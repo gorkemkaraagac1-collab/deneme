@@ -434,7 +434,7 @@
         <div class="blog-row">
           <div class="b-date">${p.date || ''}</div>
           <div class="b-body">
-            <h3>${p.title || ''}</h3>
+            <h3>${p.title || ''}${p.access==='paid' ? ' <span style="font-family:\'JetBrains Mono\',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--brass-dark);border:1px solid var(--brass);border-radius:2px;padding:2px 7px;vertical-align:middle;">Üyelere Özel</span>' : ''}</h3>
             <p>${p.excerpt || ''}</p>
           </div>
           <div class="b-tag">${p.tag || ''}</div>

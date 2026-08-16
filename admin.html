@@ -540,14 +540,24 @@ function renderPosts(){
       <div class="field"><label>Etiket</label><input type="text" data-f="tag" data-i="${i}" value="${escapeAttr(p.tag)}" placeholder="TMS 29"></div>
       <div class="field"><label>Yazar</label><input type="text" data-f="author" data-i="${i}" value="${escapeAttr(p.author)}"></div>
       <div class="field"><label>Okuma Süresi</label><input type="text" data-f="readTime" data-i="${i}" value="${escapeAttr(p.readTime)}" placeholder="6 dk okuma"></div>
+      <div class="field">
+        <label>Erişim</label>
+        <select data-f="access" data-i="${i}">
+          <option value="free" ${!p.access||p.access==='free'?'selected':''}>Ücretsiz — herkes okuyabilir</option>
+          <option value="paid" ${p.access==='paid'?'selected':''}>Ücretli — sadece üyeler okuyabilir</option>
+        </select>
+      </div>
+      ${p.access==='paid' ? `<div class="field"><label>Ücretsiz Önizleme (kaç paragraf/başlık gösterilsin)</label><input type="text" inputmode="numeric" data-f="previewBlocks" data-i="${i}" value="${p.previewBlocks ?? 2}"></div>` : ''}
       <div class="field"><label>Özet (blog listesinde görünür)</label><textarea data-f="excerpt" data-i="${i}">${p.excerpt||''}</textarea></div>
       <div class="field"><label>Gövde Metni</label><textarea data-f="body" data-i="${i}" style="min-height:180px;">${blocksToText(p.body)}</textarea></div>
     </div>`).join('');
 
-  wrap.querySelectorAll('input,textarea').forEach(el=>{
+  wrap.querySelectorAll('input,textarea,select').forEach(el=>{
     el.addEventListener('input', e=>{
       const i = +e.target.dataset.i, f = e.target.dataset.f;
       if(f==='body'){ state.posts[i].body = textToBlocks(e.target.value); }
+      else if(f==='previewBlocks'){ state.posts[i].previewBlocks = Math.max(0, parseInt(e.target.value,10) || 0); }
+      else if(f==='access'){ state.posts[i].access = e.target.value; renderPosts(); return; }
       else {
         state.posts[i][f] = e.target.value;
         if(f==='title') state.posts[i].id = slugify(e.target.value);
@@ -614,7 +624,7 @@ document.getElementById('addService').addEventListener('click', ()=>{
   renderServices(); markDirty();
 });
 document.getElementById('addPost').addEventListener('click', ()=>{
-  state.posts.unshift({id:'yeni-yazi', date:'', tag:'', author:'Görkem Karaağaç', readTime:'', title:'Yeni Yazı', excerpt:'', body:[{type:'p', text:''}]});
+  state.posts.unshift({id:'yeni-yazi', date:'', tag:'', author:'Görkem Karaağaç', readTime:'', title:'Yeni Yazı', excerpt:'', access:'free', previewBlocks:2, body:[{type:'p', text:''}]});
   renderPosts(); markDirty();
 });
 

@@ -111,6 +111,8 @@
       "readTime": "6 dk okuma",
       "title": "TMS 29 Endeksleme: Aylık Kapanışta Sık Yapılan 3 Hata",
       "excerpt": "Enflasyon muhasebesi endekslemesinde en çok karşılaşılan formül ve dönem hataları, ve bunları SAP tarafında nasıl önleyebileceğiniz.",
+      "access": "free",
+      "previewBlocks": 2,
       "body": [
         {
           "type": "p",
