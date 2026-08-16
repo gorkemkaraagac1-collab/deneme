@@ -64,6 +64,7 @@
     <div class="wordmark">GK <span>ADVISORY</span></div>
     <div class="sub">Üye Girişi</div>
 
+    <div id="error" style="display:none;color:#d78b80;margin-bottom:14px;font-size:13px;"></div>
     <form id="loginForm">
       <div class="field">
         <label>E-posta</label>
@@ -76,17 +77,20 @@
       <button class="btn" type="submit">Giriş Yap</button>
     </form>
 
-    <div class="note">
-      <strong>Not:</strong> Bu bir tasarım taslağıdır — herhangi bir e-posta/şifre ile "demo üye" olarak panele girebilirsiniz. Gerçek kimlik doğrulama backend bağlandığında etkinleşecek.
-    </div>
+    <div class="note"><strong>Demo:</strong> demo@gkadvisory.com / demo1234<br>Admin: admin@gkadvisory.com / admin1234<br><span style="opacity:.75">Bu sürüm frontend prototipidir; üretimde backend authentication kullanılmalıdır.</span></div>
 
     <a href="index.html" class="back">← Ana sayfaya dön</a>
   </div>
 
+<script src="auth.js"></script>
 <script>
+  const next=new URLSearchParams(location.search).get("next")||"dashboard.html";
   document.getElementById('loginForm').addEventListener('submit', e => {
     e.preventDefault();
-    window.location.href = 'dashboard.html';
+    const r=GKAuth.login(document.getElementById('email').value,document.getElementById('password').value);
+    const err=document.getElementById('error');
+    if(!r.ok){err.textContent=r.error;err.style.display='block';return;}
+    window.location.href = next;
   });
 </script>
 
