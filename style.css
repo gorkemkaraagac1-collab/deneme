@@ -1,0 +1,23 @@
+
+:root {
+    --ink: #1a1a1a;
+    --brass: #b8860b;
+    --parchment: #fdfbf7;
+    --text-mute: #5B6472;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background-color: var(--parchment); color: var(--ink); line-height: 1.6; }
+body.menu-open { overflow: hidden; }
+
+header { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
+.nav-links { display: flex; gap: 20px; }
+.nav-links a { text-decoration: none; color: var(--ink); font-weight: 500; position: relative; }
+.nav-links a.active { color: var(--brass); }
+.nav-links a.active::after {
+    content: ''; position: absolute; bottom: -4px; left: 0; right: 0; height: 2px; background: var(--brass);
+}
+
+input:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--brass); border-color: transparent;
+}
