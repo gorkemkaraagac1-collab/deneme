@@ -1,32 +1,11 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Finance Intelligence — GK Advisory</title>
-<link rel="stylesheet" href="styles.css">
-<style>
-body{background:#F7F5F0;color:#1c2a3a}.router{max-width:900px;margin:80px auto;padding:0 24px}.card{background:#fff;border:1px solid #ddd6ca;padding:34px}.eyebrow{color:#B08D57;font:500 11px 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase}.card h1{font:500 38px Fraunces,serif;color:#0F1C2E;margin:10px 0}.card p{color:#68717f}.btn{display:inline-block;margin-top:12px;padding:11px 15px;background:#B08D57;color:#0F1C2E;text-decoration:none;font-weight:600}
-</style></head>
-<body>
-<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="dashboard.html">← Panele dön</a></div></nav></header>
-<main class="router"><section class="card"><div class="eyebrow">Finance Intelligence</div><h1 id="title">Araç</h1><p id="desc">Yönlendiriliyorsunuz.</p><a class="btn" href="dashboard.html">Dashboard'a dön</a></section></main>
-<script src="auth.js"></script>
-<script>
-const u=GKAuth.require();
-if(u){
- const service=new URLSearchParams(location.search).get('service');
- const routes={
-   tms29:'tms29.html',
-   dcf:'dcf.html'
- };
- if(routes[service]) location.replace(routes[service]);
- else if(service==='workingcapital'||service==='tfrs16'||service==='ecl'||service==='hedge'){
-   document.getElementById('title').textContent='Bu araç yapım aşamasında';
-   document.getElementById('desc').textContent='Bu Finance Intelligence aracı henüz kullanıma açılmadı. Dashboard üzerinden diğer aktif araçlarınıza erişebilirsiniz.';
- } else {
-   document.getElementById('title').textContent='Araç bulunamadı';
-   document.getElementById('desc').textContent='Geçersiz veya eksik araç bağlantısı.';
- }
-}
-</script>
-</body></html>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0;url=dashboard.html">
+<meta name="robots" content="noindex">
+<title>GK Advisory</title>
+<script>location.replace("dashboard.html");</script>
+</head>
+<body><a href="dashboard.html">Devam et</a></body>
+</html>
