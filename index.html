@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GK Advisory — Görkem Karaağaç | SAP S/4HANA · IFRS/TFRS · M&A</title>
+<meta name="description" content="GK Advisory — SAP S/4HANA FI-CO, IFRS/TFRS raporlama, M&A finansal durum tespiti, değerleme ve finans süreç dönüşümü danışmanlığı.">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0F1C2E">
+<link rel="canonical" href="https://gk-advisory.com/">
+<link rel="manifest" href="site.webmanifest">
+<title>GK Advisory | Finans, ERP ve İş Dönüşümü</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -363,13 +368,25 @@
     .section{padding:72px 0;}
   }
 </style>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"ProfessionalService",
+  "name":"GK Advisory",
+  "url":"https://gk-advisory.com/",
+  "description":"SAP S/4HANA, IFRS/TFRS, M&A ve finans süreç dönüşümü danışmanlığı.",
+  "areaServed":"TR",
+  "founder":{"@type":"Person","name":"Görkem Karaağaç"},
+  "serviceType":["SAP S/4HANA FI-CO Danışmanlığı","IFRS/TFRS Raporlama","M&A Financial Due Diligence","Finansal Modelleme","Süreç İyileştirme","İç Kontrol Danışmanlığı"]
+}
+</script>
 </head>
 <body>
 
 <header>
   <nav class="nav">
     <div class="wordmark" id="wordmark">GK <span>ADVISORY</span></div>
-    <button class="nav-toggle" id="navToggle" aria-label="Menüyü aç/kapat">☰</button>
+    <button class="nav-toggle" id="navToggle" aria-label="Menüyü aç/kapat" aria-controls="navLinks" aria-expanded="false">☰</button>
     <div class="nav-links" id="navLinks">
       <a href="#hizmetler">Hizmetler</a>
       <a href="#deneyim">Deneyim</a>
@@ -534,8 +551,8 @@
 <script>
   const toggle = document.getElementById('navToggle');
   const links = document.getElementById('navLinks');
-  toggle.addEventListener('click', () => links.classList.toggle('open'));
-  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => links.classList.remove('open')));
+  toggle.addEventListener('click', () => { const open = links.classList.toggle('open'); toggle.setAttribute('aria-expanded', String(open)); document.body.classList.toggle('nav-open', open); });
+  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => { links.classList.remove('open'); toggle.setAttribute('aria-expanded','false'); document.body.classList.remove('nav-open'); }));
 
   // content.json üzerinden logo, hero ve hizmetleri doldurur.
   // Not: dosya olarak (file://) açıldığında tarayıcı fetch'i engelleyebilir;
@@ -557,11 +574,11 @@
     if (Array.isArray(data.services)) {
       const grid = document.getElementById('serviceGrid');
       grid.innerHTML = data.services.map(s => `
-        <div class="service-card">
+        <article class="service-card" itemscope itemtype="https://schema.org/Service">
           <span class="acct-no">${s.acct}</span>
-          <h3>${s.title}</h3>
-          <p>${s.desc}</p>
-        </div>`).join('');
+          <h3 itemprop="name">${s.title}</h3>
+          <p itemprop="description">${s.desc}</p>
+        </article>`).join('');
     }
   }).catch(() => { /* content.json bulunamadıysa sayfa varsayılan metinlerle görüntülenir */ });
 </script>

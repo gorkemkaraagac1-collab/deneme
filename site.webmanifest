@@ -1,0 +1,10 @@
+{
+  "name": "GK Advisory",
+  "short_name": "GK Advisory",
+  "lang": "tr",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0F1C2E",
+  "theme_color": "#0F1C2E",
+  "description": "SAP S/4HANA, IFRS/TFRS, M&A ve finans dönüşümü danışmanlığı."
+}
