@@ -1,0 +1,44 @@
+{
+  "logo": {
+    "prefix": "GK",
+    "suffix": "ADVISORY",
+    "imageDataUrl": null
+  },
+  "hero": {
+    "eyebrow": "Governance & Knowledge Advisory",
+    "titleLine1": "Defterden",
+    "titleLine2": "karar masasına.",
+    "lede": "SAP S/4HANA FI-CO, IFRS/TFRS raporlama ve M&A finansal durum tespiti alanlarında; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık."
+  },
+  "services": [
+    { "acct": "HESAP 100 · ERP", "title": "SAP S/4HANA FI-CO Danışmanlığı", "desc": "Paralel defter aktivasyonu, doküman bölünmesi ve TMS 29/UMS 29 enflasyon muhasebesi modül kurulumu." },
+    { "acct": "HESAP 200 · RAPORLAMA", "title": "IFRS/TFRS Raporlama & Konsolidasyon", "desc": "Çok şirketli grup konsolidasyonu, SPK'ya tabi ve halka açık şirketler için raporlama paketleri." },
+    { "acct": "HESAP 300 · M&A", "title": "Finansal Durum Tespiti (Quality of Earnings)", "desc": "Birleşme ve satın alma süreçlerinde sürdürülebilir kazanç analizi ve işlem destek hizmetleri." },
+    { "acct": "HESAP 400 · DEĞERLEME", "title": "Finansal Modelleme & Değer Düşüklüğü Testi", "desc": "DCF bazlı şirket değerlemesi, şerefiye ve varlık değer düşüklüğü testleri (UMS/IAS 36)." },
+    { "acct": "HESAP 500 · SÜREÇ", "title": "Süreç İyileştirme & Dijitalleşme", "desc": "Manuel iş yükünü azaltan, otomasyonu artıran finans süreç ve iş akışı tasarımı." },
+    { "acct": "HESAP 600 · DENETİM", "title": "Denetim & İç Kontrol Danışmanlığı", "desc": "ISA/BDS çerçevesinde iç kontrol değerlendirmesi ve denetim süreci danışmanlığı." }
+  ],
+  "posts": [
+    {
+      "id": "tms29-endeksleme",
+      "date": "16 Ağu 2026",
+      "tag": "TMS 29",
+      "author": "Görkem Karaağaç",
+      "readTime": "6 dk okuma",
+      "title": "TMS 29 Endeksleme: Aylık Kapanışta Sık Yapılan 3 Hata",
+      "excerpt": "Enflasyon muhasebesi endekslemesinde en çok karşılaşılan formül ve dönem hataları, ve bunları SAP tarafında nasıl önleyebileceğiniz.",
+      "body": [
+        { "type": "p", "text": "Bu, makale şablonunun içeriğidir — kendi yazınızı admin panelinden ekleyip bu paragrafın yerini alabilirsiniz." },
+        { "type": "h2", "text": "Neden endeksleme hataları tekrar eder" },
+        { "type": "p", "text": "Aylık kapanış sürecinde endeksleme adımları genellikle aynı noktalarda aksar: dönem bazlı düzeltme katsayısının yanlış uygulanması, parasal olmayan kalemlerin yanlış sınıflandırılması ve konsolidasyon öncesi mahsup farklarının gözden kaçması." },
+        { "type": "h3", "text": "1. Düzeltme katsayısının dönem kayması" },
+        { "type": "p", "text": "Örnek paragraf metni. Burada ilgili hatayı, neden oluştuğunu ve pratikte nasıl önlendiğini anlatan bir açıklama yer alır." },
+        { "type": "h3", "text": "2. Parasal olmayan kalemlerin yanlış işaretlenmesi" },
+        { "type": "ul", "items": ["Örnek madde bir", "Örnek madde iki", "Örnek madde üç"] },
+        { "type": "h3", "text": "3. Mahsup farklarının konsolidasyon öncesi gözden kaçması" },
+        { "type": "quote", "text": "Örnek bir alıntı veya öne çıkarılmış not buraya gelir." },
+        { "type": "p", "text": "Kapanış paragrafı — özet ve varsa bir sonraki adım için yönlendirme buraya eklenir." }
+      ]
+    }
+  ]
+}
