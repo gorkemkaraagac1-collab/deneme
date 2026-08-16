@@ -213,6 +213,31 @@
     display:flex; justify-content:space-between;
   }
 
+  /* ---------- BUSINESS IMPACT ---------- */
+  .impact{background:var(--paper);}
+  .impact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);}
+  .impact-card{background:var(--paper);padding:30px 28px;min-height:210px;}
+  .impact-card .num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--brass-dark);letter-spacing:.08em;margin-bottom:16px;display:block;}
+  .impact-card h3{font-family:'Fraunces',serif;font-size:21px;font-weight:500;color:var(--ink);margin-bottom:9px;}
+  .impact-card p{font-size:14px;color:var(--text-mute);line-height:1.6;}
+  .impact-card .outcome{margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--brass-dark);}
+
+  /* ---------- POSITIONING ---------- */
+  .positioning{background:var(--ink-2);color:var(--parchment);}
+  .positioning-grid{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;}
+  .positioning h2{font-family:'Fraunces',serif;font-weight:500;font-size:clamp(30px,3.6vw,42px);line-height:1.12;color:var(--parchment);}
+  .positioning p{margin-top:18px;color:rgba(237,234,226,.65);font-size:15px;max-width:520px;}
+  .decision-list{border-top:1px solid rgba(237,234,226,.14);}
+  .decision-item{display:grid;grid-template-columns:120px 1fr;gap:20px;padding:18px 0;border-bottom:1px solid rgba(237,234,226,.14);}
+  .decision-item .k{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);}
+  .decision-item .v{font-size:14px;color:rgba(237,234,226,.78);}
+
+  @media (max-width:760px){
+    .impact-grid{grid-template-columns:1fr;}
+    .positioning-grid{grid-template-columns:1fr;gap:36px;}
+    .decision-item{grid-template-columns:1fr;gap:6px;}
+  }
+
   /* ---------- BLOG (index / listing) ---------- */
   .page-hero{
     background:var(--ink); padding:150px 0 64px;
@@ -403,10 +428,10 @@
     <div>
       <div class="eyebrow" id="heroEyebrow">Governance &amp; Knowledge Advisory</div>
       <h1 id="heroTitle">Defterden<br><em>karar masasına.</em></h1>
-      <p class="lede" id="heroLede">SAP S/4HANA FI-CO, IFRS/TFRS raporlama ve M&amp;A finansal durum tespiti alanlarında; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık.</p>
+      <p class="lede" id="heroLede">Finans fonksiyonunun raporlama, süreç, teknoloji ve karar alma kapasitesini birlikte geliştiren; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık.</p>
       <div class="hero-ctas">
         <a href="#iletisim" class="btn-primary">Görüşme Talep Et</a>
-        <a href="#hizmetler" class="btn-ghost">Hizmetleri İncele</a>
+        <a href="#etki" class="btn-ghost">Nasıl Değer Yaratıyorum?</a>
       </div>
     </div>
     <div class="ledger-card">
@@ -457,6 +482,52 @@
         <h3>Denetim &amp; İç Kontrol Danışmanlığı</h3>
         <p>ISA/BDS çerçevesinde iç kontrol değerlendirmesi ve denetim süreci danışmanlığı.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section impact" id="etki">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-tag">Yönetimsel Etki</div>
+      <h2>Teknik çıktıyı, yönetimin kullanabileceği karara dönüştürüyorum.</h2>
+      <p>Danışmanlığın başarısını yalnızca doğru muhasebe veya doğru süreç olarak değil; nakit, kârlılık, risk ve karar kalitesi üzerindeki etkisiyle ölçüyorum.</p>
+    </div>
+    <div class="impact-grid">
+      <article class="impact-card">
+        <span class="num">01 · NAKİT</span>
+        <h3>Working Capital</h3>
+        <p>Alacak, stok ve borç döngülerini süreç bazında analiz ederek nakit dönüşüm süresindeki iyileştirme alanlarını görünür hale getirme.</p>
+        <div class="outcome">Çıktı · Cash Release</div>
+      </article>
+      <article class="impact-card">
+        <span class="num">02 · KÂRLILIK</span>
+        <h3>Performance &amp; Margin</h3>
+        <p>Finansal veriyi operasyonel sürücülerle eşleştirerek marj, maliyet ve sürdürülebilir kazanç üzerindeki etkileri ayrıştırma.</p>
+        <div class="outcome">Çıktı · Better Decisions</div>
+      </article>
+      <article class="impact-card">
+        <span class="num">03 · RİSK</span>
+        <h3>Controls &amp; Governance</h3>
+        <p>Finans süreçlerindeki kontrol boşluklarını, manuel bağımlılıkları ve raporlama risklerini yönetilebilir aksiyonlara dönüştürme.</p>
+        <div class="outcome">Çıktı · Risk Reduction</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section positioning">
+  <div class="wrap positioning-grid">
+    <div>
+      <div class="section-tag" style="color:var(--brass);">Yaklaşım</div>
+      <h2>Denetçi bakışıyla doğrula. Finansçı bakışıyla yönet. Dönüşüm bakışıyla ölçekle.</h2>
+      <p>GK Advisory'nin farkı, finansal raporlama ile operasyonel süreç arasındaki bağlantıyı birlikte ele almasıdır. Amaç yalnızca mevcut problemi çözmek değil; aynı problemin tekrar oluşmasını önleyecek yapıyı kurmaktır.</p>
+    </div>
+    <div class="decision-list">
+      <div class="decision-item"><span class="k">Finance</span><span class="v">Kârlılık, nakit akışı ve finansal görünürlüğü güçlendirme.</span></div>
+      <div class="decision-item"><span class="k">Risk</span><span class="v">İç kontrol, yönetişim ve raporlama risklerini azaltma.</span></div>
+      <div class="decision-item"><span class="k">Process</span><span class="v">Manuel adımları sadeleştirme ve standartlaştırma.</span></div>
+      <div class="decision-item"><span class="k">Technology</span><span class="v">SAP, otomasyon ve veri akışlarını ölçeklenebilir hale getirme.</span></div>
     </div>
   </div>
 </section>
