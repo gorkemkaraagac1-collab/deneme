@@ -645,11 +645,7 @@
     if (Array.isArray(data.services)) {
       const grid = document.getElementById('serviceGrid');
       grid.innerHTML = data.services.map(s => `
-        <article class="service-card" itemscope itemtype="https://schema.org/Service">
-          <span class="acct-no">${s.acct}</span>
-          <h3 itemprop="name">${s.title}</h3>
-          <p itemprop="description">${s.desc}</p>
-        </article>`).join('');
+        <a href="service.html?id=${encodeURIComponent(s.id)}" class="service-card" itemscope itemtype="https://schema.org/Service"><span class="acct-no">${s.acct}</span><h3 itemprop="name">${s.title}</h3><p itemprop="description">${s.desc}</p><span style="display:block;margin-top:16px;font-size:13px;font-weight:600;color:var(--brass-dark)">Detayları Gör →</span></a>`).join('');
     }
   }).catch(() => { /* content.json bulunamadıysa sayfa varsayılan metinlerle görüntülenir */ });
 </script>

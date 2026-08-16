@@ -11,12 +11,96 @@
     "lede": "SAP S/4HANA FI-CO, IFRS/TFRS raporlama ve M&A finansal durum tespiti alanlarında; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık."
   },
   "services": [
-    { "acct": "HESAP 100 · ERP", "title": "SAP S/4HANA FI-CO Danışmanlığı", "desc": "Paralel defter aktivasyonu, doküman bölünmesi ve TMS 29/UMS 29 enflasyon muhasebesi modül kurulumu." },
-    { "acct": "HESAP 200 · RAPORLAMA", "title": "IFRS/TFRS Raporlama & Konsolidasyon", "desc": "Çok şirketli grup konsolidasyonu, SPK'ya tabi ve halka açık şirketler için raporlama paketleri." },
-    { "acct": "HESAP 300 · M&A", "title": "Finansal Durum Tespiti (Quality of Earnings)", "desc": "Birleşme ve satın alma süreçlerinde sürdürülebilir kazanç analizi ve işlem destek hizmetleri." },
-    { "acct": "HESAP 400 · DEĞERLEME", "title": "Finansal Modelleme & Değer Düşüklüğü Testi", "desc": "DCF bazlı şirket değerlemesi, şerefiye ve varlık değer düşüklüğü testleri (UMS/IAS 36)." },
-    { "acct": "HESAP 500 · SÜREÇ", "title": "Süreç İyileştirme & Dijitalleşme", "desc": "Manuel iş yükünü azaltan, otomasyonu artıran finans süreç ve iş akışı tasarımı." },
-    { "acct": "HESAP 600 · DENETİM", "title": "Denetim & İç Kontrol Danışmanlığı", "desc": "ISA/BDS çerçevesinde iç kontrol değerlendirmesi ve denetim süreci danışmanlığı." }
+    {
+      "acct": "HESAP 100 · ERP",
+      "title": "SAP S/4HANA FI-CO Danışmanlığı",
+      "desc": "Paralel defter aktivasyonu, doküman bölünmesi ve TMS 29/UMS 29 enflasyon muhasebesi modül kurulumu.",
+      "id": "sap-fi-co",
+      "problem": "Finansal kayıtların, paralel defterlerin ve yönetim raporlamasının ERP üzerinde daha kontrollü ve ölçeklenebilir çalışması.",
+      "approach": "Mevcut FI-CO tasarımını, muhasebe politikalarını ve raporlama ihtiyaçlarını birlikte değerlendirerek süreç ve sistem tasarımını ele alıyoruz.",
+      "deliverables": [
+        "FI-CO süreç değerlendirmesi",
+        "Muhasebe ve raporlama tasarım önerileri",
+        "TMS 29 / paralel defter değerlendirmesi",
+        "Kontrol noktaları ve iyileştirme yol haritası"
+      ],
+      "impact": "Daha düşük manuel iş yükü, daha güvenilir raporlama ve kapanış sürecinde daha yüksek kontrol."
+    },
+    {
+      "acct": "HESAP 200 · RAPORLAMA",
+      "title": "IFRS/TFRS Raporlama & Konsolidasyon",
+      "desc": "Çok şirketli grup konsolidasyonu, SPK'ya tabi ve halka açık şirketler için raporlama paketleri.",
+      "id": "ifrs-tfrs",
+      "problem": "Grup şirketlerinde raporlama farklılıkları, konsolidasyon karmaşıklığı ve yönetimin zamanında bilgi ihtiyacı.",
+      "approach": "Muhasebe politikaları, konsolidasyon akışı, reporting package ve kritik IFRS/TFRS alanlarını uçtan uca değerlendiriyoruz.",
+      "deliverables": [
+        "Reporting package tasarımı",
+        "Konsolidasyon süreci analizi",
+        "IFRS/TFRS teknik değerlendirmeleri",
+        "Kapanış ve raporlama takvimi"
+      ],
+      "impact": "Daha hızlı kapanış, daha az düzeltme ve yönetimin finansal sonuçlara güveninin artması."
+    },
+    {
+      "acct": "HESAP 300 · M&A",
+      "title": "Finansal Durum Tespiti (Quality of Earnings)",
+      "desc": "Birleşme ve satın alma süreçlerinde sürdürülebilir kazanç analizi ve işlem destek hizmetleri.",
+      "id": "qoe",
+      "problem": "İşletmenin görünen EBITDA performansı ile sürdürülebilir operasyonel kazanç kapasitesi arasındaki farkın netleştirilmesi.",
+      "approach": "Tek seferlik kalemleri, normalizasyonları, working capital hareketlerini ve operasyonel performans sürücülerini analiz ediyoruz.",
+      "deliverables": [
+        "QoE analizi",
+        "EBITDA normalizasyonları",
+        "Working capital analizi",
+        "Deal discussion destekleri"
+      ],
+      "impact": "Daha doğru işlem değeri, daha güçlü müzakere pozisyonu ve sürprizlerin azaltılması."
+    },
+    {
+      "acct": "HESAP 400 · DEĞERLEME",
+      "title": "Finansal Modelleme & Değer Düşüklüğü Testi",
+      "desc": "DCF bazlı şirket değerlemesi, şerefiye ve varlık değer düşüklüğü testleri (UMS/IAS 36).",
+      "id": "valuation-impairment",
+      "problem": "Değerleme varsayımlarının finansal tablo etkilerinin ve impairment risklerinin yönetilememesi.",
+      "approach": "DCF modelini, nakit akışlarını, WACC ve terminal value varsayımlarını yönetim perspektifiyle test ediyoruz.",
+      "deliverables": [
+        "DCF modelleme",
+        "IAS 36 impairment assessment",
+        "Sensitivity / scenario analysis",
+        "Yönetim raporu"
+      ],
+      "impact": "Değerleme risklerinin görünür hale gelmesi ve sermaye tahsisi kararlarının güçlenmesi."
+    },
+    {
+      "acct": "HESAP 500 · SÜREÇ",
+      "title": "Süreç İyileştirme & Dijitalleşme",
+      "desc": "Manuel iş yükünü azaltan, otomasyonu artıran finans süreç ve iş akışı tasarımı.",
+      "id": "process-digital",
+      "problem": "Manuel kontroller, Excel bağımlılığı, tekrar eden işler ve finans ekiplerinin düşük katma değerli faaliyetlere zaman harcaması.",
+      "approach": "Süreçleri AS-IS / TO-BE olarak haritalıyor, kontrol noktalarını ve otomasyon fırsatlarını önceliklendiriyoruz.",
+      "deliverables": [
+        "Süreç haritalama",
+        "RACI ve kontrol tasarımı",
+        "Otomasyon fırsat analizi",
+        "Uygulama yol haritası"
+      ],
+      "impact": "Daha kısa çevrim süresi, daha düşük operasyonel maliyet ve ölçeklenebilir finans operasyonu."
+    },
+    {
+      "acct": "HESAP 600 · DENETİM",
+      "title": "Denetim & İç Kontrol Danışmanlığı",
+      "desc": "ISA/BDS çerçevesinde iç kontrol değerlendirmesi ve denetim süreci danışmanlığı.",
+      "id": "audit-controls",
+      "problem": "Kontrol zafiyetleri, denetim bulguları ve yönetim için yeterince görünür olmayan finansal riskler.",
+      "approach": "Riskleri süreç bazında değerlendirerek kontrol tasarımını, uygulamasını ve izleme mekanizmasını ele alıyoruz.",
+      "deliverables": [
+        "Risk-control matrix",
+        "İç kontrol değerlendirmesi",
+        "Bulgular ve aksiyon planı",
+        "Denetim hazırlık desteği"
+      ],
+      "impact": "Daha güçlü yönetişim, daha az kontrol açığı ve daha öngörülebilir denetim süreci."
+    }
   ],
   "posts": [
     {
@@ -28,16 +112,50 @@
       "title": "TMS 29 Endeksleme: Aylık Kapanışta Sık Yapılan 3 Hata",
       "excerpt": "Enflasyon muhasebesi endekslemesinde en çok karşılaşılan formül ve dönem hataları, ve bunları SAP tarafında nasıl önleyebileceğiniz.",
       "body": [
-        { "type": "p", "text": "Bu, makale şablonunun içeriğidir — kendi yazınızı admin panelinden ekleyip bu paragrafın yerini alabilirsiniz." },
-        { "type": "h2", "text": "Neden endeksleme hataları tekrar eder" },
-        { "type": "p", "text": "Aylık kapanış sürecinde endeksleme adımları genellikle aynı noktalarda aksar: dönem bazlı düzeltme katsayısının yanlış uygulanması, parasal olmayan kalemlerin yanlış sınıflandırılması ve konsolidasyon öncesi mahsup farklarının gözden kaçması." },
-        { "type": "h3", "text": "1. Düzeltme katsayısının dönem kayması" },
-        { "type": "p", "text": "Örnek paragraf metni. Burada ilgili hatayı, neden oluştuğunu ve pratikte nasıl önlendiğini anlatan bir açıklama yer alır." },
-        { "type": "h3", "text": "2. Parasal olmayan kalemlerin yanlış işaretlenmesi" },
-        { "type": "ul", "items": ["Örnek madde bir", "Örnek madde iki", "Örnek madde üç"] },
-        { "type": "h3", "text": "3. Mahsup farklarının konsolidasyon öncesi gözden kaçması" },
-        { "type": "quote", "text": "Örnek bir alıntı veya öne çıkarılmış not buraya gelir." },
-        { "type": "p", "text": "Kapanış paragrafı — özet ve varsa bir sonraki adım için yönlendirme buraya eklenir." }
+        {
+          "type": "p",
+          "text": "Bu, makale şablonunun içeriğidir — kendi yazınızı admin panelinden ekleyip bu paragrafın yerini alabilirsiniz."
+        },
+        {
+          "type": "h2",
+          "text": "Neden endeksleme hataları tekrar eder"
+        },
+        {
+          "type": "p",
+          "text": "Aylık kapanış sürecinde endeksleme adımları genellikle aynı noktalarda aksar: dönem bazlı düzeltme katsayısının yanlış uygulanması, parasal olmayan kalemlerin yanlış sınıflandırılması ve konsolidasyon öncesi mahsup farklarının gözden kaçması."
+        },
+        {
+          "type": "h3",
+          "text": "1. Düzeltme katsayısının dönem kayması"
+        },
+        {
+          "type": "p",
+          "text": "Örnek paragraf metni. Burada ilgili hatayı, neden oluştuğunu ve pratikte nasıl önlendiğini anlatan bir açıklama yer alır."
+        },
+        {
+          "type": "h3",
+          "text": "2. Parasal olmayan kalemlerin yanlış işaretlenmesi"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "Örnek madde bir",
+            "Örnek madde iki",
+            "Örnek madde üç"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "3. Mahsup farklarının konsolidasyon öncesi gözden kaçması"
+        },
+        {
+          "type": "quote",
+          "text": "Örnek bir alıntı veya öne çıkarılmış not buraya gelir."
+        },
+        {
+          "type": "p",
+          "text": "Kapanış paragrafı — özet ve varsa bir sonraki adım için yönlendirme buraya eklenir."
+        }
       ]
     }
   ]
