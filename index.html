@@ -2,150 +2,23 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Görkem Karaağaç | Danışmanlık & Finansal Yönetim</title>
-    <!-- Fontlar -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --ink: #111827;
-            --brass: #b8860b;
-            --parchment: #fdfbf7;
-            --text-mute: #4b5563;
-            --card-bg: #ffffff;
-            --border: #e5e7eb;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: var(--parchment); 
-            color: var(--ink); 
-            line-height: 1.6; 
-        }
-
-        header { 
-            padding: 24px 40px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
-            background-color: var(--parchment);
-        }
-
-        .logo {
-            font-family: 'Fraunces', serif;
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--ink);
-            letter-spacing: -0.02em;
-        }
-
-        .nav-links { display: flex; gap: 28px; }
-        .nav-links a { 
-            text-decoration: none; 
-            color: var(--text-mute); 
-            font-weight: 500; 
-            font-size: 0.95rem;
-            transition: color 0.2s;
-            position: relative;
-        }
-        .nav-links a:hover, .nav-links a.active { color: var(--ink); }
-        .nav-links a.active::after {
-            content: ''; position: absolute; bottom: -6px; left: 0; right: 0; height: 2px; background: var(--brass);
-        }
-
-        main {
-            max-width: 900px;
-            margin: 60px auto;
-            padding: 0 20px;
-        }
-
-        .hero h1 {
-            font-family: 'Fraunces', serif;
-            font-size: 2.75rem;
-            line-height: 1.2;
-            margin-bottom: 16px;
-            color: var(--ink);
-        }
-
-        .hero p {
-            font-size: 1.15rem;
-            color: var(--text-mute);
-            max-width: 680px;
-            margin-bottom: 40px;
-        }
-
-        .card-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 20px;
-            margin-top: 40px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            padding: 24px;
-            border-radius: 8px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-        }
-
-        .card h3 {
-            font-family: 'Fraunces', serif;
-            margin-bottom: 8px;
-            font-size: 1.2rem;
-        }
-
-        .card p {
-            font-size: 0.95rem;
-            color: var(--text-mute);
-        }
-
-        @media (max-width: 640px) {
-            header { padding: 16px 20px; }
-            .hero h1 { font-size: 2rem; }
-        }
-    </style>
+    <title>Anasayfa | Görkem Karaağaç</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <header>
         <div class="logo">Görkem Karaağaç</div>
-        <nav class="nav-links">
-            <a href="index.html" class="active">Anasayfa</a>
-            <a href="blog.html">Yazılar</a>
-            <a href="admin.html">Panel</a>
+        <button id="navToggle">Menu</button>
+        <nav id="navLinks" class="nav-links">
+            <a href="index.html">Anasayfa</a>
+            <a href="blog.html">Blog</a>
+            <a href="admin.html">Admin</a>
         </nav>
     </header>
-
     <main>
-        <section class="hero">
-            <h1>Finansal Yönetim & İş Geliştirme Danışmanlığı</h1>
-            <p>TMS/IFRS standartları, M&A değerleme modelleri ve kurumsal süreç optimizasyonu üzerine teknik incelemeler ve analitik çözümler.</p>
-        </section>
-
-        <section class="card-grid">
-            <div class="card">
-                <h3>TMS / IFRS Raporlama</h3>
-                <p>Uluslararası finansal raporlama standartlarına uyum ve paralel defter yapılandırması.</p>
-            </div>
-            <div class="card">
-                <h3>M&A & Değerleme</h3>
-                <p>Net çalışma sermayesi düzeltmeleri ve finansal modelleme mimarileri.</p>
-            </div>
-            <div class="card">
-                <h3>Süreç Geliştirme</h3>
-                <p>SAP S/4HANA dönüşümü ve kurumsal operasyonel verimlilik analizi.</p>
-            </div>
-        </section>
+        <h1>Anasayfa</h1>
+        <p>İçerik burada yer alacak.</p>
     </main>
+    <script src="js/main.js"></script>
 </body>
 </html>
