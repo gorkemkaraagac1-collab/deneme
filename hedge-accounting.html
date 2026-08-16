@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TFRS 9 Hedge Accounting Simülatörü</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .hedge-container { max-width: 1000px; margin: 2rem auto; padding: 1.5rem; font-family: system-ui, sans-serif; }
+        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+        .btn { background: #2563eb; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%; }
+        .btn:hover { background: #1d4ed8; }
+        .result-box { background: #f8fafc; border-left: 4px solid #2563eb; padding: 1rem; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; font-size: 0.85rem; }
+        th { background: #f1f5f9; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge-oci { background: #dbeafe; color: #1e40af; }
+        .badge-pl { background: #dcfce7; color: #166534; }
+    </style>
+</head>
+<body>
+
+<div class="hedge-container">
+    <h2>TFRS 9 Hedge Accounting Simülatörü</h2>
+    <p>3 Temel Korunma Yönteminin Muhasebe Etkisini Hesaplayın</p>
+
+    <div class="card">
+        <div class="form-group">
+            <label for="hedgeType">Hedge Yöntemi Seçin</label>
+            <select id="hedgeType" onchange="toggleInputs()">
+                <option value="cashflow">1. Nakit Akış Hedge'i (Gelecekteki Satış - FX Kredi / IRS)</option>
+                <option value="fairvalue">2. Gerçeğe Uygun Değer Hedge'i (Ticari Borç - Forward / Hipotetik)</option>
+                <option value="netinvestment">3. Net Yatırım Hedge'i (Yurtdışı İştirak - Döviz Kredisi)</option>
+            </select>
+        </div>
+
+        <div class="grid">
+            <div class="form-group">
+                <label id="notionalLabel">İşlem Tutarı (USD / EUR)</label>
+                <input type="number" id="notional" value="100000">
+            </div>
+            <div class="form-group">
+                <label>Başlangıç Kuru (TL)</label>
+                <input type="number" id="spotStart" step="0.01" value="32.50">
+            </div>
+            <div class="form-group">
+                <label>Dönem Sonu Kuru (TL)</label>
+                <input type="number" id="spotEnd" step="0.01" value="35.00">
+            </div>
+            <div class="form-group" id="ineffectiveGroup">
+                <label>Etkinsizlik Oranı (%)</label>
+                <input type="number" id="inefficiency" value="0" min="0" max="100">
+            </div>
+        </div>
+
+        <button class="btn" onclick="calculateHedge()">Hesapla ve Muhasebeleştir</button>
+    </div>
+
+    <div class="card" id="resultsCard" style="display:none;">
+        <h3>Hesaplama Sonuçları ve Yevmiye Mantığı</h3>
+        <div id="summary" class="result-box"></div>
+        
+        <h4>Gelir Tablosu ve Özkaynak Etkisi</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Hesap / Kalem</th>
+                    <th>Tutar (TL)</th>
+                    <th>Muhasebe Etkisi (Kaydedilecek Yer)</th>
+                </tr>
+            </thead>
+            <tbody id="accountingTable"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function toggleInputs() {
+    const type = document.getElementById("hedgeType").value;
+    const label = document.getElementById("notionalLabel");
+    if(type === "netinvestment") {
+        label.innerText = "Yurtdışı İştirak Özkaynak Tutarı (EUR/USD)";
+    } else {
+        label.innerText = "İşlem Tutarı (USD / EUR)";
+    }
+}
+
+function calculateHedge() {
+    const type = document.getElementById("hedgeType").value;
+    const notional = parseFloat(document.getElementById("notional").value);
+    const spotStart = parseFloat(document.getElementById("spotStart").value);
+    const spotEnd = parseFloat(document.getElementById("spotEnd").value);
+    const ineff = parseFloat(document.getElementById("inefficiency").value) / 100;
+
+    const fxDiffPerUnit = spotEnd - spotStart;
+    const totalFxGainLoss = notional * fxDiffPerUnit;
+
+    const effectiveAmount = totalFxGainLoss * (1 - ineff);
+    const ineffectiveAmount = totalFxGainLoss * ineff;
+
+    const resultsCard = document.getElementById("resultsCard");
+    const summary = document.getElementById("summary");
+    const table = document.getElementById("accountingTable");
+
+    resultsCard.style.display = "block";
+    table.innerHTML = "";
+
+    if (type === "cashflow") {
+        summary.innerHTML = `<strong>Nakit Akış Hedge'i Özeti:</strong> Toplam ${totalFxGainLoss.toLocaleString('tr-TR')} TL kur değişim etkisinin etkin kısmı Özkaynaklar (OCI) altında dondurulur, risk gerçekleştiğinde P&L'e aktarılır.`;
+        
+        table.innerHTML = `
+            <tr>
+                <td>Etkin Korunma Tutarı (Hedge Reserve)</td>
+                <td>${effectiveAmount.toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-oci">Özkaynaklar (OCI)</span></td>
+            </tr>
+            <tr>
+                <td>Etkinsizlik / P&L Payı</td>
+                <td>${ineffectiveAmount.toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-pl">Gelir Tablosu (P&L)</span></td>
+            </tr>
+        `;
+    } else if (type === "fairvalue") {
+        summary.innerHTML = `<strong>Gerçeğe Uygun Değer Hedge'i Özeti:</strong> Hem ticari borçtaki kur farkı zararı hem de Forward / Hipotetik Türev değerlemesi doğrudan Gelir Tablosuna yazılır ve birbirini netleştirir.`;
+
+        table.innerHTML = `
+            <tr>
+                <td>Ticari Borç Değerleme Zararı/Kârı</td>
+                <td>${(-totalFxGainLoss).toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-pl">Gelir Tablosu (Finansman Gideri)</span></td>
+            </tr>
+            <tr>
+                <td>Türev / Forward Değerleme Kârı/Zararı</td>
+                <td>${effectiveAmount.toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-pl">Gelir Tablosu (Finansman Geliri)</span></td>
+            </tr>
+            <tr>
+                <td>Net P&L Etkisi (Etkinsizlik)</td>
+                <td>${(-ineffectiveAmount).toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-pl">Net Gelir Tablosu Etkisi</span></td>
+            </tr>
+        `;
+    } else if (type === "netinvestment") {
+        summary.innerHTML = `<strong>Net Yatırım Hedge'i Özeti:</strong> Yurtdışındaki iştirakin değerleme farkı ile korunma aracının (döviz kredisi) kur farkı Özkaynaklardaki Yabancı Para Çevrim Farkı (CTA) hesabında netleştirilir.`;
+
+        table.innerHTML = `
+            <tr>
+                <td>Döviz Kredisi Kur Değişim Etkisi</td>
+                <td>${(-totalFxGainLoss).toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-oci">Özkaynaklar (Çevrim Farkları - CTA)</span></td>
+            </tr>
+            <tr>
+                <td>İştirak Çevrim Kârı/Zararı Eşleşmesi</td>
+                <td>${effectiveAmount.toLocaleString('tr-TR')} TL</td>
+                <td><span class="badge badge-oci">Özkaynaklar (Konsolide Denge)</span></td>
+            </tr>
+        `;
+    }
+}
+</script>
+
+</body>
+</html>
