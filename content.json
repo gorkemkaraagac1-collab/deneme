@@ -160,5 +160,71 @@
         }
       ]
     }
+  ],
+  "plans": [
+    {
+      "id": "free",
+      "name": "Ücretsiz",
+      "price": "0",
+      "period": "",
+      "tagline": "Hizmet kataloğunu ve ücretsiz makaleleri incelemek için.",
+      "features": [
+        "Tüm hizmet açıklamalarına erişim",
+        "Ücretsiz blog yazıları",
+        "İletişim / ön değerlendirme talebi"
+      ],
+      "ctaText": "Ücretsiz Başla",
+      "ctaLink": "login.html",
+      "highlight": false,
+      "licenses": []
+    },
+    {
+      "id": "professional",
+      "name": "Professional",
+      "price": "4.900",
+      "period": "/ay",
+      "tagline": "Finans ekipleri için çalışan hesaplama araçları.",
+      "features": [
+        "TMS 29 Endeksleme Motoru",
+        "DCF Değerleme Aracı",
+        "Working Capital Analyzer",
+        "Tüm üyelere özel blog içerikleri",
+        "E-posta destek"
+      ],
+      "ctaText": "Lisans Talep Et",
+      "ctaLink": "mailto:gorkemkaraagac1@gmail.com?subject=Professional Plan Talebi",
+      "highlight": true,
+      "licenses": [
+        "tms29",
+        "dcf",
+        "workingcapital"
+      ]
+    },
+    {
+      "id": "enterprise",
+      "name": "Enterprise",
+      "price": "Özel Fiyatlandırma",
+      "period": "",
+      "tagline": "Kurumsal ölçekte tüm araçlar ve öncelikli danışmanlık desteği.",
+      "features": [
+        "Professional plandaki her şey",
+        "TFRS 16 Kiralama İşlemleri Motoru",
+        "ECL Analyzer",
+        "Hedge Accounting Modülü",
+        "Öncelikli danışmanlık desteği",
+        "SAP S/4HANA entegrasyon danışmanlığı"
+      ],
+      "ctaText": "Bize Ulaşın",
+      "ctaLink": "mailto:gorkemkaraagac1@gmail.com?subject=Enterprise Plan Görüşme Talebi",
+      "highlight": false,
+      "licenses": [
+        "tms29",
+        "dcf",
+        "workingcapital",
+        "tfrs16",
+        "ecl",
+        "hedge"
+      ]
+    }
   ]
 }
