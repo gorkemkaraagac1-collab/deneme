@@ -15,6 +15,8 @@
 .status{margin:12px 0;font-size:13px}.ok{color:var(--green)}.warn{color:var(--red)}
 footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}.wrap{padding:0 16px}}@media(max-width:500px){.summary{grid-template-columns:1fr}}
+.print-only{display:none;}
+@media print{.print-only{display:block !important;}}
 </style></head><body>
 <header><nav class="nav"><div class="brand">GK <span>ADVISORY</span></div><a class="back" href="dashboard.html">← Panele dön</a></nav></header>
 <section class="hero"><div class="wrap"><div class="eyebrow">Finance Intelligence · TMS 19</div><h1>TMS 19 Kıdem Tazminatı Yükümlülüğü Motoru</h1><p>Tanımlanmış fayda yükümlülüğünün (DBO), <strong>Projected Unit Credit</strong> yöntemiyle — ölüm ve personel devir olasılıklarını rakip azalış (competing decrement) modeliyle yıl yıl işleyerek — bugünkü değerinin hesaplanması.</p></div></section>
@@ -28,8 +30,9 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
   <div class="field"><label>Emeklilik / Değerleme Ufku Yaşı</label><input id="retireAge" type="number" min="45" max="70" step="1" value="60"></div>
   <div class="field"><label>Güncel Kıdem Tazminatı Tavanı (aylık, TL)</label><input id="ceiling" type="number" min="0" step="0.01" placeholder="Örn. 46655.43"></div>
 
-  <div id="mortRefWrap"></div>
-  <div id="turnRefWrap"></div>
+  <div id="mortRefWrap" class="print-only"></div>
+  <div id="turnRefWrap" class="print-only"></div>
+  <p style="font-size:11.5px;color:var(--muted);margin-top:12px;">Ölüm ve devir tabloları hesaplamaya dahil edilmiştir; ayrıntılar CSV ve Yazdır/PDF çıktısında yer alır.</p>
 
   <div class="note">
     <strong>Yöntem:</strong> Her personel için, cari yaştan emeklilik yaşına kadar her yıl için "hayatta kalma × o yıl ölme olasılığı" ve "hayatta kalma × o yıl işten ayrılma (devir) olasılığı" hesaplanır. <u>Ölüm veya emekliliğe ulaşma</u> her zaman kıdem tazminatı hak eder (Türk İş Hukuku'na göre); <u>gönüllü devir/istifa</u> hak etmediği varsayılır ve yükümlülükten çıkarılır. Her senaryonun bugünkü değeri, gerçekleşme olasılığıyla ağırlıklandırılıp toplanır (Projected Unit Credit). Ölüm ve devir tabloları <a href="admin.html" style="color:var(--brass2);">admin panelinden</a> düzenlenir.
@@ -199,7 +202,26 @@ document.getElementById('sample').onclick=()=>{
 document.getElementById('clear').onclick=()=>{ staff=[]; renderRows(); };
 document.getElementById('print').onclick=()=>window.print();
 document.getElementById('csv').onclick=()=>{
-  let out=['Ad/Unvan;İşe Giriş;Doğum Tarihi;Aylık Ücret;Kıdem (yıl);Nominal (bugün);Hak Ediş Olasılığı;DBO Bugünkü Değer'];
+  let out=[];
+  out.push('GK Advisory — TMS 19 Kıdem Tazminatı Analizi');
+  out.push('');
+  out.push('Aktüeryal Varsayımlar');
+  out.push('İskonto Oranı;%'+document.getElementById('discRate').value);
+  out.push('Ücret Artış Oranı;%'+document.getElementById('salaryGrowth').value);
+  out.push('Tavan Artış Oranı;%'+document.getElementById('ceilingGrowth').value);
+  out.push('Emeklilik Yaşı;'+document.getElementById('retireAge').value);
+  out.push('Güncel Tavan;'+document.getElementById('ceiling').value);
+  out.push('');
+  out.push('Ölüm Oranları (qx)');
+  out.push('Yaş;Oran');
+  [...ACT.mortality].sort((a,b)=>a.age-b.age).forEach(r=>out.push(r.age+'+;%'+r.rate));
+  out.push('');
+  out.push('Devir Oranları (wx)');
+  out.push('Yaş;Oran');
+  [...ACT.turnover].sort((a,b)=>a.age-b.age).forEach(r=>out.push(r.age+'+;%'+r.rate));
+  out.push('');
+  out.push('Personel Portföyü');
+  out.push('Ad/Unvan;İşe Giriş;Doğum Tarihi;Aylık Ücret;Kıdem (yıl);Nominal (bugün);Hak Ediş Olasılığı;DBO Bugünkü Değer');
   staff.forEach(e=>{
     const c=calcEmployee(e);
     out.push([e.name, e.hireDate, e.birthDate, e.salary.toFixed(2), c.serviceYears.toFixed(2), c.nominal.toFixed(2), (c.entitleProb*100).toFixed(1)+'%', c.pv.toFixed(2)].join(';'));
