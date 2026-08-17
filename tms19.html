@@ -47,7 +47,8 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
     <div class="metric"><small>DBO (PUC Bugünkü Değer)</small><strong id="totPv">0</strong></div>
     <div class="metric"><small>Ort. Hak Ediş Olasılığı</small><strong id="avgProb">%0</strong></div>
   </div>
-  <div class="actions" style="margin-bottom:14px"><button class="btn" id="add">+ Personel ekle</button><button class="btn secondary" id="sample">Örnek veri</button><button class="btn secondary" id="csv">CSV dışa aktar</button><button class="btn secondary" id="print">Yazdır / PDF</button><button class="btn danger" id="clear">Temizle</button></div>
+  <div class="actions" style="margin-bottom:14px"><button class="btn" id="add">+ Personel ekle</button><button class="btn secondary" id="bulkUploadBtn">Excel'den Toplu Yükle</button><a class="btn secondary" href="GK_TMS19_Personel_Sablonu.xlsx" download style="text-decoration:none;display:inline-flex;align-items:center;">Şablonu İndir</a><input type="file" id="bulkFile" accept=".xlsx,.xls" style="display:none;"><button class="btn secondary" id="sample">Örnek veri</button><button class="btn secondary" id="csv">CSV dışa aktar</button><button class="btn secondary" id="print">Yazdır / PDF</button><button class="btn danger" id="clear">Temizle</button></div>
+  <div id="bulkStatus" class="status"></div>
   <div class="table-wrap"><table class="tbl"><thead><tr><th>Ad / Unvan</th><th>İşe Giriş</th><th>Doğum Tarihi</th><th>Aylık Ücret</th><th>Kıdem (yıl)</th><th>Nominal (bugün)</th><th>Hak Ediş Olasılığı</th><th>DBO (Bugünkü Değer)</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
   <div id="status" class="status"></div>
 </section>
@@ -55,6 +56,7 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
 
 <footer><div class="wrap">© 2026 GK Advisory — TMS 19 Finance Engine · Prototype</div></footer>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="auth.js"></script>
 <script>
 const user=window.GKAuth?window.GKAuth.current():null;
@@ -187,6 +189,69 @@ function renderRows(){
 }
 
 document.getElementById('add').onclick=()=>{ staff.push({name:'', hireDate:'', birthDate:'', salary:0}); renderRows(); };
+
+document.getElementById('bulkUploadBtn').addEventListener('click', ()=>document.getElementById('bulkFile').click());
+document.getElementById('bulkFile').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('bulkStatus');
+  statusEl.innerHTML = '<span class="ok">Dosya okunuyor…</span>';
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+
+      const toISO = v => {
+        if(!v && v!==0) return '';
+        if(v instanceof Date) return v.toISOString().slice(0,10);
+        const s = String(v).trim();
+        if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const parsed = new Date(s);
+        return isNaN(parsed) ? '' : parsed.toISOString().slice(0,10);
+      };
+      const toNum = v => {
+        if(typeof v === 'number') return v;
+        const cleaned = String(v).replace(/[^\d.,-]/g,'').replace(/\.(?=\d{3},)/g,'').replace(',', '.');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+      };
+      const findKey = (row, needles) => Object.keys(row).find(k => {
+        const lk = k.toLocaleLowerCase('tr');
+        return needles.some(n => lk.includes(n));
+      });
+
+      let imported = 0, skipped = 0;
+      json.forEach(row => {
+        const nameKey = findKey(row, ['ad soyad','unvan','isim','ad ']) || findKey(row, ['ad']);
+        const hireKey = findKey(row, ['giriş','giris']);
+        const birthKey = findKey(row, ['doğum','dogum']);
+        const salKey = findKey(row, ['ücret','ucret','maaş','maas']);
+        const name = nameKey ? String(row[nameKey]).trim() : '';
+        // Örnek satırı ("Örnek:" ile başlayan) otomatik atla
+        if(!name || name.toLocaleLowerCase('tr').startsWith('örnek')){ skipped++; return; }
+        staff.push({
+          name,
+          hireDate: hireKey ? toISO(row[hireKey]) : '',
+          birthDate: birthKey ? toISO(row[birthKey]) : '',
+          salary: salKey ? toNum(row[salKey]) : 0
+        });
+        imported++;
+      });
+
+      renderRows();
+      statusEl.innerHTML = imported
+        ? `<span class="ok">${imported} personel içe aktarıldı${skipped?` (${skipped} boş/örnek satır atlandı)`:''}.</span>`
+        : `<span class="warn">Dosyada geçerli personel satırı bulunamadı. Sütun başlıklarının şablondakiyle aynı olduğundan emin olun.</span>`;
+    } catch(err){
+      statusEl.innerHTML = `<span class="warn">Dosya okunamadı. .xlsx formatında ve şablona uygun olduğundan emin olun.</span>`;
+    }
+    e.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+});
+
 ['discRate','salaryGrowth','ceilingGrowth','retireAge','ceiling'].forEach(id=>{
   document.getElementById(id).addEventListener('input', renderRows);
 });
