@@ -432,6 +432,13 @@
       <button class="btn-add" id="addPost" type="button">+ Yeni yazı ekle</button>
     </div>
 
+    <div class="admin-block">
+      <h2>Fiyatlandırma / Paketler</h2>
+      <p class="hint">pricing.html sayfasındaki paket kartları. Özellikleri satır satır girin (her satır bir madde olur). "Öne çıkar" işaretlenen paket "Önerilen" rozetiyle vurgulanır.</p>
+      <div id="plansList"></div>
+      <button class="btn-add" id="addPlan" type="button">+ Yeni paket ekle</button>
+    </div>
+
   </div>
 
   <div class="wrap admin-actions">
@@ -445,7 +452,8 @@ let state = {
   logo: { prefix: "GK", suffix: "ADVISORY", imageDataUrl: null },
   hero: { eyebrow: "", titleLine1: "", titleLine2: "", lede: "" },
   services: [],
-  posts: []
+  posts: [],
+  plans: []
 };
 
 function slugify(s){
@@ -580,6 +588,44 @@ function markDirty(){
   document.getElementById('statusMsg').textContent = 'Kaydedilmemiş değişiklikler var — bitirince "content.json indir" butonuna basın.';
 }
 
+function renderPlans(){
+  const wrap = document.getElementById('plansList');
+  wrap.innerHTML = state.plans.map((p,i)=>`
+    <div class="item-card" data-idx="${i}">
+      <div class="item-card-head">
+        <span class="tag">${p.name || 'yeni paket'}</span>
+        <button class="btn-small danger" data-act="del-plan" data-i="${i}" type="button">Sil</button>
+      </div>
+      <div class="field"><label>Paket Adı</label><input type="text" data-f="name" data-i="${i}" value="${escapeAttr(p.name)}"></div>
+      <div class="field"><label>Fiyat (sayı veya "Özel Fiyatlandırma" gibi metin)</label><input type="text" data-f="price" data-i="${i}" value="${escapeAttr(p.price)}" placeholder="4.900"></div>
+      <div class="field"><label>Periyot</label><input type="text" data-f="period" data-i="${i}" value="${escapeAttr(p.period)}" placeholder="/ay"></div>
+      <div class="field"><label>Alt Başlık</label><input type="text" data-f="tagline" data-i="${i}" value="${escapeAttr(p.tagline)}"></div>
+      <div class="field"><label>Özellikler (her satır bir madde)</label><textarea data-f="features" data-i="${i}">${(p.features||[]).join('\n')}</textarea></div>
+      <div class="field"><label>Buton Metni</label><input type="text" data-f="ctaText" data-i="${i}" value="${escapeAttr(p.ctaText)}"></div>
+      <div class="field"><label>Buton Linki</label><input type="text" data-f="ctaLink" data-i="${i}" value="${escapeAttr(p.ctaLink)}" placeholder="mailto:... veya login.html"></div>
+      <div class="field" style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" data-f="highlight" data-i="${i}" id="highlight-${i}" ${p.highlight?'checked':''} style="width:auto;">
+        <label for="highlight-${i}" style="margin-bottom:0;">Öne çıkar ("Önerilen" rozeti)</label>
+      </div>
+    </div>`).join('');
+
+  wrap.querySelectorAll('input,textarea').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      if(f==='features'){ state.plans[i].features = e.target.value.split('\n').map(s=>s.trim()).filter(Boolean); }
+      else if(f==='highlight'){ state.plans[i].highlight = e.target.checked; }
+      else { state.plans[i][f] = e.target.value; }
+      markDirty();
+    });
+  });
+  wrap.querySelectorAll('button[data-act="del-plan"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.plans.splice(+btn.dataset.i,1);
+      renderPlans(); markDirty();
+    });
+  });
+}
+
 function loadStateIntoForm(){
   document.getElementById('logoPrefix').value = state.logo.prefix || '';
   document.getElementById('logoSuffix').value = state.logo.suffix || '';
@@ -590,6 +636,7 @@ function loadStateIntoForm(){
   renderLogoPreview();
   renderServices();
   renderPosts();
+  renderPlans();
 }
 
 // field bindings
@@ -627,6 +674,10 @@ document.getElementById('addPost').addEventListener('click', ()=>{
   state.posts.unshift({id:'yeni-yazi', date:'', tag:'', author:'Görkem Karaağaç', readTime:'', title:'Yeni Yazı', excerpt:'', access:'free', previewBlocks:2, body:[{type:'p', text:''}]});
   renderPosts(); markDirty();
 });
+document.getElementById('addPlan').addEventListener('click', ()=>{
+  state.plans.push({id:'paket-'+(state.plans.length+1), name:'Yeni Paket', price:'0', period:'/ay', tagline:'', features:[], ctaText:'Detaylı Bilgi', ctaLink:'mailto:gorkemkaraagac1@gmail.com', highlight:false, licenses:[]});
+  renderPlans(); markDirty();
+});
 
 document.getElementById('fileLoader').addEventListener('change', e=>{
   const file = e.target.files[0];
@@ -635,7 +686,7 @@ document.getElementById('fileLoader').addEventListener('change', e=>{
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      state = Object.assign({logo:{},hero:{},services:[],posts:[]}, data);
+      state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[]}, data);
       loadStateIntoForm();
       document.getElementById('statusMsg').textContent = 'Dosya yüklendi. Düzenlemeye devam edebilirsiniz.';
     } catch(err){
@@ -657,7 +708,7 @@ document.getElementById('downloadBtn').addEventListener('click', ()=>{
 
 // başlangıçta site içeriğini otomatik yüklemeyi dene
 fetch('content.json').then(r=>r.json()).then(data=>{
-  state = Object.assign({logo:{},hero:{},services:[],posts:[]}, data);
+  state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[]}, data);
   loadStateIntoForm();
 }).catch(()=>{ loadStateIntoForm(); });
 </script>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiyatlandırma — GK Advisory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0F1C2E; --ink-2:#16283F; --parchment:#EDEAE2; --paper:#F7F5F0;
+    --brass:#B08D57; --brass-dark:#8C6D3F; --line:rgba(176,141,87,0.35);
+    --text-dark:#1C2A3A; --text-mute:#5B6472;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--paper);color:var(--text-dark);font-family:'Inter',sans-serif;line-height:1.6;}
+  a{color:inherit;text-decoration:none;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 32px;}
+
+  header{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--ink);border-bottom:1px solid rgba(176,141,87,0.25);}
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:18px 32px;max-width:1120px;margin:0 auto;}
+  .wordmark{color:var(--parchment);font-family:'Fraunces',serif;font-weight:600;font-size:19px;letter-spacing:0.02em;}
+  .wordmark span{color:var(--brass);}
+  .nav-links{display:flex;gap:32px;align-items:center;flex-wrap:wrap;}
+  .nav-links a{color:var(--parchment);font-size:14px;opacity:0.8;}
+  .nav-links a:hover{opacity:1;}
+  .nav-cta{border:1px solid var(--brass);color:var(--brass) !important;padding:8px 18px;border-radius:2px;font-size:13px !important;opacity:1 !important;}
+  .nav-cta:hover{background:var(--brass);color:var(--ink) !important;}
+
+  .page-hero{background:var(--ink);padding:150px 0 64px;}
+  .eyebrow{color:var(--brass);font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px;}
+  .page-hero h1{font-family:'Fraunces',serif;font-weight:500;font-size:clamp(32px,4.4vw,50px);color:var(--parchment);line-height:1.1;}
+  .page-hero p{color:rgba(237,234,226,0.7);margin-top:16px;font-size:16px;max-width:520px;}
+
+  .section{padding:72px 0 100px;}
+  .plans-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch;}
+  .plan-card{
+    background:var(--parchment);border:1px solid var(--line);border-radius:2px;padding:32px 28px;
+    display:flex;flex-direction:column;position:relative;
+  }
+  .plan-card.highlight{background:var(--ink);color:var(--parchment);border-color:var(--brass);}
+  .plan-badge{
+    position:absolute;top:-13px;left:28px;background:var(--brass);color:var(--ink);
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;
+    padding:4px 10px;border-radius:2px;font-weight:600;
+  }
+  .plan-name{font-family:'Fraunces',serif;font-weight:500;font-size:22px;margin-bottom:6px;}
+  .plan-tagline{font-size:13.5px;color:var(--text-mute);margin-bottom:22px;}
+  .plan-card.highlight .plan-tagline{color:rgba(237,234,226,0.65);}
+  .plan-price{font-family:'Fraunces',serif;font-size:36px;font-weight:500;margin-bottom:4px;}
+  .plan-price .period{font-family:'Inter',sans-serif;font-size:14px;color:var(--text-mute);font-weight:400;}
+  .plan-card.highlight .plan-price .period{color:rgba(237,234,226,0.55);}
+  .plan-features{list-style:none;margin:24px 0 28px;flex-grow:1;}
+  .plan-features li{
+    display:flex;gap:10px;align-items:flex-start;font-size:13.5px;padding:9px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .plan-card.highlight .plan-features li{border-bottom-color:rgba(237,234,226,0.12);}
+  .plan-features li::before{content:'—';color:var(--brass);flex-shrink:0;}
+  .plan-cta{
+    display:block;text-align:center;padding:13px;border-radius:2px;font-weight:600;font-size:14px;
+    background:var(--brass);color:var(--ink);
+  }
+  .plan-cta:hover{background:#c39c66;}
+  .plan-card.highlight .plan-cta{background:var(--brass);color:var(--ink);}
+  .plan-card:not(.highlight) .plan-cta.secondary{background:transparent;border:1px solid var(--brass-dark);color:var(--brass-dark);}
+
+  .faq-note{
+    margin-top:56px;padding:22px 26px;background:#eee8da;border-left:3px solid var(--brass);
+    font-size:13.5px;color:var(--text-mute);max-width:760px;border-radius:2px;
+  }
+
+  footer{background:var(--ink);color:rgba(237,234,226,0.5);padding:28px 0;font-size:13px;display:flex;justify-content:space-between;}
+
+  @media (max-width:860px){
+    .plans-grid{grid-template-columns:1fr;}
+    .nav-links{display:none;}
+    .wrap{padding:0 22px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="nav">
+    <a href="index.html" class="wordmark">GK <span>ADVISORY</span></a>
+    <div class="nav-links">
+      <a href="index.html#hizmetler">Hizmetler</a>
+      <a href="blog.html">Blog</a>
+      <a href="pricing.html">Fiyatlandırma</a>
+      <a href="login.html">Üye Girişi</a>
+      <a href="index.html#iletisim" class="nav-cta">Görüşme Planla</a>
+    </div>
+  </nav>
+</header>
+
+<section class="page-hero">
+  <div class="wrap">
+    <div class="eyebrow">Fiyatlandırma</div>
+    <h1>Erişim düzeyinizi seçin.</h1>
+    <p>Tek seferlik danışmanlık ihtiyacından, ekibinizin sürekli kullandığı finans araçlarına kadar — size uygun planı belirleyin.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="plans-grid" id="plansGrid"></div>
+    <div class="faq-note">
+      Fiyatlar örnek/başlangıç niteliğindedir ve şirket büyüklüğüne, kapsam ve entegrasyon ihtiyacına göre özelleştirilebilir. Enterprise plan için görüşme sonrası özel teklif hazırlanır.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;width:100%;">
+    <span>© 2026 GK Advisory — Görkem Karaağaç</span>
+    <span style="font-family:'JetBrains Mono',monospace;"><a href="admin.html" style="opacity:0.6;">Yönetim</a></span>
+  </div>
+</footer>
+
+<script>
+  fetch('content.json').then(r => r.json()).then(data => {
+    const plans = Array.isArray(data.plans) ? data.plans : [];
+    if (!plans.length) return;
+    document.getElementById('plansGrid').innerHTML = plans.map(p => `
+      <div class="plan-card ${p.highlight ? 'highlight' : ''}">
+        ${p.highlight ? '<div class="plan-badge">Önerilen</div>' : ''}
+        <div class="plan-name">${p.name || ''}</div>
+        <div class="plan-tagline">${p.tagline || ''}</div>
+        <div class="plan-price">${/^[0-9.,]+$/.test(String(p.price).trim()) ? '₺' + p.price : p.price}<span class="period">${p.period || ''}</span></div>
+        <ul class="plan-features">${(p.features || []).map(f => `<li>${f}</li>`).join('')}</ul>
+        <a href="${p.ctaLink || '#'}" class="plan-cta ${p.highlight ? '' : 'secondary'}">${p.ctaText || 'Detaylı Bilgi'}</a>
+      </div>`).join('');
+  }).catch(() => {});
+</script>
+
+</body>
+</html>
