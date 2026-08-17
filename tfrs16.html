@@ -29,8 +29,7 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
   <div class="field"><label>Başlangıç Tarihi</label><input id="startDate" type="date"></div>
   <div class="field"><label>İlk Doğrudan Maliyetler</label><input id="idc" type="number" min="0" step="0.01" value="0"></div>
   <div class="field"><label>Kiralama Teşvikleri (İndirim)</label><input id="incentive" type="number" min="0" step="0.01" value="0"></div>
-  <div class="actions"><button class="btn" id="add">+ Sözleşme ekle</button><button class="btn secondary" id="bulkUploadBtn">Excel'den Toplu Yükle</button><a class="btn secondary" href="GK_TFRS16_Sozlesme_Sablonu.xlsx" download style="text-decoration:none;display:inline-flex;align-items:center;">Şablonu İndir</a><input type="file" id="bulkFile" accept=".xlsx,.xls" style="display:none;"><button class="btn secondary" id="sample">Örnek veri</button></div>
-  <div id="bulkStatus" class="status"></div>
+  <div class="actions"><button class="btn" id="add">+ Sözleşme ekle</button><button class="btn secondary" id="sample">Örnek veri</button></div>
   <div class="note"><strong>Hesaplama mantığı:</strong> Kira yükümlülüğü = aylık ödemelerin, aylık iskonto oranıyla (yıllık oran/12) bugünkü değeri (ödemeler dönem sonunda). ROU varlık = kira yükümlülüğü + ilk doğrudan maliyetler − teşvikler. Amortisman doğrusal, faiz etkin faiz yöntemiyle hesaplanır. Değişken ödeme, opsiyon ve yeniden ölçüm bu prototipte kapsam dışıdır.</div>
 </section>
 
@@ -45,22 +44,10 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
   <div class="actions" style="margin-top:16px"><button class="btn secondary" id="clear">Tümünü Temizle</button><button class="btn secondary" id="print">Yazdır / PDF</button></div>
   <div id="status" class="status"></div>
 </section>
-
-<section class="panel" style="grid-column:1 / -1;"><h2>3 · Muhasebe Kaydı (Düzeltme Fişi)</h2>
-  <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px;">
-    <div class="field" style="max-width:220px;margin-bottom:0;"><label>Raporlama Tarihi</label><input id="reportDate" type="date"></div>
-    <button class="btn" id="genJournal">Muhasebe Kaydını Oluştur</button>
-    <button class="btn secondary" id="journalCsv">CSV dışa aktar</button>
-    <button class="btn secondary" id="journalPrint">Yazdır / PDF</button>
-  </div>
-  <div class="note">Bu fiş, seçilen sözleşmeler için <strong>hiçbir TFRS 16 kaydının daha önce yapılmadığı</strong> varsayımıyla — kontrat başlangıcından raporlama tarihine kadar olan ilk muhasebeleştirme, birikmiş amortisman, birikmiş faiz ve yapılan ödemeleri tek bir düzeltme fişinde birleştirir. Hesap kodları Tekdüzen Hesap Planı'na göre yaygın kullanılan örneklerdir — şirketinizin kendi hesap planına göre uyarlayın. Kısmen kaydedilmiş sözleşmeler için bu fiş, zaten kaydedilmiş tutarları da tekrar içerecektir; mizanla mutabakat yapın.</div>
-  <div id="journalOutput"></div>
-</section>
 </div></main>
 
 <footer><div class="wrap">© 2026 GK Advisory — TFRS 16 Finance Engine · Prototype</div></footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="auth.js"></script>
 <script>
 const user=window.GKAuth?window.GKAuth.current():null;
@@ -158,78 +145,6 @@ document.getElementById('add').onclick=()=>{
   leases.push(l);
   renderRows();
 };
-
-document.getElementById('bulkUploadBtn').addEventListener('click', ()=>document.getElementById('bulkFile').click());
-document.getElementById('bulkFile').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('bulkStatus');
-  statusEl.innerHTML = '<span class="ok">Dosya okunuyor…</span>';
-  const reader = new FileReader();
-  reader.onload = evt => {
-    try {
-      const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
-
-      const toISO = v => {
-        if(!v && v!==0) return '';
-        if(v instanceof Date) return v.toISOString().slice(0,10);
-        const s = String(v).trim();
-        if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-        const parsed = new Date(s);
-        return isNaN(parsed) ? '' : parsed.toISOString().slice(0,10);
-      };
-      const toNum = v => {
-        if(typeof v === 'number') return v;
-        const cleaned = String(v).replace(/[^\d.,-]/g,'').replace(/\.(?=\d{3},)/g,'').replace(',', '.');
-        const n = parseFloat(cleaned);
-        return isNaN(n) ? 0 : n;
-      };
-      const findKey = (row, needles) => Object.keys(row).find(k => {
-        const lk = k.toLocaleLowerCase('tr');
-        return needles.some(n => lk.includes(n));
-      });
-
-      let imported = 0, skipped = 0;
-      json.forEach(row => {
-        const nameKey = findKey(row, ['varlık','varlik','sözleşme','sozlesme']);
-        const paymentKey = findKey(row, ['kira bedeli','aylık kira','aylik kira']);
-        const termKey = findKey(row, ['süre','sure']);
-        const rateKey = findKey(row, ['iskonto']);
-        const startKey = findKey(row, ['başlangıç','baslangic']);
-        const idcKey = findKey(row, ['doğrudan maliyet','dogrudan maliyet']);
-        const incentiveKey = findKey(row, ['teşvik','tesvik']);
-
-        const name = nameKey ? String(row[nameKey]).trim() : '';
-        if(!name || name.toLocaleLowerCase('tr').startsWith('örnek')){ skipped++; return; }
-
-        const l = {
-          assetName: name,
-          payment: paymentKey ? toNum(row[paymentKey]) : 0,
-          term: termKey ? toNum(row[termKey]) : 0,
-          rate: rateKey ? toNum(row[rateKey]) : 0,
-          startDate: startKey ? toISO(row[startKey]) : '',
-          idc: idcKey ? toNum(row[idcKey]) : 0,
-          incentive: incentiveKey ? toNum(row[incentiveKey]) : 0
-        };
-        if(!l.payment || !l.term || !l.rate){ skipped++; return; }
-        leases.push(l);
-        imported++;
-      });
-
-      renderRows();
-      statusEl.innerHTML = imported
-        ? `<span class="ok">${imported} sözleşme içe aktarıldı${skipped?` (${skipped} boş/eksik/örnek satır atlandı)`:''}.</span>`
-        : `<span class="warn">Dosyada geçerli sözleşme satırı bulunamadı. Sütun başlıklarının şablondakiyle aynı ve aylık kira/süre/iskonto alanlarının dolu olduğundan emin olun.</span>`;
-    } catch(err){
-      statusEl.innerHTML = `<span class="warn">Dosya okunamadı. .xlsx formatında ve şablona uygun olduğundan emin olun.</span>`;
-    }
-    e.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
-});
-
 document.getElementById('sample').onclick=()=>{
   document.getElementById('assetName').value='Depo Kirası — İzmir';
   document.getElementById('payment').value=45000;
@@ -242,100 +157,5 @@ document.getElementById('sample').onclick=()=>{
 document.getElementById('clear').onclick=()=>{ leases=[]; renderRows(); };
 document.getElementById('print').onclick=()=>window.print();
 renderRows();
-
-// ---------- 3 · Muhasebe Kaydı (Düzeltme Fişi) ----------
-document.getElementById('reportDate').value = new Date().toISOString().slice(0,10);
-
-function monthsBetween(start, end){
-  let m = (end.getFullYear()-start.getFullYear())*12 + (end.getMonth()-start.getMonth());
-  if(end.getDate() < start.getDate()) m -= 1;
-  return Math.max(0, m);
-}
-
-function calcAsOf(l, reportDateStr){
-  const calc = computeLease(l);
-  const start = new Date(l.startDate);
-  const rd = new Date(reportDateStr);
-  let t = isNaN(start) ? 0 : monthsBetween(start, rd);
-  t = Math.max(0, Math.min(calc.n, t));
-  let cumDep=0, cumInterest=0, cumPayments=0;
-  let closingLiab=calc.liabInitial, closingRou=calc.rouInitial;
-  for(let k=0;k<t;k++){
-    cumDep += calc.schedule[k].dep;
-    cumInterest += calc.schedule[k].interest;
-    cumPayments += calc.schedule[k].payment;
-  }
-  if(t>0){ closingLiab = calc.schedule[t-1].closing; closingRou = calc.schedule[t-1].rouBal; }
-  return { t, months:t, rouInitial:calc.rouInitial, liabInitial:calc.liabInitial, cumDep, cumInterest, cumPayments, closingLiab, closingRou };
-}
-
-function buildJournalRows(l, a){
-  const rows = [];
-  rows.push({desc:`${l.assetName} — İlk Muhasebeleştirme`, acc:'260 Kullanım Hakkı Varlığı (Haklar)', debit:a.rouInitial, credit:0});
-  rows.push({desc:'', acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:0, credit:a.liabInitial});
-  if(a.cumDep>0){
-    rows.push({desc:`${l.assetName} — Birikmiş Amortisman (${a.months} ay)`, acc:'770/730 Amortisman Gideri', debit:a.cumDep, credit:0});
-    rows.push({desc:'', acc:'268 Birikmiş Amortisman - Kullanım Hakkı Varlığı', debit:0, credit:a.cumDep});
-  }
-  if(a.cumInterest>0){
-    rows.push({desc:`${l.assetName} — Birikmiş Faiz (${a.months} ay)`, acc:'780/660 Finansman Gideri (Faiz)', debit:a.cumInterest, credit:0});
-    rows.push({desc:'', acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:0, credit:a.cumInterest});
-  }
-  if(a.cumPayments>0){
-    rows.push({desc:`${l.assetName} — Yapılan Ödemeler (${a.months} ay)`, acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:a.cumPayments, credit:0});
-    rows.push({desc:'', acc:'102 Bankalar', debit:0, credit:a.cumPayments});
-  }
-  return rows;
-}
-
-function renderJournal(){
-  const reportDate = document.getElementById('reportDate').value;
-  const out = document.getElementById('journalOutput');
-  if(!leases.length){ out.innerHTML = `<div class="status"><span class="warn">Önce en az bir sözleşme ekleyin.</span></div>`; return; }
-
-  let allRows = [];
-  let totRouNet=0, totLiabNet=0;
-  leases.forEach(l=>{
-    const a = calcAsOf(l, reportDate);
-    allRows = allRows.concat(buildJournalRows(l, a));
-    totRouNet += a.closingRou;
-    totLiabNet += a.closingLiab;
-  });
-
-  const totalDebit = allRows.reduce((s,r)=>s+r.debit,0);
-  const totalCredit = allRows.reduce((s,r)=>s+r.credit,0);
-  const balanced = Math.abs(totalDebit-totalCredit) < 0.01;
-
-  out.innerHTML = `
-    <div class="summary" style="grid-template-columns:repeat(4,1fr);margin-top:6px;">
-      <div class="metric"><small>Raporlama Tarihi</small><strong style="font-size:16px;">${reportDate}</strong></div>
-      <div class="metric"><small>ROU Net Defter Değeri</small><strong>${fmt(totRouNet)}</strong></div>
-      <div class="metric"><small>Kira Yükümlülüğü (Net)</small><strong>${fmt(totLiabNet)}</strong></div>
-      <div class="metric"><small>Fiş Dengesi</small><strong style="color:${balanced?'#8fd6b4':'#e8a8a0'}">${balanced?'Denk':'Dengesiz'}</strong></div>
-    </div>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Açıklama</th><th>Hesap</th><th>Borç</th><th>Alacak</th></tr></thead><tbody>
-      ${allRows.map(r=>`<tr><td>${r.desc}</td><td>${r.acc}</td><td>${r.debit?fmt(r.debit):''}</td><td>${r.credit?fmt(r.credit):''}</td></tr>`).join('')}
-      <tr style="font-weight:600;background:#f6f2ea;"><td colspan="2">TOPLAM</td><td>${fmt(totalDebit)}</td><td>${fmt(totalCredit)}</td></tr>
-    </tbody></table></div>`;
-}
-
-document.getElementById('genJournal').addEventListener('click', renderJournal);
-document.getElementById('journalPrint').addEventListener('click', ()=>window.print());
-document.getElementById('journalCsv').addEventListener('click', ()=>{
-  const reportDate = document.getElementById('reportDate').value;
-  if(!leases.length){ alert('Önce en az bir sözleşme ekleyin.'); return; }
-  let out=['GK Advisory — TFRS 16 Düzeltme Fişi', 'Raporlama Tarihi;'+reportDate, '', 'Açıklama;Hesap;Borç;Alacak'];
-  let totalDebit=0, totalCredit=0;
-  leases.forEach(l=>{
-    const a = calcAsOf(l, reportDate);
-    buildJournalRows(l,a).forEach(r=>{
-      totalDebit+=r.debit; totalCredit+=r.credit;
-      out.push([r.desc, r.acc, r.debit?r.debit.toFixed(2):'', r.credit?r.credit.toFixed(2):''].join(';'));
-    });
-  });
-  out.push(['TOPLAM','',totalDebit.toFixed(2),totalCredit.toFixed(2)].join(';'));
-  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_TFRS16_Duzeltme_Fisi.csv'; a.click();
-});
 </script>
 </body></html>
