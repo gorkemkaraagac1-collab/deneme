@@ -1,13 +1,160 @@
-<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GK Advisory — Dashboard</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="index.html">Siteye Dön</a><a href="#" id="logout">Çıkış</a></div></nav></header>
-<section class="page-hero"><div class="wrap"><div class="eyebrow">Client Portal</div><h1 id="welcome">Dashboard</h1><p id="meta"></p></div></section>
-<section class="section"><div class="wrap"><div class="service-grid" id="tools"></div></div></section>
-<script src="auth.js"></script><script>
-const u=GKAuth.require(); if(u){
- document.getElementById('welcome').textContent='Hoş geldin, '+u.name;
- document.getElementById('meta').textContent=u.email+' · '+u.plan+' Plan · '+u.role.toUpperCase();
- const all=[['tms29','TMS 29 Endeksleme','Enflasyon muhasebesi düzeltme ve kontrol aracı','tms29.html'],['tms19','TMS 19 Kıdem Tazminatı','Aktüeryal kıdem tazminatı yükümlülüğü hesaplama','tms19.html'],['dcf','DCF Değerleme','Serbest nakit akışı bazlı değerleme','dcf-engine.html'],['workingcapital','Working Capital Analyzer','DSO, DIO, DPO ve cash conversion cycle','working-capital.html'],['tfrs16','TFRS 16','Kiralama yükümlülüğü ve ROU hesaplama','tfrs16.html'],['ecl','ECL Analyzer','Beklenen kredi zararı analizi','ecl.html'],['hedge','Hedge Accounting','Hedge effectiveness değerlendirmesi','hedge.html']];
- document.getElementById('tools').innerHTML=all.map(x=>{const ok=GKAuth.can(x[0]);const href=ok?x[3]:'#';return `<a href="${href}" class="service-card" style="text-decoration:none;opacity:${ok?1:.55};cursor:${ok?'pointer':'not-allowed'}" ${ok?'':'onclick="return false;"'}><span class="acct-no">${ok?'AKTİF':'KİLİTLİ'}</span><h3>${x[1]}</h3><p>${x[2]}</p><small>${ok?'Aracı Aç →':'Bu araç planınıza dahil değil'}</small></a>`}).join('');
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GK Advisory — CFO Intelligence</title>
+<meta name="description" content="GK Advisory CFO Intelligence Dashboard — executive financial decision cockpit">
+<link rel="stylesheet" href="styles.css">
+<style>
+:root{--ink:#102033;--muted:#657384;--paper:#f6f3ec;--card:#fff;--line:#ddd8cc;--gold:#a8894a;--green:#1d7652;--amber:#a56a17;--red:#a33c3c}
+.cfo-wrap{max-width:1280px;margin:auto;padding:0 24px 72px}
+.cfo-hero{padding:54px 0 28px;background:linear-gradient(180deg,#f6f3ec 0%,#fff 100%)}
+.cfo-eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.cfo-title{font-family:Georgia,serif;font-size:clamp(34px,5vw,58px);line-height:1.02;color:var(--ink);margin:12px 0}
+.cfo-sub{max-width:720px;color:var(--muted);font-size:16px;line-height:1.65}
+.cfo-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.cfo-btn{border:1px solid var(--ink);background:var(--ink);color:#fff;padding:11px 16px;border-radius:4px;text-decoration:none;font-size:13px;cursor:pointer}
+.cfo-btn.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.cfo-grid{display:grid;gap:16px}
+.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr));margin:18px 0}
+.kpi,.panel,.alert,.action{background:var(--card);border:1px solid var(--line);border-radius:6px}
+.kpi{padding:20px;min-height:138px}
+.kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.kpi-value{font-family:Georgia,serif;font-size:31px;color:var(--ink);margin:12px 0 5px}
+.kpi-meta{font-size:12px;color:var(--muted)}
+.up{color:var(--green)} .down{color:var(--red)} .watch{color:var(--amber)}
+.section-title{font-family:Georgia,serif;color:var(--ink);font-size:24px;margin:42px 0 14px}
+.two{grid-template-columns:1.35fr .9fr}
+.panel{padding:22px}
+.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:18px}
+.panel-title{font-family:Georgia,serif;color:var(--ink);font-size:21px}
+.panel-note{font-size:12px;color:var(--muted)}
+.bar-row{display:grid;grid-template-columns:90px 1fr 80px;gap:12px;align-items:center;margin:16px 0;font-size:13px;color:var(--ink)}
+.bar-track{height:10px;background:#ebe7dd;border-radius:20px;overflow:hidden}
+.bar-fill{height:100%;border-radius:20px;background:var(--gold)}
+.metric-line{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #eee9df;font-size:13px}
+.metric-line:last-child{border-bottom:0}
+.alert-list,.action-list{display:grid;gap:10px}
+.alert{padding:15px 16px;border-left:4px solid var(--amber)}
+.alert.high{border-left-color:var(--red)} .alert.low{border-left-color:var(--green)}
+.alert strong{display:block;color:var(--ink);font-size:13px;margin-bottom:5px}
+.alert span{font-size:12px;color:var(--muted);line-height:1.5}
+.action{padding:16px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+.priority{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.action strong{font-size:13px;color:var(--ink);display:block}.action small{color:var(--muted)}
+.impact{font-family:Georgia,serif;color:var(--green);font-size:18px;white-space:nowrap}
+.bridge{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}
+.bridge-card{background:#faf8f3;border:1px solid #e7e1d5;padding:16px;border-radius:5px}
+.bridge-card b{font-family:Georgia,serif;font-size:23px;color:var(--ink);display:block;margin:7px 0}
+.covenant{display:flex;align-items:center;gap:16px;margin:8px 0 20px}
+.ring{width:82px;height:82px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) 0 81%,#e8e4da 81% 100%);position:relative}
+.ring:after{content:"";position:absolute;width:62px;height:62px;background:#fff;border-radius:50%}
+.ring b{position:relative;z-index:1;color:var(--ink);font-size:16px}
+@media(max-width:980px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:620px){.cfo-wrap{padding:0 16px 48px}.kpi-grid{grid-template-columns:1fr}.bridge{grid-template-columns:1fr}.action{grid-template-columns:auto 1fr}.impact{grid-column:2}}
+</style>
+</head>
+<body>
+<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a>
+<div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent">
+<a href="index.html">Siteye Dön</a><a href="#" id="logout">Çıkış</a></div></nav></header>
+
+<main>
+<section class="cfo-hero"><div class="cfo-wrap">
+<div class="cfo-eyebrow">CFO Intelligence Layer · Phase 10.1</div>
+<h1 class="cfo-title">Financial Decision Cockpit</h1>
+<p class="cfo-sub">Şirketin finansal performansını, likiditesini, kaldıraç seviyesini ve işletme sermayesini tek ekranda yönet. Bu sürüm executive dashboard foundation olarak tasarlanmıştır.</p>
+<div class="cfo-actions">
+<a class="cfo-btn" href="working-capital.html">Working Capital →</a>
+<a class="cfo-btn secondary" href="dcf-engine.html">DCF Engine</a>
+<a class="cfo-btn secondary" href="ecl.html">ECL Analyzer</a>
+</div>
+</div></section>
+
+<section class="cfo-wrap">
+<div class="cfo-grid kpi-grid" id="kpis"></div>
+
+<h2 class="section-title">CFO View</h2>
+<div class="cfo-grid two">
+<section class="panel">
+<div class="panel-head"><div><div class="panel-title">Working Capital</div><div class="panel-note">Current vs target operating cycle</div></div><div class="impact">€3.2M opportunity</div></div>
+<div class="bar-row"><span>DSO</span><div class="bar-track"><div class="bar-fill" style="width:82%"></div></div><strong>74d</strong></div>
+<div class="bar-row"><span>DIO</span><div class="bar-track"><div class="bar-fill" style="width:76%"></div></div><strong>82d</strong></div>
+<div class="bar-row"><span>DPO</span><div class="bar-track"><div class="bar-fill" style="width:58%"></div></div><strong>42d</strong></div>
+<div class="metric-line"><span>Cash Conversion Cycle</span><strong>114 days</strong></div>
+<div class="metric-line"><span>Target CCC</span><strong>61 days</strong></div>
+<div class="bridge">
+<div class="bridge-card"><small>Receivables</small><b>€1.8M</b><span class="panel-note">cash release</span></div>
+<div class="bridge-card"><small>Inventory</small><b>€0.8M</b><span class="panel-note">cash release</span></div>
+<div class="bridge-card"><small>Payables</small><b>€0.6M</b><span class="panel-note">cash release</span></div>
+</div>
+</section>
+
+<section class="panel">
+<div class="panel-head"><div><div class="panel-title">Liquidity & Debt</div><div class="panel-note">Executive leverage view</div></div></div>
+<div class="covenant"><div class="ring"><b>81%</b></div><div><strong>Covenant headroom</strong><br><span class="panel-note">Healthy · Net Debt / EBITDA 2.84x</span></div></div>
+<div class="metric-line"><span>Cash</span><strong>€18.6M</strong></div>
+<div class="metric-line"><span>Gross Debt</span><strong>€60.7M</strong></div>
+<div class="metric-line"><span>Net Debt</span><strong>€42.1M</strong></div>
+<div class="metric-line"><span>Interest Coverage</span><strong>6.2x</strong></div>
+</section>
+</div>
+
+<h2 class="section-title">CFO Alerts</h2>
+<div class="alert-list">
+<div class="alert high"><strong>🔴 DSO is 9 days above target</strong><span>Receivables are the largest working-capital pressure. Estimated cash-release opportunity: €1.8M.</span></div>
+<div class="alert"><strong>🟠 EBITDA margin is 1.2 pp below target</strong><span>Margin deterioration requires pricing, product mix and cost-base review.</span></div>
+<div class="alert"><strong>🟠 Covenant headroom should be monitored</strong><span>Current Net Debt / EBITDA is 2.84x against a 3.50x limit.</span></div>
+<div class="alert low"><strong>🟢 Inventory opportunity identified</strong><span>Reducing DIO toward target could release approximately €0.8M cash.</span></div>
+</div>
+
+<h2 class="section-title">Management Insights</h2>
+<div class="panel">
+<div class="panel-title">Priority Insight</div>
+<p style="color:var(--ink);line-height:1.7;margin-bottom:8px"><strong>Receivables are currently the largest source of excess liquidity consumption.</strong></p>
+<p class="panel-note" style="line-height:1.7">DSO is 74 days versus a 65-day target. A 5-day reduction would materially improve cash conversion. Prioritise the top overdue customers, review credit limits and introduce collection escalation for high-value accounts.</p>
+</div>
+
+<h2 class="section-title">CFO Action Center</h2>
+<div class="action-list">
+<div class="action"><span class="priority down">High</span><div><strong>Launch top-20 customer collection campaign</strong><small>Owner: AR / Treasury · Focus: overdue receivables</small></div><span class="impact">€1.8M</span></div>
+<div class="action"><span class="priority down">High</span><div><strong>Review leverage and covenant headroom</strong><small>Owner: CFO / Treasury · Scenario: debt reduction</small></div><span class="impact">Risk</span></div>
+<div class="action"><span class="priority watch">Medium</span><div><strong>Inventory SKU rationalisation</strong><small>Owner: Supply Chain / Finance · Focus: slow-moving stock</small></div><span class="impact">€0.8M</span></div>
+<div class="action"><span class="priority watch">Medium</span><div><strong>Margin recovery plan</strong><small>Owner: CFO / Commercial · Focus: pricing and mix</small></div><span class="impact">€1.2M</span></div>
+</div>
+
+<div style="margin-top:28px;padding:20px;background:var(--ink);color:#fff;border-radius:6px;display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap">
+<div><div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.7">Estimated Financial Impact</div><div style="font-family:Georgia,serif;font-size:34px;margin-top:5px">€3.8M+</div></div>
+<div style="max-width:560px;font-size:12px;line-height:1.6;opacity:.78">Phase 10.1 uses illustrative management data. Phase 10.2–10.5 will connect these cards to reusable finance engines, scenario analysis, risk rules and automated management insights.</div>
+</div>
+</section>
+</main>
+
+<script src="auth.js"></script>
+<script>
+const u = window.GKAuth ? GKAuth.require() : null;
+if (u) {
+  const nav = document.querySelector('.wordmark');
+  if (nav) nav.title = u.name || 'GK Advisory';
 }
-document.getElementById('logout').onclick=e=>{e.preventDefault();GKAuth.logout();location.href='login.html';};
-</script></body></html>
+const logout=document.getElementById('logout');
+if(logout && window.GKAuth){logout.onclick=e=>{e.preventDefault();GKAuth.logout();location.href='login.html';};}
+const data=[
+ ['Revenue','€124.6M','+8.2% vs prior','up'],
+ ['EBITDA','€18.4M','+11.4% vs prior','up'],
+ ['EBITDA Margin','14.8%','−1.2 pp vs target','down'],
+ ['Free Cash Flow','€9.7M','+6.8% vs prior','up'],
+ ['Cash','€18.6M','Liquidity: Strong','up'],
+ ['Net Debt','€42.1M','−4.2% vs prior','up'],
+ ['Net Debt / EBITDA','2.84x','3.50x covenant limit','watch'],
+ ['CCC','114 days','61 days target','down'],
+ ['DSO','74 days','65 days target','down'],
+ ['DIO','82 days','75 days target','down'],
+ ['DPO','42 days','48 days target','watch'],
+ ['ROIC','12.6%','+0.9 pp vs prior','up']
+];
+document.getElementById('kpis').innerHTML=data.map(k=>`<article class="kpi"><div class="kpi-label">${k[0]}</div><div class="kpi-value">${k[1]}</div><div class="kpi-meta ${k[3]}">${k[2]}</div></article>`).join('');
+</script>
+</body>
+</html>
