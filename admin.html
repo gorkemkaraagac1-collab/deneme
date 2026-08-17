@@ -439,6 +439,23 @@
       <button class="btn-add" id="addPlan" type="button">+ Yeni paket ekle</button>
     </div>
 
+    <div class="admin-block">
+      <h2>Aktüeryal Tablolar (TMS 19)</h2>
+      <p class="hint">tms19.html aracının kullandığı ölüm ve personel devir oranı tabloları. Her satır bir yaş eşiğidir ("bu yaştan itibaren" mantığıyla); araç hesaplama yaparken bir yaş için tablodaki en yakın alt eşiğin oranını kullanır. Buradaki varsayılan değerler örnektir — gerçek değerleme için CSO 1980 veya güncel bir aktüeryal ölüm tablosu ve şirketinizin gerçek devir istatistikleriyle değiştirin.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+          <h3 style="font:500 15px Fraunces,serif;margin-bottom:10px;color:var(--ink);">Ölüm Oranları (qx, yıllık %)</h3>
+          <div id="mortalityList"></div>
+          <button class="btn-small" id="addMortality" type="button" style="margin-top:8px;">+ Yaş satırı ekle</button>
+        </div>
+        <div>
+          <h3 style="font:500 15px Fraunces,serif;margin-bottom:10px;color:var(--ink);">Personel Devir Oranları (wx, yıllık %)</h3>
+          <div id="turnoverList"></div>
+          <button class="btn-small" id="addTurnover" type="button" style="margin-top:8px;">+ Yaş satırı ekle</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <div class="wrap admin-actions">
@@ -453,7 +470,8 @@ let state = {
   hero: { eyebrow: "", titleLine1: "", titleLine2: "", lede: "" },
   services: [],
   posts: [],
-  plans: []
+  plans: [],
+  actuarial: { mortality: [], turnover: [] }
 };
 
 function slugify(s){
@@ -637,7 +655,43 @@ function loadStateIntoForm(){
   renderServices();
   renderPosts();
   renderPlans();
+  if(!state.actuarial) state.actuarial = {mortality:[], turnover:[]};
+  renderActuarialTable('mortality');
+  renderActuarialTable('turnover');
 }
+
+function renderActuarialTable(key){
+  const wrap = document.getElementById(key==='mortality' ? 'mortalityList' : 'turnoverList');
+  const list = state.actuarial[key] || [];
+  wrap.innerHTML = list.map((r,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <input type="text" inputmode="numeric" value="${r.age}" data-key="${key}" data-i="${i}" data-f="age" placeholder="Yaş" style="width:70px;padding:8px;border:1px solid var(--line);background:var(--parchment);border-radius:2px;font-size:13.5px;">
+      <input type="text" inputmode="decimal" value="${r.rate}" data-key="${key}" data-i="${i}" data-f="rate" placeholder="Oran %" style="flex:1;padding:8px;border:1px solid var(--line);background:var(--parchment);border-radius:2px;font-size:13.5px;">
+      <button class="btn-small danger" data-key="${key}" data-i="${i}" data-act="del-act" type="button">Sil</button>
+    </div>`).join('');
+  wrap.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const k=e.target.dataset.key, i=+e.target.dataset.i, f=e.target.dataset.f;
+      state.actuarial[k][i][f] = f==='age' ? (parseInt(e.target.value,10)||0) : (parseFloat(e.target.value)||0);
+      markDirty();
+    });
+  });
+  wrap.querySelectorAll('button[data-act="del-act"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const k=btn.dataset.key;
+      state.actuarial[k].splice(+btn.dataset.i,1);
+      renderActuarialTable(k); markDirty();
+    });
+  });
+}
+document.getElementById('addMortality').addEventListener('click', ()=>{
+  state.actuarial.mortality.push({age:0, rate:0});
+  renderActuarialTable('mortality'); markDirty();
+});
+document.getElementById('addTurnover').addEventListener('click', ()=>{
+  state.actuarial.turnover.push({age:0, rate:0});
+  renderActuarialTable('turnover'); markDirty();
+});
 
 // field bindings
 ['logoPrefix','logoSuffix'].forEach(id=>{
@@ -686,7 +740,7 @@ document.getElementById('fileLoader').addEventListener('change', e=>{
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[]}, data);
+      state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]}}, data);
       loadStateIntoForm();
       document.getElementById('statusMsg').textContent = 'Dosya yüklendi. Düzenlemeye devam edebilirsiniz.';
     } catch(err){
@@ -708,7 +762,7 @@ document.getElementById('downloadBtn').addEventListener('click', ()=>{
 
 // başlangıçta site içeriğini otomatik yüklemeyi dene
 fetch('content.json').then(r=>r.json()).then(data=>{
-  state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[]}, data);
+  state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]}}, data);
   loadStateIntoForm();
 }).catch(()=>{ loadStateIntoForm(); });
 </script>
