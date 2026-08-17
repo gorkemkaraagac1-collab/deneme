@@ -27,6 +27,7 @@
   .nav-links a:hover{opacity:1;}
   .nav-cta{border:1px solid var(--brass);color:var(--brass) !important;padding:8px 18px;border-radius:2px;font-size:13px !important;opacity:1 !important;}
   .nav-cta:hover{background:var(--brass);color:var(--ink) !important;}
+  .nav-toggle{display:none;}
 
   .page-hero{background:var(--ink);padding:150px 0 64px;}
   .eyebrow{color:var(--brass);font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px;}
@@ -75,7 +76,11 @@
 
   @media (max-width:860px){
     .plans-grid{grid-template-columns:1fr;}
-    .nav-links{display:none;}
+    .nav-links{position:fixed; top:64px; left:0; right:0; bottom:0; background:var(--ink);
+      flex-direction:column; padding:40px 32px; gap:26px; transform:translateX(100%);
+      transition:transform 0.3s; align-items:flex-start;}
+    .nav-links.open{transform:translateX(0);}
+    .nav-toggle{display:block; background:none; border:none; color:var(--parchment); font-size:22px;}
     .wrap{padding:0 22px;}
   }
 </style>
@@ -85,7 +90,8 @@
 <header>
   <nav class="nav">
     <a href="index.html" class="wordmark">GK <span>ADVISORY</span></a>
-    <div class="nav-links">
+    <button class="nav-toggle" id="navToggle" aria-label="Menüyü aç/kapat" aria-controls="navLinks" aria-expanded="false">☰</button>
+    <div class="nav-links" id="navLinks">
       <a href="index.html#hizmetler">Hizmetler</a>
       <a href="blog.html">Blog</a>
       <a href="pricing.html">Fiyatlandırma</a>
@@ -120,6 +126,11 @@
 </footer>
 
 <script>
+  const toggle = document.getElementById('navToggle');
+  const links = document.getElementById('navLinks');
+  toggle.addEventListener('click', () => links.classList.toggle('open'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => links.classList.remove('open')));
+
   fetch('content.json').then(r => r.json()).then(data => {
     const plans = Array.isArray(data.plans) ? data.plans : [];
     if (!plans.length) return;
