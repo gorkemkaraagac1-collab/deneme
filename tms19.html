@@ -52,6 +52,24 @@ footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
   <div class="table-wrap"><table class="tbl"><thead><tr><th>Ad / Unvan</th><th>İşe Giriş</th><th>Doğum Tarihi</th><th>Aylık Ücret</th><th>Kıdem (yıl)</th><th>Nominal (bugün)</th><th>Hak Ediş Olasılığı</th><th>DBO (Bugünkü Değer)</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
   <div id="status" class="status"></div>
 </section>
+
+<section class="panel" style="grid-column:1 / -1;"><h2>3 · Muhasebe Kaydı (Düzeltme Fişi)</h2>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+    <div class="field" style="margin-bottom:0;"><label>Dönem Başı DBO (Açılış Bakiyesi)</label><input id="openingDbo" type="number" min="0" step="0.01" value="0"></div>
+    <div class="field" style="margin-bottom:0;"><label>Dönem İçinde Ödenen Fiili Tazminatlar</label><input id="benefitsPaid" type="number" min="0" step="0.01" value="0"></div>
+    <div class="field" style="margin-bottom:0;"><label>Kurumlar Vergisi Oranı (%)</label><input id="taxRate" type="number" min="0" step="0.01" value="25"></div>
+    <div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;gap:8px;">
+      <input type="checkbox" id="includeDefTax" checked style="width:auto;"><label for="includeDefTax" style="margin-bottom:0;">Ertelenmiş vergiyi dahil et</label>
+    </div>
+  </div>
+  <div class="actions" style="margin-bottom:18px;"><button class="btn" id="genJournal">Muhasebe Kaydını Oluştur</button><button class="btn secondary" id="journalCsv">CSV dışa aktar</button><button class="btn secondary" id="journalPrint">Yazdır / PDF</button></div>
+  <div class="note">
+    <strong>Yöntem:</strong> Kapanış DBO = Açılış DBO + Cari Hizmet Maliyeti + Faiz Maliyeti (Açılış DBO × iskonto oranı) − Ödenen Tazminatlar + Aktüeryal (Kazanç)/Kayıp. Cari hizmet maliyeti, her personel için son bir yıllık hizmetin marjinal etkisi olarak yaklaşık hesaplanır. Faiz maliyeti ve hizmet maliyeti <strong>kâr/zarara</strong>; aktüeryal kazanç/kayıp (yeniden ölçüm) TMS 19 (2011 revize) gereği <strong>Diğer Kapsamlı Gelir/Özkaynaklara</strong> yazılır — kâr/zarara alınmaz.
+    <br><br><strong>Ertelenmiş vergi:</strong> Kıdem tazminatı karşılığı Türkiye'de ödendiğinde vergiden indirilebildiği için tamamı indirilebilir geçici fark oluşturur. Ertelenmiş vergi varlığındaki değişim de aynı mantıkla bölünür: kâr/zararla ilişkili kısım kâr/zarara, özkaynaklarla ilişkili kısım özkaynaklara yazılır. <strong>Kurumlar vergisi oranını güncel mevzuattan teyit edin</strong> — bu araç otomatik güncellemez.
+    <br><br>Açılış DBO "0" bırakılırsa (ilk uygulama), tüm kapanış DBO'su cari hizmet maliyeti olarak, aktüeryal kazanç/kayıp hesaplanmadan kaydedilir. Hesap kodları (472, 293, 531 vb.) yaygın kullanılan örneklerdir — kendi hesap planınıza uyarlayın.
+  </div>
+  <div id="journalOutput"></div>
+</section>
 </div></main>
 
 <footer><div class="wrap">© 2026 GK Advisory — TMS 19 Finance Engine · Prototype</div></footer>
@@ -302,5 +320,139 @@ fetch('content.json').then(r=>r.json()).then(data=>{
   renderRefTables();
   renderRows();
 }).catch(()=>{ renderRefTables(); renderRows(); });
+
+// ---------- 3 · Muhasebe Kaydı (Düzeltme Fişi) ----------
+
+function serviceCostForEmployee(e){
+  // Marjinal hizmet maliyeti: son 1 yıllık hizmetin PV etkisi ~ mevcut PV − (1 yıl daha az hizmetle hesaplanan) PV
+  const shifted = Object.assign({}, e);
+  if(e.hireDate){
+    const d = new Date(e.hireDate);
+    d.setFullYear(d.getFullYear()+1); // 1 yıl sonra işe girmiş gibi = 1 yıl daha az kıdem
+    shifted.hireDate = d.toISOString().slice(0,10);
+  }
+  const pvNow = calcEmployee(e).pv;
+  const pvMinus1 = calcEmployee(shifted).pv;
+  return Math.max(0, pvNow - pvMinus1);
+}
+
+function buildActuarialJournal(){
+  const totalDboClose = staff.reduce((s,e)=> s + calcEmployee(e).pv, 0);
+  const openingDbo = Number(document.getElementById('openingDbo').value) || 0;
+  const benefitsPaid = Number(document.getElementById('benefitsPaid').value) || 0;
+  const discRate = Number(document.getElementById('discRate').value)/100 || 0;
+  const taxRate = Number(document.getElementById('taxRate').value)/100 || 0;
+  const includeTax = document.getElementById('includeDefTax').checked;
+
+  let serviceCost, interestCost, remeasurement;
+
+  if(openingDbo <= 0){
+    // İlk uygulama: tüm bakiye hizmet maliyeti olarak kaydedilir, yeniden ölçüm ayrıştırılmaz
+    serviceCost = totalDboClose - benefitsPaid;
+    if(serviceCost < 0) serviceCost = totalDboClose;
+    interestCost = 0;
+    remeasurement = 0;
+  } else {
+    serviceCost = staff.reduce((s,e)=> s + serviceCostForEmployee(e), 0);
+    interestCost = openingDbo * discRate;
+    remeasurement = totalDboClose - openingDbo - serviceCost - interestCost + benefitsPaid;
+  }
+
+  const rows = [];
+  if(serviceCost > 0.01){
+    rows.push({desc:'Cari Hizmet Maliyeti', acc:'770/760 Personel Giderleri', debit:serviceCost, credit:0});
+    rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:serviceCost});
+  }
+  if(interestCost > 0.01){
+    rows.push({desc:'Faiz Maliyeti', acc:'780/660 Finansman Gideri', debit:interestCost, credit:0});
+    rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:interestCost});
+  }
+  if(benefitsPaid > 0.01){
+    rows.push({desc:'Dönem İçinde Ödenen Tazminatlar', acc:'472 Kıdem Tazminatı Karşılığı', debit:benefitsPaid, credit:0});
+    rows.push({desc:'', acc:'100/102 Kasa/Bankalar', debit:0, credit:benefitsPaid});
+  }
+  if(Math.abs(remeasurement) > 0.01){
+    if(remeasurement > 0){
+      rows.push({desc:'Aktüeryal Kayıp (Yeniden Ölçüm)', acc:'531 Özkaynaklar — Tanımlanmış Fayda Yeniden Ölçüm Kayıpları (OKG)', debit:remeasurement, credit:0});
+      rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:remeasurement});
+    } else {
+      const amt = Math.abs(remeasurement);
+      rows.push({desc:'Aktüeryal Kazanç (Yeniden Ölçüm)', acc:'472 Kıdem Tazminatı Karşılığı', debit:amt, credit:0});
+      rows.push({desc:'', acc:'531 Özkaynaklar — Tanımlanmış Fayda Yeniden Ölçüm Kazançları (OKG)', debit:0, credit:amt});
+    }
+  }
+
+  let dtaPl=0, dtaOci=0;
+  if(includeTax){
+    dtaPl = (serviceCost + interestCost - benefitsPaid) * taxRate;
+    dtaOci = remeasurement * taxRate;
+    if(Math.abs(dtaPl) > 0.01){
+      if(dtaPl > 0){
+        rows.push({desc:'Ertelenmiş Vergi Etkisi (K/Z)', acc:'293 Ertelenmiş Vergi Varlığı', debit:dtaPl, credit:0});
+        rows.push({desc:'', acc:'692 Ertelenmiş Vergi Geliri', debit:0, credit:dtaPl});
+      } else {
+        const amt = Math.abs(dtaPl);
+        rows.push({desc:'Ertelenmiş Vergi Etkisi (K/Z)', acc:'692 Ertelenmiş Vergi Gideri', debit:amt, credit:0});
+        rows.push({desc:'', acc:'293 Ertelenmiş Vergi Varlığı', debit:0, credit:amt});
+      }
+    }
+    if(Math.abs(dtaOci) > 0.01){
+      if(dtaOci > 0){
+        rows.push({desc:'Ertelenmiş Vergi Etkisi (OKG)', acc:'293 Ertelenmiş Vergi Varlığı', debit:dtaOci, credit:0});
+        rows.push({desc:'', acc:'531 Özkaynaklar — Yeniden Ölçümlerin Ertelenmiş Vergi Etkisi', debit:0, credit:dtaOci});
+      } else {
+        const amt = Math.abs(dtaOci);
+        rows.push({desc:'Ertelenmiş Vergi Etkisi (OKG)', acc:'531 Özkaynaklar — Yeniden Ölçümlerin Ertelenmiş Vergi Etkisi', debit:amt, credit:0});
+        rows.push({desc:'', acc:'293 Ertelenmiş Vergi Varlığı', debit:0, credit:amt});
+      }
+    }
+  }
+
+  return { rows, totalDboClose, openingDbo, serviceCost, interestCost, benefitsPaid, remeasurement, dtaPl, dtaOci };
+}
+
+function renderJournal(){
+  const out = document.getElementById('journalOutput');
+  if(!staff.length){ out.innerHTML = `<div class="status"><span class="warn">Önce en az bir personel ekleyin.</span></div>`; return; }
+
+  const r = buildActuarialJournal();
+  const totalDebit = r.rows.reduce((s,x)=>s+x.debit,0);
+  const totalCredit = r.rows.reduce((s,x)=>s+x.credit,0);
+  const balanced = Math.abs(totalDebit-totalCredit) < 0.01;
+
+  out.innerHTML = `
+    <div class="summary" style="grid-template-columns:repeat(5,1fr);margin-top:6px;">
+      <div class="metric"><small>Kapanış DBO</small><strong>${fmt(r.totalDboClose)}</strong></div>
+      <div class="metric"><small>Cari Hizmet Maliyeti</small><strong>${fmt(r.serviceCost)}</strong></div>
+      <div class="metric"><small>Faiz Maliyeti</small><strong>${fmt(r.interestCost)}</strong></div>
+      <div class="metric"><small>Aktüeryal (Kazanç)/Kayıp</small><strong>${fmt(r.remeasurement)}</strong></div>
+      <div class="metric"><small>Fiş Dengesi</small><strong style="color:${balanced?'#8fd6b4':'#e8a8a0'}">${balanced?'Denk':'Dengesiz'}</strong></div>
+    </div>
+    ${r.rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Açıklama</th><th>Hesap</th><th>Borç</th><th>Alacak</th></tr></thead><tbody>
+      ${r.rows.map(x=>`<tr><td>${x.desc}</td><td>${x.acc}</td><td>${x.debit?fmt(x.debit):''}</td><td>${x.credit?fmt(x.credit):''}</td></tr>`).join('')}
+      <tr style="font-weight:600;background:#f6f2ea;"><td colspan="2">TOPLAM</td><td>${fmt(totalDebit)}</td><td>${fmt(totalCredit)}</td></tr>
+    </tbody></table></div>` : `<div class="status"><span class="ok">Hesaplanan hareketler önemsiz düzeyde — ek kayıt gerekmiyor.</span></div>`}`;
+}
+
+document.getElementById('genJournal').addEventListener('click', renderJournal);
+document.getElementById('journalPrint').addEventListener('click', ()=>window.print());
+document.getElementById('journalCsv').addEventListener('click', ()=>{
+  if(!staff.length){ alert('Önce en az bir personel ekleyin.'); return; }
+  const r = buildActuarialJournal();
+  let out=['GK Advisory — TMS 19 Düzeltme Fişi'];
+  out.push('Açılış DBO;'+r.openingDbo.toFixed(2));
+  out.push('Kapanış DBO;'+r.totalDboClose.toFixed(2));
+  out.push('Cari Hizmet Maliyeti;'+r.serviceCost.toFixed(2));
+  out.push('Faiz Maliyeti;'+r.interestCost.toFixed(2));
+  out.push('Ödenen Tazminatlar;'+r.benefitsPaid.toFixed(2));
+  out.push('Aktüeryal (Kazanç)/Kayıp;'+r.remeasurement.toFixed(2));
+  out.push('');
+  out.push('Açıklama;Hesap;Borç;Alacak');
+  let totalDebit=0, totalCredit=0;
+  r.rows.forEach(x=>{ totalDebit+=x.debit; totalCredit+=x.credit; out.push([x.desc, x.acc, x.debit?x.debit.toFixed(2):'', x.credit?x.credit.toFixed(2):''].join(';')); });
+  if(r.rows.length) out.push(['TOPLAM','',totalDebit.toFixed(2),totalCredit.toFixed(2)].join(';'));
+  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_TMS19_Duzeltme_Fisi.csv'; a.click();
+});
 </script>
 </body></html>
