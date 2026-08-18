@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCockpitKPIs();
   renderWorkingCapitalKPIs();
   renderValuationUI();
+  renderTMS29KPIs();
   bindValuationInputEvents();
 });
 
@@ -62,6 +63,20 @@ function renderValuationUI() {
 
   const netDebtEl = document.querySelector('[data-val="net-debt"]');
   if (netDebtEl) netDebtEl.textContent = fmt.currency(dcf.netDebt);
+}
+
+// Render TMS 29 Inflation Engine Page
+function renderTMS29KPIs() {
+  if (typeof FinancialEngine === 'undefined') return;
+
+  const tms29 = FinancialEngine.calculateTMS29();
+  const fmt = FinancialEngine.formatters;
+
+  const gainEl = document.querySelector('[data-tms29="non-monetary-gain"]');
+  if (gainEl) gainEl.textContent = fmt.currency(tms29.inflationGainOnAssets, '₺');
+
+  const lossEl = document.querySelector('[data-tms29="monetary-loss"]');
+  if (lossEl) lossEl.textContent = fmt.currency(tms29.monetaryLoss, '₺');
 }
 
 // Bind Dynamic Inputs on DCF Page
