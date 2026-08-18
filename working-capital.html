@@ -46,33 +46,35 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 30px;">
       <div class="kpi-card">
         <span class="kpi-title">DSO (Days Sales Outstanding)</span>
-        <div class="kpi-value">54 Days</div>
+        <div class="kpi-value" data-kpi="dso">0 Days</div>
         <div class="kpi-delta negative">▲ +7 Days vs Budget</div>
       </div>
       <div class="kpi-card">
         <span class="kpi-title">DIO (Days Inventory Outstanding)</span>
-        <div class="kpi-value">42 Days</div>
+        <div class="kpi-value" data-kpi="dio">0 Days</div>
         <div class="kpi-delta positive">▼ -2 Days vs Budget</div>
       </div>
       <div class="kpi-card">
         <span class="kpi-title">DPO (Days Payables Outstanding)</span>
-        <div class="kpi-value">48 Days</div>
+        <div class="kpi-value" data-kpi="dpo">0 Days</div>
         <div class="kpi-delta positive">▲ +3 Days vs Budget</div>
       </div>
       <div class="kpi-card">
         <span class="kpi-title">CCC (Cash Conversion Cycle)</span>
-        <div class="kpi-value">48 Days</div>
+        <div class="kpi-value" data-kpi="wc-ccc">0 Days</div>
         <div class="kpi-delta negative">▲ +2 Days Impact</div>
       </div>
     </div>
 
     <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">WORKING CAPITAL ALERT</span> DSO increased by 7 days.</div>
+      <div class="insight-step"><span class="insight-step-label step-happened">WORKING CAPITAL ALERT</span> DSO target tolerance exceeded.</div>
       <div class="insight-step"><span class="insight-step-label step-sowhat">CASH IMPACT</span> Estimated working capital cash lockup: €2.4M.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">OPPORTUNITY</span> Reducing DSO by 5 days could release approximately €1.7M cash immediately.</div>
+      <div class="insight-step"><span class="insight-step-label step-next">OPPORTUNITY</span> Reducing DSO by 5 days releases approximately €1.7M cash immediately.</div>
     </div>
   </main>
 
+  <!-- Script Entegrasyon Sırası -->
+  <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
