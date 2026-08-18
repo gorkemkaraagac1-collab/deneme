@@ -1,13 +1,70 @@
-<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GK Advisory — Dashboard</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="index.html">Siteye Dön</a><a href="#" id="logout">Çıkış</a></div></nav></header>
-<section class="page-hero"><div class="wrap"><div class="eyebrow">Müşteri Portalı</div><h1 id="welcome">Finans Yönetim Merkezi</h1><p id="meta"></p></div></section>
-<section class="section"><div class="wrap"><div class="service-grid" id="tools"></div></div></section>
-<script src="auth.js"></script><script>
-const u=GKAuth.require(); if(u){
- document.getElementById('welcome').textContent='Hoş geldin, '+u.name;
- document.getElementById('meta').textContent=u.email+' · '+u.plan+' Plan · '+(u.role==='admin'?'Yönetici':'Kullanıcı');
- const all=[['financial-cockpit','CFO Kokpiti','Şirketin finansal görünümünü, risklerini ve yönetim önceliklerini tek ekranda izleyin','financial-decision-cockpit.html'],['tms29','TMS 29 — Enflasyon Muhasebesi','Enflasyon düzeltmesi, endeksleme ve kontrol hesaplamaları','tms29.html'],['tms19','TMS 19 — Çalışanlara Sağlanan Faydalar','Kıdem tazminatı ve aktüeryal yükümlülük hesaplamaları','tms19.html'],['dcf','DCF — Şirket Değerleme','Serbest nakit akışı bazlı şirket değerleme ve duyarlılık analizi','dcf-engine.html'],['workingcapital','İşletme Sermayesi','DSO, DIO, DPO ve nakit dönüşüm süresi analizi','working-capital.html'],['tfrs16','TFRS 16 — Kiralamalar','Kira yükümlülüğü, kullanım hakkı varlığı ve muhasebe fişi','tfrs16.html'],['ecl','Beklenen Kredi Zararı','Alacak portföyü ve beklenen kredi zararı analizi','ecl.html'],['hedge','Riskten Korunma Muhasebesi','Riskten korunma ilişkisi ve etkinlik değerlendirmesi','hedge.html']];
- document.getElementById('tools').innerHTML=all.map(x=>{const ok=GKAuth.can(x[0]);const href=ok?x[3]:'#';return `<a href="${href}" class="service-card" style="text-decoration:none;opacity:${ok?1:.55};cursor:${ok?'pointer':'not-allowed'}" ${ok?'':'onclick="return false;"'}><span class="acct-no">${ok?'AKTİF':'KİLİTLİ'}</span><h3>${x[1]}</h3><p>${x[2]}</p><small>${ok?'Aracı Aç →':'Bu araç planınıza dahil değil'}</small></a>`}).join('');
+{
+  "plans": [
+    {
+      "id": "starter",
+      "name": "Starter",
+      "tagline": "Finans otomasyonuna giriş",
+      "price": "2.900",
+      "period": " / ay",
+      "highlight": false,
+      "features": [
+        "1 kullanıcı",
+        "TFRS 16 Kiralama Motoru",
+        "25 sözleşmeye kadar",
+        "Otomatik kira yükümlülüğü hesaplama",
+        "ROU varlık ve amortisman hesaplama",
+        "Faiz ve ödeme tablosu",
+        "Excel'den sözleşme yükleme",
+        "CSV dışa aktarma"
+      ],
+      "ctaText": "Başlayın",
+      "ctaLink": "login.html"
+    },
+    {
+      "id": "professional",
+      "name": "Professional",
+      "tagline": "Finans ekipleri için gelişmiş otomasyon",
+      "price": "7.900",
+      "period": " / ay",
+      "highlight": true,
+      "features": [
+        "5 kullanıcı",
+        "250 sözleşmeye kadar",
+        "Tüm TFRS 16 hesaplama özellikleri",
+        "Toplu Excel yükleme",
+        "Dönemsel yeniden ölçüm",
+        "Muhasebe fişi oluşturma",
+        "Ertelenmiş vergi hesaplama",
+        "Mutabakat ve kontrol raporları",
+        "CFO Cockpit temel göstergeleri",
+        "Öncelikli destek"
+      ],
+      "ctaText": "Profesyonel Pakete Geçin",
+      "ctaLink": "login.html"
+    },
+    {
+      "id": "enterprise",
+      "name": "Enterprise",
+      "tagline": "Kurumsal finans dönüşümü",
+      "price": "Özel Teklif",
+      "period": "",
+      "highlight": false,
+      "features": [
+        "Sınırsız kullanıcı",
+        "Yüksek hacimli sözleşme portföyü",
+        "CFO Cockpit",
+        "Audit trail",
+        "Kullanıcı ve rol yönetimi",
+        "ERP entegrasyonları",
+        "API erişimi",
+        "Çoklu şirket yapısı",
+        "Çoklu para birimi",
+        "Özel raporlama",
+        "Workflow ve onay mekanizmaları",
+        "SLA ve öncelikli destek"
+      ],
+      "ctaText": "Kurumsal Görüşme Planla",
+      "ctaLink": "index.html#iletisim"
+    }
+  ]
 }
-document.getElementById('logout').onclick=e=>{e.preventDefault();GKAuth.logout();location.href='login.html';};
-</script></body></html>
