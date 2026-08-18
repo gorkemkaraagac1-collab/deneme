@@ -1,43 +1,37 @@
 /* ==========================================================================
-   FINANCIAL INTELLIGENCE PLATFORM - GLOBAL DESIGN SYSTEM
+   GK ADVISORY - ENTERPRISE DESIGN SYSTEM & GLOBAL STYLES
    ========================================================================== */
 
 :root {
-  /* Color Palette - Enterprise Financial Dark/Light Hybrid */
-  --navy-900: #0f172a;
-  --navy-800: #1e293b;
-  --navy-700: #334155;
+  /* GK Advisory Color Palette */
+  --gk-navy-dark: #0b132b;
+  --gk-navy-card: #1c2541;
+  --gk-gold: #d4af37;
+  --gk-gold-hover: #f3e5ab;
+  
+  --slate-900: #0f172a;
+  --slate-800: #1e293b;
+  --slate-700: #334155;
   --slate-600: #475569;
   --slate-500: #64748b;
   --slate-300: #cbd5e1;
   --slate-100: #f1f5f9;
   --slate-50:  #f8fafc;
 
-  /* Accent & Status Colors */
-  --primary: #1e3a8a;
-  --primary-hover: #1d4ed8;
-  --accent: #2563eb;
-  
+  /* Status & Financial Indicators */
   --success: #15803d;
   --success-bg: #f0fdf4;
   --warning: #b45309;
   --warning-bg: #fffbeb;
   --danger: #b91c1c;
   --danger-bg: #fef2f2;
-  --info: #0369a1;
-  --info-bg: #f0f9ff;
 
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
-
-  /* Spacing & Layout */
-  --header-height: 60px;
-  --sidebar-width: 260px;
-  --border-radius: 6px;
+  /* Layout */
   --border-color: #e2e8f0;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -47,15 +41,97 @@
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: var(--slate-50);
-  color: var(--navy-900);
+  color: var(--slate-900);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Tabular Nums for Financial Data Alignment */
 .amount, .metric-value, td.number, .financial-num {
-  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   HEADER & NAVIGATION (GK ADVISORY FIXED STANDARD)
+   ========================================================================== */
+
+.gk-header {
+  width: 100%;
+  background-color: var(--gk-navy-dark);
+  color: #ffffff !important;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  z-index: 100;
+}
+
+.gk-header-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gk-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #ffffff !important;
+}
+
+.gk-brand .brand-logo {
+  color: var(--gk-gold) !important;
+}
+
+.gk-brand .brand-title {
+  color: #ffffff !important;
+}
+
+.gk-nav .nav-link {
+  color: var(--slate-300) !important;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.gk-nav .nav-link:hover {
+  color: var(--gk-gold) !important;
+}
+
+/* ==========================================================================
+   MAIN CONTENT & CONTAINER
+   ========================================================================== */
+
+main, .main-container, .container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 20px 40px 20px !important;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: var(--slate-900);
+  margin-bottom: 6px;
+}
+
+.page-header p {
+  font-size: 0.95rem;
+  color: var(--slate-600);
 }
