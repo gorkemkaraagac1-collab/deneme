@@ -3,87 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Working Capital Intelligence - GK Platform</title>
+  <title>GK ADVISORY - Çalışma Sermayesi Yönetimi</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
-  <!-- Chart.js CDN Entegrasyonu -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
+  <header class="gk-header">
+    <div class="gk-header-container">
+      <div class="gk-brand">
         <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
-        </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link" style="color: var(--text-primary);">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
-        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
-          </div>
-        </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+        <span class="brand-title">ADVISORY</span>
       </div>
+      <nav class="gk-nav">
+        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
+      </nav>
     </div>
   </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Working Capital Intelligence &amp; Cash Cycle</h2>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 30px;">
-      <div class="kpi-card">
-        <span class="kpi-title">DSO (Days Sales Outstanding)</span>
-        <div class="kpi-value" data-kpi="dso">0 Days</div>
-        <div class="kpi-delta negative">▲ +7 Days vs Budget</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">DIO (Days Inventory Outstanding)</span>
-        <div class="kpi-value" data-kpi="dio">0 Days</div>
-        <div class="kpi-delta positive">▼ -2 Days vs Budget</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">DPO (Days Payables Outstanding)</span>
-        <div class="kpi-value" data-kpi="dpo">0 Days</div>
-        <div class="kpi-delta positive">▲ +3 Days vs Budget</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">CCC (Cash Conversion Cycle)</span>
-        <div class="kpi-value" data-kpi="wc-ccc">0 Days</div>
-        <div class="kpi-delta negative">▲ +2 Days Impact</div>
-      </div>
+  <main class="main-container">
+    <div class="page-header">
+      <div class="kpi-title">FINANCE INTELLIGENCE · WORKING CAPITAL</div>
+      <h1>Çalışma Sermayesi Yönetimi</h1>
+      <p>Nakit Dönüşüm Süresi (CCC), Alacak Tahsilat Süresi (DSO), Stok Devir Süresi (DIO) ve Borç Ödeme Süresi (DPO) analizi.</p>
     </div>
 
-    <!-- Chart.js Working Capital Breakdown Canvas -->
-    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Nakit Dönüşüm Döngüsü (CCC) Bileşenleri (Gün)</h3>
-      <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="wcChart"></canvas>
-      </div>
-    </div>
-
-    <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">WORKING CAPITAL ALERT</span> DSO target tolerance exceeded.</div>
-      <div class="insight-step"><span class="insight-step-label step-sowhat">CASH IMPACT</span> Estimated working capital cash lockup: €2.4M.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">OPPORTUNITY</span> Reducing DSO by 5 days releases approximately €1.7M cash immediately.</div>
+    <div class="kpi-card">
+      <h3 class="serif-title" style="font-size: 1.2rem; color: var(--gk-navy); margin-bottom: 16px;">1 · Çalışma Sermayesi Girdileri</h3>
+      <form style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <div>
+          <label class="kpi-title">ALACAKLAR (DSO HESABI)</label>
+          <input type="number" placeholder="Örn. 1200000" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
+        </div>
+        <div>
+          <label class="kpi-title">STOKLAR (DIO HESABI)</label>
+          <input type="number" placeholder="Örn. 850000" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
+        </div>
+        <div>
+          <label class="kpi-title">BORÇLAR (DPO HESABI)</label>
+          <input type="number" placeholder="Örn. 650000" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
+        </div>
+      </form>
     </div>
   </main>
 
-  <!-- Script Entegrasyon Sırası -->
   <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
