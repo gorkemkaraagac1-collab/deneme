@@ -1,106 +1,144 @@
-<!-- STANDART HEAD YAPISI -->
+<!DOCTYPE html>
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GK ADVISORY - Financial Intelligence Platform</title>
+  <title>GK ADVISORY - Financial Intelligence Decision Cockpit</title>
+  
+  <!-- Modern & Clean Design System -->
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="styles.css">
 </head>
+<body>
 
-<!-- STANDART GK ADVISORY HEADER -->
-<header class="gk-header">
-  <div class="gk-header-container">
-    <div class="gk-brand">
-      <span class="brand-logo">GK</span>
-      <span class="brand-title">ADVISORY</span>
+  <!-- FIXED GK ADVISORY HEADER -->
+  <header class="gk-header">
+    <div class="gk-header-container">
+      <div class="gk-brand">
+        <span class="brand-logo">GK</span>
+        <span class="brand-title">ADVISORY</span>
+      </div>
+      <nav class="gk-nav">
+        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
+      </nav>
     </div>
-    <nav class="gk-nav">
-      <a href="dashboard.html" class="nav-link">← Panele Dön</a>
-    </nav>
-  </div>
-</header>
+  </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+  <!-- MAIN COCKPIT CONTAINER -->
+  <main class="main-container">
+    
+    <!-- PAGE TITLE SECTION -->
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
       <div>
-        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">Executive Decision Cockpit</h2>
-        <p style="color: var(--text-muted); font-size: 0.95rem;">Şirket genel finansal performans, nakit akışı ve çalışma sermayesi konsolide görünümü.</p>
+        <h1>Executive Decision Cockpit</h1>
+        <p>Şirket genel finansal performans, nakit akışı ve çalışma sermayesi konsolide görünümü.</p>
       </div>
-      <div style="display: flex; gap: 12px;">
-        <button onclick="renderCockpitKPIs()" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">↻ Verileri Yenile</button>
+      <button class="btn btn-secondary" onclick="window.location.reload();" style="padding: 8px 16px; border: 1px solid var(--border-color); background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+        ↻ Verileri Yenile
+      </button>
+    </div>
+
+    <!-- HIGH-LEVEL EXECUTIVE KPIS -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">TOPLAM SATIŞ GELİRİ (LTM)</div>
+        <div class="kpi-value">€0</div>
+        <div class="kpi-subtext trend-up">▲ +8.4% vs LTM</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">EBITDA MARJI</div>
+        <div class="kpi-value">0%</div>
+        <div class="kpi-subtext trend-up">▲ +1.2 bps vs Bütçe</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">NAKİT DÖNÜŞÜM SÜRESİ (CCC)</div>
+        <div class="kpi-value">0 Gün</div>
+        <div class="kpi-subtext trend-down">▲ +2 Gün Impact</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">NET FINANSAL BORÇ / EBITDA</div>
+        <div class="kpi-value">0.0x</div>
+        <div class="kpi-subtext trend-neutral">● Hedef Seviyede</div>
       </div>
     </div>
 
-    <!-- Canlı Veri Motoru KPI Kartları -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 30px;">
-      <div class="kpi-card">
-        <span class="kpi-title">Toplam Satış Geliri (LTM)</span>
-        <div class="kpi-value" data-kpi="revenue">€0</div>
-        <div class="kpi-delta positive">▲ +8.4% vs LTM</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">EBITDA Marjı</span>
-        <div class="kpi-value" data-kpi="ebitda-margin">0%</div>
-        <div class="kpi-delta positive">▲ +1.2 bps vs Bütçe</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">Nakit Dönüşüm Süresi (CCC)</span>
-        <div class="kpi-value" data-kpi="ccc">0 Gün</div>
-        <div class="kpi-delta negative">▲ +2 Gün Impact</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">Net Borç Pozisyonu</span>
-        <div class="kpi-value" data-kpi="cockpit-net-debt">€0</div>
-        <div class="kpi-delta positive">▼ -€2.1M Deleveraging</div>
+    <!-- EXECUTIVE INSIGHTS LAYER -->
+    <div class="insight-card warning">
+      <div class="insight-header">CFO Executive Summary & Alert Directive</div>
+      <div class="insight-body">
+        Modüller arası veri entegrasyonu aktif. Çalışma sermayesi gün sayıları ve TFRS 16 yükümlülük güncellemeleri konsolide EBITDA rasyolarına otomatik yansıtılmaktadır.
       </div>
     </div>
 
-    <!-- Finansal Trend Grafiği -->
-    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-size: 1.1rem; color: var(--text-primary);">Çeyreklik Gelir ve EBITDA Performansı (€M)</h3>
-        <span style="font-size: 0.85rem; color: var(--text-muted);">Canlı Motor Projeksiyonu</span>
-      </div>
-      <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="cockpitTrendChart"></canvas>
+    <!-- NAVIGATION / MODULE QUICK ACCESS -->
+    <div style="margin-top: 32px;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--slate-800);">Konsolide Finansal Modüller</h3>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        
+        <a href="working-capital.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">ÇALIŞMA SERMAYESİ</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">Working Capital Management</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">DSO, DIO, DPO ve Nakit Dönüşüm Süresi analizi.</div>
+          </div>
+        </a>
+
+        <a href="dcf.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">VALUASIYON & DCF</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">DCF & Valuation Engine</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">WACC, İndirgenmiş Nakit Akışları ve Şirket Değerlemesi.</div>
+          </div>
+        </a>
+
+        <a href="tms29.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">ENFLASYON MUHASEBESİ</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">TMS 29 Hyperinflation</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">Parasal/Parasal Olmayan Varlık Düzeltmeleri ve Parasal Kazanç/Kayıp.</div>
+          </div>
+        </a>
+
+        <a href="tfrs16.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">KİRALAMA MUHASEBESİ</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">TFRS 16 Leases</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">Kullanım Hakkı Varlığı (RoU) ve Kiralama Borçları İtfa Tablosu.</div>
+          </div>
+        </a>
+
+        <a href="tms19.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">ÇALIŞAN HAKLARI</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">TMS 19 Actuarial Valuation</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">Kıdem Tazminatı Aktüeryal İskonto ve Karşılık Hesaplayıcı.</div>
+          </div>
+        </a>
+
+        <a href="ecl.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">BEKLENEN KREDİ ZARARLARI</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">IFRS 9 Expected Credit Loss</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">Ticari Alacak Matrisi ve Aktör Bazlı Karşılık Hesaplama.</div>
+          </div>
+        </a>
+
+        <a href="hedge.html" style="text-decoration: none;">
+          <div class="kpi-card" style="cursor: pointer; height: 100%;">
+            <div class="kpi-title" style="color: var(--accent);">RISK DÜZELTME</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--slate-800); margin-top: 4px;">Hedge Accounting</div>
+            <div style="font-size: 0.8rem; color: var(--slate-500); margin-top: 8px;">Nakit Akış Riski Etkinlik Testi ve Muhasebeleştirme.</div>
+          </div>
+        </a>
+
       </div>
     </div>
 
-    <!-- Stratejik Karar ve Analiz Paneli -->
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-      <div class="insight-card" style="margin-bottom: 0;">
-        <h4 style="font-size: 1rem; margin-bottom: 12px; color: var(--text-primary);">Yönetim Özeti ve Aksiyon İkazları</h4>
-        <div class="insight-step"><span class="insight-step-label step-happened">PERFORMANS</span> Gelir büyümesi bütçe paralelinde ilerlemekte, EBITDA marjı %22.0 seviyesini korumaktadır.</div>
-        <div class="insight-step"><span class="insight-step-label step-sowhat">ÇALIŞMA SERMAYESİ</span> DSO'daki yükseliş nedeniyle nakit dönüşüm süresi (CCC) 70 güne çıkmıştır.</div>
-        <div class="insight-step"><span class="insight-step-label step-next">ÖNERİLEN AKSİYON</span> Ticari alacak tahsilatlarına odaklanılarak €1.7M tutarında işletme sermayesi serbest bırakılabilir.</div>
-      </div>
-
-      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
-        <h4 style="font-size: 1rem; margin-bottom: 16px; color: var(--text-primary);">Sistem Durumu ve Versiyon</h4>
-        <ul style="list-style: none; padding: 0; font-size: 0.88rem; line-height: 2;">
-          <li style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted);">Engine Version:</span>
-            <span style="font-weight: 600;">V11 Active</span>
-          </li>
-          <li style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted);">Valuation Sync:</span>
-            <span style="color: #10b981;">Tam Entegre</span>
-          </li>
-          <li style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted);">TMS 29 Engine:</span>
-            <span style="color: #10b981;">Aktif</span>
-          </li>
-          <li style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted);">Son Güncelleme:</span>
-            <span>Canlı (DOM Ready)</span>
-          </li>
-        </ul>
-      </div>
-    </div>
   </main>
 
-  <!-- Script Entegrasyon Sırası -->
+  <!-- SCRIPTS -->
   <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
