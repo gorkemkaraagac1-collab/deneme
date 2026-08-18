@@ -1,0 +1,156 @@
+/**
+ * GK Financial Intelligence Platform - Financial Data & Engine
+ * Phase 2: Centralized State, Dynamic Calculations & Formatting
+ */
+
+const FinancialEngine = (() => {
+  // 1. Central Financial State
+  const state = {
+    currency: 'EUR', // 'EUR' | 'TRY' | 'USD'
+    pnl: {
+      revenue: 42800000,
+      cogs: 29960000,
+      opex: 5392800,
+      budgetRevenue: 39556000,
+      priorYearEbitdaMargin: 0.18
+    },
+    workingCapital: {
+      receivables: 6330000, // DSO ~54 days
+      inventory: 3447000,   // DIO ~42 days
+      payables: 3940000,    // DPO ~48 days
+      budgetDso: 47,
+      budgetDio: 44,
+      budgetDpo: 45
+    },
+    valuation: {
+      wacc: 0.105,           // %10.5
+      terminalGrowth: 0.025, // %2.5
+      revenueGrowth: 0.080,  // %8.0
+      netDebt: 18200000,
+      explicitYears: 5
+    },
+    inflationTMS29: {
+      nonMonetaryAssets: 184200000,
+      openingIndex: 1850.4,
+      closingIndex: 2313.0,
+      monetaryNetPosition: -68000000
+    }
+  };
+
+  // 2. Helper Formatters
+  const formatters = {
+    currency: (val, symbol = '€', compact = true) => {
+      if (compact) {
+        if (Math.abs(val) >= 1e6) return `${symbol}${(val / 1e6).toFixed(1)}M`;
+        if (Math.abs(val) >= 1e3) return `${symbol}${(val / 1e3).toFixed(1)}K`;
+      }
+      return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'EUR' }).format(val);
+    },
+    percent: (val, decimals = 1) => `${(val * 100).toFixed(decimals)}%`,
+    days: (val) => `${Math.round(val)} Days`
+  };
+
+  // 3. Calculation Engines
+  const calculatePnl = () => {
+    const grossProfit = state.pnl.revenue - state.pnl.cogs;
+    const ebitda = grossProfit - state.pnl.opex;
+    const ebitdaMargin = ebitda / state.pnl.revenue;
+    const revenueVsBudget = (state.pnl.revenue - state.pnl.budgetRevenue) / state.pnl.budgetRevenue;
+    const ebitdaMarginDiffPp = (ebitdaMargin - state.pnl.priorYearEbitdaMargin) * 100;
+
+    return {
+      grossProfit,
+      ebitda,
+      ebitdaMargin,
+      revenueVsBudget,
+      ebitdaMarginDiffPp
+    };
+  };
+
+  const calculateWorkingCapital = () => {
+    const dailyRevenue = state.pnl.revenue / 365;
+    const dailyCogs = state.pnl.cogs / 365;
+
+    const dso = state.workingCapital.receivables / dailyRevenue;
+    const dio = state.workingCapital.inventory / dailyCogs;
+    const dpo = state.workingCapital.payables / dailyCogs;
+    const ccc = dso + dio - dpo;
+
+    const dsoVsBudget = dso - state.workingCapital.budgetDso;
+    const cashLockupDso = dsoVsBudget * dailyRevenue;
+
+    return {
+      dso,
+      dio,
+      dpo,
+      ccc,
+      dsoVsBudget,
+      cashLockupDso
+    };
+  };
+
+  const calculateValuation = () => {
+    const pnl = calculatePnl();
+    let currentFcf = pnl.ebitda * 0.70; // FCF proxy (%70 EBITDA conversion)
+    let totalPv = 0;
+    const projections = [];
+
+    // Explicit Forecast Period (5 Years)
+    for (let i = 1; i <= state.valuation.explicitYears; i++) {
+      currentFcf *= (1 + state.valuation.revenueGrowth);
+      const discountFactor = Math.pow(1 + state.valuation.wacc, i);
+      const pvFcf = currentFcf / discountFactor;
+      totalPv += pvFcf;
+
+      projections.push({ year: i, fcf: currentFcf, pvFcf });
+    }
+
+    // Terminal Value Calculation (Gordon Growth Model)
+    const terminalFcf = currentFcf * (1 + state.valuation.terminalGrowth);
+    const terminalValue = terminalFcf / (state.valuation.wacc - state.valuation.terminalGrowth);
+    const pvTerminalValue = terminalValue / Math.pow(1 + state.valuation.wacc, state.valuation.explicitYears);
+
+    const enterpriseValue = totalPv + pvTerminalValue;
+    const equityValue = enterpriseValue - state.valuation.netDebt;
+
+    return {
+      enterpriseValue,
+      equityValue,
+      netDebt: state.valuation.netDebt,
+      pvTerminalValue,
+      pvExplicitCashFlows: totalPv,
+      projections
+    };
+  };
+
+  const calculateTMS29 = () => {
+    const indexRatio = state.inflationTMS29.closingIndex / state.inflationTMS29.openingIndex;
+    const adjustedNonMonetaryAssets = state.inflationTMS29.nonMonetaryAssets * indexRatio;
+    const inflationGainOnAssets = adjustedNonMonetaryAssets - state.inflationTMS29.nonMonetaryAssets;
+
+    // Monetary loss calculation: Net monetary liability position * (IndexRatio - 1)
+    const monetaryLoss = state.inflationTMS29.monetaryNetPosition * (indexRatio - 1);
+
+    return {
+      indexRatio,
+      adjustedNonMonetaryAssets,
+      inflationGainOnAssets,
+      monetaryLoss
+    };
+  };
+
+  // 4. Public API
+  return {
+    getState: () => state,
+    updateState: (category, key, value) => {
+      if (state[category] && key in state[category]) {
+        state[category][key] = parseFloat(value);
+      }
+    },
+    formatters,
+    calculatePnl,
+    calculateWorkingCapital,
+    calculateValuation,
+    calculateTMS29
+  };
+})();
