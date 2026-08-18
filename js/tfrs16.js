@@ -3,8 +3,9 @@ document.addEventListener("DOMContentLoaded", () => {
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
-  TFRS 16 ACCOUNTING ENGINE V10
+  TFRS 16 ACCOUNTING ENGINE V11
   BULK CONTRACT IMPORT
+  BULK JOURNAL GENERATOR
   ============================================================
   */
 
@@ -178,7 +179,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
-
     else if (
       /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(
         text
@@ -197,7 +197,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
-
     else if (
       /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(
         text
@@ -215,7 +214,6 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
     }
-
 
     else {
 
@@ -431,7 +429,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const interest =
         openingLiability *
         monthlyRate;
-
 
       let principal =
         payment -
@@ -2412,6 +2409,2058 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
+  V11 BULK JOURNAL ENGINE
+  ============================================================
+  */
+
+  function getContractYearMonths(
+    contract,
+    year
+  ) {
+
+    const start =
+      parseDate(
+        contract.startDate
+      );
+
+    const end =
+      parseDate(
+        contract.endDate
+      );
+
+    if (
+      !start ||
+      !end
+    ) {
+      return [];
+    }
+
+
+    const result = [];
+
+
+    const leaseStartYear =
+      start.getFullYear();
+
+    const leaseStartMonth =
+      start.getMonth() + 1;
+
+    const leaseEndYear =
+      end.getFullYear();
+
+    const leaseEndMonth =
+      end.getMonth() + 1;
+
+
+    if (
+      year < leaseStartYear ||
+      year > leaseEndYear
+    ) {
+
+      return [];
+
+    }
+
+
+    for (
+      let month = 1;
+      month <= 12;
+      month++
+    ) {
+
+      if (
+        year === leaseStartYear &&
+        month < leaseStartMonth
+      ) {
+        continue;
+      }
+
+      if (
+        year === leaseEndYear &&
+        month > leaseEndMonth
+      ) {
+        continue;
+      }
+
+
+      const engine =
+        calculateLease(
+          contract
+        );
+
+
+      const periodIndex =
+        (
+          year -
+          leaseStartYear
+        ) * 12
+        +
+        (
+          month -
+          leaseStartMonth
+        );
+
+
+      if (
+        periodIndex < 0 ||
+        periodIndex >=
+          engine.schedule.length
+      ) {
+        continue;
+      }
+
+
+      result.push({
+
+        month,
+
+        period:
+          periodIndex + 1,
+
+        schedule:
+          engine.schedule[
+            periodIndex
+          ]
+
+      });
+
+    }
+
+
+    return result;
+
+  }
+
+
+  function getBulkPeriodDefinition(
+    year,
+    period,
+    month
+  ) {
+
+    if (
+      period === "monthly"
+    ) {
+
+      return {
+
+        label:
+          `${year} - ${getMonthName(month)}`,
+
+        months: [month]
+
+      };
+
+    }
+
+
+    if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+      const start =
+        (
+          quarter - 1
+        ) * 3 + 1;
+
+      return {
+
+        label:
+          `${year} - ${quarter}. Çeyrek`,
+
+        months: [
+          start,
+          start + 1,
+          start + 2
+        ]
+
+      };
+
+    }
+
+
+    if (
+      period === "annual"
+    ) {
+
+      return {
+
+        label:
+          `${year} - 12 Aylık Toplu`,
+
+        months:
+          Array.from(
+            {
+              length: 12
+            },
+            (
+              _,
+              index
+            ) =>
+              index + 1
+          )
+
+      };
+
+    }
+
+
+    if (
+      period === "closing"
+    ) {
+
+      return {
+
+        label:
+          `${year} Yıl Sonu Kapanış`,
+
+        months:
+          Array.from(
+            {
+              length: 12
+            },
+            (
+              _,
+              index
+            ) =>
+              index + 1
+          )
+
+      };
+
+    }
+
+
+    return {
+
+      label:
+        `${year} Dönem`,
+
+      months: [month]
+
+    };
+
+  }
+
+
+  function buildBulkJournalRows(
+    selectedContracts,
+    year,
+    period,
+    month
+  ) {
+
+    const definition =
+      getBulkPeriodDefinition(
+        year,
+        period,
+        month
+      );
+
+
+    const rows = [];
+
+
+    selectedContracts.forEach(
+      contract => {
+
+        const monthlyData =
+          getContractYearMonths(
+            contract,
+            year
+          );
+
+
+        if (
+          !monthlyData.length
+        ) {
+          return;
+        }
+
+
+        if (
+          period === "closing"
+        ) {
+
+          const entries =
+            generateReclassificationEntry(
+              contract
+            );
+
+
+          entries.forEach(
+            entry => {
+
+              rows.push({
+
+                contractId:
+                  contract.id,
+
+                company:
+                  contract.company,
+
+                supplier:
+                  contract.supplier,
+
+                account:
+                  entry.account,
+
+                debit:
+                  entry.debit,
+
+                credit:
+                  entry.credit
+
+              });
+
+            }
+          );
+
+
+          return;
+
+        }
+
+
+        const selected =
+          monthlyData.filter(
+            item =>
+              definition.months.includes(
+                item.month
+              )
+          );
+
+
+        if (
+          !selected.length
+        ) {
+          return;
+        }
+
+
+        const interest =
+          selected.reduce(
+            (
+              total,
+              item
+            ) =>
+              total +
+              item.schedule.interest,
+            0
+          );
+
+
+        const principal =
+          selected.reduce(
+            (
+              total,
+              item
+            ) =>
+              total +
+              item.schedule.principal,
+            0
+          );
+
+
+        const payment =
+          selected.reduce(
+            (
+              total,
+              item
+            ) =>
+              total +
+              item.schedule.payment,
+            0
+          );
+
+
+        const depreciation =
+          selected.reduce(
+            (
+              total,
+              item
+            ) =>
+              total +
+              item.schedule.depreciation,
+            0
+          );
+
+
+        const entries = [
+
+          {
+            account:
+              "780 Finansman Giderleri",
+
+            debit:
+              interest,
+
+            credit:
+              0
+
+          },
+
+          {
+            account:
+              "401 Kiralama Yükümlülüğü",
+
+            debit:
+              principal,
+
+            credit:
+              0
+
+          },
+
+          {
+            account:
+              "381 Kira Borçları / Ödeme",
+
+            debit:
+              0,
+
+            credit:
+              payment
+
+          },
+
+          {
+            account:
+              "770 / 730 Amortisman Giderleri",
+
+            debit:
+              depreciation,
+
+            credit:
+              0
+
+          },
+
+          {
+            account:
+              "268 Birikmiş Amortismanlar",
+
+            debit:
+              0,
+
+            credit:
+              depreciation
+
+          }
+
+        ];
+
+
+        entries.forEach(
+          entry => {
+
+            rows.push({
+
+              contractId:
+                contract.id,
+
+              company:
+                contract.company,
+
+              supplier:
+                contract.supplier,
+
+              account:
+                entry.account,
+
+              debit:
+                entry.debit,
+
+              credit:
+                entry.credit
+
+            });
+
+          }
+        );
+
+      }
+    );
+
+
+    return {
+
+      label:
+        definition.label,
+
+      rows
+
+    };
+
+  }
+
+
+  function renderBulkJournalPreview(
+    result
+  ) {
+
+    const container =
+      document.getElementById(
+        "bulkJournalPreview"
+      );
+
+
+    if (!container) {
+      return;
+    }
+
+
+    if (
+      !result.rows.length
+    ) {
+
+      container.innerHTML = `
+
+        <div style="
+          padding:18px;
+          margin-top:16px;
+          background:#fff7ed;
+          border:1px solid #fed7aa;
+          border-radius:10px;
+          color:#9a3412;
+        ">
+
+          Seçilen dönem için
+          uygun sözleşme / ödeme planı bulunamadı.
+
+        </div>
+
+      `;
+
+      return;
+
+    }
+
+
+    const totalDebit =
+      result.rows.reduce(
+        (
+          total,
+          row
+        ) =>
+          total +
+          Number(
+            row.debit || 0
+          ),
+        0
+      );
+
+
+    const totalCredit =
+      result.rows.reduce(
+        (
+          total,
+          row
+        ) =>
+          total +
+          Number(
+            row.credit || 0
+          ),
+        0
+      );
+
+
+    const difference =
+      Math.abs(
+        totalDebit -
+        totalCredit
+      );
+
+
+    const contractsCount =
+      new Set(
+        result.rows.map(
+          row =>
+            row.contractId
+        )
+      ).size;
+
+
+    const grouped =
+      {};
+
+
+    result.rows.forEach(
+      row => {
+
+        if (
+          !grouped[
+            row.contractId
+          ]
+        ) {
+
+          grouped[
+            row.contractId
+          ] = {
+
+            contractId:
+              row.contractId,
+
+            company:
+              row.company,
+
+            supplier:
+              row.supplier,
+
+            rows: []
+
+          };
+
+        }
+
+
+        grouped[
+          row.contractId
+        ].rows.push(
+          row
+        );
+
+      }
+    );
+
+
+    container.innerHTML = `
+
+      <div style="
+        margin-top:18px;
+      ">
+
+        <div style="
+          display:grid;
+          grid-template-columns:
+            repeat(4,minmax(0,1fr));
+          gap:10px;
+          margin-bottom:14px;
+        ">
+
+          <div style="
+            padding:13px;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            background:#f8fafc;
+          ">
+
+            <div style="
+              font-size:10px;
+              color:#64748b;
+            ">
+              Dönem
+            </div>
+
+            <strong>
+              ${escapeHtml(
+                result.label
+              )}
+            </strong>
+
+          </div>
+
+
+          <div style="
+            padding:13px;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            background:#f8fafc;
+          ">
+
+            <div style="
+              font-size:10px;
+              color:#64748b;
+            ">
+              Sözleşme
+            </div>
+
+            <strong>
+              ${contractsCount}
+            </strong>
+
+          </div>
+
+
+          <div style="
+            padding:13px;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            background:#f8fafc;
+          ">
+
+            <div style="
+              font-size:10px;
+              color:#64748b;
+            ">
+              Toplam Borç
+            </div>
+
+            <strong>
+              ${formatCurrency(
+                totalDebit
+              )}
+            </strong>
+
+          </div>
+
+
+          <div style="
+            padding:13px;
+            border:1px solid ${
+              difference < 0.01
+                ? "#bbf7d0"
+                : "#fecaca"
+            };
+            border-radius:10px;
+            background:${
+              difference < 0.01
+                ? "#ecfdf5"
+                : "#fef2f2"
+            };
+          ">
+
+            <div style="
+              font-size:10px;
+              color:#64748b;
+            ">
+              Borç / Alacak Kontrolü
+            </div>
+
+            <strong style="
+              color:${
+                difference < 0.01
+                  ? "#166534"
+                  : "#991b1b"
+              };
+            ">
+
+              ${
+                difference < 0.01
+                  ? "✓ Dengeli"
+                  : "⚠ Fark Var"
+              }
+
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <div style="
+          border:1px solid #e5e7eb;
+          border-radius:11px;
+          overflow:auto;
+          background:white;
+        ">
+
+          <table style="
+            width:100%;
+            border-collapse:collapse;
+            min-width:850px;
+          ">
+
+            <thead>
+
+              <tr style="
+                background:#f8fafc;
+              ">
+
+                <th style="
+                  padding:10px;
+                  text-align:left;
+                ">
+                  Sözleşme
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:left;
+                ">
+                  Şirket
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:left;
+                ">
+                  Hesap
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:right;
+                ">
+                  Borç
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:right;
+                ">
+                  Alacak
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody>
+
+              ${Object.values(
+                grouped
+              ).map(
+                group =>
+
+                  group.rows.map(
+                    row => `
+
+                      <tr>
+
+                        <td style="
+                          padding:9px;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${escapeHtml(
+                            row.contractId
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:9px;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${escapeHtml(
+                            row.company
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:9px;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${escapeHtml(
+                            row.account
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:9px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${
+                            row.debit
+                              ? formatCurrency(
+                                  row.debit
+                                )
+                              : "-"
+                          }
+                        </td>
+
+                        <td style="
+                          padding:9px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${
+                            row.credit
+                              ? formatCurrency(
+                                  row.credit
+                                )
+                              : "-"
+                          }
+                        </td>
+
+                      </tr>
+
+                    `
+                  ).join("")
+
+              ).join("")}
+
+            </tbody>
+
+
+            <tfoot>
+
+              <tr>
+
+                <td colspan="3" style="
+                  padding:11px;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  TOPLAM
+                </td>
+
+                <td style="
+                  padding:11px;
+                  text-align:right;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  ${formatCurrency(
+                    totalDebit
+                  )}
+                </td>
+
+                <td style="
+                  padding:11px;
+                  text-align:right;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  ${formatCurrency(
+                    totalCredit
+                  )}
+                </td>
+
+              </tr>
+
+            </tfoot>
+
+          </table>
+
+        </div>
+
+
+        <div style="
+          display:flex;
+          justify-content:flex-end;
+          gap:8px;
+          margin-top:12px;
+        ">
+
+          <button
+            type="button"
+            id="exportBulkJournalCsv"
+            class="secondary-button"
+          >
+            CSV Olarak İndir
+          </button>
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    document
+      .getElementById(
+        "exportBulkJournalCsv"
+      )
+      ?.addEventListener(
+        "click",
+        () =>
+          exportBulkJournalCSV(
+            result
+          )
+      );
+
+  }
+
+
+  /*
+  ============================================================
+  BULK JOURNAL CSV EXPORT
+  ============================================================
+  */
+
+  function exportBulkJournalCSV(
+    result
+  ) {
+
+    if (
+      !result ||
+      !result.rows ||
+      !result.rows.length
+    ) {
+      return;
+    }
+
+
+    const rows = [
+
+      [
+        "Dönem",
+        "Contract ID",
+        "Company",
+        "Supplier",
+        "Hesap",
+        "Borç",
+        "Alacak"
+      ]
+
+    ];
+
+
+    result.rows.forEach(
+      row => {
+
+        rows.push([
+
+          result.label,
+
+          row.contractId,
+
+          row.company,
+
+          row.supplier,
+
+          row.account,
+
+          Number(
+            row.debit || 0
+          ),
+
+          Number(
+            row.credit || 0
+          )
+
+        ]);
+
+      }
+    );
+
+
+    const csv =
+      rows
+        .map(
+          row =>
+            row
+              .map(
+                cell =>
+                  `"${String(
+                    cell
+                  ).replaceAll(
+                    '"',
+                    '""'
+                  )}"`
+              )
+              .join(";")
+        )
+        .join("\n");
+
+
+    const blob =
+      new Blob(
+        [
+          "\uFEFF" + csv
+        ],
+        {
+          type:
+            "text/csv;charset=utf-8;"
+        }
+      );
+
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+
+    link.href = url;
+
+    link.download =
+      `TFRS16_Toplu_Fis_${result.label.replaceAll(" ", "_")}.csv`;
+
+
+    document.body.appendChild(
+      link
+    );
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(
+      url
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  BULK JOURNAL CENTER
+  ============================================================
+  */
+
+  function openBulkJournalCenter() {
+
+    const existing =
+      document.getElementById(
+        "bulkJournalModal"
+      );
+
+
+    if (existing) {
+
+      existing.classList.remove(
+        "hidden"
+      );
+
+      setupBulkJournalControls();
+
+      return;
+
+    }
+
+
+    const modal =
+      document.createElement(
+        "div"
+      );
+
+
+    modal.id =
+      "bulkJournalModal";
+
+
+    modal.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      background:rgba(15,23,42,.55);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    `;
+
+
+    modal.innerHTML = `
+
+      <div style="
+        width:min(1100px,100%);
+        max-height:92vh;
+        overflow:auto;
+        background:#ffffff;
+        border-radius:16px;
+        box-shadow:0 25px 70px rgba(15,23,42,.25);
+      ">
+
+        <div style="
+          padding:20px 22px;
+          border-bottom:1px solid #e5e7eb;
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          position:sticky;
+          top:0;
+          background:#ffffff;
+          z-index:2;
+        ">
+
+          <div>
+
+            <div style="
+              font-size:10px;
+              font-weight:800;
+              color:#64748b;
+              letter-spacing:1px;
+            ">
+              GK FINANCE INTELLIGENCE
+            </div>
+
+            <h2 style="
+              margin:4px 0 0;
+              font-size:20px;
+            ">
+              Toplu Muhasebe Fiş Merkezi
+            </h2>
+
+            <div style="
+              margin-top:5px;
+              font-size:11px;
+              color:#64748b;
+            ">
+              Tüm sözleşmeler için tek seferde
+              aylık, çeyreklik veya yıllık fiş oluşturun.
+            </div>
+
+          </div>
+
+
+          <button
+            type="button"
+            id="closeBulkJournalModal"
+            style="
+              border:0;
+              background:#f1f5f9;
+              width:36px;
+              height:36px;
+              border-radius:8px;
+              cursor:pointer;
+              font-size:18px;
+            "
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div style="
+          padding:20px 22px;
+        ">
+
+
+          <div style="
+            display:grid;
+            grid-template-columns:
+              repeat(auto-fit,minmax(190px,1fr));
+            gap:12px;
+          ">
+
+
+            <div style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:14px;
+            ">
+
+              <label style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:7px;
+                font-weight:700;
+              ">
+                Raporlama Yılı
+              </label>
+
+              <select
+                id="bulkAccountingYear"
+                style="
+                  width:100%;
+                  padding:10px;
+                  border:1px solid #d1d5db;
+                  border-radius:7px;
+                "
+              >
+              </select>
+
+            </div>
+
+
+            <div style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:14px;
+            ">
+
+              <label style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:7px;
+                font-weight:700;
+              ">
+                Fiş Periyodu
+              </label>
+
+              <select
+                id="bulkAccountingPeriod"
+                style="
+                  width:100%;
+                  padding:10px;
+                  border:1px solid #d1d5db;
+                  border-radius:7px;
+                "
+              >
+
+                <option value="monthly">
+                  Aylık
+                </option>
+
+                <option value="quarterly">
+                  Çeyreklik
+                </option>
+
+                <option value="annual">
+                  12 Aylık Toplu
+                </option>
+
+                <option value="closing">
+                  Yıllık Kapanış
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:14px;
+            ">
+
+              <label style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:7px;
+                font-weight:700;
+              ">
+                Ay / Çeyrek
+              </label>
+
+              <select
+                id="bulkAccountingMonth"
+                style="
+                  width:100%;
+                  padding:10px;
+                  border:1px solid #d1d5db;
+                  border-radius:7px;
+                "
+              >
+
+                ${buildMonthOptions()}
+
+              </select>
+
+            </div>
+
+
+            <div style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:14px;
+            ">
+
+              <label style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:7px;
+                font-weight:700;
+              ">
+                Şirket
+              </label>
+
+              <select
+                id="bulkAccountingCompany"
+                style="
+                  width:100%;
+                  padding:10px;
+                  border:1px solid #d1d5db;
+                  border-radius:7px;
+                "
+              >
+
+                <option value="all">
+                  Tüm Şirketler
+                </option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+            margin-top:16px;
+            padding:14px;
+            background:#f8fafc;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+          ">
+
+            <div>
+
+              <strong style="
+                font-size:12px;
+              ">
+                Fiş kapsamı
+              </strong>
+
+              <div id="bulkJournalScopeText" style="
+                margin-top:3px;
+                color:#64748b;
+                font-size:10px;
+              ">
+                Aktif tüm sözleşmeler
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              id="generateBulkJournal"
+              class="primary-button"
+              style="
+                min-width:190px;
+                min-height:42px;
+              "
+            >
+              Toplu Fişleri Oluştur
+            </button>
+
+          </div>
+
+
+          <div id="bulkJournalPreview"></div>
+
+
+          <div style="
+            margin-top:14px;
+            padding:12px 14px;
+            background:#fffdf7;
+            border:1px solid #f3e8c5;
+            border-radius:9px;
+            color:#92400e;
+            font-size:10px;
+            line-height:1.5;
+          ">
+
+            <strong>CFO Kontrolü:</strong>
+
+            Sistem seçilen dönem için aktif sözleşmeleri
+            topluca hesaplar. Borç / alacak dengesi ayrıca
+            kontrol edilir. ERP'ye otomatik kayıt yapılmaz.
+
+          </div>
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    document.body.appendChild(
+      modal
+    );
+
+
+    document
+      .getElementById(
+        "closeBulkJournalModal"
+      )
+      ?.addEventListener(
+        "click",
+        closeBulkJournalCenter
+      );
+
+
+    modal.addEventListener(
+      "click",
+      event => {
+
+        if (
+          event.target ===
+          modal
+        ) {
+
+          closeBulkJournalCenter();
+
+        }
+
+      }
+    );
+
+
+    setupBulkJournalControls();
+
+  }
+
+
+  function setupBulkJournalControls() {
+
+    const yearSelect =
+      document.getElementById(
+        "bulkAccountingYear"
+      );
+
+
+    const companySelect =
+      document.getElementById(
+        "bulkAccountingCompany"
+      );
+
+
+    if (
+      yearSelect
+    ) {
+
+      const years =
+        getAvailableAccountingYears();
+
+
+      yearSelect.innerHTML =
+        years.map(
+          year => `
+            <option value="${year}">
+              ${year}
+            </option>
+          `
+        ).join("");
+
+    }
+
+
+    if (
+      companySelect
+    ) {
+
+      const current =
+        companySelect.value;
+
+
+      const companies =
+        [
+          ...new Set(
+            contracts
+              .map(
+                contract =>
+                  contract.company
+              )
+              .filter(Boolean)
+          )
+        ].sort();
+
+
+      companySelect.innerHTML = `
+
+        <option value="all">
+          Tüm Şirketler
+        </option>
+
+        ${companies.map(
+          company => `
+            <option value="${escapeHtml(
+              company
+            )}">
+              ${escapeHtml(
+                company
+              )}
+            </option>
+          `
+        ).join("")}
+
+      `;
+
+
+      if (
+        companies.includes(
+          current
+        )
+      ) {
+
+        companySelect.value =
+          current;
+
+      }
+
+    }
+
+
+    document
+      .getElementById(
+        "bulkAccountingPeriod"
+      )
+      ?.addEventListener(
+        "change",
+        updateBulkPeriodUI
+      );
+
+
+    document
+      .getElementById(
+        "generateBulkJournal"
+      )
+      ?.addEventListener(
+        "click",
+        generateBulkJournal
+      );
+
+
+    updateBulkPeriodUI();
+
+  }
+
+
+  function getAvailableAccountingYears() {
+
+    const years =
+      new Set();
+
+
+    contracts.forEach(
+      contract => {
+
+        const start =
+          parseDate(
+            contract.startDate
+          )?.getFullYear();
+
+
+        const end =
+          parseDate(
+            contract.endDate
+          )?.getFullYear();
+
+
+        if (
+          start &&
+          end
+        ) {
+
+          for (
+            let year = start;
+            year <= end;
+            year++
+          ) {
+
+            years.add(
+              year
+            );
+
+          }
+
+        }
+
+      }
+    );
+
+
+    if (
+      !years.size
+    ) {
+
+      years.add(
+        new Date().getFullYear()
+      );
+
+    }
+
+
+    return [
+      ...years
+    ].sort(
+      (
+        a,
+        b
+      ) =>
+        a - b
+    );
+
+  }
+
+
+  function updateBulkPeriodUI() {
+
+    const period =
+      document.getElementById(
+        "bulkAccountingPeriod"
+      )?.value;
+
+
+    const month =
+      document.getElementById(
+        "bulkAccountingMonth"
+      );
+
+
+    if (!month) {
+      return;
+    }
+
+
+    if (
+      period === "quarterly"
+    ) {
+
+      month.innerHTML = `
+
+        <option value="1">
+          1. Çeyrek — Ocak / Şubat / Mart
+        </option>
+
+        <option value="4">
+          2. Çeyrek — Nisan / Mayıs / Haziran
+        </option>
+
+        <option value="7">
+          3. Çeyrek — Temmuz / Ağustos / Eylül
+        </option>
+
+        <option value="10">
+          4. Çeyrek — Ekim / Kasım / Aralık
+        </option>
+
+      `;
+
+      month.disabled =
+        false;
+
+    }
+
+    else if (
+      period === "annual" ||
+      period === "closing"
+    ) {
+
+      month.innerHTML = `
+
+        <option value="1">
+          Tüm Yıl
+        </option>
+
+      `;
+
+      month.disabled =
+        true;
+
+    }
+
+    else {
+
+      month.innerHTML =
+        buildMonthOptions();
+
+      month.disabled =
+        false;
+
+    }
+
+
+    updateBulkScopeText();
+
+  }
+
+
+  function updateBulkScopeText() {
+
+    const year =
+      document.getElementById(
+        "bulkAccountingYear"
+      )?.value;
+
+
+    const period =
+      document.getElementById(
+        "bulkAccountingPeriod"
+      )?.value;
+
+
+    const month =
+      Number(
+        document.getElementById(
+          "bulkAccountingMonth"
+        )?.value
+      );
+
+
+    const company =
+      document.getElementById(
+        "bulkAccountingCompany"
+      )?.value ||
+      "all";
+
+
+    const active =
+      contracts.filter(
+        contract =>
+          contract.status ===
+          "active"
+      );
+
+
+    const scoped =
+      active.filter(
+        contract =>
+          company === "all" ||
+          contract.company ===
+            company
+      );
+
+
+    const text =
+      document.getElementById(
+        "bulkJournalScopeText"
+      );
+
+
+    if (!text) {
+      return;
+    }
+
+
+    let periodText =
+      "seçilen dönem";
+
+
+    if (
+      period === "monthly"
+    ) {
+
+      periodText =
+        `${year} ${getMonthName(
+          month
+        )}`;
+
+    }
+
+    else if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+      periodText =
+        `${year} ${quarter}. Çeyrek`;
+
+    }
+
+    else if (
+      period === "annual"
+    ) {
+
+      periodText =
+        `${year} 12 Aylık`;
+
+    }
+
+    else if (
+      period === "closing"
+    ) {
+
+      periodText =
+        `${year} Yıl Sonu Kapanış`;
+
+    }
+
+
+    text.textContent =
+      `${scoped.length} aktif sözleşme · ${periodText}`;
+
+  }
+
+
+  function generateBulkJournal() {
+
+    const year =
+      Number(
+        document.getElementById(
+          "bulkAccountingYear"
+        )?.value
+      );
+
+
+    const period =
+      document.getElementById(
+        "bulkAccountingPeriod"
+      )?.value;
+
+
+    const month =
+      Number(
+        document.getElementById(
+          "bulkAccountingMonth"
+        )?.value
+      );
+
+
+    const company =
+      document.getElementById(
+        "bulkAccountingCompany"
+      )?.value ||
+      "all";
+
+
+    let selected =
+      contracts.filter(
+        contract =>
+          contract.status ===
+            "active" &&
+          (
+            company === "all" ||
+            contract.company ===
+              company
+          )
+      );
+
+
+    if (
+      !selected.length
+    ) {
+
+      renderBulkJournalPreview({
+        label:
+          "Kayıt bulunamadı",
+        rows: []
+      });
+
+      return;
+
+    }
+
+
+    const result =
+      buildBulkJournalRows(
+        selected,
+        year,
+        period,
+        month
+      );
+
+
+    renderBulkJournalPreview(
+      result
+    );
+
+  }
+
+
+  function closeBulkJournalCenter() {
+
+    document
+      .getElementById(
+        "bulkJournalModal"
+      )
+      ?.remove();
+
+  }
+
+
+  /*
+  ============================================================
+  ADD BULK JOURNAL BUTTON
+  ============================================================
+  */
+
+  function bindBulkJournalButton() {
+
+    const ids = [
+
+      "bulkJournalButton",
+      "bulkAccountingButton",
+      "generateBulkJournalButton",
+      "bulkJournalCenterButton"
+
+    ];
+
+
+    ids.forEach(
+      id => {
+
+        document
+          .getElementById(
+            id
+          )
+          ?.addEventListener(
+            "click",
+            openBulkJournalCenter
+          );
+
+      }
+    );
+
+
+    if (
+      document.getElementById(
+        "bulkJournalButton"
+      ) ||
+      document.getElementById(
+        "bulkAccountingButton"
+      ) ||
+      document.getElementById(
+        "generateBulkJournalButton"
+      ) ||
+      document.getElementById(
+        "bulkJournalCenterButton"
+      )
+    ) {
+
+      return;
+
+    }
+
+
+    const bulkImportButton =
+      document.getElementById(
+        "bulkImportButton"
+      );
+
+
+    if (
+      bulkImportButton
+    ) {
+
+      const button =
+        document.createElement(
+          "button"
+        );
+
+
+      button.type =
+        "button";
+
+      button.id =
+        "bulkJournalButton";
+
+      button.className =
+        bulkImportButton.className ||
+        "secondary-button";
+
+      button.textContent =
+        "Toplu Muhasebe Fişi";
+
+      button.style.marginLeft =
+        "8px";
+
+
+      bulkImportButton.parentNode
+        ?.insertBefore(
+          button,
+          bulkImportButton.nextSibling
+        );
+
+
+      button.addEventListener(
+        "click",
+        openBulkJournalCenter
+      );
+
+    }
+
+  }
+
+
+  /*
+  ============================================================
   DETAIL MODAL
   ============================================================
   */
@@ -3177,12 +5226,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
 
 
-    /*
-    ----------------------------------------------------------
-    XLSX
-    ----------------------------------------------------------
-    */
-
     if (
       typeof XLSX !==
       "undefined"
@@ -3249,12 +5292,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
-
-    /*
-    ----------------------------------------------------------
-    CSV FALLBACK
-    ----------------------------------------------------------
-    */
 
     const csvRows = [
       headers,
@@ -4058,11 +6095,6 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-    /*
-    Turkish:
-    125.000,50
-    */
-
     if (
       text.includes(",") &&
       text.includes(".")
@@ -4774,6 +6806,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         closeBulkImportModal();
 
+        closeBulkJournalCenter();
+
       }
 
     }
@@ -4825,6 +6859,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderTable();
 
+    bindBulkJournalButton();
+
   }
 
 
@@ -4838,7 +6874,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   console.log(
-    "GK TFRS 16 Accounting Engine V10 loaded successfully."
+    "GK TFRS 16 Accounting Engine V11 loaded successfully."
   );
 
 });
