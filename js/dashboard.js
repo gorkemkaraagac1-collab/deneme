@@ -1,184 +1,343 @@
 document.addEventListener("DOMContentLoaded", function () {
 
-  const data = window.CFO_DATA;
+    /*
+    =====================================================
+    CFO DATA
+    =====================================================
+    */
+
+    const data = window.CFO_DATA;
+
+    if (!data) {
+
+        console.error(
+            "CFO_DATA bulunamadı. dashboard-data.js yüklenmemiş olabilir."
+        );
+
+        return;
+
+    }
 
 
-  /*
-  =====================================================
-  CFO KPI
-  =====================================================
-  */
+    /*
+    =====================================================
+    FINANCIAL KPI
+    =====================================================
+    */
 
-  const kpis = {
+    const financial = data.financial || {};
 
-    revenue: data.financial.revenue,
+    setText(
+        "revenueKpi",
+        formatMoney(financial.revenue)
+    );
 
-    ebitda: data.financial.ebitda,
+    setText(
+        "ebitdaKpi",
+        formatMoney(financial.ebitda)
+    );
 
-    ebitdaMargin:
-      data.financial.ebitdaMargin,
+    setText(
+        "ebitdaMarginKpi",
+        formatPercent(financial.ebitdaMargin)
+    );
 
-    cash:
-      data.financial.cash,
+    setText(
+        "cashKpi",
+        formatMoney(financial.cash)
+    );
 
-    freeCashFlow:
-      data.financial.freeCashFlow,
+    setText(
+        "fcfKpi",
+        formatMoney(financial.freeCashFlow)
+    );
 
-    netProfit:
-      data.financial.netProfit
-
-  };
-
-
-  /*
-  =====================================================
-  TFRS 16
-  =====================================================
-  */
-
-  const tfrs = data.tfrs16;
-
-
-  const tfrsMain =
-    document.querySelector(".tfrs-main");
-
-
-  if (tfrsMain) {
-
-    tfrsMain.innerHTML = `
-
-      <div class="big-metric">
-
-        <span>
-          Kira Yükümlülüğü
-        </span>
-
-        <strong>
-          ₺${formatNumber(tfrs.leaseLiability)}
-        </strong>
-
-      </div>
+    setText(
+        "netProfitKpi",
+        formatMoney(financial.netProfit)
+    );
 
 
-      <div class="big-metric">
+    /*
+    =====================================================
+    FINANCIAL PERFORMANCE
+    =====================================================
+    */
 
-        <span>
-          ROU Varlıkları
-        </span>
+    setText(
+        "revenueMetric",
+        formatMoney(financial.revenue)
+    );
 
-        <strong>
-          ₺${formatNumber(tfrs.rouAssets)}
-        </strong>
+    setText(
+        "ebitdaMetric",
+        formatMoney(financial.ebitda)
+    );
 
-      </div>
+    setText(
+        "ebitdaMarginMetric",
+        formatPercent(financial.ebitdaMargin)
+    );
 
-    `;
+    setText(
+        "netProfitMetric",
+        formatMoney(financial.netProfit)
+    );
 
-  }
-
-
-  /*
-  =====================================================
-  TFRS 16 MINI METRICS
-  =====================================================
-  */
-
-  const miniGrid =
-    document.querySelector(".tfrs-small-grid");
-
-
-  if (miniGrid) {
-
-    miniGrid.innerHTML = `
-
-      <div>
-
-        <span>
-          Önümüzdeki 12 Ay
-        </span>
-
-        <strong>
-          ₺${formatNumber(tfrs.next12Months)}
-        </strong>
-
-      </div>
+    setText(
+        "fcfMetric",
+        formatMoney(financial.freeCashFlow)
+    );
 
 
-      <div>
+    /*
+    =====================================================
+    WORKING CAPITAL
+    =====================================================
+    */
 
-        <span>
-          Sözleşme
-        </span>
+    const workingCapital =
+        data.workingCapital || {};
 
-        <strong>
-          ${tfrs.contracts}
-        </strong>
+    setText(
+        "dsoMetric",
+        formatDays(workingCapital.dso)
+    );
 
-      </div>
+    setText(
+        "dpoMetric",
+        formatDays(workingCapital.dpo)
+    );
 
+    setText(
+        "inventoryMetric",
+        formatDays(workingCapital.inventoryDays)
+    );
 
-      <div>
-
-        <span>
-          Yenileme &lt;90 gün
-        </span>
-
-        <strong class="warning-text">
-          ${tfrs.renewals90Days}
-        </strong>
-
-      </div>
-
-
-      <div>
-
-        <span>
-          Modification
-        </span>
-
-        <strong class="warning-text">
-          ${tfrs.modifications}
-        </strong>
-
-      </div>
-
-    `;
-
-  }
+    setText(
+        "cccMetric",
+        formatDays(
+            workingCapital.cashConversionCycle
+        )
+    );
 
 
-  /*
-  =====================================================
-  CFO ACTION CENTER
-  =====================================================
-  */
+    /*
+    =====================================================
+    TFRS 16
+    =====================================================
+    */
 
-  const actionContainer =
-    document.querySelector(".action");
+    const tfrs =
+        data.tfrs16 || {};
 
-  /*
-  İlerleyen aşamada bu alanı da
-  gerçek finansal verilere bağlayacağız.
-  */
+    setText(
+        "tfrsLiability",
+        formatMoney(
+            tfrs.leaseLiability
+        )
+    );
+
+    setText(
+        "tfrsRou",
+        formatMoney(
+            tfrs.rouAssets
+        )
+    );
+
+    setText(
+        "tfrsNext12",
+        formatMoney(
+            tfrs.next12Months
+        )
+    );
+
+    setText(
+        "tfrsContracts",
+        tfrs.contracts || 0
+    );
+
+    setText(
+        "tfrsRenewals",
+        tfrs.renewals90Days || 0
+    );
+
+    setText(
+        "tfrsModifications",
+        tfrs.modifications || 0
+    );
 
 
-  console.log(
-    "CFO Cockpit data loaded:",
-    data
-  );
+    /*
+    =====================================================
+    CLOSE
+    =====================================================
+    */
 
+    const close =
+        data.close || {};
+
+    const progress =
+        Number(close.progress || 0);
+
+    setText(
+        "closeProgress",
+        `%${progress}`
+    );
+
+    setText(
+        "closeCompleted",
+        `${close.completed || 0} / ${close.total || 0} tamamlandı`
+    );
+
+    setText(
+        "closeTarget",
+        `Hedef: ${close.target || "D+5"}`
+    );
+
+
+    const progressBar =
+        document.getElementById(
+            "closeProgressBar"
+        );
+
+    if (progressBar) {
+
+        progressBar.style.width =
+            `${Math.min(progress, 100)}%`;
+
+    }
+
+
+    /*
+    =====================================================
+    CFO ACTION CENTER
+    =====================================================
+    */
+
+    const renewalCount =
+        Number(
+            tfrs.renewals90Days || 0
+        );
+
+
+    const renewalAction =
+        document.getElementById(
+            "renewalAction"
+        );
+
+
+    if (renewalAction) {
+
+        if (renewalCount > 0) {
+
+            renewalAction.textContent =
+                `${renewalCount} sözleşmenin önümüzdeki 90 gün içinde yenileme tarihi bulunuyor.`;
+
+        } else {
+
+            renewalAction.textContent =
+                "Önümüzdeki 90 gün içinde kritik sözleşme yenilemesi bulunmuyor.";
+
+        }
+
+    }
+
+
+    /*
+    =====================================================
+    LOG
+    =====================================================
+    */
+
+    console.log(
+        "CFO Cockpit başarıyla yüklendi:",
+        data
+    );
 
 });
 
 
-function formatNumber(value) {
+/*
+=========================================================
+HELPER FUNCTIONS
+=========================================================
+*/
 
-  return Number(value).toLocaleString(
-    "tr-TR",
-    {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1
+
+function setText(
+    elementId,
+    value
+) {
+
+    const element =
+        document.getElementById(
+            elementId
+        );
+
+    if (element) {
+
+        element.textContent =
+            value;
+
     }
-  );
+
+}
+
+
+function formatMoney(
+    value
+) {
+
+    const number =
+        Number(value || 0);
+
+
+    return "₺" +
+        number.toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            }
+        );
+
+}
+
+
+function formatPercent(
+    value
+) {
+
+    const number =
+        Number(value || 0);
+
+
+    return "%" +
+        number.toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            }
+        );
+
+}
+
+
+function formatDays(
+    value
+) {
+
+    const number =
+        Number(value || 0);
+
+
+    return `${number.toLocaleString(
+        "tr-TR",
+        {
+            maximumFractionDigits: 0
+        }
+    )} gün`;
 
 }
