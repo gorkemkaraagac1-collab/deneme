@@ -1,64 +1,140 @@
-/* ==========================================
-   CFO COCKPIT COMPONENTS (KPI, INSIGHT, TABLES)
-   ========================================== */
+/* ==========================================================================
+   FINANCIAL INTELLIGENCE PLATFORM - COMPONENT SYSTEM
+   ========================================================================== */
 
-/* KPI Card Component */
+/* --- KPI Cards --- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .kpi-card {
-  background: var(--bg-card);
+  background: #ffffff;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  border-radius: var(--border-radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kpi-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .kpi-title {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  color: var(--slate-500);
+  margin-bottom: 8px;
 }
 
 .kpi-value {
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.kpi-delta {
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.kpi-delta.positive { color: var(--accent-green); }
-.kpi-delta.negative { color: var(--accent-red); }
-
-/* Executive Decision / Insight Card */
-.insight-card {
-  background: var(--bg-card);
-  border-left: 4px solid var(--accent-blue);
-  border-radius: 0 8px 8px 0;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.insight-step {
+  color: var(--navy-900);
+  font-variant-numeric: tabular-nums;
   margin-bottom: 6px;
 }
 
-.insight-step-label {
-  font-weight: 700;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-right: 8px;
+.kpi-subtext {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.step-happened { background: #334155; color: #fff; }
-.step-why { background: #1e3a8a; color: #93c5fd; }
-.step-sowhat { background: #7c2d12; color: #fdba74; }
-.step-next { background: #064e3b; color: #6ee7b7; }
+.trend-up { color: var(--success); }
+.trend-down { color: var(--danger); }
+.trend-neutral { color: var(--slate-500); }
+
+/* --- Financial Tables --- */
+.table-container {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.fin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.fin-table th {
+  background-color: var(--slate-100);
+  color: var(--navy-800);
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.fin-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--navy-900);
+}
+
+.fin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.fin-table tr.total-row {
+  font-weight: 700;
+  background-color: var(--slate-50);
+}
+
+.fin-table td.text-right, .fin-table th.text-right {
+  text-align: right;
+}
+
+/* --- Insight Cards (CFO Executive Layer) --- */
+.insight-card {
+  background: #ffffff;
+  border-left: 4px solid var(--accent);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.insight-card.warning { border-left-color: var(--warning); }
+.insight-card.danger { border-left-color: var(--danger); }
+.insight-card.success { border-left-color: var(--success); }
+
+.insight-header {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin-bottom: 6px;
+}
+
+.insight-body {
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  line-height: 1.4;
+}
+
+/* --- Badges & Status --- */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.badge-success { background: var(--success-bg); color: var(--success); }
+.badge-warning { background: var(--warning-bg); color: var(--warning); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-info { background: var(--info-bg); color: var(--info); }
