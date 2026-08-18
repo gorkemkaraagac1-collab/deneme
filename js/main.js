@@ -3,6 +3,7 @@
  */
 
 let dcfChartInstance = null;
+let wcChartInstance = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   renderCockpitKPIs();
@@ -30,7 +31,7 @@ function renderCockpitKPIs() {
   if (cccEl) cccEl.textContent = fmt.days(wc.ccc);
 }
 
-// Render Working Capital Engine Page
+// Render Working Capital Engine Page & Chart
 function renderWorkingCapitalKPIs() {
   if (typeof FinancialEngine === 'undefined') return;
 
@@ -48,6 +49,84 @@ function renderWorkingCapitalKPIs() {
 
   const cccEl = document.querySelector('[data-kpi="wc-ccc"]');
   if (cccEl) cccEl.textContent = fmt.days(wc.ccc);
+
+  // Render Working Capital Chart
+  renderWorkingCapitalChart(wc);
+}
+
+// Render / Update Chart.js Working Capital Chart
+function renderWorkingCapitalChart(wc) {
+  const ctx = document.getElementById('wcChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  const labels = ['DSO (Alacak)', 'DIO (Stok)', 'DPO (Borç)', 'CCC (Nakit Döngüsü)'];
+  const dataValues = [
+    Math.round(wc.dso),
+    Math.round(wc.dio),
+    Math.round(wc.dpo),
+    Math.round(wc.ccc)
+  ];
+
+  const backgroundColors = [
+    'rgba(59, 130, 246, 0.7)',  // DSO - Mavi
+    'rgba(245, 158, 11, 0.7)',  // DIO - Turuncu
+    'rgba(16, 185, 129, 0.7)',  // DPO - Yeşil
+    'rgba(239, 68, 68, 0.8)'    // CCC - Kırmızı / Vurgu
+  ];
+
+  const borderColors = [
+    '#3b82f6',
+    '#f59e0b',
+    '#10b981',
+    '#ef4444'
+  ];
+
+  if (wcChartInstance) {
+    wcChartInstance.data.datasets[0].data = dataValues;
+    wcChartInstance.update();
+  } else {
+    wcChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Süre (Gün)',
+          data: dataValues,
+          backgroundColor: backgroundColors,
+          borderColor: borderColors,
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return `${context.label}: ${context.raw} Gün`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#94a3b8', font: { size: 12 } },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#94a3b8', font: { size: 12 } },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          }
+        }
+      }
+    });
+  }
 }
 
 // Render DCF Engine Page Outputs, Chart & Sensitivity Matrix
@@ -143,7 +222,6 @@ function renderSensitivityMatrix() {
   const netDebt = state.netDebt;
   const revGrowth = state.revenueGrowth;
 
-  // Variasyonal adımlar (-1.0%, -0.5%, Base, +0.5%, +1.0%)
   const waccSteps = [-0.01, -0.005, 0, 0.005, 0.01];
   const growthSteps = [-0.01, -0.005, 0, 0.005, 0.01];
 
@@ -165,7 +243,6 @@ function renderSensitivityMatrix() {
     growthSteps.forEach(gStep => {
       const gVal = baseGrowth + gStep;
       
-      // Matris hücresi özel hesaplaması
       const eqVal = calculateMatrixEquityValue(wVal, gVal, revGrowth, pnlState, netDebt);
       const isBaseCase = (wStep === 0 && gStep === 0);
       const cellClass = isBaseCase ? 'class="base-case"' : '';
@@ -188,7 +265,7 @@ function calculateMatrixEquityValue(wacc, terminalGrowth, revGrowth, pnlState, n
   for (let i = 1; i <= 5; i++) {
     currentRev *= (1 + revGrowth);
     const ebitda = currentRev * pnlState.ebitdaMargin;
-    const fcf = ebitda * 0.70; // Basitleştirilmiş vergi & CapEx sonrası FCF oranı
+    const fcf = ebitda * 0.70;
     pvSum += fcf / Math.pow(1 + wacc, i);
   }
 
