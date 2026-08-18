@@ -1,60 +1,178 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GK ADVISORY - IFRS 9 ECL Beklenen Kredi Zararları</title>
-  <link rel="stylesheet" href="css/global.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECL Analyzer — GK Advisory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0F1C2E;--ink2:#16283F;--parchment:#EDEAE2;--paper:#F7F5F0;--brass:#B08D57;--brass2:#8C6D3F;--line:rgba(176,141,87,.3);--muted:#68717f;--red:#9d453b;--green:#3d7057}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:#1c2a3a;font-family:Inter,sans-serif;line-height:1.5}.wrap{max-width:1180px;margin:auto;padding:0 24px}header{background:var(--ink);color:var(--parchment);border-bottom:1px solid var(--line)}.nav{max-width:1180px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.brand{font:600 19px Fraunces,serif}.brand span,.eyebrow{color:var(--brass)}.back{color:#ddd;font-size:13px;text-decoration:none}.hero{background:var(--ink);padding:42px 0 48px;color:var(--parchment)}.eyebrow{font:500 11px 'JetBrains Mono';letter-spacing:.1em;text-transform:uppercase}.hero h1{font:500 clamp(28px,4vw,42px) Fraunces,serif;margin:10px 0}.hero p{max-width:760px;color:rgba(237,234,226,.7);margin:0}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:22px;margin:28px 0 50px}.panel{background:white;border:1px solid #ddd6ca;border-radius:3px;padding:22px}.panel h2{font:500 21px Fraunces,serif;margin:0 0 16px}.field{margin-bottom:14px}.field label{display:block;font:500 10px 'JetBrains Mono';text-transform:uppercase;letter-spacing:.07em;color:var(--brass2);margin-bottom:6px}.field input,.field select{width:100%;padding:10px 11px;border:1px solid #d4d0c8;background:#fff;border-radius:2px;font:14px Inter}
+.btn{border:0;border-radius:2px;padding:11px 15px;background:var(--brass);color:var(--ink);font-weight:600;cursor:pointer;font-family:Inter,sans-serif}.btn.secondary{background:transparent;border:1px solid var(--brass);color:var(--brass2)}.btn.danger{background:#f2e5e2;color:var(--red)}.btn.tiny{padding:6px 10px;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted);background:#f6f2ea;border-left:3px solid var(--brass);padding:11px;margin-top:16px}
+.table-wrap{overflow:auto}.tbl{width:100%;border-collapse:collapse;min-width:900px}.tbl th{background:var(--ink);color:var(--parchment);font:500 10px 'JetBrains Mono';text-align:left;padding:10px}.tbl td{border-bottom:1px solid #e5e0d8;padding:8px;vertical-align:top}.tbl input,.tbl select{width:100%;padding:8px;border:1px solid #ddd7cd;border-radius:2px;font-size:13px}
+.matrix-tbl{width:100%;border-collapse:collapse}.matrix-tbl th{background:var(--ink);color:var(--parchment);font:500 10px 'JetBrains Mono';text-align:left;padding:8px}.matrix-tbl td{border-bottom:1px solid #e5e0d8;padding:6px;vertical-align:middle}.matrix-tbl input{width:100%;padding:7px;border:1px solid #ddd7cd;border-radius:2px;font-size:13px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.metric{background:var(--ink);color:var(--parchment);padding:15px;border-radius:2px}.metric small{display:block;color:rgba(237,234,226,.55);font:10px 'JetBrains Mono';text-transform:uppercase}.metric strong{display:block;margin-top:5px;font:500 22px Fraunces,serif}
+.status{margin:12px 0;font-size:13px}.ok{color:var(--green)}.warn{color:var(--red)}
+.bucket-chip{display:inline-block;padding:2px 8px;border-radius:10px;background:#efe9dd;color:var(--brass2);font:600 10.5px 'JetBrains Mono'}
+footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}.wrap{padding:0 16px}}@media(max-width:500px){.summary{grid-template-columns:1fr}}
+</style></head><body>
+<header><nav class="nav"><div class="brand">GK <span>ADVISORY</span></div><a class="back" href="dashboard.html">← Panele dön</a></nav></header>
+<section class="hero"><div class="wrap"><div class="eyebrow">Finance Intelligence · TFRS 9</div><h1>ECL Analyzer</h1><p>Ticari alacaklar için basitleştirilmiş yaklaşım (yaşlandırma matrisi) ile beklenen kredi zararı hesaplaması; diğer finansal varlıklar için PD × LGD bazlı genel yaklaşım.</p></div></section>
 
-  <header class="gk-header">
-    <div class="gk-header-container">
-      <div class="gk-brand">
-        <span class="brand-logo">GK</span>
-        <span class="brand-title">ADVISORY</span>
-      </div>
-      <nav class="gk-nav">
-        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
-      </nav>
-    </div>
-  </header>
+<main class="wrap"><div id="guard" class="note" style="display:none"></div>
+<div class="grid">
+<section class="panel"><h2>1 · Yaşlandırma Matrisi</h2>
+  <div class="table-wrap"><table class="matrix-tbl" id="matrixTbl"><thead><tr><th>Kova</th><th>Karşılık Oranı (%)</th><th></th></tr></thead><tbody id="matrixRows"></tbody></table></div>
+  <div class="actions" style="margin-top:14px"><button class="btn secondary" id="addBucket">+ Kova ekle</button><button class="btn secondary" id="resetMatrix">Varsayılana Dön</button></div>
+  <div class="note"><strong>Basitleştirilmiş yaklaşım:</strong> TFRS 9 uyarınca ticari alacaklarda ömür boyu beklenen kredi zararı, geçmiş tahsilat performansına dayalı bir provizyon matrisiyle tahmin edilebilir. Oranlar geçmiş veri ve ileriye dönük makro beklentilerle güncellenmelidir; bu prototipte varsayılan oranlar örnek amaçlıdır.</div>
+</section>
 
-  <main class="main-container">
-    <div class="page-header">
-      <div class="kpi-title">FINANCE INTELLIGENCE · IFRS 9 / TFRS 9</div>
-      <h1>Beklenen Kredi Zararları (ECL) Modülü</h1>
-      <p>Ticari alacaklar ve finansal varlıklar için karşılık matrisi ve aktör bazlı temerrüt ihtimali (PD/LGD) hesaplayıcı.</p>
-    </div>
+<section class="panel"><h2>2 · Alacak / Enstrüman Portföyü</h2>
+  <div class="summary">
+    <div class="metric"><small>Kalem</small><strong id="count">0</strong></div>
+    <div class="metric"><small>Toplam Bakiye (EAD)</small><strong id="totEad">0</strong></div>
+    <div class="metric"><small>Toplam ECL Karşılığı</small><strong id="totEcl">0</strong></div>
+    <div class="metric"><small>Ağırlıklı Ort. Oran</small><strong id="avgRate">%0</strong></div>
+  </div>
+  <div class="actions" style="margin-bottom:14px"><button class="btn" id="add">+ Kalem ekle</button><button class="btn secondary" id="sample">Örnek veri</button><button class="btn secondary" id="csv">CSV dışa aktar</button><button class="btn secondary" id="print">Yazdır / PDF</button><button class="btn danger" id="clear">Temizle</button></div>
+  <div class="table-wrap"><table class="tbl"><thead><tr><th>Müşteri / Enstrüman</th><th>Bakiye (EAD)</th><th>Yöntem</th><th>Kova / PD</th><th>LGD (%)</th><th>ECL Oranı</th><th>ECL Tutarı</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+  <div id="status" class="status"></div>
+</section>
+</div></main>
 
-    <div class="kpi-card">
-      <h3 class="serif-title" style="font-size: 1.2rem; color: var(--gk-navy); margin-bottom: 16px;">1 · Ticari Alacak Yaslandırma ve Karşılık Matrisi</h3>
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-          <thead>
-            <tr style="border-bottom: 2px solid var(--card-border); text-align: left;">
-              <th style="padding: 10px;" class="kpi-title">VADE DİLİMİ</th>
-              <th style="padding: 10px;" class="kpi-title">ALACAK TUTARI (₺)</th>
-              <th style="padding: 10px;" class="kpi-title">TAHMİNİ ZARAR ORANI (%)</th>
-              <th style="padding: 10px;" class="kpi-title">HESAPLANAN KARŞILIK (₺)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom: 1px solid var(--card-border);">
-              <td style="padding: 10px; font-weight: 600;">Vadesi Gelmemiş</td>
-              <td style="padding: 10px;"><input type="number" placeholder="0.00" style="width: 100%; padding: 6px; border: 1px solid var(--card-border);"></td>
-              <td style="padding: 10px;"><input type="number" placeholder="0.5" style="width: 100%; padding: 6px; border: 1px solid var(--card-border);"></td>
-              <td style="padding: 10px; font-weight: 700; color: var(--gk-navy);">₺0.00</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </main>
+<footer><div class="wrap">© 2026 GK Advisory — ECL Finance Engine · Prototype</div></footer>
 
-  <script src="js/financial-data.js"></script>
-  <script src="js/main.js"></script>
-</body>
-</html>
+<script src="auth.js"></script>
+<script>
+const user=window.GKAuth?window.GKAuth.current():null;
+if(!user||!(user.role==='admin'||user.licenses.includes('ecl'))){
+  document.getElementById('guard').style.display='block';
+  document.getElementById('guard').innerHTML=(!user?'Bu aracı kullanmak için giriş yapmalısınız. <a href="login.html?next=ecl.html">Giriş Yap</a>.':'Bu araç Enterprise/lisanslı erişim gerektirir. <a href="dashboard.html">Dashboard\u2019a dön</a>.');
+  document.querySelector('main').style.opacity='.45';
+  document.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);
+}
+
+const fmt=n=>new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
+const DEFAULT_MATRIX=[
+  {bucket:'Vadesi geçmemiş',rate:1.0},
+  {bucket:'1–30 gün',rate:3.0},
+  {bucket:'31–60 gün',rate:8.0},
+  {bucket:'61–90 gün',rate:20.0},
+  {bucket:'91–180 gün',rate:45.0},
+  {bucket:'180+ gün',rate:80.0}
+];
+let matrix=JSON.parse(JSON.stringify(DEFAULT_MATRIX));
+let items=[];
+
+function renderMatrix(){
+  const tb=document.getElementById('matrixRows');
+  tb.innerHTML=matrix.map((m,i)=>`<tr><td><input data-i="${i}" data-f="bucket" value="${m.bucket}"></td><td><input data-i="${i}" data-f="rate" type="number" min="0" max="100" step="0.1" value="${m.rate}"></td><td><button class="btn tiny danger" data-i="${i}" data-act="delBucket">Sil</button></td></tr>`).join('');
+  tb.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
+    const i=+e.target.dataset.i, f=e.target.dataset.f;
+    matrix[i][f]= f==='rate' ? (Number(e.target.value)||0) : e.target.value;
+    renderRows(); renderMatrixSelects();
+  }));
+  tb.querySelectorAll('button[data-act="delBucket"]').forEach(btn=>btn.addEventListener('click',()=>{
+    matrix.splice(+btn.dataset.i,1); renderMatrix(); renderRows();
+  }));
+}
+
+function bucketOptions(selectedIdx){
+  return matrix.map((m,i)=>`<option value="${i}" ${i==selectedIdx?'selected':''}>${m.bucket} (%${m.rate})</option>`).join('');
+}
+
+function renderMatrixSelects(){
+  document.querySelectorAll('select.bucketSelect').forEach(sel=>{
+    const i=+sel.dataset.i;
+    sel.innerHTML=bucketOptions(items[i].bucketIdx);
+  });
+}
+
+function calcItem(it){
+  let rate, ecl;
+  if(it.method==='matrix'){
+    const m=matrix[it.bucketIdx]||matrix[0];
+    rate=(m?m.rate:0);
+    ecl=it.balance*(rate/100);
+  } else {
+    rate=(it.pd/100)*(it.lgd/100)*100;
+    ecl=it.balance*(it.pd/100)*(it.lgd/100);
+  }
+  return {rate, ecl};
+}
+
+function renderRows(){
+  const rows=document.getElementById('rows');
+  let totEad=0, totEcl=0;
+  rows.innerHTML=items.map((it,i)=>{
+    const {rate,ecl}=calcItem(it);
+    totEad+=it.balance; totEcl+=ecl;
+    const methodCell = it.method==='matrix'
+      ? `<select class="bucketSelect" data-i="${i}" data-act="bucket">${bucketOptions(it.bucketIdx)}</select>`
+      : `<div style="display:flex;gap:4px"><input type="number" min="0" max="100" step="0.1" value="${it.pd}" data-i="${i}" data-act="pd" placeholder="PD %" style="width:70px"></div>`;
+    return `<tr>
+      <td><input value="${it.customer}" data-i="${i}" data-act="customer"></td>
+      <td><input type="number" min="0" step="0.01" value="${it.balance}" data-i="${i}" data-act="balance"></td>
+      <td><select data-i="${i}" data-act="method"><option value="matrix" ${it.method==='matrix'?'selected':''}>Yaşlandırma Matrisi</option><option value="pdlgd" ${it.method==='pdlgd'?'selected':''}>PD × LGD</option></select></td>
+      <td>${methodCell}</td>
+      <td>${it.method==='pdlgd'?`<input type="number" min="0" max="100" step="0.1" value="${it.lgd}" data-i="${i}" data-act="lgd">`:`<span class="bucket-chip">otomatik</span>`}</td>
+      <td>%${rate.toFixed(2)}</td>
+      <td><strong>${fmt(ecl)}</strong></td>
+      <td><button class="btn tiny danger" data-i="${i}" data-act="del">Sil</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('count').textContent=items.length;
+  document.getElementById('totEad').textContent=fmt(totEad);
+  document.getElementById('totEcl').textContent=fmt(totEcl);
+  document.getElementById('avgRate').textContent='%'+(totEad? (totEcl/totEad*100).toFixed(2):'0.00');
+  document.getElementById('status').innerHTML=items.length?`<span class="ok">${items.length} kalem hesaplandı.</span>`:`<span class="warn">Henüz kalem eklenmedi.</span>`;
+
+  rows.querySelectorAll('[data-act]').forEach(el=>{
+    el.addEventListener(el.tagName==='SELECT'||el.type==='number'?'input':'input', e=>{
+      const i=+e.target.dataset.i, act=e.target.dataset.act;
+      if(act==='del'){ items.splice(i,1); renderRows(); return; }
+      if(act==='customer') items[i].customer=e.target.value;
+      if(act==='balance') items[i].balance=Number(e.target.value)||0;
+      if(act==='method'){ items[i].method=e.target.value; renderRows(); return; }
+      if(act==='bucket') items[i].bucketIdx=Number(e.target.value);
+      if(act==='pd') items[i].pd=Number(e.target.value)||0;
+      if(act==='lgd') items[i].lgd=Number(e.target.value)||0;
+      renderRows();
+    });
+  });
+}
+
+document.getElementById('add').onclick=()=>{
+  items.push({customer:'', balance:0, method:'matrix', bucketIdx:0, pd:0, lgd:45});
+  renderRows();
+};
+document.getElementById('sample').onclick=()=>{
+  items=[
+    {customer:'ABC Tekstil A.Ş.', balance:320000, method:'matrix', bucketIdx:0, pd:0, lgd:45},
+    {customer:'Deniz Lojistik Ltd.', balance:145000, method:'matrix', bucketIdx:2, pd:0, lgd:45},
+    {customer:'Kaya İnşaat', balance:610000, method:'matrix', bucketIdx:4, pd:0, lgd:45},
+    {customer:'Kurumsal Krediler — Banka Plasmanı', balance:2500000, method:'pdlgd', bucketIdx:0, pd:2.5, lgd:35}
+  ];
+  renderRows();
+};
+document.getElementById('clear').onclick=()=>{ items=[]; renderRows(); };
+document.getElementById('addBucket').onclick=()=>{ matrix.push({bucket:'Yeni Kova', rate:0}); renderMatrix(); renderRows(); };
+document.getElementById('resetMatrix').onclick=()=>{ matrix=JSON.parse(JSON.stringify(DEFAULT_MATRIX)); renderMatrix(); renderRows(); };
+document.getElementById('print').onclick=()=>window.print();
+document.getElementById('csv').onclick=()=>{
+  let out=['Müşteri;Bakiye (EAD);Yöntem;Kova/PD;LGD;ECL Oranı;ECL Tutarı'];
+  items.forEach(it=>{
+    const {rate,ecl}=calcItem(it);
+    const bucketOrPd = it.method==='matrix' ? (matrix[it.bucketIdx]?matrix[it.bucketIdx].bucket:'') : it.pd+'%';
+    out.push([it.customer, it.balance.toFixed(2), it.method==='matrix'?'Yaşlandırma Matrisi':'PD x LGD', bucketOrPd, it.method==='pdlgd'?it.lgd:'', rate.toFixed(2)+'%', ecl.toFixed(2)].join(';'));
+  });
+  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_ECL_Analiz.csv'; a.click();
+};
+
+renderMatrix();
+renderRows();
+</script>
+</body></html>
