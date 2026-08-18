@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TFRS 16 Kiralama İşlemleri - GK Platform</title>
+  <title>TFRS 16 Kiralama Modülü - GK Platform</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
+  <!-- Chart.js CDN Entegrasyonu -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -21,12 +23,12 @@
       <nav class="cfo-nav-menu">
         <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
         <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
+        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
         <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
         <div class="nav-dropdown">
           <span class="dropdown-title" style="color: var(--text-primary);">IFRS / TFRS Modülleri ▾</span>
           <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
+            <a href="tfrs16.html" style="color: var(--text-primary);">TFRS 16 Kiralama</a>
             <a href="tms19.html">TMS 19 Çalışan Hakları</a>
             <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
             <a href="hedge-accounting.html">Hedge Accounting</a>
@@ -41,13 +43,78 @@
   </header>
 
   <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">TFRS 16 Kiralama Standartları Hesaplama Engine</h2>
-    <div class="kpi-card" style="max-width: 400px; margin-bottom: 20px;">
-      <span class="kpi-title">Kullanım Hakkı Varlığı (ROU)</span>
-      <div class="kpi-value">₺34.8M</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">TFRS 16 Kiralama İşlemleri Hesaplama Modülü</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Kullanım Hakkı Varlığı (ROU Asset) ve Kiralama Yükümlülüğü Bugünkü Değer (PV) Modellemesi.</p>
+      </div>
+    </div>
+
+    <!-- TFRS 16 Girdi Paneli ve KPI Kartları -->
+    <div style="display: grid; grid-template-columns: 320px 1fr; gap: 24px; margin-bottom: 30px;">
+      <!-- Parametre Inputları -->
+      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
+        <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Sözleşme Parametreleri</h3>
+        
+        <div style="margin-bottom: 14px;">
+          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Yıllık Ödeme Tutarı (€)</label>
+          <input type="number" id="tfrs16-payment-input" value="120000" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Sözleşme Süresi (Yıl)</label>
+          <input type="number" id="tfrs16-term-input" value="5" min="1" max="30" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Alternatif Borçlanma Oranı (%)</label>
+          <input type="number" id="tfrs16-rate-input" value="8.5" step="0.1" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        </div>
+      </div>
+
+      <!-- Çıktı KPI Kartları -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-content: start;">
+        <div class="kpi-card">
+          <span class="kpi-title">İlk Kullanım Hakkı Varlığı (ROU)</span>
+          <div class="kpi-value" data-tfrs16="rou-asset">€0</div>
+          <div class="kpi-delta positive">Bilanço Aktifi (+)</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-title">Başlangıç Kiralama Yükümlülüğü</span>
+          <div class="kpi-value" data-tfrs16="lease-liability">€0</div>
+          <div class="kpi-delta negative">Finansal Borç (+)</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-title">Yıllık Amortisman Gideri</span>
+          <div class="kpi-value" data-tfrs16="annual-depr">€0</div>
+          <div class="kpi-delta positive">EBITDA Pozitif Etki</div>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-title">1. Yıl Faiz Gideri</span>
+          <div class="kpi-value" data-tfrs16="interest-exp">€0</div>
+          <div class="kpi-delta negative">Finansman Gideri (-)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TFRS 16 İtfa Grafiği -->
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Kiralama Yükümlülüğü İtfa Profil Grafiği (€)</h3>
+      <div style="position: relative; height: 320px; width: 100%;">
+        <canvas id="tfrs16Chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Finansal Tablo Etkisi -->
+    <div class="insight-card">
+      <div class="insight-step"><span class="insight-step-label step-happened">TFRS 16 ETKİSİ</span> Operasyonel kira gideri P&amp;L'den kaldırılarak amortisman ve faiz giderine dönüştürülmüştür.</div>
+      <div class="insight-step"><span class="insight-step-label step-sowhat">EBITDA &amp; ROIC</span> EBITDA tutarında kira ödemesi kadar artış sağlanırken, Bilanço toplamı büyüdüğü için ROIC üzerinde baskı oluşturur.</div>
+      <div class="insight-step"><span class="insight-step-label step-next">NET BORÇ</span> Kiralama yükümlülüğü Net Borç hesabına dahil edilir.</div>
     </div>
   </main>
 
+  <!-- Script Entegrasyon Sırası -->
+  <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
