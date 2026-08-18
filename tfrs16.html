@@ -3,117 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TFRS 16 Kiralama Modülü - GK Platform</title>
+  <title>GK ADVISORY - TFRS 16 Kiralama Muhasebesi</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
-  <!-- Chart.js CDN Entegrasyonu -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
+  <header class="gk-header">
+    <div class="gk-header-container">
+      <div class="gk-brand">
         <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
-        </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
-        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title" style="color: var(--text-primary);">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html" style="color: var(--text-primary);">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
-          </div>
-        </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+        <span class="brand-title">ADVISORY</span>
       </div>
+      <nav class="gk-nav">
+        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
+      </nav>
     </div>
   </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-      <div>
-        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">TFRS 16 Kiralama İşlemleri Hesaplama Modülü</h2>
-        <p style="color: var(--text-muted); font-size: 0.95rem;">Kullanım Hakkı Varlığı (ROU Asset) ve Kiralama Yükümlülüğü Bugünkü Değer (PV) Modellemesi.</p>
-      </div>
+  <main class="main-container">
+    <div class="page-header">
+      <div class="kpi-title">FINANCE INTELLIGENCE · TFRS 16 / IFRS 16</div>
+      <h1>TFRS 16 Kiralama Muhasebesi</h1>
+      <p>Kullanım hakkı varlığı (RoU) ve kiralama borçları itfa tablosu hesaplama motoru.</p>
     </div>
 
-    <!-- TFRS 16 Girdi Paneli ve KPI Kartları -->
-    <div style="display: grid; grid-template-columns: 320px 1fr; gap: 24px; margin-bottom: 30px;">
-      <!-- Parametre Inputları -->
-      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
-        <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Sözleşme Parametreleri</h3>
-        
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Yıllık Ödeme Tutarı (€)</label>
-          <input type="number" id="tfrs16-payment-input" value="120000" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+    <div class="kpi-card">
+      <h3 class="serif-title" style="font-size: 1.2rem; color: var(--gk-navy); margin-bottom: 16px;">1 · Sözleşme Bilgileri</h3>
+      <form style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <div>
+          <label class="kpi-title">AYLIK KİRA TUTARI</label>
+          <input type="number" placeholder="Örn. 50000" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Sözleşme Süresi (Yıl)</label>
-          <input type="number" id="tfrs16-term-input" value="5" min="1" max="30" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        <div>
+          <label class="kpi-title">ALTERNATİF BORÇLANMA ORANI (%)</label>
+          <input type="number" step="0.01" placeholder="Örn. 24.5" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Alternatif Borçlanma Oranı (%)</label>
-          <input type="number" id="tfrs16-rate-input" value="8.5" step="0.1" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        <div>
+          <label class="kpi-title">KİRALAMA SÜRESİ (AY)</label>
+          <input type="number" placeholder="Örn. 36" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-      </div>
-
-      <!-- Çıktı KPI Kartları -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-content: start;">
-        <div class="kpi-card">
-          <span class="kpi-title">İlk Kullanım Hakkı Varlığı (ROU)</span>
-          <div class="kpi-value" data-tfrs16="rou-asset">€0</div>
-          <div class="kpi-delta positive">Bilanço Aktifi (+)</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Başlangıç Kiralama Yükümlülüğü</span>
-          <div class="kpi-value" data-tfrs16="lease-liability">€0</div>
-          <div class="kpi-delta negative">Finansal Borç (+)</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Yıllık Amortisman Gideri</span>
-          <div class="kpi-value" data-tfrs16="annual-depr">€0</div>
-          <div class="kpi-delta positive">EBITDA Pozitif Etki</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">1. Yıl Faiz Gideri</span>
-          <div class="kpi-value" data-tfrs16="interest-exp">€0</div>
-          <div class="kpi-delta negative">Finansman Gideri (-)</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TFRS 16 İtfa Grafiği -->
-    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Kiralama Yükümlülüğü İtfa Profil Grafiği (€)</h3>
-      <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="tfrs16Chart"></canvas>
-      </div>
-    </div>
-
-    <!-- Finansal Tablo Etkisi -->
-    <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">TFRS 16 ETKİSİ</span> Operasyonel kira gideri P&amp;L'den kaldırılarak amortisman ve faiz giderine dönüştürülmüştür.</div>
-      <div class="insight-step"><span class="insight-step-label step-sowhat">EBITDA &amp; ROIC</span> EBITDA tutarında kira ödemesi kadar artış sağlanırken, Bilanço toplamı büyüdüğü için ROIC üzerinde baskı oluşturur.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">NET BORÇ</span> Kiralama yükümlülüğü Net Borç hesabına dahil edilir.</div>
+      </form>
     </div>
   </main>
 
-  <!-- Script Entegrasyon Sırası -->
   <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
