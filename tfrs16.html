@@ -1,379 +1,781 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TFRS 16 Kiralama İşlemleri Motoru — GK Advisory</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root{--ink:#0F1C2E;--ink2:#16283F;--parchment:#EDEAE2;--paper:#F7F5F0;--brass:#B08D57;--brass2:#8C6D3F;--line:rgba(176,141,87,.3);--muted:#68717f;--red:#9d453b;--green:#3d7057}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:#1c2a3a;font-family:Inter,sans-serif;line-height:1.5}.wrap{max-width:1180px;margin:auto;padding:0 24px}header{background:var(--ink);color:var(--parchment);border-bottom:1px solid var(--line)}.nav{max-width:1180px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.brand{font:600 19px Fraunces,serif}.brand span,.eyebrow{color:var(--brass)}.back{color:#ddd;font-size:13px;text-decoration:none}.hero{background:var(--ink);padding:42px 0 48px;color:var(--parchment)}.eyebrow{font:500 11px 'JetBrains Mono';letter-spacing:.1em;text-transform:uppercase}.hero h1{font:500 clamp(28px,4vw,42px) Fraunces,serif;margin:10px 0}.hero p{max-width:760px;color:rgba(237,234,226,.7);margin:0}
-.grid{display:grid;grid-template-columns:340px 1fr;gap:22px;margin:28px 0 50px}.panel{background:white;border:1px solid #ddd6ca;border-radius:3px;padding:22px}.panel h2{font:500 21px Fraunces,serif;margin:0 0 16px}.field{margin-bottom:14px}.field label{display:block;font:500 10px 'JetBrains Mono';text-transform:uppercase;letter-spacing:.07em;color:var(--brass2);margin-bottom:6px}.field input,.field select{width:100%;padding:10px 11px;border:1px solid #d4d0c8;background:#fff;border-radius:2px;font:14px Inter}
-.btn{border:0;border-radius:2px;padding:11px 15px;background:var(--brass);color:var(--ink);font-weight:600;cursor:pointer;font-family:Inter,sans-serif}.btn.secondary{background:transparent;border:1px solid var(--brass);color:var(--brass2)}.btn.danger{background:#f2e5e2;color:var(--red)}.btn.tiny{padding:6px 10px;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}
-.note{font-size:12px;color:var(--muted);background:#f6f2ea;border-left:3px solid var(--brass);padding:11px;margin-top:16px}
-.table-wrap{overflow:auto}.tbl{width:100%;border-collapse:collapse;min-width:980px}.tbl th{background:var(--ink);color:var(--parchment);font:500 10px 'JetBrains Mono';text-align:left;padding:10px}.tbl td{border-bottom:1px solid #e5e0d8;padding:8px;vertical-align:top}.tbl input,.tbl select{width:100%;padding:8px;border:1px solid #ddd7cd;border-radius:2px;font-size:13px}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.metric{background:var(--ink);color:var(--parchment);padding:15px;border-radius:2px}.metric small{display:block;color:rgba(237,234,226,.55);font:10px 'JetBrains Mono';text-transform:uppercase}.metric strong{display:block;margin-top:5px;font:500 22px Fraunces,serif}
-.status{margin:12px 0;font-size:13px}.ok{color:var(--green)}.warn{color:var(--red)}
-.sched-row td{background:#fbfaf6}.sched-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0}.sched-tbl th{background:#efe9dd;color:var(--ink);text-align:right;padding:6px 8px;font:600 10px 'JetBrains Mono'}.sched-tbl th:first-child,.sched-tbl td:first-child{text-align:left}.sched-tbl td{text-align:right;padding:6px 8px;border-bottom:1px solid #e9e3d6}
-footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
-@media(max-width:850px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}.wrap{padding:0 16px}}@media(max-width:500px){.summary{grid-template-columns:1fr}}
-</style></head><body>
-<header><nav class="nav"><div class="brand">GK <span>ADVISORY</span></div><a class="back" href="dashboard.html">← Panele dön</a></nav></header>
-<section class="hero"><div class="wrap"><div class="eyebrow">Finance Intelligence · TFRS 16</div><h1>TFRS 16 Kiralama İşlemleri Motoru</h1><p>Kiralama sözleşmelerini kullanım hakkı varlığı (ROU) ve kira yükümlülüğüne dönüştürmek, etkin faiz yöntemiyle amortisman/faiz tablosu üretmek için tasarlanmış prototip.</p></div></section>
 
-<main class="wrap"><div id="guard" class="note" style="display:none"></div>
-<div class="grid">
-<section class="panel"><h2>1 · Sözleşme Parametreleri</h2>
-  <div class="field"><label>Varlık / Sözleşme Adı</label><input id="assetName" placeholder="Örn. Depo Kirası — İzmir"></div>
-  <div class="field"><label>Aylık Kira Bedeli</label><input id="payment" type="number" min="0" step="0.01" placeholder="Örn. 45000"></div>
-  <div class="field"><label>Kiralama Süresi (ay)</label><input id="term" type="number" min="1" step="1" placeholder="Örn. 36"></div>
-  <div class="field"><label>Yıllık İskonto Oranı (%)</label><input id="rate" type="number" min="0" step="0.01" placeholder="Örn. 42.5"></div>
-  <div class="field"><label>Başlangıç Tarihi</label><input id="startDate" type="date"></div>
-  <div class="field"><label>İlk Doğrudan Maliyetler</label><input id="idc" type="number" min="0" step="0.01" value="0"></div>
-  <div class="field"><label>Kiralama Teşvikleri (İndirim)</label><input id="incentive" type="number" min="0" step="0.01" value="0"></div>
-  <div class="actions"><button class="btn" id="add">+ Sözleşme ekle</button><button class="btn secondary" id="bulkUploadBtn">Excel'den Toplu Yükle</button><a class="btn secondary" href="GK_TFRS16_Sozlesme_Sablonu.xlsx" download style="text-decoration:none;display:inline-flex;align-items:center;">Şablonu İndir</a><input type="file" id="bulkFile" accept=".xlsx,.xls" style="display:none;"><button class="btn secondary" id="sample">Örnek veri</button></div>
-  <div id="bulkStatus" class="status"></div>
-  <div class="note"><strong>Hesaplama mantığı:</strong> Kira yükümlülüğü = aylık ödemelerin, aylık iskonto oranıyla (yıllık oran/12) bugünkü değeri (ödemeler dönem sonunda). ROU varlık = kira yükümlülüğü + ilk doğrudan maliyetler − teşvikler. Amortisman doğrusal, faiz etkin faiz yöntemiyle hesaplanır. Değişken ödeme, opsiyon ve yeniden ölçüm bu prototipte kapsam dışıdır.</div>
-</section>
+  <meta charset="UTF-8">
 
-<section class="panel"><h2>2 · Sözleşme Portföyü</h2>
-  <div class="summary">
-    <div class="metric"><small>Sözleşme</small><strong id="count">0</strong></div>
-    <div class="metric"><small>Toplam Kira Yükümlülüğü</small><strong id="totLiab">0</strong></div>
-    <div class="metric"><small>Toplam ROU Varlık</small><strong id="totRou">0</strong></div>
-    <div class="metric"><small>Toplam Faiz (Süre Boyunca)</small><strong id="totInt">0</strong></div>
-  </div>
-  <div class="table-wrap"><table class="tbl"><thead><tr><th>Varlık</th><th>Aylık Kira</th><th>Süre (ay)</th><th>İskonto (%)</th><th>Kira Yükümlülüğü</th><th>ROU Varlık</th><th>Aylık Amortisman</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
-  <div class="actions" style="margin-top:16px"><button class="btn secondary" id="clear">Tümünü Temizle</button><button class="btn secondary" id="print">Yazdır / PDF</button></div>
-  <div id="status" class="status"></div>
-</section>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-<section class="panel" style="grid-column:1 / -1;"><h2>3 · Muhasebe Kaydı (Düzeltme Fişi)</h2>
-  <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px;">
-    <div class="field" style="max-width:220px;margin-bottom:0;"><label>Raporlama Tarihi</label><input id="reportDate" type="date"></div>
-    <div class="field" style="max-width:180px;margin-bottom:0;"><label>Kurumlar Vergisi Oranı (%)</label><input id="taxRate" type="number" min="0" step="0.01" value="25"></div>
-    <div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;gap:8px;">
-      <input type="checkbox" id="includeDefTax" checked style="width:auto;"><label for="includeDefTax" style="margin-bottom:0;">Ertelenmiş vergiyi dahil et</label>
+  <title>TFRS 16 | Contract Portfolio</title>
+
+  <link
+    rel="stylesheet"
+    href="css/tfrs16.css"
+  >
+
+</head>
+
+
+<body>
+
+
+<div class="app">
+
+
+  <!-- SIDEBAR -->
+
+  <aside class="sidebar">
+
+    <div class="brand">
+
+      <div class="brand-title">
+        GK Finance
+      </div>
+
+      <div class="brand-subtitle">
+        Finance Intelligence
+      </div>
+
     </div>
-    <button class="btn" id="genJournal">Muhasebe Kaydını Oluştur</button>
-    <button class="btn secondary" id="journalCsv">CSV dışa aktar</button>
-    <button class="btn secondary" id="journalPrint">Yazdır / PDF</button>
-  </div>
-  <div class="note">Bu fiş, seçilen sözleşmeler için <strong>hiçbir TFRS 16 kaydının daha önce yapılmadığı</strong> varsayımıyla — kontrat başlangıcından raporlama tarihine kadar olan ilk muhasebeleştirme, birikmiş amortisman, birikmiş faiz ve yapılan ödemeleri tek bir düzeltme fişinde birleştirir. Hesap kodları Tekdüzen Hesap Planı'na göre yaygın kullanılan örneklerdir — şirketinizin kendi hesap planına göre uyarlayın. Kısmen kaydedilmiş sözleşmeler için bu fiş, zaten kaydedilmiş tutarları da tekrar içerecektir; mizanla mutabakat yapın.
-  <br><br><strong>Ertelenmiş vergi:</strong> Türkiye'de kira gideri vergi matrahından genelde ödenen kira bedeli üzerinden indirilir; TFRS 16'nın ROU/yükümlülük modeli vergi tabanında birebir kabul görmez. Geçici fark = Kira Yükümlülüğü (Net) − ROU Net Defter Değeri olarak hesaplanır: fark pozitifse (yükümlülük > ROU net, tipik olarak erken dönemlerde) indirilebilir geçici fark → Ertelenmiş Vergi Varlığı; negatifse vergilendirilebilir geçici fark → Ertelenmiş Vergi Yükümlülüğü. <strong>Kurumlar vergisi oranını güncel mevzuattan teyit edin.</strong></div>
-  <div id="journalOutput"></div>
-</section>
-</div></main>
 
-<footer><div class="wrap">© 2026 GK Advisory — TFRS 16 Finance Engine · Prototype</div></footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="auth.js"></script>
-<script>
-const user=window.GKAuth?window.GKAuth.current():null;
-if(!user||!(user.role==='admin'||user.licenses.includes('tfrs16'))){
-  document.getElementById('guard').style.display='block';
-  document.getElementById('guard').innerHTML=(!user?'Bu aracı kullanmak için giriş yapmalısınız. <a href="login.html?next=tfrs16.html">Giriş Yap</a>.':'Bu araç Enterprise/lisanslı erişim gerektirir. <a href="dashboard.html">Dashboard\u2019a dön</a>.');
-  document.querySelector('main').style.opacity='.45';
-  document.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);
-}
+    <nav class="navigation">
 
-const rows=document.getElementById('rows');
-const fmt=n=>new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
-let leases=[];
+      <a
+        href="dashboard.html"
+        class="nav-item"
+      >
 
-function computeLease(l){
-  const n=Math.max(1,Math.round(l.term));
-  const mr=(l.rate/100)/12;
-  const pay=l.payment;
-  // PV of ordinary annuity (payments at period end)
-  let liab = mr>0 ? pay*(1-Math.pow(1+mr,-n))/mr : pay*n;
-  const rouInitial = liab + (l.idc||0) - (l.incentive||0);
-  const monthlyDep = rouInitial/n;
-  const schedule=[];
-  let bal=liab, rouBal=rouInitial;
-  let totalInterest=0;
-  for(let i=1;i<=n;i++){
-    const interest = bal*mr;
-    let principal = pay-interest;
-    let closing = bal-principal;
-    if(i===n){ // clean up rounding on final period
-      principal += closing; closing = 0;
-    }
-    rouBal = Math.max(0, rouInitial - monthlyDep*i);
-    totalInterest += interest;
-    schedule.push({period:i, opening:bal, interest, payment:pay, principal, closing, dep:monthlyDep, rouBal});
-    bal = closing;
-  }
-  return {liabInitial:liab, rouInitial, monthlyDep, schedule, totalInterest, n, mr};
-}
+        <span>◈</span>
 
-function renderRows(){
-  rows.innerHTML='';
-  let totLiab=0, totRou=0, totInt=0;
-  leases.forEach((l,i)=>{
-    const calc=computeLease(l);
-    totLiab+=calc.liabInitial; totRou+=calc.rouInitial; totInt+=calc.totalInterest;
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${l.assetName||'—'}</td><td>${fmt(l.payment)}</td><td>${l.term}</td><td>${l.rate}</td><td>${fmt(calc.liabInitial)}</td><td>${fmt(calc.rouInitial)}</td><td>${fmt(calc.monthlyDep)}</td><td><button class="btn tiny secondary" data-i="${i}" data-act="detail">Detay</button> <button class="btn tiny secondary" data-i="${i}" data-act="csv">CSV</button> <button class="btn tiny danger" data-i="${i}" data-act="del">Sil</button></td>`;
-    rows.appendChild(tr);
+        CFO Cockpit
 
-    const detailTr=document.createElement('tr');
-    detailTr.className='sched-row'; detailTr.style.display='none'; detailTr.dataset.detailFor=i;
-    const td=document.createElement('td'); td.colSpan=8;
-    td.innerHTML=`<div class="table-wrap"><table class="sched-tbl"><thead><tr><th>Dönem</th><th>Açılış Bakiye</th><th>Faiz</th><th>Ödeme</th><th>Anapara</th><th>Kapanış Bakiye</th><th>ROU Amortisman</th><th>ROU Kalan Değer</th></tr></thead><tbody>${calc.schedule.map(s=>`<tr><td>${s.period}</td><td>${fmt(s.opening)}</td><td>${fmt(s.interest)}</td><td>${fmt(s.payment)}</td><td>${fmt(s.principal)}</td><td>${fmt(s.closing)}</td><td>${fmt(s.dep)}</td><td>${fmt(s.rouBal)}</td></tr>`).join('')}</tbody></table></div>`;
-    detailTr.appendChild(td);
-    rows.appendChild(detailTr);
-  });
-  document.getElementById('count').textContent=leases.length;
-  document.getElementById('totLiab').textContent=fmt(totLiab);
-  document.getElementById('totRou').textContent=fmt(totRou);
-  document.getElementById('totInt').textContent=fmt(totInt);
-  document.getElementById('status').innerHTML=leases.length?`<span class="ok">${leases.length} sözleşme hesaplandı.</span>`:`<span class="warn">Henüz sözleşme eklenmedi.</span>`;
+      </a>
 
-  rows.querySelectorAll('button[data-act]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const i=+btn.dataset.i, act=btn.dataset.act;
-      if(act==='del'){ leases.splice(i,1); renderRows(); return; }
-      if(act==='detail'){
-        const dr=rows.querySelector(`tr[data-detail-for="${i}"]`);
-        dr.style.display = dr.style.display==='none' ? '' : 'none';
-        return;
-      }
-      if(act==='csv'){
-        const l=leases[i], calc=computeLease(l);
-        let out=['Dönem;Açılış Bakiye;Faiz;Ödeme;Anapara;Kapanış Bakiye;ROU Amortisman;ROU Kalan Değer'];
-        calc.schedule.forEach(s=>out.push([s.period,s.opening,s.interest,s.payment,s.principal,s.closing,s.dep,s.rouBal].map(v=>typeof v==='number'?v.toFixed(2):v).join(';')));
-        const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
-        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`GK_TFRS16_${(l.assetName||'sozlesme').replace(/\s+/g,'_')}.csv`; a.click();
-      }
-    });
-  });
-}
 
-document.getElementById('add').onclick=()=>{
-  const l={
-    assetName:document.getElementById('assetName').value,
-    payment:Number(document.getElementById('payment').value)||0,
-    term:Number(document.getElementById('term').value)||0,
-    rate:Number(document.getElementById('rate').value)||0,
-    startDate:document.getElementById('startDate').value,
-    idc:Number(document.getElementById('idc').value)||0,
-    incentive:Number(document.getElementById('incentive').value)||0
-  };
-  if(!l.payment||!l.term||!l.rate){ alert('Aylık kira, süre ve iskonto oranı zorunludur.'); return; }
-  leases.push(l);
-  renderRows();
-};
+      <a
+        href="tfrs16.html"
+        class="nav-item active"
+      >
 
-document.getElementById('bulkUploadBtn').addEventListener('click', ()=>document.getElementById('bulkFile').click());
-document.getElementById('bulkFile').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('bulkStatus');
-  statusEl.innerHTML = '<span class="ok">Dosya okunuyor…</span>';
-  const reader = new FileReader();
-  reader.onload = evt => {
-    try {
-      const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        <span>▣</span>
 
-      const toISO = v => {
-        if(!v && v!==0) return '';
-        if(v instanceof Date) return v.toISOString().slice(0,10);
-        const s = String(v).trim();
-        if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-        const parsed = new Date(s);
-        return isNaN(parsed) ? '' : parsed.toISOString().slice(0,10);
-      };
-      const toNum = v => {
-        if(typeof v === 'number') return v;
-        const cleaned = String(v).replace(/[^\d.,-]/g,'').replace(/\.(?=\d{3},)/g,'').replace(',', '.');
-        const n = parseFloat(cleaned);
-        return isNaN(n) ? 0 : n;
-      };
-      const findKey = (row, needles) => Object.keys(row).find(k => {
-        const lk = k.toLocaleLowerCase('tr');
-        return needles.some(n => lk.includes(n));
-      });
+        TFRS 16
 
-      let imported = 0, skipped = 0;
-      json.forEach(row => {
-        const nameKey = findKey(row, ['varlık','varlik','sözleşme','sozlesme']);
-        const paymentKey = findKey(row, ['kira bedeli','aylık kira','aylik kira']);
-        const termKey = findKey(row, ['süre','sure']);
-        const rateKey = findKey(row, ['iskonto']);
-        const startKey = findKey(row, ['başlangıç','baslangic']);
-        const idcKey = findKey(row, ['doğrudan maliyet','dogrudan maliyet']);
-        const incentiveKey = findKey(row, ['teşvik','tesvik']);
+      </a>
 
-        const name = nameKey ? String(row[nameKey]).trim() : '';
-        if(!name || name.toLocaleLowerCase('tr').startsWith('örnek')){ skipped++; return; }
 
-        const l = {
-          assetName: name,
-          payment: paymentKey ? toNum(row[paymentKey]) : 0,
-          term: termKey ? toNum(row[termKey]) : 0,
-          rate: rateKey ? toNum(row[rateKey]) : 0,
-          startDate: startKey ? toISO(row[startKey]) : '',
-          idc: idcKey ? toNum(row[idcKey]) : 0,
-          incentive: incentiveKey ? toNum(row[incentiveKey]) : 0
-        };
-        if(!l.payment || !l.term || !l.rate){ skipped++; return; }
-        leases.push(l);
-        imported++;
-      });
+      <a
+        href="#"
+        class="nav-item"
+      >
 
-      renderRows();
-      statusEl.innerHTML = imported
-        ? `<span class="ok">${imported} sözleşme içe aktarıldı${skipped?` (${skipped} boş/eksik/örnek satır atlandı)`:''}.</span>`
-        : `<span class="warn">Dosyada geçerli sözleşme satırı bulunamadı. Sütun başlıklarının şablondakiyle aynı ve aylık kira/süre/iskonto alanlarının dolu olduğundan emin olun.</span>`;
-    } catch(err){
-      statusEl.innerHTML = `<span class="warn">Dosya okunamadı. .xlsx formatında ve şablona uygun olduğundan emin olun.</span>`;
-    }
-    e.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
-});
+        <span>▤</span>
 
-document.getElementById('sample').onclick=()=>{
-  document.getElementById('assetName').value='Depo Kirası — İzmir';
-  document.getElementById('payment').value=45000;
-  document.getElementById('term').value=36;
-  document.getElementById('rate').value=42.5;
-  document.getElementById('startDate').value=new Date().toISOString().slice(0,10);
-  document.getElementById('idc').value=15000;
-  document.getElementById('incentive').value=10000;
-};
-document.getElementById('clear').onclick=()=>{ leases=[]; renderRows(); };
-document.getElementById('print').onclick=()=>window.print();
-renderRows();
+        Finansal Raporlama
 
-// ---------- 3 · Muhasebe Kaydı (Düzeltme Fişi) ----------
-document.getElementById('reportDate').value = new Date().toISOString().slice(0,10);
+      </a>
 
-function monthsBetween(start, end){
-  let m = (end.getFullYear()-start.getFullYear())*12 + (end.getMonth()-start.getMonth());
-  if(end.getDate() < start.getDate()) m -= 1;
-  return Math.max(0, m);
-}
 
-function calcAsOf(l, reportDateStr){
-  const calc = computeLease(l);
-  const start = new Date(l.startDate);
-  const rd = new Date(reportDateStr);
-  let t = isNaN(start) ? 0 : monthsBetween(start, rd);
-  t = Math.max(0, Math.min(calc.n, t));
-  let cumDep=0, cumInterest=0, cumPayments=0;
-  let closingLiab=calc.liabInitial, closingRou=calc.rouInitial;
-  for(let k=0;k<t;k++){
-    cumDep += calc.schedule[k].dep;
-    cumInterest += calc.schedule[k].interest;
-    cumPayments += calc.schedule[k].payment;
-  }
-  if(t>0){ closingLiab = calc.schedule[t-1].closing; closingRou = calc.schedule[t-1].rouBal; }
-  return { t, months:t, rouInitial:calc.rouInitial, liabInitial:calc.liabInitial, cumDep, cumInterest, cumPayments, closingLiab, closingRou };
-}
+      <a
+        href="#"
+        class="nav-item"
+      >
 
-function buildJournalRows(l, a){
-  const rows = [];
-  rows.push({desc:`${l.assetName} — İlk Muhasebeleştirme`, acc:'260 Kullanım Hakkı Varlığı (Haklar)', debit:a.rouInitial, credit:0});
-  rows.push({desc:'', acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:0, credit:a.liabInitial});
-  if(a.cumDep>0){
-    rows.push({desc:`${l.assetName} — Birikmiş Amortisman (${a.months} ay)`, acc:'770/730 Amortisman Gideri', debit:a.cumDep, credit:0});
-    rows.push({desc:'', acc:'268 Birikmiş Amortisman - Kullanım Hakkı Varlığı', debit:0, credit:a.cumDep});
-  }
-  if(a.cumInterest>0){
-    rows.push({desc:`${l.assetName} — Birikmiş Faiz (${a.months} ay)`, acc:'780/660 Finansman Gideri (Faiz)', debit:a.cumInterest, credit:0});
-    rows.push({desc:'', acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:0, credit:a.cumInterest});
-  }
-  if(a.cumPayments>0){
-    rows.push({desc:`${l.assetName} — Yapılan Ödemeler (${a.months} ay)`, acc:'302/402 Kiralama İşlemlerinden Borçlar', debit:a.cumPayments, credit:0});
-    rows.push({desc:'', acc:'102 Bankalar', debit:0, credit:a.cumPayments});
-  }
-  return rows;
-}
+        <span>◫</span>
 
-function renderJournal(){
-  const reportDate = document.getElementById('reportDate').value;
-  const out = document.getElementById('journalOutput');
-  if(!leases.length){ out.innerHTML = `<div class="status"><span class="warn">Önce en az bir sözleşme ekleyin.</span></div>`; return; }
+        Ay Sonu Kapanış
 
-  const taxRate = Number(document.getElementById('taxRate').value)/100 || 0;
-  const includeTax = document.getElementById('includeDefTax').checked;
+      </a>
 
-  let allRows = [];
-  let totRouNet=0, totLiabNet=0;
-  leases.forEach(l=>{
-    const a = calcAsOf(l, reportDate);
-    allRows = allRows.concat(buildJournalRows(l, a));
-    totRouNet += a.closingRou;
-    totLiabNet += a.closingLiab;
-  });
 
-  const tempDiff = totLiabNet - totRouNet; // pozitif: indirilebilir GF (DTA), negatif: vergilendirilebilir GF (DTL)
-  if(includeTax && Math.abs(tempDiff) > 0.01){
-    const amt = Math.abs(tempDiff) * taxRate;
-    if(tempDiff > 0){
-      allRows.push({desc:'Ertelenmiş Vergi (Geçici Fark: Yükümlülük > ROU Net)', acc:'293 Ertelenmiş Vergi Varlığı', debit:amt, credit:0});
-      allRows.push({desc:'', acc:'692 Ertelenmiş Vergi Geliri', debit:0, credit:amt});
-    } else {
-      allRows.push({desc:'Ertelenmiş Vergi (Geçici Fark: ROU Net > Yükümlülük)', acc:'691 Ertelenmiş Vergi Gideri', debit:amt, credit:0});
-      allRows.push({desc:'', acc:'493 Ertelenmiş Vergi Yükümlülüğü', debit:0, credit:amt});
-    }
-  }
+      <a
+        href="#"
+        class="nav-item"
+      >
 
-  const totalDebit = allRows.reduce((s,r)=>s+r.debit,0);
-  const totalCredit = allRows.reduce((s,r)=>s+r.credit,0);
-  const balanced = Math.abs(totalDebit-totalCredit) < 0.01;
+        <span>⚠</span>
 
-  out.innerHTML = `
-    <div class="summary" style="grid-template-columns:repeat(5,1fr);margin-top:6px;">
-      <div class="metric"><small>Raporlama Tarihi</small><strong style="font-size:16px;">${reportDate}</strong></div>
-      <div class="metric"><small>ROU Net Defter Değeri</small><strong>${fmt(totRouNet)}</strong></div>
-      <div class="metric"><small>Kira Yükümlülüğü (Net)</small><strong>${fmt(totLiabNet)}</strong></div>
-      <div class="metric"><small>Geçici Fark</small><strong>${fmt(tempDiff)}</strong></div>
-      <div class="metric"><small>Fiş Dengesi</small><strong style="color:${balanced?'#8fd6b4':'#e8a8a0'}">${balanced?'Denk':'Dengesiz'}</strong></div>
+        Risk & Kontroller
+
+      </a>
+
+
+      <a
+        href="pricing.html"
+        class="nav-item"
+      >
+
+        <span>₺</span>
+
+        Paketler
+
+      </a>
+
+    </nav>
+
+
+    <div class="sidebar-footer">
+
+      <div class="demo-badge">
+        DEMO
+      </div>
+
+      Finance Intelligence Platform
+
     </div>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Açıklama</th><th>Hesap</th><th>Borç</th><th>Alacak</th></tr></thead><tbody>
-      ${allRows.map(r=>`<tr><td>${r.desc}</td><td>${r.acc}</td><td>${r.debit?fmt(r.debit):''}</td><td>${r.credit?fmt(r.credit):''}</td></tr>`).join('')}
-      <tr style="font-weight:600;background:#f6f2ea;"><td colspan="2">TOPLAM</td><td>${fmt(totalDebit)}</td><td>${fmt(totalCredit)}</td></tr>
-    </tbody></table></div>`;
-}
 
-document.getElementById('genJournal').addEventListener('click', renderJournal);
-document.getElementById('journalPrint').addEventListener('click', ()=>window.print());
-document.getElementById('journalCsv').addEventListener('click', ()=>{
-  const reportDate = document.getElementById('reportDate').value;
-  if(!leases.length){ alert('Önce en az bir sözleşme ekleyin.'); return; }
-  const taxRate = Number(document.getElementById('taxRate').value)/100 || 0;
-  const includeTax = document.getElementById('includeDefTax').checked;
+  </aside>
 
-  let out=['GK Advisory — TFRS 16 Düzeltme Fişi', 'Raporlama Tarihi;'+reportDate, '', 'Açıklama;Hesap;Borç;Alacak'];
-  let totalDebit=0, totalCredit=0, totRouNet=0, totLiabNet=0;
-  let allRows=[];
-  leases.forEach(l=>{
-    const a = calcAsOf(l, reportDate);
-    allRows = allRows.concat(buildJournalRows(l,a));
-    totRouNet += a.closingRou; totLiabNet += a.closingLiab;
-  });
-  const tempDiff = totLiabNet - totRouNet;
-  if(includeTax && Math.abs(tempDiff) > 0.01){
-    const amt = Math.abs(tempDiff) * taxRate;
-    if(tempDiff > 0){
-      allRows.push({desc:'Ertelenmiş Vergi (Geçici Fark)', acc:'293 Ertelenmiş Vergi Varlığı', debit:amt, credit:0});
-      allRows.push({desc:'', acc:'692 Ertelenmiş Vergi Geliri', debit:0, credit:amt});
-    } else {
-      allRows.push({desc:'Ertelenmiş Vergi (Geçici Fark)', acc:'691 Ertelenmiş Vergi Gideri', debit:amt, credit:0});
-      allRows.push({desc:'', acc:'493 Ertelenmiş Vergi Yükümlülüğü', debit:0, credit:amt});
-    }
-  }
-  allRows.forEach(r=>{
-    totalDebit+=r.debit; totalCredit+=r.credit;
-    out.push([r.desc, r.acc, r.debit?r.debit.toFixed(2):'', r.credit?r.credit.toFixed(2):''].join(';'));
-  });
-  out.push(['TOPLAM','',totalDebit.toFixed(2),totalCredit.toFixed(2)].join(';'));
-  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_TFRS16_Duzeltme_Fisi.csv'; a.click();
-});
-</script>
-</body></html>
+
+
+  <!-- MAIN -->
+
+  <main class="main">
+
+
+    <!-- HEADER -->
+
+    <header class="topbar">
+
+      <div>
+
+        <div class="eyebrow">
+          TFRS 16 / KİRALAMA MUHASEBESİ
+        </div>
+
+        <h1>
+          Sözleşme Portföyü
+        </h1>
+
+        <div class="period">
+          Tüm aktif kira sözleşmeleri
+        </div>
+
+      </div>
+
+
+      <div class="topbar-actions">
+
+        <a
+          href="dashboard.html"
+          class="secondary-button"
+        >
+          ← CFO Cockpit
+        </a>
+
+
+        <button
+          id="newContractButton"
+          class="primary-button"
+        >
+
+          + Yeni Sözleşme
+
+        </button>
+
+      </div>
+
+    </header>
+
+
+
+    <!-- KPI -->
+
+    <section class="kpi-grid">
+
+
+      <div class="kpi-card">
+
+        <div class="kpi-label">
+          Aktif Sözleşme
+        </div>
+
+        <div
+          id="contractCount"
+          class="kpi-value"
+        >
+          0
+        </div>
+
+        <div class="kpi-description">
+          Portföydeki aktif sözleşmeler
+        </div>
+
+      </div>
+
+
+      <div class="kpi-card">
+
+        <div class="kpi-label">
+          Kira Yükümlülüğü
+        </div>
+
+        <div
+          id="leaseLiability"
+          class="kpi-value"
+        >
+          ₺0
+        </div>
+
+        <div class="kpi-description">
+          İlk ölçüm bazlı toplam
+        </div>
+
+      </div>
+
+
+      <div class="kpi-card">
+
+        <div class="kpi-label">
+          ROU Varlıkları
+        </div>
+
+        <div
+          id="rouAssets"
+          class="kpi-value"
+        >
+          ₺0
+        </div>
+
+        <div class="kpi-description">
+          Right-of-use assets
+        </div>
+
+      </div>
+
+
+      <div class="kpi-card">
+
+        <div class="kpi-label">
+          Önümüzdeki 12 Ay
+        </div>
+
+        <div
+          id="next12Months"
+          class="kpi-value"
+        >
+          ₺0
+        </div>
+
+        <div class="kpi-description">
+          Beklenen kira ödemeleri
+        </div>
+
+      </div>
+
+
+      <div class="kpi-card warning-card">
+
+        <div class="kpi-label">
+          Yenileme &lt;90 Gün
+        </div>
+
+        <div
+          id="renewals90Days"
+          class="kpi-value warning-text"
+        >
+          0
+        </div>
+
+        <div class="kpi-description">
+          Yönetim aksiyonu gerekenler
+        </div>
+
+      </div>
+
+
+      <div class="kpi-card warning-card">
+
+        <div class="kpi-label">
+          Modification
+        </div>
+
+        <div
+          id="modifications"
+          class="kpi-value warning-text"
+        >
+          0
+        </div>
+
+        <div class="kpi-description">
+          İnceleme bekleyenler
+        </div>
+
+      </div>
+
+    </section>
+
+
+
+    <!-- FILTERS -->
+
+    <section class="toolbar">
+
+
+      <div class="search-box">
+
+        <span>⌕</span>
+
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Sözleşme, tedarikçi veya şirket ara..."
+        >
+
+      </div>
+
+
+      <select id="statusFilter">
+
+        <option value="all">
+          Tüm Durumlar
+        </option>
+
+        <option value="active">
+          Aktif
+        </option>
+
+        <option value="inactive">
+          Pasif
+        </option>
+
+      </select>
+
+
+      <select id="companyFilter">
+
+        <option value="all">
+          Tüm Şirketler
+        </option>
+
+      </select>
+
+    </section>
+
+
+
+    <!-- PORTFOLIO -->
+
+    <section class="panel">
+
+
+      <div class="panel-header">
+
+        <div>
+
+          <h2>
+            Sözleşme Portföyü
+          </h2>
+
+          <p>
+            TFRS 16 kapsamında takip edilen kira sözleşmeleri
+          </p>
+
+        </div>
+
+
+        <div
+          id="resultCount"
+          class="result-count"
+        >
+          0 kayıt
+        </div>
+
+      </div>
+
+
+
+      <div class="table-wrapper">
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>
+                Sözleşme
+              </th>
+
+              <th>
+                Şirket
+              </th>
+
+              <th>
+                Tedarikçi
+              </th>
+
+              <th>
+                Başlangıç
+              </th>
+
+              <th>
+                Bitiş
+              </th>
+
+              <th>
+                Aylık Kira
+              </th>
+
+              <th>
+                Durum
+              </th>
+
+              <th>
+                Yenileme
+              </th>
+
+              <th>
+                İşlem
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody id="contractTableBody">
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <div
+        id="emptyState"
+        class="empty-state hidden"
+      >
+
+        <div class="empty-icon">
+          ◫
+        </div>
+
+        <h3>
+          Sözleşme bulunamadı
+        </h3>
+
+        <p>
+          Arama veya filtre kriterlerini değiştirin.
+        </p>
+
+      </div>
+
+    </section>
+
+
+
+    <!-- MANAGEMENT INSIGHT -->
+
+    <section class="insight-panel">
+
+      <div class="insight-icon">
+        !
+      </div>
+
+      <div>
+
+        <strong>
+          CFO Perspektifi
+        </strong>
+
+        <p>
+          TFRS 16 portföyünüzde yalnızca muhasebe kayıtlarını değil;
+          yaklaşan yenilemeleri, nakit çıkışlarını ve sözleşme
+          değişikliklerini birlikte izleyin.
+        </p>
+
+      </div>
+
+    </section>
+
+
+    <footer>
+
+      TFRS 16 Contract Portfolio V1 · Demo sürümü
+
+    </footer>
+
+
+  </main>
+
+</div>
+
+
+
+<!-- CONTRACT MODAL -->
+
+<div
+  id="contractModal"
+  class="modal hidden"
+>
+
+  <div class="modal-content">
+
+
+    <div class="modal-header">
+
+      <div>
+
+        <div class="eyebrow">
+          TFRS 16
+        </div>
+
+        <h2 id="modalTitle">
+          Yeni Sözleşme
+        </h2>
+
+      </div>
+
+
+      <button
+        id="closeModal"
+        class="close-button"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+
+    <form id="contractForm">
+
+
+      <div class="form-grid">
+
+
+        <div class="form-group">
+
+          <label>
+            Sözleşme ID
+          </label>
+
+          <input
+            id="contractId"
+            required
+            placeholder="LEASE-004"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Şirket
+          </label>
+
+          <input
+            id="company"
+            required
+            value="GK Holding"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Tedarikçi
+          </label>
+
+          <input
+            id="supplier"
+            required
+            placeholder="Tedarikçi adı"
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Aylık Kira (₺)
+          </label>
+
+          <input
+            id="monthlyPayment"
+            type="number"
+            min="0"
+            step="0.01"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Başlangıç Tarihi
+          </label>
+
+          <input
+            id="startDate"
+            type="date"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Bitiş Tarihi
+          </label>
+
+          <input
+            id="endDate"
+            type="date"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            İskonto Oranı (%)
+          </label>
+
+          <input
+            id="discountRate"
+            type="number"
+            min="0"
+            step="0.01"
+            value="18"
+            required
+          >
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label>
+            Yenileme Tarihi
+          </label>
+
+          <input
+            id="renewalDate"
+            type="date"
+          >
+
+        </div>
+
+      </div>
+
+
+
+      <div class="modal-footer">
+
+        <button
+          type="button"
+          id="cancelModal"
+          class="secondary-button"
+        >
+          İptal
+        </button>
+
+
+        <button
+          type="submit"
+          class="primary-button"
+        >
+          Sözleşmeyi Kaydet
+        </button>
+
+      </div>
+
+
+    </form>
+
+  </div>
+
+</div>
+
+
+
+<!-- DETAIL MODAL -->
+
+<div
+  id="detailModal"
+  class="modal hidden"
+>
+
+  <div class="modal-content detail-modal">
+
+
+    <div class="modal-header">
+
+      <div>
+
+        <div class="eyebrow">
+          SÖZLEŞME DETAYI
+        </div>
+
+        <h2 id="detailTitle">
+          -
+        </h2>
+
+      </div>
+
+
+      <button
+        id="closeDetailModal"
+        class="close-button"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+    <div
+      id="detailContent"
+      class="detail-content"
+    >
+
+    </div>
+
+
+    <div class="detail-actions">
+
+      <button
+        id="deleteContract"
+        class="danger-button"
+      >
+        Sözleşmeyi Sil
+      </button>
+
+      <button
+        id="detailCloseButton"
+        class="secondary-button"
+      >
+        Kapat
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+<script src="js/tfrs16.js"></script>
+
+</body>
+
+</html>
