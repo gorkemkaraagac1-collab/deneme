@@ -1,11 +1,89 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=dcf-engine.html">
-<meta name="robots" content="noindex">
-<title>GK Advisory</title>
-<script>location.replace("dcf-engine.html");</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCF &amp; Valuation Engine - GK Platform</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
 </head>
-<body><a href="dcf-engine.html">Devam et</a></body>
+<body>
+
+  <header class="cfo-navbar">
+    <div class="cfo-nav-container">
+      <a href="index.html" class="cfo-brand">
+        <span class="brand-logo">GK</span>
+        <div class="brand-text">
+          <span class="brand-name">Financial Intelligence</span>
+          <span class="brand-sub">Decision Cockpit</span>
+        </div>
+      </a>
+      <nav class="cfo-nav-menu">
+        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
+        <a href="working-capital.html" class="nav-link">Working Capital</a>
+        <a href="dcf.html" class="nav-link" style="color: var(--text-primary);">DCF & Valuation</a>
+        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
+        <div class="nav-dropdown">
+          <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
+          <div class="dropdown-content">
+            <a href="tfrs16.html">TFRS 16 Kiralama</a>
+            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
+            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
+            <a href="hedge-accounting.html">Hedge Accounting</a>
+          </div>
+        </div>
+      </nav>
+      <div class="cfo-nav-actions">
+        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
+        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
+    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Discounted Cash Flow (DCF) &amp; Valuation Engine</h2>
+
+    <div style="display: grid; grid-template-columns: 300px 1fr; gap: 24px;">
+      <!-- Valuation Inputs -->
+      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
+        <h3 style="font-size: 1.1rem; margin-bottom: 16px;">Model Varsayımları</h3>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">WACC (%):
+            <input type="number" value="10.5" step="0.1" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+          </label>
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">Terminal Growth Rate (%):
+            <input type="number" value="2.5" step="0.1" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+          </label>
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">Revenue Growth (%):
+            <input type="number" value="8.0" step="0.5" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+          </label>
+        </div>
+      </div>
+
+      <!-- Valuation Output -->
+      <div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
+          <div class="kpi-card">
+            <span class="kpi-title">Enterprise Value (EV)</span>
+            <div class="kpi-value">€142.5M</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">Net Debt</span>
+            <div class="kpi-value">€18.2M</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">Equity Value</span>
+            <div class="kpi-value" style="color: var(--accent-green);">€124.3M</div>
+          </div>
+        </div>
+
+        <div class="insight-card">
+          <div class="insight-step"><span class="insight-step-label step-sowhat">VALUATION INSIGHT</span> A 100bps increase in WACC (from 10.5% to 11.5%) reduces estimated Enterprise Value by approximately €9.4M (-6.6%).</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
 </html>
