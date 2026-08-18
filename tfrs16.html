@@ -26,7 +26,9 @@
 <div class="app">
 
 
-  <!-- SIDEBAR -->
+  <!-- =====================================================
+       SIDEBAR
+  ====================================================== -->
 
   <aside class="sidebar">
 
@@ -49,11 +51,8 @@
         href="dashboard.html"
         class="nav-item"
       >
-
         <span>◈</span>
-
         CFO Cockpit
-
       </a>
 
 
@@ -61,11 +60,8 @@
         href="tfrs16.html"
         class="nav-item active"
       >
-
         <span>▣</span>
-
         TFRS 16
-
       </a>
 
 
@@ -73,11 +69,8 @@
         href="#"
         class="nav-item"
       >
-
         <span>▤</span>
-
         Finansal Raporlama
-
       </a>
 
 
@@ -85,11 +78,8 @@
         href="#"
         class="nav-item"
       >
-
         <span>◫</span>
-
         Ay Sonu Kapanış
-
       </a>
 
 
@@ -97,11 +87,8 @@
         href="#"
         class="nav-item"
       >
-
         <span>⚠</span>
-
         Risk & Kontroller
-
       </a>
 
 
@@ -109,11 +96,8 @@
         href="pricing.html"
         class="nav-item"
       >
-
         <span>₺</span>
-
         Paketler
-
       </a>
 
     </nav>
@@ -133,7 +117,9 @@
 
 
 
-  <!-- MAIN -->
+  <!-- =====================================================
+       MAIN
+  ====================================================== -->
 
   <main class="main">
 
@@ -170,12 +156,20 @@
 
 
         <button
+          id="excelImportButton"
+          class="secondary-button"
+          type="button"
+        >
+          ⇧ Excel'den Toplu Yükle
+        </button>
+
+
+        <button
           id="newContractButton"
           class="primary-button"
+          type="button"
         >
-
           + Yeni Sözleşme
-
         </button>
 
       </div>
@@ -184,7 +178,9 @@
 
 
 
-    <!-- KPI -->
+    <!-- =====================================================
+         KPI
+    ====================================================== -->
 
     <section class="kpi-grid">
 
@@ -312,10 +308,11 @@
 
 
 
-    <!-- FILTERS -->
+    <!-- =====================================================
+         FILTERS
+    ====================================================== -->
 
     <section class="toolbar">
-
 
       <div class="search-box">
 
@@ -359,7 +356,9 @@
 
 
 
-    <!-- PORTFOLIO -->
+    <!-- =====================================================
+         PORTFOLIO
+    ====================================================== -->
 
     <section class="panel">
 
@@ -387,7 +386,6 @@
         </div>
 
       </div>
-
 
 
       <div class="table-wrapper">
@@ -439,9 +437,7 @@
           </thead>
 
 
-          <tbody id="contractTableBody">
-
-          </tbody>
+          <tbody id="contractTableBody"></tbody>
 
         </table>
 
@@ -471,7 +467,9 @@
 
 
 
-    <!-- MANAGEMENT INSIGHT -->
+    <!-- =====================================================
+         MANAGEMENT INSIGHT
+    ====================================================== -->
 
     <section class="insight-panel">
 
@@ -486,9 +484,10 @@
         </strong>
 
         <p>
-          TFRS 16 portföyünüzde yalnızca muhasebe kayıtlarını değil;
-          yaklaşan yenilemeleri, nakit çıkışlarını ve sözleşme
-          değişikliklerini birlikte izleyin.
+          TFRS 16 portföyünüzde yalnızca muhasebe kayıtlarını
+          değil; yaklaşan yenilemeleri, nakit çıkışlarını,
+          sözleşme değişikliklerini ve finansal yükümlülükleri
+          birlikte izleyin.
         </p>
 
       </div>
@@ -498,7 +497,7 @@
 
     <footer>
 
-      TFRS 16 Contract Portfolio V1 · Demo sürümü
+      TFRS 16 Contract Portfolio V9 · Finance Intelligence
 
     </footer>
 
@@ -509,7 +508,9 @@
 
 
 
-<!-- CONTRACT MODAL -->
+<!-- =======================================================
+     CONTRACT MODAL
+======================================================== -->
 
 <div
   id="contractModal"
@@ -537,12 +538,12 @@
       <button
         id="closeModal"
         class="close-button"
+        type="button"
       >
         ×
       </button>
 
     </div>
-
 
 
     <form id="contractForm">
@@ -677,7 +678,6 @@
       </div>
 
 
-
       <div class="modal-footer">
 
         <button
@@ -707,7 +707,9 @@
 
 
 
-<!-- DETAIL MODAL -->
+<!-- =======================================================
+     DETAIL MODAL
+======================================================== -->
 
 <div
   id="detailModal"
@@ -735,6 +737,7 @@
       <button
         id="closeDetailModal"
         class="close-button"
+        type="button"
       >
         ×
       </button>
@@ -745,9 +748,7 @@
     <div
       id="detailContent"
       class="detail-content"
-    >
-
-    </div>
+    ></div>
 
 
     <div class="detail-actions">
@@ -755,13 +756,16 @@
       <button
         id="deleteContract"
         class="danger-button"
+        type="button"
       >
         Sözleşmeyi Sil
       </button>
 
+
       <button
         id="detailCloseButton"
         class="secondary-button"
+        type="button"
       >
         Kapat
       </button>
@@ -774,7 +778,330 @@
 
 
 
+<!-- =======================================================
+     EXCEL IMPORT MODAL
+======================================================== -->
+
+<div
+  id="excelImportModal"
+  class="modal hidden"
+>
+
+  <div class="modal-content excel-modal">
+
+
+    <div class="modal-header">
+
+      <div>
+
+        <div class="eyebrow">
+          TFRS 16 / PORTFÖY YÖNETİMİ
+        </div>
+
+        <h2>
+          Excel'den Toplu Sözleşme Yükle
+        </h2>
+
+        <p class="modal-description">
+          Çok sayıda kira sözleşmesini tek seferde
+          portföye aktarın.
+        </p>
+
+      </div>
+
+
+      <button
+        id="closeExcelModal"
+        class="close-button"
+        type="button"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+
+    <!-- TEMPLATE -->
+
+    <div class="excel-template-card">
+
+      <div>
+
+        <strong>
+          1. Excel Şablonunu Hazırlayın
+        </strong>
+
+        <p>
+          Standart GK Finance şablonunu indirerek
+          sözleşme bilgilerinizi doldurun.
+        </p>
+
+      </div>
+
+
+      <button
+        id="downloadTemplateButton"
+        class="secondary-button"
+        type="button"
+      >
+        ↓ Excel Şablonunu İndir
+      </button>
+
+    </div>
+
+
+
+    <!-- UPLOAD -->
+
+    <div class="excel-upload-card">
+
+      <div class="upload-title">
+        2. Excel Dosyasını Yükleyin
+      </div>
+
+
+      <div
+        id="excelDropZone"
+        class="excel-drop-zone"
+      >
+
+        <div class="upload-icon">
+          ⇧
+        </div>
+
+        <strong>
+          Excel dosyanızı buraya bırakın
+        </strong>
+
+        <span>
+          veya
+        </span>
+
+
+        <button
+          id="selectExcelButton"
+          class="primary-button"
+          type="button"
+        >
+          Dosya Seç
+        </button>
+
+
+        <input
+          id="excelFileInput"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          hidden
+        >
+
+        <div
+          id="selectedExcelFile"
+          class="selected-file hidden"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- VALIDATION -->
+
+    <div
+      id="excelValidationSection"
+      class="excel-validation hidden"
+    >
+
+      <div class="validation-header">
+
+        <div>
+
+          <div class="upload-title">
+            3. Veri Kontrolü
+          </div>
+
+          <p>
+            Sistem yükleme öncesi sözleşmeleri
+            otomatik olarak kontrol eder.
+          </p>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="validation-summary">
+
+
+        <div class="validation-card success">
+
+          <span>
+            Başarılı
+          </span>
+
+          <strong id="excelValidCount">
+            0
+          </strong>
+
+        </div>
+
+
+        <div class="validation-card warning">
+
+          <span>
+            Uyarı
+          </span>
+
+          <strong id="excelWarningCount">
+            0
+          </strong>
+
+        </div>
+
+
+        <div class="validation-card error">
+
+          <span>
+            Hatalı
+          </span>
+
+          <strong id="excelErrorCount">
+            0
+          </strong>
+
+        </div>
+
+
+        <div class="validation-card">
+
+          <span>
+            Toplam
+          </span>
+
+          <strong id="excelTotalCount">
+            0
+          </strong>
+
+        </div>
+
+      </div>
+
+
+
+      <div
+        id="excelValidationMessages"
+        class="validation-messages"
+      ></div>
+
+
+
+      <!-- PREVIEW -->
+
+      <div class="excel-preview-wrapper">
+
+        <div class="preview-title">
+          İçeri Aktarım Önizlemesi
+        </div>
+
+
+        <div class="table-wrapper">
+
+          <table class="excel-preview-table">
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Durum
+                </th>
+
+                <th>
+                  Sözleşme ID
+                </th>
+
+                <th>
+                  Şirket
+                </th>
+
+                <th>
+                  Tedarikçi
+                </th>
+
+                <th>
+                  Aylık Kira
+                </th>
+
+                <th>
+                  Başlangıç
+                </th>
+
+                <th>
+                  Bitiş
+                </th>
+
+                <th>
+                  İskonto
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody
+              id="excelPreviewBody"
+            ></tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+
+    </div>
+
+
+
+    <!-- FOOTER -->
+
+    <div class="excel-modal-footer">
+
+      <button
+        id="cancelExcelImport"
+        class="secondary-button"
+        type="button"
+      >
+        İptal
+      </button>
+
+
+      <button
+        id="importExcelContracts"
+        class="primary-button"
+        type="button"
+        disabled
+      >
+        ✓ Sözleşmeleri Aktar
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+<!-- =======================================================
+     SCRIPT
+======================================================== -->
+
 <script src="js/tfrs16.js"></script>
+
 
 </body>
 
