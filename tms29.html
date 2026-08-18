@@ -46,18 +46,20 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
       <div class="kpi-card">
         <span class="kpi-title">Parasal Olmayan Varlık Düzeltmesi</span>
-        <div class="kpi-value">₺184.2M</div>
+        <div class="kpi-value" data-tms29="non-monetary-gain">₺0.0M</div>
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">Stoklar ve Maddi Duran Varlık katsayı düzeltme etkisi.</p>
       </div>
 
       <div class="kpi-card">
         <span class="kpi-title">Net Parasal Pozisyon Kar / Zararı</span>
-        <div class="kpi-value" style="color: var(--accent-red);">-₺12.4M</div>
+        <div class="kpi-value" style="color: var(--accent-red);" data-tms29="monetary-loss">₺0.0M</div>
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">Net parasal yükümlülük pozisyonu enflasyon kaybı.</p>
       </div>
     </div>
   </main>
 
+  <!-- Script Entegrasyon Sırası -->
+  <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
