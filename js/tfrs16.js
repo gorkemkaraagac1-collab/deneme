@@ -3,14 +3,35 @@ document.addEventListener("DOMContentLoaded", () => {
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
-  TFRS 16 ACCOUNTING ENGINE V7
+  TFRS 16 ACCOUNTING ENGINE V8
+  ============================================================
+
+  V8 FEATURES
+  ------------------------------------------------------------
+  1. Contract portfolio
+  2. Individual accounting entries
+  3. Monthly / quarterly / annual entries
+  4. Year-end current / non-current reclassification
+  5. Calendar-year based calculation
+  6. Portfolio-level batch accounting
+  7. Company filtering
+  8. Active contract filtering
+  9. Debit / credit control
+  10. CFO-oriented financial impact
   ============================================================
   */
 
-  const STORAGE_KEY = "gk_tfrs16_contracts_v7";
 
-  let contracts = loadContracts();
-  let selectedContractId = null;
+  const STORAGE_KEY =
+    "gk_tfrs16_contracts_v8";
+
+
+  let contracts =
+    loadContracts();
+
+
+  let selectedContractId =
+    null;
 
 
   /*
@@ -22,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function getDefaultContracts() {
 
     return [
+
       {
         id: "LEASE-001",
         company: "GK Holding",
@@ -34,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       },
+
       {
         id: "LEASE-002",
         company: "GK Holding",
@@ -46,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: true
       },
+
       {
         id: "LEASE-003",
         company: "GK Teknoloji",
@@ -58,6 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       }
+
     ];
 
   }
@@ -74,15 +99,21 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
 
       const stored =
-        localStorage.getItem(STORAGE_KEY);
+        localStorage.getItem(
+          STORAGE_KEY
+        );
+
 
       if (stored) {
 
         const parsed =
           JSON.parse(stored);
 
+
         if (Array.isArray(parsed)) {
+
           return parsed;
+
         }
 
       }
@@ -96,17 +127,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+
     const defaults =
       getDefaultContracts();
 
-    saveContracts(defaults);
+
+    saveContracts(
+      defaults
+    );
+
 
     return defaults;
 
   }
 
 
-  function saveContracts(data) {
+  function saveContracts(
+    data
+  ) {
 
     localStorage.setItem(
       STORAGE_KEY,
@@ -122,53 +160,72 @@ document.addEventListener("DOMContentLoaded", () => {
   ============================================================
   */
 
-  function formatNumber(value) {
+  function formatNumber(
+    value
+  ) {
 
-    return Number(value || 0)
-      .toLocaleString(
-        "tr-TR",
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        }
-      );
+    return Number(
+      value || 0
+    ).toLocaleString(
+      "tr-TR",
+      {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }
+    );
 
   }
 
 
-  function formatCurrency(value) {
+  function formatCurrency(
+    value
+  ) {
 
     return `₺${formatNumber(value)}`;
 
   }
 
 
-  function parseDate(value) {
+  function parseDate(
+    value
+  ) {
 
     if (!value) {
+
       return null;
+
     }
+
 
     const date =
       new Date(
         `${value}T00:00:00`
       );
 
-    return isNaN(date.getTime())
+
+    return isNaN(
+      date.getTime()
+    )
       ? null
       : date;
 
   }
 
 
-  function formatDate(value) {
+  function formatDate(
+    value
+  ) {
 
     const date =
       parseDate(value);
 
+
     if (!date) {
+
       return "-";
+
     }
+
 
     return date.toLocaleDateString(
       "tr-TR"
@@ -191,15 +248,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const startDate =
       parseDate(start);
 
+
     const endDate =
       parseDate(end);
+
 
     if (
       !startDate ||
       !endDate
     ) {
+
       return 0;
+
     }
+
 
     const months =
       (
@@ -211,6 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
         endDate.getMonth() -
         startDate.getMonth()
       );
+
 
     return Math.max(
       1,
@@ -235,15 +298,18 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.monthlyPayment
       ) || 0;
 
+
     const annualRate =
       Number(
         contract.discountRate
       ) || 0;
 
+
     const monthlyRate =
       annualRate /
       100 /
       12;
+
 
     const months =
       monthsBetween(
@@ -251,18 +317,26 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.endDate
       );
 
+
     if (
       payment <= 0 ||
       months <= 0
     ) {
 
       return {
+
         months: 0,
+
         liability: 0,
+
         rouAssets: 0,
+
         depreciation: 0,
+
         monthlyInterest: 0,
+
         schedule: []
+
       };
 
     }
@@ -300,8 +374,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const initialLiability =
       liability;
 
+
     const initialROU =
       initialLiability;
+
 
     const depreciation =
       initialROU /
@@ -310,11 +386,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const schedule = [];
 
+
     let openingLiability =
       initialLiability;
 
+
     let rouOpening =
       initialROU;
+
+
+    const startDate =
+      parseDate(
+        contract.startDate
+      );
 
 
     for (
@@ -367,9 +451,30 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
+      const periodDate =
+        new Date(
+          startDate
+        );
+
+
+      periodDate.setMonth(
+        periodDate.getMonth() +
+        (i - 1)
+      );
+
+
       schedule.push({
 
         period: i,
+
+        date:
+          periodDate,
+
+        year:
+          periodDate.getFullYear(),
+
+        month:
+          periodDate.getMonth() + 1,
 
         openingLiability,
 
@@ -393,6 +498,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       openingLiability =
         closingLiability;
+
 
       rouOpening =
         rouClosing;
@@ -424,7 +530,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  LIABILITY
+  CALENDAR YEAR FILTER
+  ============================================================
+  */
+
+  function getScheduleForYear(
+    contract,
+    year
+  ) {
+
+    const engine =
+      calculateLease(
+        contract
+      );
+
+
+    return engine.schedule.filter(
+      item =>
+        item.year ===
+        Number(year)
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  CURRENT LIABILITY
   ============================================================
   */
 
@@ -436,6 +568,7 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateLease(
         contract
       );
+
 
     return engine.schedule
       .slice(0, 12)
@@ -452,6 +585,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /*
+  ============================================================
+  NON CURRENT LIABILITY
+  ============================================================
+  */
+
   function calculateNonCurrentLiability(
     contract
   ) {
@@ -461,10 +600,12 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
+
     const current =
       calculateCurrentLiability(
         contract
       );
+
 
     return Math.max(
       0,
@@ -475,6 +616,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /*
+  ============================================================
+  NEXT 12 MONTHS
+  ============================================================
+  */
+
   function calculateNext12Months(
     contract
   ) {
@@ -483,6 +630,7 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateLease(
         contract
       );
+
 
     return engine.schedule
       .slice(0, 12)
@@ -512,20 +660,34 @@ document.addEventListener("DOMContentLoaded", () => {
     if (
       !contract.renewalDate
     ) {
+
       return false;
+
     }
+
 
     const renewal =
       parseDate(
         contract.renewalDate
       );
 
+
     const today =
       new Date();
+
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
 
     const difference =
       renewal.getTime() -
       today.getTime();
+
 
     const days =
       difference /
@@ -535,6 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
         60 *
         24
       );
+
 
     return (
       days >= 0 &&
@@ -561,7 +724,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     let liability = 0;
+
     let rou = 0;
+
     let next12 = 0;
 
 
@@ -573,11 +738,14 @@ document.addEventListener("DOMContentLoaded", () => {
             contract
           );
 
+
         liability +=
           engine.liability;
 
+
         rou +=
           engine.rouAssets;
+
 
         next12 +=
           calculateNext12Months(
@@ -607,12 +775,14 @@ document.addEventListener("DOMContentLoaded", () => {
       active.length
     );
 
+
     setText(
       "leaseLiability",
       formatCurrency(
         liability
       )
     );
+
 
     setText(
       "rouAssets",
@@ -621,6 +791,7 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
+
     setText(
       "next12Months",
       formatCurrency(
@@ -628,10 +799,12 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
+
     setText(
       "renewals90Days",
       renewals
     );
+
 
     setText(
       "modifications",
@@ -651,9 +824,12 @@ document.addEventListener("DOMContentLoaded", () => {
         id
       );
 
+
     if (element) {
+
       element.textContent =
         value;
+
     }
 
   }
@@ -672,8 +848,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "companyFilter"
       );
 
+
     if (!select) {
+
       return;
+
     }
 
 
@@ -693,9 +872,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     select.innerHTML = `
+
       <option value="all">
         Tüm Şirketler
       </option>
+
     `;
 
 
@@ -707,11 +888,14 @@ document.addEventListener("DOMContentLoaded", () => {
             "option"
           );
 
+
         option.value =
           company;
 
+
         option.textContent =
           company;
+
 
         select.appendChild(
           option
@@ -748,8 +932,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractTableBody"
       );
 
+
     if (!tbody) {
+
       return;
+
     }
 
 
@@ -804,7 +991,7 @@ document.addEventListener("DOMContentLoaded", () => {
             (
               status === "all" ||
               contract.status ===
-                status
+              status
             )
 
             &&
@@ -812,7 +999,7 @@ document.addEventListener("DOMContentLoaded", () => {
             (
               company === "all" ||
               contract.company ===
-                company
+              company
             )
 
           );
@@ -844,50 +1031,62 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>
 
             <div class="contract-id">
+
               ${escapeHtml(
                 contract.id
               )}
+
             </div>
 
           </td>
 
 
           <td>
+
             ${escapeHtml(
               contract.company
             )}
+
           </td>
 
 
           <td>
 
             <div class="supplier">
+
               ${escapeHtml(
                 contract.supplier
               )}
+
             </div>
 
           </td>
 
 
           <td class="date">
+
             ${formatDate(
               contract.startDate
             )}
+
           </td>
 
 
           <td class="date">
+
             ${formatDate(
               contract.endDate
             )}
+
           </td>
 
 
           <td>
+
             ${formatCurrency(
               contract.monthlyPayment
             )}
+
           </td>
 
 
@@ -940,7 +1139,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 contract.id
               )}"
             >
+
               Görüntüle
+
             </button>
 
           </td>
@@ -1013,8 +1214,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractModal"
       );
 
+
     if (!modal) {
+
       return;
+
     }
 
 
@@ -1030,11 +1234,13 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.id || ""
     );
 
+
     setInput(
       "company",
       contract?.company ||
       "GK Holding"
     );
+
 
     setInput(
       "supplier",
@@ -1042,11 +1248,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
+
     setInput(
       "monthlyPayment",
       contract?.monthlyPayment ||
       ""
     );
+
 
     setInput(
       "startDate",
@@ -1054,17 +1262,20 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
+
     setInput(
       "endDate",
       contract?.endDate ||
       ""
     );
 
+
     setInput(
       "discountRate",
       contract?.discountRate ??
       18
     );
+
 
     setInput(
       "renewalDate",
@@ -1106,9 +1317,12 @@ document.addEventListener("DOMContentLoaded", () => {
         id
       );
 
+
     if (input) {
+
       input.value =
         value;
+
     }
 
   }
@@ -1184,7 +1398,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         if (!id) {
+
           return;
+
         }
 
 
@@ -1273,9 +1489,12 @@ document.addEventListener("DOMContentLoaded", () => {
           contracts
         );
 
+
         refresh();
 
+
         closeContractModal();
+
 
         openDetail(
           id
@@ -1287,33 +1506,111 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  ACCOUNTING ENGINE
+  INDIVIDUAL JOURNAL ENGINE
   ============================================================
   */
 
   function getJournalForPeriod(
     contract,
-    startMonth,
-    endMonth
+    year,
+    period
   ) {
 
-    const engine =
-      calculateLease(
-        contract
+    const schedule =
+      getScheduleForYear(
+        contract,
+        year
       );
 
 
-    const selected =
-      engine.schedule.slice(
-        startMonth - 1,
-        endMonth
-      );
+    if (!schedule.length) {
+
+      return [];
+
+    }
+
+
+    let selected = [];
+
+
+    if (
+      period === "monthly"
+    ) {
+
+      const month =
+        Number(
+          document.getElementById(
+            "accountingMonth"
+          )?.value
+        );
+
+
+      selected =
+        schedule.filter(
+          item =>
+            item.month ===
+            month
+        );
+
+    }
+
+
+    if (
+      period === "quarterly"
+    ) {
+
+      const month =
+        Number(
+          document.getElementById(
+            "accountingMonth"
+          )?.value
+        );
+
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+
+      selected =
+        schedule.filter(
+          item =>
+            Math.ceil(
+              item.month / 3
+            ) === quarter
+        );
+
+    }
+
+
+    if (
+      period === "annual"
+    ) {
+
+      selected =
+        schedule;
+
+    }
 
 
     if (!selected.length) {
+
       return [];
+
     }
 
+
+    return aggregateSchedule(
+      selected
+    );
+
+  }
+
+
+  function aggregateSchedule(
+    selected
+  ) {
 
     const interest =
       selected.reduce(
@@ -1552,6 +1849,13 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
+    const difference =
+      Math.abs(
+        debit -
+        credit
+      );
+
+
     return `
 
       <div style="
@@ -1569,7 +1873,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ">
 
           <strong>
-            ${title}
+            ${escapeHtml(title)}
           </strong>
 
         </div>
@@ -1621,16 +1925,20 @@ document.addEventListener("DOMContentLoaded", () => {
                     padding:10px;
                     border-top:1px solid #edf0f4;
                   ">
+
                     ${escapeHtml(
                       item.account
                     )}
+
                   </td>
+
 
                   <td style="
                     padding:10px;
                     text-align:right;
                     border-top:1px solid #edf0f4;
                   ">
+
                     ${
                       item.debit
                         ? formatCurrency(
@@ -1638,13 +1946,16 @@ document.addEventListener("DOMContentLoaded", () => {
                           )
                         : "-"
                     }
+
                   </td>
+
 
                   <td style="
                     padding:10px;
                     text-align:right;
                     border-top:1px solid #edf0f4;
                   ">
+
                     ${
                       item.credit
                         ? formatCurrency(
@@ -1652,6 +1963,7 @@ document.addEventListener("DOMContentLoaded", () => {
                           )
                         : "-"
                     }
+
                   </td>
 
                 </tr>
@@ -1671,8 +1983,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 font-weight:800;
                 border-top:2px solid #cbd5e1;
               ">
+
                 TOPLAM
+
               </td>
+
 
               <td style="
                 padding:11px;
@@ -1680,10 +1995,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 font-weight:800;
                 border-top:2px solid #cbd5e1;
               ">
+
                 ${formatCurrency(
                   debit
                 )}
+
               </td>
+
 
               <td style="
                 padding:11px;
@@ -1691,9 +2009,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 font-weight:800;
                 border-top:2px solid #cbd5e1;
               ">
+
                 ${formatCurrency(
                   credit
                 )}
+
               </td>
 
             </tr>
@@ -1701,6 +2021,31 @@ document.addEventListener("DOMContentLoaded", () => {
           </tfoot>
 
         </table>
+
+
+        <div style="
+          padding:11px 14px;
+          background:${
+            difference < 0.01
+              ? "#f0fdf4"
+              : "#fef2f2"
+          };
+          color:${
+            difference < 0.01
+              ? "#166534"
+              : "#991b1b"
+          };
+          font-size:10px;
+          font-weight:700;
+        ">
+
+          ${
+            difference < 0.01
+              ? "✓ Borç / Alacak dengeli"
+              : "⚠ Borç / Alacak farkı mevcut"
+          }
+
+        </div>
 
       </div>
 
@@ -1719,23 +2064,7 @@ document.addEventListener("DOMContentLoaded", () => {
     contract
   ) {
 
-    const engine =
-      calculateLease(
-        contract
-      );
-
-
-    const totalMonths =
-      engine.schedule.length;
-
-
-    const year =
-      new Date(
-        contract.startDate
-      ).getFullYear();
-
-
-    let html = `
+    return `
 
       <div style="
         margin-top:28px;
@@ -1743,41 +2072,40 @@ document.addEventListener("DOMContentLoaded", () => {
         padding-top:24px;
       ">
 
-        <div style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          gap:15px;
-          flex-wrap:wrap;
-        ">
+        <div>
 
-          <div>
+          <div style="
+            font-size:10px;
+            color:#64748b;
+            font-weight:800;
+            letter-spacing:1px;
+          ">
 
-            <div style="
-              font-size:10px;
-              color:#64748b;
-              font-weight:800;
-              letter-spacing:1px;
-            ">
-              MUHASEBE İŞLEMLERİ
-            </div>
-
-            <h3 style="
-              margin:5px 0 0;
-              font-size:18px;
-            ">
-              Muhasebe Fiş Merkezi
-            </h3>
-
-            <p style="
-              margin:5px 0 0;
-              color:#64748b;
-              font-size:11px;
-            ">
-              Aylık, çeyreklik ve yıllık fişleri oluşturun.
-            </p>
+            MUHASEBE İŞLEMLERİ
 
           </div>
+
+
+          <h3 style="
+            margin:5px 0 0;
+            font-size:18px;
+          ">
+
+            Muhasebe Fiş Merkezi
+
+          </h3>
+
+
+          <p style="
+            margin:5px 0 0;
+            color:#64748b;
+            font-size:11px;
+          ">
+
+            Bu sözleşme için aylık,
+            çeyreklik veya yıllık fiş oluşturun.
+
+          </p>
 
         </div>
 
@@ -1804,8 +2132,11 @@ document.addEventListener("DOMContentLoaded", () => {
               color:#64748b;
               margin-bottom:7px;
             ">
+
               Raporlama Yılı
+
             </label>
+
 
             <select
               id="accountingYear"
@@ -1839,8 +2170,11 @@ document.addEventListener("DOMContentLoaded", () => {
               color:#64748b;
               margin-bottom:7px;
             ">
+
               Fiş Periyodu
+
             </label>
+
 
             <select
               id="accountingPeriod"
@@ -1886,8 +2220,11 @@ document.addEventListener("DOMContentLoaded", () => {
               color:#64748b;
               margin-bottom:7px;
             ">
-              Dönem
+
+              Dönem / Ay
+
             </label>
+
 
             <select
               id="accountingMonth"
@@ -1919,7 +2256,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 min-height:42px;
               "
             >
+
               Fişi Oluştur
+
             </button>
 
           </div>
@@ -1944,16 +2283,13 @@ document.addEventListener("DOMContentLoaded", () => {
           <strong>Kontrol:</strong>
 
           Fişler önce önizleme olarak oluşturulur.
-          ERP'ye otomatik kayıt bu sürümde yapılmaz.
+          ERP entegrasyonu sonraki aşamada eklenecektir.
 
         </div>
 
       </div>
 
     `;
-
-
-    return html;
 
   }
 
@@ -1986,8 +2322,12 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
 
       return `
-        <option>
+        <option value="${
+          new Date().getFullYear()
+        }">
+
           ${new Date().getFullYear()}
+
         </option>
       `;
 
@@ -1998,15 +2338,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     for (
-      let y = start;
-      y <= end;
-      y++
+      let year = start;
+      year <= end;
+      year++
     ) {
 
       html += `
-        <option value="${y}">
-          ${y}
+
+        <option value="${year}">
+
+          ${year}
+
         </option>
+
       `;
 
     }
@@ -2026,6 +2370,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function buildMonthOptions() {
 
     const months = [
+
       "Ocak",
       "Şubat",
       "Mart",
@@ -2038,6 +2383,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Ekim",
       "Kasım",
       "Aralık"
+
     ];
 
 
@@ -2063,7 +2409,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  JOURNAL GENERATOR
+  INDIVIDUAL JOURNAL
   ============================================================
   */
 
@@ -2093,123 +2439,9 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    const engine =
-      calculateLease(
-        contract
-      );
-
-
-    let startMonth;
-    let endMonth;
-    let title;
-
-
-    /*
-    ----------------------------------------------------------
-    MONTHLY
-    ----------------------------------------------------------
-    */
-
-    if (
-      period === "monthly"
-    ) {
-
-      startMonth =
-        month;
-
-      endMonth =
-        month;
-
-      title =
-        `${year} - ${getMonthName(
-          month
-        )} Aylık Muhasebe Fişi`;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    QUARTERLY
-    ----------------------------------------------------------
-    */
-
-    if (
-      period === "quarterly"
-    ) {
-
-      const quarter =
-        Math.ceil(
-          month / 3
-        );
-
-
-      startMonth =
-        (
-          quarter - 1
-        ) * 3 + 1;
-
-
-      endMonth =
-        Math.min(
-          quarter * 3,
-          engine.schedule.length
-        );
-
-
-      title =
-        `${year} - ${quarter}. Çeyrek Muhasebe Fişi`;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    ANNUAL
-    ----------------------------------------------------------
-    */
-
-    if (
-      period === "annual"
-    ) {
-
-      startMonth =
-        1;
-
-      endMonth =
-        Math.min(
-          12,
-          engine.schedule.length
-        );
-
-
-      title =
-        `${year} - 12 Aylık Toplu Muhasebe Fişi`;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    CLOSING
-    ----------------------------------------------------------
-    */
-
     if (
       period === "closing"
     ) {
-
-      const current =
-        calculateCurrentLiability(
-          contract
-        );
-
-
-      const nonCurrent =
-        calculateNonCurrentLiability(
-          contract
-        );
-
 
       const entries =
         generateReclassificationEntry(
@@ -2226,25 +2458,21 @@ document.addEventListener("DOMContentLoaded", () => {
           entries
         );
 
-      return;
-
-    }
-
-
-    if (
-      !startMonth ||
-      !endMonth
-    ) {
 
       return;
 
     }
 
 
-    if (
-      startMonth >
-      engine.schedule.length
-    ) {
+    const entries =
+      getJournalForPeriod(
+        contract,
+        year,
+        period
+      );
+
+
+    if (!entries.length) {
 
       document.getElementById(
         "journalPreview"
@@ -2259,31 +2487,59 @@ document.addEventListener("DOMContentLoaded", () => {
           color:#9a3412;
         ">
 
-          Bu sözleşmede seçilen dönem için
-          ödeme planı bulunmuyor.
+          Seçilen yıl / dönem için
+          bu sözleşmede ödeme planı bulunmuyor.
 
         </div>
 
       `;
+
 
       return;
 
     }
 
 
-    endMonth =
-      Math.min(
-        endMonth,
-        engine.schedule.length
-      );
+    let title =
+      "";
 
 
-    const entries =
-      getJournalForPeriod(
-        contract,
-        startMonth,
-        endMonth
-      );
+    if (
+      period === "monthly"
+    ) {
+
+      title =
+        `${year} - ${getMonthName(
+          month
+        )} Aylık Muhasebe Fişi`;
+
+    }
+
+
+    if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+
+      title =
+        `${year} - ${quarter}. Çeyrek Muhasebe Fişi`;
+
+    }
+
+
+    if (
+      period === "annual"
+    ) {
+
+      title =
+        `${year} - 12 Aylık Toplu Muhasebe Fişi`;
+
+    }
 
 
     document.getElementById(
@@ -2298,11 +2554,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /*
+  ============================================================
+  MONTH NAME
+  ============================================================
+  */
+
   function getMonthName(
     month
   ) {
 
     const names = [
+
       "Ocak",
       "Şubat",
       "Mart",
@@ -2315,11 +2578,14 @@ document.addEventListener("DOMContentLoaded", () => {
       "Ekim",
       "Kasım",
       "Aralık"
+
     ];
 
 
     return (
-      names[month - 1] ||
+      names[
+        month - 1
+      ] ||
       "-"
     );
 
@@ -2344,7 +2610,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     if (!contract) {
+
       return;
+
     }
 
 
@@ -2415,143 +2683,217 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="detail-grid">
 
           <div class="detail-item">
-            <span>Şirket</span>
+
+            <span>
+              Şirket
+            </span>
+
             <strong>
               ${escapeHtml(
                 contract.company
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Tedarikçi</span>
+
+            <span>
+              Tedarikçi
+            </span>
+
             <strong>
               ${escapeHtml(
                 contract.supplier
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Aylık Kira</span>
+
+            <span>
+              Aylık Kira
+            </span>
+
             <strong>
               ${formatCurrency(
                 contract.monthlyPayment
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Kira Süresi</span>
+
+            <span>
+              Kira Süresi
+            </span>
+
             <strong>
               ${engine.months} Ay
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>İskonto Oranı</span>
+
+            <span>
+              İskonto Oranı
+            </span>
+
             <strong>
               %${contract.discountRate}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>İlk Kira Yükümlülüğü</span>
+
+            <span>
+              İlk Kira Yükümlülüğü
+            </span>
+
             <strong>
               ${formatCurrency(
                 engine.liability
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>ROU Varlığı</span>
+
+            <span>
+              ROU Varlığı
+            </span>
+
             <strong>
               ${formatCurrency(
                 engine.rouAssets
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Aylık Amortisman</span>
+
+            <span>
+              Aylık Amortisman
+            </span>
+
             <strong>
               ${formatCurrency(
                 engine.depreciation
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Aylık Faiz</span>
+
+            <span>
+              Aylık Faiz
+            </span>
+
             <strong>
               ${formatCurrency(
                 engine.monthlyInterest
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Current Liability</span>
+
+            <span>
+              Current Liability
+            </span>
+
             <strong>
               ${formatCurrency(
                 current
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Non-current Liability</span>
+
+            <span>
+              Non-current Liability
+            </span>
+
             <strong>
               ${formatCurrency(
                 nonCurrent
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Önümüzdeki 12 Ay</span>
+
+            <span>
+              Önümüzdeki 12 Ay
+            </span>
+
             <strong>
               ${formatCurrency(
                 next12
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Başlangıç</span>
+
+            <span>
+              Başlangıç
+            </span>
+
             <strong>
               ${formatDate(
                 contract.startDate
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Bitiş</span>
+
+            <span>
+              Bitiş
+            </span>
+
             <strong>
               ${formatDate(
                 contract.endDate
               )}
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Yenileme</span>
+
+            <span>
+              Yenileme
+            </span>
+
             <strong class="${
               renewal
                 ? "renewal-warning"
@@ -2569,18 +2911,26 @@ document.addEventListener("DOMContentLoaded", () => {
               }
 
             </strong>
+
           </div>
 
 
           <div class="detail-item">
-            <span>Modification</span>
+
+            <span>
+              Modification
+            </span>
+
             <strong>
+
               ${
                 contract.modification
                   ? "İnceleme gerekli"
                   : "Yok"
               }
+
             </strong>
+
           </div>
 
         </div>
@@ -2592,11 +2942,13 @@ document.addEventListener("DOMContentLoaded", () => {
             !
           </div>
 
+
           <div>
 
             <strong>
               CFO Finansal Etki
             </strong>
+
 
             <p>
 
@@ -2647,7 +2999,9 @@ document.addEventListener("DOMContentLoaded", () => {
             margin:0 0 12px;
             font-size:14px;
           ">
+
             İlk 12 Aylık Ödeme Planı
+
           </h3>
 
 
@@ -2765,12 +3119,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    /*
-    ----------------------------------------------------------
-    ACCOUNTING EVENTS
-    ----------------------------------------------------------
-    */
-
     setTimeout(
       () => {
 
@@ -2853,7 +3201,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (
           !selectedContractId
         ) {
+
           return;
+
         }
 
 
@@ -2866,7 +3216,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         if (!contract) {
+
           return;
+
         }
 
 
@@ -2877,7 +3229,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         if (!confirmed) {
+
           return;
+
         }
 
 
@@ -2896,10 +3250,1195 @@ document.addEventListener("DOMContentLoaded", () => {
 
         closeDetail();
 
+
         refresh();
 
       }
     );
+
+
+  /*
+  ============================================================
+  V8 — BATCH ACCOUNTING BUTTON
+  ============================================================
+  */
+
+  function injectBatchButton() {
+
+    const actions =
+      document.querySelector(
+        ".topbar-actions"
+      );
+
+
+    if (!actions) {
+
+      return;
+
+    }
+
+
+    if (
+      document.getElementById(
+        "batchAccountingButton"
+      )
+    ) {
+
+      return;
+
+    }
+
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+
+    button.id =
+      "batchAccountingButton";
+
+
+    button.className =
+      "secondary-button";
+
+
+    button.textContent =
+      "▤ Toplu Fiş Merkezi";
+
+
+    button.addEventListener(
+      "click",
+      openBatchAccounting
+    );
+
+
+    actions.insertBefore(
+      button,
+      document.getElementById(
+        "newContractButton"
+      )
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH ACCOUNTING MODAL
+  ============================================================
+  */
+
+  function openBatchAccounting() {
+
+    const modal =
+      document.createElement(
+        "div"
+      );
+
+
+    modal.id =
+      "batchAccountingModal";
+
+
+    modal.className =
+      "modal";
+
+
+    modal.innerHTML = `
+
+      <div
+        class="modal-content"
+        style="
+          width:min(1100px,100%);
+          max-height:90vh;
+          overflow:auto;
+        "
+      >
+
+        <div class="modal-header">
+
+          <div>
+
+            <div class="eyebrow">
+              TFRS 16
+            </div>
+
+            <h2>
+              Toplu Muhasebe Fiş Merkezi
+            </h2>
+
+            <p style="
+              margin:5px 0 0;
+              color:#64748b;
+              font-size:11px;
+            ">
+
+              Birden fazla sözleşmenin
+              muhasebe hareketlerini tek fişte
+              toplulaştırın.
+
+            </p>
+
+          </div>
+
+
+          <button
+            id="closeBatchModal"
+            class="close-button"
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div style="
+          display:grid;
+          grid-template-columns:
+            repeat(auto-fit,minmax(180px,1fr));
+          gap:12px;
+        ">
+
+
+          <div style="
+            background:#f8fafc;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            padding:14px;
+          ">
+
+            <label style="
+              display:block;
+              font-size:10px;
+              color:#64748b;
+              margin-bottom:7px;
+            ">
+
+              Raporlama Yılı
+
+            </label>
+
+
+            <select
+              id="batchYear"
+              style="
+                width:100%;
+                padding:9px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+
+              ${buildBatchYearOptions()}
+
+            </select>
+
+          </div>
+
+
+          <div style="
+            background:#f8fafc;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            padding:14px;
+          ">
+
+            <label style="
+              display:block;
+              font-size:10px;
+              color:#64748b;
+              margin-bottom:7px;
+            ">
+
+              Fiş Tipi
+
+            </label>
+
+
+            <select
+              id="batchPeriod"
+              style="
+                width:100%;
+                padding:9px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+
+              <option value="monthly">
+                Aylık
+              </option>
+
+              <option value="quarterly">
+                Çeyreklik
+              </option>
+
+              <option value="annual">
+                12 Aylık Toplu
+              </option>
+
+              <option value="closing">
+                Yıllık Kapanış
+              </option>
+
+            </select>
+
+          </div>
+
+
+          <div style="
+            background:#f8fafc;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            padding:14px;
+          ">
+
+            <label style="
+              display:block;
+              font-size:10px;
+              color:#64748b;
+              margin-bottom:7px;
+            ">
+
+              Ay / Çeyrek
+
+            </label>
+
+
+            <select
+              id="batchMonth"
+              style="
+                width:100%;
+                padding:9px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+
+              ${buildMonthOptions()}
+
+            </select>
+
+          </div>
+
+
+          <div style="
+            background:#f8fafc;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+            padding:14px;
+          ">
+
+            <label style="
+              display:block;
+              font-size:10px;
+              color:#64748b;
+              margin-bottom:7px;
+            ">
+
+              Şirket
+
+            </label>
+
+
+            <select
+              id="batchCompany"
+              style="
+                width:100%;
+                padding:9px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+
+              <option value="all">
+                Tüm Şirketler
+              </option>
+
+              ${getCompanyOptions()}
+
+            </select>
+
+          </div>
+
+        </div>
+
+
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          margin-top:18px;
+          padding:14px;
+          background:#f8fafc;
+          border:1px solid #e5e7eb;
+          border-radius:10px;
+          flex-wrap:wrap;
+        ">
+
+          <div>
+
+            <strong
+              id="batchContractCount"
+              style="font-size:14px;"
+            >
+              0 sözleşme
+            </strong>
+
+            <div style="
+              color:#64748b;
+              font-size:10px;
+              margin-top:4px;
+            ">
+
+              Aktif sözleşmeler üzerinden
+              hesaplanacaktır.
+
+            </div>
+
+          </div>
+
+
+          <button
+            id="generateBatchJournal"
+            class="primary-button"
+          >
+
+            Toplu Fişi Oluştur
+
+          </button>
+
+        </div>
+
+
+        <div id="batchJournalPreview"></div>
+
+
+        <div style="
+          margin-top:15px;
+          padding:12px 14px;
+          background:#fffdf7;
+          border:1px solid #f3e8c5;
+          border-radius:9px;
+          color:#92400e;
+          font-size:10px;
+          line-height:1.5;
+        ">
+
+          <strong>CFO Kontrolü:</strong>
+
+          Bu ekran yüzlerce sözleşmenin
+          muhasebe hareketlerini tek fişte
+          toplulaştırmak için tasarlanmıştır.
+          ERP entegrasyonu sonraki aşamada
+          eklenecektir.
+
+        </div>
+
+      </div>
+
+    `;
+
+
+    document.body.appendChild(
+      modal
+    );
+
+
+    document
+      .getElementById(
+        "closeBatchModal"
+      )
+      ?.addEventListener(
+        "click",
+        () => modal.remove()
+      );
+
+
+    document
+      .getElementById(
+        "generateBatchJournal"
+      )
+      ?.addEventListener(
+        "click",
+        generateBatchJournal
+      );
+
+
+    document
+      .getElementById(
+        "batchCompany"
+      )
+      ?.addEventListener(
+        "change",
+        updateBatchCount
+      );
+
+
+    updateBatchCount();
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH YEARS
+  ============================================================
+  */
+
+  function buildBatchYearOptions() {
+
+    const years =
+      new Set();
+
+
+    contracts.forEach(
+      contract => {
+
+        const start =
+          parseDate(
+            contract.startDate
+          );
+
+
+        const end =
+          parseDate(
+            contract.endDate
+          );
+
+
+        if (
+          !start ||
+          !end
+        ) {
+
+          return;
+
+        }
+
+
+        for (
+          let y =
+            start.getFullYear();
+
+          y <=
+          end.getFullYear();
+
+          y++
+        ) {
+
+          years.add(y);
+
+        }
+
+      }
+    );
+
+
+    if (!years.size) {
+
+      years.add(
+        new Date().getFullYear()
+      );
+
+    }
+
+
+    return [
+      ...years
+    ]
+      .sort(
+        (a, b) =>
+          a - b
+      )
+      .map(
+        year => `
+
+          <option value="${year}">
+
+            ${year}
+
+          </option>
+
+        `
+      )
+      .join("");
+
+  }
+
+
+  /*
+  ============================================================
+  COMPANY OPTIONS
+  ============================================================
+  */
+
+  function getCompanyOptions() {
+
+    return [
+      ...new Set(
+        contracts.map(
+          contract =>
+            contract.company
+        )
+      )
+    ]
+      .sort()
+      .map(
+        company => `
+
+          <option value="${
+            escapeHtml(company)
+          }">
+
+            ${escapeHtml(company)}
+
+          </option>
+
+        `
+      )
+      .join("");
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH COUNT
+  ============================================================
+  */
+
+  function getBatchContracts() {
+
+    const company =
+      document.getElementById(
+        "batchCompany"
+      )?.value ||
+      "all";
+
+
+    return contracts.filter(
+      contract => {
+
+        return (
+
+          contract.status ===
+          "active"
+
+          &&
+
+          (
+            company === "all" ||
+            contract.company ===
+            company
+          )
+
+        );
+
+      }
+    );
+
+  }
+
+
+  function updateBatchCount() {
+
+    const selected =
+      getBatchContracts();
+
+
+    setText(
+      "batchContractCount",
+      `${selected.length} sözleşme`
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH JOURNAL
+  ============================================================
+  */
+
+  function generateBatchJournal() {
+
+    const year =
+      Number(
+        document.getElementById(
+          "batchYear"
+        )?.value
+      );
+
+
+    const period =
+      document.getElementById(
+        "batchPeriod"
+      )?.value;
+
+
+    const month =
+      Number(
+        document.getElementById(
+          "batchMonth"
+        )?.value
+      );
+
+
+    const selectedContracts =
+      getBatchContracts();
+
+
+    if (
+      !selectedContracts.length
+    ) {
+
+      showBatchMessage(
+        "Toplu fiş oluşturmak için aktif sözleşme bulunamadı.",
+        "warning"
+      );
+
+
+      return;
+
+    }
+
+
+    if (
+      period === "closing"
+    ) {
+
+      generateBatchClosing(
+        selectedContracts,
+        year
+      );
+
+
+      return;
+
+    }
+
+
+    const totals = {
+
+      interest: 0,
+
+      principal: 0,
+
+      payment: 0,
+
+      depreciation: 0
+
+    };
+
+
+    let contractCount = 0;
+
+
+    selectedContracts.forEach(
+      contract => {
+
+        const schedule =
+          getScheduleForYear(
+            contract,
+            year
+          );
+
+
+        let selected = [];
+
+
+        if (
+          period === "monthly"
+        ) {
+
+          selected =
+            schedule.filter(
+              item =>
+                item.month ===
+                month
+            );
+
+        }
+
+
+        if (
+          period === "quarterly"
+        ) {
+
+          const quarter =
+            Math.ceil(
+              month / 3
+            );
+
+
+          selected =
+            schedule.filter(
+              item =>
+                Math.ceil(
+                  item.month / 3
+                ) ===
+                quarter
+            );
+
+        }
+
+
+        if (
+          period === "annual"
+        ) {
+
+          selected =
+            schedule;
+
+        }
+
+
+        if (!selected.length) {
+
+          return;
+
+        }
+
+
+        contractCount++;
+
+
+        selected.forEach(
+          item => {
+
+            totals.interest +=
+              item.interest;
+
+
+            totals.principal +=
+              item.principal;
+
+
+            totals.payment +=
+              item.payment;
+
+
+            totals.depreciation +=
+              item.depreciation;
+
+          }
+        );
+
+      }
+    );
+
+
+    if (
+      contractCount === 0
+    ) {
+
+      showBatchMessage(
+        "Seçilen yıl / dönem için aktif sözleşmelerde hareket bulunamadı.",
+        "warning"
+      );
+
+
+      return;
+
+    }
+
+
+    const entries = [
+
+      {
+        account:
+          "780 Finansman Giderleri",
+        debit:
+          totals.interest,
+        credit:
+          0
+      },
+
+      {
+        account:
+          "401 Kiralama Yükümlülüğü",
+        debit:
+          totals.principal,
+        credit:
+          0
+      },
+
+      {
+        account:
+          "381 Kira Borçları / Ödeme",
+        debit:
+          0,
+        credit:
+          totals.payment
+      },
+
+      {
+        account:
+          "770 / 730 Amortisman Giderleri",
+        debit:
+          totals.depreciation,
+        credit:
+          0
+      },
+
+      {
+        account:
+          "268 Birikmiş Amortismanlar",
+        debit:
+          0,
+        credit:
+          totals.depreciation
+      }
+
+    ];
+
+
+    let title;
+
+
+    if (
+      period === "monthly"
+    ) {
+
+      title =
+        `${year} - ${getMonthName(
+          month
+        )} TOPLU TFRS 16 FİŞİ`;
+
+    }
+
+
+    if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+
+      title =
+        `${year} - ${quarter}. ÇEYREK TOPLU TFRS 16 FİŞİ`;
+
+    }
+
+
+    if (
+      period === "annual"
+    ) {
+
+      title =
+        `${year} - 12 AYLIK TOPLU TFRS 16 FİŞİ`;
+
+    }
+
+
+    const summary = `
+
+      <div style="
+        display:grid;
+        grid-template-columns:
+          repeat(auto-fit,minmax(160px,1fr));
+        gap:10px;
+        margin-top:18px;
+      ">
+
+        ${batchMetric(
+          "İşlenen Sözleşme",
+          contractCount
+        )}
+
+        ${batchMetric(
+          "Toplam Faiz",
+          formatCurrency(
+            totals.interest
+          )
+        )}
+
+        ${batchMetric(
+          "Toplam Anapara",
+          formatCurrency(
+            totals.principal
+          )
+        )}
+
+        ${batchMetric(
+          "Toplam Ödeme",
+          formatCurrency(
+            totals.payment
+          )
+        )}
+
+        ${batchMetric(
+          "Toplam Amortisman",
+          formatCurrency(
+            totals.depreciation
+          )
+        )}
+
+      </div>
+
+    `;
+
+
+    document.getElementById(
+      "batchJournalPreview"
+    ).innerHTML =
+
+      summary +
+
+      renderJournalEntry(
+        title,
+        entries
+      );
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH CLOSING
+  ============================================================
+  */
+
+  function generateBatchClosing(
+    selectedContracts,
+    year
+  ) {
+
+    let current = 0;
+
+    let nonCurrent = 0;
+
+    let count = 0;
+
+
+    selectedContracts.forEach(
+      contract => {
+
+        const schedule =
+          getScheduleForYear(
+            contract,
+            year
+          );
+
+
+        if (!schedule.length) {
+
+          return;
+
+        }
+
+
+        const last =
+          schedule[
+            schedule.length - 1
+          ];
+
+
+        current +=
+          calculateCurrentLiability(
+            contract
+          );
+
+
+        nonCurrent +=
+          Math.max(
+            0,
+            last.closingLiability -
+            current
+          );
+
+
+        count++;
+
+      }
+    );
+
+
+    const entries = [
+
+      {
+        account:
+          "401 Kiralama Yükümlülüğü - Non-current",
+        debit:
+          0,
+        credit:
+          nonCurrent
+      },
+
+      {
+        account:
+          "301 Kiralama Yükümlülüğü - Current",
+        debit:
+          current,
+        credit:
+          0
+      }
+
+    ];
+
+
+    const summary = `
+
+      <div style="
+        display:grid;
+        grid-template-columns:
+          repeat(auto-fit,minmax(170px,1fr));
+        gap:10px;
+        margin-top:18px;
+      ">
+
+        ${batchMetric(
+          "İşlenen Sözleşme",
+          count
+        )}
+
+        ${batchMetric(
+          "Current",
+          formatCurrency(
+            current
+          )
+        )}
+
+        ${batchMetric(
+          "Non-current",
+          formatCurrency(
+            nonCurrent
+          )
+        )}
+
+      </div>
+
+    `;
+
+
+    document.getElementById(
+      "batchJournalPreview"
+    ).innerHTML =
+
+      summary +
+
+      renderJournalEntry(
+        `${year} Yıl Sonu TOPLU Current / Non-current Fişi`,
+        entries
+      );
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH METRIC
+  ============================================================
+  */
+
+  function batchMetric(
+    label,
+    value
+  ) {
+
+    return `
+
+      <div style="
+        background:white;
+        border:1px solid #e5e7eb;
+        border-radius:10px;
+        padding:13px;
+      ">
+
+        <div style="
+          color:#64748b;
+          font-size:9px;
+        ">
+
+          ${label}
+
+        </div>
+
+        <div style="
+          margin-top:5px;
+          font-size:15px;
+          font-weight:800;
+        ">
+
+          ${value}
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  /*
+  ============================================================
+  BATCH MESSAGE
+  ============================================================
+  */
+
+  function showBatchMessage(
+    message,
+    type
+  ) {
+
+    const color =
+      type === "warning"
+        ? "#9a3412"
+        : "#166534";
+
+
+    const background =
+      type === "warning"
+        ? "#fff7ed"
+        : "#f0fdf4";
+
+
+    const border =
+      type === "warning"
+        ? "#fed7aa"
+        : "#bbf7d0";
+
+
+    const preview =
+      document.getElementById(
+        "batchJournalPreview"
+      );
+
+
+    if (!preview) {
+
+      return;
+
+    }
+
+
+    preview.innerHTML = `
+
+      <div style="
+        margin-top:18px;
+        padding:15px;
+        background:${background};
+        border:1px solid ${border};
+        border-radius:9px;
+        color:${color};
+      ">
+
+        ${escapeHtml(
+          message
+        )}
+
+      </div>
+
+    `;
+
+  }
 
 
   /*
@@ -2956,6 +4495,13 @@ document.addEventListener("DOMContentLoaded", () => {
         closeContractModal();
 
         closeDetail();
+
+
+        document
+          .getElementById(
+            "batchAccountingModal"
+          )
+          ?.remove();
 
       }
 
@@ -3014,6 +4560,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderTable();
 
+    injectBatchButton();
+
   }
 
 
@@ -3027,7 +4575,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   console.log(
-    "GK TFRS 16 Accounting Engine V7 loaded successfully."
+    "GK TFRS 16 Accounting Engine V8 loaded successfully."
   );
 
 });
