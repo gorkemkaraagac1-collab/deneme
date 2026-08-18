@@ -194,7 +194,7 @@
                     <input type="number" id="pve" value="1420000" step="1000">
                 </div>
 
-                <button type="button" class="btn-calculate" onclick="TMS19Engine.calculateAndRender()">Motoru Çalıştır</button>
+                <button type="button" class="btn-calculate" onclick="calculateTMS19ViaAPI()">Motoru Çalıştır</button>
             </form>
         </div>
 
@@ -204,15 +204,15 @@
             <div class="summary-cards">
                 <div class="metric-card">
                     <div class="metric-label">Faiz Maliyeti (Kar/Zarar)</div>
-                    <div class="metric-value" id="summaryInterestCost">0 TL</div>
+                    <div class="metric-value" id="summaryInterestCost">0 ₺</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Net Dönem Gideri (K/Z)</div>
-                    <div class="metric-value" id="summaryPnL">0 TL</div>
+                    <div class="metric-value" id="summaryPnL">0 ₺</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Aktüeryal Kazanç/Kayıp (DOK)</div>
-                    <div class="metric-value" id="summaryOCI">0 TL</div>
+                    <div class="metric-value" id="summaryOCI">0 ₺</div>
                 </div>
             </div>
 
@@ -238,110 +238,123 @@
 
 <script>
 /**
- * TMS 19 Hesaplama ve Veri Bağlantı Motoru
+ * Local Hesaplama Motoru (Backend hazır değilse veya API bağlantısı kesilirse yedek olarak çalışır)
  */
-const TMS19Engine = {
-    // Form verilerini okur
-    getInputs: function() {
-        return {
-            pvb: parseFloat(document.getElementById('pvb').value) || 0,
-            discountRate: (parseFloat(document.getElementById('discountRate').value) || 0) / 100,
-            salaryIncrease: (parseFloat(document.getElementById('salaryIncrease').value) || 0) / 100,
-            turnoverRate: (parseFloat(document.getElementById('turnoverRate').value) || 0) / 100,
-            serviceCost: parseFloat(document.getElementById('serviceCost').value) || 0,
-            benefitsPaid: parseFloat(document.getElementById('benefitsPaid').value) || 0,
-            pve: parseFloat(document.getElementById('pve').value) || 0
-        };
-    },
+function calculateLocalFallback(inputs) {
+    const discountDecimal = inputs.discountRate / 100;
+    const interestCost = inputs.presentValueOpening * discountDecimal;
+    const totalPnLExpense = inputs.currentServiceCost + interestCost;
+    const expectedClosing = inputs.presentValueOpening + inputs.currentServiceCost + interestCost - inputs.benefitsPaid;
+    const actuarialGainLoss = inputs.presentValueClosingActual - expectedClosing;
 
-    // Aktüeryal hesaplama mantığı
-    calculate: function(data) {
-        // Net Reel İskonto Oranı Hesaplaması (Fisher Denklem Yaklaşımı)
-        const netDiscountRate = ((1 + data.discountRate) / (1 + data.salaryIncrease)) - 1;
-        
-        // Faiz Maliyeti = Dönem Başı Yükümlülük * İskonto Oranı
-        const interestCost = data.pvb * data.discountRate;
-
-        // Toplam Kar/Zarar Etkisi (Cari Hizmet Maliyeti + Faiz Maliyeti)
-        const totalPnL = data.serviceCost + interestCost;
-
-        // Aktüeryal Beklenen Dönem Sonu Yükümlülüğü
-        const expectedPVE = data.pvb + data.serviceCost + interestCost - data.benefitsPaid;
-
-        // Aktüeryal Kazanç / Kayıp (Kar/Zarar Dışındaki Diğer Kapsamlı Gelire - DOK / OCI Gider)
-        // Gerçekleşen Yükümlülük (pve) ile Beklenen Yükümlülük arasındaki fark
-        const actuarialGainLoss = data.pve - expectedPVE;
-
-        return {
-            netDiscountRate: netDiscountRate,
+    return {
+        pnlImpact: {
+            currentServiceCost: inputs.currentServiceCost,
             interestCost: interestCost,
-            totalPnL: totalPnL,
-            expectedPVE: expectedPVE,
+            totalPnLExpense: totalPnLExpense
+        },
+        ociImpact: {
             actuarialGainLoss: actuarialGainLoss
-        };
-    },
+        },
+        reconciliation: {
+            openingBalance: inputs.presentValueOpening,
+            expectedClosingBalance: expectedClosing,
+            actualClosingBalance: inputs.presentValueClosingActual
+        }
+    };
+}
 
-    // Sayıları para birimi formatına çevirir
-    formatCurrency: function(val) {
-        return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
-    },
+/**
+ * Backend API İstek Fonksiyonu
+ */
+async function calculateTMS19ViaAPI() {
+    const inputs = {
+        presentValueOpening: parseFloat(document.getElementById('pvb').value) || 0,
+        discountRate: parseFloat(document.getElementById('discountRate').value) || 0,
+        salaryIncreaseRate: parseFloat(document.getElementById('salaryIncrease').value) || 0,
+        turnoverRate: parseFloat(document.getElementById('turnoverRate').value) || 0,
+        currentServiceCost: parseFloat(document.getElementById('serviceCost').value) || 0,
+        benefitsPaid: parseFloat(document.getElementById('benefitsPaid').value) || 0,
+        presentValueClosingActual: parseFloat(document.getElementById('pve').value) || 0
+    };
 
-    // UI güncelleyici
-    render: function(inputs, results) {
-        // Özet Kartları Güncelle
-        document.getElementById('summaryInterestCost').innerText = this.formatCurrency(results.interestCost);
-        document.getElementById('summaryPnL').innerText = this.formatCurrency(results.totalPnL);
-        document.getElementById('summaryOCI').innerText = this.formatCurrency(results.actuarialGainLoss);
+    const requestData = { calculationParameters: inputs };
 
-        // Tablo Satırları Güncelle
-        const tableBody = document.getElementById('reconciliationTable');
-        tableBody.innerHTML = `
-            <tr>
-                <td><strong>Dönem Başı Tanımlanmış Fayda Yükümlülüğü</strong></td>
-                <td class="text-right">${this.formatCurrency(inputs.pvb)}</td>
-                <td>Bilanço (Açılış)</td>
-            </tr>
-            <tr>
-                <td>Cari Hizmet Maliyeti</td>
-                <td class="text-right">${this.formatCurrency(inputs.serviceCost)}</td>
-                <td>K/Z - Personel Giderleri</td>
-            </tr>
-            <tr>
-                <td>Faiz Maliyeti</td>
-                <td class="text-right">${this.formatCurrency(results.interestCost)}</td>
-                <td>K/Z - Finansman Giderleri</td>
-            </tr>
-            <tr>
-                <td>Ödenen Faydalar (Tazminatlar)</td>
-                <td class="text-right">-${this.formatCurrency(inputs.benefitsPaid)}</td>
-                <td>Nakit Akış / Bilanço Azalışı</td>
-            </tr>
-            <tr>
-                <td>Aktüeryal (Kazanç) / Kayıp Değişimi</td>
-                <td class="text-right" style="color: ${results.actuarialGainLoss > 0 ? '#dc2626' : '#16a34a'}; font-weight: bold;">
-                    ${this.formatCurrency(results.actuarialGainLoss)}
-                </td>
-                <td>DOK (Diğer Kapsamlı Gelir - OCI)</td>
-            </tr>
-            <tr style="background-color: #f8fafc; font-weight: bold;">
-                <td>Dönem Sonu Tanımlanmış Fayda Yükümlülüğü</td>
-                <td class="text-right">${this.formatCurrency(inputs.pve)}</td>
-                <td>Bilanço (Kapanış)</td>
-            </tr>
-        `;
-    },
+    try {
+        const response = await fetch('/api/v1/tms19/calculate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
 
-    // Tetikleyici Fonksiyon
-    calculateAndRender: function() {
-        const inputs = this.getInputs();
-        const results = this.calculate(inputs);
-        this.render(inputs, results);
+        if (!response.ok) throw new Error('API bağlantısı kurulamadı.');
+
+        const result = await response.json();
+
+        if (result.status === "SUCCESS") {
+            updateUIWithApiResult(result.data, inputs);
+        } else {
+            throw new Error('API geçersiz yanıt döndürdü.');
+        }
+    } catch (error) {
+        console.warn("Backend API henüz hazır değil veya erişilemiyor. Yerel motor çalıştırılıyor...", error);
+        const fallbackData = calculateLocalFallback(inputs);
+        updateUIWithApiResult(fallbackData, inputs);
     }
-};
+}
 
-// Sayfa yüklendiğinde motoru varsayılan değerlerle ilk kez çalıştır
+/**
+ * Arayüzü Güncelleyen Fonksiyon
+ */
+function updateUIWithApiResult(apiData, inputs) {
+    const fmt = (val) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+
+    // Kartlar
+    document.getElementById('summaryInterestCost').innerText = fmt(apiData.pnlImpact.interestCost);
+    document.getElementById('summaryPnL').innerText = fmt(apiData.pnlImpact.totalPnLExpense);
+    document.getElementById('summaryOCI').innerText = fmt(apiData.ociImpact.actuarialGainLoss);
+
+    // Tablo
+    const tableBody = document.getElementById('reconciliationTable');
+    tableBody.innerHTML = `
+        <tr>
+            <td><strong>Dönem Başı Yükümlülük</strong></td>
+            <td class="text-right">${fmt(apiData.reconciliation.openingBalance)}</td>
+            <td>Bilanço (Açılış)</td>
+        </tr>
+        <tr>
+            <td>Cari Hizmet Maliyeti</td>
+            <td class="text-right">${fmt(apiData.pnlImpact.currentServiceCost)}</td>
+            <td>K/Z - Personel Giderleri</td>
+        </tr>
+        <tr>
+            <td>Faiz Maliyeti</td>
+            <td class="text-right">${fmt(apiData.pnlImpact.interestCost)}</td>
+            <td>K/Z - Finansman Giderleri</td>
+        </tr>
+        <tr>
+            <td>Ödenen Tazminatlar</td>
+            <td class="text-right">-${fmt(inputs.benefitsPaid)}</td>
+            <td>Nakit Akış / Bilanço Azalışı</td>
+        </tr>
+        <tr>
+            <td>Aktüeryal (Kazanç) / Kayıp</td>
+            <td class="text-right" style="color: ${apiData.ociImpact.actuarialGainLoss > 0 ? '#dc2626' : '#16a34a'}; font-weight: bold;">
+                ${fmt(apiData.ociImpact.actuarialGainLoss)}
+            </td>
+            <td>DOK (Diğer Kapsamlı Gelir - OCI)</td>
+        </tr>
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+            <td>Dönem Sonu Yükümlülük</td>
+            <td class="text-right">${fmt(apiData.reconciliation.actualClosingBalance)}</td>
+            <td>Bilanço (Kapanış)</td>
+        </tr>
+    `;
+}
+
+// Sayfa yüklendiğinde ilk hesaplamayı otomatik çalıştır
 document.addEventListener('DOMContentLoaded', () => {
-    TMS19Engine.calculateAndRender();
+    calculateTMS19ViaAPI();
 });
 </script>
 
