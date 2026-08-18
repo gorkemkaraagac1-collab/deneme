@@ -3,11 +3,11 @@ document.addEventListener("DOMContentLoaded", () => {
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
-  TFRS 16 ENGINE V5
+  TFRS 16 ACCOUNTING ENGINE V6
   ============================================================
   */
 
-  const STORAGE_KEY = "gk_tfrs16_contracts_v5";
+  const STORAGE_KEY = "gk_tfrs16_contracts_v6";
 
   let contracts = loadContracts();
   let selectedContractId = null;
@@ -22,7 +22,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function getDefaultContracts() {
 
     return [
-
       {
         id: "LEASE-001",
         company: "GK Holding",
@@ -61,7 +60,6 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       }
-
     ];
 
   }
@@ -82,7 +80,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (stored) {
 
-        const parsed = JSON.parse(stored);
+        const parsed =
+          JSON.parse(stored);
 
         if (Array.isArray(parsed)) {
           return parsed;
@@ -157,7 +156,9 @@ document.addEventListener("DOMContentLoaded", () => {
         `${value}T00:00:00`
       );
 
-    return isNaN(date.getTime())
+    return isNaN(
+      date.getTime()
+    )
       ? null
       : date;
 
@@ -182,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  MONTH CALCULATION
+  MONTHS
   ============================================================
   */
 
@@ -197,7 +198,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const endDate =
       parseDate(end);
 
-    if (!startDate || !endDate) {
+    if (
+      !startDate ||
+      !endDate
+    ) {
       return 0;
     }
 
@@ -222,34 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  TFRS 16 ENGINE
-  ============================================================
-
-  Simplified financial model:
-
-  Initial Lease Liability
-  =
-  PV of future lease payments
-
-  Monthly Interest
-  =
-  Opening Liability × Monthly Discount Rate
-
-  Principal
-  =
-  Payment - Interest
-
-  Closing Liability
-  =
-  Opening Liability - Principal
-
-  ROU Asset
-  =
-  Initial Lease Liability
-
-  Monthly Depreciation
-  =
-  Initial ROU / Lease Term
+  TFRS 16 CALCULATION ENGINE
   ============================================================
   */
 
@@ -288,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
         liability: 0,
         rouAssets: 0,
         depreciation: 0,
-        interest: 0,
+        monthlyInterest: 0,
         schedule: []
       };
 
@@ -296,12 +273,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /*
-    INITIAL LIABILITY
+    INITIAL LEASE LIABILITY
     */
 
     let liability = 0;
 
-    if (monthlyRate === 0) {
+    if (
+      monthlyRate === 0
+    ) {
 
       liability =
         payment * months;
@@ -329,22 +308,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     /*
-    INITIAL ROU
-
-    V5 simplified:
-
-    ROU = lease liability
-
-    V6:
-    + prepaid payments
-    + direct costs
-    - incentives
-    + restoration
+    ROU ASSET
     */
 
     const initialROU =
       initialLiability;
 
+
+    /*
+    STRAIGHT-LINE DEPRECIATION
+    */
 
     const depreciation =
       initialROU /
@@ -471,7 +444,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  CURRENT / NON-CURRENT
+  CURRENT LIABILITY
   ============================================================
   */
 
@@ -484,34 +457,26 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
-    if (
-      !engine.schedule.length
-    ) {
-      return 0;
-    }
-
-
-    const current =
-      engine.schedule
-        .slice(0, 12)
-        .reduce(
-          (
-            total,
-            item
-          ) =>
-            total +
-            item.principal,
-          0
-        );
-
-
-    return Math.min(
-      engine.liability,
-      current
-    );
+    return engine.schedule
+      .slice(0, 12)
+      .reduce(
+        (
+          total,
+          item
+        ) =>
+          total +
+          item.principal,
+        0
+      );
 
   }
 
+
+  /*
+  ============================================================
+  NON-CURRENT LIABILITY
+  ============================================================
+  */
 
   function calculateNonCurrentLiability(
     contract
@@ -522,12 +487,10 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
-
     const current =
       calculateCurrentLiability(
         contract
       );
-
 
     return Math.max(
       0,
@@ -540,7 +503,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  NEXT 12 MONTHS
+  NEXT 12 MONTHS CASH
   ============================================================
   */
 
@@ -578,7 +541,9 @@ document.addEventListener("DOMContentLoaded", () => {
     contract
   ) {
 
-    if (!contract.renewalDate) {
+    if (
+      !contract.renewalDate
+    ) {
       return false;
     }
 
@@ -621,8 +586,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const active =
       contracts.filter(
-        c =>
-          c.status ===
+        contract =>
+          contract.status ===
           "active"
       );
 
@@ -663,8 +628,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const modifications =
       active.filter(
-        c =>
-          c.modification === true
+        contract =>
+          contract.modification ===
+          true
       ).length;
 
 
@@ -673,14 +639,12 @@ document.addEventListener("DOMContentLoaded", () => {
       active.length
     );
 
-
     setText(
       "leaseLiability",
       formatCurrency(
         liability
       )
     );
-
 
     setText(
       "rouAssets",
@@ -689,7 +653,6 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
-
     setText(
       "next12Months",
       formatCurrency(
@@ -697,12 +660,10 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
-
     setText(
       "renewals90Days",
       renewals
     );
-
 
     setText(
       "modifications",
@@ -756,8 +717,8 @@ document.addEventListener("DOMContentLoaded", () => {
       [
         ...new Set(
           contracts.map(
-            c =>
-              c.company
+            contract =>
+              contract.company
           )
         )
       ].sort();
@@ -852,7 +813,7 @@ document.addEventListener("DOMContentLoaded", () => {
       contracts.filter(
         contract => {
 
-          const text =
+          const searchable =
             `
             ${contract.id}
             ${contract.company}
@@ -861,29 +822,25 @@ document.addEventListener("DOMContentLoaded", () => {
             .toLowerCase();
 
 
-          const matchSearch =
-            !search ||
-            text.includes(
-              search
-            );
-
-
-          const matchStatus =
-            status === "all" ||
-            contract.status ===
-              status;
-
-
-          const matchCompany =
-            company === "all" ||
-            contract.company ===
-              company;
-
-
           return (
-            matchSearch &&
-            matchStatus &&
-            matchCompany
+            (
+              !search ||
+              searchable.includes(
+                search
+              )
+            )
+            &&
+            (
+              status === "all" ||
+              contract.status ===
+                status
+            )
+            &&
+            (
+              company === "all" ||
+              contract.company ===
+                company
+            )
           );
 
         }
@@ -951,6 +908,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </td>
 
           <td>
+
             <span class="status ${
               contract.status
             }">
@@ -963,6 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
               }
 
             </span>
+
           </td>
 
           <td>
@@ -1030,20 +989,14 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    const empty =
-      document.getElementById(
+    document
+      .getElementById(
         "emptyState"
-      );
-
-
-    if (empty) {
-
-      empty.classList.toggle(
+      )
+      ?.classList.toggle(
         "hidden",
         filtered.length > 0
       );
-
-    }
 
   }
 
@@ -1074,7 +1027,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractModal"
       );
 
-
     if (!modal) {
       return;
     }
@@ -1092,13 +1044,11 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.id || ""
     );
 
-
     setInput(
       "company",
       contract?.company ||
       "GK Holding"
     );
-
 
     setInput(
       "supplier",
@@ -1106,13 +1056,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
-
     setInput(
       "monthlyPayment",
       contract?.monthlyPayment ||
       ""
     );
-
 
     setInput(
       "startDate",
@@ -1120,20 +1068,17 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
-
     setInput(
       "endDate",
       contract?.endDate ||
       ""
     );
 
-
     setInput(
       "discountRate",
       contract?.discountRate ??
       18
     );
-
 
     setInput(
       "renewalDate",
@@ -1146,7 +1091,6 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(
         "modalTitle"
       );
-
 
     if (title) {
 
@@ -1231,7 +1175,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  SAVE
+  SAVE CONTRACT
   ============================================================
   */
 
@@ -1259,8 +1203,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const existing =
           contracts.find(
-            c =>
-              c.id === id
+            contract =>
+              contract.id ===
+              id
           );
 
 
@@ -1341,7 +1286,6 @@ document.addEventListener("DOMContentLoaded", () => {
           contracts
         );
 
-
         refresh();
 
         closeContractModal();
@@ -1356,6 +1300,409 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
+  ACCOUNTING ENGINE V6
+  ============================================================
+  */
+
+  function generateInitialRecognitionEntry(
+    contract
+  ) {
+
+    const engine =
+      calculateLease(
+        contract
+      );
+
+
+    return [
+
+      {
+        account:
+          "260 Haklar / Kullanım Hakkı Varlığı",
+
+        debit:
+          engine.rouAssets,
+
+        credit:
+          0
+      },
+
+      {
+        account:
+          "401 Kiralama İşlemlerinden Yükümlülükler",
+
+        debit:
+          0,
+
+        credit:
+          engine.liability
+      }
+
+    ];
+
+  }
+
+
+  /*
+  ============================================================
+  MONTHLY ACCOUNTING ENTRY
+  ============================================================
+  */
+
+  function generateMonthlyEntry(
+    contract,
+    month = 1
+  ) {
+
+    const engine =
+      calculateLease(
+        contract
+      );
+
+
+    const item =
+      engine.schedule[
+        month - 1
+      ];
+
+
+    if (!item) {
+      return [];
+    }
+
+
+    return [
+
+      {
+        account:
+          "780 Finansman Giderleri",
+
+        debit:
+          item.interest,
+
+        credit:
+          0
+      },
+
+      {
+        account:
+          "401 Kiralama İşlemlerinden Yükümlülükler",
+
+        debit:
+          item.principal,
+
+        credit:
+          0
+      },
+
+      {
+        account:
+          "381 Gider Tahakkukları / Kira Ödemesi",
+
+        debit:
+          0,
+
+        credit:
+          item.payment
+      },
+
+      {
+        account:
+          "770 / 730 Amortisman Giderleri",
+
+        debit:
+          item.depreciation,
+
+        credit:
+          0
+      },
+
+      {
+        account:
+          "268 Birikmiş Amortismanlar",
+
+        debit:
+          0,
+
+        credit:
+          item.depreciation
+      }
+
+    ];
+
+  }
+
+
+  /*
+  ============================================================
+  CURRENT / NON CURRENT RECLASS
+  ============================================================
+  */
+
+  function generateReclassificationEntry(
+    contract
+  ) {
+
+    const current =
+      calculateCurrentLiability(
+        contract
+      );
+
+
+    const nonCurrent =
+      calculateNonCurrentLiability(
+        contract
+      );
+
+
+    return [
+
+      {
+        account:
+          "401 Kiralama Yükümlülüğü - Non-current",
+
+        debit:
+          0,
+
+        credit:
+          nonCurrent
+      },
+
+      {
+        account:
+          "301 Kiralama Yükümlülüğü - Current",
+
+        debit:
+          current,
+
+        credit:
+          0
+      }
+
+    ];
+
+  }
+
+
+  /*
+  ============================================================
+  ACCOUNTING ENTRY HTML
+  ============================================================
+  */
+
+  function renderJournalEntry(
+    title,
+    entries
+  ) {
+
+    if (
+      !entries ||
+      !entries.length
+    ) {
+
+      return `
+        <div style="
+          padding:15px;
+          color:#64748b;
+          background:#f8fafc;
+          border-radius:8px;
+        ">
+          Muhasebe fişi oluşturulamadı.
+        </div>
+      `;
+
+    }
+
+
+    const totalDebit =
+      entries.reduce(
+        (
+          total,
+          item
+        ) =>
+          total +
+          Number(item.debit || 0),
+        0
+      );
+
+
+    const totalCredit =
+      entries.reduce(
+        (
+          total,
+          item
+        ) =>
+          total +
+          Number(item.credit || 0),
+        0
+      );
+
+
+    return `
+
+      <div style="
+        margin-top:22px;
+        border:1px solid #e5e7eb;
+        border-radius:12px;
+        overflow:hidden;
+        background:white;
+      ">
+
+        <div style="
+          padding:14px 16px;
+          background:#f8fafc;
+          border-bottom:1px solid #e5e7eb;
+        ">
+
+          <strong style="
+            font-size:13px;
+          ">
+            ${title}
+          </strong>
+
+        </div>
+
+
+        <div style="
+          overflow-x:auto;
+        ">
+
+          <table style="
+            width:100%;
+            border-collapse:collapse;
+            min-width:600px;
+          ">
+
+            <thead>
+
+              <tr>
+
+                <th style="padding:10px;">
+                  Hesap
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:right;
+                ">
+                  Borç
+                </th>
+
+                <th style="
+                  padding:10px;
+                  text-align:right;
+                ">
+                  Alacak
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody>
+
+              ${entries.map(
+                item => `
+
+                  <tr>
+
+                    <td style="
+                      padding:10px;
+                      border-top:1px solid #edf0f4;
+                    ">
+                      ${escapeHtml(
+                        item.account
+                      )}
+                    </td>
+
+                    <td style="
+                      padding:10px;
+                      text-align:right;
+                      border-top:1px solid #edf0f4;
+                    ">
+                      ${
+                        item.debit
+                          ? formatCurrency(
+                              item.debit
+                            )
+                          : "-"
+                      }
+                    </td>
+
+                    <td style="
+                      padding:10px;
+                      text-align:right;
+                      border-top:1px solid #edf0f4;
+                    ">
+                      ${
+                        item.credit
+                          ? formatCurrency(
+                              item.credit
+                            )
+                          : "-"
+                      }
+                    </td>
+
+                  </tr>
+
+                `
+              ).join("")}
+
+            </tbody>
+
+
+            <tfoot>
+
+              <tr>
+
+                <td style="
+                  padding:11px;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  TOPLAM
+                </td>
+
+                <td style="
+                  padding:11px;
+                  text-align:right;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  ${formatCurrency(
+                    totalDebit
+                  )}
+                </td>
+
+                <td style="
+                  padding:11px;
+                  text-align:right;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                ">
+                  ${formatCurrency(
+                    totalCredit
+                  )}
+                </td>
+
+              </tr>
+
+            </tfoot>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+  }
+
+
+  /*
+  ============================================================
   DETAIL
   ============================================================
   */
@@ -1366,8 +1713,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const contract =
       contracts.find(
-        c =>
-          c.id === id
+        item =>
+          item.id === id
       );
 
 
@@ -1599,6 +1946,8 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
+        <!-- CFO SUMMARY -->
+
         <div class="insight-panel">
 
           <div class="insight-icon">
@@ -1608,40 +1957,42 @@ document.addEventListener("DOMContentLoaded", () => {
           <div>
 
             <strong>
-              TFRS 16 Finansal Etki
+              CFO Finansal Etki
             </strong>
 
             <p>
 
-              İlk ölçümde kira yükümlülüğü
+              İlk ölçüm kira yükümlülüğü:
+
               <strong>
                 ${formatCurrency(
                   engine.liability
                 )}
               </strong>
-              olarak hesaplanmıştır.
 
-              ROU varlığı
+              · ROU varlığı:
+
               <strong>
                 ${formatCurrency(
                   engine.rouAssets
                 )}
               </strong>
-              seviyesindedir.
 
-              Aylık faiz gideri yaklaşık
+              · Aylık faiz:
+
               <strong>
                 ${formatCurrency(
                   engine.monthlyInterest
                 )}
               </strong>
-              , aylık ROU amortismanı ise
+
+              · Aylık amortisman:
+
               <strong>
                 ${formatCurrency(
                   engine.depreciation
                 )}
               </strong>
-              seviyesindedir.
 
             </p>
 
@@ -1650,10 +2001,10 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
+        <!-- PAYMENT PLAN -->
+
         <div style="
-          margin-top:20px;
-          border-top:1px solid #e5e7eb;
-          padding-top:18px;
+          margin-top:22px;
         ">
 
           <h3 style="
@@ -1671,7 +2022,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <table style="
               width:100%;
               border-collapse:collapse;
-              min-width:700px;
+              min-width:750px;
             ">
 
               <thead>
@@ -1679,7 +2030,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <tr>
 
                   <th>Ay</th>
-                  <th>Açılış Yükümlülüğü</th>
+                  <th>Açılış</th>
                   <th>Ödeme</th>
                   <th>Faiz</th>
                   <th>Anapara</th>
@@ -1753,6 +2104,33 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
         </div>
+
+
+        <!-- ACCOUNTING -->
+
+        ${renderJournalEntry(
+          "İlk Muhasebeleştirme Fişi",
+          generateInitialRecognitionEntry(
+            contract
+          )
+        )}
+
+
+        ${renderJournalEntry(
+          "1. Ay Dönemsel Muhasebe Fişi",
+          generateMonthlyEntry(
+            contract,
+            1
+          )
+        )}
+
+
+        ${renderJournalEntry(
+          "Current / Non-current Sınıflama Fişi",
+          generateReclassificationEntry(
+            contract
+          )
+        )}
 
       `;
 
@@ -1833,8 +2211,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const contract =
           contracts.find(
-            c =>
-              c.id ===
+            item =>
+              item.id ===
               selectedContractId
           );
 
@@ -1857,8 +2235,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         contracts =
           contracts.filter(
-            c =>
-              c.id !==
+            item =>
+              item.id !==
               selectedContractId
           );
 
@@ -1923,14 +2301,15 @@ document.addEventListener("DOMContentLoaded", () => {
     event => {
 
       if (
-        event.key !==
+        event.key ===
         "Escape"
       ) {
-        return;
-      }
 
-      closeContractModal();
-      closeDetail();
+        closeContractModal();
+
+        closeDetail();
+
+      }
 
     }
   );
@@ -1938,7 +2317,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  SECURITY
+  ESCAPE HTML
   ============================================================
   */
 
@@ -2000,7 +2379,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   console.log(
-    "GK TFRS 16 Engine V5 loaded successfully."
+    "GK TFRS 16 Accounting Engine V6 loaded successfully."
   );
 
 });
