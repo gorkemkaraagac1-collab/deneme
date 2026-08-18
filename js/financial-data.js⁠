@@ -1,156 +1,88 @@
-/**
- * GK Financial Intelligence Platform - Financial Data & Engine
- * Phase 2: Centralized State, Dynamic Calculations & Formatting
- */
+/* ==========================================================================
+   GK ADVISORY - CONSOLIDATED FINANCIAL DATA MODEL ENGINE
+   ========================================================================== */
 
-const FinancialEngine = (() => {
-  // 1. Central Financial State
-  const state = {
-    currency: 'EUR', // 'EUR' | 'TRY' | 'USD'
-    pnl: {
-      revenue: 42800000,
-      cogs: 29960000,
-      opex: 5392800,
-      budgetRevenue: 39556000,
-      priorYearEbitdaMargin: 0.18
-    },
-    workingCapital: {
-      receivables: 6330000, // DSO ~54 days
-      inventory: 3447000,   // DIO ~42 days
-      payables: 3940000,    // DPO ~48 days
-      budgetDso: 47,
-      budgetDio: 44,
-      budgetDpo: 45
-    },
-    valuation: {
-      wacc: 0.105,           // %10.5
-      terminalGrowth: 0.025, // %2.5
-      revenueGrowth: 0.080,  // %8.0
-      netDebt: 18200000,
-      explicitYears: 5
-    },
-    inflationTMS29: {
-      nonMonetaryAssets: 184200000,
-      openingIndex: 1850.4,
-      closingIndex: 2313.0,
-      monetaryNetPosition: -68000000
+const GKFinancialEngine = {
+  // Varsayılan konsolide finansal durum
+  state: {
+    revenue: 0,
+    ebitda: 0,
+    ebitdaMargin: 0,
+    ccc: 0, // Cash Conversion Cycle (Days)
+    netDebt: 0,
+    leverageRatio: 0,
+    tms29GainLoss: 0,
+    tfrs16Liabilities: 0,
+    tms19Provision: 0,
+    eclProvision: 0
+  },
+
+  // Verileri yükle veya ilklendir
+  init() {
+    const savedState = localStorage.getItem('gk_financial_state');
+    if (savedState) {
+      this.state = JSON.parse(savedState);
+    } else {
+      this.save();
     }
-  };
+    this.updateUI();
+  },
 
-  // 2. Helper Formatters
-  const formatters = {
-    currency: (val, symbol = '€', compact = true) => {
-      if (compact) {
-        if (Math.abs(val) >= 1e6) return `${symbol}${(val / 1e6).toFixed(1)}M`;
-        if (Math.abs(val) >= 1e3) return `${symbol}${(val / 1e3).toFixed(1)}K`;
-      }
-      return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'EUR' }).format(val);
-    },
-    percent: (val, decimals = 1) => `${(val * 100).toFixed(decimals)}%`,
-    days: (val) => `${Math.round(val)} Days`
-  };
+  // Veriyi kaydet
+  save() {
+    localStorage.setItem('gk_financial_state', JSON.stringify(this.state));
+    this.updateUI();
+  },
 
-  // 3. Calculation Engines
-  const calculatePnl = () => {
-    const grossProfit = state.pnl.revenue - state.pnl.cogs;
-    const ebitda = grossProfit - state.pnl.opex;
-    const ebitdaMargin = ebitda / state.pnl.revenue;
-    const revenueVsBudget = (state.pnl.revenue - state.pnl.budgetRevenue) / state.pnl.budgetRevenue;
-    const ebitdaMarginDiffPp = (ebitdaMargin - state.pnl.priorYearEbitdaMargin) * 100;
+  // Modüllerden gelen verileri konsolide et
+  updateModuleData(moduleName, data) {
+    if (this.state[moduleName] !== undefined) {
+      this.state[moduleName] = data;
+      this.recalculateConsolidated();
+    }
+  },
 
-    return {
-      grossProfit,
-      ebitda,
-      ebitdaMargin,
-      revenueVsBudget,
-      ebitdaMarginDiffPp
-    };
-  };
-
-  const calculateWorkingCapital = () => {
-    const dailyRevenue = state.pnl.revenue / 365;
-    const dailyCogs = state.pnl.cogs / 365;
-
-    const dso = state.workingCapital.receivables / dailyRevenue;
-    const dio = state.workingCapital.inventory / dailyCogs;
-    const dpo = state.workingCapital.payables / dailyCogs;
-    const ccc = dso + dio - dpo;
-
-    const dsoVsBudget = dso - state.workingCapital.budgetDso;
-    const cashLockupDso = dsoVsBudget * dailyRevenue;
-
-    return {
-      dso,
-      dio,
-      dpo,
-      ccc,
-      dsoVsBudget,
-      cashLockupDso
-    };
-  };
-
-  const calculateValuation = () => {
-    const pnl = calculatePnl();
-    let currentFcf = pnl.ebitda * 0.70; // FCF proxy (%70 EBITDA conversion)
-    let totalPv = 0;
-    const projections = [];
-
-    // Explicit Forecast Period (5 Years)
-    for (let i = 1; i <= state.valuation.explicitYears; i++) {
-      currentFcf *= (1 + state.valuation.revenueGrowth);
-      const discountFactor = Math.pow(1 + state.valuation.wacc, i);
-      const pvFcf = currentFcf / discountFactor;
-      totalPv += pvFcf;
-
-      projections.push({ year: i, fcf: currentFcf, pvFcf });
+  // Konsolide rasyoları ve KPI'ları yeniden hesapla
+  recalculateConsolidated() {
+    // EBITDA Marjı Hesabı
+    if (this.state.revenue > 0) {
+      this.state.ebitdaMargin = ((this.state.ebitda / this.state.revenue) * 100).toFixed(1);
     }
 
-    // Terminal Value Calculation (Gordon Growth Model)
-    const terminalFcf = currentFcf * (1 + state.valuation.terminalGrowth);
-    const terminalValue = terminalFcf / (state.valuation.wacc - state.valuation.terminalGrowth);
-    const pvTerminalValue = terminalValue / Math.pow(1 + state.valuation.wacc, state.valuation.explicitYears);
+    // Kaldıraç Oranı (Net Borç / EBITDA)
+    if (this.state.ebitda > 0) {
+      this.state.leverageRatio = (this.state.netDebt / this.state.ebitda).toFixed(1);
+    }
 
-    const enterpriseValue = totalPv + pvTerminalValue;
-    const equityValue = enterpriseValue - state.valuation.netDebt;
+    this.save();
+  },
 
-    return {
-      enterpriseValue,
-      equityValue,
-      netDebt: state.valuation.netDebt,
-      pvTerminalValue,
-      pvExplicitCashFlows: totalPv,
-      projections
-    };
-  };
+  // Cockpit ve Modül Arayüzlerini Güncelle
+  updateUI() {
+    // Toplam Satış
+    const revEl = document.querySelector('[data-kpi="revenue"]');
+    if (revEl) revEl.innerText = this.formatCurrency(this.state.revenue);
 
-  const calculateTMS29 = () => {
-    const indexRatio = state.inflationTMS29.closingIndex / state.inflationTMS29.openingIndex;
-    const adjustedNonMonetaryAssets = state.inflationTMS29.nonMonetaryAssets * indexRatio;
-    const inflationGainOnAssets = adjustedNonMonetaryAssets - state.inflationTMS29.nonMonetaryAssets;
+    // EBITDA Marjı
+    const marginEl = document.querySelector('[data-kpi="ebitda-margin"]');
+    if (marginEl) marginEl.innerText = `${this.state.ebitdaMargin}%`;
 
-    // Monetary loss calculation: Net monetary liability position * (IndexRatio - 1)
-    const monetaryLoss = state.inflationTMS29.monetaryNetPosition * (indexRatio - 1);
+    // Nakit Dönüşüm Süresi
+    const cccEl = document.querySelector('[data-kpi="ccc"]');
+    if (cccEl) cccEl.innerText = `${this.state.ccc} Gün`;
 
-    return {
-      indexRatio,
-      adjustedNonMonetaryAssets,
-      inflationGainOnAssets,
-      monetaryLoss
-    };
-  };
+    // Net Borç / EBITDA
+    const levEl = document.querySelector('[data-kpi="leverage"]');
+    if (levEl) levEl.innerText = `${this.state.leverageRatio}x`;
+  },
 
-  // 4. Public API
-  return {
-    getState: () => state,
-    updateState: (category, key, value) => {
-      if (state[category] && key in state[category]) {
-        state[category][key] = parseFloat(value);
-      }
-    },
-    formatters,
-    calculatePnl,
-    calculateWorkingCapital,
-    calculateValuation,
-    calculateTMS29
-  };
-})();
+  // Finansal Para Birimi Biçimlendirici (EUR / TRY / USD)
+  formatCurrency(val, currency = '€') {
+    return `${currency}${Number(val).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`;
+  }
+};
+
+// Sayfa yüklendiğinde motoru çalıştır
+document.addEventListener('DOMContentLoaded', () => {
+  GKFinancialEngine.init();
+});
