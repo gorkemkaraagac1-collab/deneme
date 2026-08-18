@@ -1,0 +1,64 @@
+/* ==========================================
+   CFO COCKPIT COMPONENTS (KPI, INSIGHT, TABLES)
+   ========================================== */
+
+/* KPI Card Component */
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-title {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.kpi-delta {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kpi-delta.positive { color: var(--accent-green); }
+.kpi-delta.negative { color: var(--accent-red); }
+
+/* Executive Decision / Insight Card */
+.insight-card {
+  background: var(--bg-card);
+  border-left: 4px solid var(--accent-blue);
+  border-radius: 0 8px 8px 0;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.insight-step {
+  margin-bottom: 6px;
+}
+
+.insight-step-label {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+
+.step-happened { background: #334155; color: #fff; }
+.step-why { background: #1e3a8a; color: #93c5fd; }
+.step-sowhat { background: #7c2d12; color: #fdba74; }
+.step-next { background: #064e3b; color: #6ee7b7; }
