@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>GK Advisory — Financial Decision Cockpit</title>
+
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    .cockpit-shell {
+      padding: 40px 0 80px;
+    }
+
+    .cockpit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .cockpit-header h1 {
+      margin-bottom: 8px;
+    }
+
+    .cockpit-header p {
+      margin: 0;
+      max-width: 720px;
+      opacity: .75;
+    }
+
+    .cockpit-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .cockpit-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      border: 1px solid rgba(0,0,0,.10);
+      border-radius: 14px;
+      padding: 22px;
+      background: #fff;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      opacity: .65;
+      margin-bottom: 10px;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    .metric-note {
+      font-size: 12px;
+      opacity: .65;
+    }
+
+    .decision-layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+
+    .cockpit-card {
+      border: 1px solid rgba(0,0,0,.10);
+      border-radius: 14px;
+      padding: 24px;
+      background: #fff;
+      margin-bottom: 24px;
+    }
+
+    .cockpit-card h2 {
+      margin-top: 0;
+      margin-bottom: 6px;
+    }
+
+    .cockpit-card > p {
+      margin-top: 0;
+      opacity: .7;
+    }
+
+    .decision-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .decision-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 15px 16px;
+      border: 1px solid rgba(0,0,0,.08);
+      border-radius: 10px;
+    }
+
+    .decision-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .decision-description {
+      font-size: 13px;
+      opacity: .65;
+    }
+
+    .status {
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.06);
+    }
+
+    .priority-high {
+      border-left: 4px solid #222;
+    }
+
+    .priority-medium {
+      border-left: 4px solid #888;
+    }
+
+    .priority-low {
+      border-left: 4px solid #bbb;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .module-link {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      border: 1px solid rgba(0,0,0,.08);
+      border-radius: 10px;
+      padding: 16px;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .module-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    }
+
+    .module-link strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .module-link small {
+      opacity: .65;
+    }
+
+    .cockpit-notice {
+      padding: 16px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.045);
+      font-size: 13px;
+      margin-top: 20px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1000px) {
+      .cockpit-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .decision-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .cockpit-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .cockpit-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .module-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .decision-item {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <nav class="nav">
+    <a href="index.html" class="wordmark">
+      GK <span>ADVISORY</span>
+    </a>
+
+    <div
+      class="nav-links"
+      style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"
+    >
+      <a href="dashboard.html">Dashboard</a>
+      <a href="#" id="logout">Çıkış</a>
+    </div>
+  </nav>
+</header>
+
+<section class="page-hero">
+  <div class="wrap">
+    <div class="eyebrow">Finance Intelligence</div>
+
+    <h1>Financial Decision Cockpit</h1>
+
+    <p id="welcome-text">
+      Finansal performans, risk ve karar destek göstergelerinizi tek ekranda yönetin.
+    </p>
+  </div>
+</section>
+
+<section class="section cockpit-shell">
+
+  <div class="wrap">
+
+    <div class="cockpit-header">
+
+      <div>
+        <div class="eyebrow">Management View</div>
+
+        <h1 id="company-name">
+          Financial Overview
+        </h1>
+
+        <p id="user-meta"></p>
+      </div>
+
+      <div class="cockpit-actions">
+        <a href="dashboard.html" class="btn">
+          ← Dashboard
+        </a>
+      </div>
+
+    </div>
+
+
+    <!-- KPI CARDS -->
+
+    <div class="cockpit-grid">
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Revenue
+        </div>
+
+        <div class="metric-value">
+          €12.4M
+        </div>
+
+        <div class="metric-note">
+          +8.4% vs. prior period
+        </div>
+      </div>
+
+
+      <div class="metric-card">
+        <div class="metric-label">
+          EBITDA Margin
+        </div>
+
+        <div class="metric-value">
+          18.7%
+        </div>
+
+        <div class="metric-note">
+          +1.9 pts improvement
+        </div>
+      </div>
+
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Cash Conversion Cycle
+        </div>
+
+        <div class="metric-value">
+          67 days
+        </div>
+
+        <div class="metric-note">
+          5 days above target
+        </div>
+      </div>
+
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Net Debt / EBITDA
+        </div>
+
+        <div class="metric-value">
+          2.4x
+        </div>
+
+        <div class="metric-note">
+          Within covenant range
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="decision-layout">
+
+      <!-- MAIN DECISION AREA -->
+
+      <div>
+
+        <div class="cockpit-card">
+
+          <h2>Management Priorities</h2>
+
+          <p>
+            Platform tarafından belirlenen öncelikli finansal aksiyonlar.
+          </p>
+
+
+          <div class="decision-list">
+
+            <div class="decision-item priority-high">
+
+              <div>
+                <div class="decision-title">
+                  Working Capital
+                </div>
+
+                <div class="decision-description">
+                  Receivables days hedefin üzerinde. Cash conversion cycle üzerinde
+                  iyileştirme fırsatı bulunuyor.
+                </div>
+              </div>
+
+              <span class="status">
+                HIGH
+              </span>
+
+            </div>
+
+
+            <div class="decision-item priority-medium">
+
+              <div>
+                <div class="decision-title">
+                  Debt Position
+                </div>
+
+                <div class="decision-description">
+                  Net debt / EBITDA seviyesi izlenmeli. Refinancing ve covenant
+                  sensitivity analizi öneriliyor.
+                </div>
+              </div>
+
+              <span class="status">
+                MEDIUM
+              </span>
+
+            </div>
+
+
+            <div class="decision-item priority-medium">
+
+              <div>
+                <div class="decision-title">
+                  Valuation
+                </div>
+
+                <div class="decision-description">
+                  DCF değerlemesinde terminal value şirket değerinin önemli bölümünü
+                  oluşturuyor. Sensitivity analizi öneriliyor.
+                </div>
+              </div>
+
+              <span class="status">
+                REVIEW
+              </span>
+
+            </div>
+
+
+            <div class="decision-item priority-low">
+
+              <div>
+                <div class="decision-title">
+                  ECL Exposure
+                </div>
+
+                <div class="decision-description">
+                  Expected credit loss modeli kapsamında müşteri risk dağılımı
+                  düzenli olarak izlenmeli.
+                </div>
+              </div>
+
+              <span class="status">
+                MONITOR
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- FINANCIAL SIGNALS -->
+
+        <div class="cockpit-card">
+
+          <h2>Financial Signals</h2>
+
+          <p>
+            Önemli finansal göstergeler ve yönetim açısından değerlendirilmesi
+            gereken alanlar.
+          </p>
+
+
+          <div class="decision-list">
+
+            <div class="decision-item">
+
+              <div>
+                <div class="decision-title">
+                  Revenue Growth
+                </div>
+
+                <div class="decision-description">
+                  Revenue growth trend positive.
+                </div>
+              </div>
+
+              <span class="status">
+                POSITIVE
+              </span>
+
+            </div>
+
+
+            <div class="decision-item">
+
+              <div>
+                <div class="decision-title">
+                  Gross Margin
+                </div>
+
+                <div class="decision-description">
+                  Margin pressure observed in recent periods.
+                </div>
+              </div>
+
+              <span class="status">
+                WATCH
+              </span>
+
+            </div>
+
+
+            <div class="decision-item">
+
+              <div>
+                <div class="decision-title">
+                  Liquidity
+                </div>
+
+                <div class="decision-description">
+                  Current liquidity position appears adequate.
+                </div>
+              </div>
+
+              <span class="status">
+                STABLE
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- RIGHT SIDE -->
+
+      <div>
+
+        <div class="cockpit-card">
+
+          <h2>Finance Modules</h2>
+
+          <p>
+            Kullanabileceğiniz finansal analiz araçları.
+          </p>
+
+
+          <div class="module-grid">
+
+            <a
+              href="dcf-engine.html"
+              class="module-link"
+              id="module-dcf"
+            >
+              <strong>DCF Valuation</strong>
+              <small>Company valuation</small>
+            </a>
+
+
+            <a
+              href="working-capital.html"
+              class="module-link"
+              id="module-workingcapital"
+            >
+              <strong>Working Capital</strong>
+              <small>Cash conversion analysis</small>
+            </a>
+
+
+            <a
+              href="ecl.html"
+              class="module-link"
+              id="module-ecl"
+            >
+              <strong>ECL Analyzer</strong>
+              <small>Credit risk analysis</small>
+            </a>
+
+
+            <a
+              href="tms29.html"
+              class="module-link"
+              id="module-tms29"
+            >
+              <strong>TMS 29</strong>
+              <small>Inflation accounting</small>
+            </a>
+
+          </div>
+
+        </div>
+
+
+        <div class="cockpit-card">
+
+          <h2>Decision Support</h2>
+
+          <p>
+            Yönetim kararlarını desteklemek için platformdaki analizleri
+            birlikte değerlendirin.
+          </p>
+
+          <div class="cockpit-notice">
+
+            <strong>Next step</strong>
+
+            <br><br>
+
+            Financial data yüklediğinizde bu alan;
+            revenue, profitability, liquidity, working capital,
+            valuation ve credit risk verilerini gerçek zamanlı olarak
+            analiz edecek şekilde geliştirilecektir.
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<script src="auth.js"></script>
+
+<script>
+
+  /*
+   * 10.1 — Financial Decision Cockpit
+   *
+   * Bu sayfa mevcut Dashboard'un yerine geçmez.
+   * Authentication ve license kontrolü auth.js üzerinden yapılır.
+   */
+
+  const user = GKAuth.require();
+
+  if (user) {
+
+    /*
+     * Şimdilik Cockpit erişimini admin kullanıcıya açık bırakıyoruz.
+     *
+     * Production aşamasında:
+     *
+     * financial-cockpit
+     *
+     * ayrı bir entitlement/license olarak yönetilecek.
+     */
+
+    const cockpitAccess =
+      user.role === 'admin' ||
+      user.licenses.includes('financial-cockpit');
+
+    if (!cockpitAccess) {
+
+      document.body.innerHTML = `
+        <section class="section">
+          <div class="wrap">
+            <h1>Bu alana erişiminiz bulunmuyor.</h1>
+
+            <p>
+              Financial Decision Cockpit mevcut planınıza dahil değil.
+            </p>
+
+            <a href="dashboard.html">
+              Dashboard'a Dön →
+            </a>
+          </div>
+        </section>
+      `;
+
+      throw new Error(
+        'Financial Decision Cockpit license required.'
+      );
+    }
+
+
+    document.getElementById('welcome-text').textContent =
+      `Hoş geldin, ${user.name}. Finansal karar destek görünümünüz hazır.`;
+
+
+    document.getElementById('user-meta').textContent =
+      `${user.email} · ${user.plan} Plan · ${user.role.toUpperCase()}`;
+
+
+    /*
+     * Demo company name.
+     *
+     * Daha sonra gerçek company/workspace bilgisi
+     * backend/database üzerinden gelecek.
+     */
+
+    document.getElementById('company-name').textContent =
+      'Financial Overview';
+
+
+    /*
+     * Module license control
+     *
+     * Kullanıcının lisansı yoksa modül linkini
+     * görünür ama pasif hale getiriyoruz.
+     */
+
+    const modules = [
+      ['module-dcf', 'dcf'],
+      ['module-workingcapital', 'workingcapital'],
+      ['module-ecl', 'ecl'],
+      ['module-tms29', 'tms29']
+    ];
+
+
+    modules.forEach(([elementId, license]) => {
+
+      const element = document.getElementById(elementId);
+
+      if (!element) return;
+
+      if (!GKAuth.can(license)) {
+
+        element.removeAttribute('href');
+
+        element.style.opacity = '0.45';
+
+        element.style.cursor = 'not-allowed';
+
+        element.title =
+          'Bu modül mevcut planınıza dahil değil.';
+
+        element.onclick = function(event) {
+          event.preventDefault();
+          return false;
+        };
+
+      }
+
+    });
+
+  }
+
+
+  /*
+   * Logout
+   */
+
+  document.getElementById('logout').onclick = function(event) {
+
+    event.preventDefault();
+
+    GKAuth.logout();
+
+    location.href = 'login.html';
+
+  };
+
+</script>
+
+</body>
+</html>
