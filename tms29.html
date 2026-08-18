@@ -3,115 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TMS 29 Enflasyon Muhasebesi - GK Platform</title>
+  <title>GK ADVISORY - TMS 29 Enflasyon Muhasebesi</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
+  <header class="gk-header">
+    <div class="gk-header-container">
+      <div class="gk-brand">
         <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
-        </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
-        <a href="tms29.html" class="nav-link" style="color: var(--text-primary);">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
-          </div>
-        </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+        <span class="brand-title">ADVISORY</span>
       </div>
+      <nav class="gk-nav">
+        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
+      </nav>
     </div>
   </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-      <div>
-        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">TMS 29 Yüksek Enflasyonlu Ekonomilerde Finansal Raporlama</h2>
-        <p style="color: var(--text-muted); font-size: 0.95rem;">ÜFE/TÜFE Katsayıları, Parasal/Parasal Olmayan Kalem Düzeltmeleri ve Net Parasal Pozisyon Kar/Zararı Engine Simülasyonu.</p>
-      </div>
+  <main class="main-container">
+    <div class="page-header">
+      <div class="kpi-title">FINANCE INTELLIGENCE · TMS 29 / TAS 29</div>
+      <h1>TMS 29 Enflasyon Muhasebesi</h1>
+      <p>Yüksek enflasyonlu ekonomilerde finansal tabloların düzeltilmesi ve net parasal pozisyon kazanç/kayıp hesaplayıcı.</p>
     </div>
 
-    <!-- Parametre Paneli ve Metrikler -->
-    <div style="display: grid; grid-template-columns: 340px 1fr; gap: 24px; margin-bottom: 30px;">
-      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
-        <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Enflasyon ve Endeks Parametreleri</h3>
-        
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Dönem Sonu Endeksi (31.12)</label>
-          <input type="number" id="tms29-end-index" value="3850" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+    <div class="kpi-card">
+      <h3 class="serif-title" style="font-size: 1.2rem; color: var(--gk-navy); margin-bottom: 16px;">1 · Enflasyon Düzeltme Parametreleri</h3>
+      <form id="tms29-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <div>
+          <label class="kpi-title">BAŞLANGIÇ Yİ-ÜFE EN DEKSİ</label>
+          <input type="number" id="start-index" placeholder="Örn. 1000.00" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Dönem Başı / Düzeltmeye Esas Endeks</label>
-          <input type="number" id="tms29-base-index" value="2800" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        <div>
+          <label class="kpi-title">BİTİŞ Yİ-ÜFE ENDEKSİ</label>
+          <input type="number" id="end-index" placeholder="Örn. 2800.00" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Parasal Olmayan Aktif Tutar (₺)</label>
-          <input type="number" id="tms29-nonmonetary-asset" value="150000000" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
+        <div>
+          <label class="kpi-title">PARASAL OLMAYAN VARLIK TUTARI</label>
+          <input type="number" id="asset-amount" placeholder="Örn. 1000000" style="width: 100%; padding: 10px; border: 1px solid var(--card-border); background: #fff; border-radius: 4px; margin-top: 4px;">
         </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Net Parasal Pozisyon (Aktif - Pasif) (₺)</label>
-          <input type="number" id="tms29-net-monetary" value="-40000000" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
-        </div>
-      </div>
-
-      <!-- KPI Çıktıları -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-content: start;">
-        <div class="kpi-card">
-          <span class="kpi-title">Düzeltme Katsayısı (Factor)</span>
-          <div class="kpi-value" data-tms29="adj-factor">1.0000</div>
-          <div class="kpi-delta positive">Endeks Artış Oranı</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Düzeltilmiş Parasal Olmayan Varlık</span>
-          <div class="kpi-value" data-tms29="adj-asset">₺0</div>
-          <div class="kpi-delta positive">Özkaynak Farkı (+)</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Parasal Olmayan Kalem Değerleme Farkı</span>
-          <div class="kpi-value" data-tms29="non-monetary-gain">₺0</div>
-          <div class="kpi-delta positive">Bilanço Büyümesi</div>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Net Parasal Pozisyon Kazanç / Kaybı</span>
-          <div class="kpi-value" data-tms29="monetary-loss">₺0</div>
-          <div class="kpi-delta negative">P&amp;L Enflasyon Etkisi</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Grafik Paneli -->
-    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Tarihsel vs. Enflasyona Göre Düzeltilmiş Bilanço Karşılaştırması (₺)</h3>
-      <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="tms29Chart"></canvas>
-      </div>
-    </div>
-
-    <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">TMS 29 MANTIĞI</span> Parasal kalemler (Nakit, Alacak, Borç) satın alma gücü kaybına uğradığı için yeniden değerlenmez, ancak P&amp;L'de net parasal pozisyon kar/zararı yaratır.</div>
-      <div class="insight-step"><span class="insight-step-label step-sowhat">ÖZKAYNAK ETKİSİ</span> Parasal olmayan varlıkların (Maddi Duran Varlıklar, Stoklar) düzeltme katsayısı ile artırılması Özkaynaklar altında Enflasyon Düzeltme Farkları hesabını büyütür.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">VERGİ BOZULMASI</span> TFRS/IFRS TMS 29 farkları ile VUK Enflasyon düzeltmesi arasındaki farklar Geçici Ertelenmiş Vergi (Deferred Tax) doğurur.</div>
+      </form>
     </div>
   </main>
 
