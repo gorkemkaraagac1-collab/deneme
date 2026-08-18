@@ -1,41 +1,21 @@
-/* ==========================================
-   FINANCIAL INTELLIGENCE PLATFORM - GLOBAL
-   ========================================== */
-:root {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #1e293b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --border-color: #334155;
-  
-  /* Financial Severity & Accent Colors */
-  --accent-blue: #2563eb;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
-  --accent-warning: #f59e0b;
-  
-  /* Typography */
-  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-}
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+document.addEventListener('DOMContentLoaded', () => {
+    // Active Link Logic
+    const currentPath = window.location.pathname.split("/").pop() || "index.html";
+    document.querySelectorAll('.nav-links a').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href === currentPath || (currentPath === 'index.html' && href === 'index.html')) {
+            link.classList.add('active');
+        }
+    });
 
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-main);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
+    // Mobile Menu Toggle
+    const toggle = document.getElementById('navToggle');
+    const links = document.getElementById('navLinks');
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            links.classList.toggle('open');
+            document.body.classList.toggle('menu-open');
+        });
+    }
+});
