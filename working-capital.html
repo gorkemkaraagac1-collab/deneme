@@ -6,6 +6,8 @@
   <title>Working Capital Intelligence - GK Platform</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
+  <!-- Chart.js CDN Entegrasyonu -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -21,7 +23,7 @@
       <nav class="cfo-nav-menu">
         <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
         <a href="working-capital.html" class="nav-link" style="color: var(--text-primary);">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
+        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
         <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
         <div class="nav-dropdown">
           <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
@@ -63,6 +65,14 @@
         <span class="kpi-title">CCC (Cash Conversion Cycle)</span>
         <div class="kpi-value" data-kpi="wc-ccc">0 Days</div>
         <div class="kpi-delta negative">▲ +2 Days Impact</div>
+      </div>
+    </div>
+
+    <!-- Chart.js Working Capital Breakdown Canvas -->
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Nakit Dönüşüm Döngüsü (CCC) Bileşenleri (Gün)</h3>
+      <div style="position: relative; height: 320px; width: 100%;">
+        <canvas id="wcChart"></canvas>
       </div>
     </div>
 
