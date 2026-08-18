@@ -1,458 +1,53 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TMS 19 Kıdem Tazminatı Motoru — GK Advisory</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root{--ink:#0F1C2E;--ink2:#16283F;--parchment:#EDEAE2;--paper:#F7F5F0;--brass:#B08D57;--brass2:#8C6D3F;--line:rgba(176,141,87,.3);--muted:#68717f;--red:#9d453b;--green:#3d7057}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:#1c2a3a;font-family:Inter,sans-serif;line-height:1.5}.wrap{max-width:1180px;margin:auto;padding:0 24px}header{background:var(--ink);color:var(--parchment);border-bottom:1px solid var(--line)}.nav{max-width:1180px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.brand{font:600 19px Fraunces,serif}.brand span,.eyebrow{color:var(--brass)}.back{color:#ddd;font-size:13px;text-decoration:none}.hero{background:var(--ink);padding:42px 0 48px;color:var(--parchment)}.eyebrow{font:500 11px 'JetBrains Mono';letter-spacing:.1em;text-transform:uppercase}.hero h1{font:500 clamp(28px,4vw,42px) Fraunces,serif;margin:10px 0}.hero p{max-width:760px;color:rgba(237,234,226,.7);margin:0}
-.grid{display:grid;grid-template-columns:340px 1fr;gap:22px;margin:28px 0 50px}.panel{background:white;border:1px solid #ddd6ca;border-radius:3px;padding:22px}.panel h2{font:500 21px Fraunces,serif;margin:0 0 16px}.field{margin-bottom:14px}.field label{display:block;font:500 10px 'JetBrains Mono';text-transform:uppercase;letter-spacing:.07em;color:var(--brass2);margin-bottom:6px}.field input,.field select{width:100%;padding:10px 11px;border:1px solid #d4d0c8;background:#fff;border-radius:2px;font:14px Inter}
-.btn{border:0;border-radius:2px;padding:11px 15px;background:var(--brass);color:var(--ink);font-weight:600;cursor:pointer;font-family:Inter,sans-serif}.btn.secondary{background:transparent;border:1px solid var(--brass);color:var(--brass2)}.btn.danger{background:#f2e5e2;color:var(--red)}.btn.tiny{padding:6px 10px;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}
-.note{font-size:12px;color:var(--muted);background:#f6f2ea;border-left:3px solid var(--brass);padding:11px;margin-top:16px}
-.ref-mini{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:8px}.ref-mini th{background:#efe9dd;padding:5px 7px;text-align:left;font:600 10px 'JetBrains Mono'}.ref-mini td{padding:5px 7px;border-bottom:1px solid #ece6d9}
-.table-wrap{overflow:auto}.tbl{width:100%;border-collapse:collapse;min-width:1040px}.tbl th{background:var(--ink);color:var(--parchment);font:500 10px 'JetBrains Mono';text-align:left;padding:10px}.tbl td{border-bottom:1px solid #e5e0d8;padding:8px;vertical-align:top}.tbl input,.tbl select{width:100%;padding:8px;border:1px solid #ddd7cd;border-radius:2px;font-size:13px}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.metric{background:var(--ink);color:var(--parchment);padding:15px;border-radius:2px}.metric small{display:block;color:rgba(237,234,226,.55);font:10px 'JetBrains Mono';text-transform:uppercase}.metric strong{display:block;margin-top:5px;font:500 22px Fraunces,serif}
-.status{margin:12px 0;font-size:13px}.ok{color:var(--green)}.warn{color:var(--red)}
-footer{background:var(--ink);color:#aaa;padding:24px 0;font-size:12px}
-@media(max-width:850px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}.wrap{padding:0 16px}}@media(max-width:500px){.summary{grid-template-columns:1fr}}
-.print-only{display:none;}
-@media print{.print-only{display:block !important;}}
-</style></head><body>
-<header><nav class="nav"><div class="brand">GK <span>ADVISORY</span></div><a class="back" href="dashboard.html">← Panele dön</a></nav></header>
-<section class="hero"><div class="wrap"><div class="eyebrow">Finance Intelligence · TMS 19</div><h1>TMS 19 Kıdem Tazminatı Yükümlülüğü Motoru</h1><p>Tanımlanmış fayda yükümlülüğünün (DBO), <strong>Projected Unit Credit</strong> yöntemiyle — ölüm ve personel devir olasılıklarını rakip azalış (competing decrement) modeliyle yıl yıl işleyerek — bugünkü değerinin hesaplanması.</p></div></section>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TMS 19 Çalışan Hakları - GK Platform</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
 
-<main class="wrap"><div id="guard" class="note" style="display:none"></div>
-<div class="grid">
-<section class="panel"><h2>1 · Aktüeryal Varsayımlar</h2>
-  <div class="field"><label>Yıllık İskonto Oranı (%)</label><input id="discRate" type="number" min="0" step="0.01" value="28"></div>
-  <div class="field"><label>Beklenen Yıllık Ücret Artışı (%)</label><input id="salaryGrowth" type="number" min="0" step="0.01" value="24"></div>
-  <div class="field"><label>Kıdem Tazminatı Tavanı Artış Oranı (%)</label><input id="ceilingGrowth" type="number" min="0" step="0.01" value="24"></div>
-  <div class="field"><label>Emeklilik / Değerleme Ufku Yaşı</label><input id="retireAge" type="number" min="45" max="70" step="1" value="60"></div>
-  <div class="field"><label>Güncel Kıdem Tazminatı Tavanı (aylık, TL)</label><input id="ceiling" type="number" min="0" step="0.01" placeholder="Örn. 46655.43"></div>
-
-  <div id="mortRefWrap" class="print-only"></div>
-  <div id="turnRefWrap" class="print-only"></div>
-  <p style="font-size:11.5px;color:var(--muted);margin-top:12px;">Ölüm ve devir tabloları hesaplamaya dahil edilmiştir; ayrıntılar CSV ve Yazdır/PDF çıktısında yer alır.</p>
-
-  <div class="note">
-    <strong>Yöntem:</strong> Her personel için, cari yaştan emeklilik yaşına kadar her yıl için "hayatta kalma × o yıl ölme olasılığı" ve "hayatta kalma × o yıl işten ayrılma (devir) olasılığı" hesaplanır. <u>Ölüm veya emekliliğe ulaşma</u> her zaman kıdem tazminatı hak eder (Türk İş Hukuku'na göre); <u>gönüllü devir/istifa</u> hak etmediği varsayılır ve yükümlülükten çıkarılır. Her senaryonun bugünkü değeri, gerçekleşme olasılığıyla ağırlıklandırılıp toplanır (Projected Unit Credit). Ölüm ve devir tabloları <a href="admin.html" style="color:var(--brass2);">admin panelinden</a> düzenlenir.
-    <br><br><strong>Kapsam dışı kalan basitleştirmeler:</strong> Malullük (disability) ayrı bir azalış olarak modellenmemiştir; 15 yıl/3600 gün gibi erken emeklilik hak edişleri, EYT ve SGK giriş tarihine bağlı emeklilik yaşı farklılıkları tek bir "emeklilik yaşı" varsayımına indirgenmiştir. Resmi bağımsız denetim raporu için lisanslı aktüer onayı gerekir.
-  </div>
-</section>
-
-<section class="panel"><h2>2 · Personel Portföyü</h2>
-  <div class="summary">
-    <div class="metric"><small>Personel</small><strong id="count">0</strong></div>
-    <div class="metric"><small>Nominal Yükümlülük (bugün ayrılsa)</small><strong id="totNominal">0</strong></div>
-    <div class="metric"><small>DBO (PUC Bugünkü Değer)</small><strong id="totPv">0</strong></div>
-    <div class="metric"><small>Ort. Hak Ediş Olasılığı</small><strong id="avgProb">%0</strong></div>
-  </div>
-  <div class="actions" style="margin-bottom:14px"><button class="btn" id="add">+ Personel ekle</button><button class="btn secondary" id="bulkUploadBtn">Excel'den Toplu Yükle</button><a class="btn secondary" href="GK_TMS19_Personel_Sablonu.xlsx" download style="text-decoration:none;display:inline-flex;align-items:center;">Şablonu İndir</a><input type="file" id="bulkFile" accept=".xlsx,.xls" style="display:none;"><button class="btn secondary" id="sample">Örnek veri</button><button class="btn secondary" id="csv">CSV dışa aktar</button><button class="btn secondary" id="print">Yazdır / PDF</button><button class="btn danger" id="clear">Temizle</button></div>
-  <div id="bulkStatus" class="status"></div>
-  <div class="table-wrap"><table class="tbl"><thead><tr><th>Ad / Unvan</th><th>İşe Giriş</th><th>Doğum Tarihi</th><th>Aylık Ücret</th><th>Kıdem (yıl)</th><th>Nominal (bugün)</th><th>Hak Ediş Olasılığı</th><th>DBO (Bugünkü Değer)</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
-  <div id="status" class="status"></div>
-</section>
-
-<section class="panel" style="grid-column:1 / -1;"><h2>3 · Muhasebe Kaydı (Düzeltme Fişi)</h2>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
-    <div class="field" style="margin-bottom:0;"><label>Dönem Başı DBO (Açılış Bakiyesi)</label><input id="openingDbo" type="number" min="0" step="0.01" value="0"></div>
-    <div class="field" style="margin-bottom:0;"><label>Dönem İçinde Ödenen Fiili Tazminatlar</label><input id="benefitsPaid" type="number" min="0" step="0.01" value="0"></div>
-    <div class="field" style="margin-bottom:0;"><label>Kurumlar Vergisi Oranı (%)</label><input id="taxRate" type="number" min="0" step="0.01" value="25"></div>
-    <div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;gap:8px;">
-      <input type="checkbox" id="includeDefTax" checked style="width:auto;"><label for="includeDefTax" style="margin-bottom:0;">Ertelenmiş vergiyi dahil et</label>
+  <header class="cfo-navbar">
+    <div class="cfo-nav-container">
+      <a href="index.html" class="cfo-brand">
+        <span class="brand-logo">GK</span>
+        <div class="brand-text">
+          <span class="brand-name">Financial Intelligence</span>
+          <span class="brand-sub">Decision Cockpit</span>
+        </div>
+      </a>
+      <nav class="cfo-nav-menu">
+        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
+        <a href="working-capital.html" class="nav-link">Working Capital</a>
+        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
+        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
+        <div class="nav-dropdown">
+          <span class="dropdown-title" style="color: var(--text-primary);">IFRS / TFRS Modülleri ▾</span>
+          <div class="dropdown-content">
+            <a href="tfrs16.html">TFRS 16 Kiralama</a>
+            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
+            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
+            <a href="hedge-accounting.html">Hedge Accounting</a>
+          </div>
+        </div>
+      </nav>
+      <div class="cfo-nav-actions">
+        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
+        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+      </div>
     </div>
-  </div>
-  <div class="actions" style="margin-bottom:18px;"><button class="btn" id="genJournal">Muhasebe Kaydını Oluştur</button><button class="btn secondary" id="journalCsv">CSV dışa aktar</button><button class="btn secondary" id="journalPrint">Yazdır / PDF</button></div>
-  <div class="note">
-    <strong>Yöntem:</strong> Kapanış DBO = Açılış DBO + Cari Hizmet Maliyeti + Faiz Maliyeti (Açılış DBO × iskonto oranı) − Ödenen Tazminatlar + Aktüeryal (Kazanç)/Kayıp. Cari hizmet maliyeti, her personel için son bir yıllık hizmetin marjinal etkisi olarak yaklaşık hesaplanır. Faiz maliyeti ve hizmet maliyeti <strong>kâr/zarara</strong>; aktüeryal kazanç/kayıp (yeniden ölçüm) TMS 19 (2011 revize) gereği <strong>Diğer Kapsamlı Gelir/Özkaynaklara</strong> yazılır — kâr/zarara alınmaz.
-    <br><br><strong>Ertelenmiş vergi:</strong> Kıdem tazminatı karşılığı Türkiye'de ödendiğinde vergiden indirilebildiği için tamamı indirilebilir geçici fark oluşturur. Ertelenmiş vergi varlığındaki değişim de aynı mantıkla bölünür: kâr/zararla ilişkili kısım kâr/zarara, özkaynaklarla ilişkili kısım özkaynaklara yazılır. <strong>Kurumlar vergisi oranını güncel mevzuattan teyit edin</strong> — bu araç otomatik güncellemez.
-    <br><br>Açılış DBO "0" bırakılırsa (ilk uygulama), tüm kapanış DBO'su cari hizmet maliyeti olarak, aktüeryal kazanç/kayıp hesaplanmadan kaydedilir. Hesap kodları (472, 293, 531 vb.) yaygın kullanılan örneklerdir — kendi hesap planınıza uyarlayın.
-  </div>
-  <div id="journalOutput"></div>
-</section>
-</div></main>
+  </header>
 
-<footer><div class="wrap">© 2026 GK Advisory — TMS 19 Finance Engine · Prototype</div></footer>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="auth.js"></script>
-<script>
-const user=window.GKAuth?window.GKAuth.current():null;
-if(!user||!(user.role==='admin'||user.licenses.includes('tms19'))){
-  document.getElementById('guard').style.display='block';
-  document.getElementById('guard').innerHTML=(!user?'Bu aracı kullanmak için giriş yapmalısınız. <a href="login.html?next=tms19.html">Giriş Yap</a>.':'Bu araç Enterprise/lisanslı erişim gerektirir. <a href="dashboard.html">Dashboard\u2019a dön</a>.');
-  document.querySelector('main').style.opacity='.45';
-  document.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);
-}
-
-const fmt=n=>new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
-let staff=[];
-let ACT = { mortality:[{age:20,rate:0.04},{age:30,rate:0.07},{age:40,rate:0.16},{age:50,rate:0.48},{age:60,rate:1.35}],
-            turnover: [{age:20,rate:18},{age:30,rate:10},{age:40,rate:5},{age:50,rate:2.5},{age:60,rate:0.5}] };
-
-function lookupRate(table, age){
-  if(!table || !table.length) return 0;
-  const sorted = [...table].sort((a,b)=>a.age-b.age);
-  let r = sorted[0].rate;
-  for(const row of sorted){ if(age >= row.age) r = row.rate; else break; }
-  return r/100;
-}
-
-function renderRefTables(){
-  const m = [...ACT.mortality].sort((a,b)=>a.age-b.age);
-  const t = [...ACT.turnover].sort((a,b)=>a.age-b.age);
-  document.getElementById('mortRefWrap').innerHTML = `<label style="display:block;font:500 10px 'JetBrains Mono';text-transform:uppercase;letter-spacing:.07em;color:var(--brass2);margin:14px 0 6px;">Ölüm Oranları (qx) — admin panelinden</label>
-    <table class="ref-mini"><tr>${m.map(r=>`<th>${r.age}+</th>`).join('')}</tr><tr>${m.map(r=>`<td>%${r.rate}</td>`).join('')}</tr></table>`;
-  document.getElementById('turnRefWrap').innerHTML = `<label style="display:block;font:500 10px 'JetBrains Mono';text-transform:uppercase;letter-spacing:.07em;color:var(--brass2);margin:14px 0 6px;">Devir Oranları (wx) — admin panelinden</label>
-    <table class="ref-mini"><tr>${t.map(r=>`<th>${r.age}+</th>`).join('')}</tr><tr>${t.map(r=>`<td>%${r.rate}</td>`).join('')}</tr></table>`;
-}
-
-function yearsBetween(d1,d2){ return (d2-d1)/(365.25*24*3600*1000); }
-
-function calcEmployee(e){
-  const disc = Number(document.getElementById('discRate').value)/100 || 0;
-  const salGrowth = Number(document.getElementById('salaryGrowth').value)/100 || 0;
-  const ceilGrowth = Number(document.getElementById('ceilingGrowth').value)/100 || 0;
-  const retireAge = Number(document.getElementById('retireAge').value) || 60;
-  const ceiling0 = Number(document.getElementById('ceiling').value) || 0;
-
-  const hire = new Date(e.hireDate);
-  const birth = e.birthDate ? new Date(e.birthDate) : null;
-  const now = new Date();
-  const serviceYears = Math.max(0, yearsBetween(hire, now));
-  const age0 = birth ? yearsBetween(birth, now) : retireAge; // yaş yoksa değerleme yapılamaz, N=0 olur
-  const N = Math.max(0, Math.floor(retireAge - age0));
-
-  // Bugün ayrılsa nominal (referans metrik)
-  const dailyWageNow = e.salary/30;
-  const cappedDailyNow = ceiling0>0 ? Math.min(dailyWageNow, ceiling0/30) : dailyWageNow;
-  const nominalNow = cappedDailyNow*30*serviceYears;
-
-  if(N<=0 || !birth){
-    return { serviceYears, nominal:nominalNow, pv:nominalNow, entitleProb: 1 };
-  }
-
-  let survive = 1;      // o yıla kadar hâlâ şirkette olma olasılığı
-  let pv = 0;
-  let entitleProbSum = 0;
-
-  for(let t=1; t<=N; t++){
-    const ageAtYear = Math.floor(age0) + t;
-    const qx = lookupRate(ACT.mortality, ageAtYear);
-    const wx = t===N ? 0 : lookupRate(ACT.turnover, ageAtYear); // son yıl kesin emeklilik, devir uygulanmaz
-
-    // Bu yılın sonundaki projekte ücret ve tavan
-    const futureSalary = e.salary * Math.pow(1+salGrowth, t);
-    const futureCeiling = ceiling0>0 ? ceiling0 * Math.pow(1+ceilGrowth, t) : 0;
-    const futureDaily = futureSalary/30;
-    const cappedDaily = futureCeiling>0 ? Math.min(futureDaily, futureCeiling/30) : futureDaily;
-    const accruedService = serviceYears + t;
-    const benefit = cappedDaily*30*accruedService;
-    const pvFactor = Math.pow(1+disc, -t);
-
-    if(t===N){
-      // Emekliliğe ulaşan herkes hak eder (kesin)
-      const prob = survive;
-      pv += benefit*pvFactor*prob;
-      entitleProbSum += prob;
-    } else {
-      // Bu yıl ölüm ile ayrılma — hak eder
-      const probDeath = survive*qx;
-      pv += benefit*pvFactor*probDeath;
-      entitleProbSum += probDeath;
-      // Bu yıl devir ile ayrılma — hak etmez, yükümlülükten çıkar
-      survive = survive*(1-qx-wx);
-    }
-  }
-
-  return { serviceYears, nominal: nominalNow, pv, entitleProb: entitleProbSum };
-}
-
-function renderRows(){
-  const rows = document.getElementById('rows');
-  let totNominal=0, totPv=0, probSum=0;
-  rows.innerHTML = staff.map((e,i)=>{
-    const c = calcEmployee(e);
-    totNominal += c.nominal; totPv += c.pv; probSum += c.entitleProb;
-    return `<tr>
-      <td><input value="${e.name}" data-i="${i}" data-act="name"></td>
-      <td><input type="date" value="${e.hireDate}" data-i="${i}" data-act="hireDate"></td>
-      <td><input type="date" value="${e.birthDate}" data-i="${i}" data-act="birthDate"></td>
-      <td><input type="number" min="0" step="0.01" value="${e.salary}" data-i="${i}" data-act="salary"></td>
-      <td>${c.serviceYears.toFixed(1)}</td>
-      <td>${fmt(c.nominal)}</td>
-      <td>%${(c.entitleProb*100).toFixed(1)}</td>
-      <td><strong>${fmt(c.pv)}</strong></td>
-      <td><button class="btn tiny danger" data-i="${i}" data-act="del">Sil</button></td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('count').textContent = staff.length;
-  document.getElementById('totNominal').textContent = fmt(totNominal);
-  document.getElementById('totPv').textContent = fmt(totPv);
-  document.getElementById('avgProb').textContent = '%'+(staff.length ? (probSum/staff.length*100).toFixed(1) : '0.0');
-  document.getElementById('status').innerHTML = staff.length ? `<span class="ok">${staff.length} personel hesaplandı.</span>` : `<span class="warn">Henüz personel eklenmedi.</span>`;
-
-  rows.querySelectorAll('[data-act]').forEach(el=>{
-    el.addEventListener('input', e=>{
-      const i=+e.target.dataset.i, act=e.target.dataset.act;
-      if(act==='del'){ staff.splice(i,1); renderRows(); return; }
-      if(act==='name') staff[i].name=e.target.value;
-      if(act==='hireDate') staff[i].hireDate=e.target.value;
-      if(act==='birthDate') staff[i].birthDate=e.target.value;
-      if(act==='salary') staff[i].salary=Number(e.target.value)||0;
-      renderRows();
-    });
-  });
-}
-
-document.getElementById('add').onclick=()=>{ staff.push({name:'', hireDate:'', birthDate:'', salary:0}); renderRows(); };
-
-document.getElementById('bulkUploadBtn').addEventListener('click', ()=>document.getElementById('bulkFile').click());
-document.getElementById('bulkFile').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('bulkStatus');
-  statusEl.innerHTML = '<span class="ok">Dosya okunuyor…</span>';
-  const reader = new FileReader();
-  reader.onload = evt => {
-    try {
-      const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
-
-      const toISO = v => {
-        if(!v && v!==0) return '';
-        if(v instanceof Date) return v.toISOString().slice(0,10);
-        const s = String(v).trim();
-        if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-        const parsed = new Date(s);
-        return isNaN(parsed) ? '' : parsed.toISOString().slice(0,10);
-      };
-      const toNum = v => {
-        if(typeof v === 'number') return v;
-        const cleaned = String(v).replace(/[^\d.,-]/g,'').replace(/\.(?=\d{3},)/g,'').replace(',', '.');
-        const n = parseFloat(cleaned);
-        return isNaN(n) ? 0 : n;
-      };
-      const findKey = (row, needles) => Object.keys(row).find(k => {
-        const lk = k.toLocaleLowerCase('tr');
-        return needles.some(n => lk.includes(n));
-      });
-
-      let imported = 0, skipped = 0;
-      json.forEach(row => {
-        const nameKey = findKey(row, ['ad soyad','unvan','isim','ad ']) || findKey(row, ['ad']);
-        const hireKey = findKey(row, ['giriş','giris']);
-        const birthKey = findKey(row, ['doğum','dogum']);
-        const salKey = findKey(row, ['ücret','ucret','maaş','maas']);
-        const name = nameKey ? String(row[nameKey]).trim() : '';
-        // Örnek satırı ("Örnek:" ile başlayan) otomatik atla
-        if(!name || name.toLocaleLowerCase('tr').startsWith('örnek')){ skipped++; return; }
-        staff.push({
-          name,
-          hireDate: hireKey ? toISO(row[hireKey]) : '',
-          birthDate: birthKey ? toISO(row[birthKey]) : '',
-          salary: salKey ? toNum(row[salKey]) : 0
-        });
-        imported++;
-      });
-
-      renderRows();
-      statusEl.innerHTML = imported
-        ? `<span class="ok">${imported} personel içe aktarıldı${skipped?` (${skipped} boş/örnek satır atlandı)`:''}.</span>`
-        : `<span class="warn">Dosyada geçerli personel satırı bulunamadı. Sütun başlıklarının şablondakiyle aynı olduğundan emin olun.</span>`;
-    } catch(err){
-      statusEl.innerHTML = `<span class="warn">Dosya okunamadı. .xlsx formatında ve şablona uygun olduğundan emin olun.</span>`;
-    }
-    e.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
-});
-
-['discRate','salaryGrowth','ceilingGrowth','retireAge','ceiling'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', renderRows);
-});
-document.getElementById('sample').onclick=()=>{
-  document.getElementById('ceiling').value = 46655.43;
-  staff=[
-    {name:'A.Y. — Üretim Şefi', hireDate:'2011-03-01', birthDate:'1984-06-15', salary:68000},
-    {name:'B.K. — Muhasebe Uzmanı', hireDate:'2018-09-10', birthDate:'1991-02-20', salary:52000},
-    {name:'C.T. — Satış Müdürü', hireDate:'2006-01-15', birthDate:'1979-11-02', salary:95000}
-  ];
-  renderRows();
-};
-document.getElementById('clear').onclick=()=>{ staff=[]; renderRows(); };
-document.getElementById('print').onclick=()=>window.print();
-document.getElementById('csv').onclick=()=>{
-  let out=[];
-  out.push('GK Advisory — TMS 19 Kıdem Tazminatı Analizi');
-  out.push('');
-  out.push('Aktüeryal Varsayımlar');
-  out.push('İskonto Oranı;%'+document.getElementById('discRate').value);
-  out.push('Ücret Artış Oranı;%'+document.getElementById('salaryGrowth').value);
-  out.push('Tavan Artış Oranı;%'+document.getElementById('ceilingGrowth').value);
-  out.push('Emeklilik Yaşı;'+document.getElementById('retireAge').value);
-  out.push('Güncel Tavan;'+document.getElementById('ceiling').value);
-  out.push('');
-  out.push('Ölüm Oranları (qx)');
-  out.push('Yaş;Oran');
-  [...ACT.mortality].sort((a,b)=>a.age-b.age).forEach(r=>out.push(r.age+'+;%'+r.rate));
-  out.push('');
-  out.push('Devir Oranları (wx)');
-  out.push('Yaş;Oran');
-  [...ACT.turnover].sort((a,b)=>a.age-b.age).forEach(r=>out.push(r.age+'+;%'+r.rate));
-  out.push('');
-  out.push('Personel Portföyü');
-  out.push('Ad/Unvan;İşe Giriş;Doğum Tarihi;Aylık Ücret;Kıdem (yıl);Nominal (bugün);Hak Ediş Olasılığı;DBO Bugünkü Değer');
-  staff.forEach(e=>{
-    const c=calcEmployee(e);
-    out.push([e.name, e.hireDate, e.birthDate, e.salary.toFixed(2), c.serviceYears.toFixed(2), c.nominal.toFixed(2), (c.entitleProb*100).toFixed(1)+'%', c.pv.toFixed(2)].join(';'));
-  });
-  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_TMS19_Kidem_Tazminati.csv'; a.click();
-};
-
-fetch('content.json').then(r=>r.json()).then(data=>{
-  if(data.actuarial && ((data.actuarial.mortality&&data.actuarial.mortality.length) || (data.actuarial.turnover&&data.actuarial.turnover.length))){
-    ACT = data.actuarial;
-  }
-  renderRefTables();
-  renderRows();
-}).catch(()=>{ renderRefTables(); renderRows(); });
-
-// ---------- 3 · Muhasebe Kaydı (Düzeltme Fişi) ----------
-
-function serviceCostForEmployee(e){
-  // Marjinal hizmet maliyeti: son 1 yıllık hizmetin PV etkisi ~ mevcut PV − (1 yıl daha az hizmetle hesaplanan) PV
-  const shifted = Object.assign({}, e);
-  if(e.hireDate){
-    const d = new Date(e.hireDate);
-    d.setFullYear(d.getFullYear()+1); // 1 yıl sonra işe girmiş gibi = 1 yıl daha az kıdem
-    shifted.hireDate = d.toISOString().slice(0,10);
-  }
-  const pvNow = calcEmployee(e).pv;
-  const pvMinus1 = calcEmployee(shifted).pv;
-  return Math.max(0, pvNow - pvMinus1);
-}
-
-function buildActuarialJournal(){
-  const totalDboClose = staff.reduce((s,e)=> s + calcEmployee(e).pv, 0);
-  const openingDbo = Number(document.getElementById('openingDbo').value) || 0;
-  const benefitsPaid = Number(document.getElementById('benefitsPaid').value) || 0;
-  const discRate = Number(document.getElementById('discRate').value)/100 || 0;
-  const taxRate = Number(document.getElementById('taxRate').value)/100 || 0;
-  const includeTax = document.getElementById('includeDefTax').checked;
-
-  let serviceCost, interestCost, remeasurement;
-
-  if(openingDbo <= 0){
-    // İlk uygulama: tüm bakiye hizmet maliyeti olarak kaydedilir, yeniden ölçüm ayrıştırılmaz
-    serviceCost = totalDboClose - benefitsPaid;
-    if(serviceCost < 0) serviceCost = totalDboClose;
-    interestCost = 0;
-    remeasurement = 0;
-  } else {
-    serviceCost = staff.reduce((s,e)=> s + serviceCostForEmployee(e), 0);
-    interestCost = openingDbo * discRate;
-    remeasurement = totalDboClose - openingDbo - serviceCost - interestCost + benefitsPaid;
-  }
-
-  const rows = [];
-  if(serviceCost > 0.01){
-    rows.push({desc:'Cari Hizmet Maliyeti', acc:'770/760 Personel Giderleri', debit:serviceCost, credit:0});
-    rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:serviceCost});
-  }
-  if(interestCost > 0.01){
-    rows.push({desc:'Faiz Maliyeti', acc:'780/660 Finansman Gideri', debit:interestCost, credit:0});
-    rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:interestCost});
-  }
-  if(benefitsPaid > 0.01){
-    rows.push({desc:'Dönem İçinde Ödenen Tazminatlar', acc:'472 Kıdem Tazminatı Karşılığı', debit:benefitsPaid, credit:0});
-    rows.push({desc:'', acc:'100/102 Kasa/Bankalar', debit:0, credit:benefitsPaid});
-  }
-  if(Math.abs(remeasurement) > 0.01){
-    if(remeasurement > 0){
-      rows.push({desc:'Aktüeryal Kayıp (Yeniden Ölçüm)', acc:'531 Özkaynaklar — Tanımlanmış Fayda Yeniden Ölçüm Kayıpları (OKG)', debit:remeasurement, credit:0});
-      rows.push({desc:'', acc:'472 Kıdem Tazminatı Karşılığı', debit:0, credit:remeasurement});
-    } else {
-      const amt = Math.abs(remeasurement);
-      rows.push({desc:'Aktüeryal Kazanç (Yeniden Ölçüm)', acc:'472 Kıdem Tazminatı Karşılığı', debit:amt, credit:0});
-      rows.push({desc:'', acc:'531 Özkaynaklar — Tanımlanmış Fayda Yeniden Ölçüm Kazançları (OKG)', debit:0, credit:amt});
-    }
-  }
-
-  let dtaPl=0, dtaOci=0;
-  if(includeTax){
-    dtaPl = (serviceCost + interestCost - benefitsPaid) * taxRate;
-    dtaOci = remeasurement * taxRate;
-    if(Math.abs(dtaPl) > 0.01){
-      if(dtaPl > 0){
-        rows.push({desc:'Ertelenmiş Vergi Etkisi (K/Z)', acc:'293 Ertelenmiş Vergi Varlığı', debit:dtaPl, credit:0});
-        rows.push({desc:'', acc:'692 Ertelenmiş Vergi Geliri', debit:0, credit:dtaPl});
-      } else {
-        const amt = Math.abs(dtaPl);
-        rows.push({desc:'Ertelenmiş Vergi Etkisi (K/Z)', acc:'692 Ertelenmiş Vergi Gideri', debit:amt, credit:0});
-        rows.push({desc:'', acc:'293 Ertelenmiş Vergi Varlığı', debit:0, credit:amt});
-      }
-    }
-    if(Math.abs(dtaOci) > 0.01){
-      if(dtaOci > 0){
-        rows.push({desc:'Ertelenmiş Vergi Etkisi (OKG)', acc:'293 Ertelenmiş Vergi Varlığı', debit:dtaOci, credit:0});
-        rows.push({desc:'', acc:'531 Özkaynaklar — Yeniden Ölçümlerin Ertelenmiş Vergi Etkisi', debit:0, credit:dtaOci});
-      } else {
-        const amt = Math.abs(dtaOci);
-        rows.push({desc:'Ertelenmiş Vergi Etkisi (OKG)', acc:'531 Özkaynaklar — Yeniden Ölçümlerin Ertelenmiş Vergi Etkisi', debit:amt, credit:0});
-        rows.push({desc:'', acc:'293 Ertelenmiş Vergi Varlığı', debit:0, credit:amt});
-      }
-    }
-  }
-
-  return { rows, totalDboClose, openingDbo, serviceCost, interestCost, benefitsPaid, remeasurement, dtaPl, dtaOci };
-}
-
-function renderJournal(){
-  const out = document.getElementById('journalOutput');
-  if(!staff.length){ out.innerHTML = `<div class="status"><span class="warn">Önce en az bir personel ekleyin.</span></div>`; return; }
-
-  const r = buildActuarialJournal();
-  const totalDebit = r.rows.reduce((s,x)=>s+x.debit,0);
-  const totalCredit = r.rows.reduce((s,x)=>s+x.credit,0);
-  const balanced = Math.abs(totalDebit-totalCredit) < 0.01;
-
-  out.innerHTML = `
-    <div class="summary" style="grid-template-columns:repeat(5,1fr);margin-top:6px;">
-      <div class="metric"><small>Kapanış DBO</small><strong>${fmt(r.totalDboClose)}</strong></div>
-      <div class="metric"><small>Cari Hizmet Maliyeti</small><strong>${fmt(r.serviceCost)}</strong></div>
-      <div class="metric"><small>Faiz Maliyeti</small><strong>${fmt(r.interestCost)}</strong></div>
-      <div class="metric"><small>Aktüeryal (Kazanç)/Kayıp</small><strong>${fmt(r.remeasurement)}</strong></div>
-      <div class="metric"><small>Fiş Dengesi</small><strong style="color:${balanced?'#8fd6b4':'#e8a8a0'}">${balanced?'Denk':'Dengesiz'}</strong></div>
+  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
+    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">TMS 19 Aktüeryal Kıdem Tazminatı Karşılığı Engine</h2>
+    <div class="kpi-card" style="max-width: 400px; margin-bottom: 20px;">
+      <span class="kpi-title">Net Aktüeryal Yükümlülük</span>
+      <div class="kpi-value">₺18.5M</div>
     </div>
-    ${r.rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Açıklama</th><th>Hesap</th><th>Borç</th><th>Alacak</th></tr></thead><tbody>
-      ${r.rows.map(x=>`<tr><td>${x.desc}</td><td>${x.acc}</td><td>${x.debit?fmt(x.debit):''}</td><td>${x.credit?fmt(x.credit):''}</td></tr>`).join('')}
-      <tr style="font-weight:600;background:#f6f2ea;"><td colspan="2">TOPLAM</td><td>${fmt(totalDebit)}</td><td>${fmt(totalCredit)}</td></tr>
-    </tbody></table></div>` : `<div class="status"><span class="ok">Hesaplanan hareketler önemsiz düzeyde — ek kayıt gerekmiyor.</span></div>`}`;
-}
+  </main>
 
-document.getElementById('genJournal').addEventListener('click', renderJournal);
-document.getElementById('journalPrint').addEventListener('click', ()=>window.print());
-document.getElementById('journalCsv').addEventListener('click', ()=>{
-  if(!staff.length){ alert('Önce en az bir personel ekleyin.'); return; }
-  const r = buildActuarialJournal();
-  let out=['GK Advisory — TMS 19 Düzeltme Fişi'];
-  out.push('Açılış DBO;'+r.openingDbo.toFixed(2));
-  out.push('Kapanış DBO;'+r.totalDboClose.toFixed(2));
-  out.push('Cari Hizmet Maliyeti;'+r.serviceCost.toFixed(2));
-  out.push('Faiz Maliyeti;'+r.interestCost.toFixed(2));
-  out.push('Ödenen Tazminatlar;'+r.benefitsPaid.toFixed(2));
-  out.push('Aktüeryal (Kazanç)/Kayıp;'+r.remeasurement.toFixed(2));
-  out.push('');
-  out.push('Açıklama;Hesap;Borç;Alacak');
-  let totalDebit=0, totalCredit=0;
-  r.rows.forEach(x=>{ totalDebit+=x.debit; totalCredit+=x.credit; out.push([x.desc, x.acc, x.debit?x.debit.toFixed(2):'', x.credit?x.credit.toFixed(2):''].join(';')); });
-  if(r.rows.length) out.push(['TOPLAM','',totalDebit.toFixed(2),totalCredit.toFixed(2)].join(';'));
-  const blob=new Blob(['\ufeff'+out.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='GK_TMS19_Duzeltme_Fisi.csv'; a.click();
-});
-</script>
-</body></html>
+  <script src="js/main.js"></script>
+</body>
+</html>
