@@ -3,17 +3,35 @@ document.addEventListener("DOMContentLoaded", () => {
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
-  TFRS 16 ACCOUNTING ENGINE V11
-  BULK CONTRACT IMPORT
-  BULK JOURNAL GENERATOR
+  TFRS 16 ACCOUNTING ENGINE V12
+  ------------------------------------------------------------
+  V12 FEATURES
+  - Contract portfolio management
+  - Bulk Excel / CSV import
+  - Individual journal generation
+  - Monthly / Quarterly / Annual journals
+  - Bulk journal generation for entire portfolio
+  - Company-based consolidation
+  - Debit / Credit control
+  - Interest / principal / depreciation analysis
   ============================================================
   */
 
-  const STORAGE_KEY = "gk_tfrs16_contracts_v7";
 
-  let contracts = loadContracts();
-  let selectedContractId = null;
-  let bulkImportData = [];
+  const STORAGE_KEY =
+    "gk_tfrs16_contracts_v7";
+
+
+  let contracts =
+    loadContracts();
+
+
+  let selectedContractId =
+    null;
+
+
+  let bulkImportData =
+    [];
 
 
   /*
@@ -25,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function getDefaultContracts() {
 
     return [
+
       {
         id: "LEASE-001",
         company: "GK Holding",
@@ -37,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       },
+
       {
         id: "LEASE-002",
         company: "GK Holding",
@@ -49,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: true
       },
+
       {
         id: "LEASE-003",
         company: "GK Teknoloji",
@@ -61,6 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       }
+
     ];
 
   }
@@ -77,15 +99,23 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
 
       const stored =
-        localStorage.getItem(STORAGE_KEY);
+        localStorage.getItem(
+          STORAGE_KEY
+        );
+
 
       if (stored) {
 
         const parsed =
           JSON.parse(stored);
 
-        if (Array.isArray(parsed)) {
+
+        if (
+          Array.isArray(parsed)
+        ) {
+
           return parsed;
+
         }
 
       }
@@ -99,17 +129,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+
     const defaults =
       getDefaultContracts();
 
-    saveContracts(defaults);
+
+    saveContracts(
+      defaults
+    );
+
 
     return defaults;
 
   }
 
 
-  function saveContracts(data) {
+  function saveContracts(
+    data
+  ) {
 
     localStorage.setItem(
       STORAGE_KEY,
@@ -125,43 +162,80 @@ document.addEventListener("DOMContentLoaded", () => {
   ============================================================
   */
 
-  function formatNumber(value) {
+  function formatNumber(
+    value
+  ) {
 
-    return Number(value || 0)
-      .toLocaleString(
-        "tr-TR",
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        }
-      );
+    return Number(
+      value || 0
+    ).toLocaleString(
+      "tr-TR",
+      {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }
+    );
 
   }
 
 
-  function formatCurrency(value) {
+  function formatCurrency(
+    value
+  ) {
 
     return `₺${formatNumber(value)}`;
 
   }
 
 
-  function parseDate(value) {
+  function formatDecimal(
+    value
+  ) {
+
+    return Number(
+      value || 0
+    ).toLocaleString(
+      "tr-TR",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  DATE
+  ============================================================
+  */
+
+  function parseDate(
+    value
+  ) {
 
     if (!value) {
       return null;
     }
 
-    if (value instanceof Date) {
 
-      return isNaN(value.getTime())
+    if (
+      value instanceof Date
+    ) {
+
+      return isNaN(
+        value.getTime()
+      )
         ? null
         : value;
 
     }
 
+
     const text =
       String(value).trim();
+
 
     let date = null;
 
@@ -179,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+
     else if (
       /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(
         text
@@ -188,6 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const parts =
         text.split(".");
 
+
       date =
         new Date(
           Number(parts[2]),
@@ -196,6 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
     }
+
 
     else if (
       /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(
@@ -206,6 +283,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const parts =
         text.split("/");
 
+
       date =
         new Date(
           Number(parts[2]),
@@ -214,6 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
     }
+
 
     else {
 
@@ -225,7 +304,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return (
       date &&
-      !isNaN(date.getTime())
+      !isNaN(
+        date.getTime()
+      )
     )
       ? date
       : null;
@@ -233,45 +314,63 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function normalizeDate(value) {
+  function normalizeDate(
+    value
+  ) {
 
     if (!value) {
       return "";
     }
 
+
     const date =
       parseDate(value);
+
 
     if (!date) {
       return "";
     }
 
+
     const year =
       date.getFullYear();
+
 
     const month =
       String(
         date.getMonth() + 1
-      ).padStart(2, "0");
+      ).padStart(
+        2,
+        "0"
+      );
+
 
     const day =
       String(
         date.getDate()
-      ).padStart(2, "0");
+      ).padStart(
+        2,
+        "0"
+      );
+
 
     return `${year}-${month}-${day}`;
 
   }
 
 
-  function formatDate(value) {
+  function formatDate(
+    value
+  ) {
 
     const date =
       parseDate(value);
 
+
     if (!date) {
       return "-";
     }
+
 
     return date.toLocaleDateString(
       "tr-TR"
@@ -294,15 +393,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const startDate =
       parseDate(start);
 
+
     const endDate =
       parseDate(end);
+
 
     if (
       !startDate ||
       !endDate
     ) {
+
       return 0;
+
     }
+
 
     const months =
       (
@@ -314,6 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
         endDate.getMonth() -
         startDate.getMonth()
       );
+
 
     return Math.max(
       1,
@@ -338,15 +443,18 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.monthlyPayment
       ) || 0;
 
+
     const annualRate =
       Number(
         contract.discountRate
       ) || 0;
 
+
     const monthlyRate =
       annualRate /
       100 /
       12;
+
 
     const months =
       monthsBetween(
@@ -354,18 +462,26 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.endDate
       );
 
+
     if (
       payment <= 0 ||
       months <= 0
     ) {
 
       return {
+
         months: 0,
+
         liability: 0,
+
         rouAssets: 0,
+
         depreciation: 0,
+
         monthlyInterest: 0,
+
         schedule: []
+
       };
 
     }
@@ -382,7 +498,9 @@ document.addEventListener("DOMContentLoaded", () => {
         payment *
         months;
 
-    } else {
+    }
+
+    else {
 
       liability =
         payment *
@@ -403,8 +521,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const initialLiability =
       liability;
 
+
     const initialROU =
       initialLiability;
+
 
     const depreciation =
       initialROU /
@@ -413,8 +533,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const schedule = [];
 
+
     let openingLiability =
       initialLiability;
+
 
     let rouOpening =
       initialROU;
@@ -429,6 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const interest =
         openingLiability *
         monthlyRate;
+
 
       let principal =
         payment -
@@ -471,30 +594,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
       schedule.push({
 
-        period: i,
+        period:
+          i,
 
-        openingLiability,
+        openingLiability:
+          openingLiability,
 
-        payment,
+        payment:
+          payment,
 
-        interest,
+        interest:
+          interest,
 
-        principal,
+        principal:
+          principal,
 
-        closingLiability,
+        closingLiability:
+          closingLiability,
 
-        rouOpening,
+        rouOpening:
+          rouOpening,
 
         depreciation:
           rouDepreciation,
 
-        rouClosing
+        rouClosing:
+          rouClosing
 
       });
 
 
       openingLiability =
         closingLiability;
+
 
       rouOpening =
         rouClosing;
@@ -539,8 +671,12 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
+
     return engine.schedule
-      .slice(0, 12)
+      .slice(
+        0,
+        12
+      )
       .reduce(
         (
           total,
@@ -563,10 +699,12 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
+
     const current =
       calculateCurrentLiability(
         contract
       );
+
 
     return Math.max(
       0,
@@ -586,8 +724,12 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
+
     return engine.schedule
-      .slice(0, 12)
+      .slice(
+        0,
+        12
+      )
       .reduce(
         (
           total,
@@ -614,20 +756,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (
       !contract.renewalDate
     ) {
+
       return false;
+
     }
+
 
     const renewal =
       parseDate(
         contract.renewalDate
       );
 
+
     if (!renewal) {
       return false;
     }
 
+
     const today =
       new Date();
+
 
     today.setHours(
       0,
@@ -636,9 +784,11 @@ document.addEventListener("DOMContentLoaded", () => {
       0
     );
 
+
     const difference =
       renewal.getTime() -
       today.getTime();
+
 
     const days =
       difference /
@@ -648,6 +798,7 @@ document.addEventListener("DOMContentLoaded", () => {
         60 *
         24
       );
+
 
     return (
       days >= 0 &&
@@ -674,7 +825,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     let liability = 0;
+
     let rou = 0;
+
     let next12 = 0;
 
 
@@ -686,11 +839,14 @@ document.addEventListener("DOMContentLoaded", () => {
             contract
           );
 
+
         liability +=
           engine.liability;
 
+
         rou +=
           engine.rouAssets;
+
 
         next12 +=
           calculateNext12Months(
@@ -720,12 +876,14 @@ document.addEventListener("DOMContentLoaded", () => {
       active.length
     );
 
+
     setText(
       "leaseLiability",
       formatCurrency(
         liability
       )
     );
+
 
     setText(
       "rouAssets",
@@ -734,6 +892,7 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
+
     setText(
       "next12Months",
       formatCurrency(
@@ -741,10 +900,12 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     );
 
+
     setText(
       "renewals90Days",
       renewals
     );
+
 
     setText(
       "modifications",
@@ -764,9 +925,12 @@ document.addEventListener("DOMContentLoaded", () => {
         id
       );
 
+
     if (element) {
+
       element.textContent =
         value;
+
     }
 
   }
@@ -784,6 +948,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(
         "companyFilter"
       );
+
 
     if (!select) {
       return;
@@ -822,11 +987,14 @@ document.addEventListener("DOMContentLoaded", () => {
             "option"
           );
 
+
         option.value =
           company;
 
+
         option.textContent =
           company;
+
 
         select.appendChild(
           option
@@ -862,6 +1030,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(
         "contractTableBody"
       );
+
 
     if (!tbody) {
       return;
@@ -1129,6 +1298,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractModal"
       );
 
+
     if (!modal) {
       return;
     }
@@ -1146,11 +1316,13 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.id || ""
     );
 
+
     setInput(
       "company",
       contract?.company ||
       "GK Holding"
     );
+
 
     setInput(
       "supplier",
@@ -1158,11 +1330,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
+
     setInput(
       "monthlyPayment",
       contract?.monthlyPayment ||
       ""
     );
+
 
     setInput(
       "startDate",
@@ -1170,17 +1344,20 @@ document.addEventListener("DOMContentLoaded", () => {
       ""
     );
 
+
     setInput(
       "endDate",
       contract?.endDate ||
       ""
     );
 
+
     setInput(
       "discountRate",
       contract?.discountRate ??
       18
     );
+
 
     setInput(
       "renewalDate",
@@ -1222,9 +1399,12 @@ document.addEventListener("DOMContentLoaded", () => {
         id
       );
 
+
     if (input) {
+
       input.value =
         value;
+
     }
 
   }
@@ -1382,7 +1562,9 @@ document.addEventListener("DOMContentLoaded", () => {
                   : item
             );
 
-        } else {
+        }
+
+        else {
 
           contracts.push(
             contract
@@ -1394,6 +1576,7 @@ document.addEventListener("DOMContentLoaded", () => {
         saveContracts(
           contracts
         );
+
 
         refresh();
 
@@ -1432,8 +1615,12 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    if (!selected.length) {
+    if (
+      !selected.length
+    ) {
+
       return [];
+
     }
 
 
@@ -1841,7 +2028,7 @@ document.addEventListener("DOMContentLoaded", () => {
     contract
   ) {
 
-    let html = `
+    return `
 
       <div style="
         margin-top:28px;
@@ -1885,7 +2072,6 @@ document.addEventListener("DOMContentLoaded", () => {
           gap:12px;
           margin-top:18px;
         ">
-
 
           <div style="
             background:#f8fafc;
@@ -2022,7 +2208,31 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
-        <div id="journalPreview"></div>
+        <div
+          id="journalPreview"
+        ></div>
+
+
+        <div style="
+          margin-top:18px;
+          padding-top:18px;
+          border-top:1px dashed #d1d5db;
+        ">
+
+          <button
+            id="openBulkJournalCenter"
+            type="button"
+            class="primary-button"
+            style="
+              width:100%;
+              min-height:44px;
+              background:#111827;
+            "
+          >
+            ⚡ Tüm Sözleşmeler İçin Toplu Fiş Merkezi
+          </button>
+
+        </div>
 
 
         <div style="
@@ -2046,9 +2256,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
     `;
-
-
-    return html;
 
   }
 
@@ -2121,6 +2328,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function buildMonthOptions() {
 
     const months = [
+
       "Ocak",
       "Şubat",
       "Mart",
@@ -2133,6 +2341,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Ekim",
       "Kasım",
       "Aralık"
+
     ];
 
 
@@ -2161,6 +2370,197 @@ document.addEventListener("DOMContentLoaded", () => {
   JOURNAL GENERATOR
   ============================================================
   */
+
+  function getPeriodRange(
+    contract,
+    year,
+    period,
+    month
+  ) {
+
+    const engine =
+      calculateLease(
+        contract
+      );
+
+
+    const contractStart =
+      parseDate(
+        contract.startDate
+      );
+
+
+    const contractEnd =
+      parseDate(
+        contract.endDate
+      );
+
+
+    if (
+      !contractStart ||
+      !contractEnd
+    ) {
+
+      return null;
+
+    }
+
+
+    const startYear =
+      contractStart.getFullYear();
+
+
+    const startMonth =
+      contractStart.getMonth() + 1;
+
+
+    const endYear =
+      contractEnd.getFullYear();
+
+
+    const endMonth =
+      contractEnd.getMonth() + 1;
+
+
+    let startPeriod;
+    let endPeriod;
+
+
+    if (
+      period === "monthly"
+    ) {
+
+      startPeriod =
+        (
+          year -
+          startYear
+        ) * 12
+        +
+        (
+          month -
+          startMonth
+        )
+        + 1;
+
+
+      endPeriod =
+        startPeriod;
+
+    }
+
+
+    else if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+
+      const firstMonth =
+        (
+          quarter - 1
+        ) * 3 + 1;
+
+
+      startPeriod =
+        (
+          year -
+          startYear
+        ) * 12
+        +
+        (
+          firstMonth -
+          startMonth
+        )
+        + 1;
+
+
+      endPeriod =
+        startPeriod + 2;
+
+    }
+
+
+    else if (
+      period === "annual"
+    ) {
+
+      startPeriod =
+        (
+          year -
+          startYear
+        ) * 12
+        +
+        (
+          1 -
+          startMonth
+        )
+        + 1;
+
+
+      endPeriod =
+        startPeriod + 11;
+
+    }
+
+
+    else {
+
+      return null;
+
+    }
+
+
+    if (
+      endPeriod < 1 ||
+      startPeriod >
+        engine.schedule.length
+    ) {
+
+      return null;
+
+    }
+
+
+    startPeriod =
+      Math.max(
+        1,
+        startPeriod
+      );
+
+
+    endPeriod =
+      Math.min(
+        engine.schedule.length,
+        endPeriod
+      );
+
+
+    if (
+      startPeriod >
+      endPeriod
+    ) {
+
+      return null;
+
+    }
+
+
+    return {
+
+      startMonth:
+        startPeriod,
+
+      endMonth:
+        endPeriod
+
+    };
+
+  }
+
 
   function generateSelectedJournal(
     contract
@@ -2194,78 +2594,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    let startMonth;
-    let endMonth;
-    let title;
-
-
-    if (
-      period === "monthly"
-    ) {
-
-      startMonth =
-        month;
-
-      endMonth =
-        month;
-
-      title =
-        `${year} - ${getMonthName(
-          month
-        )} Aylık Muhasebe Fişi`;
-
-    }
-
-
-    if (
-      period === "quarterly"
-    ) {
-
-      const quarter =
-        Math.ceil(
-          month / 3
-        );
-
-
-      startMonth =
-        (
-          quarter - 1
-        ) * 3 + 1;
-
-
-      endMonth =
-        Math.min(
-          quarter * 3,
-          engine.schedule.length
-        );
-
-
-      title =
-        `${year} - ${quarter}. Çeyrek Muhasebe Fişi`;
-
-    }
-
-
-    if (
-      period === "annual"
-    ) {
-
-      startMonth =
-        1;
-
-      endMonth =
-        Math.min(
-          12,
-          engine.schedule.length
-        );
-
-
-      title =
-        `${year} - 12 Aylık Toplu Muhasebe Fişi`;
-
-    }
-
-
     if (
       period === "closing"
     ) {
@@ -2292,25 +2620,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
       }
 
-      return;
-
-    }
-
-
-    if (
-      !startMonth ||
-      !endMonth
-    ) {
 
       return;
 
     }
 
 
-    if (
-      startMonth >
-      engine.schedule.length
-    ) {
+    const range =
+      getPeriodRange(
+        contract,
+        year,
+        period,
+        month
+      );
+
+
+    if (!range) {
 
       const preview =
         document.getElementById(
@@ -2340,23 +2665,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
       }
 
+
       return;
 
     }
 
 
-    endMonth =
-      Math.min(
-        endMonth,
-        engine.schedule.length
-      );
+    let title = "";
+
+
+    if (
+      period === "monthly"
+    ) {
+
+      title =
+        `${year} - ${getMonthName(
+          month
+        )} Aylık Muhasebe Fişi`;
+
+    }
+
+
+    else if (
+      period === "quarterly"
+    ) {
+
+      const quarter =
+        Math.ceil(
+          month / 3
+        );
+
+
+      title =
+        `${year} - ${quarter}. Çeyrek Muhasebe Fişi`;
+
+    }
+
+
+    else if (
+      period === "annual"
+    ) {
+
+      title =
+        `${year} - 12 Aylık Toplu Muhasebe Fişi`;
+
+    }
 
 
     const entries =
       getJournalForPeriod(
         contract,
-        startMonth,
-        endMonth
+        range.startMonth,
+        range.endMonth
       );
 
 
@@ -2384,6 +2744,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ) {
 
     const names = [
+
       "Ocak",
       "Şubat",
       "Mart",
@@ -2396,6 +2757,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "Ekim",
       "Kasım",
       "Aralık"
+
     ];
 
 
@@ -2409,457 +2771,144 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  V11 BULK JOURNAL ENGINE
+  V12
+  BULK JOURNAL ENGINE
   ============================================================
   */
 
-  function getContractYearMonths(
-    contract,
-    year
-  ) {
-
-    const start =
-      parseDate(
-        contract.startDate
-      );
-
-    const end =
-      parseDate(
-        contract.endDate
-      );
-
-    if (
-      !start ||
-      !end
-    ) {
-      return [];
-    }
-
-
-    const result = [];
-
-
-    const leaseStartYear =
-      start.getFullYear();
-
-    const leaseStartMonth =
-      start.getMonth() + 1;
-
-    const leaseEndYear =
-      end.getFullYear();
-
-    const leaseEndMonth =
-      end.getMonth() + 1;
-
-
-    if (
-      year < leaseStartYear ||
-      year > leaseEndYear
-    ) {
-
-      return [];
-
-    }
-
-
-    for (
-      let month = 1;
-      month <= 12;
-      month++
-    ) {
-
-      if (
-        year === leaseStartYear &&
-        month < leaseStartMonth
-      ) {
-        continue;
-      }
-
-      if (
-        year === leaseEndYear &&
-        month > leaseEndMonth
-      ) {
-        continue;
-      }
-
-
-      const engine =
-        calculateLease(
-          contract
-        );
-
-
-      const periodIndex =
-        (
-          year -
-          leaseStartYear
-        ) * 12
-        +
-        (
-          month -
-          leaseStartMonth
-        );
-
-
-      if (
-        periodIndex < 0 ||
-        periodIndex >=
-          engine.schedule.length
-      ) {
-        continue;
-      }
-
-
-      result.push({
-
-        month,
-
-        period:
-          periodIndex + 1,
-
-        schedule:
-          engine.schedule[
-            periodIndex
-          ]
-
-      });
-
-    }
-
-
-    return result;
-
-  }
-
-
-  function getBulkPeriodDefinition(
+  function generateBulkJournalData(
     year,
     period,
-    month
+    month,
+    selectedContracts
   ) {
 
-    if (
-      period === "monthly"
-    ) {
+    const result = {
 
-      return {
+      rows: [],
 
-        label:
-          `${year} - ${getMonthName(month)}`,
+      totals: {
 
-        months: [month]
+        interest: 0,
 
-      };
+        principal: 0,
 
-    }
+        payment: 0,
 
+        depreciation: 0,
 
-    if (
-      period === "quarterly"
-    ) {
+        debit: 0,
 
-      const quarter =
-        Math.ceil(
-          month / 3
-        );
+        credit: 0
 
-      const start =
-        (
-          quarter - 1
-        ) * 3 + 1;
+      },
 
-      return {
+      companies: {},
 
-        label:
-          `${year} - ${quarter}. Çeyrek`,
-
-        months: [
-          start,
-          start + 1,
-          start + 2
-        ]
-
-      };
-
-    }
-
-
-    if (
-      period === "annual"
-    ) {
-
-      return {
-
-        label:
-          `${year} - 12 Aylık Toplu`,
-
-        months:
-          Array.from(
-            {
-              length: 12
-            },
-            (
-              _,
-              index
-            ) =>
-              index + 1
-          )
-
-      };
-
-    }
-
-
-    if (
-      period === "closing"
-    ) {
-
-      return {
-
-        label:
-          `${year} Yıl Sonu Kapanış`,
-
-        months:
-          Array.from(
-            {
-              length: 12
-            },
-            (
-              _,
-              index
-            ) =>
-              index + 1
-          )
-
-      };
-
-    }
-
-
-    return {
-
-      label:
-        `${year} Dönem`,
-
-      months: [month]
+      skipped: []
 
     };
-
-  }
-
-
-  function buildBulkJournalRows(
-    selectedContracts,
-    year,
-    period,
-    month
-  ) {
-
-    const definition =
-      getBulkPeriodDefinition(
-        year,
-        period,
-        month
-      );
-
-
-    const rows = [];
 
 
     selectedContracts.forEach(
       contract => {
 
-        const monthlyData =
-          getContractYearMonths(
+        const range =
+          getPeriodRange(
             contract,
-            year
+            year,
+            period,
+            month
           );
 
 
-        if (
-          !monthlyData.length
-        ) {
-          return;
-        }
+        if (!range) {
 
-
-        if (
-          period === "closing"
-        ) {
-
-          const entries =
-            generateReclassificationEntry(
-              contract
-            );
-
-
-          entries.forEach(
-            entry => {
-
-              rows.push({
-
-                contractId:
-                  contract.id,
-
-                company:
-                  contract.company,
-
-                supplier:
-                  contract.supplier,
-
-                account:
-                  entry.account,
-
-                debit:
-                  entry.debit,
-
-                credit:
-                  entry.credit
-
-              });
-
-            }
+          result.skipped.push(
+            contract
           );
-
 
           return;
 
         }
 
 
-        const selected =
-          monthlyData.filter(
-            item =>
-              definition.months.includes(
-                item.month
-              )
+        const entries =
+          getJournalForPeriod(
+            contract,
+            range.startMonth,
+            range.endMonth
           );
 
 
-        if (
-          !selected.length
-        ) {
+        if (!entries.length) {
+
+          result.skipped.push(
+            contract
+          );
+
           return;
+
         }
 
 
         const interest =
-          selected.reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.schedule.interest,
-            0
-          );
+          entries
+            .find(
+              item =>
+                item.account ===
+                "780 Finansman Giderleri"
+            )?.debit || 0;
 
 
         const principal =
-          selected.reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.schedule.principal,
-            0
-          );
+          entries
+            .find(
+              item =>
+                item.account ===
+                "401 Kiralama Yükümlülüğü"
+            )?.debit || 0;
 
 
         const payment =
-          selected.reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.schedule.payment,
-            0
-          );
+          entries
+            .find(
+              item =>
+                item.account ===
+                "381 Kira Borçları / Ödeme"
+            )?.credit || 0;
 
 
         const depreciation =
-          selected.reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.schedule.depreciation,
-            0
-          );
+          entries
+            .find(
+              item =>
+                item.account ===
+                "770 / 730 Amortisman Giderleri"
+            )?.debit || 0;
 
 
-        const entries = [
+        let debit = 0;
 
-          {
-            account:
-              "780 Finansman Giderleri",
-
-            debit:
-              interest,
-
-            credit:
-              0
-
-          },
-
-          {
-            account:
-              "401 Kiralama Yükümlülüğü",
-
-            debit:
-              principal,
-
-            credit:
-              0
-
-          },
-
-          {
-            account:
-              "381 Kira Borçları / Ödeme",
-
-            debit:
-              0,
-
-            credit:
-              payment
-
-          },
-
-          {
-            account:
-              "770 / 730 Amortisman Giderleri",
-
-            debit:
-              depreciation,
-
-            credit:
-              0
-
-          },
-
-          {
-            account:
-              "268 Birikmiş Amortismanlar",
-
-            debit:
-              0,
-
-            credit:
-              depreciation
-
-          }
-
-        ];
+        let credit = 0;
 
 
         entries.forEach(
-          entry => {
+          item => {
 
-            rows.push({
+            debit +=
+              Number(
+                item.debit || 0
+              );
+
+
+            credit +=
+              Number(
+                item.credit || 0
+              );
+
+
+            result.rows.push({
 
               contractId:
                 contract.id,
@@ -2871,652 +2920,125 @@ document.addEventListener("DOMContentLoaded", () => {
                 contract.supplier,
 
               account:
-                entry.account,
+                item.account,
 
               debit:
-                entry.debit,
+                Number(
+                  item.debit || 0
+                ),
 
               credit:
-                entry.credit
+                Number(
+                  item.credit || 0
+                )
 
             });
 
           }
         );
 
-      }
-    );
+
+        result.totals.interest +=
+          interest;
 
 
-    return {
-
-      label:
-        definition.label,
-
-      rows
-
-    };
-
-  }
+        result.totals.principal +=
+          principal;
 
 
-  function renderBulkJournalPreview(
-    result
-  ) {
-
-    const container =
-      document.getElementById(
-        "bulkJournalPreview"
-      );
+        result.totals.payment +=
+          payment;
 
 
-    if (!container) {
-      return;
-    }
+        result.totals.depreciation +=
+          depreciation;
 
 
-    if (
-      !result.rows.length
-    ) {
-
-      container.innerHTML = `
-
-        <div style="
-          padding:18px;
-          margin-top:16px;
-          background:#fff7ed;
-          border:1px solid #fed7aa;
-          border-radius:10px;
-          color:#9a3412;
-        ">
-
-          Seçilen dönem için
-          uygun sözleşme / ödeme planı bulunamadı.
-
-        </div>
-
-      `;
-
-      return;
-
-    }
+        result.totals.debit +=
+          debit;
 
 
-    const totalDebit =
-      result.rows.reduce(
-        (
-          total,
-          row
-        ) =>
-          total +
-          Number(
-            row.debit || 0
-          ),
-        0
-      );
+        result.totals.credit +=
+          credit;
 
-
-    const totalCredit =
-      result.rows.reduce(
-        (
-          total,
-          row
-        ) =>
-          total +
-          Number(
-            row.credit || 0
-          ),
-        0
-      );
-
-
-    const difference =
-      Math.abs(
-        totalDebit -
-        totalCredit
-      );
-
-
-    const contractsCount =
-      new Set(
-        result.rows.map(
-          row =>
-            row.contractId
-        )
-      ).size;
-
-
-    const grouped =
-      {};
-
-
-    result.rows.forEach(
-      row => {
 
         if (
-          !grouped[
-            row.contractId
+          !result.companies[
+            contract.company
           ]
         ) {
 
-          grouped[
-            row.contractId
+          result.companies[
+            contract.company
           ] = {
 
-            contractId:
-              row.contractId,
+            contracts: 0,
 
-            company:
-              row.company,
+            interest: 0,
 
-            supplier:
-              row.supplier,
+            principal: 0,
 
-            rows: []
+            payment: 0,
+
+            depreciation: 0,
+
+            debit: 0,
+
+            credit: 0
 
           };
 
         }
 
 
-        grouped[
-          row.contractId
-        ].rows.push(
-          row
-        );
+        const company =
+          result.companies[
+            contract.company
+          ];
+
+
+        company.contracts += 1;
+
+        company.interest +=
+          interest;
+
+        company.principal +=
+          principal;
+
+        company.payment +=
+          payment;
+
+        company.depreciation +=
+          depreciation;
+
+        company.debit +=
+          debit;
+
+        company.credit +=
+          credit;
 
       }
     );
 
 
-    container.innerHTML = `
-
-      <div style="
-        margin-top:18px;
-      ">
-
-        <div style="
-          display:grid;
-          grid-template-columns:
-            repeat(4,minmax(0,1fr));
-          gap:10px;
-          margin-bottom:14px;
-        ">
-
-          <div style="
-            padding:13px;
-            border:1px solid #e5e7eb;
-            border-radius:10px;
-            background:#f8fafc;
-          ">
-
-            <div style="
-              font-size:10px;
-              color:#64748b;
-            ">
-              Dönem
-            </div>
-
-            <strong>
-              ${escapeHtml(
-                result.label
-              )}
-            </strong>
-
-          </div>
-
-
-          <div style="
-            padding:13px;
-            border:1px solid #e5e7eb;
-            border-radius:10px;
-            background:#f8fafc;
-          ">
-
-            <div style="
-              font-size:10px;
-              color:#64748b;
-            ">
-              Sözleşme
-            </div>
-
-            <strong>
-              ${contractsCount}
-            </strong>
-
-          </div>
-
-
-          <div style="
-            padding:13px;
-            border:1px solid #e5e7eb;
-            border-radius:10px;
-            background:#f8fafc;
-          ">
-
-            <div style="
-              font-size:10px;
-              color:#64748b;
-            ">
-              Toplam Borç
-            </div>
-
-            <strong>
-              ${formatCurrency(
-                totalDebit
-              )}
-            </strong>
-
-          </div>
-
-
-          <div style="
-            padding:13px;
-            border:1px solid ${
-              difference < 0.01
-                ? "#bbf7d0"
-                : "#fecaca"
-            };
-            border-radius:10px;
-            background:${
-              difference < 0.01
-                ? "#ecfdf5"
-                : "#fef2f2"
-            };
-          ">
-
-            <div style="
-              font-size:10px;
-              color:#64748b;
-            ">
-              Borç / Alacak Kontrolü
-            </div>
-
-            <strong style="
-              color:${
-                difference < 0.01
-                  ? "#166534"
-                  : "#991b1b"
-              };
-            ">
-
-              ${
-                difference < 0.01
-                  ? "✓ Dengeli"
-                  : "⚠ Fark Var"
-              }
-
-            </strong>
-
-          </div>
-
-        </div>
-
-
-        <div style="
-          border:1px solid #e5e7eb;
-          border-radius:11px;
-          overflow:auto;
-          background:white;
-        ">
-
-          <table style="
-            width:100%;
-            border-collapse:collapse;
-            min-width:850px;
-          ">
-
-            <thead>
-
-              <tr style="
-                background:#f8fafc;
-              ">
-
-                <th style="
-                  padding:10px;
-                  text-align:left;
-                ">
-                  Sözleşme
-                </th>
-
-                <th style="
-                  padding:10px;
-                  text-align:left;
-                ">
-                  Şirket
-                </th>
-
-                <th style="
-                  padding:10px;
-                  text-align:left;
-                ">
-                  Hesap
-                </th>
-
-                <th style="
-                  padding:10px;
-                  text-align:right;
-                ">
-                  Borç
-                </th>
-
-                <th style="
-                  padding:10px;
-                  text-align:right;
-                ">
-                  Alacak
-                </th>
-
-              </tr>
-
-            </thead>
-
-
-            <tbody>
-
-              ${Object.values(
-                grouped
-              ).map(
-                group =>
-
-                  group.rows.map(
-                    row => `
-
-                      <tr>
-
-                        <td style="
-                          padding:9px;
-                          border-top:1px solid #edf0f4;
-                        ">
-                          ${escapeHtml(
-                            row.contractId
-                          )}
-                        </td>
-
-                        <td style="
-                          padding:9px;
-                          border-top:1px solid #edf0f4;
-                        ">
-                          ${escapeHtml(
-                            row.company
-                          )}
-                        </td>
-
-                        <td style="
-                          padding:9px;
-                          border-top:1px solid #edf0f4;
-                        ">
-                          ${escapeHtml(
-                            row.account
-                          )}
-                        </td>
-
-                        <td style="
-                          padding:9px;
-                          text-align:right;
-                          border-top:1px solid #edf0f4;
-                        ">
-                          ${
-                            row.debit
-                              ? formatCurrency(
-                                  row.debit
-                                )
-                              : "-"
-                          }
-                        </td>
-
-                        <td style="
-                          padding:9px;
-                          text-align:right;
-                          border-top:1px solid #edf0f4;
-                        ">
-                          ${
-                            row.credit
-                              ? formatCurrency(
-                                  row.credit
-                                )
-                              : "-"
-                          }
-                        </td>
-
-                      </tr>
-
-                    `
-                  ).join("")
-
-              ).join("")}
-
-            </tbody>
-
-
-            <tfoot>
-
-              <tr>
-
-                <td colspan="3" style="
-                  padding:11px;
-                  font-weight:800;
-                  border-top:2px solid #cbd5e1;
-                ">
-                  TOPLAM
-                </td>
-
-                <td style="
-                  padding:11px;
-                  text-align:right;
-                  font-weight:800;
-                  border-top:2px solid #cbd5e1;
-                ">
-                  ${formatCurrency(
-                    totalDebit
-                  )}
-                </td>
-
-                <td style="
-                  padding:11px;
-                  text-align:right;
-                  font-weight:800;
-                  border-top:2px solid #cbd5e1;
-                ">
-                  ${formatCurrency(
-                    totalCredit
-                  )}
-                </td>
-
-              </tr>
-
-            </tfoot>
-
-          </table>
-
-        </div>
-
-
-        <div style="
-          display:flex;
-          justify-content:flex-end;
-          gap:8px;
-          margin-top:12px;
-        ">
-
-          <button
-            type="button"
-            id="exportBulkJournalCsv"
-            class="secondary-button"
-          >
-            CSV Olarak İndir
-          </button>
-
-        </div>
-
-      </div>
-
-    `;
-
-
-    document
-      .getElementById(
-        "exportBulkJournalCsv"
-      )
-      ?.addEventListener(
-        "click",
-        () =>
-          exportBulkJournalCSV(
-            result
-          )
-      );
+    return result;
 
   }
 
 
   /*
   ============================================================
-  BULK JOURNAL CSV EXPORT
+  BULK JOURNAL MODAL
   ============================================================
   */
 
-  function exportBulkJournalCSV(
-    result
-  ) {
+  function ensureBulkJournalModal() {
 
     if (
-      !result ||
-      !result.rows ||
-      !result.rows.length
-    ) {
-      return;
-    }
-
-
-    const rows = [
-
-      [
-        "Dönem",
-        "Contract ID",
-        "Company",
-        "Supplier",
-        "Hesap",
-        "Borç",
-        "Alacak"
-      ]
-
-    ];
-
-
-    result.rows.forEach(
-      row => {
-
-        rows.push([
-
-          result.label,
-
-          row.contractId,
-
-          row.company,
-
-          row.supplier,
-
-          row.account,
-
-          Number(
-            row.debit || 0
-          ),
-
-          Number(
-            row.credit || 0
-          )
-
-        ]);
-
-      }
-    );
-
-
-    const csv =
-      rows
-        .map(
-          row =>
-            row
-              .map(
-                cell =>
-                  `"${String(
-                    cell
-                  ).replaceAll(
-                    '"',
-                    '""'
-                  )}"`
-              )
-              .join(";")
-        )
-        .join("\n");
-
-
-    const blob =
-      new Blob(
-        [
-          "\uFEFF" + csv
-        ],
-        {
-          type:
-            "text/csv;charset=utf-8;"
-        }
-      );
-
-
-    const url =
-      URL.createObjectURL(
-        blob
-      );
-
-
-    const link =
-      document.createElement(
-        "a"
-      );
-
-
-    link.href = url;
-
-    link.download =
-      `TFRS16_Toplu_Fis_${result.label.replaceAll(" ", "_")}.csv`;
-
-
-    document.body.appendChild(
-      link
-    );
-
-    link.click();
-
-    link.remove();
-
-    URL.revokeObjectURL(
-      url
-    );
-
-  }
-
-
-  /*
-  ============================================================
-  BULK JOURNAL CENTER
-  ============================================================
-  */
-
-  function openBulkJournalCenter() {
-
-    const existing =
       document.getElementById(
         "bulkJournalModal"
-      );
-
-
-    if (existing) {
-
-      existing.classList.remove(
-        "hidden"
-      );
-
-      setupBulkJournalControls();
+      )
+    ) {
 
       return;
 
@@ -3533,27 +3055,29 @@ document.addEventListener("DOMContentLoaded", () => {
       "bulkJournalModal";
 
 
+    modal.className =
+      "hidden";
+
+
     modal.style.cssText = `
       position:fixed;
       inset:0;
       z-index:99999;
-      background:rgba(15,23,42,.55);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:20px;
+      background:rgba(15,23,42,.62);
+      padding:24px;
+      overflow:auto;
     `;
 
 
     modal.innerHTML = `
 
       <div style="
-        width:min(1100px,100%);
-        max-height:92vh;
-        overflow:auto;
-        background:#ffffff;
+        max-width:1250px;
+        margin:20px auto;
+        background:#fff;
         border-radius:16px;
-        box-shadow:0 25px 70px rgba(15,23,42,.25);
+        overflow:hidden;
+        box-shadow:0 25px 80px rgba(0,0,0,.25);
       ">
 
         <div style="
@@ -3562,10 +3086,7 @@ document.addEventListener("DOMContentLoaded", () => {
           display:flex;
           justify-content:space-between;
           align-items:center;
-          position:sticky;
-          top:0;
-          background:#ffffff;
-          z-index:2;
+          gap:15px;
         ">
 
           <div>
@@ -3573,40 +3094,39 @@ document.addEventListener("DOMContentLoaded", () => {
             <div style="
               font-size:10px;
               font-weight:800;
-              color:#64748b;
               letter-spacing:1px;
+              color:#64748b;
             ">
               GK FINANCE INTELLIGENCE
             </div>
 
             <h2 style="
-              margin:4px 0 0;
+              margin:5px 0 0;
               font-size:20px;
             ">
               Toplu Muhasebe Fiş Merkezi
             </h2>
 
-            <div style="
-              margin-top:5px;
-              font-size:11px;
+            <p style="
+              margin:5px 0 0;
               color:#64748b;
+              font-size:11px;
             ">
-              Tüm sözleşmeler için tek seferde
-              aylık, çeyreklik veya yıllık fiş oluşturun.
-            </div>
+              Tüm sözleşme portföyünü tek işlemle dönemsel muhasebeleştirin.
+            </p>
 
           </div>
 
 
           <button
-            type="button"
             id="closeBulkJournalModal"
+            type="button"
             style="
               border:0;
               background:#f1f5f9;
-              width:36px;
-              height:36px;
-              border-radius:8px;
+              width:38px;
+              height:38px;
+              border-radius:9px;
               cursor:pointer;
               font-size:18px;
             "
@@ -3621,20 +3141,18 @@ document.addEventListener("DOMContentLoaded", () => {
           padding:20px 22px;
         ">
 
-
           <div style="
             display:grid;
             grid-template-columns:
-              repeat(auto-fit,minmax(190px,1fr));
+              repeat(auto-fit,minmax(180px,1fr));
             gap:12px;
           ">
 
-
             <div style="
+              padding:14px;
               background:#f8fafc;
               border:1px solid #e5e7eb;
               border-radius:10px;
-              padding:14px;
             ">
 
               <label style="
@@ -3648,24 +3166,23 @@ document.addEventListener("DOMContentLoaded", () => {
               </label>
 
               <select
-                id="bulkAccountingYear"
+                id="bulkJournalYear"
                 style="
                   width:100%;
-                  padding:10px;
+                  padding:9px;
                   border:1px solid #d1d5db;
                   border-radius:7px;
                 "
-              >
-              </select>
+              ></select>
 
             </div>
 
 
             <div style="
+              padding:14px;
               background:#f8fafc;
               border:1px solid #e5e7eb;
               border-radius:10px;
-              padding:14px;
             ">
 
               <label style="
@@ -3679,10 +3196,10 @@ document.addEventListener("DOMContentLoaded", () => {
               </label>
 
               <select
-                id="bulkAccountingPeriod"
+                id="bulkJournalPeriod"
                 style="
                   width:100%;
-                  padding:10px;
+                  padding:9px;
                   border:1px solid #d1d5db;
                   border-radius:7px;
                 "
@@ -3697,11 +3214,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </option>
 
                 <option value="annual">
-                  12 Aylık Toplu
-                </option>
-
-                <option value="closing">
-                  Yıllık Kapanış
+                  Yıllık
                 </option>
 
               </select>
@@ -3710,10 +3223,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
             <div style="
+              padding:14px;
               background:#f8fafc;
               border:1px solid #e5e7eb;
               border-radius:10px;
-              padding:14px;
             ">
 
               <label style="
@@ -3727,10 +3240,10 @@ document.addEventListener("DOMContentLoaded", () => {
               </label>
 
               <select
-                id="bulkAccountingMonth"
+                id="bulkJournalMonth"
                 style="
                   width:100%;
-                  padding:10px;
+                  padding:9px;
                   border:1px solid #d1d5db;
                   border-radius:7px;
                 "
@@ -3744,94 +3257,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
             <div style="
-              background:#f8fafc;
-              border:1px solid #e5e7eb;
-              border-radius:10px;
-              padding:14px;
+              display:flex;
+              align-items:end;
             ">
 
-              <label style="
-                display:block;
-                font-size:10px;
-                color:#64748b;
-                margin-bottom:7px;
-                font-weight:700;
-              ">
-                Şirket
-              </label>
-
-              <select
-                id="bulkAccountingCompany"
+              <button
+                id="generateBulkJournal"
+                type="button"
+                class="primary-button"
                 style="
                   width:100%;
-                  padding:10px;
-                  border:1px solid #d1d5db;
-                  border-radius:7px;
+                  min-height:43px;
                 "
               >
-
-                <option value="all">
-                  Tüm Şirketler
-                </option>
-
-              </select>
+                Fişleri Oluştur
+              </button>
 
             </div>
 
           </div>
 
 
-          <div style="
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            gap:10px;
-            margin-top:16px;
-            padding:14px;
-            background:#f8fafc;
-            border:1px solid #e5e7eb;
-            border-radius:10px;
-          ">
-
-            <div>
-
-              <strong style="
-                font-size:12px;
-              ">
-                Fiş kapsamı
-              </strong>
-
-              <div id="bulkJournalScopeText" style="
-                margin-top:3px;
-                color:#64748b;
-                font-size:10px;
-              ">
-                Aktif tüm sözleşmeler
-              </div>
-
-            </div>
-
-
-            <button
-              type="button"
-              id="generateBulkJournal"
-              class="primary-button"
-              style="
-                min-width:190px;
-                min-height:42px;
-              "
-            >
-              Toplu Fişleri Oluştur
-            </button>
-
-          </div>
-
-
-          <div id="bulkJournalPreview"></div>
+          <div
+            id="bulkJournalResult"
+            style="
+              margin-top:20px;
+            "
+          ></div>
 
 
           <div style="
-            margin-top:14px;
+            margin-top:18px;
             padding:12px 14px;
             background:#fffdf7;
             border:1px solid #f3e8c5;
@@ -3843,9 +3299,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             <strong>CFO Kontrolü:</strong>
 
-            Sistem seçilen dönem için aktif sözleşmeleri
-            topluca hesaplar. Borç / alacak dengesi ayrıca
-            kontrol edilir. ERP'ye otomatik kayıt yapılmaz.
+            Sistem yalnızca seçilen dönemde ödeme planı bulunan
+            aktif sözleşmeleri toplu olarak muhasebeleştirir.
+            Borç ve alacak toplamları ayrıca kontrol edilir.
 
           </div>
 
@@ -3867,129 +3323,7 @@ document.addEventListener("DOMContentLoaded", () => {
       )
       ?.addEventListener(
         "click",
-        closeBulkJournalCenter
-      );
-
-
-    modal.addEventListener(
-      "click",
-      event => {
-
-        if (
-          event.target ===
-          modal
-        ) {
-
-          closeBulkJournalCenter();
-
-        }
-
-      }
-    );
-
-
-    setupBulkJournalControls();
-
-  }
-
-
-  function setupBulkJournalControls() {
-
-    const yearSelect =
-      document.getElementById(
-        "bulkAccountingYear"
-      );
-
-
-    const companySelect =
-      document.getElementById(
-        "bulkAccountingCompany"
-      );
-
-
-    if (
-      yearSelect
-    ) {
-
-      const years =
-        getAvailableAccountingYears();
-
-
-      yearSelect.innerHTML =
-        years.map(
-          year => `
-            <option value="${year}">
-              ${year}
-            </option>
-          `
-        ).join("");
-
-    }
-
-
-    if (
-      companySelect
-    ) {
-
-      const current =
-        companySelect.value;
-
-
-      const companies =
-        [
-          ...new Set(
-            contracts
-              .map(
-                contract =>
-                  contract.company
-              )
-              .filter(Boolean)
-          )
-        ].sort();
-
-
-      companySelect.innerHTML = `
-
-        <option value="all">
-          Tüm Şirketler
-        </option>
-
-        ${companies.map(
-          company => `
-            <option value="${escapeHtml(
-              company
-            )}">
-              ${escapeHtml(
-                company
-              )}
-            </option>
-          `
-        ).join("")}
-
-      `;
-
-
-      if (
-        companies.includes(
-          current
-        )
-      ) {
-
-        companySelect.value =
-          current;
-
-      }
-
-    }
-
-
-    document
-      .getElementById(
-        "bulkAccountingPeriod"
-      )
-      ?.addEventListener(
-        "change",
-        updateBulkPeriodUI
+        closeBulkJournalModal
       );
 
 
@@ -4003,15 +3337,134 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    updateBulkPeriodUI();
+    document
+      .getElementById(
+        "bulkJournalPeriod"
+      )
+      ?.addEventListener(
+        "change",
+        updateBulkJournalMonthState
+      );
 
   }
 
 
-  function getAvailableAccountingYears() {
+  function openBulkJournalModal() {
 
-    const years =
-      new Set();
+    ensureBulkJournalModal();
+
+
+    const modal =
+      document.getElementById(
+        "bulkJournalModal"
+      );
+
+
+    if (!modal) {
+      return;
+    }
+
+
+    populateBulkJournalYears();
+
+
+    const year =
+      document.getElementById(
+        "bulkJournalYear"
+      );
+
+
+    const month =
+      document.getElementById(
+        "bulkJournalMonth"
+      );
+
+
+    if (year) {
+
+      year.value =
+        String(
+          new Date().getFullYear()
+        );
+
+    }
+
+
+    if (month) {
+
+      month.value =
+        "1";
+
+    }
+
+
+    const result =
+      document.getElementById(
+        "bulkJournalResult"
+      );
+
+
+    if (result) {
+
+      result.innerHTML = `
+
+        <div style="
+          padding:20px;
+          border:1px dashed #cbd5e1;
+          border-radius:10px;
+          text-align:center;
+          color:#64748b;
+          font-size:12px;
+        ">
+
+          Dönem seçin ve
+          <strong>Fişleri Oluştur</strong>
+          butonuna basın.
+
+        </div>
+
+      `;
+
+    }
+
+
+    modal.classList.remove(
+      "hidden"
+    );
+
+
+    updateBulkJournalMonthState();
+
+  }
+
+
+  function closeBulkJournalModal() {
+
+    document
+      .getElementById(
+        "bulkJournalModal"
+      )
+      ?.classList.add(
+        "hidden"
+      );
+
+  }
+
+
+  function populateBulkJournalYears() {
+
+    const select =
+      document.getElementById(
+        "bulkJournalYear"
+      );
+
+
+    if (!select) {
+      return;
+    }
+
+
+    const years = [];
 
 
     contracts.forEach(
@@ -4035,14 +3488,12 @@ document.addEventListener("DOMContentLoaded", () => {
         ) {
 
           for (
-            let year = start;
-            year <= end;
-            year++
+            let y = start;
+            y <= end;
+            y++
           ) {
 
-            years.add(
-              year
-            );
+            years.push(y);
 
           }
 
@@ -4052,142 +3503,109 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-    if (
-      !years.size
-    ) {
+    years.push(
+      new Date().getFullYear()
+    );
 
-      years.add(
-        new Date().getFullYear()
+
+    const uniqueYears =
+      [
+        ...new Set(years)
+      ].sort(
+        (a, b) =>
+          a - b
       );
 
-    }
 
-
-    return [
-      ...years
-    ].sort(
-      (
-        a,
-        b
-      ) =>
-        a - b
-    );
+    select.innerHTML =
+      uniqueYears.map(
+        year => `
+          <option value="${year}">
+            ${year}
+          </option>
+        `
+      ).join("");
 
   }
 
 
-  function updateBulkPeriodUI() {
+  function updateBulkJournalMonthState() {
 
     const period =
       document.getElementById(
-        "bulkAccountingPeriod"
+        "bulkJournalPeriod"
       )?.value;
 
 
-    const month =
+    const monthSelect =
       document.getElementById(
-        "bulkAccountingMonth"
+        "bulkJournalMonth"
       );
 
 
-    if (!month) {
+    if (!monthSelect) {
       return;
     }
 
 
     if (
-      period === "quarterly"
+      period === "annual"
     ) {
 
-      month.innerHTML = `
+      monthSelect.value =
+        "12";
 
-        <option value="1">
-          1. Çeyrek — Ocak / Şubat / Mart
-        </option>
-
-        <option value="4">
-          2. Çeyrek — Nisan / Mayıs / Haziran
-        </option>
-
-        <option value="7">
-          3. Çeyrek — Temmuz / Ağustos / Eylül
-        </option>
-
-        <option value="10">
-          4. Çeyrek — Ekim / Kasım / Aralık
-        </option>
-
-      `;
-
-      month.disabled =
-        false;
-
-    }
-
-    else if (
-      period === "annual" ||
-      period === "closing"
-    ) {
-
-      month.innerHTML = `
-
-        <option value="1">
-          Tüm Yıl
-        </option>
-
-      `;
-
-      month.disabled =
+      monthSelect.disabled =
         true;
 
     }
 
     else {
 
-      month.innerHTML =
-        buildMonthOptions();
-
-      month.disabled =
+      monthSelect.disabled =
         false;
 
     }
 
-
-    updateBulkScopeText();
-
   }
 
 
-  function updateBulkScopeText() {
+  /*
+  ============================================================
+  BULK JOURNAL GENERATION
+  ============================================================
+  */
+
+  function generateBulkJournal() {
 
     const year =
-      document.getElementById(
-        "bulkAccountingYear"
-      )?.value;
+      Number(
+        document.getElementById(
+          "bulkJournalYear"
+        )?.value
+      );
 
 
     const period =
       document.getElementById(
-        "bulkAccountingPeriod"
+        "bulkJournalPeriod"
       )?.value;
 
 
     const month =
       Number(
         document.getElementById(
-          "bulkAccountingMonth"
+          "bulkJournalMonth"
         )?.value
       );
 
 
-    const company =
-      document.getElementById(
-        "bulkAccountingCompany"
-      )?.value ||
-      "all";
+    if (!year) {
+      return;
+    }
 
 
-    const active =
+    const activeContracts =
       contracts.filter(
         contract =>
           contract.status ===
@@ -4195,266 +3613,643 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    const scoped =
-      active.filter(
-        contract =>
-          company === "all" ||
-          contract.company ===
-            company
-      );
-
-
-    const text =
-      document.getElementById(
-        "bulkJournalScopeText"
-      );
-
-
-    if (!text) {
-      return;
-    }
-
-
-    let periodText =
-      "seçilen dönem";
-
-
-    if (
-      period === "monthly"
-    ) {
-
-      periodText =
-        `${year} ${getMonthName(
-          month
-        )}`;
-
-    }
-
-    else if (
-      period === "quarterly"
-    ) {
-
-      const quarter =
-        Math.ceil(
-          month / 3
-        );
-
-      periodText =
-        `${year} ${quarter}. Çeyrek`;
-
-    }
-
-    else if (
-      period === "annual"
-    ) {
-
-      periodText =
-        `${year} 12 Aylık`;
-
-    }
-
-    else if (
-      period === "closing"
-    ) {
-
-      periodText =
-        `${year} Yıl Sonu Kapanış`;
-
-    }
-
-
-    text.textContent =
-      `${scoped.length} aktif sözleşme · ${periodText}`;
-
-  }
-
-
-  function generateBulkJournal() {
-
-    const year =
-      Number(
-        document.getElementById(
-          "bulkAccountingYear"
-        )?.value
-      );
-
-
-    const period =
-      document.getElementById(
-        "bulkAccountingPeriod"
-      )?.value;
-
-
-    const month =
-      Number(
-        document.getElementById(
-          "bulkAccountingMonth"
-        )?.value
-      );
-
-
-    const company =
-      document.getElementById(
-        "bulkAccountingCompany"
-      )?.value ||
-      "all";
-
-
-    let selected =
-      contracts.filter(
-        contract =>
-          contract.status ===
-            "active" &&
-          (
-            company === "all" ||
-            contract.company ===
-              company
-          )
-      );
-
-
-    if (
-      !selected.length
-    ) {
-
-      renderBulkJournalPreview({
-        label:
-          "Kayıt bulunamadı",
-        rows: []
-      });
-
-      return;
-
-    }
-
-
     const result =
-      buildBulkJournalRows(
-        selected,
+      generateBulkJournalData(
         year,
         period,
-        month
+        month,
+        activeContracts
       );
 
 
-    renderBulkJournalPreview(
-      result
+    renderBulkJournalResult(
+      result,
+      year,
+      period,
+      month
     );
-
-  }
-
-
-  function closeBulkJournalCenter() {
-
-    document
-      .getElementById(
-        "bulkJournalModal"
-      )
-      ?.remove();
 
   }
 
 
   /*
   ============================================================
-  ADD BULK JOURNAL BUTTON
+  BULK JOURNAL RESULT
   ============================================================
   */
 
-  function bindBulkJournalButton() {
+  function renderBulkJournalResult(
+    result,
+    year,
+    period,
+    month
+  ) {
 
-    const ids = [
-
-      "bulkJournalButton",
-      "bulkAccountingButton",
-      "generateBulkJournalButton",
-      "bulkJournalCenterButton"
-
-    ];
-
-
-    ids.forEach(
-      id => {
-
-        document
-          .getElementById(
-            id
-          )
-          ?.addEventListener(
-            "click",
-            openBulkJournalCenter
-          );
-
-      }
-    );
-
-
-    if (
+    const container =
       document.getElementById(
-        "bulkJournalButton"
-      ) ||
-      document.getElementById(
-        "bulkAccountingButton"
-      ) ||
-      document.getElementById(
-        "generateBulkJournalButton"
-      ) ||
-      document.getElementById(
-        "bulkJournalCenterButton"
-      )
-    ) {
+        "bulkJournalResult"
+      );
 
+
+    if (!container) {
       return;
-
     }
 
 
-    const bulkImportButton =
-      document.getElementById(
-        "bulkImportButton"
+    const companyRows =
+      Object.entries(
+        result.companies
       );
 
 
-    if (
-      bulkImportButton
-    ) {
-
-      const button =
-        document.createElement(
-          "button"
-        );
-
-
-      button.type =
-        "button";
-
-      button.id =
-        "bulkJournalButton";
-
-      button.className =
-        bulkImportButton.className ||
-        "secondary-button";
-
-      button.textContent =
-        "Toplu Muhasebe Fişi";
-
-      button.style.marginLeft =
-        "8px";
-
-
-      bulkImportButton.parentNode
-        ?.insertBefore(
-          button,
-          bulkImportButton.nextSibling
-        );
-
-
-      button.addEventListener(
-        "click",
-        openBulkJournalCenter
+    const balanceDifference =
+      Math.abs(
+        result.totals.debit -
+        result.totals.credit
       );
 
-    }
+
+    const balanced =
+      balanceDifference <
+      0.01;
+
+
+    const periodText =
+      period === "monthly"
+
+        ? `${year} - ${getMonthName(month)}`
+
+        : period === "quarterly"
+
+          ? `${year} - ${Math.ceil(month / 3)}. Çeyrek`
+
+          : `${year} - Yıllık`;
+
+
+    container.innerHTML = `
+
+      <div style="
+        display:grid;
+        grid-template-columns:
+          repeat(auto-fit,minmax(150px,1fr));
+        gap:10px;
+        margin-bottom:16px;
+      ">
+
+        ${bulkMetricCard(
+          "İşlenen Sözleşme",
+          Object.keys(
+            result.companies
+          ).reduce(
+            (
+              total,
+              company
+            ) =>
+              total +
+              result.companies[
+                company
+              ].contracts,
+            0
+          ),
+          "adet"
+        )}
+
+
+        ${bulkMetricCard(
+          "Faiz Gideri",
+          formatCurrency(
+            result.totals.interest
+          )
+        )}
+
+
+        ${bulkMetricCard(
+          "Anapara",
+          formatCurrency(
+            result.totals.principal
+          )
+        )}
+
+
+        ${bulkMetricCard(
+          "Kira Ödemesi",
+          formatCurrency(
+            result.totals.payment
+          )
+        )}
+
+
+        ${bulkMetricCard(
+          "Amortisman",
+          formatCurrency(
+            result.totals.depreciation
+          )
+        )}
+
+      </div>
+
+
+      <div style="
+        padding:14px 16px;
+        border-radius:10px;
+        margin-bottom:16px;
+        background:${
+          balanced
+            ? "#ecfdf5"
+            : "#fef2f2"
+        };
+        border:1px solid ${
+          balanced
+            ? "#bbf7d0"
+            : "#fecaca"
+        };
+        color:${
+          balanced
+            ? "#166534"
+            : "#991b1b"
+        };
+      ">
+
+        <strong>
+          ${
+            balanced
+              ? "✓ Fiş kontrolü başarılı"
+              : "⚠ Borç / Alacak farkı var"
+          }
+        </strong>
+
+        <div style="
+          margin-top:5px;
+          font-size:11px;
+        ">
+
+          Dönem:
+          <strong>
+            ${periodText}
+          </strong>
+
+          · Borç:
+          <strong>
+            ${formatCurrency(
+              result.totals.debit
+            )}
+          </strong>
+
+          · Alacak:
+          <strong>
+            ${formatCurrency(
+              result.totals.credit
+            )}
+          </strong>
+
+          · Fark:
+          <strong>
+            ${formatCurrency(
+              balanceDifference
+            )}
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      ${
+        companyRows.length
+          ? `
+
+            <div style="
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              overflow:auto;
+              margin-bottom:18px;
+            ">
+
+              <table style="
+                width:100%;
+                border-collapse:collapse;
+                min-width:850px;
+              ">
+
+                <thead>
+
+                  <tr>
+
+                    <th style="padding:10px;text-align:left;">
+                      Şirket
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Sözleşme
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Faiz
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Anapara
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Ödeme
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Amortisman
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Borç
+                    </th>
+
+                    <th style="padding:10px;text-align:right;">
+                      Alacak
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                  ${companyRows.map(
+                    (
+                      [
+                        company,
+                        data
+                      ]
+                    ) => `
+
+                      <tr>
+
+                        <td style="
+                          padding:10px;
+                          border-top:1px solid #edf0f4;
+                          font-weight:700;
+                        ">
+                          ${escapeHtml(
+                            company
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${data.contracts}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.interest
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.principal
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.payment
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.depreciation
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.debit
+                          )}
+                        </td>
+
+                        <td style="
+                          padding:10px;
+                          text-align:right;
+                          border-top:1px solid #edf0f4;
+                        ">
+                          ${formatCurrency(
+                            data.credit
+                          )}
+                        </td>
+
+                      </tr>
+
+                    `
+                  ).join("")}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          `
+          : ""
+      }
+
+
+      <div style="
+        border:1px solid #e5e7eb;
+        border-radius:10px;
+        overflow:auto;
+      ">
+
+        <table style="
+          width:100%;
+          border-collapse:collapse;
+          min-width:950px;
+        ">
+
+          <thead>
+
+            <tr>
+
+              <th style="padding:10px;text-align:left;">
+                Contract ID
+              </th>
+
+              <th style="padding:10px;text-align:left;">
+                Şirket
+              </th>
+
+              <th style="padding:10px;text-align:left;">
+                Tedarikçi
+              </th>
+
+              <th style="padding:10px;text-align:left;">
+                Hesap
+              </th>
+
+              <th style="padding:10px;text-align:right;">
+                Borç
+              </th>
+
+              <th style="padding:10px;text-align:right;">
+                Alacak
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${result.rows.map(
+              row => `
+
+                <tr>
+
+                  <td style="
+                    padding:9px;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${escapeHtml(
+                      row.contractId
+                    )}
+                  </td>
+
+                  <td style="
+                    padding:9px;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${escapeHtml(
+                      row.company
+                    )}
+                  </td>
+
+                  <td style="
+                    padding:9px;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${escapeHtml(
+                      row.supplier
+                    )}
+                  </td>
+
+                  <td style="
+                    padding:9px;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${escapeHtml(
+                      row.account
+                    )}
+                  </td>
+
+                  <td style="
+                    padding:9px;
+                    text-align:right;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${
+                      row.debit
+                        ? formatCurrency(
+                            row.debit
+                          )
+                        : "-"
+                    }
+                  </td>
+
+                  <td style="
+                    padding:9px;
+                    text-align:right;
+                    border-top:1px solid #edf0f4;
+                  ">
+                    ${
+                      row.credit
+                        ? formatCurrency(
+                            row.credit
+                          )
+                        : "-"
+                    }
+                  </td>
+
+                </tr>
+
+              `
+            ).join("")}
+
+          </tbody>
+
+
+          <tfoot>
+
+            <tr>
+
+              <td
+                colspan="4"
+                style="
+                  padding:11px;
+                  font-weight:800;
+                  border-top:2px solid #cbd5e1;
+                "
+              >
+                TOPLAM
+              </td>
+
+              <td style="
+                padding:11px;
+                text-align:right;
+                font-weight:800;
+                border-top:2px solid #cbd5e1;
+              ">
+                ${formatCurrency(
+                  result.totals.debit
+                )}
+              </td>
+
+              <td style="
+                padding:11px;
+                text-align:right;
+                font-weight:800;
+                border-top:2px solid #cbd5e1;
+              ">
+                ${formatCurrency(
+                  result.totals.credit
+                )}
+              </td>
+
+            </tr>
+
+          </tfoot>
+
+        </table>
+
+      </div>
+
+
+      ${
+        result.skipped.length
+          ? `
+
+            <div style="
+              margin-top:14px;
+              padding:12px 14px;
+              background:#fff7ed;
+              border:1px solid #fed7aa;
+              border-radius:9px;
+              color:#9a3412;
+              font-size:11px;
+            ">
+
+              <strong>
+                ${result.skipped.length}
+                sözleşme döneme dahil edilemedi.
+              </strong>
+
+              <div style="
+                margin-top:5px;
+              ">
+
+                Bu sözleşmelerin seçilen dönemde
+                geçerli ödeme planı bulunmuyor.
+
+              </div>
+
+              <div style="
+                margin-top:8px;
+                line-height:1.6;
+              ">
+
+                ${result.skipped.map(
+                  contract =>
+                    escapeHtml(
+                      contract.id
+                    )
+                ).join(
+                  " · "
+                )}
+
+              </div>
+
+            </div>
+
+          `
+          : ""
+      }
+
+    `;
+
+  }
+
+
+  function bulkMetricCard(
+    title,
+    value,
+    suffix = ""
+  ) {
+
+    return `
+
+      <div style="
+        padding:14px;
+        background:#f8fafc;
+        border:1px solid #e5e7eb;
+        border-radius:10px;
+      ">
+
+        <div style="
+          font-size:10px;
+          color:#64748b;
+          font-weight:700;
+        ">
+          ${title}
+        </div>
+
+        <div style="
+          margin-top:7px;
+          font-size:17px;
+          font-weight:800;
+          color:#111827;
+        ">
+          ${value}
+          ${
+            suffix
+              ? `
+                <span style="
+                  font-size:10px;
+                  color:#64748b;
+                ">
+                  ${suffix}
+                </span>
+              `
+              : ""
+          }
+        </div>
+
+      </div>
+
+    `;
 
   }
 
@@ -4913,6 +4708,16 @@ document.addEventListener("DOMContentLoaded", () => {
               )
           );
 
+
+        document
+          .getElementById(
+            "openBulkJournalCenter"
+          )
+          ?.addEventListener(
+            "click",
+            openBulkJournalModal
+          );
+
       },
       0
     );
@@ -4980,7 +4785,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (
           !selectedContractId
         ) {
+
           return;
+
         }
 
 
@@ -5078,6 +4885,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "bulkImportModal"
       );
 
+
     if (!modal) {
       return;
     }
@@ -5091,15 +4899,18 @@ document.addEventListener("DOMContentLoaded", () => {
         "bulkFileInput"
       );
 
+
     const preview =
       document.getElementById(
         "bulkPreview"
       );
 
+
     const status =
       document.getElementById(
         "bulkImportStatus"
       );
+
 
     const confirmButton =
       document.getElementById(
@@ -5111,13 +4922,16 @@ document.addEventListener("DOMContentLoaded", () => {
       fileInput.value = "";
     }
 
+
     if (preview) {
       preview.innerHTML = "";
     }
 
+
     if (status) {
       status.innerHTML = "";
     }
+
 
     if (confirmButton) {
       confirmButton.disabled = true;
@@ -5140,6 +4954,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ?.classList.add(
         "hidden"
       );
+
 
     bulkImportData = [];
 
@@ -5343,6 +5158,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     link.href = url;
 
+
     link.download =
       "TFRS16_Sozlesme_Portfoyu_Sablon.csv";
 
@@ -5351,9 +5167,12 @@ document.addEventListener("DOMContentLoaded", () => {
       link
     );
 
+
     link.click();
 
+
     link.remove();
+
 
     URL.revokeObjectURL(
       url
@@ -5422,9 +5241,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const text =
           await file.text();
 
+
         processCSV(
           text
         );
+
 
         return;
 
@@ -5445,6 +5266,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "Excel modülü yüklenemedi. Lütfen internet bağlantınızı kontrol edin veya CSV dosyası kullanın.",
             "error"
           );
+
 
           return;
 
@@ -5485,6 +5307,7 @@ document.addEventListener("DOMContentLoaded", () => {
           rows
         );
 
+
         return;
 
       }
@@ -5515,7 +5338,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  CSV PARSER
+  CSV
   ============================================================
   */
 
@@ -5545,6 +5368,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "CSV dosyasında veri bulunamadı.",
         "error"
       );
+
 
       return;
 
@@ -5620,7 +5444,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const result = [];
 
+
     let current = "";
+
 
     let insideQuotes =
       false;
@@ -5649,7 +5475,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
           i++;
 
-        } else {
+        }
+
+        else {
 
           insideQuotes =
             !insideQuotes;
@@ -5666,6 +5494,7 @@ document.addEventListener("DOMContentLoaded", () => {
         result.push(
           current.trim()
         );
+
 
         current = "";
 
@@ -5785,7 +5614,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
   ============================================================
-  IMPORT PROCESSING
+  IMPORT
   ============================================================
   */
 
@@ -5802,6 +5631,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "Dosyada kayıt bulunamadı.",
         "error"
       );
+
 
       return;
 
@@ -6116,7 +5946,9 @@ document.addEventListener("DOMContentLoaded", () => {
               "."
             );
 
-      } else {
+      }
+
+      else {
 
         text =
           text.replaceAll(
@@ -6244,6 +6076,7 @@ document.addEventListener("DOMContentLoaded", () => {
           contract.startDate
         );
 
+
       const end =
         parseDate(
           contract.endDate
@@ -6304,9 +6137,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
 
-    if (
-      !preview
-    ) {
+    if (!preview) {
       return;
     }
 
@@ -6317,10 +6148,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       preview.innerHTML = "";
 
+
       if (confirmButton) {
+
         confirmButton.disabled =
           true;
+
       }
+
 
       return;
 
@@ -6455,8 +6290,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 let state =
                   "Geçerli";
 
+
                 let stateColor =
                   "#166534";
+
 
                 if (
                   item.errors.length
@@ -6467,10 +6304,12 @@ document.addEventListener("DOMContentLoaded", () => {
                       ", "
                     );
 
+
                   stateColor =
                     "#991b1b";
 
                 }
+
 
                 else if (
                   item.duplicate
@@ -6478,6 +6317,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                   state =
                     "Mükerrer kayıt";
+
 
                   stateColor =
                     "#9a3412";
@@ -6599,6 +6439,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "error"
       );
 
+
       return;
 
     }
@@ -6612,8 +6453,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     contracts = [
+
       ...contracts,
+
       ...newContracts
+
     ];
 
 
@@ -6683,8 +6527,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     if (confirmButton) {
+
       confirmButton.disabled =
         true;
+
     }
 
 
@@ -6721,39 +6567,55 @@ document.addEventListener("DOMContentLoaded", () => {
     const styles = {
 
       success: {
+
         background:
           "#ecfdf5",
+
         color:
           "#166534",
+
         border:
           "#bbf7d0"
+
       },
 
       warning: {
+
         background:
           "#fff7ed",
+
         color:
           "#9a3412",
+
         border:
           "#fed7aa"
+
       },
 
       error: {
+
         background:
           "#fef2f2",
+
         color:
           "#991b1b",
+
         border:
           "#fecaca"
+
       },
 
       info: {
+
         background:
           "#eff6ff",
+
         color:
           "#1d4ed8",
+
         border:
           "#bfdbfe"
+
       }
 
     };
@@ -6806,7 +6668,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         closeBulkImportModal();
 
-        closeBulkJournalCenter();
+        closeBulkJournalModal();
 
       }
 
@@ -6859,8 +6721,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderTable();
 
-    bindBulkJournalButton();
-
   }
 
 
@@ -6874,7 +6734,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   console.log(
-    "GK TFRS 16 Accounting Engine V11 loaded successfully."
+    "GK TFRS 16 Accounting Engine V12 loaded successfully."
   );
 
 });
