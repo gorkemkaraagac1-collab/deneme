@@ -1,5 +1,5 @@
 /**
- * GK Financial Intelligence Platform - UI & Chart Engine Integrator
+ * GK Financial Intelligence Platform - UI, Chart & Sensitivity Engine Integrator
  */
 
 let dcfChartInstance = null;
@@ -50,7 +50,7 @@ function renderWorkingCapitalKPIs() {
   if (cccEl) cccEl.textContent = fmt.days(wc.ccc);
 }
 
-// Render DCF Engine Page Outputs & Chart
+// Render DCF Engine Page Outputs, Chart & Sensitivity Matrix
 function renderValuationUI() {
   if (typeof FinancialEngine === 'undefined') return;
 
@@ -66,8 +66,9 @@ function renderValuationUI() {
   const netDebtEl = document.querySelector('[data-val="net-debt"]');
   if (netDebtEl) netDebtEl.textContent = fmt.currency(dcf.netDebt);
 
-  // Render or Update Dynamic Chart
+  // Render Chart & Matrix
   renderDCFChart(dcf.projections);
+  renderSensitivityMatrix();
 }
 
 // Render / Update Chart.js DCF Chart
@@ -127,6 +128,76 @@ function renderDCFChart(projections) {
       }
     });
   }
+}
+
+// Interaktif 5x5 Valuation Sensitivity Matrix Generator
+function renderSensitivityMatrix() {
+  const container = document.getElementById('sensitivity-matrix-container');
+  if (!container || typeof FinancialEngine === 'undefined') return;
+
+  const state = FinancialEngine.getState().valuation;
+  const pnlState = FinancialEngine.getState().pnl;
+  
+  const baseWacc = state.wacc;
+  const baseGrowth = state.terminalGrowth;
+  const netDebt = state.netDebt;
+  const revGrowth = state.revenueGrowth;
+
+  // Variasyonal adımlar (-1.0%, -0.5%, Base, +0.5%, +1.0%)
+  const waccSteps = [-0.01, -0.005, 0, 0.005, 0.01];
+  const growthSteps = [-0.01, -0.005, 0, 0.005, 0.01];
+
+  let html = `<table class="sensitivity-table">
+    <thead>
+      <tr>
+        <th style="text-align: left;">WACC \\ Terminal g</th>`;
+
+  growthSteps.forEach(gStep => {
+    const gVal = baseGrowth + gStep;
+    html += `<th>${(gVal * 100).toFixed(1)}%</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  waccSteps.forEach(wStep => {
+    const wVal = baseWacc + wStep;
+    html += `<tr><th>WACC: ${(wVal * 100).toFixed(1)}%</th>`;
+
+    growthSteps.forEach(gStep => {
+      const gVal = baseGrowth + gStep;
+      
+      // Matris hücresi özel hesaplaması
+      const eqVal = calculateMatrixEquityValue(wVal, gVal, revGrowth, pnlState, netDebt);
+      const isBaseCase = (wStep === 0 && gStep === 0);
+      const cellClass = isBaseCase ? 'class="base-case"' : '';
+
+      html += `<td ${cellClass}>€${(eqVal / 1e6).toFixed(1)}M</td>`;
+    });
+
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+// Sensitivity Matris Elemanları İçin Hızlı DCF Modeli
+function calculateMatrixEquityValue(wacc, terminalGrowth, revGrowth, pnlState, netDebt) {
+  let currentRev = pnlState.revenue;
+  let pvSum = 0;
+
+  for (let i = 1; i <= 5; i++) {
+    currentRev *= (1 + revGrowth);
+    const ebitda = currentRev * pnlState.ebitdaMargin;
+    const fcf = ebitda * 0.70; // Basitleştirilmiş vergi & CapEx sonrası FCF oranı
+    pvSum += fcf / Math.pow(1 + wacc, i);
+  }
+
+  const lastFcf = (currentRev * pnlState.ebitdaMargin * 0.70);
+  const terminalValue = (lastFcf * (1 + terminalGrowth)) / (wacc - terminalGrowth);
+  const pvTerminalValue = terminalValue / Math.pow(1 + wacc, 5);
+
+  const enterpriseValue = pvSum + pvTerminalValue;
+  return enterpriseValue - netDebt;
 }
 
 // Render TMS 29 Inflation Engine Page
