@@ -416,6 +416,11 @@
       <div class="field"><label>Başlık — 1. Satır</label><input type="text" id="heroTitle1"></div>
       <div class="field"><label>Başlık — 2. Satır (vurgulu)</label><input type="text" id="heroTitle2"></div>
       <div class="field"><label>Açıklama</label><textarea id="heroLede"></textarea></div>
+      <p class="hint" style="margin-top:22px;">🇬🇧 İngilizce (opsiyonel — boş bırakılırsa EN seçilse bile Türkçe metin görünür)</p>
+      <div class="field"><label>Üst Etiket (EN)</label><input type="text" id="heroEyebrowEn"></div>
+      <div class="field"><label>Başlık — 1. Satır (EN)</label><input type="text" id="heroTitle1En"></div>
+      <div class="field"><label>Başlık — 2. Satır (EN)</label><input type="text" id="heroTitle2En"></div>
+      <div class="field"><label>Açıklama (EN)</label><textarea id="heroLedeEn"></textarea></div>
     </div>
 
     <div class="admin-block">
@@ -456,6 +461,23 @@
       </div>
     </div>
 
+    <div class="admin-block">
+      <h2>Financial Decision Cockpit</h2>
+      <p class="hint">Cockpit ekranındaki KPI kartları, öncelikler ve sinyaller — burada güncelledikçe cockpit sayfası otomatik yansıtır. "Son güncelleme" tarihi cockpit'te görünür, verinin elle girildiğini gösterir.</p>
+      <div class="field"><label>Son Güncelleme Tarihi</label><input type="text" id="cockpitUpdated" placeholder="18 Ağustos 2026"></div>
+
+      <h3 style="font:500 15px Fraunces,serif;margin:18px 0 10px;color:var(--ink);">KPI Kartları</h3>
+      <div id="cockpitMetricsList"></div>
+
+      <h3 style="font:500 15px Fraunces,serif;margin:22px 0 10px;color:var(--ink);">Yönetim Öncelikleri</h3>
+      <div id="cockpitPrioritiesList"></div>
+      <button class="btn-small" id="addPriority" type="button">+ Öncelik ekle</button>
+
+      <h3 style="font:500 15px Fraunces,serif;margin:22px 0 10px;color:var(--ink);">Finansal Sinyaller</h3>
+      <div id="cockpitSignalsList"></div>
+      <button class="btn-small" id="addSignal" type="button">+ Sinyal ekle</button>
+    </div>
+
   </div>
 
   <div class="wrap admin-actions">
@@ -471,7 +493,8 @@ let state = {
   services: [],
   posts: [],
   plans: [],
-  actuarial: { mortality: [], turnover: [] }
+  actuarial: { mortality: [], turnover: [] },
+  cockpit: { lastUpdated: "", metrics: [], priorities: [], signals: [] }
 };
 
 function slugify(s){
@@ -533,6 +556,8 @@ function renderServices(){
       <div class="field"><label>Hesap Etiketi</label><input type="text" data-f="acct" data-i="${i}" value="${escapeAttr(s.acct)}"></div>
       <div class="field"><label>Başlık</label><input type="text" data-f="title" data-i="${i}" value="${escapeAttr(s.title)}"></div>
       <div class="field"><label>Açıklama</label><textarea data-f="desc" data-i="${i}">${s.desc||''}</textarea></div>
+      <div class="field"><label>Başlık (EN)</label><input type="text" data-f="titleEn" data-i="${i}" value="${escapeAttr(s.titleEn)}"></div>
+      <div class="field"><label>Açıklama (EN)</label><textarea data-f="descEn" data-i="${i}">${s.descEn||''}</textarea></div>
     </div>`).join('');
 
   wrap.querySelectorAll('input,textarea').forEach(el=>{
@@ -651,6 +676,10 @@ function loadStateIntoForm(){
   document.getElementById('heroTitle1').value = state.hero.titleLine1 || '';
   document.getElementById('heroTitle2').value = state.hero.titleLine2 || '';
   document.getElementById('heroLede').value = state.hero.lede || '';
+  document.getElementById('heroEyebrowEn').value = state.hero.eyebrowEn || '';
+  document.getElementById('heroTitle1En').value = state.hero.titleLine1En || '';
+  document.getElementById('heroTitle2En').value = state.hero.titleLine2En || '';
+  document.getElementById('heroLedeEn').value = state.hero.ledeEn || '';
   renderLogoPreview();
   renderServices();
   renderPosts();
@@ -658,7 +687,102 @@ function loadStateIntoForm(){
   if(!state.actuarial) state.actuarial = {mortality:[], turnover:[]};
   renderActuarialTable('mortality');
   renderActuarialTable('turnover');
+  if(!state.cockpit) state.cockpit = {lastUpdated:'', metrics:[], priorities:[], signals:[]};
+  document.getElementById('cockpitUpdated').value = state.cockpit.lastUpdated || '';
+  renderCockpitMetrics();
+  renderCockpitPriorities();
+  renderCockpitSignals();
 }
+
+document.getElementById('cockpitUpdated').addEventListener('input', e=>{
+  state.cockpit.lastUpdated = e.target.value;
+  markDirty();
+});
+
+function renderCockpitMetrics(){
+  const wrap = document.getElementById('cockpitMetricsList');
+  const list = state.cockpit.metrics || [];
+  wrap.innerHTML = list.map((m,i)=>`
+    <div class="item-card">
+      <div class="field"><label>Etiket</label><input type="text" data-i="${i}" data-f="label" value="${escapeAttr(m.label)}"></div>
+      <div class="field"><label>Değer</label><input type="text" data-i="${i}" data-f="value" value="${escapeAttr(m.value)}"></div>
+      <div class="field"><label>Not</label><input type="text" data-i="${i}" data-f="note" value="${escapeAttr(m.note)}"></div>
+      <div class="field"><label>Yön</label>
+        <select data-i="${i}" data-f="direction">
+          <option value="up" ${m.direction==='up'?'selected':''}>Yukarı (▲)</option>
+          <option value="down" ${m.direction==='down'?'selected':''}>Aşağı (▼)</option>
+          <option value="neutral" ${(!m.direction||m.direction==='neutral')?'selected':''}>Nötr (—)</option>
+        </select>
+      </div>
+    </div>`).join('');
+  wrap.querySelectorAll('input,select').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const i=+e.target.dataset.i, f=e.target.dataset.f;
+      state.cockpit.metrics[i][f] = e.target.value;
+      markDirty();
+    });
+  });
+}
+
+function renderCockpitPriorities(){
+  const wrap = document.getElementById('cockpitPrioritiesList');
+  const list = state.cockpit.priorities || [];
+  wrap.innerHTML = list.map((p,i)=>`
+    <div class="item-card">
+      <div class="item-card-head"><span class="tag">ÖNCELİK ${i+1}</span><button class="btn-small danger" data-act="del-priority" data-i="${i}" type="button">Sil</button></div>
+      <div class="field"><label>Başlık</label><input type="text" data-i="${i}" data-f="title" value="${escapeAttr(p.title)}"></div>
+      <div class="field"><label>Açıklama</label><textarea data-i="${i}" data-f="desc">${p.desc||''}</textarea></div>
+      <div class="field"><label>Rozet Metni</label><input type="text" data-i="${i}" data-f="status" value="${escapeAttr(p.status)}" placeholder="YÜKSEK / ORTA / İZLE"></div>
+      <div class="field"><label>Öncelik Seviyesi (kenar rengi)</label>
+        <select data-i="${i}" data-f="level">
+          <option value="high" ${p.level==='high'?'selected':''}>Yüksek</option>
+          <option value="medium" ${p.level==='medium'?'selected':''}>Orta</option>
+          <option value="low" ${p.level==='low'?'selected':''}>Düşük</option>
+        </select>
+      </div>
+    </div>`).join('');
+  wrap.querySelectorAll('input,textarea,select').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const i=+e.target.dataset.i, f=e.target.dataset.f;
+      state.cockpit.priorities[i][f] = e.target.value;
+      markDirty();
+    });
+  });
+  wrap.querySelectorAll('button[data-act="del-priority"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ state.cockpit.priorities.splice(+btn.dataset.i,1); renderCockpitPriorities(); markDirty(); });
+  });
+}
+
+function renderCockpitSignals(){
+  const wrap = document.getElementById('cockpitSignalsList');
+  const list = state.cockpit.signals || [];
+  wrap.innerHTML = list.map((s,i)=>`
+    <div class="item-card">
+      <div class="item-card-head"><span class="tag">SİNYAL ${i+1}</span><button class="btn-small danger" data-act="del-signal" data-i="${i}" type="button">Sil</button></div>
+      <div class="field"><label>Başlık</label><input type="text" data-i="${i}" data-f="title" value="${escapeAttr(s.title)}"></div>
+      <div class="field"><label>Açıklama</label><textarea data-i="${i}" data-f="desc">${s.desc||''}</textarea></div>
+      <div class="field"><label>Rozet Metni</label><input type="text" data-i="${i}" data-f="status" value="${escapeAttr(s.status)}" placeholder="POZİTİF / İZLE / STABİL"></div>
+    </div>`).join('');
+  wrap.querySelectorAll('input,textarea').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const i=+e.target.dataset.i, f=e.target.dataset.f;
+      state.cockpit.signals[i][f] = e.target.value;
+      markDirty();
+    });
+  });
+  wrap.querySelectorAll('button[data-act="del-signal"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ state.cockpit.signals.splice(+btn.dataset.i,1); renderCockpitSignals(); markDirty(); });
+  });
+}
+
+document.getElementById('addPriority').addEventListener('click', ()=>{
+  state.cockpit.priorities.push({title:'Yeni Öncelik', desc:'', status:'İZLE', level:'medium'});
+  renderCockpitPriorities(); markDirty();
+});
+document.getElementById('addSignal').addEventListener('click', ()=>{
+  state.cockpit.signals.push({title:'Yeni Sinyal', desc:'', status:'İZLE'});
+  renderCockpitSignals(); markDirty();
+});
 
 function renderActuarialTable(key){
   const wrap = document.getElementById(key==='mortality' ? 'mortalityList' : 'turnoverList');
@@ -712,9 +836,9 @@ document.getElementById('logoClear').addEventListener('click', ()=>{
   document.getElementById('logoFile').value = '';
   renderLogoPreview(); markDirty();
 });
-['heroEyebrow','heroTitle1','heroTitle2','heroLede'].forEach(id=>{
+['heroEyebrow','heroTitle1','heroTitle2','heroLede','heroEyebrowEn','heroTitle1En','heroTitle2En','heroLedeEn'].forEach(id=>{
   document.getElementById(id).addEventListener('input', e=>{
-    const map = {heroEyebrow:'eyebrow', heroTitle1:'titleLine1', heroTitle2:'titleLine2', heroLede:'lede'};
+    const map = {heroEyebrow:'eyebrow', heroTitle1:'titleLine1', heroTitle2:'titleLine2', heroLede:'lede', heroEyebrowEn:'eyebrowEn', heroTitle1En:'titleLine1En', heroTitle2En:'titleLine2En', heroLedeEn:'ledeEn'};
     state.hero[map[id]] = e.target.value;
     markDirty();
   });
@@ -740,7 +864,7 @@ document.getElementById('fileLoader').addEventListener('change', e=>{
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]}}, data);
+      state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]},cockpit:{lastUpdated:'',metrics:[],priorities:[],signals:[]}}, data);
       loadStateIntoForm();
       document.getElementById('statusMsg').textContent = 'Dosya yüklendi. Düzenlemeye devam edebilirsiniz.';
     } catch(err){
@@ -762,7 +886,7 @@ document.getElementById('downloadBtn').addEventListener('click', ()=>{
 
 // başlangıçta site içeriğini otomatik yüklemeyi dene
 fetch('content.json').then(r=>r.json()).then(data=>{
-  state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]}}, data);
+  state = Object.assign({logo:{},hero:{},services:[],posts:[],plans:[],actuarial:{mortality:[],turnover:[]},cockpit:{lastUpdated:'',metrics:[],priorities:[],signals:[]}}, data);
   loadStateIntoForm();
 }).catch(()=>{ loadStateIntoForm(); });
 </script>
