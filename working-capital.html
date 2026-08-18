@@ -1,84 +1,78 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Working Capital Analyzer — GK Advisory</title>
-<link rel="stylesheet" href="styles.css">
-<style>
-:root{--ink:#0F1C2E;--parchment:#F7F5F0;--brass:#B08D57;--muted:#68717f;--line:#ddd6ca;--white:#fff;--good:#55765b;--warn:#9a7138}
-body{background:var(--parchment);color:#1c2a3a}.wc-wrap{max-width:1180px;margin:54px auto 90px;padding:0 24px}.wc-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:28px}.eyebrow{color:var(--brass);font:500 11px 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase}.wc-head h1{font:500 42px Fraunces,serif;color:var(--ink);margin:8px 0}.wc-head p{max-width:720px;color:var(--muted);line-height:1.7;margin:0}.back{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--brass);padding-bottom:3px}.grid{display:grid;grid-template-columns:360px 1fr;gap:20px}.panel{background:var(--white);border:1px solid var(--line);padding:26px}.panel h2{font:500 23px Fraunces,serif;margin:0 0 18px;color:var(--ink)}.field{margin:0 0 15px}.field label{display:block;font:600 12px Inter,sans-serif;color:#4e5867;margin-bottom:6px}.field input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #cfc7b9;background:#fff;font:14px Inter,sans-serif;color:var(--ink)}.hint{font-size:11px;color:#87909c;margin-top:4px}.btn{border:0;cursor:pointer;padding:12px 16px;background:var(--brass);color:var(--ink);font-weight:700;font-family:Inter,sans-serif}.btn.secondary{background:var(--ink);color:var(--parchment);margin-left:7px}.actions{margin-top:18px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.kpi{border:1px solid var(--line);padding:17px;background:#fbfaf7}.kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.kpi .value{font:500 27px Fraunces,serif;color:var(--ink);margin-top:7px}.kpi .sub{font-size:11px;color:#7d8590;margin-top:4px}.opportunity{margin-top:18px;border:1px solid #cfc09e;background:#f8f3e8;padding:22px}.opportunity .label{font:600 11px 'JetBrains Mono',monospace;color:var(--brass);text-transform:uppercase}.opportunity .value{font:500 38px Fraunces,serif;color:var(--ink);margin:6px 0}.opportunity p{margin:0;color:#5f6875;line-height:1.6}.table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13px}.table th,.table td{border-bottom:1px solid var(--line);padding:11px 8px;text-align:right}.table th:first-child,.table td:first-child{text-align:left}.table th{color:#6b7380;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.insights{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.insight{border-left:3px solid var(--brass);background:#fbfaf7;padding:15px}.insight strong{display:block;color:var(--ink);margin-bottom:5px}.insight span{font-size:12px;color:#69727e;line-height:1.5}.empty{color:#707985;padding:30px 0}.footnote{font-size:11px;color:#8a919a;margin-top:14px;line-height:1.5}.status{display:inline-block;padding:5px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:#eee9df;color:#7b6545}.status.good{background:#e8efe8;color:var(--good)}.status.warn{background:#f3eadb;color:var(--warn)}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.wc-head{display:block}.back{display:inline-block;margin-top:15px}.insights{grid-template-columns:1fr}}
-@media(max-width:520px){.wc-head h1{font-size:34px}.wc-wrap{padding:0 16px}.panel{padding:19px}.kpis{grid-template-columns:1fr}.btn{width:100%;margin:5px 0 0}.btn.secondary{margin-left:0}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Working Capital Intelligence - GK Platform</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
-<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="dashboard.html">← Panele dön</a></div></nav></header>
-<main class="wc-wrap">
-  <div class="wc-head">
-    <div><div class="eyebrow">Finance Intelligence · Working Capital</div><h1>Working Capital Analyzer</h1><p>Çalışma sermayesi KPI'larını nakit etkisine çevirin. DSO, DIO, DPO ve Cash Conversion Cycle'ı analiz edin; hedef seviyeye göre potansiyel nakit serbestleşmesini görün.</p></div>
-    <a class="back" href="dashboard.html">Dashboard</a>
-  </div>
-  <div class="grid">
-    <section class="panel">
-      <h2>Veri Girişi</h2>
-      <div class="field"><label for="revenue">Yıllık Net Satışlar (₺)</label><input id="revenue" type="number" value="120000000" min="0" step="100000"></div>
-      <div class="field"><label for="cogs">Yıllık Satışların Maliyeti (₺)</label><input id="cogs" type="number" value="78000000" min="0" step="100000"></div>
-      <div class="field"><label for="ar">Ticari Alacaklar (₺)</label><input id="ar" type="number" value="28000000" min="0" step="100000"></div>
-      <div class="field"><label for="inventory">Stoklar (₺)</label><input id="inventory" type="number" value="24000000" min="0" step="100000"></div>
-      <div class="field"><label for="ap">Ticari Borçlar (₺)</label><input id="ap" type="number" value="15000000" min="0" step="100000"></div>
-      <div class="field"><label for="days">Dönem Gün Sayısı</label><input id="days" type="number" value="365" min="1" max="366"></div>
-      <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
-      <h2>Hedef KPI'lar</h2>
-      <div class="field"><label for="targetDso">Hedef DSO (gün)</label><input id="targetDso" type="number" value="60" min="0" step="1"></div>
-      <div class="field"><label for="targetDio">Hedef DIO (gün)</label><input id="targetDio" type="number" value="75" min="0" step="1"></div>
-      <div class="field"><label for="targetDpo">Hedef DPO (gün)</label><input id="targetDpo" type="number" value="55" min="0" step="1"></div>
-      <div class="actions"><button class="btn" onclick="calculate()">Analizi Çalıştır →</button><button class="btn secondary" onclick="exportCSV()">CSV Export</button></div>
-      <div class="footnote">Basitleştirilmiş yönetim analizi: DSO satışlar, DIO/DPO ise COGS bazında hesaplanır. Hedef nakit etkisi mevcut bakiye ile hedef bakiye arasındaki farktır.</div>
-    </section>
-    <section class="panel">
-      <div id="result"><div class="empty">Analizi çalıştırdığınızda KPI'lar, Cash Conversion Cycle ve nakit serbestleşme fırsatı burada görünecek.</div></div>
-    </section>
-  </div>
-</main>
-<script src="auth.js"></script>
-<script>
-if(!GKAuth.current()){location.href='login.html?next='+encodeURIComponent(location.pathname)}
-let last=null;
-const $=id=>document.getElementById(id);
-const num=id=>Math.max(0,Number($(id).value)||0);
-const money=x=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(x);
-const days=x=>Number(x).toFixed(1).replace('.',',')+' gün';
-function calculate(){
- const revenue=num('revenue'),cogs=num('cogs'),ar=num('ar'),inventory=num('inventory'),ap=num('ap'),d=num('days');
- const tdso=num('targetDso'),tdio=num('targetDio'),tdpo=num('targetDpo');
- if(revenue<=0||cogs<=0||d<=0){$('result').innerHTML='<div class="empty">Satış, COGS ve gün sayısı sıfırdan büyük olmalıdır.</div>';return}
- const dso=ar/revenue*d, dio=inventory/cogs*d, dpo=ap/cogs*d, ccc=dso+dio-dpo;
- const targetAR=revenue*tdso/d, targetInv=cogs*tdio/d, targetAP=cogs*tdpo/d;
- const arRelease=ar-targetAR, invRelease=inventory-targetInv, apRelease=targetAP-ap;
- const total=arRelease+invRelease+apRelease;
- const currentWC=ar+inventory-ap, targetWC=targetAR+targetInv-targetAP;
- const currentStatus=ccc<=60?'good':ccc<=90?'warn':'';
- last={revenue,cogs,ar,inventory,ap,d,tdso,tdio,tdpo,dso,dio,dpo,ccc,targetAR,targetInv,targetAP,arRelease,invRelease,apRelease,total,currentWC,targetWC};
- $('result').innerHTML=`
- <div class="kpis">
-  <div class="kpi"><div class="label">DSO</div><div class="value">${days(dso)}</div><div class="sub">Hedef ${days(tdso)}</div></div>
-  <div class="kpi"><div class="label">DIO</div><div class="value">${days(dio)}</div><div class="sub">Hedef ${days(tdio)}</div></div>
-  <div class="kpi"><div class="label">DPO</div><div class="value">${days(dpo)}</div><div class="sub">Hedef ${days(tdpo)}</div></div>
-  <div class="kpi"><div class="label">CCC</div><div class="value">${days(ccc)}</div><div class="sub"><span class="status ${currentStatus}">${ccc<=60?'Güçlü':ccc<=90?'İzlenmeli':'Aksiyon gerekli'}</span></div></div>
- </div>
- <div class="opportunity"><div class="label">Cash Release Opportunity</div><div class="value">${money(total)}</div><p>Hedef KPI'lara ulaşılması halinde çalışma sermayesinde teorik olarak serbestleşebilecek nakit. Negatif değer, hedefin mevcut durumdan daha fazla işletme sermayesi gerektirdiğini gösterir.</p></div>
- <table class="table"><thead><tr><th>Driver</th><th>Mevcut</th><th>Hedef</th><th>Nakit Etkisi</th></tr></thead><tbody>
- <tr><td>Alacaklar / DSO</td><td>${money(ar)} · ${days(dso)}</td><td>${money(targetAR)} · ${days(tdso)}</td><td>${money(arRelease)}</td></tr>
- <tr><td>Stoklar / DIO</td><td>${money(inventory)} · ${days(dio)}</td><td>${money(targetInv)} · ${days(tdio)}</td><td>${money(invRelease)}</td></tr>
- <tr><td>Borçlar / DPO</td><td>${money(ap)} · ${days(dpo)}</td><td>${money(targetAP)} · ${days(tdpo)}</td><td>${money(apRelease)}</td></tr>
- </tbody></table>
- <div class="insights">
-  <div class="insight"><strong>En büyük fırsat</strong><span>${largest(arRelease,invRelease,apRelease)}</span></div>
-  <div class="insight"><strong>Çalışma sermayesi</strong><span>Mevcut net operasyonel WC: ${money(currentWC)} → hedef: ${money(targetWC)}.</span></div>
- </div>`;
-}
-function largest(a,b,c){const arr=[['Alacak / DSO',a],['Stok / DIO',b],['Borç / DPO',c]].sort((x,y)=>y[1]-x[1]);return arr[0][0]+' tarafında '+money(arr[0][1])+' potansiyel nakit etkisi bulunuyor.'}
-function exportCSV(){if(!last)calculate();if(!last)return;const rows=[['GK Advisory - Working Capital Analyzer'],['Metric','Current','Target','Cash Impact'],['DSO',last.dso,last.tdso,last.arRelease],['DIO',last.dio,last.tdio,last.invRelease],['DPO',last.dpo,last.tdpo,last.apRelease],['CCC',last.ccc,'',last.total],['Current Net Operating WC',last.currentWC,last.targetWC,last.total]];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='GK_Advisory_Working_Capital_Analysis.csv';a.click();URL.revokeObjectURL(a.href)}
-calculate();
-</script>
-</body></html>
+
+  <header class="cfo-navbar">
+    <div class="cfo-nav-container">
+      <a href="index.html" class="cfo-brand">
+        <span class="brand-logo">GK</span>
+        <div class="brand-text">
+          <span class="brand-name">Financial Intelligence</span>
+          <span class="brand-sub">Decision Cockpit</span>
+        </div>
+      </a>
+      <nav class="cfo-nav-menu">
+        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
+        <a href="working-capital.html" class="nav-link" style="color: var(--text-primary);">Working Capital</a>
+        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
+        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
+        <div class="nav-dropdown">
+          <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
+          <div class="dropdown-content">
+            <a href="tfrs16.html">TFRS 16 Kiralama</a>
+            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
+            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
+            <a href="hedge-accounting.html">Hedge Accounting</a>
+          </div>
+        </div>
+      </nav>
+      <div class="cfo-nav-actions">
+        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
+        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
+    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Working Capital Intelligence &amp; Cash Cycle</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 30px;">
+      <div class="kpi-card">
+        <span class="kpi-title">DSO (Days Sales Outstanding)</span>
+        <div class="kpi-value">54 Days</div>
+        <div class="kpi-delta negative">▲ +7 Days vs Budget</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">DIO (Days Inventory Outstanding)</span>
+        <div class="kpi-value">42 Days</div>
+        <div class="kpi-delta positive">▼ -2 Days vs Budget</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">DPO (Days Payables Outstanding)</span>
+        <div class="kpi-value">48 Days</div>
+        <div class="kpi-delta positive">▲ +3 Days vs Budget</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">CCC (Cash Conversion Cycle)</span>
+        <div class="kpi-value">48 Days</div>
+        <div class="kpi-delta negative">▲ +2 Days Impact</div>
+      </div>
+    </div>
+
+    <div class="insight-card">
+      <div class="insight-step"><span class="insight-step-label step-happened">WORKING CAPITAL ALERT</span> DSO increased by 7 days.</div>
+      <div class="insight-step"><span class="insight-step-label step-sowhat">CASH IMPACT</span> Estimated working capital cash lockup: €2.4M.</div>
+      <div class="insight-step"><span class="insight-step-label step-next">OPPORTUNITY</span> Reducing DSO by 5 days could release approximately €1.7M cash immediately.</div>
+    </div>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
