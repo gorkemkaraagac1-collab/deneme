@@ -180,14 +180,14 @@
   "plans": [
     {
       "id": "free",
-      "name": "Ücretsiz",
+      "name": "Başlangıç",
       "price": "0",
       "period": "",
-      "tagline": "Hizmet kataloğunu ve ücretsiz makaleleri incelemek için.",
+      "tagline": "Finans yönetimi yaklaşımını keşfetmek isteyen şirketler için.",
       "features": [
-        "Tüm hizmet açıklamalarına erişim",
-        "Ücretsiz blog yazıları",
-        "İletişim / ön değerlendirme talebi"
+        "Finans yönetimi içerikleri",
+        "Ücretsiz finansal analiz içerikleri",
+        "Ön değerlendirme ve görüşme talebi"
       ],
       "ctaText": "Ücretsiz Başla",
       "ctaLink": "login.html",
@@ -196,19 +196,19 @@
     },
     {
       "id": "professional",
-      "name": "Professional",
+      "name": "Finans Profesyonel",
       "price": "4.900",
       "period": "/ay",
-      "tagline": "Finans ekipleri için çalışan hesaplama araçları.",
+      "tagline": "Finans ekiplerinin günlük raporlama ve analiz süreçleri için.",
       "features": [
-        "TMS 29 Endeksleme Motoru",
-        "DCF Değerleme Aracı",
-        "Working Capital Analyzer",
-        "Tüm üyelere özel blog içerikleri",
+        "TMS 29 — Enflasyon Muhasebesi",
+        "DCF — Şirket Değerleme",
+        "İşletme Sermayesi Analizi",
+        "Yönetim raporlama araçları",
         "E-posta destek"
       ],
       "ctaText": "Lisans Talep Et",
-      "ctaLink": "mailto:gorkemkaraagac1@gmail.com?subject=Professional Plan Talebi",
+      "ctaLink": "mailto:gorkemkaraagac1@gmail.com?subject=Finans Profesyonel Plan Talebi",
       "highlight": true,
       "licenses": [
         "tms29",
@@ -218,28 +218,31 @@
     },
     {
       "id": "enterprise",
-      "name": "Enterprise",
+      "name": "CFO Kurumsal",
       "price": "Özel Fiyatlandırma",
       "period": "",
-      "tagline": "Kurumsal ölçekte tüm araçlar ve öncelikli danışmanlık desteği.",
+      "tagline": "Finansal raporlama, risk ve CFO karar desteğini tek platformda birleştiren kurumsal çözüm.",
       "features": [
-        "Professional plandaki her şey",
-        "TFRS 16 Kiralama İşlemleri Motoru",
-        "ECL Analyzer",
-        "Hedge Accounting Modülü",
-        "Öncelikli danışmanlık desteği",
-        "SAP S/4HANA entegrasyon danışmanlığı"
+        "Finans Profesyonel plandaki her şey",
+        "TFRS 16 — Kiralamalar",
+        "TMS 19 — Çalışanlara Sağlanan Faydalar",
+        "Beklenen Kredi Zararı Analizi",
+        "Riskten Korunma Muhasebesi",
+        "CFO Kokpiti ve yönetim görünümü",
+        "Entegrasyon ve öncelikli danışmanlık"
       ],
-      "ctaText": "Bize Ulaşın",
-      "ctaLink": "mailto:gorkemkaraagac1@gmail.com?subject=Enterprise Plan Görüşme Talebi",
+      "ctaText": "Görüşme Planla",
+      "ctaLink": "index.html#iletisim",
       "highlight": false,
       "licenses": [
         "tms29",
         "dcf",
         "workingcapital",
         "tfrs16",
+        "tms19",
         "ecl",
-        "hedge"
+        "hedge",
+        "financial-cockpit"
       ]
     }
   ],
