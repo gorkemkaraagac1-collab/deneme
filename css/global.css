@@ -1,37 +1,32 @@
 /* ==========================================================================
-   GK ADVISORY - ENTERPRISE DESIGN SYSTEM & GLOBAL STYLES
+   GK ADVISORY - ORIGINAL LUXURY BRANDING & DESIGN SYSTEM
    ========================================================================== */
 
 :root {
-  /* GK Advisory Color Palette */
-  --gk-navy-dark: #0b132b;
-  --gk-navy-card: #1c2541;
-  --gk-gold: #d4af37;
-  --gk-gold-hover: #f3e5ab;
+  /* Premium GK Advisory Palette */
+  --gk-navy: #0b132b;
+  --gk-navy-border: rgba(255, 255, 255, 0.12);
+  --gk-gold: #c5a059;
+  --gk-gold-light: #d4b475;
   
-  --slate-900: #0f172a;
-  --slate-800: #1e293b;
-  --slate-700: #334155;
-  --slate-600: #475569;
-  --slate-500: #64748b;
-  --slate-300: #cbd5e1;
-  --slate-100: #f1f5f9;
-  --slate-50:  #f8fafc;
+  /* Backgrounds */
+  --bg-cream: #f4f0ea;
+  --card-cream: #fbf9f5;
+  --card-border: #e2d7c5;
+  
+  /* Text Colors */
+  --text-dark: #1a1a1a;
+  --text-muted: #666666;
+  --text-gold: #a37f3e;
 
-  /* Status & Financial Indicators */
-  --success: #15803d;
-  --success-bg: #f0fdf4;
-  --warning: #b45309;
-  --warning-bg: #fffbeb;
-  --danger: #b91c1c;
-  --danger-bg: #fef2f2;
+  /* Status Colors */
+  --success: #2e7d32;
+  --danger: #c62828;
+  --warning: #ef6c00;
 
   /* Layout */
-  --border-color: #e2e8f0;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --radius-sm: 4px;
+  --radius-md: 8px;
 }
 
 * {
@@ -41,11 +36,17 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: var(--slate-50);
-  color: var(--slate-900);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  background-color: var(--bg-cream) !important;
+  color: var(--text-dark);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Serif Font Class for Brand Headings */
+h1, h2, h3, .serif-title {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
 }
 
 /* Tabular Nums for Financial Data Alignment */
@@ -54,25 +55,22 @@ body {
 }
 
 /* ==========================================================================
-   HEADER & NAVIGATION (GK ADVISORY FIXED STANDARD)
+   HEADER & NAVIGATION
    ========================================================================== */
 
 .gk-header {
   width: 100%;
-  background-color: var(--gk-navy-dark);
+  background-color: var(--gk-navy) !important;
   color: #ffffff !important;
   padding: 16px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--gk-navy-border);
   position: relative;
   z-index: 100;
 }
 
 .gk-header-container {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
@@ -86,8 +84,7 @@ body {
   font-family: Georgia, serif;
   font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #ffffff !important;
+  letter-spacing: 0.08em;
 }
 
 .gk-brand .brand-logo {
@@ -99,39 +96,65 @@ body {
 }
 
 .gk-nav .nav-link {
-  color: var(--slate-300) !important;
+  color: var(--gk-gold) !important;
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: color 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .gk-nav .nav-link:hover {
-  color: var(--gk-gold) !important;
+  opacity: 0.8;
 }
 
 /* ==========================================================================
-   MAIN CONTENT & CONTAINER
+   MAIN CONTAINER & CARDS
    ========================================================================== */
 
 main, .main-container, .container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px 40px 20px !important;
+  padding: 32px 20px 48px 20px !important;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .page-header h1 {
-  font-size: 1.85rem;
+  font-size: 2rem;
   font-weight: 700;
-  color: var(--slate-900);
-  margin-bottom: 6px;
+  color: var(--gk-navy);
+  margin-bottom: 8px;
 }
 
 .page-header p {
   font-size: 0.95rem;
-  color: var(--slate-600);
+  color: var(--text-muted);
+}
+
+/* Original GK Advisory Cream Cards */
+.kpi-card, .card, .module-card {
+  background-color: var(--card-cream) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.kpi-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-gold) !important;
+  margin-bottom: 8px;
+}
+
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--gk-navy);
+  font-variant-numeric: tabular-nums;
 }
