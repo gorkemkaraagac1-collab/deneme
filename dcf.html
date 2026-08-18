@@ -43,47 +43,68 @@
   <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
     <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Discounted Cash Flow (DCF) &amp; Valuation Engine</h2>
 
-    <div style="display: grid; grid-template-columns: 300px 1fr; gap: 24px;">
-      <!-- Valuation Inputs -->
+    <div style="display: grid; grid-template-columns: 320px 1fr; gap: 24px;">
+      <!-- Dynamic Valuation Inputs -->
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
         <h3 style="font-size: 1.1rem; margin-bottom: 16px;">Model Varsayımları</h3>
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-          <label style="font-size: 0.85rem; color: var(--text-secondary);">WACC (%):
-            <input type="number" value="10.5" step="0.1" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">
+            WACC (%):
+            <input type="number" id="wacc-input" value="10.5" step="0.1" min="1" max="50" 
+                   style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 4px; margin-top: 6px;">
           </label>
-          <label style="font-size: 0.85rem; color: var(--text-secondary);">Terminal Growth Rate (%):
-            <input type="number" value="2.5" step="0.1" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">
+            Terminal Growth Rate (%):
+            <input type="number" id="terminal-growth-input" value="2.5" step="0.1" min="0" max="10" 
+                   style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 4px; margin-top: 6px;">
           </label>
-          <label style="font-size: 0.85rem; color: var(--text-secondary);">Revenue Growth (%):
-            <input type="number" value="8.0" step="0.5" style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 6px; border-radius: 4px; margin-top: 4px;">
+
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">
+            Revenue Growth (%):
+            <input type="number" id="revenue-growth-input" value="8.0" step="0.5" min="-20" max="50" 
+                   style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 4px; margin-top: 6px;">
           </label>
+
+          <label style="font-size: 0.85rem; color: var(--text-secondary);">
+            Net Debt (€):
+            <input type="number" id="net-debt-input" value="18200000" step="100000" 
+                   style="width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 4px; margin-top: 6px;">
+          </label>
+
         </div>
       </div>
 
-      <!-- Valuation Output -->
+      <!-- Dynamic Valuation Output & Sensitivity -->
       <div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
           <div class="kpi-card">
             <span class="kpi-title">Enterprise Value (EV)</span>
-            <div class="kpi-value">€142.5M</div>
+            <div class="kpi-value" data-val="ev">€0.0M</div>
           </div>
           <div class="kpi-card">
             <span class="kpi-title">Net Debt</span>
-            <div class="kpi-value">€18.2M</div>
+            <div class="kpi-value" data-val="net-debt">€0.0M</div>
           </div>
           <div class="kpi-card">
             <span class="kpi-title">Equity Value</span>
-            <div class="kpi-value" style="color: var(--accent-green);">€124.3M</div>
+            <div class="kpi-value" style="color: var(--accent-green);" data-val="equity">€0.0M</div>
           </div>
         </div>
 
         <div class="insight-card">
-          <div class="insight-step"><span class="insight-step-label step-sowhat">VALUATION INSIGHT</span> A 100bps increase in WACC (from 10.5% to 11.5%) reduces estimated Enterprise Value by approximately €9.4M (-6.6%).</div>
+          <div class="insight-step">
+            <span class="insight-step-label step-sowhat">VALUATION DYNAMICS</span>
+            Model sonuçları `js/financial-data.js` motoru üzerinden canlı hesaplanmaktadır. WACC veya Büyüme Oranı değiştirildiğinde İndirgenmiş Nakit Akışları ve Özsermaye Değeri (Equity Value) anlık güncellenir.
+          </div>
         </div>
       </div>
     </div>
   </main>
 
+  <!-- Script Entegrasyon Sırası -->
+  <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
