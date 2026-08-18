@@ -8,7 +8,11 @@
     "eyebrow": "Governance & Knowledge Advisory",
     "titleLine1": "Defterden",
     "titleLine2": "karar masasına.",
-    "lede": "SAP S/4HANA FI-CO, IFRS/TFRS raporlama ve M&A finansal durum tespiti alanlarında; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık."
+    "lede": "SAP S/4HANA FI-CO, IFRS/TFRS raporlama ve M&A finansal durum tespiti alanlarında; Big Four denetim disipliniyle şekillenmiş, uygulamaya dönük danışmanlık.",
+    "eyebrowEn": "Governance & Knowledge Advisory",
+    "titleLine1En": "From the ledger",
+    "titleLine2En": "to the decision desk.",
+    "ledeEn": "Practice-oriented advisory shaped by Big Four audit discipline, developing the finance function's reporting, process, technology, and decision-making capacity together."
   },
   "services": [
     {
@@ -24,7 +28,9 @@
         "TMS 29 / paralel defter değerlendirmesi",
         "Kontrol noktaları ve iyileştirme yol haritası"
       ],
-      "impact": "Daha düşük manuel iş yükü, daha güvenilir raporlama ve kapanış sürecinde daha yüksek kontrol."
+      "impact": "Daha düşük manuel iş yükü, daha güvenilir raporlama ve kapanış sürecinde daha yüksek kontrol.",
+      "titleEn": "SAP S/4HANA FI-CO Advisory",
+      "descEn": "Parallel ledger activation, document splitting, and IAS 29 inflation accounting module setup."
     },
     {
       "acct": "HESAP 200 · RAPORLAMA",
@@ -39,7 +45,9 @@
         "IFRS/TFRS teknik değerlendirmeleri",
         "Kapanış ve raporlama takvimi"
       ],
-      "impact": "Daha hızlı kapanış, daha az düzeltme ve yönetimin finansal sonuçlara güveninin artması."
+      "impact": "Daha hızlı kapanış, daha az düzeltme ve yönetimin finansal sonuçlara güveninin artması.",
+      "titleEn": "IFRS Reporting & Consolidation",
+      "descEn": "Multi-entity group consolidation and reporting packages for CMB-regulated and publicly listed companies."
     },
     {
       "acct": "HESAP 300 · M&A",
@@ -54,7 +62,9 @@
         "Working capital analizi",
         "Deal discussion destekleri"
       ],
-      "impact": "Daha doğru işlem değeri, daha güçlü müzakere pozisyonu ve sürprizlerin azaltılması."
+      "impact": "Daha doğru işlem değeri, daha güçlü müzakere pozisyonu ve sürprizlerin azaltılması.",
+      "titleEn": "Financial Due Diligence (Quality of Earnings)",
+      "descEn": "Sustainable earnings analysis and transaction support services for M&A processes."
     },
     {
       "acct": "HESAP 400 · DEĞERLEME",
@@ -69,7 +79,9 @@
         "Sensitivity / scenario analysis",
         "Yönetim raporu"
       ],
-      "impact": "Değerleme risklerinin görünür hale gelmesi ve sermaye tahsisi kararlarının güçlenmesi."
+      "impact": "Değerleme risklerinin görünür hale gelmesi ve sermaye tahsisi kararlarının güçlenmesi.",
+      "titleEn": "Financial Modeling & Impairment Testing",
+      "descEn": "DCF-based company valuation, goodwill and asset impairment testing (IAS 36)."
     },
     {
       "acct": "HESAP 500 · SÜREÇ",
@@ -84,7 +96,9 @@
         "Otomasyon fırsat analizi",
         "Uygulama yol haritası"
       ],
-      "impact": "Daha kısa çevrim süresi, daha düşük operasyonel maliyet ve ölçeklenebilir finans operasyonu."
+      "impact": "Daha kısa çevrim süresi, daha düşük operasyonel maliyet ve ölçeklenebilir finans operasyonu.",
+      "titleEn": "Process Improvement & Digitalization",
+      "descEn": "Finance process and workflow design that reduces manual workload and increases automation."
     },
     {
       "acct": "HESAP 600 · DENETİM",
@@ -99,7 +113,9 @@
         "Bulgular ve aksiyon planı",
         "Denetim hazırlık desteği"
       ],
-      "impact": "Daha güçlü yönetişim, daha az kontrol açığı ve daha öngörülebilir denetim süreci."
+      "impact": "Daha güçlü yönetişim, daha az kontrol açığı ve daha öngörülebilir denetim süreci.",
+      "titleEn": "Audit & Internal Control Advisory",
+      "descEn": "Internal control assessment and audit process advisory under ISA/BDS frameworks."
     }
   ],
   "posts": [
@@ -306,6 +322,78 @@
       {
         "age": 60,
         "rate": 0.5
+      }
+    ]
+  },
+  "cockpit": {
+    "lastUpdated": "18 Ağustos 2026",
+    "metrics": [
+      {
+        "label": "Gelir",
+        "value": "₺412M",
+        "note": "Önceki döneme göre +8,4%",
+        "direction": "up"
+      },
+      {
+        "label": "FAVÖK Marjı",
+        "value": "%18,7",
+        "note": "1,9 puan iyileşme",
+        "direction": "up"
+      },
+      {
+        "label": "Nakit Dönüşüm Süresi",
+        "value": "67 gün",
+        "note": "Hedefin 5 gün üzerinde",
+        "direction": "down"
+      },
+      {
+        "label": "Net Borç / FAVÖK",
+        "value": "2,4x",
+        "note": "Kovenant aralığında",
+        "direction": "neutral"
+      }
+    ],
+    "priorities": [
+      {
+        "title": "Working Capital",
+        "desc": "Receivables days hedefin üzerinde. Cash conversion cycle üzerinde iyileştirme fırsatı bulunuyor.",
+        "status": "YÜKSEK",
+        "level": "high"
+      },
+      {
+        "title": "Borç Pozisyonu",
+        "desc": "Net borç / FAVÖK seviyesi izlenmeli. Refinansman ve kovenant duyarlılık analizi öneriliyor.",
+        "status": "ORTA",
+        "level": "medium"
+      },
+      {
+        "title": "Değerleme",
+        "desc": "DCF değerlemesinde terminal value şirket değerinin önemli bölümünü oluşturuyor. Duyarlılık analizi öneriliyor.",
+        "status": "GÖZDEN GEÇİR",
+        "level": "medium"
+      },
+      {
+        "title": "ECL Riski",
+        "desc": "Beklenen kredi zararı modeli kapsamında müşteri risk dağılımı düzenli olarak izlenmeli.",
+        "status": "İZLE",
+        "level": "low"
+      }
+    ],
+    "signals": [
+      {
+        "title": "Gelir Büyümesi",
+        "desc": "Gelir büyüme trendi olumlu.",
+        "status": "POZİTİF"
+      },
+      {
+        "title": "Brüt Kâr Marjı",
+        "desc": "Son dönemlerde marj baskısı gözlemleniyor.",
+        "status": "İZLE"
+      },
+      {
+        "title": "Likidite",
+        "desc": "Mevcut likidite pozisyonu yeterli görünüyor.",
+        "status": "STABİL"
       }
     ]
   }

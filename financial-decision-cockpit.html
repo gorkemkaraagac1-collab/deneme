@@ -274,6 +274,15 @@
         flex-direction: column;
       }
     }
+
+    @media print {
+      header, .cockpit-actions, footer, .module-grid, #logout { display: none !important; }
+      body { background: #fff; }
+      .page-hero { background: #fff !important; color: #000 !important; padding: 10px 0 20px; }
+      .page-hero .eyebrow, .page-hero h1, .page-hero p { color: #000 !important; }
+      .cockpit-shell { padding: 0; }
+      .metric-card, .cockpit-card, .decision-item { break-inside: avoid; border-color: #ccc !important; }
+    }
   </style>
 </head>
 
@@ -321,9 +330,11 @@
         </h1>
 
         <p id="user-meta"></p>
+        <p id="lastUpdated" style="font-size:12.5px;opacity:.6;margin-top:4px;"></p>
       </div>
 
       <div class="cockpit-actions">
+        <button type="button" class="btn" id="printBtn" style="border:none;cursor:pointer;">Yazdır / PDF</button>
         <a href="dashboard.html" class="btn">
           ← Dashboard
         </a>
@@ -334,7 +345,7 @@
 
     <!-- KPI CARDS -->
 
-    <div class="cockpit-grid">
+    <div class="cockpit-grid" id="cockpitGrid">
 
       <div class="metric-card">
         <div class="metric-label">
@@ -413,7 +424,7 @@
           </p>
 
 
-          <div class="decision-list">
+          <div class="decision-list" id="prioritiesList">
 
             <div class="decision-item priority-high">
 
@@ -511,7 +522,7 @@
           </p>
 
 
-          <div class="decision-list">
+          <div class="decision-list" id="signalsList">
 
             <div class="decision-item">
 
@@ -830,6 +841,59 @@
     location.href = 'login.html';
 
   };
+
+
+  /*
+   * Yazdır / PDF
+   */
+  document.getElementById('printBtn').onclick = function(){ window.print(); };
+
+
+  /*
+   * content.json üzerinden cockpit verilerini yükler (KPI'lar, öncelikler, sinyaller).
+   * Bulunamazsa sayfadaki varsayılan (hardcoded) örnek veriler görünmeye devam eder.
+   */
+  const dirArrow = { up: '▲', down: '▼', neutral: '—' };
+
+  fetch('content.json').then(r => r.json()).then(data => {
+    const c = data.cockpit;
+    if (!c) return;
+
+    if (c.lastUpdated) {
+      document.getElementById('lastUpdated').textContent = 'Son güncelleme: ' + c.lastUpdated + ' (elle girilmiştir, gerçek zamanlı değildir)';
+    }
+
+    if (Array.isArray(c.metrics) && c.metrics.length) {
+      document.getElementById('cockpitGrid').innerHTML = c.metrics.map(m => `
+        <div class="metric-card">
+          <div class="metric-label">${m.label || ''}</div>
+          <div class="metric-value">${m.value || ''}</div>
+          <div class="metric-note">${dirArrow[m.direction] || ''} ${m.note || ''}</div>
+        </div>`).join('');
+    }
+
+    if (Array.isArray(c.priorities) && c.priorities.length) {
+      document.getElementById('prioritiesList').innerHTML = c.priorities.map(p => `
+        <div class="decision-item priority-${p.level || 'medium'}">
+          <div>
+            <div class="decision-title">${p.title || ''}</div>
+            <div class="decision-description">${p.desc || ''}</div>
+          </div>
+          <span class="status">${p.status || ''}</span>
+        </div>`).join('');
+    }
+
+    if (Array.isArray(c.signals) && c.signals.length) {
+      document.getElementById('signalsList').innerHTML = c.signals.map(s => `
+        <div class="decision-item">
+          <div>
+            <div class="decision-title">${s.title || ''}</div>
+            <div class="decision-description">${s.desc || ''}</div>
+          </div>
+          <span class="status">${s.status || ''}</span>
+        </div>`).join('');
+    }
+  }).catch(() => { /* content.json'a ulaşılamıyorsa varsayılan örnek veriler görünmeye devam eder */ });
 
 </script>
 
