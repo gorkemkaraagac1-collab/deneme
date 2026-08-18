@@ -3,183 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IFRS 9 Beklenen Kredi Zararları (ECL) - GK Platform</title>
+  <title>GK ADVISORY - IFRS 9 ECL Beklenen Kredi Zararları</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
+  <header class="gk-header">
+    <div class="gk-header-container">
+      <div class="gk-brand">
         <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
-        </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
-        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title" style="color: var(--text-primary);">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html" style="color: var(--text-primary);">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
-          </div>
-        </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+        <span class="brand-title">ADVISORY</span>
       </div>
+      <nav class="gk-nav">
+        <a href="dashboard.html" class="nav-link">← Panele Dön</a>
+      </nav>
     </div>
   </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-      <div>
-        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">IFRS 9 Beklenen Kredi Zararları (ECL) Modelleme</h2>
-        <p style="color: var(--text-muted); font-size: 0.95rem;">3 Aşamalı Kredi Riski Matrisi (Stage 1, 2, 3) üzerinden PD x LGD x EAD Karşılık Hesabı ve P&amp;L Etki Simülasyonu.</p>
-      </div>
+  <main class="main-container">
+    <div class="page-header">
+      <div class="kpi-title">FINANCE INTELLIGENCE · IFRS 9 / TFRS 9</div>
+      <h1>Beklenen Kredi Zararları (ECL) Modülü</h1>
+      <p>Ticari alacaklar ve finansal varlıklar için karşılık matrisi ve aktör bazlı temerrüt ihtimali (PD/LGD) hesaplayıcı.</p>
     </div>
 
-    <!-- Parametre Giriş Paneli ve KPI Metrikleri -->
-    <div style="display: grid; grid-template-columns: 360px 1fr; gap: 24px; margin-bottom: 30px;">
-      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
-        <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Portföy ve Risk Parametreleri</h3>
-        
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Toplam Alacak Portföyı (EAD) (₺)</label>
-          <input type="number" id="ecl-total-ead" value="500000000" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
-        </div>
-
-        <div style="margin-bottom: 14px;">
-          <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Temerrüt Halinde Kayıp Oranı (LGD %)</label>
-          <input type="number" id="ecl-lgd-rate" value="45" step="1" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px;">
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 16px 0;">
-
-        <h4 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text-primary);">Stage 1 (12 Aylık ECL - Düşük Risk)</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Portföy Payı (%)</label>
-            <input type="number" id="ecl-s1-share" value="80" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 4px;">
-          </div>
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">12-Ay PD (%)</label>
-            <input type="number" id="ecl-s1-pd" value="1.5" step="0.1" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 4px;">
-          </div>
-        </div>
-
-        <h4 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text-primary);">Stage 2 (Ömür Boyu ECL - Risk Artışı)</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Portföy Payı (%)</label>
-            <input type="number" id="ecl-s2-share" value="15" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 4px;">
-          </div>
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Lifetime PD (%)</label>
-            <input type="number" id="ecl-s2-pd" value="8.0" step="0.5" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 4px;">
-          </div>
-        </div>
-
-        <h4 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text-primary);">Stage 3 (Kredi Batık - Impaired)</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Portföy Payı (%)</label>
-            <input type="number" id="ecl-s3-share" value="5" style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 4px;">
-          </div>
-          <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted);">PD (%)</label>
-            <input type="number" id="ecl-s3-pd" value="100" readonly style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-muted); padding: 6px 10px; border-radius: 4px;">
-          </div>
-        </div>
+    <div class="kpi-card">
+      <h3 class="serif-title" style="font-size: 1.2rem; color: var(--gk-navy); margin-bottom: 16px;">1 · Ticari Alacak Yaslandırma ve Karşılık Matrisi</h3>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--card-border); text-align: left;">
+              <th style="padding: 10px;" class="kpi-title">VADE DİLİMİ</th>
+              <th style="padding: 10px;" class="kpi-title">ALACAK TUTARI (₺)</th>
+              <th style="padding: 10px;" class="kpi-title">TAHMİNİ ZARAR ORANI (%)</th>
+              <th style="padding: 10px;" class="kpi-title">HESAPLANAN KARŞILIK (₺)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--card-border);">
+              <td style="padding: 10px; font-weight: 600;">Vadesi Gelmemiş</td>
+              <td style="padding: 10px;"><input type="number" placeholder="0.00" style="width: 100%; padding: 6px; border: 1px solid var(--card-border);"></td>
+              <td style="padding: 10px;"><input type="number" placeholder="0.5" style="width: 100%; padding: 6px; border: 1px solid var(--card-border);"></td>
+              <td style="padding: 10px; font-weight: 700; color: var(--gk-navy);">₺0.00</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-
-      <!-- KPI Kartları ve Dağılım Tablosu -->
-      <div style="display: flex; flex-direction: column; gap: 20px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-          <div class="kpi-card">
-            <span class="kpi-title">Toplam Hesaplanan ECL Karşılığı</span>
-            <div class="kpi-value" data-ecl="total-provision">₺0</div>
-            <div class="kpi-delta negative">Bilançoda Düşülecek Tutar</div>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Portföy Karşılık Oranı (%)</span>
-            <div class="kpi-value" data-ecl="coverage-ratio">%0.00</div>
-            <div class="kpi-delta positive">ECL / Toplam EAD</div>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Stage 1 + 2 ECL Payı</span>
-            <div class="kpi-value" data-ecl="performing-provision">₺0</div>
-            <div class="kpi-delta positive">Perform Eden Portföy</div>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-title">Stage 3 (Batık) Karşılığı</span>
-            <div class="kpi-value" data-ecl="stage3-provision">₺0</div>
-            <div class="kpi-delta negative">100% PD Karşılığı</div>
-          </div>
-        </div>
-
-        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; flex-grow: 1;">
-          <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Aşamalar Bazında ECL Detay Tablosu</h3>
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-            <thead>
-              <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted);">
-                <th style="padding: 10px;">Aşama (Stage)</th>
-                <th style="padding: 10px;">EAD (Risk Tutarı)</th>
-                <th style="padding: 10px;">PD (Temerrüt Prob.)</th>
-                <th style="padding: 10px;">LGD (Kayıp Oranı)</th>
-                <th style="padding: 10px; text-align: right;">ECL Karşılığı (₺)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 10px; font-weight: 600;">Stage 1 (12-Ay ECL)</td>
-                <td style="padding: 10px;" data-ecl="s1-ead">₺0</td>
-                <td style="padding: 10px;" data-ecl="s1-pd-val">%0</td>
-                <td style="padding: 10px;" data-ecl="lgd-val1">%0</td>
-                <td style="padding: 10px; text-align: right; color: var(--text-primary); font-weight: 600;" data-ecl="s1-ecl">₺0</td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 10px; font-weight: 600;">Stage 2 (Ömür Boyu ECL)</td>
-                <td style="padding: 10px;" data-ecl="s2-ead">₺0</td>
-                <td style="padding: 10px;" data-ecl="s2-pd-val">%0</td>
-                <td style="padding: 10px;" data-ecl="lgd-val2">%0</td>
-                <td style="padding: 10px; text-align: right; color: var(--text-primary); font-weight: 600;" data-ecl="s2-ecl">₺0</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; font-weight: 600;">Stage 3 (Kredi Batık)</td>
-                <td style="padding: 10px;" data-ecl="s3-ead">₺0</td>
-                <td style="padding: 10px;">%100.00</td>
-                <td style="padding: 10px;" data-ecl="lgd-val3">%0</td>
-                <td style="padding: 10px; text-align: right; color: #ef4444; font-weight: 600;" data-ecl="s3-ecl">₺0</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Grafik Paneli -->
-    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-      <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--text-primary);">Aşamalara Göre Risk Tutarı (EAD) ve Beklenen Karşılık Dağılımı (₺M)</h3>
-      <div style="position: relative; height: 320px; width: 100%;">
-        <canvas id="eclChart"></canvas>
-      </div>
-    </div>
-
-    <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">12 AYLIK VS ÖMÜR BOYU</span> Stage 1 finansal varlıklar için 12 aylık ECL ayrılırken, kredi riskinde önemli artış (SICR) gerçekleştiğinde Stage 2'ye geçilir ve Ömür Boyu (Lifetime) ECL hesaplanır.</div>
-      <div class="insight-step"><span class="insight-step-label step-sowhat">P&amp;L ETKİSİ</span> Karşılıktaki dönemler arası net değişim doğrudan Gelir Tablosuna (Kredi Zarar Karşılık Gideri) yazılarak EBITDA ve Net Karı etkiler.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">MAKROEKONOMİK ETKİ</span> IFRS 9 forward-looking (ileriye dönük) yaklaşımı gereği GSYH büyümesi, işsizlik ve enflasyon senaryoları PD ve LGD oranlarına çarpan olarak eklenmelidir.</div>
     </div>
   </main>
 
