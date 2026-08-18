@@ -1,21 +1,28 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-  /* =====================================================
-     TFRS 16 CONTRACT PORTFOLIO V4
-     ===================================================== */
+  /*
+  ============================================================
+  GK FINANCE INTELLIGENCE
+  TFRS 16 ENGINE V5
+  ============================================================
+  */
 
-  const STORAGE_KEY = "gk_tfrs16_contracts_v4";
+  const STORAGE_KEY = "gk_tfrs16_contracts_v5";
 
   let contracts = loadContracts();
   let selectedContractId = null;
 
-  /* =====================================================
-     DEMO DATA
-     ===================================================== */
+
+  /*
+  ============================================================
+  DEMO DATA
+  ============================================================
+  */
 
   function getDefaultContracts() {
 
     return [
+
       {
         id: "LEASE-001",
         company: "GK Holding",
@@ -54,14 +61,17 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "active",
         modification: false
       }
+
     ];
 
   }
 
 
-  /* =====================================================
-     STORAGE
-     ===================================================== */
+  /*
+  ============================================================
+  STORAGE
+  ============================================================
+  */
 
   function loadContracts() {
 
@@ -89,7 +99,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
-    const defaults = getDefaultContracts();
+    const defaults =
+      getDefaultContracts();
 
     saveContracts(defaults);
 
@@ -108,19 +119,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     HELPERS
-     ===================================================== */
+  /*
+  ============================================================
+  FORMAT
+  ============================================================
+  */
 
   function formatNumber(value) {
 
-    return Number(value || 0).toLocaleString(
-      "tr-TR",
-      {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }
-    );
+    return Number(value || 0)
+      .toLocaleString(
+        "tr-TR",
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }
+      );
 
   }
 
@@ -134,20 +148,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function parseDate(value) {
 
-    if (!value) return null;
+    if (!value) {
+      return null;
+    }
 
-    return new Date(`${value}T00:00:00`);
+    const date =
+      new Date(
+        `${value}T00:00:00`
+      );
+
+    return isNaN(date.getTime())
+      ? null
+      : date;
 
   }
 
 
   function formatDate(value) {
 
-    if (!value) return "-";
+    const date =
+      parseDate(value);
 
-    const date = parseDate(value);
-
-    if (!date || isNaN(date)) {
+    if (!date) {
       return "-";
     }
 
@@ -158,18 +180,37 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function monthsBetween(start, end) {
+  /*
+  ============================================================
+  MONTH CALCULATION
+  ============================================================
+  */
 
-    const startDate = parseDate(start);
-    const endDate = parseDate(end);
+  function monthsBetween(
+    start,
+    end
+  ) {
+
+    const startDate =
+      parseDate(start);
+
+    const endDate =
+      parseDate(end);
 
     if (!startDate || !endDate) {
       return 0;
     }
 
     const months =
-      (endDate.getFullYear() - startDate.getFullYear()) * 12 +
-      (endDate.getMonth() - startDate.getMonth());
+      (
+        endDate.getFullYear() -
+        startDate.getFullYear()
+      ) * 12
+      +
+      (
+        endDate.getMonth() -
+        startDate.getMonth()
+      );
 
     return Math.max(
       1,
@@ -179,26 +220,84 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     TFRS 16 CALCULATION
-     ===================================================== */
+  /*
+  ============================================================
+  TFRS 16 ENGINE
+  ============================================================
 
-  function calculateLease(contract) {
+  Simplified financial model:
+
+  Initial Lease Liability
+  =
+  PV of future lease payments
+
+  Monthly Interest
+  =
+  Opening Liability × Monthly Discount Rate
+
+  Principal
+  =
+  Payment - Interest
+
+  Closing Liability
+  =
+  Opening Liability - Principal
+
+  ROU Asset
+  =
+  Initial Lease Liability
+
+  Monthly Depreciation
+  =
+  Initial ROU / Lease Term
+  ============================================================
+  */
+
+  function calculateLease(
+    contract
+  ) {
 
     const payment =
-      Number(contract.monthlyPayment) || 0;
+      Number(
+        contract.monthlyPayment
+      ) || 0;
 
     const annualRate =
-      Number(contract.discountRate) || 0;
+      Number(
+        contract.discountRate
+      ) || 0;
 
     const monthlyRate =
-      annualRate / 100 / 12;
+      annualRate /
+      100 /
+      12;
 
     const months =
       monthsBetween(
         contract.startDate,
         contract.endDate
       );
+
+    if (
+      payment <= 0 ||
+      months <= 0
+    ) {
+
+      return {
+        months: 0,
+        liability: 0,
+        rouAssets: 0,
+        depreciation: 0,
+        interest: 0,
+        schedule: []
+      };
+
+    }
+
+
+    /*
+    INITIAL LIABILITY
+    */
 
     let liability = 0;
 
@@ -212,7 +311,8 @@ document.addEventListener("DOMContentLoaded", () => {
       liability =
         payment *
         (
-          (1 -
+          (
+            1 -
             Math.pow(
               1 + monthlyRate,
               -months
@@ -223,81 +323,260 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+
+    const initialLiability =
+      liability;
+
+
     /*
-      Simplified ROU calculation.
+    INITIAL ROU
 
-      V4:
-      Initial ROU ≈ Lease Liability
+    V5 simplified:
 
-      İlerleyen versiyonda:
-      + initial direct costs
-      + prepaid lease payments
-      - lease incentives
-      + restoration obligations
-      eklenecek.
+    ROU = lease liability
+
+    V6:
+    + prepaid payments
+    + direct costs
+    - incentives
+    + restoration
     */
 
-    const rouAssets = liability;
+    const initialROU =
+      initialLiability;
+
+
+    const depreciation =
+      initialROU /
+      months;
+
+
+    /*
+    PAYMENT SCHEDULE
+    */
+
+    const schedule = [];
+
+    let openingLiability =
+      initialLiability;
+
+    let rouOpening =
+      initialROU;
+
+
+    for (
+      let i = 1;
+      i <= months;
+      i++
+    ) {
+
+      const interest =
+        openingLiability *
+        monthlyRate;
+
+
+      let principal =
+        payment -
+        interest;
+
+
+      if (
+        principal >
+        openingLiability
+      ) {
+
+        principal =
+          openingLiability;
+
+      }
+
+
+      const closingLiability =
+        Math.max(
+          0,
+          openingLiability -
+          principal
+        );
+
+
+      const rouDepreciation =
+        Math.min(
+          depreciation,
+          rouOpening
+        );
+
+
+      const rouClosing =
+        Math.max(
+          0,
+          rouOpening -
+          rouDepreciation
+        );
+
+
+      schedule.push({
+
+        period: i,
+
+        openingLiability,
+
+        payment,
+
+        interest,
+
+        principal,
+
+        closingLiability,
+
+        rouOpening,
+
+        depreciation:
+          rouDepreciation,
+
+        rouClosing
+
+      });
+
+
+      openingLiability =
+        closingLiability;
+
+      rouOpening =
+        rouClosing;
+
+    }
+
 
     return {
+
       months,
-      liability,
-      rouAssets
+
+      liability:
+        initialLiability,
+
+      rouAssets:
+        initialROU,
+
+      depreciation,
+
+      monthlyInterest:
+        schedule[0]?.interest || 0,
+
+      schedule
+
     };
 
   }
 
 
-  /* =====================================================
-     NEXT 12 MONTHS
-     ===================================================== */
+  /*
+  ============================================================
+  CURRENT / NON-CURRENT
+  ============================================================
+  */
 
-  function calculateNext12Months(contract) {
+  function calculateCurrentLiability(
+    contract
+  ) {
 
-    const payment =
-      Number(contract.monthlyPayment) || 0;
+    const engine =
+      calculateLease(
+        contract
+      );
 
-    const endDate =
-      parseDate(contract.endDate);
-
-    const today =
-      new Date();
-
-    let monthsRemaining = 12;
-
-    if (endDate) {
-
-      const diffMonths =
-        (
-          endDate.getFullYear() -
-          today.getFullYear()
-        ) * 12 +
-        (
-          endDate.getMonth() -
-          today.getMonth()
-        );
-
-      monthsRemaining =
-        Math.max(
-          0,
-          Math.min(
-            12,
-            diffMonths
-          )
-        );
-
+    if (
+      !engine.schedule.length
+    ) {
+      return 0;
     }
 
-    return payment * monthsRemaining;
+
+    const current =
+      engine.schedule
+        .slice(0, 12)
+        .reduce(
+          (
+            total,
+            item
+          ) =>
+            total +
+            item.principal,
+          0
+        );
+
+
+    return Math.min(
+      engine.liability,
+      current
+    );
 
   }
 
 
-  /* =====================================================
-     RENEWAL
-     ===================================================== */
+  function calculateNonCurrentLiability(
+    contract
+  ) {
 
-  function isRenewalWithin90Days(contract) {
+    const engine =
+      calculateLease(
+        contract
+      );
+
+
+    const current =
+      calculateCurrentLiability(
+        contract
+      );
+
+
+    return Math.max(
+      0,
+      engine.liability -
+      current
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  NEXT 12 MONTHS
+  ============================================================
+  */
+
+  function calculateNext12Months(
+    contract
+  ) {
+
+    const engine =
+      calculateLease(
+        contract
+      );
+
+    return engine.schedule
+      .slice(0, 12)
+      .reduce(
+        (
+          total,
+          item
+        ) =>
+          total +
+          item.payment,
+        0
+      );
+
+  }
+
+
+  /*
+  ============================================================
+  RENEWAL
+  ============================================================
+  */
+
+  function isRenewalWithin90Days(
+    contract
+  ) {
 
     if (!contract.renewalDate) {
       return false;
@@ -317,7 +596,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const days =
       difference /
-      (1000 * 60 * 60 * 24);
+      (
+        1000 *
+        60 *
+        60 *
+        24
+      );
 
     return (
       days >= 0 &&
@@ -327,106 +611,130 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     KPI
-     ===================================================== */
+  /*
+  ============================================================
+  KPI
+  ============================================================
+  */
 
   function updateKPIs() {
 
-    const activeContracts =
+    const active =
       contracts.filter(
-        c => c.status === "active"
+        c =>
+          c.status ===
+          "active"
       );
 
-    let totalLiability = 0;
-    let totalROU = 0;
-    let next12Months = 0;
 
-    activeContracts.forEach(contract => {
-
-      const calculation =
-        calculateLease(contract);
-
-      totalLiability +=
-        calculation.liability;
-
-      totalROU +=
-        calculation.rouAssets;
-
-      next12Months +=
-        calculateNext12Months(
-          contract
-        );
-
-    });
+    let liability = 0;
+    let rou = 0;
+    let next12 = 0;
 
 
-    const renewalCount =
-      activeContracts.filter(
+    active.forEach(
+      contract => {
+
+        const engine =
+          calculateLease(
+            contract
+          );
+
+        liability +=
+          engine.liability;
+
+        rou +=
+          engine.rouAssets;
+
+        next12 +=
+          calculateNext12Months(
+            contract
+          );
+
+      }
+    );
+
+
+    const renewals =
+      active.filter(
         isRenewalWithin90Days
       ).length;
 
 
-    const modificationCount =
-      activeContracts.filter(
-        c => c.modification === true
+    const modifications =
+      active.filter(
+        c =>
+          c.modification === true
       ).length;
 
 
     setText(
       "contractCount",
-      activeContracts.length
+      active.length
     );
+
 
     setText(
       "leaseLiability",
       formatCurrency(
-        totalLiability
+        liability
       )
     );
+
 
     setText(
       "rouAssets",
       formatCurrency(
-        totalROU
+        rou
       )
     );
+
 
     setText(
       "next12Months",
       formatCurrency(
-        next12Months
+        next12
       )
     );
 
+
     setText(
       "renewals90Days",
-      renewalCount
+      renewals
     );
+
 
     setText(
       "modifications",
-      modificationCount
+      modifications
     );
 
   }
 
 
-  function setText(id, value) {
+  function setText(
+    id,
+    value
+  ) {
 
     const element =
-      document.getElementById(id);
+      document.getElementById(
+        id
+      );
 
     if (element) {
-      element.textContent = value;
+      element.textContent =
+        value;
     }
 
   }
 
 
-  /* =====================================================
-     COMPANY FILTER
-     ===================================================== */
+  /*
+  ============================================================
+  COMPANY FILTER
+  ============================================================
+  */
 
   function populateCompanyFilter() {
 
@@ -435,16 +743,21 @@ document.addEventListener("DOMContentLoaded", () => {
         "companyFilter"
       );
 
-    if (!select) return;
+    if (!select) {
+      return;
+    }
 
-    const currentValue =
+
+    const current =
       select.value;
+
 
     const companies =
       [
         ...new Set(
           contracts.map(
-            c => c.company
+            c =>
+              c.company
           )
         )
       ].sort();
@@ -457,38 +770,47 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
 
-    companies.forEach(company => {
+    companies.forEach(
+      company => {
 
-      const option =
-        document.createElement(
-          "option"
+        const option =
+          document.createElement(
+            "option"
+          );
+
+        option.value =
+          company;
+
+        option.textContent =
+          company;
+
+        select.appendChild(
+          option
         );
 
-      option.value = company;
-      option.textContent = company;
-
-      select.appendChild(option);
-
-    });
+      }
+    );
 
 
     if (
       companies.includes(
-        currentValue
+        current
       )
     ) {
 
       select.value =
-        currentValue;
+        current;
 
     }
 
   }
 
 
-  /* =====================================================
-     TABLE
-     ===================================================== */
+  /*
+  ============================================================
+  TABLE
+  ============================================================
+  */
 
   function renderTable() {
 
@@ -497,17 +819,9 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractTableBody"
       );
 
-    const emptyState =
-      document.getElementById(
-        "emptyState"
-      );
-
-    const resultCount =
-      document.getElementById(
-        "resultCount"
-      );
-
-    if (!tbody) return;
+    if (!tbody) {
+      return;
+    }
 
 
     const search =
@@ -523,174 +837,210 @@ document.addEventListener("DOMContentLoaded", () => {
     const status =
       document.getElementById(
         "statusFilter"
-      )?.value || "all";
+      )?.value ||
+      "all";
 
 
     const company =
       document.getElementById(
         "companyFilter"
-      )?.value || "all";
+      )?.value ||
+      "all";
 
 
     const filtered =
-      contracts.filter(contract => {
+      contracts.filter(
+        contract => {
 
-        const searchable =
-          `
-          ${contract.id}
-          ${contract.company}
-          ${contract.supplier}
-          `
-          .toLowerCase();
+          const text =
+            `
+            ${contract.id}
+            ${contract.company}
+            ${contract.supplier}
+            `
+            .toLowerCase();
 
 
-        const matchesSearch =
-          !search ||
-          searchable.includes(
-            search
+          const matchSearch =
+            !search ||
+            text.includes(
+              search
+            );
+
+
+          const matchStatus =
+            status === "all" ||
+            contract.status ===
+              status;
+
+
+          const matchCompany =
+            company === "all" ||
+            contract.company ===
+              company;
+
+
+          return (
+            matchSearch &&
+            matchStatus &&
+            matchCompany
           );
 
-
-        const matchesStatus =
-          status === "all" ||
-          contract.status === status;
-
-
-        const matchesCompany =
-          company === "all" ||
-          contract.company === company;
-
-
-        return (
-          matchesSearch &&
-          matchesStatus &&
-          matchesCompany
-        );
-
-      });
+        }
+      );
 
 
     tbody.innerHTML = "";
 
 
-    filtered.forEach(contract => {
+    filtered.forEach(
+      contract => {
 
-      const renewalWarning =
-        isRenewalWithin90Days(
-          contract
-        );
-
-
-      const row =
-        document.createElement(
-          "tr"
-        );
+        const renewal =
+          isRenewalWithin90Days(
+            contract
+          );
 
 
-      row.innerHTML = `
+        const row =
+          document.createElement(
+            "tr"
+          );
 
-        <td>
-          <div class="contract-id">
-            ${escapeHtml(contract.id)}
-          </div>
-        </td>
 
-        <td>
-          ${escapeHtml(contract.company)}
-        </td>
+        row.innerHTML = `
 
-        <td>
-          <div class="supplier">
-            ${escapeHtml(contract.supplier)}
-          </div>
-        </td>
+          <td>
+            <div class="contract-id">
+              ${escapeHtml(
+                contract.id
+              )}
+            </div>
+          </td>
 
-        <td class="date">
-          ${formatDate(contract.startDate)}
-        </td>
-
-        <td class="date">
-          ${formatDate(contract.endDate)}
-        </td>
-
-        <td>
-          ${formatCurrency(contract.monthlyPayment)}
-        </td>
-
-        <td>
-
-          <span class="status ${contract.status}">
-            ${contract.status === "active"
-              ? "Aktif"
-              : "Pasif"}
-          </span>
-
-        </td>
-
-        <td>
-
-          <span class="${renewalWarning
-            ? "renewal-warning"
-            : ""}">
-
-            ${formatDate(
-              contract.renewalDate
+          <td>
+            ${escapeHtml(
+              contract.company
             )}
+          </td>
 
-            ${renewalWarning
-              ? " ⚠"
-              : ""}
+          <td>
+            <div class="supplier">
+              ${escapeHtml(
+                contract.supplier
+              )}
+            </div>
+          </td>
 
-          </span>
+          <td class="date">
+            ${formatDate(
+              contract.startDate
+            )}
+          </td>
 
-        </td>
+          <td class="date">
+            ${formatDate(
+              contract.endDate
+            )}
+          </td>
 
-        <td>
+          <td>
+            ${formatCurrency(
+              contract.monthlyPayment
+            )}
+          </td>
 
-          <button
-            class="row-action"
-            data-id="${contract.id}"
-          >
-            Görüntüle
-          </button>
+          <td>
+            <span class="status ${
+              contract.status
+            }">
 
-        </td>
+              ${
+                contract.status ===
+                "active"
+                  ? "Aktif"
+                  : "Pasif"
+              }
 
-      `;
+            </span>
+          </td>
+
+          <td>
+
+            <span class="${
+              renewal
+                ? "renewal-warning"
+                : ""
+            }">
+
+              ${formatDate(
+                contract.renewalDate
+              )}
+
+              ${
+                renewal
+                  ? " ⚠"
+                  : ""
+              }
+
+            </span>
+
+          </td>
+
+          <td>
+
+            <button
+              class="row-action"
+              data-id="${escapeHtml(
+                contract.id
+              )}"
+            >
+              Görüntüle
+            </button>
+
+          </td>
+
+        `;
 
 
-      const button =
-        row.querySelector(
-          ".row-action"
+        row
+          .querySelector(
+            ".row-action"
+          )
+          ?.addEventListener(
+            "click",
+            () =>
+              openDetail(
+                contract.id
+              )
+          );
+
+
+        tbody.appendChild(
+          row
         );
 
+      }
+    );
 
-      button.addEventListener(
-        "click",
-        () => openDetail(
-          contract.id
-        )
+
+    setText(
+      "resultCount",
+      `${filtered.length} kayıt`
+    );
+
+
+    const empty =
+      document.getElementById(
+        "emptyState"
       );
 
 
-      tbody.appendChild(row);
+    if (empty) {
 
-    });
-
-
-    if (resultCount) {
-
-      resultCount.textContent =
-        `${filtered.length} kayıt`;
-
-    }
-
-
-    if (emptyState) {
-
-      emptyState.classList.toggle(
+      empty.classList.toggle(
         "hidden",
-        filtered.length !== 0
+        filtered.length > 0
       );
 
     }
@@ -698,24 +1048,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     NEW CONTRACT
-     ===================================================== */
+  /*
+  ============================================================
+  NEW CONTRACT
+  ============================================================
+  */
 
-  const newButton =
-    document.getElementById(
+  document
+    .getElementById(
       "newContractButton"
-    );
-
-
-  if (newButton) {
-
-    newButton.addEventListener(
+    )
+    ?.addEventListener(
       "click",
-      () => openContractModal()
+      () =>
+        openContractModal()
     );
-
-  }
 
 
   function openContractModal(
@@ -727,18 +1074,17 @@ document.addEventListener("DOMContentLoaded", () => {
         "contractModal"
       );
 
-    if (!modal) return;
 
-
-    const form =
-      document.getElementById(
-        "contractForm"
-      );
-
-
-    if (form) {
-      form.reset();
+    if (!modal) {
+      return;
     }
+
+
+    document
+      .getElementById(
+        "contractForm"
+      )
+      ?.reset();
 
 
     setInput(
@@ -746,39 +1092,53 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.id || ""
     );
 
+
     setInput(
       "company",
-      contract?.company || "GK Holding"
+      contract?.company ||
+      "GK Holding"
     );
+
 
     setInput(
       "supplier",
-      contract?.supplier || ""
+      contract?.supplier ||
+      ""
     );
+
 
     setInput(
       "monthlyPayment",
-      contract?.monthlyPayment || ""
+      contract?.monthlyPayment ||
+      ""
     );
+
 
     setInput(
       "startDate",
-      contract?.startDate || ""
+      contract?.startDate ||
+      ""
     );
+
 
     setInput(
       "endDate",
-      contract?.endDate || ""
+      contract?.endDate ||
+      ""
     );
+
 
     setInput(
       "discountRate",
-      contract?.discountRate ?? 18
+      contract?.discountRate ??
+      18
     );
+
 
     setInput(
       "renewalDate",
-      contract?.renewalDate || ""
+      contract?.renewalDate ||
+      ""
     );
 
 
@@ -786,6 +1146,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(
         "modalTitle"
       );
+
 
     if (title) {
 
@@ -804,38 +1165,54 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function setInput(id, value) {
+  function setInput(
+    id,
+    value
+  ) {
 
     const input =
-      document.getElementById(id);
+      document.getElementById(
+        id
+      );
 
     if (input) {
-      input.value = value;
+      input.value =
+        value;
     }
+
+  }
+
+
+  function getInput(
+    id
+  ) {
+
+    return (
+      document.getElementById(
+        id
+      )?.value || ""
+    );
 
   }
 
 
   function closeContractModal() {
 
-    const modal =
-      document.getElementById(
+    document
+      .getElementById(
         "contractModal"
-      );
-
-    if (modal) {
-
-      modal.classList.add(
+      )
+      ?.classList.add(
         "hidden"
       );
-
-    }
 
   }
 
 
   document
-    .getElementById("closeModal")
+    .getElementById(
+      "closeModal"
+    )
     ?.addEventListener(
       "click",
       closeContractModal
@@ -843,19 +1220,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   document
-    .getElementById("cancelModal")
+    .getElementById(
+      "cancelModal"
+    )
     ?.addEventListener(
       "click",
       closeContractModal
     );
 
 
-  /* =====================================================
-     SAVE CONTRACT
-     ===================================================== */
+  /*
+  ============================================================
+  SAVE
+  ============================================================
+  */
 
   document
-    .getElementById("contractForm")
+    .getElementById(
+      "contractForm"
+    )
     ?.addEventListener(
       "submit",
       event => {
@@ -864,20 +1247,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
         const id =
-          document
-            .getElementById(
-              "contractId"
-            )
-            .value
-            .trim();
+          getInput(
+            "contractId"
+          ).trim();
 
 
-        if (!id) return;
+        if (!id) {
+          return;
+        }
 
 
         const existing =
           contracts.find(
-            c => c.id === id
+            c =>
+              c.id === id
           );
 
 
@@ -886,41 +1269,41 @@ document.addEventListener("DOMContentLoaded", () => {
           id,
 
           company:
-            getInputValue(
+            getInput(
               "company"
             ),
 
           supplier:
-            getInputValue(
+            getInput(
               "supplier"
             ),
 
           monthlyPayment:
             Number(
-              getInputValue(
+              getInput(
                 "monthlyPayment"
               )
             ) || 0,
 
           startDate:
-            getInputValue(
+            getInput(
               "startDate"
             ),
 
           endDate:
-            getInputValue(
+            getInput(
               "endDate"
             ),
 
           discountRate:
             Number(
-              getInputValue(
+              getInput(
                 "discountRate"
               )
             ) || 0,
 
           renewalDate:
-            getInputValue(
+            getInput(
               "renewalDate"
             ),
 
@@ -939,10 +1322,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
           contracts =
             contracts.map(
-              c =>
-                c.id === id
+              item =>
+                item.id === id
                   ? contract
-                  : c
+                  : item
             );
 
         } else {
@@ -958,58 +1341,76 @@ document.addEventListener("DOMContentLoaded", () => {
           contracts
         );
 
+
         refresh();
 
         closeContractModal();
 
-        openDetail(id);
+        openDetail(
+          id
+        );
 
       }
     );
 
 
-  function getInputValue(id) {
+  /*
+  ============================================================
+  DETAIL
+  ============================================================
+  */
 
-    return (
-      document.getElementById(id)
-        ?.value || ""
-    );
-
-  }
-
-
-  /* =====================================================
-     DETAIL MODAL
-     ===================================================== */
-
-  function openDetail(id) {
+  function openDetail(
+    id
+  ) {
 
     const contract =
       contracts.find(
-        c => c.id === id
+        c =>
+          c.id === id
       );
 
 
-    if (!contract) return;
+    if (!contract) {
+      return;
+    }
 
 
     selectedContractId =
       id;
 
 
-    const calculation =
+    const engine =
       calculateLease(
         contract
       );
 
 
-    const renewalWarning =
+    const current =
+      calculateCurrentLiability(
+        contract
+      );
+
+
+    const nonCurrent =
+      calculateNonCurrentLiability(
+        contract
+      );
+
+
+    const next12 =
+      calculateNext12Months(
+        contract
+      );
+
+
+    const renewal =
       isRenewalWithin90Days(
         contract
       );
 
 
-    const detailModal =
+    const modal =
       document.getElementById(
         "detailModal"
       );
@@ -1044,14 +1445,18 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="detail-item">
             <span>Şirket</span>
             <strong>
-              ${escapeHtml(contract.company)}
+              ${escapeHtml(
+                contract.company
+              )}
             </strong>
           </div>
 
           <div class="detail-item">
             <span>Tedarikçi</span>
             <strong>
-              ${escapeHtml(contract.supplier)}
+              ${escapeHtml(
+                contract.supplier
+              )}
             </strong>
           </div>
 
@@ -1065,9 +1470,9 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <div class="detail-item">
-            <span>Sözleşme Süresi</span>
+            <span>Kira Süresi</span>
             <strong>
-              ${calculation.months} Ay
+              ${engine.months} Ay
             </strong>
           </div>
 
@@ -1079,10 +1484,10 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <div class="detail-item">
-            <span>Kira Yükümlülüğü</span>
+            <span>İlk Kira Yükümlülüğü</span>
             <strong>
               ${formatCurrency(
-                calculation.liability
+                engine.liability
               )}
             </strong>
           </div>
@@ -1091,7 +1496,43 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>ROU Varlığı</span>
             <strong>
               ${formatCurrency(
-                calculation.rouAssets
+                engine.rouAssets
+              )}
+            </strong>
+          </div>
+
+          <div class="detail-item">
+            <span>Aylık Amortisman</span>
+            <strong>
+              ${formatCurrency(
+                engine.depreciation
+              )}
+            </strong>
+          </div>
+
+          <div class="detail-item">
+            <span>Aylık Faiz Gideri</span>
+            <strong>
+              ${formatCurrency(
+                engine.monthlyInterest
+              )}
+            </strong>
+          </div>
+
+          <div class="detail-item">
+            <span>Current Liability</span>
+            <strong>
+              ${formatCurrency(
+                current
+              )}
+            </strong>
+          </div>
+
+          <div class="detail-item">
+            <span>Non-current Liability</span>
+            <strong>
+              ${formatCurrency(
+                nonCurrent
               )}
             </strong>
           </div>
@@ -1100,9 +1541,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>Önümüzdeki 12 Ay</span>
             <strong>
               ${formatCurrency(
-                calculateNext12Months(
-                  contract
-                )
+                next12
               )}
             </strong>
           </div>
@@ -1128,7 +1567,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="detail-item">
             <span>Yenileme</span>
             <strong class="${
-              renewalWarning
+              renewal
                 ? "renewal-warning"
                 : ""
             }">
@@ -1138,8 +1577,8 @@ document.addEventListener("DOMContentLoaded", () => {
               )}
 
               ${
-                renewalWarning
-                  ? " ⚠ 90 gün içinde"
+                renewal
+                  ? " ⚠"
                   : ""
               }
 
@@ -1159,6 +1598,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         </div>
 
+
         <div class="insight-panel">
 
           <div class="insight-icon">
@@ -1168,33 +1608,147 @@ document.addEventListener("DOMContentLoaded", () => {
           <div>
 
             <strong>
-              CFO Değerlendirmesi
+              TFRS 16 Finansal Etki
             </strong>
 
             <p>
 
-              Bu sözleşmenin toplam
-              iskonto edilmiş yükümlülüğü
+              İlk ölçümde kira yükümlülüğü
               <strong>
                 ${formatCurrency(
-                  calculation.liability
+                  engine.liability
+                )}
+              </strong>
+              olarak hesaplanmıştır.
+
+              ROU varlığı
+              <strong>
+                ${formatCurrency(
+                  engine.rouAssets
                 )}
               </strong>
               seviyesindedir.
 
-              ${
-                renewalWarning
-                  ? " Yenileme tarihi 90 gün içinde olduğu için yönetim aksiyonu önerilir."
-                  : " Yaklaşan kritik yenileme bulunmamaktadır."
-              }
-
-              ${
-                contract.modification
-                  ? " Sözleşmede modification incelemesi beklenmektedir."
-                  : ""
-              }
+              Aylık faiz gideri yaklaşık
+              <strong>
+                ${formatCurrency(
+                  engine.monthlyInterest
+                )}
+              </strong>
+              , aylık ROU amortismanı ise
+              <strong>
+                ${formatCurrency(
+                  engine.depreciation
+                )}
+              </strong>
+              seviyesindedir.
 
             </p>
+
+          </div>
+
+        </div>
+
+
+        <div style="
+          margin-top:20px;
+          border-top:1px solid #e5e7eb;
+          padding-top:18px;
+        ">
+
+          <h3 style="
+            margin:0 0 12px;
+            font-size:14px;
+          ">
+            İlk 12 Aylık Ödeme Planı
+          </h3>
+
+
+          <div style="
+            overflow-x:auto;
+          ">
+
+            <table style="
+              width:100%;
+              border-collapse:collapse;
+              min-width:700px;
+            ">
+
+              <thead>
+
+                <tr>
+
+                  <th>Ay</th>
+                  <th>Açılış Yükümlülüğü</th>
+                  <th>Ödeme</th>
+                  <th>Faiz</th>
+                  <th>Anapara</th>
+                  <th>Kapanış</th>
+                  <th>Amortisman</th>
+
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                ${engine.schedule
+                  .slice(0, 12)
+                  .map(
+                    item => `
+
+                      <tr>
+
+                        <td>
+                          ${item.period}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.openingLiability
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.payment
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.interest
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.principal
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.closingLiability
+                          )}
+                        </td>
+
+                        <td>
+                          ${formatCurrency(
+                            item.depreciation
+                          )}
+                        </td>
+
+                      </tr>
+
+                    `
+                  )
+                  .join("")}
+
+              </tbody>
+
+            </table>
 
           </div>
 
@@ -1205,31 +1759,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    if (detailModal) {
-
-      detailModal.classList.remove(
+    modal
+      ?.classList.remove(
         "hidden"
       );
-
-    }
 
   }
 
 
+  /*
+  ============================================================
+  CLOSE DETAIL
+  ============================================================
+  */
+
   function closeDetail() {
 
-    const modal =
-      document.getElementById(
+    document
+      .getElementById(
         "detailModal"
-      );
-
-    if (modal) {
-
-      modal.classList.add(
+      )
+      ?.classList.add(
         "hidden"
       );
 
-    }
 
     selectedContractId =
       null;
@@ -1257,9 +1810,11 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-  /* =====================================================
-     DELETE
-     ===================================================== */
+  /*
+  ============================================================
+  DELETE
+  ============================================================
+  */
 
   document
     .getElementById(
@@ -1269,7 +1824,9 @@ document.addEventListener("DOMContentLoaded", () => {
       "click",
       () => {
 
-        if (!selectedContractId) {
+        if (
+          !selectedContractId
+        ) {
           return;
         }
 
@@ -1319,9 +1876,11 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-  /* =====================================================
-     FILTER EVENTS
-     ===================================================== */
+  /*
+  ============================================================
+  FILTER EVENTS
+  ============================================================
+  */
 
   document
     .getElementById(
@@ -1353,15 +1912,20 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 
-  /* =====================================================
-     ESC KEY
-     ===================================================== */
+  /*
+  ============================================================
+  ESC
+  ============================================================
+  */
 
   document.addEventListener(
     "keydown",
     event => {
 
-      if (event.key !== "Escape") {
+      if (
+        event.key !==
+        "Escape"
+      ) {
         return;
       }
 
@@ -1372,11 +1936,15 @@ document.addEventListener("DOMContentLoaded", () => {
   );
 
 
-  /* =====================================================
-     HTML SECURITY
-     ===================================================== */
+  /*
+  ============================================================
+  SECURITY
+  ============================================================
+  */
 
-  function escapeHtml(value) {
+  function escapeHtml(
+    value
+  ) {
 
     return String(
       value ?? ""
@@ -1405,9 +1973,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     REFRESH
-     ===================================================== */
+  /*
+  ============================================================
+  REFRESH
+  ============================================================
+  */
 
   function refresh() {
 
@@ -1420,15 +1990,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  /* =====================================================
-     INIT
-     ===================================================== */
+  /*
+  ============================================================
+  INIT
+  ============================================================
+  */
 
   refresh();
 
 
   console.log(
-    "GK TFRS 16 V4 loaded successfully."
+    "GK TFRS 16 Engine V5 loaded successfully."
   );
 
 });
