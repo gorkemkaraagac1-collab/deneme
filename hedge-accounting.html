@@ -1,53 +1,192 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hedge Accounting - GK Platform</title>
-  <link rel="stylesheet" href="css/global.css">
-  <link rel="stylesheet" href="css/components.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toros Tarım CFH Hesaplayıcı</title>
+    <style>
+        :root {
+            --primary-color: #008751;
+            --primary-hover: #006b40;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --border-radius: 10px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .calculator-card {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 500px;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .calculator-card h2 {
+            color: var(--primary-color);
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 2px solid #eef2f0;
+            padding-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cccccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .btn-calc {
+            width: 100%;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-calc:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .results {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #eaf5f0;
+            border-left: 5px solid var(--primary-color);
+            border-radius: 4px;
+            display: none;
+        }
+
+        .results h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .result-item:last-child {
+            margin-bottom: 0;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
-        <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
-        </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
-        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title" style="color: var(--text-primary);">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
-          </div>
-        </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
-      </div>
+<div class="calculator-card">
+    <h2>CFH Hesaplama Şablonu</h2>
+    
+    <div class="form-group">
+        <label for="area">Arazi Büyüklüğü (Dönüm / Dekar)</label>
+        <input type="number" id="area" placeholder="Örn: 50" min="1" value="10">
     </div>
-  </header>
 
-  <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Hedge Accounting &amp; Risk Protection</h2>
-    <div class="kpi-card" style="max-width: 400px; margin-bottom: 20px;">
-      <span class="kpi-title">Effective Hedge Ratio</span>
-      <div class="kpi-value" style="color: var(--accent-green);">94.2%</div>
+    <div class="form-group">
+        <label for="crop">Ürün Tipi</label>
+        <select id="crop">
+            <option value="1.2">Buğday / Arpa</option>
+            <option value="1.5">Mısır</option>
+            <option value="1.1">Ayçiçeği</option>
+            <option value="1.8">Pamuk</option>
+        </select>
     </div>
-  </main>
 
-  <script src="js/main.js"></script>
+    <div class="form-group">
+        <label for="fertilizer">Gübre Tipi</label>
+        <select id="fertilizer">
+            <option value="25">Toros Üre (%46 N)</option>
+            <option value="30">Toros CAN (%26 N)</option>
+            <option value="20">Toros DAP (18-46-0)</option>
+            <option value="35">Toros Composite (15-15-15)</option>
+        </select>
+    </div>
+
+    <button class="btn-calc" onclick="calculateCFH()">Hesapla</button>
+
+    <div class="results" id="resultBox">
+        <h3>Hesaplama Sonuçları</h3>
+        <div class="result-item">
+            <span>Toplam Gübre İhtiyacı:</span>
+            <span id="resAmount">0 kg</span>
+        </div>
+        <div class="result-item">
+            <span>Tahmini Karbon Ayak İzi (CFH):</span>
+            <span id="resCarbon">0 kg CO2e</span>
+        </div>
+        <div class="result-item">
+            <span>Verimlilik Endeksi:</span>
+            <span id="resIndex">%0</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    function calculateCFH() {
+        // Girdileri al
+        const area = parseFloat(document.getElementById('area').value) || 0;
+        const cropFactor = parseFloat(document.getElementById('crop').value);
+        const fertilizerRate = parseFloat(document.getElementById('fertilizer').value);
+
+        if (area <= 0) {
+            alert("Lütfen geçerli bir arazi büyüklüğü giriniz.");
+            return;
+        }
+
+        // Hesaplama Mantığı (Excel şablonundaki katsayılarınıza göre güncelleyebilirsiniz)
+        const totalFertilizer = area * fertilizerRate; 
+        const carbonFootprint = totalFertilizer * cropFactor * 0.85; 
+        const efficiencyIndex = Math.min(100, Math.round((cropFactor / 1.8) * 100));
+
+        // Sonuçları ekrana yazdır
+        document.getElementById('resAmount').innerText = totalFertilizer.toLocaleString('tr-TR') + " kg";
+        document.getElementById('resCarbon').innerText = carbonFootprint.toFixed(2).toLocaleString('tr-TR') + " kg CO2e";
+        document.getElementById('resIndex').innerText = "%" + efficiencyIndex;
+
+        // Sonuç kutusunu göster
+        document.getElementById('resultBox').style.display = 'block';
+    }
+</script>
+
 </body>
 </html>
