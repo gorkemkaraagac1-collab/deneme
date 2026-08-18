@@ -6,11 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCockpitKPIs();
   renderWorkingCapitalKPIs();
   renderValuationUI();
-  bindInputEvents();
+  bindValuationInputEvents();
 });
 
 // Render Executive Cockpit KPIs
 function renderCockpitKPIs() {
+  if (typeof FinancialEngine === 'undefined') return;
+
   const pnl = FinancialEngine.calculatePnl();
   const wc = FinancialEngine.calculateWorkingCapital();
   const fmt = FinancialEngine.formatters;
@@ -27,6 +29,8 @@ function renderCockpitKPIs() {
 
 // Render Working Capital Engine Page
 function renderWorkingCapitalKPIs() {
+  if (typeof FinancialEngine === 'undefined') return;
+
   const wc = FinancialEngine.calculateWorkingCapital();
   const fmt = FinancialEngine.formatters;
 
@@ -43,8 +47,10 @@ function renderWorkingCapitalKPIs() {
   if (cccEl) cccEl.textContent = fmt.days(wc.ccc);
 }
 
-// Render DCF Engine Page & Dynamics
+// Render DCF Engine Page Outputs
 function renderValuationUI() {
+  if (typeof FinancialEngine === 'undefined') return;
+
   const dcf = FinancialEngine.calculateValuation();
   const fmt = FinancialEngine.formatters;
 
@@ -58,16 +64,28 @@ function renderValuationUI() {
   if (netDebtEl) netDebtEl.textContent = fmt.currency(dcf.netDebt);
 }
 
-// Bind Dynamic Inputs (e.g., WACC changes in DCF Page)
-function bindInputEvents() {
-  const waccInput = document.querySelector('#wacc-input');
-  if (waccInput) {
-    waccInput.addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value) / 100;
-      if (!isNaN(val) && val > 0) {
-        FinancialEngine.updateState('valuation', 'wacc', val);
-        renderValuationUI();
-      }
-    });
-  }
+// Bind Dynamic Inputs on DCF Page
+function bindValuationInputEvents() {
+  if (typeof FinancialEngine === 'undefined') return;
+
+  const bindings = [
+    { id: '#wacc-input', category: 'valuation', key: 'wacc', transform: v => v / 100 },
+    { id: '#terminal-growth-input', category: 'valuation', key: 'terminalGrowth', transform: v => v / 100 },
+    { id: '#revenue-growth-input', category: 'valuation', key: 'revenueGrowth', transform: v => v / 100 },
+    { id: '#net-debt-input', category: 'valuation', key: 'netDebt', transform: v => v }
+  ];
+
+  bindings.forEach(binding => {
+    const inputEl = document.querySelector(binding.id);
+    if (inputEl) {
+      inputEl.addEventListener('input', (e) => {
+        const rawValue = parseFloat(e.target.value);
+        if (!isNaN(rawValue)) {
+          const transformedValue = binding.transform(rawValue);
+          FinancialEngine.updateState(binding.category, binding.key, transformedValue);
+          renderValuationUI();
+        }
+      });
+    }
+  });
 }
