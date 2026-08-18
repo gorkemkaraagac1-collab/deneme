@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Executive Financial Cockpit - GK Platform</title>
+  <title>Financial Decision Cockpit - GK Platform</title>
   <link rel="stylesheet" href="css/global.css">
   <link rel="stylesheet" href="css/components.css">
+  <!-- Chart.js CDN Entegrasyonu -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -21,7 +23,7 @@
       <nav class="cfo-nav-menu">
         <a href="financial-decision-cockpit.html" class="nav-link" style="color: var(--text-primary);">Executive Cockpit</a>
         <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
+        <a href="dcf.html" class="nav-link">DCF &amp; Valuation</a>
         <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
         <div class="nav-dropdown">
           <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
@@ -41,42 +43,86 @@
   </header>
 
   <main style="max-width: 1400px; margin: 30px auto; padding: 0 24px;">
-    <h2 style="font-size: 1.8rem; margin-bottom: 20px;">Executive Financial Decision Cockpit</h2>
-
-    <!-- Top KPI Row -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 30px;">
-      <div class="kpi-card">
-        <span class="kpi-title">Revenue</span>
-        <div class="kpi-value">€42.8M</div>
-        <div class="kpi-delta positive">▲ +8.2% vs Budget</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">Executive Decision Cockpit</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Şirket genel finansal performans, nakit akışı ve çalışma sermayesi konsolide görünümü.</p>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-title">EBITDA Margin</span>
-        <div class="kpi-value">17.4%</div>
-        <div class="kpi-delta negative">▼ -0.6pp vs Prior Year</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">Free Cash Flow</span>
-        <div class="kpi-value">€6.2M</div>
-        <div class="kpi-delta positive">▲ +12.4% YoY</div>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-title">Cash Conversion Cycle</span>
-        <div class="kpi-value">48 Days</div>
-        <div class="kpi-delta negative">▼ +5 Days Deterioration</div>
+      <div style="display: flex; gap: 12px;">
+        <button onclick="renderCockpitKPIs()" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">↻ Verileri Yenile</button>
       </div>
     </div>
 
-    <!-- Executive Insight & Decision Section -->
-    <h3 style="font-size: 1.2rem; margin-bottom: 16px; color: var(--text-secondary);">EXECUTIVE DECISION INSIGHTS</h3>
-    <div class="insight-card">
-      <div class="insight-step"><span class="insight-step-label step-happened">WHAT HAPPENED</span> EBITDA margin decreased by 0.6pp despite 8.2% revenue growth.</div>
-      <div class="insight-step"><span class="insight-step-label step-why">WHY</span> Primary drivers are COGS inflation and personnel cost growth exceeding sales price adjustments.</div>
-      <div class="insight-step"><span class="insight-step-label step-sowhat">SO WHAT</span> Estimated annualized EBITDA impact is €1.8m reduction in operational cash generation.</div>
-      <div class="insight-step"><span class="insight-step-label step-next">WHAT NEXT</span> Recommended actions: Pricing review for Tier-1 products, procurement optimization, and personnel cost control.</div>
+    <!-- Canlı Veri Motoru KPI Kartları -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 30px;">
+      <div class="kpi-card">
+        <span class="kpi-title">Toplam Satış Geliri (LTM)</span>
+        <div class="kpi-value" data-kpi="revenue">€0</div>
+        <div class="kpi-delta positive">▲ +8.4% vs LTM</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">EBITDA Marjı</span>
+        <div class="kpi-value" data-kpi="ebitda-margin">0%</div>
+        <div class="kpi-delta positive">▲ +1.2 bps vs Bütçe</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Nakit Dönüşüm Süresi (CCC)</span>
+        <div class="kpi-value" data-kpi="ccc">0 Gün</div>
+        <div class="kpi-delta negative">▲ +2 Gün Impact</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Net Borç Pozisyonu</span>
+        <div class="kpi-value" data-kpi="cockpit-net-debt">€0</div>
+        <div class="kpi-delta positive">▼ -€2.1M Deleveraging</div>
+      </div>
+    </div>
+
+    <!-- Finansal Trend Grafiği -->
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 1.1rem; color: var(--text-primary);">Çeyreklik Gelir ve EBITDA Performansı (€M)</h3>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Canlı Motor Projeksiyonu</span>
+      </div>
+      <div style="position: relative; height: 320px; width: 100%;">
+        <canvas id="cockpitTrendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Stratejik Karar ve Analiz Paneli -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+      <div class="insight-card" style="margin-bottom: 0;">
+        <h4 style="font-size: 1rem; margin-bottom: 12px; color: var(--text-primary);">Yönetim Özeti ve Aksiyon İkazları</h4>
+        <div class="insight-step"><span class="insight-step-label step-happened">PERFORMANS</span> Gelir büyümesi bütçe paralelinde ilerlemekte, EBITDA marjı %22.0 seviyesini korumaktadır.</div>
+        <div class="insight-step"><span class="insight-step-label step-sowhat">ÇALIŞMA SERMAYESİ</span> DSO'daki yükseliş nedeniyle nakit dönüşüm süresi (CCC) 70 güne çıkmıştır.</div>
+        <div class="insight-step"><span class="insight-step-label step-next">ÖNERİLEN AKSİYON</span> Ticari alacak tahsilatlarına odaklanılarak €1.7M tutarında işletme sermayesi serbest bırakılabilir.</div>
+      </div>
+
+      <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
+        <h4 style="font-size: 1rem; margin-bottom: 16px; color: var(--text-primary);">Sistem Durumu ve Versiyon</h4>
+        <ul style="list-style: none; padding: 0; font-size: 0.88rem; line-height: 2;">
+          <li style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Engine Version:</span>
+            <span style="font-weight: 600;">V11 Active</span>
+          </li>
+          <li style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Valuation Sync:</span>
+            <span style="color: #10b981;">Tam Entegre</span>
+          </li>
+          <li style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">TMS 29 Engine:</span>
+            <span style="color: #10b981;">Aktif</span>
+          </li>
+          <li style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Son Güncelleme:</span>
+            <span>Canlı (DOM Ready)</span>
+          </li>
+        </ul>
+      </div>
     </div>
   </main>
 
+  <!-- Script Entegrasyon Sırası -->
+  <script src="js/financial-data.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
