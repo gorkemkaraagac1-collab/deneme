@@ -4,7 +4,7 @@
   const KEY='gk_session_v1';
   const USERS={
     'demo@gkadvisory.com':{name:'Demo User',role:'client',plan:'Professional',password:'demo1234',licenses:['tms29','dcf','workingcapital']},
-    'admin@gkadvisory.com':{name:'GK Advisory Admin',role:'admin',plan:'Enterprise',password:'admin1234',licenses:['tms29','dcf','tfrs16','ecl','workingcapital','hedge']}
+    'admin@gkadvisory.com':{name:'GK Advisory Admin',role:'admin',plan:'Enterprise',password:'admin1234',licenses:['tms29','dcf','tfrs16','ecl','workingcapital','hedge','tms19']}
   };
   window.GKAuth={
     users:USERS,
@@ -17,6 +17,6 @@
     logout(){localStorage.removeItem(KEY);},
     current(){try{return JSON.parse(localStorage.getItem(KEY))||null}catch(e){return null}},
     require(){const u=this.current(); if(!u){location.href='login.html?next='+encodeURIComponent(location.pathname+location.search);return null} return u;},
-    can(id){const u=this.current(); return !!u && (u.role==='admin'||u.licenses.includes(id));}
+    can(id){const u=this.current(); return !!u && (id==='financial-cockpit'||u.role==='admin'||u.licenses.includes(id));}
   };
 })();
