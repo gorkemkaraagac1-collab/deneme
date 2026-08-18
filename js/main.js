@@ -1,6 +1,8 @@
 /**
- * GK Financial Intelligence Platform - UI Engine Integrator
+ * GK Financial Intelligence Platform - UI & Chart Engine Integrator
  */
+
+let dcfChartInstance = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   renderCockpitKPIs();
@@ -48,7 +50,7 @@ function renderWorkingCapitalKPIs() {
   if (cccEl) cccEl.textContent = fmt.days(wc.ccc);
 }
 
-// Render DCF Engine Page Outputs
+// Render DCF Engine Page Outputs & Chart
 function renderValuationUI() {
   if (typeof FinancialEngine === 'undefined') return;
 
@@ -63,6 +65,68 @@ function renderValuationUI() {
 
   const netDebtEl = document.querySelector('[data-val="net-debt"]');
   if (netDebtEl) netDebtEl.textContent = fmt.currency(dcf.netDebt);
+
+  // Render or Update Dynamic Chart
+  renderDCFChart(dcf.projections);
+}
+
+// Render / Update Chart.js DCF Chart
+function renderDCFChart(projections) {
+  const ctx = document.getElementById('dcfChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  const labels = projections.map(p => `Yıl ${p.year}`);
+  const rawFcfData = projections.map(p => (p.fcf / 1e6).toFixed(2));
+  const pvFcfData = projections.map(p => (p.pvFcf / 1e6).toFixed(2));
+
+  if (dcfChartInstance) {
+    dcfChartInstance.data.labels = labels;
+    dcfChartInstance.data.datasets[0].data = rawFcfData;
+    dcfChartInstance.data.datasets[1].data = pvFcfData;
+    dcfChartInstance.update();
+  } else {
+    dcfChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Nominal FCF (€M)',
+            data: rawFcfData,
+            backgroundColor: 'rgba(59, 130, 246, 0.5)',
+            borderColor: '#3b82f6',
+            borderWidth: 1
+          },
+          {
+            label: 'İndirgenmiş PV FCF (€M)',
+            data: pvFcfData,
+            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+            borderColor: '#10b981',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#94a3b8' }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#94a3b8' },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          },
+          y: {
+            ticks: { color: '#94a3b8' },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          }
+        }
+      }
+    });
+  }
 }
 
 // Render TMS 29 Inflation Engine Page
