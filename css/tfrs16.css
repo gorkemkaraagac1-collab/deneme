@@ -11,9 +11,13 @@
   --sidebar: #111827;
   --sidebar-hover: #1f2937;
   --primary: #334155;
+  --primary-dark: #1e293b;
   --success: #15803d;
+  --success-bg: #dcfce7;
   --danger: #b91c1c;
+  --danger-bg: #fee2e2;
   --warning: #b45309;
+  --warning-bg: #fef3c7;
 }
 
 body {
@@ -28,9 +32,19 @@ body {
     sans-serif;
 }
 
-/* =====================================================
+
+/* ============================================================
+   APP
+============================================================ */
+
+.app {
+  min-height: 100vh;
+}
+
+
+/* ============================================================
    SIDEBAR
-   ===================================================== */
+============================================================ */
 
 .sidebar {
   position: fixed;
@@ -39,6 +53,7 @@ body {
   background: var(--sidebar);
   color: white;
   padding: 26px 18px;
+  z-index: 100;
 }
 
 .brand-title {
@@ -66,6 +81,9 @@ body {
   color: #cbd5e1;
   text-decoration: none;
   font-size: 14px;
+  transition:
+    background .15s ease,
+    color .15s ease;
 }
 
 .nav-item:hover,
@@ -95,13 +113,15 @@ body {
   margin-bottom: 7px;
 }
 
-/* =====================================================
+
+/* ============================================================
    MAIN
-   ===================================================== */
+============================================================ */
 
 .main {
   margin-left: 250px;
   padding: 30px 34px;
+  min-height: 100vh;
 }
 
 .topbar {
@@ -109,6 +129,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 25px;
+  gap: 20px;
 }
 
 .eyebrow {
@@ -131,16 +152,17 @@ h1 {
 .topbar-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-/* =====================================================
+
+/* ============================================================
    BUTTONS
-   ===================================================== */
+============================================================ */
 
 .primary-button,
 .secondary-button,
 .danger-button {
-  border: none;
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 12px;
@@ -149,15 +171,28 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  transition:
+    background .15s ease,
+    border-color .15s ease,
+    transform .05s ease;
 }
 
 .primary-button {
+  border: 1px solid var(--primary);
   background: var(--primary);
   color: white;
 }
 
 .primary-button:hover {
-  background: #1e293b;
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.primary-button:active,
+.secondary-button:active,
+.danger-button:active {
+  transform: translateY(1px);
 }
 
 .secondary-button {
@@ -168,10 +203,12 @@ h1 {
 
 .secondary-button:hover {
   background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .danger-button {
-  background: #fee2e2;
+  border: 1px solid #fecaca;
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -179,9 +216,10 @@ h1 {
   background: #fecaca;
 }
 
-/* =====================================================
+
+/* ============================================================
    KPI
-   ===================================================== */
+============================================================ */
 
 .kpi-grid {
   display: grid;
@@ -222,9 +260,10 @@ h1 {
   color: var(--warning);
 }
 
-/* =====================================================
+
+/* ============================================================
    TOOLBAR
-   ===================================================== */
+============================================================ */
 
 .toolbar {
   display: flex;
@@ -234,6 +273,7 @@ h1 {
 
 .search-box {
   flex: 1;
+  min-width: 180px;
   background: white;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -253,6 +293,7 @@ h1 {
   width: 100%;
   padding: 11px;
   font-size: 12px;
+  background: transparent;
 }
 
 .toolbar select {
@@ -262,11 +303,13 @@ h1 {
   padding: 0 12px;
   color: var(--text);
   font-size: 11px;
+  min-width: 145px;
 }
 
-/* =====================================================
+
+/* ============================================================
    PANEL
-   ===================================================== */
+============================================================ */
 
 .panel {
   background: white;
@@ -280,6 +323,7 @@ h1 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 17px;
+  gap: 15px;
 }
 
 .panel-header h2 {
@@ -298,9 +342,10 @@ h1 {
   font-size: 11px;
 }
 
-/* =====================================================
+
+/* ============================================================
    TABLE
-   ===================================================== */
+============================================================ */
 
 .table-wrapper {
   overflow-x: auto;
@@ -322,6 +367,7 @@ th {
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 td {
@@ -332,37 +378,6 @@ td {
 
 tbody tr:hover {
   background: #fafafa;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 99px;
-  font-size: 9px;
-}
-
-.status-badge.active {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-badge.inactive {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.table-action {
-  border: 1px solid var(--border);
-  background: white;
-  color: var(--text);
-  border-radius: 6px;
-  padding: 6px 9px;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.table-action:hover {
-  background: #f8fafc;
 }
 
 .contract-id {
@@ -377,9 +392,45 @@ tbody tr:hover {
   color: var(--muted);
 }
 
-/* =====================================================
+.status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 99px;
+  font-size: 9px;
+}
+
+.status.active {
+  background: var(--success-bg);
+  color: #166534;
+}
+
+.status.inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.renewal-warning {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.row-action {
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.row-action:hover {
+  background: #f8fafc;
+}
+
+
+/* ============================================================
    EMPTY
-   ===================================================== */
+============================================================ */
 
 .empty-state {
   text-align: center;
@@ -404,9 +455,10 @@ tbody tr:hover {
   display: none !important;
 }
 
-/* =====================================================
+
+/* ============================================================
    INSIGHT
-   ===================================================== */
+============================================================ */
 
 .insight-panel {
   margin-top: 16px;
@@ -427,6 +479,7 @@ tbody tr:hover {
   display: grid;
   place-items: center;
   font-weight: 800;
+  flex-shrink: 0;
 }
 
 .insight-panel strong {
@@ -446,32 +499,38 @@ footer {
   margin-top: 18px;
 }
 
-/* =====================================================
+
+/* ============================================================
    MODAL
-   ===================================================== */
+============================================================ */
 
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, .55);
   display: grid;
   place-items: center;
   padding: 20px;
   z-index: 1000;
+  overflow-y: auto;
 }
 
 .modal-content {
   background: white;
   width: min(720px, 100%);
-  max-height: 90vh;
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   border-radius: 15px;
   padding: 22px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, .18);
 }
 
 .detail-modal {
-  width: min(720px, 100%);
+  width: min(650px, 100%);
+}
+
+.excel-modal {
+  width: min(1050px, 100%);
 }
 
 .modal-header {
@@ -479,11 +538,18 @@ footer {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 22px;
+  gap: 20px;
 }
 
 .modal-header h2 {
   margin: 5px 0 0;
   font-size: 20px;
+}
+
+.modal-description {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .close-button {
@@ -495,15 +561,17 @@ footer {
   cursor: pointer;
   font-size: 20px;
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .close-button:hover {
   background: #e2e8f0;
 }
 
-/* =====================================================
+
+/* ============================================================
    FORM
-   ===================================================== */
+============================================================ */
 
 .form-grid {
   display: grid;
@@ -543,31 +611,10 @@ footer {
   margin-top: 22px;
 }
 
-/* =====================================================
+
+/* ============================================================
    DETAIL
-   ===================================================== */
-
-.detail-content {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.detail-section {
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  padding: 15px;
-  background: #ffffff;
-}
-
-.detail-section-title {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--text);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
+============================================================ */
 
 .detail-grid {
   display: grid;
@@ -593,60 +640,304 @@ footer {
   font-size: 14px;
 }
 
-.detail-financial-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
 
-.financial-metric {
+/* ============================================================
+   EXCEL IMPORT
+============================================================ */
+
+.excel-template-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
   background: #f8fafc;
-  border-radius: 9px;
-  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  margin-bottom: 14px;
 }
 
-.financial-metric span {
-  display: block;
+.excel-template-card strong {
+  font-size: 12px;
+}
+
+.excel-template-card p {
+  margin: 5px 0 0;
   color: var(--muted);
-  font-size: 9px;
-  margin-bottom: 5px;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
-.financial-metric strong {
-  font-size: 16px;
+.excel-upload-card {
+  padding: 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 11px;
 }
 
-.risk-list {
+.upload-title {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.excel-drop-zone {
+  margin-top: 12px;
+  min-height: 170px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 11px;
+  background: #f8fafc;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  padding: 25px;
+  text-align: center;
+  transition:
+    border-color .15s ease,
+    background .15s ease;
 }
 
-.risk-row {
+.excel-drop-zone:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.excel-drop-zone.dragover {
+  border-color: #475569;
+  background: #eef2f7;
+}
+
+.upload-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+
+.excel-drop-zone strong {
+  font-size: 12px;
+}
+
+.excel-drop-zone span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.selected-file {
+  margin-top: 8px;
+  padding: 7px 10px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ============================================================
+   VALIDATION
+============================================================ */
+
+.excel-validation {
+  margin-top: 16px;
+}
+
+.validation-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 11px;
+  margin-bottom: 12px;
 }
 
-.risk-row span {
+.validation-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.validation-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.validation-card {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px;
+}
+
+.validation-card span {
+  display: block;
+  font-size: 9px;
   color: var(--muted);
 }
 
-.risk-ok {
+.validation-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.validation-card.success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.validation-card.success strong {
   color: var(--success);
 }
 
-.risk-warning {
+.validation-card.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.validation-card.warning strong {
   color: var(--warning);
 }
 
-/* =====================================================
+.validation-card.error {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.validation-card.error strong {
+  color: var(--danger);
+}
+
+.validation-messages {
+  margin-bottom: 14px;
+}
+
+.validation-message {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.validation-message.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.validation-message.warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.validation-message.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+
+/* ============================================================
+   EXCEL PREVIEW
+============================================================ */
+
+.excel-preview-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+
+.preview-title {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.excel-preview-wrapper .table-wrapper {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.excel-preview-table {
+  min-width: 900px;
+}
+
+.excel-preview-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+}
+
+.excel-preview-table td {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 99px;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.import-status.valid {
+  background: var(--success-bg);
+  color: #166534;
+}
+
+.import-status.warning {
+  background: var(--warning-bg);
+  color: #92400e;
+}
+
+.import-status.error {
+  background: var(--danger-bg);
+  color: #991b1b;
+}
+
+
+/* ============================================================
+   EXCEL FOOTER
+============================================================ */
+
+.excel-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.excel-modal-footer .primary-button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+
+/* ============================================================
    RESPONSIVE
-   ===================================================== */
+============================================================ */
 
 @media (max-width: 1200px) {
 
@@ -656,22 +947,65 @@ footer {
 
 }
 
-@media (max-width: 900px) {
+
+@media (max-width: 1000px) {
 
   .sidebar {
     position: static;
     width: 100%;
+    min-height: auto;
   }
 
-  .app {
-    display: block;
+  .sidebar-footer {
+    position: static;
+    margin-top: 25px;
   }
 
   .main {
     margin-left: 0;
   }
 
+  .app {
+    display: block;
+  }
+
+  .excel-modal {
+    width: min(95vw, 1050px);
+  }
+
 }
+
+
+@media (max-width: 800px) {
+
+  .main {
+    padding: 22px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .topbar-actions > * {
+    flex: 1;
+  }
+
+  .validation-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .excel-template-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+}
+
 
 @media (max-width: 650px) {
 
@@ -679,21 +1013,12 @@ footer {
     padding: 18px;
   }
 
-  .topbar {
-    align-items: flex-start;
-    gap: 15px;
-  }
-
-  .topbar-actions {
-    flex-direction: column;
-  }
-
   .toolbar {
     flex-direction: column;
   }
 
   .toolbar select {
-    height: 40px;
+    min-height: 40px;
   }
 
   .kpi-grid {
@@ -701,9 +1026,46 @@ footer {
   }
 
   .form-grid,
-  .detail-grid,
-  .detail-financial-grid {
+  .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modal {
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 20px);
+    padding: 17px;
+  }
+
+  .excel-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .excel-modal-footer button {
+    width: 100%;
+  }
+
+}
+
+
+@media (max-width: 450px) {
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
+  }
+
+  .topbar-actions > * {
+    width: 100%;
+  }
+
+  .validation-summary {
+    grid-template-columns: 1fr 1fr;
   }
 
 }
