@@ -536,14 +536,61 @@ document.addEventListener("DOMContentLoaded", () => {
 
      NOT yet implemented (reserved for later approved phases, do
      NOT assume these are active):
-       - Lease escalation math (fixed % / fixed amount) — Faz 2
        - Payment frequency other than monthly — accepted but the
          schedule is still computed monthly
        - Modification / reassessment recalculation — Faz 5/6
+       - Index-based escalation ("index" type) — structure ready,
+         math deferred; behaves as flat payment until implemented
      These fields are captured in the "assumptions" object of the
      result so the data model is ready, without silently producing
      wrong numbers for math that hasn't been built yet.
+
+     V16.2 UPDATE: lease escalation (fixedRate / fixedAmount) is
+     now implemented via computeEscalatedPayment() below. When
+     leaseIncreaseType is "none"/undefined (every legacy contract),
+     the ORIGINAL closed-form annuity path executes UNCHANGED —
+     same code, same numbers as V16.1. Escalation only activates
+     the alternate PV-summation path when explicitly requested.
   ========================================================== */
+
+  function computeEscalatedPayment(
+    basePayment,
+    periodIndex,
+    escalationType,
+    escalationRate,
+    fixedIncrease
+  ) {
+
+    // Escalation steps up once per contract year (every 12
+    // periods from commencement), not on calendar year boundary.
+    const contractYearIndex =
+      Math.floor(
+        (periodIndex - 1) / 12
+      );
+
+    if (escalationType === "fixedRate") {
+
+      return (
+        basePayment *
+        Math.pow(
+          1 + (escalationRate / 100),
+          contractYearIndex
+        )
+      );
+    }
+
+    if (escalationType === "fixedAmount") {
+
+      return (
+        basePayment +
+        (fixedIncrease * contractYearIndex)
+      );
+    }
+
+    // "none", "index" (not yet computed), or anything else:
+    // flat payment, unchanged.
+    return basePayment;
+  }
 
   function calculateLeaseEngine(contract) {
 
@@ -705,7 +752,61 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let liability = 0;
 
-    if (monthlyRate === 0) {
+    // V16.2: escalating leases need a per-period payment array,
+    // since the closed-form flat annuity formula no longer holds
+    // once payments vary. Liability becomes the PV of the actual
+    // (escalated) payment stream — TFRS 16.26/BC166 principle.
+    const hasEscalation =
+      assumptions.leaseIncreaseType === "fixedRate" ||
+      assumptions.leaseIncreaseType === "fixedAmount";
+
+    let paymentSchedule = null;
+
+    if (hasEscalation) {
+
+      paymentSchedule = [];
+
+      for (
+        let i = 1;
+        i <= months;
+        i++
+      ) {
+
+        paymentSchedule.push(
+          computeEscalatedPayment(
+            payment,
+            i,
+            assumptions.leaseIncreaseType,
+            assumptions.leaseIncreaseRate,
+            assumptions.fixedIncrease
+          )
+        );
+      }
+
+      if (monthlyRate === 0) {
+
+        liability =
+          paymentSchedule.reduce(
+            (total, p) => total + p,
+            0
+          );
+
+      } else {
+
+        liability =
+          paymentSchedule.reduce(
+            (total, p, index) =>
+              total +
+              p /
+                Math.pow(
+                  1 + monthlyRate,
+                  index + 1
+                ),
+            0
+          );
+      }
+
+    } else if (monthlyRate === 0) {
 
       liability =
         payment * months;
@@ -761,12 +862,17 @@ document.addEventListener("DOMContentLoaded", () => {
       i++
     ) {
 
+      const periodPayment =
+        paymentSchedule
+          ? paymentSchedule[i - 1]
+          : payment;
+
       const interest =
         openingLiability *
         monthlyRate;
 
       let principal =
-        payment - interest;
+        periodPayment - interest;
 
       if (principal < 0) {
         principal = 0;
@@ -814,7 +920,7 @@ document.addEventListener("DOMContentLoaded", () => {
         year: periodDate.getFullYear(),
         month: periodDate.getMonth() + 1,
         openingLiability,
-        payment,
+        payment: periodPayment,
         interest,
         principal,
         closingLiability,
