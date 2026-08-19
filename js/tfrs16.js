@@ -1119,6 +1119,146 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /* ==========================================================
+     CURRENT / NON-CURRENT — REPORTING DATE BASED (V16.3 / Faz 6)
+     ----------------------------------------------------------
+     calculateCurrentLiability()/calculateNonCurrentLiability()
+     above are UNTOUCHED and keep working exactly as in V15 (they
+     always look at the first 12 months from contract inception).
+
+     The functions below are additive: given an actual reporting
+     date, they find the outstanding liability AS OF that date
+     (from calculateLeaseEngine()'s schedule) and split it into
+     the next-12-months current portion and the remaining
+     non-current portion — the correct TFRS 16 classification
+     basis, independent of when the contract started.
+  ========================================================== */
+
+  function getScheduleAsOfReportingDate(
+    contract,
+    reportingDate
+  ) {
+
+    const engine =
+      calculateLeaseEngine(
+        contract
+      );
+
+    const ry =
+      reportingDate.getFullYear();
+
+    const rm =
+      reportingDate.getMonth() + 1;
+
+    const isClosed =
+      item =>
+        item.year < ry ||
+        (
+          item.year === ry &&
+          item.month <= rm
+        );
+
+    const closedPeriods =
+      engine.schedule.filter(
+        isClosed
+      );
+
+    const futurePeriods =
+      engine.schedule.filter(
+        item => !isClosed(item)
+      );
+
+    const outstandingLiability =
+      closedPeriods.length
+        ? closedPeriods[
+            closedPeriods.length - 1
+          ].closingLiability
+        : engine.liability;
+
+    return {
+      engine,
+      closedPeriods,
+      futurePeriods,
+      outstandingLiability
+    };
+  }
+
+
+  function calculateLiabilitySplitAsOf(
+    contract,
+    reportingDate
+  ) {
+
+    const {
+      futurePeriods,
+      outstandingLiability
+    } = getScheduleAsOfReportingDate(
+      contract,
+      reportingDate
+    );
+
+    const next12 =
+      futurePeriods.slice(0, 12);
+
+    const current =
+      next12.reduce(
+        (total, item) =>
+          total + item.principal,
+        0
+      );
+
+    const nonCurrent =
+      Math.max(
+        0,
+        outstandingLiability - current
+      );
+
+    return {
+      reportingDate,
+      outstandingLiability,
+      current,
+      nonCurrent,
+      total: outstandingLiability,
+      next12Payments:
+        next12.reduce(
+          (t, i) => t + i.payment,
+          0
+        ),
+      next12Interest:
+        next12.reduce(
+          (t, i) => t + i.interest,
+          0
+        ),
+      next12Principal:
+        current
+    };
+  }
+
+
+  function calculateCurrentLiabilityAsOf(
+    contract,
+    reportingDate
+  ) {
+
+    return calculateLiabilitySplitAsOf(
+      contract,
+      reportingDate
+    ).current;
+  }
+
+
+  function calculateNonCurrentLiabilityAsOf(
+    contract,
+    reportingDate
+  ) {
+
+    return calculateLiabilitySplitAsOf(
+      contract,
+      reportingDate
+    ).nonCurrent;
+  }
+
+
   function calculateNext12Months(
     contract
   ) {
@@ -1938,18 +2078,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function generateReclassificationEntry(
-    contract
+    contract,
+    reportingDate
   ) {
 
-    const current =
-      calculateCurrentLiability(
-        contract
-      );
+    let current;
+    let nonCurrent;
 
-    const nonCurrent =
-      calculateNonCurrentLiability(
-        contract
-      );
+    if (reportingDate) {
+
+      // V16.3: reporting-date-aware split (Faz 6)
+      const split =
+        calculateLiabilitySplitAsOf(
+          contract,
+          reportingDate
+        );
+
+      current = split.current;
+      nonCurrent = split.nonCurrent;
+
+    } else {
+
+      // No reportingDate passed: exact V15 behavior, unchanged.
+      current =
+        calculateCurrentLiability(
+          contract
+        );
+
+      nonCurrent =
+        calculateNonCurrentLiability(
+          contract
+        );
+    }
 
     return [
 
@@ -2717,9 +2877,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (period === "closing") {
 
+      const reportingDate =
+        new Date(
+          year,
+          11,
+          31
+        );
+
       const entries =
         generateReclassificationEntry(
-          contract
+          contract,
+          reportingDate
         );
 
       if (preview) {
