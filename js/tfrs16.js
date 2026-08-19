@@ -23,6 +23,19 @@ document.addEventListener("DOMContentLoaded", () => {
   - Safer date / input validation
   - Duplicate contract protection
   - Existing localStorage key preserved
+
+  ------------------------------------------------------------
+  V16.1 (additive — nothing above removed or altered)
+  - New calculateLeaseEngine(): professional TFRS 16 engine
+    supporting extended parameters (payment frequency/timing,
+    initial direct costs, incentives, prepayments, restoration
+    obligation, short-term/low-value exemption, renewal/
+    termination flags). Produces identical numbers to
+    calculateLease() when only legacy fields are present.
+    Escalation and non-monthly frequency math are intentionally
+    deferred to later approved phases (V16.2+).
+  - New "Kira Ödeme Planı" (Payment Schedule) panel in contract
+    detail view, with Yıl / Ay / Çeyrek filters and Excel export.
   ============================================================
   */
 
@@ -498,6 +511,404 @@ document.addEventListener("DOMContentLoaded", () => {
 
       schedule
     };
+  }
+
+
+  /* ==========================================================
+     PROFESSIONAL CALCULATION ENGINE (V16.1)
+     ----------------------------------------------------------
+     calculateLease() above is untouched and remains the engine
+     used by every existing V15 screen (detail summary, initial
+     journal, accounting center, bulk journal, current/non-current
+     KPIs). Nothing in this file has been rewired to use the new
+     engine except the new Payment Schedule panel below.
+
+     calculateLeaseEngine() is additive. It wraps the same core
+     amortization math but accepts a wider set of TFRS 16
+     parameters: paymentFrequency, paymentTiming, leaseIncreaseType/
+     Rate, fixedIncrease, variablePayment, renewalOption,
+     terminationOption, initialDirectCosts, leaseIncentives,
+     prepayments, restorationObligation, shortTermLease,
+     lowValueAsset, effectiveMonthlyRate. When a contract only has
+     the legacy V15 fields (monthlyPayment, discountRate,
+     startDate, endDate) it produces numerically identical results
+     to calculateLease().
+
+     NOT yet implemented (reserved for later approved phases, do
+     NOT assume these are active):
+       - Lease escalation math (fixed % / fixed amount) — Faz 2
+       - Payment frequency other than monthly — accepted but the
+         schedule is still computed monthly
+       - Modification / reassessment recalculation — Faz 5/6
+     These fields are captured in the "assumptions" object of the
+     result so the data model is ready, without silently producing
+     wrong numbers for math that hasn't been built yet.
+  ========================================================== */
+
+  function calculateLeaseEngine(contract) {
+
+    const assumptions = {
+
+      paymentFrequency:
+        contract.paymentFrequency || "monthly",
+
+      paymentTiming:
+        contract.paymentTiming || "arrears",
+
+      leaseIncreaseType:
+        contract.leaseIncreaseType || "none",
+
+      leaseIncreaseRate:
+        Number(contract.leaseIncreaseRate) || 0,
+
+      fixedIncrease:
+        Number(contract.fixedIncrease) || 0,
+
+      variablePayment:
+        Number(contract.variablePayment) || 0,
+
+      renewalOption:
+        contract.renewalOption === true,
+
+      terminationOption:
+        contract.terminationOption === true,
+
+      initialDirectCosts:
+        Number(contract.initialDirectCosts) || 0,
+
+      leaseIncentives:
+        Number(contract.leaseIncentives) || 0,
+
+      prepayments:
+        Number(contract.prepayments) || 0,
+
+      restorationObligation:
+        Number(contract.restorationObligation) || 0,
+
+      shortTermLease:
+        contract.shortTermLease === true,
+
+      lowValueAsset:
+        contract.lowValueAsset === true
+    };
+
+
+    // TFRS 16.5-8 recognition exemption: short-term / low-value
+    // leases are expensed on a straight-line basis. No ROU asset
+    // or lease liability is recognized.
+    if (
+      assumptions.shortTermLease ||
+      assumptions.lowValueAsset
+    ) {
+
+      const payment =
+        Number(contract.monthlyPayment) || 0;
+
+      const months =
+        monthsBetween(
+          contract.startDate,
+          contract.endDate
+        );
+
+      const contractStart =
+        parseDate(contract.startDate);
+
+      const schedule = [];
+
+      if (
+        payment > 0 &&
+        months > 0 &&
+        contractStart
+      ) {
+
+        for (
+          let i = 1;
+          i <= months;
+          i++
+        ) {
+
+          const periodDate =
+            new Date(
+              contractStart.getFullYear(),
+              contractStart.getMonth() +
+                i -
+                1,
+              1
+            );
+
+          schedule.push({
+            period: i,
+            date: periodDate,
+            year: periodDate.getFullYear(),
+            month: periodDate.getMonth() + 1,
+            openingLiability: 0,
+            payment,
+            interest: 0,
+            principal: 0,
+            closingLiability: 0,
+            rouOpening: 0,
+            depreciation: 0,
+            rouClosing: 0,
+            straightLineExpense: payment
+          });
+        }
+      }
+
+      return {
+        months,
+        liability: 0,
+        rouAssets: 0,
+        depreciation: 0,
+        monthlyInterest: 0,
+        schedule,
+        assumptions,
+        exempt: true
+      };
+    }
+
+
+    const payment =
+      Number(contract.monthlyPayment) || 0;
+
+    const annualRate =
+      Number(contract.discountRate) || 0;
+
+    const monthlyRate =
+      contract.effectiveMonthlyRate !== undefined &&
+      contract.effectiveMonthlyRate !== null &&
+      contract.effectiveMonthlyRate !== ""
+        ? Number(contract.effectiveMonthlyRate)
+        : annualRate / 100 / 12;
+
+    const months =
+      monthsBetween(
+        contract.startDate,
+        contract.endDate
+      );
+
+    if (
+      payment <= 0 ||
+      months <= 0
+    ) {
+
+      return {
+        months: 0,
+        liability: 0,
+        rouAssets: 0,
+        depreciation: 0,
+        monthlyInterest: 0,
+        schedule: [],
+        assumptions,
+        exempt: false
+      };
+    }
+
+    let liability = 0;
+
+    if (monthlyRate === 0) {
+
+      liability =
+        payment * months;
+
+    } else {
+
+      liability =
+        payment *
+        (
+          (
+            1 -
+            Math.pow(
+              1 + monthlyRate,
+              -months
+            )
+          ) /
+          monthlyRate
+        );
+    }
+
+    const initialLiability =
+      liability;
+
+    // Initial ROU measurement per TFRS 16.24:
+    // liability + initial direct costs + prepayments
+    // - lease incentives + restoration/dismantling obligation.
+    // When all extended fields are 0 (legacy contracts), this
+    // equals initialLiability exactly, matching calculateLease().
+    const initialROU =
+      initialLiability +
+      assumptions.initialDirectCosts +
+      assumptions.prepayments -
+      assumptions.leaseIncentives +
+      assumptions.restorationObligation;
+
+    const depreciation =
+      initialROU / months;
+
+    const schedule = [];
+
+    let openingLiability =
+      initialLiability;
+
+    let rouOpening =
+      initialROU;
+
+    const contractStart =
+      parseDate(contract.startDate);
+
+    for (
+      let i = 1;
+      i <= months;
+      i++
+    ) {
+
+      const interest =
+        openingLiability *
+        monthlyRate;
+
+      let principal =
+        payment - interest;
+
+      if (principal < 0) {
+        principal = 0;
+      }
+
+      if (
+        principal >
+        openingLiability
+      ) {
+        principal =
+          openingLiability;
+      }
+
+      const closingLiability =
+        Math.max(
+          0,
+          openingLiability - principal
+        );
+
+      const rouDepreciation =
+        Math.min(
+          depreciation,
+          rouOpening
+        );
+
+      const rouClosing =
+        Math.max(
+          0,
+          rouOpening -
+          rouDepreciation
+        );
+
+      const periodDate =
+        new Date(
+          contractStart.getFullYear(),
+          contractStart.getMonth() +
+            i -
+            1,
+          1
+        );
+
+      schedule.push({
+        period: i,
+        date: periodDate,
+        year: periodDate.getFullYear(),
+        month: periodDate.getMonth() + 1,
+        openingLiability,
+        payment,
+        interest,
+        principal,
+        closingLiability,
+        rouOpening,
+        depreciation: rouDepreciation,
+        rouClosing
+      });
+
+      openingLiability =
+        closingLiability;
+
+      rouOpening =
+        rouClosing;
+    }
+
+    return {
+      months,
+      liability: initialLiability,
+      rouAssets: initialROU,
+      depreciation,
+      monthlyInterest:
+        schedule[0]?.interest || 0,
+      schedule,
+      assumptions,
+      exempt: false
+    };
+  }
+
+
+  function buildQuarterOptions() {
+
+    return [1, 2, 3, 4]
+      .map(
+        quarter =>
+          `<option value="${quarter}">${quarter}. Çeyrek</option>`
+      )
+      .join("");
+  }
+
+
+  function filterSchedule(
+    schedule,
+    year,
+    subPeriod,
+    periodType
+  ) {
+
+    if (!schedule || !schedule.length) {
+      return [];
+    }
+
+    if (periodType === "all") {
+      return schedule;
+    }
+
+    if (periodType === "annual") {
+
+      return schedule.filter(
+        item => item.year === year
+      );
+    }
+
+    if (periodType === "quarterly") {
+
+      const quarter =
+        Number(subPeriod);
+
+      const startMonth =
+        (quarter - 1) * 3 + 1;
+
+      const endMonth =
+        quarter * 3;
+
+      return schedule.filter(
+        item =>
+          item.year === year &&
+          item.month >= startMonth &&
+          item.month <= endMonth
+      );
+    }
+
+    if (periodType === "monthly") {
+
+      const month =
+        Number(subPeriod);
+
+      return schedule.filter(
+        item =>
+          item.year === year &&
+          item.month === month
+      );
+    }
+
+    return schedule;
   }
 
 
@@ -2372,6 +2783,554 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   /* ==========================================================
+     PAYMENT SCHEDULE — "Kira Ödeme Planı" (V16.1 / Faz 3)
+     ----------------------------------------------------------
+     Read-only view of the full amortization schedule for a
+     single contract, built on top of calculateLeaseEngine().
+     Does not touch renderAccountingCenter() or any journal
+     generation logic above.
+  ========================================================== */
+
+  function renderPaymentScheduleSection(contract) {
+
+    return `
+
+      <div
+        style="
+          margin-top:28px;
+          border-top:1px solid #e5e7eb;
+          padding-top:24px;
+        "
+      >
+
+        <div>
+
+          <div
+            style="
+              font-size:10px;
+              color:#64748b;
+              font-weight:800;
+              letter-spacing:1px;
+            "
+          >
+            ÖDEME PLANI
+          </div>
+
+          <h3
+            style="
+              margin:5px 0 0;
+              font-size:18px;
+            "
+          >
+            Kira Ödeme Planı
+          </h3>
+
+          <p
+            style="
+              margin:5px 0 0;
+              color:#64748b;
+              font-size:11px;
+            "
+          >
+            Her dönem için açılış/kapanış yükümlülüğü, faiz, anapara, amortisman ve ROU net defter değeri.
+          </p>
+
+        </div>
+
+
+        <div
+          style="
+            display:grid;
+            grid-template-columns:
+              repeat(auto-fit,minmax(150px,1fr));
+            gap:12px;
+            margin-top:16px;
+          "
+        >
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Periyot
+            </label>
+
+            <select
+              id="schedulePeriodType"
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+              <option value="all">Tümü</option>
+              <option value="monthly">Aylık</option>
+              <option value="quarterly">Çeyreklik</option>
+              <option value="annual">Yıllık</option>
+            </select>
+          </div>
+
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Yıl
+            </label>
+
+            <select
+              id="scheduleYear"
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+              ${buildYearOptions(contract)}
+            </select>
+          </div>
+
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Ay / Çeyrek
+            </label>
+
+            <select
+              id="scheduleSubPeriod"
+              disabled
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+                opacity:.5;
+              "
+            >
+              ${buildMonthOptions()}
+            </select>
+          </div>
+
+
+          <div
+            style="
+              display:flex;
+              align-items:end;
+            "
+          >
+            <button
+              id="exportScheduleButton"
+              type="button"
+              class="primary-button"
+              style="
+                width:100%;
+                min-height:38px;
+              "
+            >
+              Excel'e Aktar
+            </button>
+          </div>
+
+        </div>
+
+
+        <div
+          style="
+            overflow:auto;
+            margin-top:16px;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+          "
+        >
+          <table
+            style="
+              width:100%;
+              border-collapse:collapse;
+              min-width:820px;
+            "
+          >
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">Tarih</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Açılış Yükümlülüğü</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Ödeme</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Faiz</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Anapara</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Kapanış Yükümlülüğü</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Amortisman</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">ROU Net Defter Değeri</th>
+              </tr>
+            </thead>
+            <tbody id="scheduleTableBody"></tbody>
+          </table>
+        </div>
+
+        <div
+          id="scheduleEmptyState"
+          style="
+            display:none;
+            padding:14px;
+            text-align:center;
+            color:#64748b;
+            font-size:12px;
+          "
+        >
+          Seçilen dönem için ödeme planı kaydı bulunmuyor.
+        </div>
+
+      </div>
+
+    `;
+  }
+
+
+  function renderPaymentScheduleTable(contract) {
+
+    const tbody =
+      document.getElementById(
+        "scheduleTableBody"
+      );
+
+    if (!tbody) return;
+
+    const periodType =
+      document.getElementById(
+        "schedulePeriodType"
+      )?.value || "all";
+
+    const year =
+      Number(
+        document.getElementById(
+          "scheduleYear"
+        )?.value
+      );
+
+    const subPeriod =
+      document.getElementById(
+        "scheduleSubPeriod"
+      )?.value;
+
+    const engine =
+      calculateLeaseEngine(
+        contract
+      );
+
+    const rows =
+      filterSchedule(
+        engine.schedule,
+        year,
+        subPeriod,
+        periodType
+      );
+
+    tbody.innerHTML =
+      rows
+        .map(
+          item => `
+            <tr>
+              <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${item.period}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${getMonthName(item.month)} ${item.year}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.openingLiability)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.payment)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.interest)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.principal)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.closingLiability)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.depreciation)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.rouClosing)}</td>
+            </tr>
+          `
+        )
+        .join("");
+
+    const empty =
+      document.getElementById(
+        "scheduleEmptyState"
+      );
+
+    if (empty) {
+      empty.style.display =
+        rows.length
+          ? "none"
+          : "block";
+    }
+  }
+
+
+  function updateScheduleSubPeriodUI() {
+
+    const periodType =
+      document.getElementById(
+        "schedulePeriodType"
+      )?.value;
+
+    const subPeriod =
+      document.getElementById(
+        "scheduleSubPeriod"
+      );
+
+    if (!subPeriod) return;
+
+    if (periodType === "quarterly") {
+
+      subPeriod.innerHTML =
+        buildQuarterOptions();
+
+      subPeriod.disabled = false;
+      subPeriod.style.opacity = "1";
+
+    } else if (periodType === "monthly") {
+
+      subPeriod.innerHTML =
+        buildMonthOptions();
+
+      subPeriod.disabled = false;
+      subPeriod.style.opacity = "1";
+
+    } else {
+
+      subPeriod.disabled = true;
+      subPeriod.style.opacity = ".5";
+    }
+  }
+
+
+  function initPaymentScheduleEvents(contract) {
+
+    updateScheduleSubPeriodUI();
+    renderPaymentScheduleTable(contract);
+
+    document
+      .getElementById(
+        "schedulePeriodType"
+      )
+      ?.addEventListener(
+        "change",
+        () => {
+          updateScheduleSubPeriodUI();
+          renderPaymentScheduleTable(contract);
+        }
+      );
+
+    document
+      .getElementById(
+        "scheduleYear"
+      )
+      ?.addEventListener(
+        "change",
+        () =>
+          renderPaymentScheduleTable(contract)
+      );
+
+    document
+      .getElementById(
+        "scheduleSubPeriod"
+      )
+      ?.addEventListener(
+        "change",
+        () =>
+          renderPaymentScheduleTable(contract)
+      );
+
+    document
+      .getElementById(
+        "exportScheduleButton"
+      )
+      ?.addEventListener(
+        "click",
+        () =>
+          exportPaymentSchedule(contract)
+      );
+  }
+
+
+  function exportPaymentSchedule(contract) {
+
+    const engine =
+      calculateLeaseEngine(
+        contract
+      );
+
+    if (!engine.schedule.length) {
+
+      alert(
+        "Aktarılacak ödeme planı bulunamadı."
+      );
+
+      return;
+    }
+
+    const assumptionRows = [
+      { "Alan": "Sözleşme ID", "Değer": contract.id },
+      { "Alan": "Şirket", "Değer": contract.company },
+      { "Alan": "Tedarikçi", "Değer": contract.supplier },
+      { "Alan": "Başlangıç Tarihi", "Değer": formatDate(contract.startDate) },
+      { "Alan": "Bitiş Tarihi", "Değer": formatDate(contract.endDate) },
+      { "Alan": "Aylık Kira", "Değer": contract.monthlyPayment },
+      { "Alan": "Yıllık İskonto Oranı (%)", "Değer": contract.discountRate },
+      { "Alan": "İlk Kira Yükümlülüğü", "Değer": engine.liability },
+      { "Alan": "ROU Varlığı (Başlangıç)", "Değer": engine.rouAssets },
+      { "Alan": "Rapor Tarihi", "Değer": formatDate(new Date()) }
+    ];
+
+    const scheduleRows =
+      engine.schedule.map(
+        item => ({
+          "Dönem": item.period,
+          "Yıl": item.year,
+          "Ay": getMonthName(item.month),
+          "Açılış Yükümlülüğü": item.openingLiability,
+          "Ödeme": item.payment,
+          "Faiz": item.interest,
+          "Anapara": item.principal,
+          "Kapanış Yükümlülüğü": item.closingLiability,
+          "Amortisman": item.depreciation,
+          "ROU Net Defter Değeri": item.rouClosing
+        })
+      );
+
+    if (typeof XLSX !== "undefined") {
+
+      try {
+
+        const workbook =
+          XLSX.utils.book_new();
+
+        const assumptionSheet =
+          XLSX.utils.json_to_sheet(
+            assumptionRows
+          );
+
+        XLSX.utils.book_append_sheet(
+          workbook,
+          assumptionSheet,
+          "Varsayimlar"
+        );
+
+        const scheduleSheet =
+          XLSX.utils.json_to_sheet(
+            scheduleRows
+          );
+
+        XLSX.utils.book_append_sheet(
+          workbook,
+          scheduleSheet,
+          "Odeme Plani"
+        );
+
+        XLSX.writeFile(
+          workbook,
+          `${contract.id}_Odeme_Plani.xlsx`
+        );
+
+        return;
+
+      } catch (error) {
+
+        console.error(
+          "Payment schedule export error:",
+          error
+        );
+      }
+    }
+
+    const headers =
+      Object.keys(
+        scheduleRows[0]
+      );
+
+    const csv =
+      [
+        headers.join(";"),
+        ...scheduleRows.map(
+          row =>
+            headers
+              .map(h => row[h])
+              .join(";")
+        )
+      ].join("\n");
+
+    const blob =
+      new Blob(
+        [
+          "\uFEFF" +
+          csv
+        ],
+        {
+          type:
+            "text/csv;charset=utf-8;"
+        }
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href = url;
+
+    link.download =
+      `${contract.id}_Odeme_Plani.csv`;
+
+    document.body.appendChild(
+      link
+    );
+
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(
+      url
+    );
+  }
+
+
+  /* ==========================================================
      DETAIL MODAL
   ========================================================== */
 
@@ -2512,6 +3471,11 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
+        ${renderPaymentScheduleSection(
+          contract
+        )}
+
+
         ${renderJournalEntry(
           "İlk Muhasebeleştirme Fişi",
           generateInitialEntry(
@@ -2557,6 +3521,11 @@ document.addEventListener("DOMContentLoaded", () => {
             "click",
             openBulkJournalModal
           );
+
+
+        initPaymentScheduleEvents(
+          contract
+        );
 
       },
       0
