@@ -4,1155 +4,368 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>TMS 19 | Aktüeryal Değerleme ve Karar Destek Merkezi</title>
+<title>GK Advisory — TMS 19 Aktüeryal Değerleme</title>
 
-<meta
-    name="description"
-    content="TMS 19 Tanımlanmış Fayda Yükümlülüğü, aktüeryal değerleme, DBO analizi ve duyarlılık karar destek merkezi."
->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 
-/* =========================================================
-   GLOBAL
-========================================================= */
-
 :root {
-    --bg: #f4f5f7;
+    --bg: #f4f6f8;
     --surface: #ffffff;
-    --surface-soft: #f8f9fa;
-
-    --text: #17202a;
-    --text-secondary: #59636e;
-    --text-muted: #89929b;
-
-    --border: #e3e6e8;
-
-    --navy: #172b4d;
-    --navy-dark: #0f1f36;
-
-    --gold: #b08a4a;
-    --gold-light: #f4ead7;
-
-    --green: #26734d;
-    --green-light: #e8f4ed;
-
-    --red: #a53f3f;
-    --red-light: #f9e9e9;
-
-    --orange: #a66b19;
-    --orange-light: #fff3dc;
-
-    --blue: #35658a;
-    --blue-light: #eaf2f8;
-
-    --shadow:
-        0 2px 8px rgba(16, 24, 40, 0.04),
-        0 12px 32px rgba(16, 24, 40, 0.05);
-
-    --radius: 14px;
+    --surface-soft: #f8fafc;
+    --border: #e5e7eb;
+    --text: #172033;
+    --muted: #6b7280;
+    --navy: #14213d;
+    --blue: #2563eb;
+    --green: #15803d;
+    --amber: #b45309;
+    --red: #b91c1c;
+    --shadow: 0 8px 30px rgba(15,23,42,.06);
 }
 
 * {
     box-sizing: border-box;
 }
 
-html {
-    scroll-behavior: smooth;
-}
-
 body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-
-    font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Roboto,
-        Arial,
-        sans-serif;
+    font-family: Inter, Arial, sans-serif;
 }
 
-button,
-input,
-select {
-    font-family: inherit;
+.container {
+    max-width: 1500px;
+    margin: auto;
+    padding: 28px;
 }
 
-button {
-    cursor: pointer;
-}
-
-
-/* =========================================================
-   PAGE
-========================================================= */
-
-.page {
-    max-width: 1550px;
-    margin: 0 auto;
-    padding: 30px;
-}
-
-
-/* =========================================================
-   HEADER
-========================================================= */
+/* HEADER */
 
 .header {
+    background:
+        linear-gradient(135deg,#14213d,#1e3158);
+    color: white;
+    border-radius: 20px;
+    padding: 30px 34px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+}
+
+.header-top {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-
-    padding: 28px 30px;
-
-    background:
-        linear-gradient(
-            135deg,
-            var(--navy-dark),
-            var(--navy)
-        );
-
-    color: white;
-
-    border-radius: 18px;
-
-    box-shadow: var(--shadow);
-
-    margin-bottom: 22px;
+    gap: 20px;
 }
 
-.header-left {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
+.brand {
+    font-family: "Playfair Display", serif;
+    font-size: 28px;
+    letter-spacing: .3px;
 }
 
-.header-eyebrow {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-
-    color: #cbb17c;
-}
-
-.header-title {
-    font-family: Georgia, "Times New Roman", serif;
-
-    font-size: 30px;
-    font-weight: 500;
-
-    letter-spacing: -.5px;
-}
-
-.header-subtitle {
+.subtitle {
+    margin-top: 7px;
+    color: rgba(255,255,255,.72);
     font-size: 13px;
-    color: #cbd3dd;
-
-    max-width: 750px;
-
-    line-height: 1.6;
 }
 
-.header-right {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 10px;
-}
-
-.engine-badge {
-    border: 1px solid rgba(255,255,255,.25);
-
-    background: rgba(255,255,255,.07);
-
-    color: #fff;
-
-    padding: 7px 12px;
-
-    border-radius: 20px;
-
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.date-badge {
+.standard-badge {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    padding: 9px 14px;
+    border-radius: 999px;
     font-size: 12px;
-    color: #cbd3dd;
 }
 
+/* NAV */
 
-/* =========================================================
-   NAVIGATION
-========================================================= */
-
-.module-nav {
+.nav {
     display: flex;
-    gap: 6px;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
 
-    background: var(--surface);
-
+.nav button {
     border: 1px solid var(--border);
-
-    border-radius: 12px;
-
-    padding: 6px;
-
-    margin-bottom: 22px;
-
-    overflow-x: auto;
-}
-
-.module-nav a {
-    text-decoration: none;
-
-    color: var(--text-secondary);
-
+    background: white;
+    color: var(--muted);
     padding: 10px 15px;
-
-    border-radius: 8px;
-
-    font-size: 12px;
+    border-radius: 9px;
+    cursor: pointer;
     font-weight: 600;
-
-    white-space: nowrap;
+    font-size: 12px;
 }
 
-.module-nav a:hover,
-.module-nav a.active {
+.nav button.active {
     background: var(--navy);
     color: white;
+    border-color: var(--navy);
 }
 
-
-/* =========================================================
-   SECTION
-========================================================= */
-
-.section {
-    margin-bottom: 22px;
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-
-    margin-bottom: 12px;
-}
-
-.section-heading {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.section-title {
-    font-size: 17px;
-    font-weight: 750;
-}
-
-.section-subtitle {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-
-/* =========================================================
-   KPI CARDS
-========================================================= */
+/* KPI */
 
 .kpi-grid {
     display: grid;
-
-    grid-template-columns:
-        repeat(5, minmax(0, 1fr));
-
-    gap: 14px;
+    grid-template-columns: repeat(4,1fr);
+    gap: 15px;
+    margin-bottom: 20px;
 }
 
-.kpi-card {
+.kpi {
     background: var(--surface);
-
     border: 1px solid var(--border);
-
-    border-radius: var(--radius);
-
+    border-radius: 15px;
     padding: 20px;
-
     box-shadow: var(--shadow);
-
-    position: relative;
-
-    overflow: hidden;
-}
-
-.kpi-card::before {
-    content: "";
-
-    position: absolute;
-
-    top: 0;
-    left: 0;
-
-    width: 100%;
-    height: 3px;
-
-    background: var(--navy);
-}
-
-.kpi-card.gold::before {
-    background: var(--gold);
-}
-
-.kpi-card.green::before {
-    background: var(--green);
-}
-
-.kpi-card.blue::before {
-    background: var(--blue);
-}
-
-.kpi-card.orange::before {
-    background: var(--orange);
 }
 
 .kpi-label {
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    letter-spacing: .09em;
-
-    color: var(--text-muted);
-
-    font-weight: 700;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 9px;
 }
 
 .kpi-value {
     font-size: 25px;
-
-    font-weight: 750;
-
-    letter-spacing: -.5px;
-
-    margin-top: 9px;
-
-    color: var(--text);
-}
-
-.kpi-note {
-    font-size: 11px;
-
-    color: var(--text-muted);
-
-    margin-top: 7px;
-}
-
-
-/* =========================================================
-   CARD
-========================================================= */
-
-.card {
-    background: var(--surface);
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius);
-
-    box-shadow: var(--shadow);
-
-    padding: 22px;
-
-    margin-bottom: 18px;
-}
-
-.card-header {
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: flex-start;
-
-    margin-bottom: 18px;
-}
-
-.card-title {
-    font-size: 16px;
-
-    font-weight: 750;
-}
-
-.card-description {
-    font-size: 12px;
-
-    color: var(--text-muted);
-
-    margin-top: 5px;
-
-    line-height: 1.5;
-}
-
-.card-action {
-    font-size: 11px;
-
-    color: var(--gold);
-
     font-weight: 700;
+    color: var(--navy);
 }
 
+.kpi-sub {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11px;
+}
 
-/* =========================================================
-   GRID
-========================================================= */
+/* SECTIONS */
 
-.two-column {
+.section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 23px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.section-description {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 20px;
+}
+
+/* GRID */
+
+.grid-2 {
     display: grid;
-
-    grid-template-columns:
-        minmax(0, 1fr)
-        minmax(0, 1fr);
-
+    grid-template-columns: 1fr 1fr;
     gap: 18px;
 }
 
-.three-column {
+.grid-3 {
     display: grid;
-
-    grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-
-    gap: 14px;
+    grid-template-columns: repeat(3,1fr);
+    gap: 15px;
 }
 
+/* FORM */
 
-/* =========================================================
-   ASSUMPTIONS
-========================================================= */
-
-.assumption-grid {
+.form-grid {
     display: grid;
-
-    grid-template-columns:
-        repeat(4, minmax(0, 1fr));
-
+    grid-template-columns: repeat(3,1fr);
     gap: 14px;
-}
-
-.field {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 6px;
 }
 
 .field label {
+    display: block;
     font-size: 11px;
-
-    color: var(--text-secondary);
-
-    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
 }
 
 .field input,
 .field select {
     width: 100%;
-
     border: 1px solid var(--border);
-
-    border-radius: 8px;
-
     background: #fff;
-
-    color: var(--text);
-
-    padding: 10px 11px;
-
+    border-radius: 8px;
+    padding: 11px;
     font-size: 13px;
-
+    color: var(--text);
     outline: none;
-
-    transition: .15s;
 }
 
-.field input:focus,
-.field select:focus {
-    border-color: var(--navy);
-
-    box-shadow:
-        0 0 0 3px
-        rgba(23,43,77,.08);
+.field input:focus {
+    border-color: var(--blue);
 }
 
-.field-help {
-    font-size: 10px;
-
-    color: var(--text-muted);
-}
-
-
-/* =========================================================
-   BUTTONS
-========================================================= */
-
-.actions {
-    display: flex;
-
-    flex-wrap: wrap;
-
-    gap: 9px;
-
-    margin-top: 18px;
-}
+/* BUTTON */
 
 .btn {
-    border: none;
-
-    border-radius: 8px;
-
-    padding: 10px 15px;
-
-    font-size: 12px;
-
+    border: 0;
+    border-radius: 9px;
+    padding: 12px 18px;
     font-weight: 700;
+    cursor: pointer;
 }
 
 .btn-primary {
     background: var(--navy);
-
-    color: white;
-}
-
-.btn-primary:hover {
-    background: var(--navy-dark);
-}
-
-.btn-gold {
-    background: var(--gold);
-
     color: white;
 }
 
 .btn-secondary {
-    background: #eef0f2;
-
-    color: var(--text);
+    background: #eef2f7;
+    color: var(--navy);
 }
 
-.btn-secondary:hover {
-    background: #e2e5e8;
-}
+/* TABLE */
 
-
-/* =========================================================
-   STATUS
-========================================================= */
-
-.status-row {
-    display: flex;
-
-    align-items: center;
-
-    gap: 10px;
-
-    margin-top: 15px;
-
-    padding: 10px 12px;
-
-    border-radius: 8px;
-
-    background: var(--surface-soft);
-
-    font-size: 11px;
-
-    color: var(--text-secondary);
-}
-
-.status-dot {
-    width: 7px;
-    height: 7px;
-
-    border-radius: 50%;
-
-    background: var(--green);
-}
-
-
-/* =========================================================
-   BADGES
-========================================================= */
-
-.badge {
-    display: inline-flex;
-
-    align-items: center;
-
-    padding: 5px 9px;
-
-    border-radius: 20px;
-
-    font-size: 10px;
-
-    font-weight: 750;
-
-    white-space: nowrap;
-}
-
-.badge-green {
-    background: var(--green-light);
-
-    color: var(--green);
-}
-
-.badge-red {
-    background: var(--red-light);
-
-    color: var(--red);
-}
-
-.badge-orange {
-    background: var(--orange-light);
-
-    color: var(--orange);
-}
-
-.badge-blue {
-    background: var(--blue-light);
-
-    color: var(--blue);
-}
-
-.badge-gold {
-    background: var(--gold-light);
-
-    color: var(--gold);
-}
-
-
-/* =========================================================
-   TABLE
-========================================================= */
-
-.table-wrapper {
-    width: 100%;
-
+.table-wrap {
     overflow-x: auto;
 }
 
 table {
     width: 100%;
-
     border-collapse: collapse;
-
     font-size: 12px;
 }
 
-thead {
-    background: #f6f7f8;
-}
-
 th {
+    background: var(--surface-soft);
     text-align: left;
-
-    color: var(--text-secondary);
-
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    letter-spacing: .04em;
-
-    font-weight: 750;
-
-    padding: 11px 12px;
-
-    border-bottom:
-        1px solid var(--border);
-
-    white-space: nowrap;
+    padding: 11px;
+    color: var(--muted);
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
 }
 
 td {
-    padding: 11px 12px;
-
-    border-bottom:
-        1px solid #edf0f2;
-
-    white-space: nowrap;
-}
-
-tbody tr:hover {
-    background: #fafbfc;
+    padding: 11px;
+    border-bottom: 1px solid var(--border);
 }
 
 .number {
     text-align: right;
 }
 
-td strong {
-    font-weight: 750;
-}
+/* RISK */
 
-.clickable-row {
-    cursor: pointer;
-}
-
-
-/* =========================================================
-   DBO BRIDGE
-========================================================= */
-
-.bridge {
-    display: grid;
-
-    grid-template-columns:
-        repeat(6, minmax(130px, 1fr));
-
-    gap: 8px;
-}
-
-.bridge-item {
+.risk-box {
+    border-radius: 14px;
+    padding: 20px;
     background: var(--surface-soft);
-
-    border:
-        1px solid var(--border);
-
-    border-radius: 10px;
-
-    padding: 15px;
+    border: 1px solid var(--border);
 }
 
-.bridge-label {
-    color: var(--text-muted);
-
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    letter-spacing: .05em;
-
+.risk-score {
+    font-size: 40px;
     font-weight: 700;
 }
 
-.bridge-value {
-    font-size: 17px;
-
-    font-weight: 750;
-
-    margin-top: 7px;
-}
-
-.positive {
+.risk-low {
     color: var(--green);
 }
 
-.negative {
+.risk-medium {
+    color: var(--amber);
+}
+
+.risk-high,
+.risk-critical {
     color: var(--red);
 }
 
+/* CFO */
 
-/* =========================================================
-   MANAGEMENT INSIGHT
-========================================================= */
-
-.insight-box {
-    border-left:
-        3px solid var(--gold);
-
-    background:
-        linear-gradient(
-            90deg,
-            #fbf7ef,
-            #fff
-        );
-
-    border-radius: 0 9px 9px 0;
-
-    padding: 15px 17px;
-
-    margin-top: 18px;
+.cfo {
+    background: linear-gradient(135deg,#f8fafc,#eef2f7);
+    border-left: 5px solid var(--navy);
+    border-radius: 12px;
+    padding: 20px;
 }
 
-.insight-label {
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    letter-spacing: .08em;
-
-    font-weight: 750;
-
-    color: var(--gold);
-}
-
-.insight-text {
-    font-size: 12px;
-
-    line-height: 1.7;
-
-    color: var(--text-secondary);
-
-    margin-top: 6px;
-}
-
-
-/* =========================================================
-   RISK CARDS
-========================================================= */
-
-.risk-card {
-    border:
-        1px solid var(--border);
-
-    border-radius: 10px;
-
-    padding: 15px;
-
-    background: var(--surface-soft);
-}
-
-.risk-title {
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    letter-spacing: .06em;
-
-    color: var(--text-muted);
-
+.cfo-title {
     font-weight: 700;
-}
-
-.risk-value {
-    font-size: 18px;
-
-    font-weight: 800;
-
-    margin-top: 8px;
-}
-
-.risk-description {
-    font-size: 10px;
-
-    color: var(--text-muted);
-
-    line-height: 1.5;
-
-    margin-top: 5px;
-}
-
-
-/* =========================================================
-   EMPLOYEE DETAIL
-========================================================= */
-
-.detail-grid {
-    display: grid;
-
-    grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-
-    gap: 12px;
-
-    margin-bottom: 18px;
-}
-
-.detail-metric {
-    padding: 13px;
-
-    border:
-        1px solid var(--border);
-
-    border-radius: 9px;
-
-    background: var(--surface-soft);
-}
-
-.detail-label {
-    color: var(--text-muted);
-
-    font-size: 10px;
-
-    text-transform: uppercase;
-
-    font-weight: 700;
-}
-
-.detail-value {
-    font-size: 17px;
-
-    font-weight: 750;
-
-    margin-top: 6px;
-}
-
-
-/* =========================================================
-   SENSITIVITY
-========================================================= */
-
-.sensitivity-grid {
-    display: grid;
-
-    grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-
-    gap: 14px;
-}
-
-.sensitivity-card {
-    border:
-        1px solid var(--border);
-
-    border-radius: 10px;
-
-    padding: 15px;
-
-    background: var(--surface-soft);
-}
-
-.sensitivity-title {
-    font-size: 12px;
-
-    font-weight: 750;
-
     margin-bottom: 10px;
 }
 
-.sensitivity-row {
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-    padding: 8px 0;
-
-    border-bottom:
-        1px solid var(--border);
-
-    font-size: 11px;
-}
-
-.sensitivity-row:last-child {
-    border-bottom: none;
-}
-
-
-/* =========================================================
-   ACCOUNTING
-========================================================= */
-
-.accounting-summary {
-    display: grid;
-
-    grid-template-columns:
-        repeat(4, minmax(0, 1fr));
-
-    gap: 12px;
-
-    margin-bottom: 18px;
-}
-
-.accounting-card {
-    border:
-        1px solid var(--border);
-
-    border-radius: 9px;
-
-    padding: 14px;
-
-    background: var(--surface-soft);
-}
-
-.accounting-label {
-    font-size: 10px;
-
-    color: var(--text-muted);
-
-    text-transform: uppercase;
-
-    font-weight: 700;
-}
-
-.accounting-value {
-    font-size: 17px;
-
-    font-weight: 750;
-
-    margin-top: 6px;
-}
-
-
-/* =========================================================
-   JOURNAL
-========================================================= */
-
-.journal-box {
-    background: #f8f9fa;
-
-    border:
-        1px solid var(--border);
-
-    border-radius: 10px;
-
-    padding: 16px;
-
-    margin-top: 15px;
-}
-
-.journal-title {
-    font-size: 12px;
-
-    font-weight: 750;
-
-    margin-bottom: 12px;
-}
-
-.journal-note {
-    font-size: 10px;
-
-    line-height: 1.6;
-
-    color: var(--text-muted);
-
-    margin-top: 12px;
-}
-
-
-/* =========================================================
-   EMPTY
-========================================================= */
-
-.empty {
-    padding: 30px 15px;
-
-    text-align: center;
-
-    color: var(--text-muted);
-
-    font-size: 12px;
-
-    background: var(--surface-soft);
-
-    border-radius: 9px;
-}
-
-
-/* =========================================================
-   FOOTER
-========================================================= */
-
-.footer {
-    padding: 25px 0 10px;
-
-    text-align: center;
-
-    font-size: 10px;
-
-    color: var(--text-muted);
-
+.cfo-text {
+    font-size: 13px;
     line-height: 1.7;
 }
 
+/* CHART */
 
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 1200px) {
-
-    .kpi-grid {
-        grid-template-columns:
-            repeat(3, 1fr);
-    }
-
-    .assumption-grid {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-    .bridge {
-        grid-template-columns:
-            repeat(3, 1fr);
-    }
-
-    .sensitivity-grid {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-    .accounting-summary {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
+.chart-container {
+    position: relative;
+    height: 330px;
 }
 
-@media (max-width: 800px) {
+/* FOOTER */
 
-    .page {
-        padding: 15px;
+.footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 20px;
+}
+
+/* HIDDEN */
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* RESPONSIVE */
+
+@media(max-width:1100px) {
+
+    .kpi-grid {
+        grid-template-columns: repeat(2,1fr);
     }
 
-    .header {
+    .form-grid {
+        grid-template-columns: repeat(2,1fr);
+    }
+
+}
+
+@media(max-width:750px) {
+
+    .container {
+        padding: 14px;
+    }
+
+    .kpi-grid,
+    .grid-2,
+    .grid-3,
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header-top {
         flex-direction: column;
-
-        gap: 20px;
-    }
-
-    .header-right {
-        align-items: flex-start;
-    }
-
-    .kpi-grid {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-    .two-column {
-        grid-template-columns: 1fr;
-    }
-
-    .three-column {
-        grid-template-columns: 1fr;
-    }
-
-    .bridge {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-    .sensitivity-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .accounting-summary {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 500px) {
-
-    .kpi-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .assumption-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .bridge {
-        grid-template-columns: 1fr;
-    }
-
-    .header-title {
-        font-size: 24px;
     }
 
 }
@@ -1160,53 +373,38 @@ td strong {
 </style>
 </head>
 
-
 <body>
 
-<div class="page">
+<div class="container">
 
-
-<!-- =======================================================
+<!-- =====================================================
      HEADER
-======================================================= -->
+===================================================== -->
 
 <header class="header">
 
-    <div class="header-left">
+    <div class="header-top">
 
-        <div class="header-eyebrow">
-            GK Advisory • Financial Decision Cockpit
-        </div>
+        <div>
 
-        <div class="header-title">
-            TMS 19 Aktüeryal Değerleme ve Karar Destek Merkezi
-        </div>
+            <div class="brand">
+                GK Advisory
+            </div>
 
-        <div class="header-subtitle">
+            <div style="font-size:22px;font-weight:700;margin-top:12px;">
+                TMS 19 Aktüeryal Değerleme Merkezi
+            </div>
 
-            Tanımlanmış fayda planları için
-            Projected Unit Credit yaklaşımı,
-            DBO hesaplaması, aktüeryal projeksiyon,
-            duyarlılık analizi ve finansal raporlama
-            görünümünü tek merkezde yönetin.
+            <div class="subtitle">
+                Çalışanlara Sağlanan Faydalar • PUC • DBO • P&L • OCI • Aktüeryal Risk
+            </div>
 
         </div>
 
-    </div>
-
-
-    <div class="header-right">
-
-        <div class="engine-badge">
-            AKTÜERYAL MOTOR v2.0
-        </div>
-
-        <div
-            class="date-badge"
-            id="headerValuationDate">
-
-            Değerleme tarihi: -
-
+        <div class="standard-badge">
+            TMS 19
+            <br>
+            Projected Unit Credit
         </div>
 
     </div>
@@ -1214,2282 +412,528 @@ td strong {
 </header>
 
 
-<!-- =======================================================
-     MODULE NAVIGATION
-======================================================= -->
+<!-- =====================================================
+     NAVIGATION
+===================================================== -->
 
-<nav class="module-nav">
+<div class="nav">
 
-    <a
-        href="#genel-bakis"
-        class="active">
-
+    <button class="active" onclick="showTab('dashboard',this)">
         Genel Bakış
+    </button>
 
-    </a>
-
-    <a href="#varsayimlar">
-
+    <button onclick="showTab('assumptions',this)">
         Aktüeryal Varsayımlar
+    </button>
 
-    </a>
+    <button onclick="showTab('employee',this)">
+        Personel
+    </button>
 
-    <a href="#calisanlar">
+    <button onclick="showTab('puc',this)">
+        PUC Değerleme
+    </button>
 
-        Çalışan Verileri
-
-    </a>
-
-    <a href="#dbo">
-
+    <button onclick="showTab('rollforward',this)">
         DBO Mutabakatı
-
-    </a>
-
-    <a href="#projeksiyon">
-
-        Aktüeryal Projeksiyon
-
-    </a>
-
-    <a href="#duyarlilik">
-
-        Duyarlılık Analizi
-
-    </a>
-
-    <a href="#muhasebe">
-
-        Muhasebe Görünümü
-
-    </a>
-
-</nav>
-
-
-<!-- =======================================================
-     GENEL BAKIŞ
-======================================================= -->
-
-<section
-    class="section"
-    id="genel-bakis">
-
-    <div class="section-header">
-
-        <div class="section-heading">
-
-            <div class="section-title">
-                TMS 19 Değerleme Özeti
-            </div>
-
-            <div class="section-subtitle">
-                Portföy seviyesinde aktüeryal ve finansal görünüm
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="kpi-grid">
-
-
-        <div class="kpi-card">
-
-            <div class="kpi-label">
-                Değerleme Kapsamındaki Çalışan
-            </div>
-
-            <div
-                class="kpi-value"
-                id="kpiEmployees">
-
-                0
-
-            </div>
-
-            <div class="kpi-note">
-                Aktüeryal değerleme nüfusu
-            </div>
-
-        </div>
-
-
-        <div class="kpi-card gold">
-
-            <div class="kpi-label">
-                Kapanış DBO
-            </div>
-
-            <div
-                class="kpi-value"
-                id="kpiDBO">
-
-                ₺0
-
-            </div>
-
-            <div class="kpi-note">
-                Tanımlanmış fayda yükümlülüğü
-            </div>
-
-        </div>
-
-
-        <div class="kpi-card green">
-
-            <div class="kpi-label">
-                Cari Hizmet Maliyeti
-            </div>
-
-            <div
-                class="kpi-value"
-                id="kpiServiceCost">
-
-                ₺0
-
-            </div>
-
-            <div class="kpi-note">
-                Kâr veya zarar etkisi
-            </div>
-
-        </div>
-
-
-        <div class="kpi-card blue">
-
-            <div class="kpi-label">
-                Beklenen Bugünkü Değer
-            </div>
-
-            <div
-                class="kpi-value"
-                id="kpiPV">
-
-                ₺0
-
-            </div>
-
-            <div class="kpi-note">
-                İskonto edilmiş beklenen fayda
-            </div>
-
-        </div>
-
-
-        <div class="kpi-card orange">
-
-            <div class="kpi-label">
-                Ortalama Fayda Olasılığı
-            </div>
-
-            <div
-                class="kpi-value"
-                id="kpiProbability">
-
-                0%
-
-            </div>
-
-            <div class="kpi-note">
-                Demografik varsayım göstergesi
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     AKTÜERYAL VARSAYIMLAR
-======================================================= -->
-
-<section
-    class="section"
-    id="varsayimlar">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Aktüeryal Varsayımlar
-                </div>
-
-                <div class="card-description">
-
-                    Değerleme sonucunu belirleyen finansal ve
-                    demografik varsayımlar.
-
-                </div>
-
-            </div>
-
-            <div class="card-action">
-                TMS 19 / PUC
-            </div>
-
-        </div>
-
-
-        <div class="assumption-grid">
-
-
-            <div class="field">
-
-                <label>
-                    Değerleme Tarihi
-                </label>
-
-                <input
-                    type="date"
-                    id="valuationDate">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    İskonto Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="discountRate"
-                    step="0.01"
-                    value="28">
-
-                <div class="field-help">
-                    Piyasa getirileri / yüksek kaliteli tahvil yaklaşımı
-                </div>
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Ücret Artış Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="salaryGrowthRate"
-                    step="0.01"
-                    value="24">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Tavan Artış Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="ceilingGrowthRate"
-                    step="0.01"
-                    value="24">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Personel Devir Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="turnoverRate"
-                    step="0.01"
-                    value="5">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Mortalite Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="mortalityRate"
-                    step="0.001"
-                    value="0.2">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Maluliyet Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="disabilityRate"
-                    step="0.001"
-                    value="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Emeklilik Yaşı
-                </label>
-
-                <input
-                    type="number"
-                    id="retirementAge"
-                    value="60">
-
-            </div>
-
-        </div>
-
-
-        <div class="actions">
-
-            <button
-                class="btn btn-primary"
-                onclick="runValuation()">
-
-                Aktüeryal Değerlemeyi Hesapla
-
-            </button>
-
-
-            <button
-                class="btn btn-secondary"
-                onclick="loadDemoData()">
-
-                Örnek Verileri Yükle
-
-            </button>
-
-
-            <button
-                class="btn btn-gold"
-                onclick="runSensitivity()">
-
-                Duyarlılık Analizini Çalıştır
-
-            </button>
-
-        </div>
-
-
-        <div class="status-row">
-
-            <span class="status-dot"></span>
-
-            <span>
-                Aktüeryal motor hazır — değerleme çalıştırılmayı bekliyor.
-            </span>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     ÇALIŞAN VERİLERİ
-======================================================= -->
-
-<section
-    class="section"
-    id="calisanlar">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Çalışan Verileri
-                </div>
-
-                <div class="card-description">
-
-                    Her çalışan için PUC hesaplamasında kullanılacak
-                    temel demografik ve finansal verileri girin.
-
-                </div>
-
-            </div>
-
-            <span
-                class="badge badge-gold"
-                id="populationBadge">
-
-                0 Çalışan
-
-            </span>
-
-        </div>
-
-
-        <div class="assumption-grid">
-
-
-            <div class="field">
-
-                <label>
-                    Çalışan No
-                </label>
-
-                <input
-                    id="employeeId"
-                    placeholder="EMP001">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Çalışan Adı
-                </label>
-
-                <input
-                    id="employeeName"
-                    placeholder="Çalışan adı">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Doğum Tarihi
-                </label>
-
-                <input
-                    type="date"
-                    id="birthDate">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    İşe Giriş Tarihi
-                </label>
-
-                <input
-                    type="date"
-                    id="hireDate">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Aylık Ücret
-                </label>
-
-                <input
-                    type="number"
-                    id="monthlySalary"
-                    placeholder="75000">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Mevcut Kıdem Tazminatı Tavanı
-                </label>
-
-                <input
-                    type="number"
-                    id="currentCeiling"
-                    placeholder="60000">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Emeklilik Yaşı
-                </label>
-
-                <input
-                    type="number"
-                    id="employeeRetirementAge"
-                    value="60">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Çalışana Özgü Devir Oranı (%)
-                </label>
-
-                <input
-                    type="number"
-                    id="employeeTurnover"
-                    step="0.01"
-                    placeholder="Varsayılan kullanılacak">
-
-            </div>
-
-        </div>
-
-
-        <div class="actions">
-
-            <button
-                class="btn btn-primary"
-                onclick="addEmployee()">
-
-                + Çalışan Ekle
-
-            </button>
-
-
-            <button
-                class="btn btn-secondary"
-                onclick="clearEmployees()">
-
-                Çalışan Listesini Temizle
-
-            </button>
-
-        </div>
-
-    </div>
-
-
-    <!-- ÇALIŞAN TABLOSU -->
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Değerleme Kapsamındaki Çalışanlar
-                </div>
-
-                <div class="card-description">
-                    Aktüeryal hesaplamaya dahil edilen çalışan nüfusu.
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div
-            class="table-wrapper"
-            id="employeeTableWrapper">
-
-            <div class="empty">
-                Henüz çalışan verisi yüklenmedi.
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     DBO MUTABAKATI
-======================================================= -->
-
-<section
-    class="section"
-    id="dbo">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    DBO Hareket Tablosu
-                </div>
-
-                <div class="card-description">
-
-                    Tanımlanmış fayda yükümlülüğünün dönem içindeki
-                    hareketlerini gösteren aktüeryal mutabakat.
-
-                </div>
-
-            </div>
-
-            <div class="card-action">
-                DBO BRIDGE
-            </div>
-
-        </div>
-
-
-        <div class="bridge">
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Açılış DBO
-                </div>
-
-                <div
-                    class="bridge-value"
-                    id="bridgeOpening">
-
-                    ₺0
-
-                </div>
-
-            </div>
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Cari Hizmet Maliyeti
-                </div>
-
-                <div
-                    class="bridge-value positive"
-                    id="bridgeService">
-
-                    +₺0
-
-                </div>
-
-            </div>
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Faiz Maliyeti
-                </div>
-
-                <div
-                    class="bridge-value positive"
-                    id="bridgeInterest">
-
-                    +₺0
-
-                </div>
-
-            </div>
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Ödenen Faydalar
-                </div>
-
-                <div
-                    class="bridge-value negative"
-                    id="bridgeBenefits">
-
-                    -₺0
-
-                </div>
-
-            </div>
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Aktüeryal Kazanç / Kayıp
-                </div>
-
-                <div
-                    class="bridge-value"
-                    id="bridgeActuarial">
-
-                    ₺0
-
-                </div>
-
-            </div>
-
-
-            <div class="bridge-item">
-
-                <div class="bridge-label">
-                    Kapanış DBO
-                </div>
-
-                <div
-                    class="bridge-value"
-                    id="bridgeClosing">
-
-                    ₺0
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     AKTÜERYAL DEĞERLEME
-======================================================= -->
-
-<section class="section">
-
-    <div class="two-column">
-
-
-        <!-- ÇALIŞAN DEĞERLEMESİ -->
-
-        <div class="card">
-
-            <div class="card-header">
-
-                <div>
-
-                    <div class="card-title">
-                        Çalışan Bazlı Aktüeryal Değerleme
-                    </div>
-
-                    <div class="card-description">
-
-                        Seçilen çalışanın PUC yöntemiyle
-                        hesaplanan yükümlülük detayları.
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Çalışan Seçimi
-                </label>
-
-                <select
-                    id="employeeSelector"
-                    onchange="showEmployeeValuation()">
-
-                    <option value="">
-                        Çalışan seçiniz
-                    </option>
-
-                </select>
-
-            </div>
-
-
-            <div
-                id="employeeDetail"
-                style="margin-top:18px;">
-
-                <div class="empty">
-                    Aktüeryal detayları görmek için çalışan seçiniz.
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- AKTÜERYAL RİSK -->
-
-        <div class="card">
-
-            <div class="card-header">
-
-                <div>
-
-                    <div class="card-title">
-                        Aktüeryal Risk ve Yönetim Görünümü
-                    </div>
-
-                    <div class="card-description">
-
-                        DBO üzerinde etkili olan temel finansal
-                        ve demografik risk göstergeleri.
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="three-column">
-
-
-                <div class="risk-card">
-
-                    <div class="risk-title">
-                        İskonto Riski
-                    </div>
-
-                    <div
-                        class="risk-value"
-                        id="discountRisk">
-
-                        NORMAL
-
-                    </div>
-
-                    <div class="risk-description">
-                        İskonto oranındaki değişimin DBO üzerindeki etkisi.
-                    </div>
-
-                </div>
-
-
-                <div class="risk-card">
-
-                    <div class="risk-title">
-                        Ücret Artışı Riski
-                    </div>
-
-                    <div
-                        class="risk-value"
-                        id="salaryRisk">
-
-                        NORMAL
-
-                    </div>
-
-                    <div class="risk-description">
-                        Gelecekteki ücret artışlarının yükümlülüğe etkisi.
-                    </div>
-
-                </div>
-
-
-                <div class="risk-card">
-
-                    <div class="risk-title">
-                        Demografik Risk
-                    </div>
-
-                    <div
-                        class="risk-value"
-                        id="demographicRisk">
-
-                        NORMAL
-
-                    </div>
-
-                    <div class="risk-description">
-                        Devir, mortalite ve emeklilik varsayımlarının etkisi.
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="insight-box">
-
-                <div class="insight-label">
-                    Yönetim İçgörüsü
-                </div>
-
-                <div
-                    class="insight-text"
-                    id="managementComment">
-
-                    Değerleme çalıştırıldığında,
-                    DBO'nun temel risk sürücüleri burada gösterilecektir.
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     PROJEKSİYON
-======================================================= -->
-
-<section
-    class="section"
-    id="projeksiyon">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Aktüeryal Projeksiyon
-                </div>
-
-                <div class="card-description">
-
-                    Çalışanın emekliliğe kadar beklenen ücret,
-                    hizmet süresi, fayda ve bugünkü değer projeksiyonu.
-
-                </div>
-
-            </div>
-
-            <div class="card-action">
-                PROJECTED UNIT CREDIT
-            </div>
-
-        </div>
-
-
-        <div
-            class="table-wrapper"
-            id="projectionWrapper">
-
-            <div class="empty">
-
-                Çalışan seçildiğinde yıllık aktüeryal projeksiyon
-                burada görüntülenecektir.
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     DUYARLILIK
-======================================================= -->
-
-<section
-    class="section"
-    id="duyarlilik">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    DBO Duyarlılık Analizi
-                </div>
-
-                <div class="card-description">
-
-                    Temel aktüeryal varsayımlardaki değişimin
-                    DBO üzerindeki finansal etkisini analiz edin.
-
-                </div>
-
-            </div>
-
-            <button
-                class="btn btn-gold"
-                onclick="runSensitivity()">
-
-                Analizi Çalıştır
-
-            </button>
-
-        </div>
-
-
-        <div
-            class="sensitivity-grid"
-            id="sensitivityGrid">
-
-            <div class="empty">
-
-                Duyarlılık analizini çalıştırmak için
-                yukarıdaki butona basınız.
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     MUHASEBE GÖRÜNÜMÜ
-======================================================= -->
-
-<section
-    class="section"
-    id="muhasebe">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    TMS 19 Finansal Raporlama Görünümü
-                </div>
-
-                <div class="card-description">
-
-                    Aktüeryal değerlemenin kâr veya zarar,
-                    diğer kapsamlı gelir ve finansal durum
-                    tablosu üzerindeki temel etkileri.
-
-                </div>
-
-            </div>
-
-            <div class="card-action">
-                FİNANSAL RAPORLAMA
-            </div>
-
-        </div>
-
-
-        <div class="accounting-summary">
-
-
-            <div class="accounting-card">
-
-                <div class="accounting-label">
-                    Cari Hizmet Maliyeti
-                </div>
-
-                <div
-                    class="accounting-value"
-                    id="accountingService">
-
-                    ₺0
-
-                </div>
-
-                <div class="badge badge-blue">
-                    Kâr / Zarar
-                </div>
-
-            </div>
-
-
-            <div class="accounting-card">
-
-                <div class="accounting-label">
-                    Net Faiz Maliyeti
-                </div>
-
-                <div
-                    class="accounting-value"
-                    id="accountingInterest">
-
-                    ₺0
-
-                </div>
-
-                <div class="badge badge-blue">
-                    Kâr / Zarar
-                </div>
-
-            </div>
-
-
-            <div class="accounting-card">
-
-                <div class="accounting-label">
-                    Yeniden Ölçüm
-                </div>
-
-                <div
-                    class="accounting-value"
-                    id="accountingRemeasurement">
-
-                    ₺0
-
-                </div>
-
-                <div class="badge badge-gold">
-                    Diğer Kapsamlı Gelir
-                </div>
-
-            </div>
-
-
-            <div class="accounting-card">
-
-                <div class="accounting-label">
-                    Kapanış DBO
-                </div>
-
-                <div
-                    class="accounting-value"
-                    id="accountingDBO">
-
-                    ₺0
-
-                </div>
-
-                <div class="badge badge-green">
-                    Finansal Durum Tablosu
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="table-wrapper">
-
-            <table>
-
-                <thead>
-
-                    <tr>
-
-                        <th>
-                            TMS 19 Bileşeni
-                        </th>
-
-                        <th class="number">
-                            Tutar
-                        </th>
-
-                        <th>
-                            Finansal Tablo Etkisi
-                        </th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    <tr>
-
-                        <td>
-                            Cari Hizmet Maliyeti
-                        </td>
-
-                        <td
-                            class="number"
-                            id="accountingServiceTable">
-
-                            ₺0
-
-                        </td>
-
-                        <td>
-                            Kâr veya Zarar
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Net Faiz Maliyeti
-                        </td>
-
-                        <td
-                            class="number"
-                            id="accountingInterestTable">
-
-                            ₺0
-
-                        </td>
-
-                        <td>
-                            Kâr veya Zarar
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Aktüeryal Yeniden Ölçüm
-                        </td>
-
-                        <td
-                            class="number"
-                            id="accountingRemeasurementTable">
-
-                            ₺0
-
-                        </td>
-
-                        <td>
-                            Diğer Kapsamlı Gelir
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Tanımlanmış Fayda Yükümlülüğü
-                        </td>
-
-                        <td
-                            class="number"
-                            id="accountingDBOTable">
-
-                            ₺0
-
-                        </td>
-
-                        <td>
-                            Finansal Durum Tablosu
-                        </td>
-
-                    </tr>
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-        <div class="actions">
-
-            <button
-                class="btn btn-secondary"
-                onclick="generateJournal()">
-
-                Örnek Muhasebe Kaydı Oluştur
-
-            </button>
-
-        </div>
-
-
-        <div
-            id="journalOutput">
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     KONTROL / DENETİM NOTU
-======================================================= -->
-
-<section class="section">
-
-    <div class="card">
-
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Finansal Kontrol ve Denetim Perspektifi
-                </div>
-
-                <div class="card-description">
-
-                    Aktüeryal değerlemenin finansal raporlama sürecinde
-                    kontrol edilmesi gereken kritik alanlar.
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="three-column">
-
-
-            <div class="risk-card">
-
-                <div class="risk-title">
-                    Varsayım Yönetişimi
-                </div>
-
-                <div class="risk-description">
-
-                    İskonto oranı, ücret artışı, devir ve
-                    demografik varsayımların geçmiş dönem,
-                    piyasa verisi ve şirket bütçeleriyle
-                    tutarlılığı değerlendirilmelidir.
-
-                </div>
-
-            </div>
-
-
-            <div class="risk-card">
-
-                <div class="risk-title">
-                    Veri Kalitesi
-                </div>
-
-                <div class="risk-description">
-
-                    Çalışan yaşı, işe giriş tarihi, ücret,
-                    kıdem ve emeklilik bilgilerinin insan
-                    kaynakları kayıtlarıyla mutabakatı yapılmalıdır.
-
-                </div>
-
-            </div>
-
-
-            <div class="risk-card">
-
-                <div class="risk-title">
-                    Finansal Raporlama
-                </div>
-
-                <div class="risk-description">
-
-                    Aktüeryal rapor ile finansal tablolardaki
-                    açılış DBO, kapanış DBO, hizmet maliyeti,
-                    faiz ve OCI hareketleri mutabık olmalıdır.
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- =======================================================
-     FOOTER
-======================================================= -->
-
-<footer class="footer">
-
-    <strong>
-        GK Advisory — Financial Decision Cockpit
-    </strong>
-
-    <br>
-
-    TMS 19 Aktüeryal Değerleme ve Karar Destek Merkezi
-
-    <br>
-
-    Bu araç analitik ve modelleme amacıyla hazırlanmıştır.
-    Nihai aktüeryal değerleme ve finansal raporlama sonuçları
-    yetkin aktüer ve finansal raporlama uzmanı tarafından
-    değerlendirilmelidir.
-
-</footer>
-
+    </button>
+
+    <button onclick="showTab('sensitivity',this)">
+        Duyarlılık
+    </button>
+
+    <button onclick="showTab('cfo',this)">
+        CFO Karar Paneli
+    </button>
 
 </div>
 
 
-<!-- =======================================================
-     AKTÜERYAL ENGINE
-======================================================= -->
+<!-- =====================================================
+     DASHBOARD
+===================================================== -->
 
-<script src="js/tms19-actuarial-engine.js"></script>
+<section id="dashboard" class="tab-content active">
 
+    <div class="kpi-grid">
 
-<script>
+        <div class="kpi">
 
-/* =========================================================
-   GLOBAL STATE
-========================================================= */
-
-let employees = [];
-
-let valuationResult = null;
-
-let selectedEmployeeResult = null;
-
-
-/* =========================================================
-   SAYFA BAŞLANGICI
-========================================================= */
-
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-
-        const today =
-            new Date()
-                .toISOString()
-                .split("T")[0];
-
-        document.getElementById(
-            "valuationDate"
-        ).value = today;
-
-        document.getElementById(
-            "headerValuationDate"
-        ).textContent =
-            "Değerleme tarihi: " +
-            formatDate(today);
-
-        renderEmployeeTable();
-
-    }
-);
-
-
-/* =========================================================
-   FORMATLAMA
-========================================================= */
-
-function money(value) {
-
-    return new Intl.NumberFormat(
-        "tr-TR",
-        {
-            style: "currency",
-            currency: "TRY",
-            maximumFractionDigits: 0
-        }
-    ).format(
-        Number(value || 0)
-    );
-}
-
-
-function number(value) {
-
-    return new Intl.NumberFormat(
-        "tr-TR",
-        {
-            maximumFractionDigits: 2
-        }
-    ).format(
-        Number(value || 0)
-    );
-}
-
-
-function percent(value) {
-
-    return (
-        Number(value || 0) * 100
-    ).toFixed(2) + "%";
-}
-
-
-function formatDate(value) {
-
-    if (!value) {
-        return "-";
-    }
-
-    const date =
-        new Date(value);
-
-    return date.toLocaleDateString(
-        "tr-TR"
-    );
-}
-
-
-/* =========================================================
-   VARSAYIMLARI AL
-========================================================= */
-
-function getAssumptions() {
-
-    return {
-
-        valuationDate:
-            document.getElementById(
-                "valuationDate"
-            ).value,
-
-        discountRate:
-            Number(
-                document.getElementById(
-                    "discountRate"
-                ).value
-            ) / 100,
-
-        salaryGrowthRate:
-            Number(
-                document.getElementById(
-                    "salaryGrowthRate"
-                ).value
-            ) / 100,
-
-        ceilingGrowthRate:
-            Number(
-                document.getElementById(
-                    "ceilingGrowthRate"
-                ).value
-            ) / 100,
-
-        turnoverRate:
-            Number(
-                document.getElementById(
-                    "turnoverRate"
-                ).value
-            ) / 100,
-
-        mortalityRate:
-            Number(
-                document.getElementById(
-                    "mortalityRate"
-                ).value
-            ) / 100,
-
-        disabilityRate:
-            Number(
-                document.getElementById(
-                    "disabilityRate"
-                ).value
-            ) / 100,
-
-        retirementAge:
-            Number(
-                document.getElementById(
-                    "retirementAge"
-                ).value
-            ),
-
-        maxProjectionYears: 50
-
-    };
-
-}
-
-
-/* =========================================================
-   ÇALIŞAN EKLE
-========================================================= */
-
-function addEmployee() {
-
-    const employee = {
-
-        id:
-            document.getElementById(
-                "employeeId"
-            ).value ||
-            `EMP${String(
-                employees.length + 1
-            ).padStart(3, "0")}`,
-
-        name:
-            document.getElementById(
-                "employeeName"
-            ).value ||
-            `Çalışan ${
-                employees.length + 1
-            }`,
-
-        birthDate:
-            document.getElementById(
-                "birthDate"
-            ).value,
-
-        hireDate:
-            document.getElementById(
-                "hireDate"
-            ).value,
-
-        monthlySalary:
-            Number(
-                document.getElementById(
-                    "monthlySalary"
-                ).value
-            ),
-
-        currentCeiling:
-            Number(
-                document.getElementById(
-                    "currentCeiling"
-                ).value
-            ),
-
-        retirementAge:
-            Number(
-                document.getElementById(
-                    "employeeRetirementAge"
-                ).value
-            ),
-
-        turnoverRate:
-            document.getElementById(
-                "employeeTurnover"
-            ).value
-                ? Number(
-                    document.getElementById(
-                        "employeeTurnover"
-                    ).value
-                ) / 100
-                : null
-
-    };
-
-
-    if (
-        !employee.monthlySalary ||
-        employee.monthlySalary <= 0
-    ) {
-
-        alert(
-            "Lütfen aylık ücret bilgisini giriniz."
-        );
-
-        return;
-
-    }
-
-
-    employees.push(
-        employee
-    );
-
-
-    renderEmployeeTable();
-
-    updateEmployeeSelector();
-
-    clearEmployeeForm();
-
-}
-
-
-/* =========================================================
-   FORM TEMİZLE
-========================================================= */
-
-function clearEmployeeForm() {
-
-    document.getElementById(
-        "employeeId"
-    ).value = "";
-
-    document.getElementById(
-        "employeeName"
-    ).value = "";
-
-    document.getElementById(
-        "birthDate"
-    ).value = "";
-
-    document.getElementById(
-        "hireDate"
-    ).value = "";
-
-    document.getElementById(
-        "monthlySalary"
-    ).value = "";
-
-    document.getElementById(
-        "currentCeiling"
-    ).value = "";
-
-    document.getElementById(
-        "employeeTurnover"
-    ).value = "";
-
-}
-
-
-/* =========================================================
-   ÇALIŞANLARI TEMİZLE
-========================================================= */
-
-function clearEmployees() {
-
-    employees = [];
-
-    valuationResult = null;
-
-    selectedEmployeeResult = null;
-
-    renderEmployeeTable();
-
-    updateEmployeeSelector();
-
-    resetDashboard();
-
-}
-
-
-/* =========================================================
-   ÖRNEK VERİ
-========================================================= */
-
-function loadDemoData() {
-
-    employees = [
-
-        {
-            id: "EMP001",
-            name: "Ahmet Yılmaz",
-            birthDate: "1988-05-15",
-            hireDate: "2017-06-01",
-            monthlySalary: 75000,
-            currentCeiling: 60000,
-            retirementAge: 60,
-            turnoverRate: 0.035
-        },
-
-        {
-            id: "EMP002",
-            name: "Ayşe Kaya",
-            birthDate: "1992-03-10",
-            hireDate: "2020-02-15",
-            monthlySalary: 55000,
-            currentCeiling: 60000,
-            retirementAge: 60,
-            turnoverRate: 0.055
-        },
-
-        {
-            id: "EMP003",
-            name: "Mehmet Demir",
-            birthDate: "1978-11-21",
-            hireDate: "2010-09-01",
-            monthlySalary: 95000,
-            currentCeiling: 60000,
-            retirementAge: 60,
-            turnoverRate: 0.025
-        },
-
-        {
-            id: "EMP004",
-            name: "Elif Arslan",
-            birthDate: "1996-07-18",
-            hireDate: "2022-01-10",
-            monthlySalary: 42000,
-            currentCeiling: 60000,
-            retirementAge: 60,
-            turnoverRate: 0.07
-        },
-
-        {
-            id: "EMP005",
-            name: "Can Özkan",
-            birthDate: "1983-01-25",
-            hireDate: "2014-04-01",
-            monthlySalary: 88000,
-            currentCeiling: 60000,
-            retirementAge: 60,
-            turnoverRate: 0.03
-        }
-
-    ];
-
-
-    renderEmployeeTable();
-
-    updateEmployeeSelector();
-
-    runValuation();
-
-}
-
-
-/* =========================================================
-   ÇALIŞAN TABLOSU
-========================================================= */
-
-function renderEmployeeTable() {
-
-    const wrapper =
-        document.getElementById(
-            "employeeTableWrapper"
-        );
-
-    document.getElementById(
-        "populationBadge"
-    ).textContent =
-        `${employees.length} Çalışan`;
-
-
-    if (!employees.length) {
-
-        wrapper.innerHTML = `
-            <div class="empty">
-                Henüz çalışan verisi yüklenmedi.
+            <div class="kpi-label">
+                Tanımlanmış Fayda Yükümlülüğü
             </div>
-        `;
 
-        return;
-
-    }
-
-
-    wrapper.innerHTML = `
-
-        <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>Çalışan No</th>
-
-                    <th>Çalışan Adı</th>
-
-                    <th>Yaş</th>
-
-                    <th>Kıdem</th>
-
-                    <th class="number">
-                        Aylık Ücret
-                    </th>
-
-                    <th class="number">
-                        Tavan
-                    </th>
-
-                    <th>
-                        Emeklilik Yaşı
-                    </th>
-
-                    <th>
-                        Durum
-                    </th>
-
-                </tr>
-
-            </thead>
-
-            <tbody>
-
-                ${employees.map(
-                    employee => `
-
-                    <tr>
-
-                        <td>
-                            ${employee.id}
-                        </td>
-
-                        <td>
-                            ${employee.name}
-                        </td>
-
-                        <td>
-                            ${
-                                employee.birthDate
-                                    ? calculateAge(
-                                        employee.birthDate
-                                    )
-                                    : "-"
-                            }
-                        </td>
-
-                        <td>
-                            ${
-                                employee.hireDate
-                                    ? calculateService(
-                                        employee.hireDate
-                                    )
-                                    : "-"
-                            }
-                        </td>
-
-                        <td class="number">
-                            ${money(
-                                employee.monthlySalary
-                            )}
-                        </td>
-
-                        <td class="number">
-                            ${money(
-                                employee.currentCeiling
-                            )}
-                        </td>
-
-                        <td>
-                            ${employee.retirementAge}
-                        </td>
-
-                        <td>
-
-                            <span class="badge badge-green">
-                                Değerlemeye Dahil
-                            </span>
-
-                        </td>
-
-                    </tr>
-
-                `
-                ).join("")}
-
-            </tbody>
-
-        </table>
-
-    `;
-
-}
-
-
-/* =========================================================
-   YAŞ
-========================================================= */
-
-function calculateAge(
-    birthDate
-) {
-
-    const birth =
-        new Date(birthDate);
-
-    const valuation =
-        new Date(
-            document.getElementById(
-                "valuationDate"
-            ).value
-        );
-
-    let age =
-        valuation.getFullYear() -
-        birth.getFullYear();
-
-    const month =
-        valuation.getMonth() -
-        birth.getMonth();
-
-    if (
-        month < 0 ||
-        (
-            month === 0 &&
-            valuation.getDate() <
-            birth.getDate()
-        )
-    ) {
-
-        age--;
-
-    }
-
-    return age;
-
-}
-
-
-/* =========================================================
-   KIDEM
-========================================================= */
-
-function calculateService(
-    hireDate
-) {
-
-    const hire =
-        new Date(hireDate);
-
-    const valuation =
-        new Date(
-            document.getElementById(
-                "valuationDate"
-            ).value
-        );
-
-    let years =
-        valuation.getFullYear() -
-        hire.getFullYear();
-
-    const month =
-        valuation.getMonth() -
-        hire.getMonth();
-
-    if (
-        month < 0 ||
-        (
-            month === 0 &&
-            valuation.getDate() <
-            hire.getDate()
-        )
-    ) {
-
-        years--;
-
-    }
-
-    return Math.max(
-        0,
-        years
-    );
-
-}
-
-
-/* =========================================================
-   ÇALIŞAN SELECT
-========================================================= */
-
-function updateEmployeeSelector() {
-
-    const selector =
-        document.getElementById(
-            "employeeSelector"
-        );
-
-
-    selector.innerHTML = `
-
-        <option value="">
-            Çalışan seçiniz
-        </option>
-
-        ${employees.map(
-            employee => `
-
-            <option
-                value="${employee.id}">
-
-                ${employee.id}
-                — 
-                ${employee.name}
-
-            </option>
-
-        `
-        ).join("")}
-
-    `;
-
-}
-
-
-/* =========================================================
-   DEĞERLEMEYİ ÇALIŞTIR
-========================================================= */
-
-function runValuation() {
-
-    if (!employees.length) {
-
-        alert(
-            "Lütfen önce çalışan ekleyiniz veya örnek verileri yükleyiniz."
-        );
-
-        return;
-
-    }
-
-
-    const assumptions =
-        getAssumptions();
-
-
-    document.getElementById(
-        "headerValuationDate"
-    ).textContent =
-        "Değerleme tarihi: " +
-        formatDate(
-            assumptions.valuationDate
-        );
-
-
-    valuationResult =
-        TMS19ActuarialEngine
-            .valuation
-            .portfolio(
-                employees,
-                assumptions
-            );
-
-
-    updateDashboard();
-
-    renderValuationTable();
-
-    renderAccounting();
-
-    updateRiskIndicators();
-
-}
-
-
-/* =========================================================
-   DASHBOARD
-========================================================= */
-
-function updateDashboard() {
-
-    if (!valuationResult) {
-        return;
-    }
-
-
-    const totals =
-        valuationResult.totals;
-
-
-    document.getElementById(
-        "kpiEmployees"
-    ).textContent =
-        number(
-            totals.employeeCount
-        );
-
-
-    document.getElementById(
-        "kpiDBO"
-    ).textContent =
-        money(
-            totals.DBO
-        );
-
-
-    document.getElementById(
-        "kpiServiceCost"
-    ).textContent =
-        money(
-            totals.currentServiceCost
-        );
-
-
-    document.getElementById(
-        "kpiPV"
-    ).textContent =
-        money(
-            totals.expectedPV
-        );
-
-
-    document.getElementById(
-        "kpiProbability"
-    ).textContent =
-        percent(
-            totals.averageBenefitProbability
-        );
-
-
-    document.getElementById(
-        "bridgeClosing"
-    ).textContent =
-        money(
-            totals.DBO
-        );
-
-
-    document.getElementById(
-        "bridgeService"
-    ).textContent =
-        "+" +
-        money(
-            totals.currentServiceCost
-        );
-
-
-    const interestCost =
-        TMS19ActuarialEngine
-            .accounting
-            .interestCost(
-                totals.DBO,
-                getAssumptions()
-                    .discountRate
-            );
-
-
-    document.getElementById(
-        "bridgeInterest"
-    ).textContent =
-        "+" +
-        money(
-            interestCost
-        );
-
-
-    document.getElementById(
-        "bridgeOpening"
-    ).textContent =
-        money(
-            totals.DBO
-        );
-
-
-    updateManagementComment();
-
-}
-
-
-/* =========================================================
-   DEĞERLEME TABLOSU
-========================================================= */
-
-function renderValuationTable() {
-
-    const wrapper =
-        document.getElementById(
-            "employeeDetail"
-        );
-
-
-    if (
-        !valuationResult ||
-        !valuationResult.employees.length
-    ) {
-
-        wrapper.innerHTML = `
-            <div class="empty">
-                Değerleme sonucu bulunamadı.
+            <div
+                class="kpi-value"
+                data-tms19="dbo"
+            >
+                ₺0
             </div>
-        `;
 
-        return;
+            <div class="kpi-sub">
+                DBO
+            </div>
 
-    }
+        </div>
 
 
-    wrapper.innerHTML = `
+        <div class="kpi">
 
-        <div class="table-wrapper">
+            <div class="kpi-label">
+                Current Service Cost
+            </div>
+
+            <div
+                class="kpi-value"
+                data-tms19="current-service-cost"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-sub">
+                Dönem hizmet maliyeti
+            </div>
+
+        </div>
+
+
+        <div class="kpi">
+
+            <div class="kpi-label">
+                Net Faiz
+            </div>
+
+            <div
+                class="kpi-value"
+                data-tms19="net-interest"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-sub">
+                Net finansman etkisi
+            </div>
+
+        </div>
+
+
+        <div class="kpi">
+
+            <div class="kpi-label">
+                Net Yükümlülük
+            </div>
+
+            <div
+                class="kpi-value"
+                data-tms19="net-liability"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-sub">
+                DBO − Plan Varlıkları
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="grid-2">
+
+        <div class="section">
+
+            <div class="section-title">
+                DBO ve Hizmet Maliyeti
+            </div>
+
+            <div class="section-description">
+                Aktüeryal değerlemenin temel finansal göstergeleri
+            </div>
+
+            <div class="chart-container">
+                <canvas id="dboChart"></canvas>
+            </div>
+
+        </div>
+
+
+        <div class="section">
+
+            <div class="section-title">
+                Aktüeryal Risk
+            </div>
+
+            <div class="section-description">
+                Varsayımların ve DBO duyarlılığının yönetimsel değerlendirmesi
+            </div>
+
+            <div class="risk-box">
+
+                <div class="risk-score" id="riskScore">
+                    0
+                </div>
+
+                <div
+                    id="riskLevel"
+                    style="font-weight:700;margin-top:5px;"
+                >
+                    Düşük
+                </div>
+
+                <div
+                    id="riskExplanation"
+                    style="font-size:12px;color:var(--muted);margin-top:12px;"
+                >
+                    Aktüeryal risk hesaplanıyor.
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="section">
+
+        <div class="section-title">
+            CFO Yönetim Özeti
+        </div>
+
+        <div class="section-description">
+            Aktüeryal sonuçların finansal karar perspektifinden değerlendirilmesi
+        </div>
+
+        <div class="cfo">
+
+            <div class="cfo-title">
+                Ana Risk
+            </div>
+
+            <div
+                class="cfo-text"
+                id="cfoPrimaryRisk"
+            >
+                —
+            </div>
+
+            <div class="cfo-title" style="margin-top:18px;">
+                Önerilen Yönetim Aksiyonu
+            </div>
+
+            <div
+                class="cfo-text"
+                id="cfoRecommendation"
+            >
+                —
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     VARSAYIMLAR
+===================================================== -->
+
+<section id="assumptions" class="tab-content">
+
+    <div class="section">
+
+        <div class="section-title">
+            Aktüeryal Varsayımlar
+        </div>
+
+        <div class="section-description">
+            Finansal ve demografik varsayımlar
+        </div>
+
+        <div class="form-grid">
+
+            <div class="field">
+
+                <label>
+                    İskonto Oranı
+                </label>
+
+                <input
+                    id="discountRate"
+                    type="number"
+                    step="0.01"
+                    value="0.30"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Maaş Artış Oranı
+                </label>
+
+                <input
+                    id="salaryIncreaseRate"
+                    type="number"
+                    step="0.01"
+                    value="0.35"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Enflasyon
+                </label>
+
+                <input
+                    id="inflationRate"
+                    type="number"
+                    step="0.01"
+                    value="0.30"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Personel Devir Oranı
+                </label>
+
+                <input
+                    id="turnoverRate"
+                    type="number"
+                    step="0.01"
+                    value="0.05"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Emeklilik Yaşı
+                </label>
+
+                <input
+                    id="retirementAge"
+                    type="number"
+                    value="60"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Fayda Oranı
+                </label>
+
+                <input
+                    id="benefitRate"
+                    type="number"
+                    step="0.001"
+                    value="0.03"
+                >
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     PERSONEL
+===================================================== -->
+
+<section id="employee" class="tab-content">
+
+    <div class="section">
+
+        <div class="section-title">
+            Personel Bilgileri
+        </div>
+
+        <div class="section-description">
+            Aktüeryal değerlemede kullanılacak temel çalışan verileri
+        </div>
+
+        <div class="form-grid">
+
+            <div class="field">
+
+                <label>
+                    Sicil No
+                </label>
+
+                <input
+                    id="employeeNumber"
+                    value="10001"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Personel Adı
+                </label>
+
+                <input
+                    id="employeeName"
+                    value="Örnek Personel"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Mevcut Yaş
+                </label>
+
+                <input
+                    id="currentAge"
+                    type="number"
+                    value="40"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Mevcut Hizmet Süresi
+                </label>
+
+                <input
+                    id="yearsOfService"
+                    type="number"
+                    value="8"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Yıllık Brüt Maaş
+                </label>
+
+                <input
+                    id="currentAnnualSalary"
+                    type="number"
+                    value="1000000"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Açılış DBO
+                </label>
+
+                <input
+                    id="openingDBO"
+                    type="number"
+                    value="0"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Plan Varlıkları
+                </label>
+
+                <input
+                    id="planAssets"
+                    type="number"
+                    value="0"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    Fayda Ödemeleri
+                </label>
+
+                <input
+                    id="benefitPayments"
+                    type="number"
+                    value="0"
+                >
+
+            </div>
+
+        </div>
+
+
+        <div style="margin-top:20px;">
+
+            <button
+                class="btn btn-primary"
+                onclick="hesapla()"
+            >
+                Aktüeryal Değerlemeyi Çalıştır
+            </button>
+
+            <button
+                class="btn btn-secondary"
+                onclick="ornekVeriYukle()"
+                style="margin-left:8px;"
+            >
+                Örnek Veriyi Yükle
+            </button>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     PUC
+===================================================== -->
+
+<section id="puc" class="tab-content">
+
+    <div class="section">
+
+        <div class="section-title">
+            Projected Unit Credit Değerlemesi
+        </div>
+
+        <div class="section-description">
+            Gelecek hizmet dönemlerinin beklenen fayda ve bugünkü değer analizi
+        </div>
+
+        <div class="table-wrap">
 
             <table>
 
@@ -3498,751 +942,237 @@ function renderValuationTable() {
                     <tr>
 
                         <th>
-                            Çalışan
+                            Yıl
                         </th>
 
-                        <th class="number">
+                        <th>
                             Yaş
                         </th>
 
-                        <th class="number">
-                            Kıdem
+                        <th>
+                            Projeksiyon Maaşı
                         </th>
 
-                        <th class="number">
-                            Projeksiyon Faydası
+                        <th>
+                            Toplam Hizmet
                         </th>
 
-                        <th class="number">
-                            Beklenen Bugünkü Değer
+                        <th>
+                            Beklenen Fayda
                         </th>
 
-                        <th class="number">
-                            DBO
+                        <th>
+                            Kalma Olasılığı
                         </th>
 
-                        <th class="number">
-                            Cari Hizmet Maliyeti
+                        <th>
+                            Bugünkü Değer
                         </th>
 
                     </tr>
 
                 </thead>
 
-                <tbody>
+                <tbody id="pucTableBody"></tbody>
 
-                    ${valuationResult.employees.map(
-                        item => `
+            </table>
 
-                        <tr
-                            class="clickable-row"
-                            onclick="selectEmployee('${item.employee.id}')">
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     DBO MUTABAKATI
+===================================================== -->
+
+<section id="rollforward" class="tab-content">
+
+    <div class="grid-2">
+
+        <div class="section">
+
+            <div class="section-title">
+                DBO Mutabakatı
+            </div>
+
+            <div class="section-description">
+                Tanımlanmış fayda yükümlülüğünün dönemsel hareketi
+            </div>
+
+            <div class="table-wrap">
+
+                <table>
+
+                    <tbody>
+
+                        <tr>
+                            <td>Açılış DBO</td>
+                            <td
+                                class="number"
+                                id="rfOpening"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Current Service Cost</td>
+                            <td
+                                class="number"
+                                id="rfCSC"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Interest Cost</td>
+                            <td
+                                class="number"
+                                id="rfInterest"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Aktüeryal Kazanç / Kayıp</td>
+                            <td
+                                class="number"
+                                id="rfRemeasurement"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Geçmiş Hizmet Maliyeti</td>
+                            <td
+                                class="number"
+                                id="rfPastService"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Fayda Ödemeleri</td>
+                            <td
+                                class="number"
+                                id="rfPayments"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr style="font-weight:700;">
 
                             <td>
-                                ${item.employee.name}
+                                Kapanış DBO
                             </td>
 
-                            <td class="number">
-                                ${number(
-                                    item.age
-                                )}
-                            </td>
-
-                            <td class="number">
-                                ${number(
-                                    item.serviceYears
-                                )}
-                            </td>
-
-                            <td class="number">
-                                ${money(
-                                    item.valuation.projectedBenefit
-                                )}
-                            </td>
-
-                            <td class="number">
-                                ${money(
-                                    item.valuation.expectedPV
-                                )}
-                            </td>
-
-                            <td class="number">
-
-                                <strong>
-                                    ${money(
-                                        item.valuation.DBO
-                                    )}
-                                </strong>
-
-                            </td>
-
-                            <td class="number">
-                                ${money(
-                                    item.valuation.currentServiceCost
-                                )}
+                            <td
+                                class="number"
+                                id="rfClosing"
+                            >
+                                ₺0
                             </td>
 
                         </tr>
 
-                    `
-                    ).join("")}
+                    </tbody>
 
-                </tbody>
-
-            </table>
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   ÇALIŞAN SEÇ
-========================================================= */
-
-function selectEmployee(
-    employeeId
-) {
-
-    document.getElementById(
-        "employeeSelector"
-    ).value =
-        employeeId;
-
-    showEmployeeValuation();
-
-}
-
-
-/* =========================================================
-   ÇALIŞAN DETAYI
-========================================================= */
-
-function showEmployeeValuation() {
-
-    if (!valuationResult) {
-        return;
-    }
-
-
-    const id =
-        document.getElementById(
-            "employeeSelector"
-        ).value;
-
-
-    if (!id) {
-        return;
-    }
-
-
-    selectedEmployeeResult =
-        valuationResult.employees.find(
-            item =>
-                item.employee.id === id
-        );
-
-
-    if (!selectedEmployeeResult) {
-        return;
-    }
-
-
-    const item =
-        selectedEmployeeResult;
-
-
-    document.getElementById(
-        "employeeDetail"
-    ).innerHTML = `
-
-        <div class="detail-grid">
-
-
-            <div class="detail-metric">
-
-                <div class="detail-label">
-                    Mevcut Ücret
-                </div>
-
-                <div class="detail-value">
-                    ${money(
-                        item.currentSalary
-                    )}
-                </div>
-
-            </div>
-
-
-            <div class="detail-metric">
-
-                <div class="detail-label">
-                    Mevcut Kıdem
-                </div>
-
-                <div class="detail-value">
-                    ${number(
-                        item.serviceYears
-                    )} yıl
-                </div>
-
-            </div>
-
-
-            <div class="detail-metric">
-
-                <div class="detail-label">
-                    DBO
-                </div>
-
-                <div class="detail-value">
-                    ${money(
-                        item.valuation.DBO
-                    )}
-                </div>
+                </table>
 
             </div>
 
         </div>
 
 
-        <table>
+        <div class="section">
 
-            <tr>
-
-                <td>
-                    Projeksiyon Faydası
-                </td>
-
-                <td class="number">
-                    ${money(
-                        item.valuation.projectedBenefit
-                    )}
-                </td>
-
-            </tr>
-
-
-            <tr>
-
-                <td>
-                    Beklenen Bugünkü Değer
-                </td>
-
-                <td class="number">
-                    ${money(
-                        item.valuation.expectedPV
-                    )}
-                </td>
-
-            </tr>
-
-
-            <tr>
-
-                <td>
-                    Geçmiş Hizmete İlişkin DBO
-                </td>
-
-                <td class="number">
-                    ${money(
-                        item.valuation.pastServiceDBO
-                    )}
-                </td>
-
-            </tr>
-
-
-            <tr>
-
-                <td>
-                    Cari Hizmet Maliyeti
-                </td>
-
-                <td class="number">
-                    ${money(
-                        item.valuation.currentServiceCost
-                    )}
-                </td>
-
-            </tr>
-
-
-            <tr>
-
-                <td>
-                    Gelecek Hizmet DBO'su
-                </td>
-
-                <td class="number">
-                    ${money(
-                        item.valuation.futureServiceDBO
-                    )}
-                </td>
-
-            </tr>
-
-        </table>
-
-    `;
-
-
-    renderProjection(
-        item
-    );
-
-}
-
-
-/* =========================================================
-   PROJEKSİYON
-========================================================= */
-
-function renderProjection(
-    item
-) {
-
-    const wrapper =
-        document.getElementById(
-            "projectionWrapper"
-        );
-
-
-    if (
-        !item ||
-        !item.projection ||
-        !item.projection.length
-    ) {
-
-        wrapper.innerHTML = `
-            <div class="empty">
-                Projeksiyon bulunamadı.
+            <div class="section-title">
+                P&L / OCI
             </div>
-        `;
 
-        return;
-
-    }
-
-
-    wrapper.innerHTML = `
-
-        <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>
-                        Dönem
-                    </th>
-
-                    <th>
-                        Yaş
-                    </th>
-
-                    <th>
-                        Kıdem
-                    </th>
-
-                    <th>
-                        Hayatta Kalma
-                    </th>
-
-                    <th>
-                        Devir Olasılığı
-                    </th>
-
-                    <th>
-                        Emeklilik Olasılığı
-                    </th>
-
-                    <th class="number">
-                        Projeksiyon Ücreti
-                    </th>
-
-                    <th class="number">
-                        Projeksiyon Tavanı
-                    </th>
-
-                    <th class="number">
-                        Beklenen Fayda
-                    </th>
-
-                    <th class="number">
-                        İskonto Oranı
-                    </th>
-
-                    <th class="number">
-                        Bugünkü Değer
-                    </th>
-
-                </tr>
-
-            </thead>
-
-            <tbody>
-
-                ${item.projection.map(
-                    row => `
-
-                    <tr>
-
-                        <td>
-                            ${row.year}. yıl
-                        </td>
-
-                        <td>
-                            ${row.projectedAge}
-                        </td>
-
-                        <td>
-                            ${number(
-                                row.projectedService
-                            )}
-                        </td>
-
-                        <td>
-                            ${percent(
-                                row.survivalProbability
-                            )}
-                        </td>
-
-                        <td>
-                            ${percent(
-                                row.turnoverProbability
-                            )}
-                        </td>
-
-                        <td>
-                            ${percent(
-                                row.retirementProbability
-                            )}
-                        </td>
-
-                        <td class="number">
-                            ${money(
-                                row.projectedSalary
-                            )}
-                        </td>
-
-                        <td class="number">
-                            ${money(
-                                row.projectedCeiling
-                            )}
-                        </td>
-
-                        <td class="number">
-                            ${money(
-                                row.projectedBenefit
-                            )}
-                        </td>
-
-                        <td class="number">
-                            ${percent(
-                                row.discountRate
-                            )}
-                        </td>
-
-                        <td class="number">
-
-                            <strong>
-                                ${money(
-                                    row.presentValue
-                                )}
-                            </strong>
-
-                        </td>
-
-                    </tr>
-
-                `
-                ).join("")}
-
-            </tbody>
-
-        </table>
-
-    `;
-
-}
-
-
-/* =========================================================
-   DUYARLILIK ANALİZİ
-========================================================= */
-
-function runSensitivity() {
-
-    if (!employees.length) {
-
-        alert(
-            "Önce çalışan verilerini yükleyiniz."
-        );
-
-        return;
-
-    }
-
-
-    const sensitivity =
-        TMS19ActuarialEngine
-            .sensitivity
-            .full(
-                employees,
-                getAssumptions()
-            );
-
-
-    const labels = {
-
-        discountRate:
-            "İskonto Oranı",
-
-        salaryGrowthRate:
-            "Ücret Artış Oranı",
-
-        ceilingGrowthRate:
-            "Tavan Artış Oranı",
-
-        turnoverRate:
-            "Personel Devir Oranı",
-
-        mortalityRate:
-            "Mortalite Oranı",
-
-        disabilityRate:
-            "Maluliyet Oranı"
-
-    };
-
-
-    document.getElementById(
-        "sensitivityGrid"
-    ).innerHTML =
-
-        Object.keys(
-            sensitivity
-        ).map(
-            key => {
-
-                const data =
-                    sensitivity[key];
-
-
-                return `
-
-                    <div class="sensitivity-card">
-
-                        <div class="sensitivity-title">
-
-                            ${
-                                labels[key] ||
-                                key
-                            }
-
-                        </div>
-
-
-                        ${data.scenarios.map(
-                            scenario => `
-
-                            <div class="sensitivity-row">
-
-                                <span>
-
-                                    ${
-                                        scenario.shift > 0
-                                            ? "+100 bps"
-                                            : "-100 bps"
-                                    }
-
-                                </span>
-
-                                <span
-                                    class="${
-                                        scenario.change > 0
-                                            ? "negative"
-                                            : "positive"
-                                    }">
-
-                                    ${money(
-                                        scenario.change
-                                    )}
-
-                                </span>
-
-                            </div>
-
-                        `
-                        ).join("")}
-
-
-                        <div class="sensitivity-row">
-
-                            <strong>
-                                Baz DBO
-                            </strong>
-
-                            <strong>
-                                ${money(
-                                    data.baseDBO
-                                )}
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-                `;
-
-            }
-        ).join("");
-
-}
-
-
-/* =========================================================
-   MUHASEBE GÖRÜNÜMÜ
-========================================================= */
-
-function renderAccounting() {
-
-    if (!valuationResult) {
-        return;
-    }
-
-
-    const totals =
-        valuationResult.totals;
-
-
-    const interestCost =
-        TMS19ActuarialEngine
-            .accounting
-            .interestCost(
-                totals.DBO,
-                getAssumptions()
-                    .discountRate
-            );
-
-
-    document.getElementById(
-        "accountingService"
-    ).textContent =
-        money(
-            totals.currentServiceCost
-        );
-
-
-    document.getElementById(
-        "accountingInterest"
-    ).textContent =
-        money(
-            interestCost
-        );
-
-
-    document.getElementById(
-        "accountingRemeasurement"
-    ).textContent =
-        money(0);
-
-
-    document.getElementById(
-        "accountingDBO"
-    ).textContent =
-        money(
-            totals.DBO
-        );
-
-
-    document.getElementById(
-        "accountingServiceTable"
-    ).textContent =
-        money(
-            totals.currentServiceCost
-        );
-
-
-    document.getElementById(
-        "accountingInterestTable"
-    ).textContent =
-        money(
-            interestCost
-        );
-
-
-    document.getElementById(
-        "accountingRemeasurementTable"
-    ).textContent =
-        money(0);
-
-
-    document.getElementById(
-        "accountingDBOTable"
-    ).textContent =
-        money(
-            totals.DBO
-        );
-
-}
-
-
-/* =========================================================
-   MUHASEBE KAYDI
-========================================================= */
-
-function generateJournal() {
-
-    if (!valuationResult) {
-
-        alert(
-            "Önce aktüeryal değerlemeyi çalıştırınız."
-        );
-
-        return;
-
-    }
-
-
-    const totals =
-        valuationResult.totals;
-
-
-    const interest =
-        TMS19ActuarialEngine
-            .accounting
-            .interestCost(
-                totals.DBO,
-                getAssumptions()
-                    .discountRate
-            );
-
-
-    const service =
-        totals.currentServiceCost;
-
-
-    const totalPnl =
-        service +
-        interest;
-
-
-    document.getElementById(
-        "journalOutput"
-    ).innerHTML = `
-
-        <div class="journal-box">
-
-            <div class="journal-title">
-
-                Örnek TMS 19 Muhasebe Kaydı
+            <div class="section-description">
+                Finansal tablolara yansıyan aktüeryal etkiler
+            </div>
+
+            <div class="table-wrap">
+
+                <table>
+
+                    <tbody>
+
+                        <tr>
+                            <td>Current Service Cost</td>
+                            <td
+                                class="number"
+                                id="plCSC"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Net Interest</td>
+                            <td
+                                class="number"
+                                id="plInterest"
+                            >
+                                ₺0
+                            </td>
+                        </tr>
+
+                        <tr style="font-weight:700;">
+
+                            <td>
+                                Toplam P&L Etkisi
+                            </td>
+
+                            <td
+                                class="number"
+                                id="plTotal"
+                            >
+                                ₺0
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
 
             </div>
 
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     SENSITIVITY
+===================================================== -->
+
+<section id="sensitivity" class="tab-content">
+
+    <div class="section">
+
+        <div class="section-title">
+            Aktüeryal Duyarlılık Analizi
+        </div>
+
+        <div class="section-description">
+            Temel aktüeryal varsayımlardaki ±100 baz puan değişiminin DBO etkisi
+        </div>
+
+        <div class="table-wrap">
 
             <table>
 
@@ -4251,38 +1181,74 @@ function generateJournal() {
                     <tr>
 
                         <th>
-                            Hesap
+                            Varsayım
                         </th>
 
-                        <th class="number">
-                            Borç
+                        <th>
+                            -100 bps
                         </th>
 
-                        <th class="number">
-                            Alacak
+                        <th>
+                            Baz
+                        </th>
+
+                        <th>
+                            +100 bps
+                        </th>
+
+                        <th>
+                            -100 bps Etki
+                        </th>
+
+                        <th>
+                            +100 bps Etki
                         </th>
 
                     </tr>
 
                 </thead>
 
-
                 <tbody>
 
                     <tr>
 
                         <td>
-                            Çalışanlara Sağlanan Fayda Gideri
+                            İskonto Oranı
                         </td>
 
-                        <td class="number">
-                            ${money(
-                                totalPnl
-                            )}
+                        <td
+                            class="number"
+                            id="sensDiscountMinus"
+                        >
+                            ₺0
                         </td>
 
-                        <td class="number">
-                            -
+                        <td
+                            class="number"
+                            id="sensDiscountBase"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensDiscountPlus"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensDiscountMinusImpact"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensDiscountPlusImpact"
+                        >
+                            ₺0
                         </td>
 
                     </tr>
@@ -4291,17 +1257,86 @@ function generateJournal() {
                     <tr>
 
                         <td>
-                            Tanımlanmış Fayda Yükümlülüğü
+                            Maaş Artış Oranı
                         </td>
 
-                        <td class="number">
-                            -
+                        <td
+                            class="number"
+                            id="sensSalaryMinus"
+                        >
+                            ₺0
                         </td>
 
-                        <td class="number">
-                            ${money(
-                                totalPnl
-                            )}
+                        <td
+                            class="number"
+                            id="sensSalaryBase"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensSalaryPlus"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensSalaryMinusImpact"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensSalaryPlusImpact"
+                        >
+                            ₺0
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td>
+                            Personel Devir Oranı
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensTurnoverMinus"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensTurnoverBase"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensTurnoverPlus"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensTurnoverMinusImpact"
+                        >
+                            ₺0
+                        </td>
+
+                        <td
+                            class="number"
+                            id="sensTurnoverPlusImpact"
+                        >
+                            ₺0
                         </td>
 
                     </tr>
@@ -4310,264 +1345,1196 @@ function generateJournal() {
 
             </table>
 
+        </div>
 
-            <div class="journal-note">
+    </div>
 
-                Bu kayıt yalnızca analitik amaçlı örneklenmiştir.
-                Nihai muhasebe kaydı; açılış yükümlülüğü,
-                fayda ödemeleri, aktüeryal yeniden ölçüm,
-                OCI etkisi, varlık tavanı ve ertelenmiş vergi
-                etkileri dikkate alınarak hazırlanmalıdır.
+
+    <div class="section">
+
+        <div class="section-title">
+            10 Yıllık DBO Projeksiyonu
+        </div>
+
+        <div class="chart-container">
+            <canvas id="projectionChart"></canvas>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     CFO
+===================================================== -->
+
+<section id="cfo" class="tab-content">
+
+    <div class="section">
+
+        <div class="section-title">
+            CFO Karar Paneli
+        </div>
+
+        <div class="section-description">
+            Aktüeryal sonuçların finansal yönetim ve karar alma perspektifinden değerlendirilmesi
+        </div>
+
+
+        <div class="grid-3">
+
+            <div class="risk-box">
+
+                <div class="kpi-label">
+                    Aktüeryal Risk Skoru
+                </div>
+
+                <div
+                    class="risk-score"
+                    id="cfoRiskScore"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div class="risk-box">
+
+                <div class="kpi-label">
+                    Ana Risk
+                </div>
+
+                <div
+                    id="cfoRisk"
+                    style="font-weight:700;margin-top:10px;"
+                >
+                    —
+                </div>
+
+            </div>
+
+
+            <div class="risk-box">
+
+                <div class="kpi-label">
+                    Öncelik
+                </div>
+
+                <div
+                    id="cfoPriority"
+                    style="font-weight:700;margin-top:10px;"
+                >
+                    —
+                </div>
 
             </div>
 
         </div>
 
-    `;
+
+        <div class="cfo" style="margin-top:20px;">
+
+            <div class="cfo-title">
+                CFO Değerlendirmesi
+            </div>
+
+            <div
+                class="cfo-text"
+                id="cfoDetailedInsight"
+            >
+                —
+            </div>
+
+        </div>
+
+
+        <div class="section" style="margin-top:20px;box-shadow:none;">
+
+            <div class="section-title">
+                Yönetim Aksiyonları
+            </div>
+
+            <ul
+                id="cfoActions"
+                style="line-height:2;font-size:13px;"
+            >
+
+                <li>
+                    Aktüeryal varsayımların dönemsel olarak yeniden değerlendirilmesi
+                </li>
+
+                <li>
+                    İskonto oranının piyasa göstergeleriyle benchmark edilmesi
+                </li>
+
+                <li>
+                    Maaş artış varsayımının bütçe ve uzun vadeli planlarla mutabakatı
+                </li>
+
+                <li>
+                    Gerçekleşen turnover oranının aktüeryal varsayımla karşılaştırılması
+                </li>
+
+            </ul>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<footer class="footer">
+
+    GK Advisory — TMS 19 Aktüeryal Değerleme Merkezi
+
+    <br>
+
+    Karar destek amaçlıdır; resmi aktüeryal rapor yerine geçmez.
+
+</footer>
+
+</div>
+
+
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
+
+<script src="js/tms19-actuarial-engine.js"></script>
+
+<script>
+
+let currentAnalysis = null;
+
+let dboChart = null;
+
+let projectionChart = null;
+
+
+/* =====================================================
+   TAB
+===================================================== */
+
+function showTab(
+    tabId,
+    button
+) {
+
+    document
+        .querySelectorAll(".tab-content")
+        .forEach(
+            el =>
+                el.classList.remove("active")
+        );
+
+
+    document
+        .getElementById(tabId)
+        .classList.add("active");
+
+
+    document
+        .querySelectorAll(".nav button")
+        .forEach(
+            el =>
+                el.classList.remove("active")
+        );
+
+
+    button.classList.add("active");
 
 }
 
 
-/* =========================================================
-   RİSK GÖSTERGELERİ
-========================================================= */
+/* =====================================================
+   FORM VERİSİ
+===================================================== */
 
-function updateRiskIndicators() {
+function getEmployeeData() {
 
-    const assumptions =
-        getAssumptions();
+    return {
 
+        employeeNumber:
+            document
+                .getElementById("employeeNumber")
+                .value,
 
-    const discountRisk =
-        assumptions.discountRate >= 0.25
-            ? "YÜKSEK"
-            : "NORMAL";
+        name:
+            document
+                .getElementById("employeeName")
+                .value,
 
+        currentAge:
+            Number(
+                document
+                    .getElementById("currentAge")
+                    .value
+            ),
 
-    const salaryRisk =
-        assumptions.salaryGrowthRate >= 0.20
-            ? "YÜKSEK"
-            : "NORMAL";
+        yearsOfService:
+            Number(
+                document
+                    .getElementById("yearsOfService")
+                    .value
+            ),
 
+        currentAnnualSalary:
+            Number(
+                document
+                    .getElementById("currentAnnualSalary")
+                    .value
+            ),
 
-    const demographicRisk =
-        assumptions.turnoverRate >= 0.08
-            ? "YÜKSEK"
-            : "NORMAL";
+        openingDBO:
+            Number(
+                document
+                    .getElementById("openingDBO")
+                    .value
+            ),
 
+        planAssets:
+            Number(
+                document
+                    .getElementById("planAssets")
+                    .value
+            ),
 
-    document.getElementById(
-        "discountRisk"
-    ).textContent =
-        discountRisk;
+        benefitPayments:
+            Number(
+                document
+                    .getElementById("benefitPayments")
+                    .value
+            ),
 
+        retirementAge:
+            Number(
+                document
+                    .getElementById("retirementAge")
+                    .value
+            ),
 
-    document.getElementById(
-        "salaryRisk"
-    ).textContent =
-        salaryRisk;
+        discountRate:
+            Number(
+                document
+                    .getElementById("discountRate")
+                    .value
+            ),
 
+        salaryIncreaseRate:
+            Number(
+                document
+                    .getElementById("salaryIncreaseRate")
+                    .value
+            ),
 
-    document.getElementById(
-        "demographicRisk"
-    ).textContent =
-        demographicRisk;
+        inflationRate:
+            Number(
+                document
+                    .getElementById("inflationRate")
+                    .value
+            ),
 
+        turnoverRate:
+            Number(
+                document
+                    .getElementById("turnoverRate")
+                    .value
+            ),
 
-    updateManagementComment();
+        benefitRate:
+            Number(
+                document
+                    .getElementById("benefitRate")
+                    .value
+            )
+
+    };
 
 }
 
 
-/* =========================================================
-   YÖNETİM İÇGÖRÜSÜ
-========================================================= */
+/* =====================================================
+   HESAPLA
+===================================================== */
 
-function updateManagementComment() {
+function hesapla() {
 
-    if (!valuationResult) {
+    if (
+        !window.TMS19ActuarialEngine
+    ) {
+
+        alert(
+            "TMS 19 aktüeryal motoru yüklenemedi."
+        );
+
         return;
-    }
-
-
-    const totals =
-        valuationResult.totals;
-
-
-    const assumptions =
-        getAssumptions();
-
-
-    let comment =
-
-        `Değerleme kapsamında ${
-            totals.employeeCount
-        } çalışan bulunmaktadır. `;
-
-
-    comment +=
-
-        `Hesaplanan toplam Tanımlanmış Fayda Yükümlülüğü ${
-            money(totals.DBO)
-        } seviyesindedir. `;
-
-
-    if (
-        assumptions.salaryGrowthRate >= 0.20
-    ) {
-
-        comment +=
-
-            "Ücret artış varsayımı yüksek olduğundan, ücret projeksiyonu DBO açısından önemli bir hassasiyet alanıdır. ";
 
     }
 
 
-    if (
-        assumptions.discountRate >= 0.25
-    ) {
-
-        comment +=
-
-            "İskonto oranı yüksek seviyededir; piyasa faizlerindeki değişimler DBO üzerinde önemli bir yeniden ölçüm etkisi yaratabilir. ";
-
-    }
+    const employee =
+        getEmployeeData();
 
 
-    if (
-        assumptions.turnoverRate >= 0.08
-    ) {
-
-        comment +=
-
-            "Personel devir oranı yüksek olduğundan demografik varsayımların DBO üzerindeki etkisi ayrıca değerlendirilmelidir. ";
-
-    }
+    currentAnalysis =
+        TMS19ActuarialEngine
+            .analyzeEmployee(
+                employee
+            );
 
 
-    comment +=
+    renderDashboard();
 
-        "Finansal raporlama açısından aktüeryal değerleme, açılış DBO, cari hizmet maliyeti, net faiz maliyeti, fayda ödemeleri ve aktüeryal yeniden ölçüm hareketleriyle mutabık hale getirilmelidir.";
+    renderPUC();
 
+    renderRollForward();
 
-    document.getElementById(
-        "managementComment"
-    ).textContent =
-        comment;
+    renderSensitivity();
+
+    renderCharts();
+
+    renderCFO();
 
 }
 
 
-/* =========================================================
-   DASHBOARD RESET
-========================================================= */
+/* =====================================================
+   DASHBOARD
+===================================================== */
 
-function resetDashboard() {
+function renderDashboard() {
 
-    const ids = [
-
-        "kpiEmployees",
-        "kpiDBO",
-        "kpiServiceCost",
-        "kpiPV"
-
-    ];
+    const a =
+        currentAnalysis;
 
 
-    document.getElementById(
-        "kpiEmployees"
-    ).textContent =
-        "0";
+    const engine =
+        TMS19ActuarialEngine;
 
 
-    document.getElementById(
-        "kpiDBO"
-    ).textContent =
-        "₺0";
+    document
+        .querySelector(
+            '[data-tms19="dbo"]'
+        )
+        .textContent =
+        engine.formatTRY(
+            a.puc.dbo
+        );
 
 
-    document.getElementById(
-        "kpiServiceCost"
-    ).textContent =
-        "₺0";
+    document
+        .querySelector(
+            '[data-tms19="current-service-cost"]'
+        )
+        .textContent =
+        engine.formatTRY(
+            a.currentServiceCost
+        );
 
 
-    document.getElementById(
-        "kpiPV"
-    ).textContent =
-        "₺0";
+    document
+        .querySelector(
+            '[data-tms19="net-interest"]'
+        )
+        .textContent =
+        engine.formatTRY(
+            a.netInterest.netInterest
+        );
 
 
-    document.getElementById(
-        "kpiProbability"
-    ).textContent =
-        "0%";
+    document
+        .querySelector(
+            '[data-tms19="net-liability"]'
+        )
+        .textContent =
+        engine.formatTRY(
+            a.netLiability
+        );
 
 
-    document.getElementById(
-        "bridgeOpening"
-    ).textContent =
-        "₺0";
+    document
+        .getElementById("riskScore")
+        .textContent =
+        Math.round(
+            a.risk.score
+        );
 
 
-    document.getElementById(
-        "bridgeService"
-    ).textContent =
-        "+₺0";
+    const riskLevel =
+        document
+            .getElementById("riskLevel");
 
 
-    document.getElementById(
-        "bridgeInterest"
-    ).textContent =
-        "+₺0";
+    riskLevel.textContent =
+        a.risk.level;
 
 
-    document.getElementById(
-        "bridgeBenefits"
-    ).textContent =
-        "-₺0";
+    riskLevel.className =
+        "";
 
 
-    document.getElementById(
-        "bridgeActuarial"
-    ).textContent =
-        "₺0";
+    riskLevel.classList.add(
+
+        a.risk.level === "Kritik"
+            ? "risk-critical"
+
+            : a.risk.level === "Yüksek"
+            ? "risk-high"
+
+            : a.risk.level === "Orta"
+            ? "risk-medium"
+
+            : "risk-low"
+
+    );
 
 
-    document.getElementById(
-        "bridgeClosing"
-    ).textContent =
-        "₺0";
+    document
+        .getElementById("riskExplanation")
+        .textContent =
 
+        a.risk.warnings.length
 
-    document.getElementById(
-        "accountingDBO"
-    ).textContent =
-        "₺0";
+            ?
 
+            `${a.risk.warnings.length} adet aktüeryal kontrol uyarısı bulunmaktadır.`
 
-    document.getElementById(
-        "employeeDetail"
-    ).innerHTML = `
+            :
 
-        <div class="empty">
-            Aktüeryal detayları görmek için çalışan seçiniz.
-        </div>
-
-    `;
-
-
-    document.getElementById(
-        "projectionWrapper"
-    ).innerHTML = `
-
-        <div class="empty">
-            Çalışan seçildiğinde aktüeryal projeksiyon burada görüntülenecektir.
-        </div>
-
-    `;
+            "Kritik bir varsayım kontrol uyarısı bulunmamaktadır.";
 
 }
+
+
+/* =====================================================
+   PUC TABLOSU
+===================================================== */
+
+function renderPUC() {
+
+    const tbody =
+        document
+            .getElementById(
+                "pucTableBody"
+            );
+
+
+    tbody.innerHTML = "";
+
+
+    currentAnalysis
+        .puc
+        .rows
+        .forEach(
+            row => {
+
+                const tr =
+                    document.createElement("tr");
+
+
+                tr.innerHTML = `
+
+                    <td>${row.year}</td>
+
+                    <td>${row.age}</td>
+
+                    <td class="number">
+                        ${TMS19ActuarialEngine.formatTRY(row.salary)}
+                    </td>
+
+                    <td>
+                        ${row.serviceAtYear}
+                    </td>
+
+                    <td class="number">
+                        ${TMS19ActuarialEngine.formatTRY(row.expectedBenefit)}
+                    </td>
+
+                    <td>
+                        ${TMS19ActuarialEngine.formatPercent(row.survivalProbability)}
+                    </td>
+
+                    <td class="number">
+                        ${TMS19ActuarialEngine.formatTRY(row.discountedBenefit)}
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(tr);
+
+            }
+        );
+
+}
+
+
+/* =====================================================
+   DBO MUTABAKATI
+===================================================== */
+
+function renderRollForward() {
+
+    const a =
+        currentAnalysis;
+
+
+    const engine =
+        TMS19ActuarialEngine;
+
+
+    const opening =
+        a.employee.openingDBO;
+
+
+    const interest =
+        a.netInterest.interestCost;
+
+
+    const closing =
+        opening +
+
+        a.currentServiceCost +
+
+        interest -
+
+        a.employee.benefitPayments;
+
+
+    document
+        .getElementById("rfOpening")
+        .textContent =
+        engine.formatTRY(
+            opening
+        );
+
+
+    document
+        .getElementById("rfCSC")
+        .textContent =
+        engine.formatTRY(
+            a.currentServiceCost
+        );
+
+
+    document
+        .getElementById("rfInterest")
+        .textContent =
+        engine.formatTRY(
+            interest
+        );
+
+
+    document
+        .getElementById("rfRemeasurement")
+        .textContent =
+        engine.formatTRY(0);
+
+
+    document
+        .getElementById("rfPastService")
+        .textContent =
+        engine.formatTRY(0);
+
+
+    document
+        .getElementById("rfPayments")
+        .textContent =
+        engine.formatTRY(
+            a.employee.benefitPayments
+        );
+
+
+    document
+        .getElementById("rfClosing")
+        .textContent =
+        engine.formatTRY(
+            closing
+        );
+
+
+    document
+        .getElementById("plCSC")
+        .textContent =
+        engine.formatTRY(
+            a.currentServiceCost
+        );
+
+
+    document
+        .getElementById("plInterest")
+        .textContent =
+        engine.formatTRY(
+            a.netInterest.netInterest
+        );
+
+
+    document
+        .getElementById("plTotal")
+        .textContent =
+        engine.formatTRY(
+            a.pl.totalPL
+        );
+
+}
+
+
+/* =====================================================
+   SENSITIVITY
+===================================================== */
+
+function renderSensitivity() {
+
+    const s =
+        currentAnalysis
+            .sensitivity;
+
+
+    const engine =
+        TMS19ActuarialEngine;
+
+
+    const set =
+        (
+            id,
+            value
+        ) => {
+
+            document
+                .getElementById(id)
+                .textContent =
+                engine.formatTRY(
+                    value
+                );
+
+        };
+
+
+    set(
+        "sensDiscountMinus",
+        s.discountRate.minus100bps
+    );
+
+    set(
+        "sensDiscountBase",
+        s.discountRate.base
+    );
+
+    set(
+        "sensDiscountPlus",
+        s.discountRate.plus100bps
+    );
+
+    set(
+        "sensDiscountMinusImpact",
+        s.discountRate.minusImpact
+    );
+
+    set(
+        "sensDiscountPlusImpact",
+        s.discountRate.plusImpact
+    );
+
+
+    set(
+        "sensSalaryMinus",
+        s.salaryIncreaseRate.minus100bps
+    );
+
+    set(
+        "sensSalaryBase",
+        s.salaryIncreaseRate.base
+    );
+
+    set(
+        "sensSalaryPlus",
+        s.salaryIncreaseRate.plus100bps
+    );
+
+    set(
+        "sensSalaryMinusImpact",
+        s.salaryIncreaseRate.minusImpact
+    );
+
+    set(
+        "sensSalaryPlusImpact",
+        s.salaryIncreaseRate.plusImpact
+    );
+
+
+    set(
+        "sensTurnoverMinus",
+        s.turnoverRate.minus100bps
+    );
+
+    set(
+        "sensTurnoverBase",
+        s.turnoverRate.base
+    );
+
+    set(
+        "sensTurnoverPlus",
+        s.turnoverRate.plus100bps
+    );
+
+    set(
+        "sensTurnoverMinusImpact",
+        s.turnoverRate.minusImpact
+    );
+
+    set(
+        "sensTurnoverPlusImpact",
+        s.turnoverRate.plusImpact
+    );
+
+}
+
+
+/* =====================================================
+   GRAFİKLER
+===================================================== */
+
+function renderCharts() {
+
+    const engine =
+        TMS19ActuarialEngine;
+
+
+    if (
+        dboChart
+    ) {
+
+        dboChart.destroy();
+
+    }
+
+
+    dboChart =
+        new Chart(
+
+            document
+                .getElementById(
+                    "dboChart"
+                ),
+
+            {
+
+                type: "bar",
+
+                data: {
+
+                    labels: [
+
+                        "DBO",
+
+                        "Current Service Cost",
+
+                        "Net Faiz"
+
+                    ],
+
+                    datasets: [
+
+                        {
+
+                            label:
+                                "Tutar",
+
+                            data: [
+
+                                currentAnalysis
+                                    .puc
+                                    .dbo,
+
+                                currentAnalysis
+                                    .currentServiceCost,
+
+                                currentAnalysis
+                                    .netInterest
+                                    .netInterest
+
+                            ]
+
+                        }
+
+                    ]
+
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        }
+
+                    },
+
+                    scales: {
+
+                        y: {
+
+                            ticks: {
+
+                                callback:
+                                    function(value) {
+
+                                        return engine
+                                            .formatTRY(
+                                                value
+                                            );
+
+                                    }
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        );
+
+
+    const projection =
+        engine.projectDBO(
+            getEmployeeData(),
+            10
+        );
+
+
+    if (
+        projectionChart
+    ) {
+
+        projectionChart.destroy();
+
+    }
+
+
+    projectionChart =
+        new Chart(
+
+            document
+                .getElementById(
+                    "projectionChart"
+                ),
+
+            {
+
+                type: "line",
+
+                data: {
+
+                    labels:
+                        projection.map(
+                            x =>
+                                `Yıl ${x.year}`
+                        ),
+
+                    datasets: [
+
+                        {
+
+                            label:
+                                "DBO",
+
+                            data:
+                                projection.map(
+                                    x =>
+                                        x.dbo
+                                ),
+
+                            tension:
+                                0.25
+
+                        },
+
+                        {
+
+                            label:
+                                "Current Service Cost",
+
+                            data:
+                                projection.map(
+                                    x =>
+                                        x.currentServiceCost
+                                ),
+
+                            tension:
+                                0.25
+
+                        }
+
+                    ]
+
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    scales: {
+
+                        y: {
+
+                            ticks: {
+
+                                callback:
+                                    function(value) {
+
+                                        return engine
+                                            .formatTRY(
+                                                value
+                                            );
+
+                                    }
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        );
+
+}
+
+
+/* =====================================================
+   CFO
+===================================================== */
+
+function renderCFO() {
+
+    const a =
+        currentAnalysis;
+
+
+    document
+        .getElementById(
+            "cfoPrimaryRisk"
+        )
+        .textContent =
+        a.cfoInsight.primaryRisk;
+
+
+    document
+        .getElementById(
+            "cfoRecommendation"
+        )
+        .textContent =
+        a.cfoInsight.recommendation;
+
+
+    document
+        .getElementById(
+            "cfoRiskScore"
+        )
+        .textContent =
+        Math.round(
+            a.risk.score
+        );
+
+
+    document
+        .getElementById(
+            "cfoRisk"
+        )
+        .textContent =
+        a.cfoInsight.primaryRisk;
+
+
+    document
+        .getElementById(
+            "cfoPriority"
+        )
+        .textContent =
+        a.cfoInsight.riskLevel;
+
+
+    document
+        .getElementById(
+            "cfoDetailedInsight"
+        )
+        .innerHTML = `
+
+            <strong>DBO:</strong>
+            ${TMS19ActuarialEngine.formatTRY(a.puc.dbo)}
+
+            <br><br>
+
+            <strong>Current Service Cost:</strong>
+            ${TMS19ActuarialEngine.formatTRY(a.currentServiceCost)}
+
+            <br><br>
+
+            <strong>Net Faiz:</strong>
+            ${TMS19ActuarialEngine.formatTRY(a.netInterest.netInterest)}
+
+            <br><br>
+
+            <strong>Ana Risk:</strong>
+            ${a.cfoInsight.primaryRisk}
+
+            <br><br>
+
+            <strong>Yönetim Önerisi:</strong>
+            ${a.cfoInsight.recommendation}
+
+        `;
+
+}
+
+
+/* =====================================================
+   ÖRNEK VERİ
+===================================================== */
+
+function ornekVeriYukle() {
+
+    const sample =
+        TMS19ActuarialEngine
+            .createSampleEmployee();
+
+
+    document
+        .getElementById("employeeNumber")
+        .value =
+        sample.employeeNumber;
+
+
+    document
+        .getElementById("employeeName")
+        .value =
+        sample.name;
+
+
+    document
+        .getElementById("currentAge")
+        .value =
+        sample.currentAge;
+
+
+    document
+        .getElementById("yearsOfService")
+        .value =
+        sample.yearsOfService;
+
+
+    document
+        .getElementById("currentAnnualSalary")
+        .value =
+        sample.currentAnnualSalary;
+
+
+    document
+        .getElementById("openingDBO")
+        .value =
+        sample.openingDBO;
+
+
+    document
+        .getElementById("planAssets")
+        .value =
+        sample.planAssets;
+
+
+    document
+        .getElementById("benefitPayments")
+        .value =
+        sample.benefitPayments;
+
+
+    document
+        .getElementById("retirementAge")
+        .value =
+        sample.retirementAge;
+
+
+    document
+        .getElementById("discountRate")
+        .value =
+        sample.discountRate;
+
+
+    document
+        .getElementById("salaryIncreaseRate")
+        .value =
+        sample.salaryIncreaseRate;
+
+
+    document
+        .getElementById("inflationRate")
+        .value =
+        sample.inflationRate;
+
+
+    document
+        .getElementById("turnoverRate")
+        .value =
+        sample.turnoverRate;
+
+
+    document
+        .getElementById("benefitRate")
+        .value =
+        sample.benefitRate;
+
+
+    hesapla();
+
+}
+
+
+/* =====================================================
+   BAŞLANGIÇ
+===================================================== */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        setTimeout(
+            function() {
+
+                if (
+                    window.TMS19ActuarialEngine
+                ) {
+
+                    ornekVeriYukle();
+
+                } else {
+
+                    console.error(
+                        "TMS 19 aktüeryal motoru bulunamadı."
+                    );
+
+                }
+
+            },
+            100
+        );
+
+    }
+);
 
 </script>
 
