@@ -1,43 +1,43 @@
 /* ============================================================
-   TMS 19 ACTUARIAL ENGINE V2
-   GK Advisory | Financial Decision Cockpit
+   GK ADVISORY — TMS 19 AKTÜERYAL MOTOR
+   Version: 3.0.0
 
-   TMS 19 - Çalışanlara Sağlanan Faydalar
+   TMS 19 — Çalışanlara Sağlanan Faydalar
 
-   Ana metodoloji:
-   Projected Unit Credit Method (PUC)
+   Metodoloji:
+   Projected Unit Credit (PUC)
 
-   Modüller:
-   1. Personel verisi
-   2. Aktüeryal varsayımlar
-   3. Maaş projeksiyonu
-   4. Fayda projeksiyonu
-   5. Hizmet dönemlerine dağıtım
-   6. DBO
-   7. Current Service Cost
-   8. Interest Cost
-   9. Benefit Payments
-   10. Actuarial Gain / Loss
-   11. P&L / OCI
-   12. Sensitivity
-   13. Stress Test
-   14. CFO Risk Analysis
-   ============================================================ */
+   Amaç:
+   - DBO hesaplama
+   - Current Service Cost
+   - Interest Cost
+   - P&L / OCI
+   - DBO Roll-forward
+   - Sensitivity
+   - Stress Test
+   - Varsayım kontrolü
+   - CFO karar desteği
+
+   NOT:
+   Bu motor aktüeryal rapor yerine geçmez.
+   Gerçek değerleme için plan şartları ve aktüeryal
+   varsayımlar profesyonel aktüer tarafından doğrulanmalıdır.
+============================================================ */
 
 "use strict";
 
 
 /* ============================================================
    1. MOTOR KONFİGÜRASYONU
-   ============================================================ */
+============================================================ */
 
-const TMS19_ENGINE = {
+const TMS19_CONFIG = {
 
-    version: "2.0.0",
+    version: "3.0.0",
 
     standard: "TMS 19",
 
-    methodology: "Projected Unit Credit Method",
+    methodology: "Projected Unit Credit",
 
     currency: "TRY",
 
@@ -53,15 +53,12 @@ const TMS19_ENGINE = {
 
         retirementAge: 60,
 
-        mortalityRate: 0.00,
-
-        disabilityRate: 0.00,
-
         benefitRate: 0.03,
 
-        salaryCap: 0,
+        mortalityRate: 0.00,
 
-        expectedReturnOnPlanAssets: 0.00
+        disabilityRate: 0.00
+
     },
 
     sensitivity: {
@@ -71,15 +68,17 @@ const TMS19_ENGINE = {
         salaryIncreaseRate: 0.01,
 
         turnoverRate: 0.01
+
     }
+
 };
 
 
 /* ============================================================
-   2. MATEMATİKSEL YARDIMCILAR
-   ============================================================ */
+   2. SAYISAL YARDIMCILAR
+============================================================ */
 
-function numberValue(value, fallback = 0) {
+function toNumber(value, fallback = 0) {
 
     if (
         value === null ||
@@ -94,15 +93,43 @@ function numberValue(value, fallback = 0) {
         return Number.isFinite(value)
             ? value
             : fallback;
+
     }
 
-    const cleaned = String(value)
-        .replace(/\s/g, "")
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .replace("%", "");
+    let text =
+        String(value)
+            .trim()
+            .replace(/\s/g, "");
 
-    const result = parseFloat(cleaned);
+    /*
+       Türkçe sayı formatı:
+       1.250.000,50
+    */
+
+    if (
+        text.includes(",") &&
+        text.includes(".")
+    ) {
+
+        text =
+            text
+                .replace(/\./g, "")
+                .replace(",", ".");
+
+    } else if (
+        text.includes(",")
+    ) {
+
+        text =
+            text.replace(",", ".");
+
+    }
+
+    text =
+        text.replace("%", "");
+
+    const result =
+        parseFloat(text);
 
     return Number.isFinite(result)
         ? result
@@ -112,66 +139,62 @@ function numberValue(value, fallback = 0) {
 
 function round(value, decimals = 2) {
 
-    const multiplier =
+    const factor =
         Math.pow(10, decimals);
 
     return Math.round(
         (value + Number.EPSILON) *
-        multiplier
-    ) / multiplier;
+        factor
+    ) / factor;
 }
 
 
-function clamp(value, min, max) {
+function clamp(
+    value,
+    min,
+    max
+) {
 
     return Math.min(
         Math.max(value, min),
         max
     );
+
 }
 
 
-function presentValue(
+function pv(
     futureValue,
     discountRate,
     years
 ) {
 
     if (
-        futureValue <= 0 ||
-        years < 0
+        futureValue <= 0
     ) {
         return 0;
     }
 
-    return futureValue /
+    return (
+        futureValue /
         Math.pow(
             1 + discountRate,
             years
-        );
+        )
+    );
+
 }
 
 
 /* ============================================================
    3. PERSONEL MODELİ
-   ============================================================ */
+============================================================ */
 
 function createEmployee(data = {}) {
 
-    const assumptions =
-        TMS19_ENGINE.defaultAssumptions;
+    const a =
+        TMS19_CONFIG.defaultAssumptions;
 
-    const currentAge =
-        numberValue(
-            data.currentAge,
-            35
-        );
-
-    const retirementAge =
-        numberValue(
-            data.retirementAge,
-            assumptions.retirementAge
-        );
 
     return {
 
@@ -191,123 +214,155 @@ function createEmployee(data = {}) {
             data.gender ||
             "Belirtilmemiş",
 
-        currentAge,
+        currentAge:
+            toNumber(
+                data.currentAge,
+                35
+            ),
 
-        retirementAge,
+        retirementAge:
+            toNumber(
+                data.retirementAge,
+                a.retirementAge
+            ),
 
         yearsOfService:
-            numberValue(
+            toNumber(
                 data.yearsOfService,
-                10
+                5
             ),
 
         currentAnnualSalary:
-            numberValue(
+            toNumber(
                 data.currentAnnualSalary,
                 600000
             ),
 
         benefitRate:
-            numberValue(
+            toNumber(
                 data.benefitRate,
-                assumptions.benefitRate
+                a.benefitRate
             ),
 
         discountRate:
-            numberValue(
+            toNumber(
                 data.discountRate,
-                assumptions.discountRate
+                a.discountRate
             ),
 
         salaryIncreaseRate:
-            numberValue(
+            toNumber(
                 data.salaryIncreaseRate,
-                assumptions.salaryIncreaseRate
+                a.salaryIncreaseRate
             ),
 
         inflationRate:
-            numberValue(
+            toNumber(
                 data.inflationRate,
-                assumptions.inflationRate
+                a.inflationRate
             ),
 
         turnoverRate:
-            numberValue(
+            toNumber(
                 data.turnoverRate,
-                assumptions.turnoverRate
+                a.turnoverRate
             ),
 
         mortalityRate:
-            numberValue(
+            toNumber(
                 data.mortalityRate,
-                assumptions.mortalityRate
+                a.mortalityRate
             ),
 
         disabilityRate:
-            numberValue(
+            toNumber(
                 data.disabilityRate,
-                assumptions.disabilityRate
+                a.disabilityRate
             ),
 
-        salaryCap:
-            numberValue(
-                data.salaryCap,
-                assumptions.salaryCap
+        openingDBO:
+            toNumber(
+                data.openingDBO,
+                0
+            ),
+
+        planAssets:
+            toNumber(
+                data.planAssets,
+                0
+            ),
+
+        benefitPayments:
+            toNumber(
+                data.benefitPayments,
+                0
             )
+
     };
+
 }
 
 
 /* ============================================================
-   4. KALAN HİZMET SÜRESİ
-   ============================================================ */
+   4. KALAN HİZMET
+============================================================ */
 
-function calculateRemainingService(employee) {
+function remainingService(
+    employee
+) {
 
     return Math.max(
         employee.retirementAge -
         employee.currentAge,
         0
     );
+
 }
 
 
 /* ============================================================
-   5. GELECEK MAAŞ
-   ============================================================ */
+   5. TOPLAM HİZMET
+============================================================ */
 
-function calculateProjectedSalary(
+function totalService(
+    employee
+) {
+
+    return (
+        employee.yearsOfService +
+        remainingService(employee)
+    );
+
+}
+
+
+/* ============================================================
+   6. MAAŞ PROJEKSİYONU
+============================================================ */
+
+function projectedSalary(
     employee,
     years
 ) {
 
-    let salary =
+    const salary =
         employee.currentAnnualSalary *
         Math.pow(
-            1 + employee.salaryIncreaseRate,
+            1 +
+            employee.salaryIncreaseRate,
             years
         );
 
-    if (
-        employee.salaryCap > 0
-    ) {
-
-        salary =
-            Math.min(
-                salary,
-                employee.salaryCap
-            );
-    }
-
     return salary;
+
 }
 
 
 /* ============================================================
-   6. KALMA OLASILIĞI
-   ============================================================ */
+   7. AKTÜERYAL OLASILIK
+============================================================ */
 
-function calculateSurvivalProbability(
+function survivalProbability(
     employee,
     years
 ) {
@@ -333,137 +388,212 @@ function calculateSurvivalProbability(
             1
         );
 
+
     const annualRetention =
+
         (1 - turnover) *
         (1 - mortality) *
         (1 - disability);
+
 
     return Math.pow(
         annualRetention,
         years
     );
+
 }
 
 
 /* ============================================================
-   7. TOPLAM EMEKLİLİK FAYDASI
-   ============================================================ */
+   8. GELECEKTEKİ TOPLAM FAYDA
+============================================================ */
 
-function calculateProjectedBenefit(
+function projectedRetirementBenefit(
     employee
 ) {
 
-    const remainingService =
-        calculateRemainingService(
+    const remaining =
+        remainingService(
             employee
         );
 
-    const totalService =
-        employee.yearsOfService +
-        remainingService;
-
-    const finalSalary =
-        calculateProjectedSalary(
-            employee,
-            remainingService
+    const total =
+        totalService(
+            employee
         );
 
-    const projectedBenefit =
+    const finalSalary =
+        projectedSalary(
+            employee,
+            remaining
+        );
+
+
+    const benefit =
+
         finalSalary *
         employee.benefitRate *
-        totalService;
+        total;
+
 
     return {
 
-        remainingService,
+        remainingService:
+            remaining,
 
-        totalService,
+        totalService:
+            total,
 
         finalSalary,
 
-        projectedBenefit
+        projectedBenefit:
+            benefit
+
     };
+
 }
 
 
 /* ============================================================
-   8. PUC – HİZMET YILI BAZLI FAYDA TAHSİSİ
-   ============================================================ */
+   9. PUC DEĞERLEME TABLOSU
+============================================================ */
 
 function calculatePUC(
     employee
 ) {
 
-    const remainingService =
-        calculateRemainingService(
+    const remaining =
+        remainingService(
             employee
         );
 
-    const totalService =
-        employee.yearsOfService +
-        remainingService;
+
+    const total =
+        totalService(
+            employee
+        );
+
 
     const rows = [];
 
+
     let dbo = 0;
 
-    /*
-       PUC yaklaşımında toplam beklenen fayda,
-       hizmet dönemlerine dağıtılır.
+    let serviceCost = 0;
 
+
+    /*
        Her gelecek hizmet yılı için:
 
-       1. Gelecek maaş
-       2. Toplam beklenen fayda
-       3. İlgili hizmet birimi
-       4. Kalma olasılığı
-       5. İskonto
-       6. Bugünkü değer
+       - gelecekteki maaş
+       - o yıldaki toplam hizmet
+       - hizmet birimi
+       - kalma olasılığı
+       - beklenen fayda
+       - iskonto
+       - bugünkü değer
     */
 
     for (
         let year = 1;
-        year <= remainingService;
+        year <= remaining;
         year++
     ) {
 
         const salary =
-            calculateProjectedSalary(
+            projectedSalary(
                 employee,
                 year
             );
+
 
         const serviceAtYear =
             employee.yearsOfService +
             year;
 
-        const totalProjectedBenefit =
+
+        /*
+           Emeklilikte toplam beklenen fayda
+        */
+
+        const totalBenefit =
+
             salary *
             employee.benefitRate *
             serviceAtYear;
 
-        const benefitAttributedToCurrentPeriod =
+
+        /*
+           Bir yıllık hizmet birimi
+        */
+
+        const annualBenefitUnit =
+
             salary *
             employee.benefitRate;
 
+
+        /*
+           Aktif kalma olasılığı
+        */
+
         const survival =
-            calculateSurvivalProbability(
+
+            survivalProbability(
                 employee,
                 year
             );
 
+
+        /*
+           Beklenen toplam fayda
+        */
+
         const expectedBenefit =
-            benefitAttributedToCurrentPeriod *
+
+            totalBenefit *
             survival;
 
+
+        /*
+           Beklenen bir yıllık hizmet maliyeti
+        */
+
+        const expectedServiceBenefit =
+
+            annualBenefitUnit *
+            survival;
+
+
+        /*
+           Bugünkü değer
+        */
+
         const discountedBenefit =
-            presentValue(
+
+            pv(
                 expectedBenefit,
                 employee.discountRate,
                 year
             );
 
-        dbo += discountedBenefit;
+
+        const discountedServiceCost =
+
+            pv(
+                expectedServiceBenefit,
+                employee.discountRate,
+                year
+            );
+
+
+        dbo +=
+            discountedBenefit;
+
+
+        serviceCost +=
+            discountedServiceCost;
+
 
         rows.push({
 
@@ -477,19 +607,25 @@ function calculatePUC(
 
             serviceAtYear,
 
-            totalProjectedBenefit,
+            totalBenefit,
 
-            benefitAttributed:
-                benefitAttributedToCurrentPeriod,
+            annualBenefitUnit,
 
             survivalProbability:
                 survival,
 
             expectedBenefit,
 
-            discountedBenefit
+            expectedServiceBenefit,
+
+            discountedBenefit,
+
+            discountedServiceCost
+
         });
+
     }
+
 
     return {
 
@@ -497,55 +633,55 @@ function calculatePUC(
 
         dbo,
 
-        totalService,
+        projectedServiceCost:
+            serviceCost,
 
-        remainingService
+        totalService:
+            total,
+
+        remainingService:
+            remaining
+
     };
+
 }
 
 
 /* ============================================================
-   9. CURRENT SERVICE COST
-   ============================================================ */
+   10. CURRENT SERVICE COST
+============================================================ */
 
 function calculateCurrentServiceCost(
     employee
 ) {
 
-    const nextYearSalary =
-        calculateProjectedSalary(
-            employee,
-            1
+    const puc =
+        calculatePUC(
+            employee
         );
 
-    const nextYearBenefit =
-        nextYearSalary *
-        employee.benefitRate;
 
-    const survival =
-        calculateSurvivalProbability(
-            employee,
-            1
-        );
+    if (
+        puc.rows.length === 0
+    ) {
+        return 0;
+    }
 
-    const expectedBenefit =
-        nextYearBenefit *
-        survival;
 
-    const serviceCost =
-        presentValue(
-            expectedBenefit,
-            employee.discountRate,
-            1
-        );
+    /*
+       Bir sonraki hizmet döneminin
+       aktüeryal bugünkü değeri.
+    */
 
-    return serviceCost;
+    return puc.rows[0]
+        .discountedServiceCost;
+
 }
 
 
 /* ============================================================
-   10. INTEREST COST
-   ============================================================ */
+   11. INTEREST COST
+============================================================ */
 
 function calculateInterestCost(
     openingDBO,
@@ -556,84 +692,30 @@ function calculateInterestCost(
         openingDBO *
         discountRate
     );
+
 }
 
 
 /* ============================================================
-   11. BENEFIT PAYMENT
-   ============================================================ */
+   12. PLAN VARLIKLARI ÜZERİNDEN FAİZ GELİRİ
+============================================================ */
 
-function calculateExpectedBenefitPayment(
-    employee,
-    projectedBenefit
-) {
-
-    const remainingService =
-        calculateRemainingService(
-            employee
-        );
-
-    if (
-        remainingService <= 0
-    ) {
-        return projectedBenefit;
-    }
-
-    /*
-       Basitleştirilmiş nakit akış yaklaşımı.
-       Daha ileri versiyonda ödeme zamanlaması
-       ayrı bir demografik ödeme eğrisi ile
-       modellenebilir.
-    */
-
-    const probability =
-        calculateSurvivalProbability(
-            employee,
-            remainingService
-        );
-
-    return (
-        projectedBenefit *
-        probability
-    );
-}
-
-
-/* ============================================================
-   12. AKTÜERYAL KAZANÇ / KAYIP
-   ============================================================ */
-
-function calculateActuarialGainLoss(
-    expectedDBO,
-    actualDBO
+function calculateInterestIncome(
+    openingPlanAssets,
+    discountRate
 ) {
 
     return (
-        actualDBO -
-        expectedDBO
+        openingPlanAssets *
+        discountRate
     );
+
 }
 
 
 /* ============================================================
-   13. NET TANIMLANMIŞ FAYDA YÜKÜMLÜLÜĞÜ
-   ============================================================ */
-
-function calculateNetDefinedBenefitLiability(
-    dbo,
-    planAssets = 0
-) {
-
-    return (
-        dbo -
-        planAssets
-    );
-}
-
-
-/* ============================================================
-   14. NET FAİZ
-   ============================================================ */
+   13. NET FAİZ
+============================================================ */
 
 function calculateNetInterest(
     openingDBO,
@@ -642,12 +724,20 @@ function calculateNetInterest(
 ) {
 
     const interestCost =
-        openingDBO *
-        discountRate;
+
+        calculateInterestCost(
+            openingDBO,
+            discountRate
+        );
+
 
     const interestIncome =
-        openingPlanAssets *
-        discountRate;
+
+        calculateInterestIncome(
+            openingPlanAssets,
+            discountRate
+        );
+
 
     return {
 
@@ -656,59 +746,35 @@ function calculateNetInterest(
         interestIncome,
 
         netInterest:
+
             interestCost -
             interestIncome
+
     };
+
 }
 
 
 /* ============================================================
-   15. P&L
-   ============================================================ */
+   14. AKTÜERYAL KAZANÇ / KAYIP
+============================================================ */
 
-function calculateProfitLossEffect({
-
-    currentServiceCost = 0,
-
-    pastServiceCost = 0,
-
-    settlementEffect = 0,
-
-    netInterest = 0
-
-} = {}) {
+function calculateRemeasurement(
+    expectedDBO,
+    actualDBO
+) {
 
     return (
-        currentServiceCost +
-        pastServiceCost +
-        settlementEffect +
-        netInterest
+        actualDBO -
+        expectedDBO
     );
+
 }
 
 
 /* ============================================================
-   16. OCI
-   ============================================================ */
-
-function calculateOCIEffect({
-
-    actuarialGainLoss = 0,
-
-    assetCeilingEffect = 0
-
-} = {}) {
-
-    return (
-        actuarialGainLoss +
-        assetCeilingEffect
-    );
-}
-
-
-/* ============================================================
-   17. DBO MUTABAKAT TABLOSU
-   ============================================================ */
+   15. DBO ROLL-FORWARD
+============================================================ */
 
 function calculateDBORollForward({
 
@@ -718,13 +784,14 @@ function calculateDBORollForward({
 
     interestCost = 0,
 
-    actuarialGainLoss = 0,
+    remeasurement = 0,
 
-    benefitPayments = 0,
+    pastServiceCost = 0,
 
-    pastServiceCost = 0
+    benefitPayments = 0
 
 } = {}) {
+
 
     const closingDBO =
 
@@ -734,7 +801,7 @@ function calculateDBORollForward({
 
         interestCost +
 
-        actuarialGainLoss +
+        remeasurement +
 
         pastServiceCost -
 
@@ -749,227 +816,346 @@ function calculateDBORollForward({
 
         interestCost,
 
-        actuarialGainLoss,
+        remeasurement,
 
         pastServiceCost,
 
         benefitPayments,
 
         closingDBO
+
     };
+
 }
 
 
 /* ============================================================
-   18. SENSITIVITY ANALİZİ
-   ============================================================ */
+   16. NET DEFINED BENEFIT LIABILITY
+============================================================ */
+
+function calculateNetLiability(
+    dbo,
+    planAssets
+) {
+
+    return (
+        dbo -
+        planAssets
+    );
+
+}
+
+
+/* ============================================================
+   17. P&L ETKİSİ
+============================================================ */
+
+function calculatePL({
+
+    currentServiceCost = 0,
+
+    pastServiceCost = 0,
+
+    settlementEffect = 0,
+
+    netInterest = 0
+
+} = {}) {
+
+
+    return {
+
+        currentServiceCost,
+
+        pastServiceCost,
+
+        settlementEffect,
+
+        netInterest,
+
+        totalPL:
+
+            currentServiceCost +
+            pastServiceCost +
+            settlementEffect +
+            netInterest
+
+    };
+
+}
+
+
+/* ============================================================
+   18. OCI / REMEASUREMENT
+============================================================ */
+
+function calculateOCI({
+
+    actuarialGainLoss = 0,
+
+    assetReturnDifference = 0,
+
+    assetCeilingEffect = 0
+
+} = {}) {
+
+
+    return {
+
+        actuarialGainLoss,
+
+        assetReturnDifference,
+
+        assetCeilingEffect,
+
+        totalOCI:
+
+            actuarialGainLoss +
+            assetReturnDifference +
+            assetCeilingEffect
+
+    };
+
+}
+
+
+/* ============================================================
+   19. SENSITIVITY
+============================================================ */
 
 function calculateSensitivity(
     employeeData
 ) {
 
-    const baseEmployee =
+    const base =
         createEmployee(
             employeeData
         );
 
-    const basePUC =
-        calculatePUC(
-            baseEmployee
-        );
+
+    function dboFor(
+        overrides
+    ) {
+
+        const employee =
+            createEmployee({
+
+                ...employeeData,
+
+                ...overrides
+
+            });
+
+
+        return calculatePUC(
+            employee
+        ).dbo;
+
+    }
+
 
     const baseDBO =
-        basePUC.dbo;
+        dboFor({});
 
 
-    /*
-       İskonto -100 bps
-    */
-
-    const discountDown =
-        createEmployee({
-
-            ...employeeData,
+    const discountMinus =
+        dboFor({
 
             discountRate:
-                baseEmployee.discountRate -
-                TMS19_ENGINE.sensitivity.discountRate
+
+                base.discountRate -
+                TMS19_CONFIG.sensitivity.discountRate
+
         });
 
 
-    /*
-       İskonto +100 bps
-    */
-
-    const discountUp =
-        createEmployee({
-
-            ...employeeData,
+    const discountPlus =
+        dboFor({
 
             discountRate:
-                baseEmployee.discountRate +
-                TMS19_ENGINE.sensitivity.discountRate
+
+                base.discountRate +
+                TMS19_CONFIG.sensitivity.discountRate
+
         });
 
 
-    /*
-       Maaş artışı -100 bps
-    */
-
-    const salaryDown =
-        createEmployee({
-
-            ...employeeData,
+    const salaryMinus =
+        dboFor({
 
             salaryIncreaseRate:
-                baseEmployee.salaryIncreaseRate -
-                TMS19_ENGINE.sensitivity.salaryIncreaseRate
+
+                base.salaryIncreaseRate -
+                TMS19_CONFIG.sensitivity.salaryIncreaseRate
+
         });
 
 
-    /*
-       Maaş artışı +100 bps
-    */
-
-    const salaryUp =
-        createEmployee({
-
-            ...employeeData,
+    const salaryPlus =
+        dboFor({
 
             salaryIncreaseRate:
-                baseEmployee.salaryIncreaseRate +
-                TMS19_ENGINE.sensitivity.salaryIncreaseRate
+
+                base.salaryIncreaseRate +
+                TMS19_CONFIG.sensitivity.salaryIncreaseRate
+
         });
 
 
-    /*
-       Turnover -100 bps
-    */
-
-    const turnoverDown =
-        createEmployee({
-
-            ...employeeData,
+    const turnoverMinus =
+        dboFor({
 
             turnoverRate:
+
                 Math.max(
                     0,
-                    baseEmployee.turnoverRate -
-                    TMS19_ENGINE.sensitivity.turnoverRate
+                    base.turnoverRate -
+                    TMS19_CONFIG.sensitivity.turnoverRate
                 )
+
         });
 
 
-    /*
-       Turnover +100 bps
-    */
-
-    const turnoverUp =
-        createEmployee({
-
-            ...employeeData,
+    const turnoverPlus =
+        dboFor({
 
             turnoverRate:
-                baseEmployee.turnoverRate +
-                TMS19_ENGINE.sensitivity.turnoverRate
+
+                base.turnoverRate +
+                TMS19_CONFIG.sensitivity.turnoverRate
+
         });
-
-
-    const calculate =
-        employee =>
-            calculatePUC(
-                employee
-            ).dbo;
 
 
     return {
 
-        base: baseDBO,
+        base:
+            baseDBO,
 
         discountRate: {
 
             minus100bps:
-                calculate(discountDown),
+                discountMinus,
 
             base:
                 baseDBO,
 
             plus100bps:
-                calculate(discountUp)
+                discountPlus,
+
+            minusImpact:
+                discountMinus -
+                baseDBO,
+
+            plusImpact:
+                discountPlus -
+                baseDBO
+
         },
 
         salaryIncreaseRate: {
 
             minus100bps:
-                calculate(salaryDown),
+                salaryMinus,
 
             base:
                 baseDBO,
 
             plus100bps:
-                calculate(salaryUp)
+                salaryPlus,
+
+            minusImpact:
+                salaryMinus -
+                baseDBO,
+
+            plusImpact:
+                salaryPlus -
+                baseDBO
+
         },
 
         turnoverRate: {
 
             minus100bps:
-                calculate(turnoverDown),
+                turnoverMinus,
 
             base:
                 baseDBO,
 
             plus100bps:
-                calculate(turnoverUp)
+                turnoverPlus,
+
+            minusImpact:
+                turnoverMinus -
+                baseDBO,
+
+            plusImpact:
+                turnoverPlus -
+                baseDBO
+
         }
+
     };
+
 }
 
 
 /* ============================================================
-   19. SENARYO ANALİZİ
-   ============================================================ */
+   20. STRESS TEST
+============================================================ */
 
-function calculateScenarioAnalysis(
+function calculateStressTest(
     employeeData
 ) {
 
+    const base =
+        createEmployee(
+            employeeData
+        );
+
+
     const scenarios = {
 
-        base: {
+        "Baz Senaryo": {
 
             discountRate: 0,
 
             salaryIncreaseRate: 0,
 
             turnoverRate: 0
+
         },
 
-        optimistic: {
+        "Olumlu Senaryo": {
 
             discountRate: +0.01,
 
             salaryIncreaseRate: -0.01,
 
             turnoverRate: +0.01
+
         },
 
-        pessimistic: {
+        "Olumsuz Senaryo": {
 
             discountRate: -0.01,
 
             salaryIncreaseRate: +0.01,
 
             turnoverRate: -0.01
+
         },
 
-        stress: {
+        "Stres Senaryosu": {
 
             discountRate: -0.02,
 
             salaryIncreaseRate: +0.02,
 
             turnoverRate: -0.02
+
         }
+
     };
 
 
@@ -981,70 +1167,81 @@ function calculateScenarioAnalysis(
     ).forEach(
         ([name, scenario]) => {
 
+
             const employee =
                 createEmployee({
 
                     ...employeeData,
 
                     discountRate:
-                        employeeData.discountRate +
+
+                        base.discountRate +
                         scenario.discountRate,
 
                     salaryIncreaseRate:
-                        employeeData.salaryIncreaseRate +
+
+                        base.salaryIncreaseRate +
                         scenario.salaryIncreaseRate,
 
                     turnoverRate:
+
                         Math.max(
                             0,
-                            employeeData.turnoverRate +
+                            base.turnoverRate +
                             scenario.turnoverRate
                         )
+
                 });
 
 
-            const puc =
+            const dbo =
                 calculatePUC(
                     employee
-                );
+                ).dbo;
 
 
             result[name] = {
 
-                dbo:
-                    puc.dbo,
+                dbo,
 
                 difference:
-                    puc.dbo -
+                    dbo -
                     calculatePUC(
-                        createEmployee(
-                            employeeData
-                        )
+                        base
                     ).dbo,
 
-                assumptions: {
+                differencePercent:
 
-                    discountRate:
-                        employee.discountRate,
+                    base.currentAnnualSalary === 0
 
-                    salaryIncreaseRate:
-                        employee.salaryIncreaseRate,
+                        ? 0
 
-                    turnoverRate:
-                        employee.turnoverRate
-                }
+                        :
+
+                        (
+                            dbo -
+                            calculatePUC(
+                                base
+                            ).dbo
+                        ) /
+                        calculatePUC(
+                            base
+                        ).dbo
+
             };
+
         }
     );
 
 
     return result;
+
 }
 
 
 /* ============================================================
-   20. VARSAYIM KONTROLLERİ
-   ============================================================ */
+   21. VARSAYIM KONTROLÜ
+============================================================ */
 
 function validateAssumptions(
     employee
@@ -1054,55 +1251,74 @@ function validateAssumptions(
 
 
     if (
-        employee.discountRate < 0
+        employee.discountRate <= 0
     ) {
 
         warnings.push({
 
             level: "Kritik",
 
-            title:
-                "Negatif iskonto oranı",
+            category: "İskonto",
 
             message:
-                "İskonto oranı sıfırın altında olamaz."
+                "İskonto oranı sıfırdan büyük olmalıdır."
+
         });
+
     }
 
 
     if (
-        employee.salaryIncreaseRate >
-        0.50
+        employee.discountRate > 0.50
     ) {
 
         warnings.push({
 
             level: "Yüksek",
 
-            title:
-                "Yüksek maaş artış varsayımı",
+            category: "İskonto",
+
+            message:
+                "İskonto oranı olağandışı yüksek görünüyor."
+
+        });
+
+    }
+
+
+    if (
+        employee.salaryIncreaseRate > 0.50
+    ) {
+
+        warnings.push({
+
+            level: "Yüksek",
+
+            category: "Maaş",
 
             message:
                 "Maaş artış varsayımı %50'nin üzerinde."
+
         });
+
     }
 
 
     if (
-        employee.turnoverRate >
-        0.20
+        employee.turnoverRate > 0.20
     ) {
 
         warnings.push({
 
             level: "Yüksek",
 
-            title:
-                "Yüksek personel devir oranı",
+            category: "Turnover",
 
             message:
                 "Personel devir varsayımı %20'nin üzerinde."
+
         });
+
     }
 
 
@@ -1115,12 +1331,13 @@ function validateAssumptions(
 
             level: "Kritik",
 
-            title:
-                "Emeklilik yaşı hatası",
+            category: "Emeklilik",
 
             message:
                 "Emeklilik yaşı mevcut yaştan büyük olmalıdır."
+
         });
+
     }
 
 
@@ -1132,25 +1349,46 @@ function validateAssumptions(
 
             level: "Kritik",
 
-            title:
-                "Hizmet süresi hatası",
+            category: "Hizmet",
 
             message:
                 "Hizmet süresi negatif olamaz."
+
         });
+
+    }
+
+
+    if (
+        employee.currentAnnualSalary <= 0
+    ) {
+
+        warnings.push({
+
+            level: "Kritik",
+
+            category: "Maaş",
+
+            message:
+                "Yıllık ücret sıfırdan büyük olmalıdır."
+
+        });
+
     }
 
 
     return warnings;
+
 }
 
 
 /* ============================================================
-   21. AKTÜERYAL RİSK SKORU
-   ============================================================ */
+   22. RİSK SKORU
+============================================================ */
 
 function calculateRiskScore(
-    employee
+    employee,
+    sensitivity
 ) {
 
     const warnings =
@@ -1165,34 +1403,102 @@ function calculateRiskScore(
     warnings.forEach(
         warning => {
 
-            switch (
-                warning.level
+            if (
+                warning.level === "Kritik"
             ) {
 
-                case "Kritik":
+                score += 35;
 
-                    score += 40;
+            } else if (
+                warning.level === "Yüksek"
+            ) {
 
-                    break;
+                score += 20;
 
-                case "Yüksek":
+            } else {
 
-                    score += 25;
+                score += 10;
 
-                    break;
-
-                case "Orta":
-
-                    score += 15;
-
-                    break;
-
-                default:
-
-                    score += 5;
             }
+
         }
     );
+
+
+    const dbo =
+        sensitivity.base;
+
+
+    const discountImpact =
+
+        Math.abs(
+            sensitivity
+                .discountRate
+                .minusImpact
+        ) / dbo;
+
+
+    const salaryImpact =
+
+        Math.abs(
+            sensitivity
+                .salaryIncreaseRate
+                .plusImpact
+        ) / dbo;
+
+
+    const turnoverImpact =
+
+        Math.abs(
+            sensitivity
+                .turnoverRate
+                .minusImpact
+        ) / dbo;
+
+
+    if (
+        discountImpact > 0.10
+    ) {
+
+        score += 20;
+
+    } else if (
+        discountImpact > 0.05
+    ) {
+
+        score += 10;
+
+    }
+
+
+    if (
+        salaryImpact > 0.10
+    ) {
+
+        score += 20;
+
+    } else if (
+        salaryImpact > 0.05
+    ) {
+
+        score += 10;
+
+    }
+
+
+    if (
+        turnoverImpact > 0.10
+    ) {
+
+        score += 15;
+
+    } else if (
+        turnoverImpact > 0.05
+    ) {
+
+        score += 7;
+
+    }
 
 
     score =
@@ -1227,6 +1533,7 @@ function calculateRiskScore(
     } else {
 
         level = "Düşük";
+
     }
 
 
@@ -1237,13 +1544,15 @@ function calculateRiskScore(
         level,
 
         warnings
+
     };
+
 }
 
 
 /* ============================================================
-   22. CFO YÖNETİM ANALİZİ
-   ============================================================ */
+   23. CFO İÇGÖRÜSÜ
+============================================================ */
 
 function generateCFOInsight(
     analysis
@@ -1252,101 +1561,97 @@ function generateCFOInsight(
     const dbo =
         analysis.puc.dbo;
 
-    const csc =
-        analysis.currentServiceCost;
 
     const sensitivity =
         analysis.sensitivity;
 
 
-    const discountBase =
-        sensitivity.discountRate.base;
-
-    const discountLow =
-        sensitivity.discountRate.minus100bps;
-
-
     const discountImpact =
-        discountLow -
-        discountBase;
 
-
-    const salaryBase =
-        sensitivity.salaryIncreaseRate.base;
-
-    const salaryHigh =
-        sensitivity.salaryIncreaseRate.plus100bps;
+        sensitivity
+            .discountRate
+            .minusImpact;
 
 
     const salaryImpact =
-        salaryHigh -
-        salaryBase;
+
+        sensitivity
+            .salaryIncreaseRate
+            .plusImpact;
 
 
-    let priority =
-        "Düşük";
+    let primaryRisk =
+        "Varsayım riski sınırlı.";
 
 
     if (
         Math.abs(discountImpact) >
-        dbo * 0.10 ||
-        Math.abs(salaryImpact) >
-        dbo * 0.10
+        Math.abs(salaryImpact)
     ) {
 
-        priority = "Yüksek";
+        primaryRisk =
+            "Ana risk iskonto oranıdır.";
+
+    } else {
+
+        primaryRisk =
+            "Ana risk maaş artış varsayımıdır.";
+
+    }
+
+
+    let recommendation;
+
+
+    if (
+        analysis.risk.level ===
+        "Kritik"
+    ) {
+
+        recommendation =
+            "Aktüeryal varsayımlar ve plan hükümleri detaylı olarak yeniden değerlendirilmelidir.";
 
     } else if (
-        Math.abs(discountImpact) >
-        dbo * 0.05 ||
-        Math.abs(salaryImpact) >
-        dbo * 0.05
+        analysis.risk.level ===
+        "Yüksek"
     ) {
 
-        priority = "Orta";
+        recommendation =
+            "Varsayımların bağımsız aktüeryal kanıtlarla ve bütçe/forecast varsayımlarıyla mutabakatı önerilir.";
+
+    } else {
+
+        recommendation =
+            "Varsayımların dönemsel olarak izlenmesi ve gerçekleşen deneyimle karşılaştırılması yeterlidir.";
+
     }
 
 
     return {
 
-        priority,
+        primaryRisk,
+
+        recommendation,
+
+        riskLevel:
+            analysis.risk.level,
 
         dbo,
-
-        currentServiceCost: csc,
 
         discountSensitivity:
             discountImpact,
 
         salarySensitivity:
-            salaryImpact,
+            salaryImpact
 
-        message:
-
-            priority === "Yüksek"
-
-                ?
-
-                "TMS 19 yükümlülüğü finansal varsayımlara yüksek duyarlılık göstermektedir. CFO seviyesinde iskonto oranı ve ücret artış varsayımlarının bağımsız aktüeryal kanıtlarla desteklenmesi ve bütçe/forecast modelleriyle tutarlılığının test edilmesi önerilir."
-
-                :
-
-                priority === "Orta"
-
-                    ?
-
-                    "Aktüeryal varsayımların DBO üzerinde anlamlı ancak yönetilebilir etkisi bulunmaktadır. Varsayımların dönemsel olarak yeniden değerlendirilmesi önerilir."
-
-                    :
-
-                    "Aktüeryal varsayımlar mevcut model kapsamında DBO üzerinde sınırlı duyarlılık yaratmaktadır."
     };
+
 }
 
 
 /* ============================================================
-   23. TAM PERSONEL ANALİZİ
-   ============================================================ */
+   24. PERSONEL ANALİZİ
+============================================================ */
 
 function analyzeEmployee(
     employeeData
@@ -1370,8 +1675,20 @@ function analyzeEmployee(
         );
 
 
+    const netInterest =
+        calculateNetInterest(
+
+            employee.openingDBO,
+
+            employee.planAssets,
+
+            employee.discountRate
+
+        );
+
+
     const projectedBenefit =
-        calculateProjectedBenefit(
+        projectedRetirementBenefit(
             employee
         );
 
@@ -1382,54 +1699,87 @@ function analyzeEmployee(
         );
 
 
-    const scenarios =
-        calculateScenarioAnalysis(
+    const stressTest =
+        calculateStressTest(
             employee
         );
 
 
     const risk =
         calculateRiskScore(
-            employee
+            employee,
+
+            sensitivity
+
         );
 
 
-    const preliminaryAnalysis = {
+    const netLiability =
+        calculateNetLiability(
+
+            puc.dbo,
+
+            employee.planAssets
+
+        );
+
+
+    const pl =
+        calculatePL({
+
+            currentServiceCost,
+
+            netInterest:
+                netInterest.netInterest
+
+        });
+
+
+    const cfoBase = {
 
         employee,
 
         puc,
 
-        projectedBenefit,
-
         currentServiceCost,
+
+        netInterest,
+
+        projectedBenefit,
 
         sensitivity,
 
-        scenarios,
+        stressTest,
 
-        risk
+        risk,
+
+        netLiability,
+
+        pl
+
     };
 
 
     const cfoInsight =
         generateCFOInsight(
-            preliminaryAnalysis
+            cfoBase
         );
 
 
     return {
 
-        ...preliminaryAnalysis,
+        ...cfoBase,
 
         cfoInsight
+
     };
+
 }
 
 
 /* ============================================================
-   24. PORTFÖY ANALİZİ
-   ============================================================ */
+   25. PORTFÖY ANALİZİ
+============================================================ */
 
 function analyzePortfolio(
     employees = []
@@ -1446,32 +1796,71 @@ function analyzePortfolio(
 
     const totalDBO =
         analyses.reduce(
-            (sum, analysis) =>
-                sum +
+            (
+                total,
+                analysis
+            ) =>
+                total +
                 analysis.puc.dbo,
+
             0
         );
 
 
-    const totalCurrentServiceCost =
+    const totalCSC =
         analyses.reduce(
-            (sum, analysis) =>
-                sum +
+            (
+                total,
+                analysis
+            ) =>
+                total +
                 analysis.currentServiceCost,
+
+            0
+        );
+
+
+    const totalNetLiability =
+        analyses.reduce(
+            (
+                total,
+                analysis
+            ) =>
+                total +
+                analysis.netLiability,
+
             0
         );
 
 
     const totalProjectedBenefit =
         analyses.reduce(
-            (sum, analysis) =>
-                sum +
-                analysis.projectedBenefit.projectedBenefit,
+            (
+                total,
+                analysis
+            ) =>
+                total +
+                analysis
+                    .projectedBenefit
+                    .projectedBenefit,
+
             0
         );
 
 
-    const averageDiscountRate =
+    const highRiskCount =
+        analyses.filter(
+            analysis =>
+                analysis.risk.level ===
+                "Yüksek" ||
+
+                analysis.risk.level ===
+                "Kritik"
+        ).length;
+
+
+    const averageAge =
+
         analyses.length === 0
 
             ? 0
@@ -1479,20 +1868,43 @@ function analyzePortfolio(
             :
 
             analyses.reduce(
-                (sum, analysis) =>
-                    sum +
-                    analysis.employee.discountRate,
+                (
+                    total,
+                    analysis
+                ) =>
+                    total +
+                    analysis
+                        .employee
+                        .currentAge,
+
                 0
+
             ) /
             analyses.length;
 
 
-    const highRiskEmployees =
-        analyses.filter(
-            analysis =>
-                analysis.risk.level === "Yüksek" ||
-                analysis.risk.level === "Kritik"
-        );
+    const averageDiscountRate =
+
+        analyses.length === 0
+
+            ? 0
+
+            :
+
+            analyses.reduce(
+                (
+                    total,
+                    analysis
+                ) =>
+                    total +
+                    analysis
+                        .employee
+                        .discountRate,
+
+                0
+
+            ) /
+            analyses.length;
 
 
     return {
@@ -1502,77 +1914,28 @@ function analyzePortfolio(
 
         totalDBO,
 
-        totalCurrentServiceCost,
+        totalCSC,
+
+        totalNetLiability,
 
         totalProjectedBenefit,
 
+        highRiskCount,
+
+        averageAge,
+
         averageDiscountRate,
 
-        highRiskEmployeeCount:
-            highRiskEmployees.length,
-
         analyses
+
     };
+
 }
 
 
 /* ============================================================
-   25. DBO BRIDGE
-   ============================================================ */
-
-function createDBOBridge({
-
-    openingDBO = 0,
-
-    currentServiceCost = 0,
-
-    interestCost = 0,
-
-    actuarialGainLoss = 0,
-
-    pastServiceCost = 0,
-
-    benefitPayments = 0
-
-} = {}) {
-
-    const closingDBO =
-
-        openingDBO +
-
-        currentServiceCost +
-
-        interestCost +
-
-        actuarialGainLoss +
-
-        pastServiceCost -
-
-        benefitPayments;
-
-
-    return {
-
-        openingDBO,
-
-        currentServiceCost,
-
-        interestCost,
-
-        actuarialGainLoss,
-
-        pastServiceCost,
-
-        benefitPayments,
-
-        closingDBO
-    };
-}
-
-
-/* ============================================================
-   26. YILLIK PROJEKSİYON
-   ============================================================ */
+   26. YILLIK DBO PROJEKSİYONU
+============================================================ */
 
 function projectDBO(
     employeeData,
@@ -1585,125 +1948,78 @@ function projectDBO(
         );
 
 
-    const projection = [];
+    const result = [];
 
 
-    let openingDBO =
-        calculatePUC(
-            employee
-        ).dbo;
+    let currentEmployee =
+        {
+            ...employee
+        };
 
 
     for (
-        let year = 1;
+        let year = 0;
         year <= years;
         year++
     ) {
 
-        const salary =
-            calculateProjectedSalary(
-                employee,
-                year
+        const puc =
+            calculatePUC(
+                currentEmployee
             );
 
 
-        const currentServiceCost =
-            calculateCurrentServiceCost(
-                employee
-            );
-
-
-        const interestCost =
-            calculateInterestCost(
-                openingDBO,
-                employee.discountRate
-            );
-
-
-        const closingDBO =
-
-            openingDBO +
-
-            currentServiceCost +
-
-            interestCost;
-
-
-        projection.push({
+        result.push({
 
             year,
 
             age:
-                employee.currentAge +
-                year,
+                currentEmployee.currentAge,
 
-            projectedSalary:
-                salary,
+            salary:
+                currentEmployee
+                    .currentAnnualSalary,
 
-            openingDBO,
+            dbo:
+                puc.dbo,
 
-            currentServiceCost,
+            currentServiceCost:
+                calculateCurrentServiceCost(
+                    currentEmployee
+                )
 
-            interestCost,
-
-            closingDBO
         });
 
 
-        openingDBO =
-            closingDBO;
+        currentEmployee = {
+
+            ...currentEmployee,
+
+            currentAge:
+                currentEmployee.currentAge + 1,
+
+            currentAnnualSalary:
+                projectedSalary(
+                    currentEmployee,
+                    1
+                ),
+
+            yearsOfService:
+                currentEmployee.yearsOfService + 1
+
+        };
+
     }
 
 
-    return projection;
+    return result;
+
 }
 
 
 /* ============================================================
-   27. FORMATLAMA
-   ============================================================ */
-
-function formatTRY(
-    value
-) {
-
-    return new Intl.NumberFormat(
-        "tr-TR",
-        {
-
-            minimumFractionDigits: 0,
-
-            maximumFractionDigits: 0
-        }
-    ).format(
-        numberValue(value)
-    );
-}
-
-
-function formatPercent(
-    value
-) {
-
-    return new Intl.NumberFormat(
-        "tr-TR",
-        {
-
-            style: "percent",
-
-            minimumFractionDigits: 1,
-
-            maximumFractionDigits: 2
-        }
-    ).format(
-        numberValue(value)
-    );
-}
-
-
-/* ============================================================
-   28. DASHBOARD ÖZETİ
-   ============================================================ */
+   27. DASHBOARD ÖZETİ
+============================================================ */
 
 function createDashboardSummary(
     employeeData
@@ -1723,36 +2039,116 @@ function createDashboardSummary(
         currentServiceCost:
             analysis.currentServiceCost,
 
+        interestCost:
+            analysis
+                .netInterest
+                .interestCost,
+
+        netInterest:
+            analysis
+                .netInterest
+                .netInterest,
+
+        planAssets:
+            analysis.employee.planAssets,
+
+        netLiability:
+            analysis.netLiability,
+
         projectedBenefit:
-            analysis.projectedBenefit.projectedBenefit,
+            analysis
+                .projectedBenefit
+                .projectedBenefit,
 
         finalSalary:
-            analysis.projectedBenefit.finalSalary,
+            analysis
+                .projectedBenefit
+                .finalSalary,
 
         remainingService:
-            analysis.projectedBenefit.remainingService,
+            analysis
+                .projectedBenefit
+                .remainingService,
 
         riskScore:
-            analysis.risk.score,
+            analysis
+                .risk
+                .score,
 
         riskLevel:
-            analysis.risk.level,
-
-        discountSensitivity:
-            analysis.cfoInsight.discountSensitivity,
-
-        salarySensitivity:
-            analysis.cfoInsight.salarySensitivity,
+            analysis
+                .risk
+                .level,
 
         cfoPriority:
-            analysis.cfoInsight.priority
+            analysis
+                .cfoInsight
+                .riskLevel,
+
+        primaryRisk:
+            analysis
+                .cfoInsight
+                .primaryRisk,
+
+        recommendation:
+            analysis
+                .cfoInsight
+                .recommendation
+
     };
+
 }
 
 
 /* ============================================================
-   29. HTML DASHBOARD BAĞLANTISI
-   ============================================================ */
+   28. FORMATLAMA
+============================================================ */
+
+function formatTRY(
+    value
+) {
+
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+
+            minimumFractionDigits: 0,
+
+            maximumFractionDigits: 0
+
+        }
+    ).format(
+        toNumber(value)
+    );
+
+}
+
+
+function formatPercent(
+    value
+) {
+
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+
+            style: "percent",
+
+            minimumFractionDigits: 1,
+
+            maximumFractionDigits: 2
+
+        }
+    ).format(
+        toNumber(value)
+    );
+
+}
+
+
+/* ============================================================
+   29. HTML DASHBOARD GÜNCELLEME
+============================================================ */
 
 function updateDashboard(
     employeeData
@@ -1764,9 +2160,9 @@ function updateDashboard(
         );
 
 
-    const mapping = {
+    const values = {
 
-        "dbo":
+        dbo:
             formatTRY(
                 summary.dbo
             ),
@@ -1774,6 +2170,26 @@ function updateDashboard(
         "current-service-cost":
             formatTRY(
                 summary.currentServiceCost
+            ),
+
+        "interest-cost":
+            formatTRY(
+                summary.interestCost
+            ),
+
+        "net-interest":
+            formatTRY(
+                summary.netInterest
+            ),
+
+        "plan-assets":
+            formatTRY(
+                summary.planAssets
+            ),
+
+        "net-liability":
+            formatTRY(
+                summary.netLiability
             ),
 
         "projected-benefit":
@@ -1795,25 +2211,27 @@ function updateDashboard(
         "risk-level":
             summary.riskLevel,
 
-        "discount-sensitivity":
-            formatTRY(
-                summary.discountSensitivity
-            ),
-
-        "salary-sensitivity":
-            formatTRY(
-                summary.salarySensitivity
-            ),
-
         "cfo-priority":
-            summary.cfoPriority
+            summary.cfoPriority,
+
+        "primary-risk":
+            summary.primaryRisk,
+
+        "recommendation":
+            summary.recommendation
+
     };
 
 
     Object.entries(
-        mapping
+        values
     ).forEach(
-        ([key, value]) => {
+        (
+            [
+                key,
+                value
+            ]
+        ) => {
 
             const element =
                 document.querySelector(
@@ -1827,113 +2245,49 @@ function updateDashboard(
 
                 element.textContent =
                     value;
+
             }
+
         }
     );
 
 
     return summary;
+
 }
 
 
 /* ============================================================
-   30. GLOBAL API
-   ============================================================ */
+   30. ÖRNEK PERSONEL
+============================================================ */
 
-window.TMS19ActuarialEngine = {
+function createSampleEmployee() {
 
-    version:
-        TMS19_ENGINE.version,
-
-    standard:
-        TMS19_ENGINE.standard,
-
-    methodology:
-        TMS19_ENGINE.methodology,
-
-    createEmployee,
-
-    calculateRemainingService,
-
-    calculateProjectedSalary,
-
-    calculateSurvivalProbability,
-
-    calculateProjectedBenefit,
-
-    calculatePUC,
-
-    calculateCurrentServiceCost,
-
-    calculateInterestCost,
-
-    calculateExpectedBenefitPayment,
-
-    calculateActuarialGainLoss,
-
-    calculateNetDefinedBenefitLiability,
-
-    calculateNetInterest,
-
-    calculateProfitLossEffect,
-
-    calculateOCIEffect,
-
-    calculateDBORollForward,
-
-    calculateSensitivity,
-
-    calculateScenarioAnalysis,
-
-    validateAssumptions,
-
-    calculateRiskScore,
-
-    generateCFOInsight,
-
-    analyzeEmployee,
-
-    analyzePortfolio,
-
-    createDBOBridge,
-
-    projectDBO,
-
-    createDashboardSummary,
-
-    updateDashboard,
-
-    formatTRY,
-
-    formatPercent
-};
-
-
-/* ============================================================
-   31. TEST VERİSİ
-   ============================================================ */
-
-function testTMS19Engine() {
-
-    const employee = {
+    return {
 
         id:
-            "TEST-001",
+            "TMS19-001",
+
+        employeeNumber:
+            "10001",
 
         name:
             "Örnek Personel",
 
+        gender:
+            "Erkek",
+
         currentAge:
-            35,
+            40,
 
         retirementAge:
             60,
 
         yearsOfService:
-            10,
+            8,
 
         currentAnnualSalary:
-            600000,
+            1000000,
 
         benefitRate:
             0.03,
@@ -1954,8 +2308,30 @@ function testTMS19Engine() {
             0,
 
         disabilityRate:
+            0,
+
+        openingDBO:
+            0,
+
+        planAssets:
+            0,
+
+        benefitPayments:
             0
+
     };
+
+}
+
+
+/* ============================================================
+   31. TEST
+============================================================ */
+
+function testTMS19() {
+
+    const employee =
+        createSampleEmployee();
 
 
     const result =
@@ -1965,25 +2341,45 @@ function testTMS19Engine() {
 
 
     console.group(
-        "TMS 19 ACTUARIAL ENGINE V2"
+        "GK Advisory — TMS 19 V3"
     );
 
 
     console.log(
-        "PUC / DBO:",
-        result.puc.dbo
+        "Personel:",
+        result.employee
+    );
+
+
+    console.log(
+        "DBO:",
+        formatTRY(
+            result.puc.dbo
+        )
     );
 
 
     console.log(
         "Current Service Cost:",
-        result.currentServiceCost
+        formatTRY(
+            result.currentServiceCost
+        )
     );
 
 
     console.log(
-        "Projected Benefit:",
-        result.projectedBenefit
+        "Net Interest:",
+        formatTRY(
+            result.netInterest.netInterest
+        )
+    );
+
+
+    console.log(
+        "Net Liability:",
+        formatTRY(
+            result.netLiability
+        )
     );
 
 
@@ -1994,8 +2390,8 @@ function testTMS19Engine() {
 
 
     console.log(
-        "Scenarios:",
-        result.scenarios
+        "Stress Test:",
+        result.stressTest
     );
 
 
@@ -2015,19 +2411,98 @@ function testTMS19Engine() {
 
 
     return result;
+
 }
 
 
 /* ============================================================
-   32. MOTOR BAŞLAT
-   ============================================================ */
+   32. GLOBAL API
+============================================================ */
+
+window.TMS19ActuarialEngine = {
+
+    version:
+        TMS19_CONFIG.version,
+
+    standard:
+        TMS19_CONFIG.standard,
+
+    methodology:
+        TMS19_CONFIG.methodology,
+
+    createEmployee,
+
+    createSampleEmployee,
+
+    remainingService,
+
+    totalService,
+
+    projectedSalary,
+
+    survivalProbability,
+
+    projectedRetirementBenefit,
+
+    calculatePUC,
+
+    calculateCurrentServiceCost,
+
+    calculateInterestCost,
+
+    calculateInterestIncome,
+
+    calculateNetInterest,
+
+    calculateRemeasurement,
+
+    calculateDBORollForward,
+
+    calculateNetLiability,
+
+    calculatePL,
+
+    calculateOCI,
+
+    calculateSensitivity,
+
+    calculateStressTest,
+
+    validateAssumptions,
+
+    calculateRiskScore,
+
+    generateCFOInsight,
+
+    analyzeEmployee,
+
+    analyzePortfolio,
+
+    projectDBO,
+
+    createDashboardSummary,
+
+    updateDashboard,
+
+    formatTRY,
+
+    formatPercent,
+
+    testTMS19
+
+};
+
+
+/* ============================================================
+   33. BAŞLANGIÇ
+============================================================ */
 
 console.log(
-    "TMS 19 Aktüeryal Motor V2 hazır."
+    "TMS 19 Aktüeryal Motor V3.0.0 hazır."
 );
 
 console.log(
-    "Metodoloji: Projected Unit Credit Method"
+    "Metodoloji: Projected Unit Credit"
 );
 
 console.log(
