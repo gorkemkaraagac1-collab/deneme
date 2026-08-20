@@ -1,1601 +1,2080 @@
-/* ============================================================
+/* =========================================================
    GK ADVISORY
-   TMS 19 — AKTÜERYAL VERİ YÖNETİM MOTORU
-   ------------------------------------------------------------
+   TMS 19 — PERSONEL VERİ MOTORU
+   tms19-data-engine.js
+
    Amaç:
-   - CSV personel verisi almak
-   - Türkçe / İngilizce kolonları tanımak
-   - Verileri standardize etmek
-   - Veri kalitesi kontrolü yapmak
-   - Hatalı / eksik kayıtları ayırmak
-   - Aktüeryal engine'e hazır veri üretmek
+   - CSV / JSON personel verisini almak
+   - Alanları normalize etmek
+   - Tarihleri standartlaştırmak
+   - Veri kalite kontrolleri yapmak
+   - Aktüeryal motor için temiz veri üretmek
+   - Denetim izi / veri kalite özeti oluşturmak
 
-   Not:
-   Bu dosya aktüeryal hesaplama motoru değildir.
-   Veri hazırlama ve kontrol katmanıdır.
-============================================================ */
+   NOT:
+   Bu dosya aktüeryal hesaplamayı yapmaz.
+   Hesaplama:
+   tms19-actuarial-engine.js
 
-(function (window) {
+   Portföy analizi:
+   tms19-portfolio-engine.js
+========================================================= */
+
+(function (global) {
 
     "use strict";
 
 
-    /* ========================================================
-       ANA MOTOR
-    ======================================================== */
-
-    const DataEngine = {
-
-
-        employees: [],
-
-        validEmployees: [],
-
-        warningEmployees: [],
-
-        invalidEmployees: [],
-
-        qualityResult: null,
-
-
-        /* ====================================================
-           KOLON ALIASLARI
-        ==================================================== */
-
-        columnAliases: {
-
-            employeeNumber: [
-                "sicil",
-                "sicilno",
-                "sicil_no",
-                "employee",
-                "employeeid",
-                "employee_id",
-                "employeenumber",
-                "personelno",
-                "personel_no",
-                "id"
-            ],
-
-            name: [
-                "ad",
-                "soyad",
-                "adsoyad",
-                "ad_soyad",
-                "personel",
-                "personeladi",
-                "personel_adi",
-                "name",
-                "fullname",
-                "employee_name"
-            ],
-
-            department: [
-                "departman",
-                "department",
-                "bolum",
-                "bölüm",
-                "birim",
-                "unit"
-            ],
-
-            gender: [
-                "cinsiyet",
-                "gender",
-                "sex"
-            ],
-
-            currentAge: [
-                "yas",
-                "yaş",
-                "age",
-                "currentage",
-                "current_age",
-                "mevcutyas"
-            ],
-
-            yearsOfService: [
-                "hizmet",
-                "hizmetsuresi",
-                "hizmet_suresi",
-                "hizmetyili",
-                "hizmet_yili",
-                "service",
-                "serviceyears",
-                "service_years",
-                "yearsofservice"
-            ],
-
-            currentAnnualSalary: [
-                "maas",
-                "maaş",
-                "yillikmaas",
-                "yillik_maas",
-                "yillikbrutmaas",
-                "yillik_brut_maas",
-                "salary",
-                "annualsalary",
-                "annual_salary",
-                "grosssalary"
-            ],
-
-            openingDBO: [
-                "acilisdbo",
-                "acilis_dbo",
-                "dboacilis",
-                "openingdbo",
-                "opening_dbo",
-                "openingobligation"
-            ],
-
-            planAssets: [
-                "planvarliklari",
-                "plan_varliklari",
-                "planvarligi",
-                "plan_assets",
-                "planassets",
-                "fairvalueplanassets"
-            ],
-
-            benefitPayments: [
-                "faydaodemeleri",
-                "fayda_odemeleri",
-                "odemeler",
-                "ödemeler",
-                "benefitpayments",
-                "benefit_payments",
-                "payments"
-            ],
-
-            retirementAge: [
-                "emeklilikyasi",
-                "emeklilik_yasi",
-                "retirementage",
-                "retirement_age"
-            ],
-
-            discountRate: [
-                "iskontoorani",
-                "iskonto_orani",
-                "iskonto",
-                "discountrate",
-                "discount_rate"
-            ],
-
-            salaryIncreaseRate: [
-                "maasartis",
-                "maasartisorani",
-                "maas_artis_orani",
-                "maaşartışı",
-                "salaryincrease",
-                "salaryincreaserate",
-                "salary_increase_rate"
-            ],
-
-            inflationRate: [
-                "enflasyon",
-                "enflasyonorani",
-                "enflasyon_orani",
-                "inflation",
-                "inflationrate",
-                "inflation_rate"
-            ],
-
-            turnoverRate: [
-                "turnover",
-                "turnoverrate",
-                "turnover_rate",
-                "devir",
-                "devirorani",
-                "devir_orani",
-                "personeldevir"
-            ],
-
-            benefitRate: [
-                "faydaorani",
-                "fayda_orani",
-                "benefitrate",
-                "benefit_rate"
-            ]
-
-        },
-
-
-        /* ====================================================
-           METİN NORMALİZASYONU
-        ==================================================== */
-
-        normalizeText(value) {
-
-            if (
-                value === null ||
-                value === undefined
-            ) {
-
-                return "";
-
-            }
-
-
-            return String(value)
-                .trim()
-                .toLowerCase()
-                .replace(/ı/g, "i")
-                .replace(/ğ/g, "g")
-                .replace(/ü/g, "u")
-                .replace(/ş/g, "s")
-                .replace(/ö/g, "o")
-                .replace(/ç/g, "c")
-                .replace(/[\s\-\.\/]+/g, "_")
-                .replace(/[^a-z0-9_]/g, "");
-
-        },
-
-
-        /* ====================================================
-           NUMERİK DEĞER
-        ==================================================== */
-
-        toNumber(value) {
-
-            if (
-                value === null ||
-                value === undefined ||
-                value === ""
-            ) {
-
-                return null;
-
-            }
-
-
-            if (
-                typeof value === "number"
-            ) {
-
-                return Number.isFinite(value)
-                    ? value
-                    : null;
-
-            }
-
-
-            let text =
-                String(value)
-                    .trim()
-                    .replace(/\s/g, "");
-
-
-            /*
-               Türkçe Excel formatı:
-
-               1.250.000,50
-
-               İngilizce:
-
-               1,250,000.50
-            */
-
-            if (
-                text.includes(",") &&
-                text.includes(".")
-            ) {
-
-                if (
-                    text.lastIndexOf(",") >
-                    text.lastIndexOf(".")
-                ) {
-
-                    text =
-                        text
-                            .replace(/\./g, "")
-                            .replace(",", ".");
-
-                }
-                else {
-
-                    text =
-                        text
-                            .replace(/,/g, "");
-
-                }
-
-            }
-
-            else if (
-                text.includes(",")
-            ) {
-
-                text =
-                    text.replace(",", ".");
-
-            }
-
+    /* =====================================================
+       YARDIMCI FONKSİYONLAR
+    ===================================================== */
+
+    function temizle(value) {
+
+        if (
+            value === null ||
+            value === undefined
+        ) {
+            return "";
+        }
+
+        return String(value)
+            .trim();
+
+    }
+
+
+    function sayiyaCevir(value) {
+
+        if (
+            value === null ||
+            value === undefined ||
+            value === ""
+        ) {
+            return 0;
+        }
+
+        if (
+            typeof value === "number"
+        ) {
+            return value;
+        }
+
+        let text =
+            String(value)
+                .trim();
+
+        /*
+         * Türkçe format:
+         * 1.250.000,50
+         */
+
+        if (
+            text.includes(",") &&
+            text.includes(".")
+        ) {
 
             text =
-                text.replace(
-                    /[^0-9.\-]/g,
-                    ""
-                );
-
-
-            const number =
-                Number(text);
-
-
-            return Number.isFinite(number)
-                ? number
-                : null;
-
-        },
-
-
-        /* ====================================================
-           ORAN NORMALİZASYONU
-        ==================================================== */
-
-        toRate(value) {
-
-            const number =
-                this.toNumber(value);
-
-
-            if (
-                number === null
-            ) {
-
-                return null;
-
-            }
-
-
-            /*
-               30 → %30
-               0.30 → %30
-            */
-
-            if (
-                Math.abs(number) > 1
-            ) {
-
-                return number / 100;
-
-            }
-
-
-            return number;
-
-        },
-
-
-        /* ====================================================
-           KOLON EŞLEŞTİRME
-        ==================================================== */
-
-        mapColumns(headers) {
-
-            const mapping = {};
-
-
-            headers.forEach(
-                header => {
-
-                    const normalized =
-                        this.normalizeText(
-                            header
-                        );
-
-
-                    Object.entries(
-                        this.columnAliases
-                    )
-                    .forEach(
-                        (
-                            [
-                                field,
-                                aliases
-                            ]
-                        ) => {
-
-                            const normalizedAliases =
-                                aliases.map(
-                                    alias =>
-                                        this.normalizeText(
-                                            alias
-                                        )
-                                );
-
-
-                            if (
-                                normalizedAliases
-                                    .includes(
-                                        normalized
-                                    )
-                            ) {
-
-                                if (
-                                    !mapping[field]
-                                ) {
-
-                                    mapping[field] =
-                                        header;
-
-                                }
-
-                            }
-
-                        }
-                    );
-
-                }
-            );
-
-
-            return mapping;
-
-        },
-
-
-        /* ====================================================
-           HAM KAYDI STANDARDİZE ET
-        ==================================================== */
-
-        normalizeEmployee(
-            raw,
-            mapping
-        ) {
-
-            const get =
-                field => {
-
-                    const column =
-                        mapping[field];
-
-                    return column
-                        ? raw[column]
-                        : null;
-
-                };
-
-
-            return {
-
-                employeeNumber:
-                    get(
-                        "employeeNumber"
-                    ),
-
-                name:
-                    get(
-                        "name"
-                    ),
-
-                department:
-                    get(
-                        "department"
-                    ),
-
-                gender:
-                    get(
-                        "gender"
-                    ),
-
-                currentAge:
-                    this.toNumber(
-                        get(
-                            "currentAge"
-                        )
-                    ),
-
-                yearsOfService:
-                    this.toNumber(
-                        get(
-                            "yearsOfService"
-                        )
-                    ),
-
-                currentAnnualSalary:
-                    this.toNumber(
-                        get(
-                            "currentAnnualSalary"
-                        )
-                    ),
-
-                openingDBO:
-                    this.toNumber(
-                        get(
-                            "openingDBO"
-                        )
-                    ) || 0,
-
-                planAssets:
-                    this.toNumber(
-                        get(
-                            "planAssets"
-                        )
-                    ) || 0,
-
-                benefitPayments:
-                    this.toNumber(
-                        get(
-                            "benefitPayments"
-                        )
-                    ) || 0,
-
-                retirementAge:
-                    this.toNumber(
-                        get(
-                            "retirementAge"
-                        )
-                    ) || 60,
-
-                discountRate:
-                    this.toRate(
-                        get(
-                            "discountRate"
-                        )
-                    ),
-
-                salaryIncreaseRate:
-                    this.toRate(
-                        get(
-                            "salaryIncreaseRate"
-                        )
-                    ),
-
-                inflationRate:
-                    this.toRate(
-                        get(
-                            "inflationRate"
-                        )
-                    ),
-
-                turnoverRate:
-                    this.toRate(
-                        get(
-                            "turnoverRate"
-                        )
-                    ),
-
-                benefitRate:
-                    this.toRate(
-                        get(
-                            "benefitRate"
-                        )
-                    )
-
-            };
-
-        },
-
-
-        /* ====================================================
-           PERSONEL KAYIT KONTROLÜ
-        ==================================================== */
-
-        validateEmployee(
-            employee,
-            index
-        ) {
-
-            const errors = [];
-
-            const warnings = [];
-
-
-            /* SİCİL */
-
-            if (
-                !employee.employeeNumber
-            ) {
-
-                errors.push(
-                    "Sicil numarası eksik."
-                );
-
-            }
-
-
-            /* İSİM */
-
-            if (
-                !employee.name
-            ) {
-
-                warnings.push(
-                    "Personel adı eksik."
-                );
-
-            }
-
-
-            /* YAŞ */
-
-            if (
-                employee.currentAge === null
-            ) {
-
-                errors.push(
-                    "Yaş bilgisi eksik."
-                );
-
-            }
-            else if (
-                employee.currentAge < 18 ||
-                employee.currentAge > 75
-            ) {
-
-                errors.push(
-                    "Yaş değeri makul aralık dışında."
-                );
-
-            }
-
-
-            /* HİZMET */
-
-            if (
-                employee.yearsOfService === null
-            ) {
-
-                errors.push(
-                    "Hizmet süresi eksik."
-                );
-
-            }
-            else if (
-                employee.yearsOfService < 0
-            ) {
-
-                errors.push(
-                    "Hizmet süresi negatif olamaz."
-                );
-
-            }
-
-
-            /* MAAŞ */
-
-            if (
-                employee.currentAnnualSalary === null
-            ) {
-
-                errors.push(
-                    "Yıllık brüt maaş eksik."
-                );
-
-            }
-            else if (
-                employee.currentAnnualSalary < 0
-            ) {
-
-                errors.push(
-                    "Maaş negatif olamaz."
-                );
-
-            }
-
-
-            /* HİZMET / YAŞ */
-
-            if (
-                employee.currentAge !== null &&
-                employee.yearsOfService !== null
-            ) {
-
-                if (
-                    employee.yearsOfService >
-                    employee.currentAge - 16
-                ) {
-
-                    warnings.push(
-                        "Hizmet süresi yaşa göre olağandışı görünüyor."
-                    );
-
-                }
-
-            }
-
-
-            /* EMEKLİLİK */
-
-            if (
-                employee.retirementAge <=
-                employee.currentAge
-            ) {
-
-                warnings.push(
-                    "Emeklilik yaşı mevcut yaştan düşük veya eşit."
-                );
-
-            }
-
-
-            /* ORANLAR */
-
-            const rates = [
-
-                [
-                    "İskonto oranı",
-                    employee.discountRate
-                ],
-
-                [
-                    "Maaş artış oranı",
-                    employee.salaryIncreaseRate
-                ],
-
-                [
-                    "Enflasyon oranı",
-                    employee.inflationRate
-                ],
-
-                [
-                    "Turnover oranı",
-                    employee.turnoverRate
-                ]
-
-            ];
-
-
-            rates.forEach(
-                ([name, value]) => {
-
-                    if (
-                        value !== null &&
-                        (
-                            value < 0 ||
-                            value > 1
-                        )
-                    ) {
-
-                        warnings.push(
-                            `${name} %0-%100 aralığı dışında.`
-                        );
-
-                    }
-
-                }
-            );
-
-
-            return {
-
-                index,
-
-                valid:
-                    errors.length === 0,
-
-                warning:
-                    errors.length === 0 &&
-                    warnings.length > 0,
-
-                errors,
-
-                warnings
-
-            };
-
-        },
-
-
-        /* ====================================================
-           MÜKERRER SİCİL KONTROLÜ
-        ==================================================== */
-
-        findDuplicates(
-            employees
-        ) {
-
-            const seen =
-                new Map();
-
-            const duplicates = [];
-
-
-            employees.forEach(
-                (
-                    employee,
-                    index
-                ) => {
-
-                    const id =
-                        String(
-                            employee.employeeNumber ||
-                            ""
-                        )
-                        .trim();
-
-
-                    if (!id) {
-
-                        return;
-
-                    }
-
-
-                    if (
-                        seen.has(id)
-                    ) {
-
-                        duplicates.push({
-
-                            employeeNumber:
-                                id,
-
-                            firstIndex:
-                                seen.get(id),
-
-                            duplicateIndex:
-                                index
-
-                        });
-
-                    }
-                    else {
-
-                        seen.set(
-                            id,
-                            index
-                        );
-
-                    }
-
-                }
-            );
-
-
-            return duplicates;
-
-        },
-
-
-        /* ====================================================
-           VERİ SETİNİ DOĞRULA
-        ==================================================== */
-
-        validateDataset(
-            employees
-        ) {
-
-            const valid = [];
-
-            const warning = [];
-
-            const invalid = [];
-
-            const checks = [];
-
-
-            const duplicates =
-                this.findDuplicates(
-                    employees
-                );
-
-
-            employees.forEach(
-                (
-                    employee,
-                    index
-                ) => {
-
-                    const validation =
-                        this.validateEmployee(
-                            employee,
-                            index
-                        );
-
-
-                    const duplicate =
-                        duplicates.some(
-                            x =>
-                                x.duplicateIndex ===
-                                index
-                        );
-
-
-                    if (
-                        duplicate
-                    ) {
-
-                        validation.errors.push(
-                            "Mükerrer sicil numarası."
-                        );
-
-                        validation.valid =
-                            false;
-
-                    }
-
-
-                    const result = {
-
-                        employee,
-
-                        index,
-
-                        ...validation
-
-                    };
-
-
-                    if (
-                        !validation.valid
-                    ) {
-
-                        invalid.push(
-                            result
-                        );
-
-                    }
-
-                    else if (
-                        validation.warning
-                    ) {
-
-                        warning.push(
-                            result
-                        );
-
-                    }
-
-                    else {
-
-                        valid.push(
-                            result
-                        );
-
-                    }
-
-
-                    checks.push(
-                        result
-                    );
-
-                }
-            );
-
-
-            const total =
-                employees.length;
-
-
-            const validCount =
-                valid.length;
-
-
-            const warningCount =
-                warning.length;
-
-
-            const invalidCount =
-                invalid.length;
-
-
-            const qualityScore =
-                total === 0
-                    ? 0
-                    :
-                    (
-                        (
-                            validCount +
-                            warningCount * 0.5
-                        )
-                        /
-                        total
-                    ) * 100;
-
-
-            let qualityLevel =
-                "Kritik";
-
-
-            if (
-                qualityScore >= 95
-            ) {
-
-                qualityLevel =
-                    "Mükemmel";
-
-            }
-            else if (
-                qualityScore >= 85
-            ) {
-
-                qualityLevel =
-                    "İyi";
-
-            }
-            else if (
-                qualityScore >= 70
-            ) {
-
-                qualityLevel =
-                    "Orta";
-
-            }
-            else if (
-                qualityScore >= 50
-            ) {
-
-                qualityLevel =
-                    "Düşük";
-
-            }
-
-
-            this.validEmployees =
-                valid.map(
-                    x =>
-                        x.employee
-                );
-
-
-            this.warningEmployees =
-                warning.map(
-                    x =>
-                        x.employee
-                );
-
-
-            this.invalidEmployees =
-                invalid.map(
-                    x =>
-                        x.employee
-                );
-
-
-            this.qualityResult = {
-
-                total,
-
-                validCount,
-
-                warningCount,
-
-                invalidCount,
-
-                duplicateCount:
-                    duplicates.length,
-
-                qualityScore,
-
-                qualityLevel,
-
-                checks,
-
-                duplicates,
-
-                readyForActuarial:
-                    invalidCount === 0
-
-            };
-
-
-            return this.qualityResult;
-
-        },
-
-
-        /* ====================================================
-           CSV PARSE
-        ==================================================== */
-
-        parseCSV(
-            csvText
-        ) {
-
-            if (
-                !csvText ||
-                !csvText.trim()
-            ) {
-
-                throw new Error(
-                    "CSV verisi boş."
-                );
-
-            }
-
-
-            const lines =
-                csvText
-                    .split(/\r?\n/)
-                    .filter(
-                        line =>
-                            line.trim()
-                    );
-
-
-            if (
-                lines.length < 2
-            ) {
-
-                throw new Error(
-                    "CSV dosyasında yeterli veri bulunmuyor."
-                );
-
-            }
-
-
-            const headers =
-                this.parseCSVLine(
-                    lines[0]
-                );
-
-
-            const rawEmployees = [];
-
-
-            for (
-                let i = 1;
-                i < lines.length;
-                i++
-            ) {
-
-                const values =
-                    this.parseCSVLine(
-                        lines[i]
-                    );
-
-
-                if (
-                    values.every(
-                        value =>
-                            !String(
-                                value || ""
-                            ).trim()
-                    )
-                ) {
-
-                    continue;
-
-                }
-
-
-                const raw = {};
-
-
-                headers.forEach(
-                    (
-                        header,
-                        index
-                    ) => {
-
-                        raw[header] =
-                            values[index] ??
-                            "";
-
-                    }
-                );
-
-
-                rawEmployees.push(
-                    raw
-                );
-
-            }
-
-
-            const mapping =
-                this.mapColumns(
-                    headers
-                );
-
-
-            const employees =
-                rawEmployees.map(
-                    raw =>
-                        this.normalizeEmployee(
-                            raw,
-                            mapping
-                        )
-                );
-
-
-            this.employees =
-                employees;
-
-
-            const quality =
-                this.validateDataset(
-                    employees
-                );
-
-
-            return {
-
-                employees,
-
-                mapping,
-
-                quality
-
-            };
-
-        },
-
-
-        /* ====================================================
-           CSV SATIR PARSER
-        ==================================================== */
-
-        parseCSVLine(
-            line
-        ) {
-
-            const result = [];
-
-            let current = "";
-
-            let insideQuotes =
-                false;
-
-
-            for (
-                let i = 0;
-                i < line.length;
-                i++
-            ) {
-
-                const char =
-                    line[i];
-
-
-                if (
-                    char === '"'
-                ) {
-
-                    if (
-                        insideQuotes &&
-                        line[i + 1] === '"'
-                    ) {
-
-                        current += '"';
-
-                        i++;
-
-                    }
-                    else {
-
-                        insideQuotes =
-                            !insideQuotes;
-
-                    }
-
-                }
-
-                else if (
-                    char === "," &&
-                    !insideQuotes
-                ) {
-
-                    result.push(
-                        current.trim()
-                    );
-
-                    current = "";
-
-                }
-
-                else {
-
-                    current += char;
-
-                }
-
-            }
-
-
-            result.push(
-                current.trim()
-            );
-
-
-            return result;
-
-        },
-
-
-        /* ====================================================
-           AKTÜERYAL ENGINE'E HAZIR VERİ
-        ==================================================== */
-
-        getActuarialDataset() {
-
-            if (
-                !this.qualityResult
-            ) {
-
-                this.validateDataset(
-                    this.employees
-                );
-
-            }
-
-
-            return [
-                ...this.validEmployees
-            ];
-
-        },
-
-
-        /* ====================================================
-           VERİ ÖZETİ
-        ==================================================== */
-
-        getSummary() {
-
-            if (
-                !this.qualityResult
-            ) {
-
-                return {
-
-                    total: 0,
-
-                    valid: 0,
-
-                    warning: 0,
-
-                    invalid: 0,
-
-                    qualityScore: 0,
-
-                    qualityLevel:
-                        "Veri Yok",
-
-                    readyForActuarial:
-                        false
-
-                };
-
-            }
-
-
-            return {
-
-                total:
-                    this.qualityResult.total,
-
-                valid:
-                    this.qualityResult.validCount,
-
-                warning:
-                    this.qualityResult.warningCount,
-
-                invalid:
-                    this.qualityResult.invalidCount,
-
-                duplicates:
-                    this.qualityResult.duplicateCount,
-
-                qualityScore:
-                    this.qualityResult.qualityScore,
-
-                qualityLevel:
-                    this.qualityResult.qualityLevel,
-
-                readyForActuarial:
-                    this.qualityResult
-                        .readyForActuarial
-
-            };
-
-        },
-
-
-        /* ====================================================
-           DEMO VERİ
-        ==================================================== */
-
-        createSampleDataset(
-            count = 25
-        ) {
-
-            const departments = [
-
-                "Finans",
-
-                "Satış",
-
-                "Operasyon",
-
-                "İnsan Kaynakları",
-
-                "Üretim",
-
-                "Bilgi Teknolojileri"
-
-            ];
-
-
-            const employees = [];
-
-
-            for (
-                let i = 1;
-                i <= count;
-                i++
-            ) {
-
-                const age =
-                    25 +
-                    Math.floor(
-                        Math.random() * 30
-                    );
-
-
-                const service =
-                    Math.min(
-                        Math.floor(
-                            Math.random() * 12
-                        ),
-                        Math.max(
-                            age - 18,
-                            0
-                        )
-                    );
-
-
-                const salary =
-                    450000 +
-                    Math.floor(
-                        Math.random() *
-                        1250000
-                    );
-
-
-                employees.push({
-
-                    employeeNumber:
-                        `P-${String(i)
-                            .padStart(5, "0")}`,
-
-                    name:
-                        `Personel ${i}`,
-
-                    department:
-                        departments[
-                            i %
-                            departments.length
-                        ],
-
-                    gender:
-                        i % 2 === 0
-                            ? "E"
-                            : "K",
-
-                    currentAge:
-                        age,
-
-                    yearsOfService:
-                        service,
-
-                    currentAnnualSalary:
-                        salary,
-
-                    openingDBO:
-                        Math.round(
-                            salary *
-                            0.10 *
-                            service
-                        ),
-
-                    planAssets:
-                        0,
-
-                    benefitPayments:
-                        0,
-
-                    retirementAge:
-                        60,
-
-                    discountRate:
-                        0.30,
-
-                    salaryIncreaseRate:
-                        0.30,
-
-                    inflationRate:
-                        0.25,
-
-                    turnoverRate:
-                        0.05,
-
-                    benefitRate:
-                        0.03
-
-                });
-
-            }
-
-
-            this.employees =
-                employees;
-
-
-            this.validateDataset(
-                employees
-            );
-
-
-            return {
-
-                employees,
-
-                quality:
-                    this.qualityResult
-
-            };
-
-        },
-
-
-        /* ====================================================
-           JSON DIŞARI AKTAR
-        ==================================================== */
-
-        exportJSON() {
-
-            return JSON.stringify(
-                this.employees,
-                null,
-                2
-            );
-
-        },
-
-
-        /* ====================================================
-           FORMAT
-        ==================================================== */
-
-        formatTRY(
-            value
-        ) {
-
-            return new Intl.NumberFormat(
-                "tr-TR",
-                {
-
-                    style:
-                        "currency",
-
-                    currency:
-                        "TRY",
-
-                    maximumFractionDigits:
-                        0
-
-                }
-            ).format(
-                Number(value) || 0
-            );
-
-        },
-
-
-        formatPercent(
-            value
-        ) {
-
-            return (
-                Number(value || 0) *
-                100
-            ).toFixed(1) + "%";
+                text
+                    .replace(/\./g, "")
+                    .replace(",", ".");
 
         }
+        else if (
+            text.includes(",")
+        ) {
+
+            text =
+                text.replace(",", ".");
+
+        }
+
+        text =
+            text.replace(
+                /[^0-9.-]/g,
+                ""
+            );
+
+        const number =
+            Number(text);
+
+        return Number.isFinite(number)
+            ? number
+            : 0;
+
+    }
+
+
+    function tarihCevir(value) {
+
+        if (!value) {
+            return null;
+        }
+
+
+        if (
+            value instanceof Date
+        ) {
+
+            return isNaN(
+                value.getTime()
+            )
+                ? null
+                : value;
+
+        }
+
+
+        const text =
+            String(value)
+                .trim();
+
+
+        /*
+         * DD.MM.YYYY
+         */
+
+        const trMatch =
+            text.match(
+                /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/
+            );
+
+
+        if (trMatch) {
+
+            const day =
+                Number(trMatch[1]);
+
+            const month =
+                Number(trMatch[2]) - 1;
+
+            const year =
+                Number(trMatch[3]);
+
+            const date =
+                new Date(
+                    year,
+                    month,
+                    day
+                );
+
+            return isNaN(
+                date.getTime()
+            )
+                ? null
+                : date;
+
+        }
+
+
+        /*
+         * YYYY-MM-DD
+         */
+
+        const isoMatch =
+            text.match(
+                /^(\d{4})-(\d{1,2})-(\d{1,2})$/
+            );
+
+
+        if (isoMatch) {
+
+            const date =
+                new Date(
+                    Number(isoMatch[1]),
+                    Number(isoMatch[2]) - 1,
+                    Number(isoMatch[3])
+                );
+
+            return isNaN(
+                date.getTime()
+            )
+                ? null
+                : date;
+
+        }
+
+
+        const parsed =
+            new Date(text);
+
+
+        return isNaN(
+            parsed.getTime()
+        )
+            ? null
+            : parsed;
+
+    }
+
+
+    function tarihISO(value) {
+
+        const date =
+            tarihCevir(value);
+
+
+        if (!date) {
+            return "";
+        }
+
+
+        const year =
+            date.getFullYear();
+
+
+        const month =
+            String(
+                date.getMonth() + 1
+            )
+                .padStart(2, "0");
+
+
+        const day =
+            String(
+                date.getDate()
+            )
+                .padStart(2, "0");
+
+
+        return (
+            year +
+            "-" +
+            month +
+            "-" +
+            day
+        );
+
+    }
+
+
+    function yasHesapla(
+        birthDate,
+        valuationDate
+    ) {
+
+        const birth =
+            tarihCevir(
+                birthDate
+            );
+
+
+        const valuation =
+            tarihCevir(
+                valuationDate
+            );
+
+
+        if (
+            !birth ||
+            !valuation
+        ) {
+
+            return 0;
+
+        }
+
+
+        let age =
+            valuation.getFullYear() -
+            birth.getFullYear();
+
+
+        const monthDifference =
+            valuation.getMonth() -
+            birth.getMonth();
+
+
+        if (
+            monthDifference < 0 ||
+            (
+                monthDifference === 0 &&
+                valuation.getDate() <
+                birth.getDate()
+            )
+        ) {
+
+            age--;
+
+        }
+
+
+        return age;
+
+    }
+
+
+    function hizmetSuresiHesapla(
+        startDate,
+        valuationDate
+    ) {
+
+        const start =
+            tarihCevir(
+                startDate
+            );
+
+
+        const valuation =
+            tarihCevir(
+                valuationDate
+            );
+
+
+        if (
+            !start ||
+            !valuation
+        ) {
+
+            return 0;
+
+        }
+
+
+        const difference =
+            valuation.getTime() -
+            start.getTime();
+
+
+        const years =
+            difference /
+            (
+                1000 *
+                60 *
+                60 *
+                24 *
+                365.25
+            );
+
+
+        return Math.max(
+            0,
+            years
+        );
+
+    }
+
+
+    function normalizasyonAnahtari(
+        value
+    ) {
+
+        return temizle(value)
+            .toLowerCase()
+            .replace(
+                /ı/g,
+                "i"
+            )
+            .replace(
+                /ğ/g,
+                "g"
+            )
+            .replace(
+                /ü/g,
+                "u"
+            )
+            .replace(
+                /ş/g,
+                "s"
+            )
+            .replace(
+                /ö/g,
+                "o"
+            )
+            .replace(
+                /ç/g,
+                "c"
+            )
+            .replace(
+                /[^a-z0-9]/g,
+                ""
+            );
+
+    }
+
+
+    /* =====================================================
+       ALAN EŞLEŞTİRME
+    ===================================================== */
+
+    const FIELD_ALIASES = {
+
+        employeeId: [
+            "sicilno",
+            "sicil",
+            "employeeid",
+            "employee_id",
+            "id",
+            "personelno",
+            "personelid"
+        ],
+
+        name: [
+            "adsoyad",
+            "adsoyadı",
+            "isim",
+            "name",
+            "fullname",
+            "calisan",
+            "personel"
+        ],
+
+        birthDate: [
+            "dogumtarihi",
+            "doğumtarihi",
+            "birthdate",
+            "birth_date",
+            "dogum"
+        ],
+
+        hireDate: [
+            "isegiristarihi",
+            "işegiriştarihi",
+            "hiredate",
+            "hire_date",
+            "startdate",
+            "employmentdate"
+        ],
+
+        department: [
+            "departman",
+            "department",
+            "bolum",
+            "bölüm",
+            "organizasyon"
+        ],
+
+        gender: [
+            "cinsiyet",
+            "gender",
+            "sex"
+        ],
+
+        salary: [
+            "brutmaas",
+            "brütmaaş",
+            "maas",
+            "maaş",
+            "salary",
+            "grosssalary",
+            "gross_salary"
+        ],
+
+        annualSalary: [
+            "yillikbrutmaas",
+            "yıllıkbrütmaaş",
+            "annualsalary",
+            "annual_salary",
+            "yillikmaas",
+            "yıllıkmaaş"
+        ],
+
+        retirementAge: [
+            "emeklilikyasi",
+            "emeklilikyaşı",
+            "retirementage",
+            "retirement_age"
+        ],
+
+        openingDBO: [
+            "openingdbo",
+            "opening_dbo",
+            "acilisdbo",
+            "açılışdbo",
+            "oncekidbo",
+            "öncekidbo"
+        ],
+
+        openingPlanAsset: [
+            "openingplanasset",
+            "opening_plan_asset",
+            "acilisplanvarligi",
+            "açılışplanvarlığı"
+        ],
+
+        benefitRate: [
+            "faydaorani",
+            "faydaoranı",
+            "benefitrate",
+            "benefit_rate"
+        ],
+
+        serviceYears: [
+            "hizmetsuresi",
+            "hizmetyılı",
+            "hizmetyili",
+            "serviceyears",
+            "service_years"
+        ]
 
     };
 
 
-    /* ========================================================
-       GLOBAL
-    ======================================================== */
+    function alanBul(
+        row,
+        aliases
+    ) {
 
-    window.TMS19DataEngine =
-        DataEngine;
+        const keys =
+            Object.keys(row);
+
+
+        for (
+            let i = 0;
+            i < aliases.length;
+            i++
+        ) {
+
+            const alias =
+                normalizasyonAnahtari(
+                    aliases[i]
+                );
+
+
+            for (
+                let j = 0;
+                j < keys.length;
+                j++
+            ) {
+
+                const normalizedKey =
+                    normalizasyonAnahtari(
+                        keys[j]
+                    );
+
+
+                if (
+                    normalizedKey ===
+                    alias
+                ) {
+
+                    return row[keys[j]];
+
+                }
+
+            }
+
+        }
+
+
+        return "";
+
+    }
+
+
+    /* =====================================================
+       TEK PERSONEL NORMALİZASYONU
+    ===================================================== */
+
+    function personelNormalizeEt(
+        row,
+        options
+    ) {
+
+        options =
+            options || {};
+
+
+        const valuationDate =
+            tarihCevir(
+                options.valuationDate
+            ) ||
+            new Date();
+
+
+        const employeeId =
+            temizle(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.employeeId
+                )
+            );
+
+
+        const name =
+            temizle(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.name
+                )
+            );
+
+
+        const birthDate =
+            tarihCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.birthDate
+                )
+            );
+
+
+        const hireDate =
+            tarihCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.hireDate
+                )
+            );
+
+
+        const department =
+            temizle(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.department
+                )
+            ) ||
+            "Belirtilmemiş";
+
+
+        const gender =
+            temizle(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.gender
+                )
+            ) ||
+            "Belirtilmemiş";
+
+
+        let annualSalary =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.annualSalary
+                )
+            );
+
+
+        const monthlySalary =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.salary
+                )
+            );
+
+
+        if (
+            annualSalary <= 0 &&
+            monthlySalary > 0
+        ) {
+
+            annualSalary =
+                monthlySalary * 12;
+
+        }
+
+
+        const retirementAgeRaw =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.retirementAge
+                )
+            );
+
+
+        const retirementAge =
+            retirementAgeRaw > 0
+                ? retirementAgeRaw
+                : (
+                    options.defaultRetirementAge ||
+                    60
+                );
+
+
+        const openingDBO =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.openingDBO
+                )
+            );
+
+
+        const openingPlanAsset =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.openingPlanAsset
+                )
+            );
+
+
+        const benefitRateRaw =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.benefitRate
+                )
+            );
+
+
+        const benefitRate =
+            benefitRateRaw > 1
+                ? benefitRateRaw / 100
+                : benefitRateRaw;
+
+
+        const calculatedAge =
+            yasHesapla(
+                birthDate,
+                valuationDate
+            );
+
+
+        const calculatedService =
+            hizmetSuresiHesapla(
+                hireDate,
+                valuationDate
+            );
+
+
+        const importedService =
+            sayiyaCevir(
+                alanBul(
+                    row,
+                    FIELD_ALIASES.serviceYears
+                )
+            );
+
+
+        const serviceYears =
+            importedService > 0
+                ? importedService
+                : calculatedService;
+
+
+        return {
+
+            employeeId:
+                employeeId ||
+                (
+                    "AUTO-" +
+                    Date.now() +
+                    "-" +
+                    Math.floor(
+                        Math.random() * 100000
+                    )
+                ),
+
+            name:
+                name ||
+                "İsimsiz Personel",
+
+            birthDate:
+                tarihISO(
+                    birthDate
+                ),
+
+            hireDate:
+                tarihISO(
+                    hireDate
+                ),
+
+            department:
+                department,
+
+            gender:
+                gender,
+
+            salary:
+                annualSalary,
+
+            annualSalary:
+                annualSalary,
+
+            monthlySalary:
+                annualSalary / 12,
+
+            age:
+                calculatedAge,
+
+            service:
+                serviceYears,
+
+            serviceYears:
+                serviceYears,
+
+            retirementAge:
+                retirementAge,
+
+            remainingService:
+                Math.max(
+                    0,
+                    retirementAge -
+                    calculatedAge
+                ),
+
+            openingDBO:
+                openingDBO,
+
+            openingPlanAsset:
+                openingPlanAsset,
+
+            benefitRate:
+                benefitRate,
+
+            valuationDate:
+                tarihISO(
+                    valuationDate
+                ),
+
+            /*
+             * Kaynağın orijinal satırını
+             * kaybetmiyoruz.
+             *
+             * Denetim izi açısından önemli.
+             */
+
+            sourceData:
+                Object.assign(
+                    {},
+                    row
+                )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       PERSONEL LİSTESİ NORMALİZASYONU
+    ===================================================== */
+
+    function normalizeEmployees(
+        rows,
+        options
+    ) {
+
+        if (
+            !Array.isArray(rows)
+        ) {
+
+            throw new Error(
+                "Personel verisi bir dizi olmalıdır."
+            );
+
+        }
+
+
+        const normalized =
+            rows.map(
+                function (
+                    row
+                ) {
+
+                    return personelNormalizeEt(
+                        row,
+                        options
+                    );
+
+                }
+            );
+
+
+        return normalized;
+
+    }
+
+
+    /* =====================================================
+       VERİ KALİTESİ
+    ===================================================== */
+
+    function validateEmployees(
+        employees
+    ) {
+
+        const issues = [];
+
+        let criticalCount = 0;
+
+        let warningCount = 0;
+
+        let validCount = 0;
+
+
+        employees.forEach(
+            function (
+                employee,
+                index
+            ) {
+
+                const rowNumber =
+                    index + 1;
+
+
+                const employeeIssues =
+                    [];
+
+
+                if (
+                    !employee.name ||
+                    employee.name ===
+                    "İsimsiz Personel"
+                ) {
+
+                    employeeIssues.push(
+                        "Ad soyad eksik"
+                    );
+
+                }
+
+
+                if (
+                    !employee.birthDate
+                ) {
+
+                    employeeIssues.push(
+                        "Doğum tarihi eksik"
+                    );
+
+                }
+
+
+                if (
+                    !employee.hireDate
+                ) {
+
+                    employeeIssues.push(
+                        "İşe giriş tarihi eksik"
+                    );
+
+                }
+
+
+                if (
+                    employee.salary <= 0
+                ) {
+
+                    employeeIssues.push(
+                        "Brüt yıllık maaş eksik veya sıfır"
+                    );
+
+                }
+
+
+                if (
+                    employee.age < 16 ||
+                    employee.age > 75
+                ) {
+
+                    employeeIssues.push(
+                        "Yaş olağandışı"
+                    );
+
+                }
+
+
+                if (
+                    employee.serviceYears < 0
+                ) {
+
+                    employeeIssues.push(
+                        "Hizmet süresi negatif"
+                    );
+
+                }
+
+
+                if (
+                    employee.retirementAge <=
+                    employee.age
+                ) {
+
+                    employeeIssues.push(
+                        "Emeklilik yaşı mevcut yaştan küçük veya eşit"
+                    );
+
+                }
+
+
+                if (
+                    employee.openingDBO < 0
+                ) {
+
+                    employeeIssues.push(
+                        "Opening DBO negatif"
+                    );
+
+                }
+
+
+                if (
+                    employeeIssues.length === 0
+                ) {
+
+                    validCount++;
+
+                }
+                else {
+
+                    warningCount++;
+
+                }
+
+
+                employee.validation =
+                    {
+
+                        valid:
+                            employeeIssues.length === 0,
+
+                        issues:
+                            employeeIssues,
+
+                        row:
+                            rowNumber
+
+                    };
+
+            }
+        );
+
+
+        /*
+         * Kritik veri kontrolleri
+         */
+
+        const ids =
+            new Set();
+
+
+        employees.forEach(
+            function (
+                employee
+            ) {
+
+                if (
+                    ids.has(
+                        employee.employeeId
+                    )
+                ) {
+
+                    criticalCount++;
+
+                    employee.validation.valid =
+                        false;
+
+                    employee.validation.issues.push(
+                        "Mükerrer personel sicil numarası"
+                    );
+
+                }
+
+
+                ids.add(
+                    employee.employeeId
+                );
+
+            }
+        );
+
+
+        const total =
+            employees.length;
+
+
+        const completeness =
+            total === 0
+                ? 0
+                : (
+                    validCount /
+                    total
+                ) * 100;
+
+
+        let level =
+            "Kritik";
+
+
+        if (
+            completeness >= 98 &&
+            criticalCount === 0
+        ) {
+
+            level =
+                "Mükemmel";
+
+        }
+        else if (
+            completeness >= 95 &&
+            criticalCount === 0
+        ) {
+
+            level =
+                "Yüksek";
+
+        }
+        else if (
+            completeness >= 85
+        ) {
+
+            level =
+                "Orta";
+
+        }
+        else if (
+            completeness >= 70
+        ) {
+
+            level =
+                "Düşük";
+
+        }
+
+
+        return {
+
+            totalRecords:
+                total,
+
+            validRecords:
+                validCount,
+
+            warningRecords:
+                warningCount,
+
+            criticalRecords:
+                criticalCount,
+
+            completeness:
+                Number(
+                    completeness.toFixed(2)
+                ),
+
+            level:
+                level,
+
+            issues:
+                employees
+                    .filter(
+                        employee =>
+                            !employee.validation.valid
+                    )
+                    .map(
+                        employee => ({
+                            employeeId:
+                                employee.employeeId,
+
+                            name:
+                                employee.name,
+
+                            issues:
+                                employee.validation
+                                    .issues
+                        })
+                    )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       DUPLICATE KONTROLÜ
+    ===================================================== */
+
+    function duplicateKontrolu(
+        employees
+    ) {
+
+        const map =
+            new Map();
+
+
+        employees.forEach(
+            function (
+                employee
+            ) {
+
+                const id =
+                    employee.employeeId;
+
+
+                if (
+                    !map.has(id)
+                ) {
+
+                    map.set(
+                        id,
+                        []
+                    );
+
+                }
+
+
+                map.get(id).push(
+                    employee
+                );
+
+            }
+        );
+
+
+        const duplicates = [];
+
+
+        map.forEach(
+            function (
+                records,
+                id
+            ) {
+
+                if (
+                    records.length > 1
+                ) {
+
+                    duplicates.push({
+
+                        employeeId:
+                            id,
+
+                        count:
+                            records.length,
+
+                        names:
+                            records.map(
+                                x =>
+                                    x.name
+                            )
+
+                    });
+
+                }
+
+            }
+        );
+
+
+        return duplicates;
+
+    }
+
+
+    /* =====================================================
+       PORTFÖY ÖZETİ
+    ===================================================== */
+
+    function portfolioSummary(
+        employees
+    ) {
+
+        const totalSalary =
+            employees.reduce(
+                (
+                    sum,
+                    employee
+                ) =>
+                    sum +
+                    employee.annualSalary,
+                0
+            );
+
+
+        const totalDBO =
+            employees.reduce(
+                (
+                    sum,
+                    employee
+                ) =>
+                    sum +
+                    employee.openingDBO,
+                0
+            );
+
+
+        const totalEmployees =
+            employees.length;
+
+
+        const averageAge =
+            totalEmployees === 0
+                ? 0
+                : employees.reduce(
+                    (
+                        sum,
+                        employee
+                    ) =>
+                        sum +
+                        employee.age,
+                    0
+                ) /
+                totalEmployees;
+
+
+        const averageService =
+            totalEmployees === 0
+                ? 0
+                : employees.reduce(
+                    (
+                        sum,
+                        employee
+                    ) =>
+                        sum +
+                        employee.serviceYears,
+                    0
+                ) /
+                totalEmployees;
+
+
+        const departments =
+            {};
+
+
+        employees.forEach(
+            function (
+                employee
+            ) {
+
+                const department =
+                    employee.department;
+
+
+                if (
+                    !departments[
+                        department
+                    ]
+                ) {
+
+                    departments[
+                        department
+                    ] = {
+
+                        employeeCount:
+                            0,
+
+                        salary:
+                            0,
+
+                        dbo:
+                            0
+
+                    };
+
+                }
+
+
+                departments[
+                    department
+                ].employeeCount++;
+
+
+                departments[
+                    department
+                ].salary +=
+                    employee.annualSalary;
+
+
+                departments[
+                    department
+                ].dbo +=
+                    employee.openingDBO;
+
+            }
+        );
+
+
+        return {
+
+            employeeCount:
+                totalEmployees,
+
+            totalSalary:
+                totalSalary,
+
+            totalOpeningDBO:
+                totalDBO,
+
+            averageAge:
+                Number(
+                    averageAge.toFixed(2)
+                ),
+
+            averageService:
+                Number(
+                    averageService.toFixed(2)
+                ),
+
+            dboToSalary:
+                totalSalary === 0
+                    ? 0
+                    : Number(
+                        (
+                            totalDBO /
+                            totalSalary
+                        ).toFixed(4)
+                    ),
+
+            departments:
+                departments
+
+        };
+
+    }
+
+
+    /* =====================================================
+       CSV PARSER
+    ===================================================== */
+
+    function parseCSV(
+        csvText,
+        delimiter
+    ) {
+
+        if (
+            typeof csvText !==
+            "string"
+        ) {
+
+            throw new Error(
+                "CSV içeriği metin formatında olmalıdır."
+            );
+
+        }
+
+
+        delimiter =
+            delimiter ||
+            detectDelimiter(
+                csvText
+            );
+
+
+        const rows = [];
+
+        let current = [];
+
+        let value = "";
+
+        let insideQuotes =
+            false;
+
+
+        for (
+            let i = 0;
+            i < csvText.length;
+            i++
+        ) {
+
+            const char =
+                csvText[i];
+
+
+            const next =
+                csvText[i + 1];
+
+
+            if (
+                char === '"' &&
+                next === '"'
+            ) {
+
+                value += '"';
+
+                i++;
+
+                continue;
+
+            }
+
+
+            if (
+                char === '"'
+            ) {
+
+                insideQuotes =
+                    !insideQuotes;
+
+                continue;
+
+            }
+
+
+            if (
+                char === delimiter &&
+                !insideQuotes
+            ) {
+
+                current.push(
+                    value
+                );
+
+                value = "";
+
+                continue;
+
+            }
+
+
+            if (
+                (
+                    char === "\n" ||
+                    char === "\r"
+                ) &&
+                !insideQuotes
+            ) {
+
+                if (
+                    char === "\r" &&
+                    next === "\n"
+                ) {
+
+                    i++;
+
+                }
+
+
+                current.push(
+                    value
+                );
+
+                value = "";
+
+
+                if (
+                    current.some(
+                        cell =>
+                            String(
+                                cell
+                            ).trim() !== ""
+                    )
+                ) {
+
+                    rows.push(
+                        current
+                    );
+
+                }
+
+
+                current = [];
+
+                continue;
+
+            }
+
+
+            value += char;
+
+        }
+
+
+        if (
+            value !== "" ||
+            current.length > 0
+        ) {
+
+            current.push(
+                value
+            );
+
+            rows.push(
+                current
+            );
+
+        }
+
+
+        if (
+            rows.length < 2
+        ) {
+
+            return [];
+
+        }
+
+
+        const headers =
+            rows[0].map(
+                header =>
+                    String(
+                        header
+                    ).trim()
+            );
+
+
+        return rows
+            .slice(1)
+            .map(
+                function (
+                    row
+                ) {
+
+                    const object = {};
+
+
+                    headers.forEach(
+                        function (
+                            header,
+                            index
+                        ) {
+
+                            object[
+                                header
+                            ] =
+                                row[index] ??
+                                "";
+
+                        }
+                    );
+
+
+                    return object;
+
+                }
+            );
+
+    }
+
+
+    function detectDelimiter(
+        csvText
+    ) {
+
+        const firstLine =
+            csvText.split(
+                /\r?\n/
+            )[0] ||
+            "";
+
+
+        const candidates = [
+            ";",
+            ",",
+            "\t",
+            "|"
+        ];
+
+
+        let best =
+            ",";
+
+        let max =
+            0;
+
+
+        candidates.forEach(
+            function (
+                delimiter
+            ) {
+
+                const count =
+                    firstLine.split(
+                        delimiter
+                    ).length - 1;
+
+
+                if (
+                    count > max
+                ) {
+
+                    max =
+                        count;
+
+                    best =
+                        delimiter;
+
+                }
+
+            }
+        );
+
+
+        return best;
+
+    }
+
+
+    /* =====================================================
+       CSV'DEN PERSONEL IMPORT
+    ===================================================== */
+
+    function importCSV(
+        csvText,
+        options
+    ) {
+
+        const rawRows =
+            parseCSV(
+                csvText
+            );
+
+
+        const employees =
+            normalizeEmployees(
+                rawRows,
+                options
+            );
+
+
+        const validation =
+            validateEmployees(
+                employees
+            );
+
+
+        const duplicates =
+            duplicateKontrolu(
+                employees
+            );
+
+
+        return {
+
+            employees:
+                employees,
+
+            validation:
+                validation,
+
+            duplicates:
+                duplicates,
+
+            summary:
+                portfolioSummary(
+                    employees
+                ),
+
+            importedAt:
+                new Date().toISOString(),
+
+            source:
+                "CSV"
+
+        };
+
+    }
+
+
+    /* =====================================================
+       JSON IMPORT
+    ===================================================== */
+
+    function importJSON(
+        json,
+        options
+    ) {
+
+        let rows =
+            json;
+
+
+        if (
+            typeof json ===
+            "string"
+        ) {
+
+            rows =
+                JSON.parse(
+                    json
+                );
+
+        }
+
+
+        if (
+            !Array.isArray(rows)
+        ) {
+
+            if (
+                Array.isArray(
+                    rows.employees
+                )
+            ) {
+
+                rows =
+                    rows.employees;
+
+            }
+            else {
+
+                throw new Error(
+                    "JSON personel listesi bulunamadı."
+                );
+
+            }
+
+        }
+
+
+        const employees =
+            normalizeEmployees(
+                rows,
+                options
+            );
+
+
+        const validation =
+            validateEmployees(
+                employees
+            );
+
+
+        return {
+
+            employees:
+                employees,
+
+            validation:
+                validation,
+
+            duplicates:
+                duplicateKontrolu(
+                    employees
+                ),
+
+            summary:
+                portfolioSummary(
+                    employees
+                ),
+
+            importedAt:
+                new Date().toISOString(),
+
+            source:
+                "JSON"
+
+        };
+
+    }
+
+
+    /* =====================================================
+       DEMO VERİ ÜRETİCİ
+    ===================================================== */
+
+    function generateDemoData(
+        count
+    ) {
+
+        count =
+            Number(count) ||
+            100;
+
+
+        const departments = [
+
+            "Finans",
+
+            "İnsan Kaynakları",
+
+            "Operasyon",
+
+            "Satış",
+
+            "Pazarlama",
+
+            "Bilgi Teknolojileri",
+
+            "Hukuk",
+
+            "Tedarik Zinciri"
+
+        ];
+
+
+        const names = [
+
+            "Ahmet Yılmaz",
+
+            "Ayşe Demir",
+
+            "Mehmet Kaya",
+
+            "Zeynep Şahin",
+
+            "Can Aydın",
+
+            "Elif Arslan",
+
+            "Burak Çelik",
+
+            "Selin Koç",
+
+            "Murat Özkan",
+
+            "Derya Akın"
+
+        ];
+
+
+        const employees = [];
+
+
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
+
+            const age =
+                25 +
+                Math.floor(
+                    Math.random() * 33
+                );
+
+
+            const service =
+                Math.min(
+                    age - 22,
+                    Math.max(
+                        1,
+                        Math.floor(
+                            Math.random() * 15
+                        )
+                    )
+                );
+
+
+            const birthYear =
+                new Date()
+                    .getFullYear() -
+                age;
+
+
+            const hireYear =
+                new Date()
+                    .getFullYear() -
+                Math.floor(
+                    service
+                );
+
+
+            const salary =
+                350000 +
+                Math.floor(
+                    Math.random() *
+                    750000
+                );
+
+
+            const name =
+                names[
+                    i %
+                    names.length
+                ] +
+                " " +
+                (
+                    i + 1
+                );
+
+
+            employees.push({
+
+                SicilNo:
+                    "P" +
+                    String(
+                        i + 1
+                    )
+                    .padStart(
+                        5,
+                        "0"
+                    ),
+
+                AdSoyad:
+                    name,
+
+                DogumTarihi:
+                    `${birthYear}-01-15`,
+
+                IseGirisTarihi:
+                    `${hireYear}-01-01`,
+
+                Departman:
+                    departments[
+                        i %
+                        departments.length
+                    ],
+
+                Cinsiyet:
+                    i % 2 === 0
+                        ? "E"
+                        : "K",
+
+                BrutMaas:
+                    salary,
+
+                EmeklilikYasi:
+                    60,
+
+                OpeningDBO:
+                    Math.round(
+                        salary *
+                        service *
+                        0.035
+                    )
+
+            });
+
+        }
+
+
+        return importJSON(
+            employees
+        );
+
+    }
+
+
+    /* =====================================================
+       EXPORT
+    ===================================================== */
+
+    global.TMS19DataEngine = {
+
+        normalizeEmployees:
+            normalizeEmployees,
+
+        normalizeEmployee:
+            personelNormalizeEt,
+
+        validateEmployees:
+            validateEmployees,
+
+        duplicateCheck:
+            duplicateKontrolu,
+
+        portfolioSummary:
+            portfolioSummary,
+
+        parseCSV:
+            parseCSV,
+
+        importCSV:
+            importCSV,
+
+        importJSON:
+            importJSON,
+
+        generateDemoData:
+            generateDemoData,
+
+        formatNumber:
+            sayiyaCevir,
+
+        parseDate:
+            tarihCevir,
+
+        dateToISO:
+            tarihISO,
+
+        calculateAge:
+            yasHesapla,
+
+        calculateServiceYears:
+            hizmetSuresiHesapla
+
+    };
+
+
+    console.log(
+        "TMS 19 Veri Motoru hazır."
+    );
 
 
 })(window);
