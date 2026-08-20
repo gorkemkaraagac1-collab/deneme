@@ -1,2729 +1,1545 @@
 /* ============================================================
-   GK ADVISORY — TMS 19 ACTUARIAL ENGINE
-   ------------------------------------------------------------
-   Version: 2.0.0
-   Purpose:
-   - Defined Benefit Obligation (DBO)
-   - Projected Unit Credit (PUC)
-   - Salary projection
-   - TFRS 19 / IAS 19 style actuarial projection
-   - Competing decrements
-   - Mortality
-   - Turnover
-   - Disability
-   - Retirement
-   - Benefit probability
-   - Discounting
-   - Service allocation
-   - Current service cost
-   - Interest cost
-   - Roll-forward
-   - Sensitivity analysis
-   - Portfolio aggregation
+   TMS 19 – AKTÜERYAL HESAPLAMA MOTORU
+   Financial Decision Cockpit
+   GK Advisory
 
-   IMPORTANT:
-   This engine is an actuarial calculation framework.
-   Official actuarial valuation requires review/approval
-   by a qualified actuary and validation of local Turkish
-   labour-law / SGK assumptions.
+   Amaç:
+   TMS 19 Çalışanlara Sağlanan Faydalar kapsamında
+   tanımlanmış fayda planlarının aktüeryal analizini yapmak.
 
-   No external dependencies.
+   Kapsam:
+   - DBO / PBO
+   - Current Service Cost
+   - Interest Cost
+   - Expected Benefit Payment
+   - Actuarial Gain / Loss
+   - Net Defined Benefit Liability
+   - P&L / OCI etkisi
+   - Duyarlılık analizi
+   - Senaryo analizi
+   - Aktüeryal varsayım kontrolleri
    ============================================================ */
 
-(function (global) {
+"use strict";
 
-    "use strict";
+/* ============================================================
+   1. GLOBAL AYARLAR
+   ============================================================ */
 
-    const VERSION = "2.0.0";
+const TMS19_ENGINE = {
 
-    /* =========================================================
-       1. CONSTANTS
-    ========================================================= */
+    versiyon: "1.0.0",
 
-    const DEFAULTS = {
+    paraBirimi: "TRY",
 
-        // Financial assumptions
-        discountRate: 0.28,
-        salaryGrowthRate: 0.24,
-        ceilingGrowthRate: 0.24,
+    varsayilanlar: {
 
-        // Demographic assumptions
-        turnoverRate: 0.05,
-        mortalityRate: 0.002,
-        disabilityRate: 0.001,
+        iskontoOrani: 0.30,
 
-        // Retirement
-        retirementAge: 60,
+        maasArtisOrani: 0.35,
 
-        // Valuation
-        valuationDate: new Date(),
+        enflasyonOrani: 0.30,
 
-        // Benefit
-        benefitFormula: "salary_x_service",
+        personelDevirOrani: 0.05,
 
-        // Currency
-        currency: "TRY",
+        emeklilikYasi: 60,
 
-        // Minimum rates
-        minRate: 0,
+        mevcutYas: 35,
 
-        // Projection horizon
-        maxProjectionYears: 50
+        mevcutHizmetYili: 10,
+
+        kalanHizmetYili: 15,
+
+        yillikFaydaOrani: 0.03,
+
+        mevcutYillikMaas: 600000,
+
+        beklenenFaydaYili: 15,
+
+        planFaydaLimiti: 0,
+
+        buyumeOrani: 0.00
+    },
+
+    esikler: {
+
+        yuksekIskonto: 0.40,
+
+        dusukIskonto: 0.15,
+
+        yuksekMaasArtisi: 0.50,
+
+        yuksekDevir: 0.15,
+
+        yuksekDurum: 0.20
+    }
+};
+
+
+/* ============================================================
+   2. YARDIMCI MATEMATİK FONKSİYONLARI
+   ============================================================ */
+
+function sayiyaCevir(deger, varsayilan = 0) {
+
+    if (deger === null || deger === undefined || deger === "") {
+        return varsayilan;
+    }
+
+    if (typeof deger === "number") {
+        return Number.isFinite(deger) ? deger : varsayilan;
+    }
+
+    const temiz = String(deger)
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace("%", "")
+        .trim();
+
+    const sayi = parseFloat(temiz);
+
+    return Number.isFinite(sayi) ? sayi : varsayilan;
+}
+
+
+function yuvarla(deger, basamak = 2) {
+
+    const carpan = Math.pow(10, basamak);
+
+    return Math.round((deger + Number.EPSILON) * carpan) / carpan;
+}
+
+
+function yuzde(deger) {
+
+    return sayiyaCevir(deger) / 100;
+
+}
+
+
+function bugunkuDeger(gelecektekiTutar, iskontoOrani, yil) {
+
+    if (!gelecektekiTutar || yil < 0) {
+        return 0;
+    }
+
+    return gelecektekiTutar /
+        Math.pow(1 + iskontoOrani, yil);
+}
+
+
+function bileşikBuyume(baslangic, oran, yil) {
+
+    return baslangic *
+        Math.pow(1 + oran, yil);
+}
+
+
+/* ============================================================
+   3. PERSONEL VERİSİ
+   ============================================================ */
+
+function personelOlustur(veri = {}) {
+
+    return {
+
+        id: veri.id || `PRS-${Date.now()}`,
+
+        adSoyad: veri.adSoyad || "Yeni Personel",
+
+        cinsiyet: veri.cinsiyet || "Belirtilmemiş",
+
+        dogumYili: sayiyaCevir(veri.dogumYili),
+
+        mevcutYas: sayiyaCevir(
+            veri.mevcutYas,
+            TMS19_ENGINE.varsayilanlar.mevcutYas
+        ),
+
+        hizmetYili: sayiyaCevir(
+            veri.hizmetYili,
+            TMS19_ENGINE.varsayilanlar.mevcutHizmetYili
+        ),
+
+        kalanHizmetYili: sayiyaCevir(
+            veri.kalanHizmetYili,
+            TMS19_ENGINE.varsayilanlar.kalanHizmetYili
+        ),
+
+        yillikMaas: sayiyaCevir(
+            veri.yillikMaas,
+            TMS19_ENGINE.varsayilanlar.mevcutYillikMaas
+        ),
+
+        emeklilikYasi: sayiyaCevir(
+            veri.emeklilikYasi,
+            TMS19_ENGINE.varsayilanlar.emeklilikYasi
+        ),
+
+        faydaOrani: sayiyaCevir(
+            veri.faydaOrani,
+            TMS19_ENGINE.varsayilanlar.yillikFaydaOrani
+        ),
+
+        beklenenFaydaYili: sayiyaCevir(
+            veri.beklenenFaydaYili,
+            TMS19_ENGINE.varsayilanlar.beklenenFaydaYili
+        ),
+
+        devirOrani: sayiyaCevir(
+            veri.devirOrani,
+            TMS19_ENGINE.varsayilanlar.personelDevirOrani
+        ),
+
+        iskontoOrani: sayiyaCevir(
+            veri.iskontoOrani,
+            TMS19_ENGINE.varsayilanlar.iskontoOrani
+        ),
+
+        maasArtisOrani: sayiyaCevir(
+            veri.maasArtisOrani,
+            TMS19_ENGINE.varsayilanlar.maasArtisOrani
+        ),
+
+        enflasyonOrani: sayiyaCevir(
+            veri.enflasyonOrani,
+            TMS19_ENGINE.varsayilanlar.enflasyonOrani
+        )
+    };
+}
+
+
+/* ============================================================
+   4. GELECEK MAAŞ HESAPLAMA
+   ============================================================ */
+
+function gelecektekiMaasHesapla(personel, yil) {
+
+    return bileşikBuyume(
+        personel.yillikMaas,
+        personel.maasArtisOrani,
+        yil
+    );
+}
+
+
+/* ============================================================
+   5. EMEKLİLİK FAYDASI HESAPLAMA
+   ============================================================ */
+
+function emeklilikFaydasiHesapla(personel) {
+
+    const gelecekMaas = gelecektekiMaasHesapla(
+        personel,
+        personel.kalanHizmetYili
+    );
+
+    const toplamHizmet =
+        personel.hizmetYili +
+        personel.kalanHizmetYili;
+
+    const fayda =
+        gelecekMaas *
+        personel.faydaOrani *
+        toplamHizmet;
+
+    return {
+
+        gelecekMaas: fayda > 0 ? gelecekMaas : 0,
+
+        toplamHizmet,
+
+        brutEmeklilikFaydasi: fayda
+    };
+}
+
+
+/* ============================================================
+   6. ÇALIŞANIN KALMA OLASILIĞI
+   ============================================================ */
+
+function kalmaOlasiligiHesapla(personel) {
+
+    const yil = personel.kalanHizmetYili;
+
+    const devirOrani = personel.devirOrani;
+
+    return Math.pow(
+        1 - devirOrani,
+        yil
+    );
+}
+
+
+/* ============================================================
+   7. DÜZELTİLMİŞ BEKLENEN FAYDA
+   ============================================================ */
+
+function beklenenFaydaHesapla(personel) {
+
+    const fayda =
+        emeklilikFaydasiHesapla(personel);
+
+    const kalmaOlasiligi =
+        kalmaOlasiligiHesapla(personel);
+
+    const beklenenFayda =
+        fayda.brutEmeklilikFaydasi *
+        kalmaOlasiligi;
+
+    return {
+
+        brutFayda:
+            fayda.brutEmeklilikFaydasi,
+
+        kalmaOlasiligi,
+
+        beklenenFayda
+    };
+}
+
+
+/* ============================================================
+   8. DBO / PBO HESAPLAMA
+   ============================================================ */
+
+function dboHesapla(personel) {
+
+    const beklenen =
+        beklenenFaydaHesapla(personel);
+
+    const iskonto =
+        personel.iskontoOrani;
+
+    const kalanYil =
+        personel.kalanHizmetYili;
+
+    const bugunkuDeger =
+        bugunkuDegerHesapla(
+            beklenen.beklenenFayda,
+            iskonto,
+            kalanYil
+        );
+
+    return {
+
+        beklenenFayda:
+            beklenen.beklenenFayda,
+
+        kalmaOlasiligi:
+            beklenen.kalmaOlasiligi,
+
+        iskontoOrani:
+            iskonto,
+
+        kalanYil,
+
+        dbo:
+            bugunkuDeger
+    };
+}
+
+
+/* ============================================================
+   9. BUGÜNKÜ DEĞER
+   ============================================================ */
+
+function bugunkuDegerHesapla(
+    tutar,
+    iskontoOrani,
+    yil
+) {
+
+    return bugunkuDeger(
+        tutar,
+        iskontoOrani,
+        yil
+    );
+}
+
+
+/* ============================================================
+   10. CURRENT SERVICE COST
+   ============================================================ */
+
+function currentServiceCostHesapla(personel) {
+
+    const gelecekMaas =
+        gelecektekiMaasHesapla(
+            personel,
+            1
+        );
+
+    const birYillikFayda =
+        gelecekMaas *
+        personel.faydaOrani;
+
+    const beklenen =
+        birYillikFayda *
+        (1 - personel.devirOrani);
+
+    const iskontoEdilmis =
+        bugunkuDeger(
+            beklenen,
+            personel.iskontoOrani,
+            personel.kalanHizmetYili
+        );
+
+    return iskontoEdilmis;
+}
+
+
+/* ============================================================
+   11. INTEREST COST
+   ============================================================ */
+
+function interestCostHesapla(
+    acilisDbo,
+    iskontoOrani
+) {
+
+    return acilisDbo *
+        iskontoOrani;
+}
+
+
+/* ============================================================
+   12. BENEFIT PAYMENT
+   ============================================================ */
+
+function benefitPaymentHesapla(
+    toplamFayda,
+    yil
+) {
+
+    if (yil <= 0) {
+        return toplamFayda;
+    }
+
+    return toplamFayda / yil;
+}
+
+
+/* ============================================================
+   13. AKTÜERYAL KAZANÇ / KAYIP
+   ============================================================ */
+
+function aktüeryalKazancKayipHesapla(
+    beklenenDbo,
+    gerceklesenDbo
+) {
+
+    return gerceklesenDbo -
+        beklenenDbo;
+}
+
+
+/* ============================================================
+   14. NET TANIMLANMIŞ FAYDA YÜKÜMLÜLÜĞÜ
+   ============================================================ */
+
+function netYukumlulukHesapla(
+    dbo,
+    planVarliklari = 0
+) {
+
+    return dbo -
+        planVarliklari;
+}
+
+
+/* ============================================================
+   15. P&L ETKİSİ
+   ============================================================ */
+
+function pnlEtkisiHesapla({
+
+    currentServiceCost = 0,
+
+    pastServiceCost = 0,
+
+    interestCost = 0,
+
+    interestIncome = 0,
+
+    settlementGainLoss = 0
+
+} = {}) {
+
+    return (
+        currentServiceCost +
+        pastServiceCost +
+        interestCost -
+        interestIncome +
+        settlementGainLoss
+    );
+}
+
+
+/* ============================================================
+   16. OCI ETKİSİ
+   ============================================================ */
+
+function ociEtkisiHesapla({
+
+    aktüeryalKazancKayip = 0,
+
+    varlikLimitiEtkisi = 0,
+
+    digerYenidenOlcum = 0
+
+} = {}) {
+
+    return (
+        aktüeryalKazancKayip +
+        varlikLimitiEtkisi +
+        digerYenidenOlcum
+    );
+}
+
+
+/* ============================================================
+   17. PERSONEL BAZLI AKTÜERYAL HESAPLAMA
+   ============================================================ */
+
+function personelAktüeryalAnaliz(veri) {
+
+    const personel =
+        personelOlustur(veri);
+
+    const fayda =
+        emeklilikFaydasiHesapla(personel);
+
+    const dbo =
+        dboHesapla(personel);
+
+    const currentServiceCost =
+        currentServiceCostHesapla(personel);
+
+    return {
+
+        personel,
+
+        analiz: {
+
+            gelecekMaas:
+                fayda.gelecekMaas,
+
+            toplamHizmet:
+                fayda.toplamHizmet,
+
+            brutEmeklilikFaydasi:
+                fayda.brutEmeklilikFaydasi,
+
+            kalmaOlasiligi:
+                dbo.kalmaOlasiligi,
+
+            beklenenFayda:
+                dbo.beklenenFayda,
+
+            dbo:
+                dbo.dbo,
+
+            currentServiceCost
+        }
+    };
+}
+
+
+/* ============================================================
+   18. PORTFÖY BAZLI HESAPLAMA
+   ============================================================ */
+
+function portfoyAktüeryalAnaliz(personeller = []) {
+
+    const sonuclar =
+        personeller.map(
+            personel =>
+                personelAktüeryalAnaliz(personel)
+        );
+
+    const toplamDbo =
+        sonuclar.reduce(
+            (toplam, item) =>
+                toplam + item.analiz.dbo,
+            0
+        );
+
+    const toplamCSC =
+        sonuclar.reduce(
+            (toplam, item) =>
+                toplam + item.analiz.currentServiceCost,
+            0
+        );
+
+    const toplamFayda =
+        sonuclar.reduce(
+            (toplam, item) =>
+                toplam + item.analiz.beklenenFayda,
+            0
+        );
+
+    return {
+
+        personelSayisi:
+            personeller.length,
+
+        sonuclar,
+
+        toplamlar: {
+
+            toplamDbo,
+
+            toplamCurrentServiceCost:
+                toplamCSC,
+
+            toplamBeklenenFayda:
+                toplamFayda
+        }
+    };
+}
+
+
+/* ============================================================
+   19. DUYARLILIK ANALİZİ
+   ============================================================ */
+
+function duyarlilikAnalizi(
+    personelVerisi
+) {
+
+    const baz =
+        personelAktüeryalAnaliz(
+            personelVerisi
+        );
+
+    const bazDbo =
+        baz.analiz.dbo;
+
+    const sonuc = {};
+
+    /* İskonto oranı */
+
+    const iskontoDusuk =
+        personelOlustur({
+            ...personelVerisi,
+            iskontoOrani:
+                personelVerisi.iskontoOrani - 0.01
+        });
+
+    const iskontoYuksek =
+        personelOlustur({
+            ...personelVerisi,
+            iskontoOrani:
+                personelVerisi.iskontoOrani + 0.01
+        });
+
+    sonuc.iskonto = {
+
+        dusuk:
+            dboHesapla(
+                iskontoDusuk
+            ).dbo,
+
+        baz:
+            bazDbo,
+
+        yuksek:
+            dboHesapla(
+                iskontoYuksek
+            ).dbo
     };
 
 
-    /* =========================================================
-       2. GENERAL UTILITIES
-    ========================================================= */
-
-    function toNumber(value, fallback = 0) {
-
-        if (value === null || value === undefined || value === "") {
-            return fallback;
-        }
-
-        if (typeof value === "number") {
-            return Number.isFinite(value) ? value : fallback;
-        }
-
-        const normalized = String(value)
-            .replace(/\s/g, "")
-            .replace(/\./g, "")
-            .replace(",", ".");
-
-        const parsed = Number(normalized);
-
-        return Number.isFinite(parsed) ? parsed : fallback;
-    }
-
-
-    function clamp(value, min, max) {
-
-        return Math.min(
-            Math.max(value, min),
-            max
-        );
-    }
-
-
-    function percentage(value) {
-
-        const n = toNumber(value, 0);
-
-        return n > 1 ? n / 100 : n;
-    }
-
-
-    function round(value, decimals = 2) {
-
-        const factor = Math.pow(10, decimals);
-
-        return Math.round(
-            (toNumber(value) + Number.EPSILON) * factor
-        ) / factor;
-    }
-
-
-    function safeDivide(a, b, fallback = 0) {
-
-        if (!Number.isFinite(a) ||
-            !Number.isFinite(b) ||
-            Math.abs(b) < 1e-12) {
-
-            return fallback;
-        }
-
-        return a / b;
-    }
-
-
-    function clone(value) {
-
-        try {
-
-            return JSON.parse(
-                JSON.stringify(value)
-            );
-
-        } catch (error) {
-
-            return value;
-        }
-    }
-
-
-    /* =========================================================
-       3. DATE ENGINE
-    ========================================================= */
-
-    function parseDate(value) {
-
-        if (value instanceof Date &&
-            !Number.isNaN(value.getTime())) {
-
-            return new Date(value.getTime());
-        }
-
-        if (!value) {
-            return null;
-        }
-
-        const date = new Date(value);
-
-        if (!Number.isNaN(date.getTime())) {
-            return date;
-        }
-
-        // Turkish DD.MM.YYYY
-        const match = String(value).match(
-            /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
-        );
-
-        if (match) {
-
-            const day = Number(match[1]);
-            const month = Number(match[2]) - 1;
-            const year = Number(match[3]);
-
-            const result = new Date(
-                year,
-                month,
-                day
-            );
-
-            if (!Number.isNaN(result.getTime())) {
-                return result;
-            }
-        }
-
-        return null;
-    }
-
-
-    function yearsBetween(startDate, endDate) {
-
-        const start = parseDate(startDate);
-        const end = parseDate(endDate);
-
-        if (!start || !end) {
-            return 0;
-        }
-
-        const diff =
-            end.getTime() -
-            start.getTime();
-
-        return diff /
-            (365.25 * 24 * 60 * 60 * 1000);
-    }
-
-
-    function completedYears(startDate, valuationDate) {
-
-        const start = parseDate(startDate);
-        const valuation = parseDate(valuationDate);
-
-        if (!start || !valuation) {
-            return 0;
-        }
-
-        let years =
-            valuation.getFullYear() -
-            start.getFullYear();
-
-        const monthDiff =
-            valuation.getMonth() -
-            start.getMonth();
-
-        if (
-            monthDiff < 0 ||
-            (
-                monthDiff === 0 &&
-                valuation.getDate() < start.getDate()
-            )
-        ) {
-
-            years--;
-        }
-
-        return Math.max(0, years);
-    }
-
-
-    function ageAtDate(birthDate, date) {
-
-        const birth = parseDate(birthDate);
-        const target = parseDate(date);
-
-        if (!birth || !target) {
-            return 0;
-        }
-
-        let age =
-            target.getFullYear() -
-            birth.getFullYear();
-
-        const monthDiff =
-            target.getMonth() -
-            birth.getMonth();
-
-        if (
-            monthDiff < 0 ||
-            (
-                monthDiff === 0 &&
-                target.getDate() < birth.getDate()
-            )
-        ) {
-
-            age--;
-        }
-
-        return Math.max(0, age);
-    }
-
-
-    function addYears(date, years) {
-
-        const result = new Date(date);
-
-        result.setFullYear(
-            result.getFullYear() + years
-        );
-
-        return result;
-    }
-
-
-    /* =========================================================
-       4. ASSUMPTION NORMALIZATION
-    ========================================================= */
-
-    function normalizeAssumptions(input = {}) {
-
-        const assumptions = {
-            ...DEFAULTS,
-            ...input
-        };
-
-        assumptions.discountRate =
-            percentage(assumptions.discountRate);
-
-        assumptions.salaryGrowthRate =
-            percentage(assumptions.salaryGrowthRate);
-
-        assumptions.ceilingGrowthRate =
-            percentage(assumptions.ceilingGrowthRate);
-
-        assumptions.turnoverRate =
-            percentage(assumptions.turnoverRate);
-
-        assumptions.mortalityRate =
-            percentage(assumptions.mortalityRate);
-
-        assumptions.disabilityRate =
-            percentage(assumptions.disabilityRate);
-
-        assumptions.retirementAge =
-            Math.round(
-                toNumber(
-                    assumptions.retirementAge,
-                    DEFAULTS.retirementAge
-                )
-            );
-
-        assumptions.valuationDate =
-            parseDate(
-                assumptions.valuationDate
-            ) ||
-            new Date();
-
-        assumptions.maxProjectionYears =
-            Math.max(
-                1,
-                Math.round(
-                    toNumber(
-                        assumptions.maxProjectionYears,
-                        DEFAULTS.maxProjectionYears
-                    )
-                )
-            );
-
-        return assumptions;
-    }
-
-
-    /* =========================================================
-       5. EMPLOYEE NORMALIZATION
-    ========================================================= */
-
-    function normalizeEmployee(employee = {}, assumptions = {}) {
-
-        const valuationDate =
-            assumptions.valuationDate ||
-            new Date();
-
-        const normalized = {
-
-            id:
-                employee.id ||
-                employee.employeeId ||
-                employee.sicilNo ||
-                `EMP-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 8)}`,
-
-            name:
-                employee.name ||
-                employee.employeeName ||
-                employee.fullName ||
-                "Unnamed Employee",
-
-            title:
-                employee.title ||
-                employee.position ||
-                employee.jobTitle ||
-                "",
-
-            hireDate:
-                parseDate(
-                    employee.hireDate ||
-                    employee.startDate ||
-                    employee.employmentDate
-                ),
-
-            birthDate:
-                parseDate(
-                    employee.birthDate ||
-                    employee.dateOfBirth
-                ),
-
-            monthlySalary:
-                Math.max(
-                    0,
-                    toNumber(
-                        employee.monthlySalary ??
-                        employee.salary ??
-                        employee.monthlyWage,
-                        0
-                    )
-                ),
-
-            currentCeiling:
-                Math.max(
-                    0,
-                    toNumber(
-                        employee.currentCeiling ??
-                        employee.ceiling ??
-                        assumptions.ceiling,
-                        0
-                    )
-                ),
-
-            gender:
-                employee.gender ||
-                employee.sex ||
-                null,
-
-            department:
-                employee.department ||
-                "",
-
-            grade:
-                employee.grade ||
-                employee.level ||
-                null,
-
-            annualSalaryGrowth:
-                employee.salaryGrowthRate ??
-                employee.annualSalaryGrowth ??
-                null,
-
-            turnoverRate:
-                employee.turnoverRate ??
-                null,
-
-            mortalityRate:
-                employee.mortalityRate ??
-                null,
-
-            disabilityRate:
-                employee.disabilityRate ??
-                null,
-
-            retirementAge:
-                employee.retirementAge ??
-                assumptions.retirementAge,
-
-            eligible:
-                employee.eligible !== false,
-
-            metadata:
-                clone(employee.metadata || {})
-        };
-
-        normalized.age =
-            normalized.birthDate
-                ? ageAtDate(
-                    normalized.birthDate,
-                    valuationDate
-                )
-                : toNumber(
-                    employee.age,
-                    0
-                );
-
-        normalized.serviceYears =
-            normalized.hireDate
-                ? completedYears(
-                    normalized.hireDate,
-                    valuationDate
-                )
-                : Math.max(
-                    0,
-                    toNumber(
-                        employee.serviceYears ??
-                        employee.service,
-                        0
-                    )
-                );
-
-        normalized.retirementAge =
-            Math.max(
-                normalized.age + 1,
-                toNumber(
-                    normalized.retirementAge,
-                    assumptions.retirementAge
-                )
-            );
-
-        return normalized;
-    }
-
-
-    /* =========================================================
-       6. MORTALITY TABLE ENGINE
-    ========================================================= */
-
-    function mortalityProbability(
-        age,
-        year,
-        assumptions,
-        employee
-    ) {
-
-        const customTable =
-            assumptions.mortalityTable;
-
-        if (
-            customTable &&
-            typeof customTable === "object"
-        ) {
-
-            const tableValue =
-                customTable[age + year];
-
-            if (tableValue !== undefined) {
-
-                return clamp(
-                    percentage(tableValue),
-                    0,
-                    1
-                );
-            }
-        }
-
-        const employeeRate =
-            employee?.mortalityRate;
-
-        if (
-            employeeRate !== null &&
-            employeeRate !== undefined
-        ) {
-
-            return clamp(
-                percentage(employeeRate),
-                0,
-                1
-            );
-        }
-
-        /*
-         * Default simplified mortality curve.
-         *
-         * This is deliberately conservative and should be
-         * replaced by an approved mortality table in a
-         * formal actuarial valuation.
-         */
-
-        const projectedAge =
-            age + year;
-
-        if (projectedAge < 40) {
-            return 0.001;
-        }
-
-        if (projectedAge < 50) {
-            return 0.002;
-        }
-
-        if (projectedAge < 60) {
-            return 0.004;
-        }
-
-        if (projectedAge < 65) {
-            return 0.007;
-        }
-
-        if (projectedAge < 70) {
-            return 0.012;
-        }
-
-        if (projectedAge < 75) {
-            return 0.025;
-        }
-
-        if (projectedAge < 80) {
-            return 0.050;
-        }
-
-        return Math.min(
-            0.20,
-            0.08 + (projectedAge - 80) * 0.012
-        );
-    }
-
-
-    /* =========================================================
-       7. TURNOVER TABLE ENGINE
-    ========================================================= */
-
-    function turnoverProbability(
-        age,
-        service,
-        year,
-        assumptions,
-        employee
-    ) {
-
-        if (
-            employee?.turnoverRate !== null &&
-            employee?.turnoverRate !== undefined
-        ) {
-
-            return clamp(
-                percentage(
-                    employee.turnoverRate
-                ),
-                0,
-                1
-            );
-        }
-
-        const table =
-            assumptions.turnoverTable;
-
-        if (
-            table &&
-            typeof table === "object"
-        ) {
-
-            /*
-             * Supported formats:
-             *
-             * {
-             *   "25": 0.08,
-             *   "30": 0.06
-             * }
-             */
-
-            const value =
-                table[Math.round(age)];
-
-            if (value !== undefined) {
-
-                return clamp(
-                    percentage(value),
-                    0,
-                    1
-                );
-            }
-        }
-
-        /*
-         * Service-sensitive simplified turnover curve.
-         */
-
-        let rate;
-
-        if (age < 25) {
-            rate = 0.12;
-        } else if (age < 30) {
-            rate = 0.09;
-        } else if (age < 40) {
-            rate = 0.06;
-        } else if (age < 50) {
-            rate = 0.045;
-        } else if (age < 55) {
-            rate = 0.035;
-        } else {
-            rate = 0.025;
-        }
-
-        // Longer service normally reduces voluntary turnover.
-        if (service >= 10) {
-            rate *= 0.70;
-        } else if (service >= 5) {
-            rate *= 0.85;
-        }
-
-        return clamp(
-            rate,
-            0,
-            0.50
-        );
-    }
-
-
-    /* =========================================================
-       8. DISABILITY ENGINE
-    ========================================================= */
-
-    function disabilityProbability(
-        age,
-        year,
-        assumptions,
-        employee
-    ) {
-
-        if (
-            employee?.disabilityRate !== null &&
-            employee?.disabilityRate !== undefined
-        ) {
-
-            return clamp(
-                percentage(
-                    employee.disabilityRate
-                ),
-                0,
-                1
-            );
-        }
-
-        const table =
-            assumptions.disabilityTable;
-
-        if (
-            table &&
-            typeof table === "object"
-        ) {
-
-            const value =
-                table[Math.round(age)];
-
-            if (value !== undefined) {
-
-                return clamp(
-                    percentage(value),
-                    0,
-                    1
-                );
-            }
-        }
-
-        const projectedAge =
-            age + year;
-
-        if (projectedAge < 40) {
-            return 0.0005;
-        }
-
-        if (projectedAge < 50) {
-            return 0.001;
-        }
-
-        if (projectedAge < 60) {
-            return 0.002;
-        }
-
-        return 0.004;
-    }
-
-
-    /* =========================================================
-       9. RETIREMENT ENGINE
-    ========================================================= */
-
-    function retirementProbability(
-        age,
-        retirementAge,
-        year,
-        assumptions
-    ) {
-
-        const projectedAge =
-            age + year;
-
-        if (
-            projectedAge < retirementAge
-        ) {
-
-            return 0;
-        }
-
-        /*
-         * Base case:
-         * retirement occurs at retirement age.
-         *
-         * This can later be replaced with an age-specific
-         * retirement decrement table.
-         */
-
-        const table =
-            assumptions.retirementTable;
-
-        if (
-            table &&
-            typeof table === "object"
-        ) {
-
-            const value =
-                table[Math.round(projectedAge)];
-
-            if (value !== undefined) {
-
-                return clamp(
-                    percentage(value),
-                    0,
-                    1
-                );
-            }
-        }
-
-        return projectedAge === retirementAge
-            ? 1
-            : 0;
-    }
-
-
-    /* =========================================================
-       10. COMPETING DECREMENT ENGINE
-    ========================================================= */
-
-    function calculateCompetingDecrements(params = {}) {
-
-        const age =
-            toNumber(params.age, 0);
-
-        const service =
-            toNumber(params.service, 0);
-
-        const year =
-            toNumber(params.year, 0);
-
-        const assumptions =
-            normalizeAssumptions(
-                params.assumptions || {}
-            );
-
-        const employee =
-            params.employee || {};
-
-        const retirementAge =
-            toNumber(
-                employee.retirementAge ??
-                assumptions.retirementAge,
-                60
-            );
-
-        const mortality =
-            mortalityProbability(
-                age,
-                year,
-                assumptions,
-                employee
-            );
-
-        const turnover =
-            turnoverProbability(
-                age + year,
-                service + year,
-                year,
-                assumptions,
-                employee
-            );
-
-        const disability =
-            disabilityProbability(
-                age,
-                year,
-                assumptions,
-                employee
-            );
-
-        const retirement =
-            retirementProbability(
-                age,
-                retirementAge,
-                year,
-                assumptions
-            );
-
-        /*
-         * Competing decrement probability:
-         *
-         * P(event) =
-         * survival-to-event × event hazard
-         *
-         * Multiple events compete during the same period.
-         */
-
-        const totalHazard =
-            mortality +
-            turnover +
-            disability +
-            retirement;
-
-        let scale = 1;
-
-        if (totalHazard > 1) {
-            scale = 1 / totalHazard;
-        }
-
-        return {
-
-            mortality:
-                mortality * scale,
-
-            turnover:
-                turnover * scale,
-
-            disability:
-                disability * scale,
-
-            retirement:
-                retirement * scale,
-
-            total:
-                (
-                    mortality +
-                    turnover +
-                    disability +
-                    retirement
-                ) * scale
-        };
-    }
-
-
-    /* =========================================================
-       11. SALARY PROJECTION ENGINE
-    ========================================================= */
-
-    function salaryProjection(
-        currentSalary,
-        year,
-        assumptions,
-        employee
-    ) {
-
-        const salary =
-            Math.max(
-                0,
-                toNumber(currentSalary, 0)
-            );
-
-        const individualGrowth =
-            employee?.annualSalaryGrowth !== null &&
-            employee?.annualSalaryGrowth !== undefined
-                ? percentage(
-                    employee.annualSalaryGrowth
-                )
-                : null;
-
-        const growth =
-            individualGrowth !== null
-                ? individualGrowth
-                : percentage(
-                    assumptions.salaryGrowthRate
-                );
-
-        return salary *
-            Math.pow(
-                1 + growth,
-                year
-            );
-    }
-
-
-    /* =========================================================
-       12. CEILING PROJECTION ENGINE
-    ========================================================= */
-
-    function ceilingProjection(
-        currentCeiling,
-        year,
-        assumptions
-    ) {
-
-        const ceiling =
-            Math.max(
-                0,
-                toNumber(
-                    currentCeiling,
-                    0
-                )
-            );
-
-        const growth =
-            percentage(
-                assumptions.ceilingGrowthRate
-            );
-
-        if (!ceiling) {
-            return Infinity;
-        }
-
-        return ceiling *
-            Math.pow(
-                1 + growth,
-                year
-            );
-    }
-
-
-    /* =========================================================
-       13. BENEFIT ENGINE
-    ========================================================= */
-
-    function calculateProjectedBenefit(params = {}) {
-
-        const salary =
-            Math.max(
-                0,
-                toNumber(
-                    params.projectedSalary,
-                    0
-                )
-            );
-
-        const ceiling =
-            toNumber(
-                params.projectedCeiling,
-                Infinity
-            );
-
-        const serviceYears =
-            Math.max(
-                0,
-                toNumber(
-                    params.serviceYears,
-                    0
-                )
-            );
-
-        /*
-         * Turkish severance:
-         *
-         * approximately one gross monthly salary
-         * for each completed service year,
-         * subject to statutory ceiling.
-         *
-         * This is a modelling assumption and not
-         * a legal eligibility determination.
-         */
-
-        const cappedMonthlySalary =
-            Math.min(
-                salary,
-                ceiling
-            );
-
-        return {
-
-            cappedMonthlySalary,
-
-            annualBenefit:
-                cappedMonthlySalary,
-
-            totalBenefit:
-                cappedMonthlySalary *
-                serviceYears
-        };
-    }
-
-
-    /* =========================================================
-       14. DISCOUNT ENGINE
-    ========================================================= */
-
-    function discountFactor(
-        year,
-        discountRate
-    ) {
-
-        const rate =
-            percentage(discountRate);
-
-        return 1 /
-            Math.pow(
-                1 + rate,
-                year
-            );
-    }
-
-
-    function getDiscountRate(
-        year,
-        assumptions
-    ) {
-
-        /*
-         * Optional spot / yield curve:
-         *
-         * {
-         *   1: 0.27,
-         *   2: 0.265,
-         *   3: 0.26
-         * }
-         */
-
-        const curve =
-            assumptions.discountCurve;
-
-        if (
-            curve &&
-            typeof curve === "object"
-        ) {
-
-            const rate =
-                curve[year];
-
-            if (rate !== undefined) {
-
-                return percentage(rate);
-            }
-        }
-
-        return percentage(
-            assumptions.discountRate
-        );
-    }
-
-
-    /* =========================================================
-       15. SURVIVAL PROBABILITY ENGINE
-    ========================================================= */
-
-    function calculateProjectionPath(
-        employee,
-        assumptions
-    ) {
-
-        const rows = [];
-
-        let survivalProbability = 1;
-
-        const age =
-            employee.age;
-
-        const service =
-            employee.serviceYears;
-
-        const retirementAge =
-            employee.retirementAge ||
-            assumptions.retirementAge;
-
-        const maxYears =
-            Math.min(
-                assumptions.maxProjectionYears,
-                Math.max(
-                    0,
-                    retirementAge - age
-                ) + 1
-            );
-
-        for (
-            let year = 1;
-            year <= maxYears;
-            year++
-        ) {
-
-            const projectedAge =
-                age + year;
-
-            const projectedService =
-                service + year;
-
-            const decrements =
-                calculateCompetingDecrements({
-
-                    age,
-                    service,
-                    year,
-
-                    assumptions,
-
-                    employee
-                });
-
-            const mortalityProb =
-                survivalProbability *
-                decrements.mortality;
-
-            const turnoverProb =
-                survivalProbability *
-                decrements.turnover;
-
-            const disabilityProb =
-                survivalProbability *
-                decrements.disability;
-
-            const retirementProb =
-                survivalProbability *
-                decrements.retirement;
-
-            const eventProbability =
-                mortalityProb +
-                turnoverProb +
-                disabilityProb +
-                retirementProb;
-
-            const endSurvival =
-                Math.max(
-                    0,
-                    survivalProbability -
-                    eventProbability
-                );
-
-            const projectedSalary =
-                salaryProjection(
-                    employee.monthlySalary,
-                    year,
-                    assumptions,
-                    employee
-                );
-
-            const projectedCeiling =
-                ceilingProjection(
-                    employee.currentCeiling,
-                    year,
-                    assumptions
-                );
-
-            const benefit =
-                calculateProjectedBenefit({
-
-                    projectedSalary,
-
-                    projectedCeiling,
-
-                    serviceYears:
-                        projectedService
-                });
-
-            const discountRate =
-                getDiscountRate(
-                    year,
-                    assumptions
-                );
-
-            const df =
-                discountFactor(
-                    year,
-                    discountRate
-                );
-
-            /*
-             * Benefit payable at retirement /
-             * qualifying termination event.
-             *
-             * For simplified Turkish severance model,
-             * voluntary turnover is treated as non-qualifying.
-             */
-
-            const qualifyingProbability =
-                mortalityProb +
-                disabilityProb +
-                retirementProb;
-
-            const expectedBenefit =
-                benefit.totalBenefit *
-                qualifyingProbability;
-
-            const presentValue =
-                expectedBenefit *
-                df;
-
-            rows.push({
-
-                year,
-
-                projectedAge,
-
-                projectedService,
-
-                survivalProbability,
-
-                mortalityRate:
-                    decrements.mortality,
-
-                turnoverRate:
-                    decrements.turnover,
-
-                disabilityRate:
-                    decrements.disability,
-
-                retirementRate:
-                    decrements.retirement,
-
-                mortalityProbability:
-                    mortalityProb,
-
-                turnoverProbability:
-                    turnoverProb,
-
-                disabilityProbability:
-                    disabilityProb,
-
-                retirementProbability:
-                    retirementProb,
-
-                qualifyingProbability,
-
-                projectedSalary,
-
-                projectedCeiling,
-
-                cappedMonthlySalary:
-                    benefit.cappedMonthlySalary,
-
-                projectedBenefit:
-                    benefit.totalBenefit,
-
-                discountRate,
-
-                discountFactor:
-                    df,
-
-                expectedBenefit,
-
-                presentValue
-            });
-
-            survivalProbability =
-                endSurvival;
-
-            if (
-                survivalProbability <=
-                0.0000001
-            ) {
-                break;
-            }
-        }
-
-        return rows;
-    }
-
-
-    /* =========================================================
-       16. PUC ENGINE
-    ========================================================= */
-
-    function calculatePUC(
-        employee,
-        projection,
-        assumptions
-    ) {
-
-        if (
-            !employee ||
-            !projection ||
-            !projection.length
-        ) {
-
-            return {
-
-                projectedBenefit: 0,
-
-                expectedPV: 0,
-
-                DBO: 0,
-
-                pastServiceDBO: 0,
-
-                currentServiceCost: 0,
-
-                futureServiceDBO: 0
-            };
-        }
-
-        const totalServiceAtBenefit =
-            projection.length > 0
-                ? projection[
-                    projection.length - 1
-                ].projectedService
-                : employee.serviceYears;
-
-        /*
-         * PUC allocation:
-         *
-         * Projected benefit is allocated
-         * systematically over service.
-         *
-         * DBO =
-         *
-         * PV of total projected benefit
-         * × completed service / total service
-         *
-         * For a full actuarial implementation,
-         * each decrement event and service fraction
-         * should be allocated on a cohort basis.
-         */
-
-        let totalPV = 0;
-
-        projection.forEach(row => {
-
-            totalPV +=
-                row.presentValue;
+    /* Maaş artış oranı */
+
+    const maasDusuk =
+        personelOlustur({
+            ...personelVerisi,
+            maasArtisOrani:
+                personelVerisi.maasArtisOrani - 0.01
         });
 
-        const completedService =
-            Math.max(
-                0,
-                employee.serviceYears
-            );
+    const maasYuksek =
+        personelOlustur({
+            ...personelVerisi,
+            maasArtisOrani:
+                personelVerisi.maasArtisOrani + 0.01
+        });
 
-        const totalService =
-            Math.max(
-                completedService,
-                totalServiceAtBenefit
-            );
+    sonuc.maasArtisi = {
 
-        const serviceFraction =
-            totalService > 0
-                ? clamp(
-                    completedService /
-                    totalService,
-                    0,
-                    1
-                )
-                : 0;
+        dusuk:
+            dboHesapla(
+                maasDusuk
+            ).dbo,
 
-        const DBO =
-            totalPV *
-            serviceFraction;
+        baz:
+            bazDbo,
 
-        /*
-         * Future service component.
-         */
-
-        const futureServiceFraction =
-            Math.max(
-                0,
-                1 - serviceFraction
-            );
-
-        const futureServiceDBO =
-            totalPV *
-            futureServiceFraction;
-
-        /*
-         * Current service cost:
-         *
-         * Marginal one-year PUC allocation.
-         */
-
-        const currentServiceCost =
-            totalPV /
-            Math.max(
-                totalService,
-                1
-            );
-
-        return {
-
-            projectedBenefit:
-                projection.length
-                    ? projection[
-                        projection.length - 1
-                    ].projectedBenefit
-                    : 0,
-
-            expectedPV:
-                totalPV,
-
-            DBO,
-
-            pastServiceDBO:
-                DBO,
-
-            currentServiceCost,
-
-            futureServiceDBO,
-
-            serviceFraction,
-
-            totalService:
-                totalService
-        };
-    }
+        yuksek:
+            dboHesapla(
+                maasYuksek
+            ).dbo
+    };
 
 
-    /* =========================================================
-       17. EMPLOYEE VALUATION
-    ========================================================= */
+    /* Devir oranı */
 
-    function calculateEmployee(
-        employeeInput,
-        assumptionsInput = {}
-    ) {
-
-        const assumptions =
-            normalizeAssumptions(
-                assumptionsInput
-            );
-
-        const employee =
-            normalizeEmployee(
-                employeeInput,
-                assumptions
-            );
-
-        if (!employee.eligible) {
-
-            return {
-
-                employee,
-
-                eligible: false,
-
-                projection: [],
-
-                valuation: {
-
-                    projectedBenefit: 0,
-
-                    expectedPV: 0,
-
-                    DBO: 0,
-
-                    pastServiceDBO: 0,
-
-                    currentServiceCost: 0,
-
-                    futureServiceDBO: 0
-                }
-            };
-        }
-
-        const projection =
-            calculateProjectionPath(
-                employee,
-                assumptions
-            );
-
-        const puc =
-            calculatePUC(
-                employee,
-                projection,
-                assumptions
-            );
-
-        const firstYear =
-            projection[0] || {};
-
-        const lastYear =
-            projection[
-                projection.length - 1
-            ] || {};
-
-        const result = {
-
-            employee,
-
-            eligible: true,
-
-            age:
-                employee.age,
-
-            serviceYears:
-                employee.serviceYears,
-
-            projectedRetirementAge:
-                employee.retirementAge,
-
-            yearsToRetirement:
+    const devirDusuk =
+        personelOlustur({
+            ...personelVerisi,
+            devirOrani:
                 Math.max(
                     0,
-                    employee.retirementAge -
-                    employee.age
-                ),
-
-            currentSalary:
-                employee.monthlySalary,
-
-            currentCeiling:
-                employee.currentCeiling,
-
-            currentNominalBenefit:
-                employee.currentCeiling > 0
-                    ? Math.min(
-                        employee.monthlySalary,
-                        employee.currentCeiling
-                    ) *
-                    employee.serviceYears
-                    : employee.monthlySalary *
-                    employee.serviceYears,
-
-            projection,
-
-            valuation: puc,
-
-            firstYear,
-
-            lastYear,
-
-            calculationDate:
-                new Date().toISOString(),
-
-            engineVersion:
-                VERSION
-        };
-
-        return result;
-    }
-
-
-    /* =========================================================
-       18. PORTFOLIO VALUATION
-    ========================================================= */
-
-    function calculatePortfolio(
-        employees = [],
-        assumptionsInput = {}
-    ) {
-
-        const assumptions =
-            normalizeAssumptions(
-                assumptionsInput
-            );
-
-        const valuations =
-            employees.map(
-                employee =>
-                    calculateEmployee(
-                        employee,
-                        assumptions
-                    )
-            );
-
-        const eligible =
-            valuations.filter(
-                item => item.eligible
-            );
-
-        const totals =
-            eligible.reduce(
-                (acc, item) => {
-
-                    const valuation =
-                        item.valuation;
-
-                    acc.employeeCount++;
-
-                    acc.nominalBenefit +=
-                        item.currentNominalBenefit ||
-                        0;
-
-                    acc.projectedBenefit +=
-                        valuation.projectedBenefit ||
-                        0;
-
-                    acc.expectedPV +=
-                        valuation.expectedPV ||
-                        0;
-
-                    acc.DBO +=
-                        valuation.DBO ||
-                        0;
-
-                    acc.pastServiceDBO +=
-                        valuation.pastServiceDBO ||
-                        0;
-
-                    acc.currentServiceCost +=
-                        valuation.currentServiceCost ||
-                        0;
-
-                    acc.futureServiceDBO +=
-                        valuation.futureServiceDBO ||
-                        0;
-
-                    return acc;
-
-                },
-                {
-
-                    employeeCount: 0,
-
-                    nominalBenefit: 0,
-
-                    projectedBenefit: 0,
-
-                    expectedPV: 0,
-
-                    DBO: 0,
-
-                    pastServiceDBO: 0,
-
-                    currentServiceCost: 0,
-
-                    futureServiceDBO: 0
-                }
-            );
-
-        const averageBenefitProbability =
-            eligible.length
-                ? safeDivide(
-                    eligible.reduce(
-                        (sum, item) => {
-
-                            const probability =
-                                item.projection.reduce(
-                                    (
-                                        pSum,
-                                        row
-                                    ) =>
-                                        pSum +
-                                        (
-                                            row.qualifyingProbability ||
-                                            0
-                                        ),
-                                    0
-                                );
-
-                            return sum +
-                                probability;
-
-                        },
-                        0
-                    ),
-                    eligible.length
+                    personelVerisi.devirOrani - 0.01
                 )
-                : 0;
-
-        return {
-
-            engineVersion:
-                VERSION,
-
-            valuationDate:
-                assumptions.valuationDate,
-
-            assumptions:
-
-                clone(assumptions),
-
-            employees:
-                valuations,
-
-            totals: {
-
-                ...totals,
-
-                averageBenefitProbability,
-
-                DBO:
-                    round(
-                        totals.DBO
-                    ),
-
-                currentServiceCost:
-                    round(
-                        totals.currentServiceCost
-                    ),
-
-                expectedPV:
-                    round(
-                        totals.expectedPV
-                    )
-            }
-        };
-    }
+        });
 
+    const devirYuksek =
+        personelOlustur({
+            ...personelVerisi,
+            devirOrani:
+                personelVerisi.devirOrani + 0.01
+        });
 
-    /* =========================================================
-       19. INTEREST COST
-    ========================================================= */
+    sonuc.devir = {
 
-    function calculateInterestCost(
-        openingDBO,
-        discountRate
-    ) {
+        dusuk:
+            dboHesapla(
+                devirDusuk
+            ).dbo,
 
-        const DBO =
-            Math.max(
-                0,
-                toNumber(
-                    openingDBO,
-                    0
-                )
-            );
+        baz:
+            bazDbo,
 
-        const rate =
-            percentage(
-                discountRate
-            );
+        yuksek:
+            dboHesapla(
+                devirYuksek
+            ).dbo
+    };
 
-        return DBO * rate;
-    }
 
+    return sonuc;
+}
 
-    /* =========================================================
-       20. ACTUARIAL ROLL-FORWARD
-    ========================================================= */
-
-    function calculateRollForward(
-        params = {}
-    ) {
-
-        const openingDBO =
-            toNumber(
-                params.openingDBO,
-                0
-            );
-
-        const currentServiceCost =
-            toNumber(
-                params.currentServiceCost,
-                0
-            );
-
-        const interestCost =
-            params.interestCost !== undefined
-                ? toNumber(
-                    params.interestCost,
-                    0
-                )
-                : calculateInterestCost(
-                    openingDBO,
-                    params.discountRate
-                );
-
-        const benefitsPaid =
-            toNumber(
-                params.benefitsPaid,
-                0
-            );
-
-        const actuarialGainLoss =
-            toNumber(
-                params.actuarialGainLoss,
-                0
-            );
-
-        const otherMovement =
-            toNumber(
-                params.otherMovement,
-                0
-            );
 
-        const closingDBO =
-            openingDBO +
-            currentServiceCost +
-            interestCost -
-            benefitsPaid +
-            actuarialGainLoss +
-            otherMovement;
-
-        return {
-
-            openingDBO,
-
-            currentServiceCost,
-
-            interestCost,
-
-            benefitsPaid,
-
-            actuarialGainLoss,
-
-            otherMovement,
-
-            closingDBO
-        };
-    }
-
+/* ============================================================
+   20. SENARYO ANALİZİ
+   ============================================================ */
 
-    /* =========================================================
-       21. ACTUARIAL GAIN / LOSS
-    ========================================================= */
-
-    function calculateActuarialGainLoss(params = {}) {
-
-        const expectedClosing =
-            toNumber(
-                params.expectedClosingDBO,
-                0
-            );
-
-        const actualClosing =
-            toNumber(
-                params.actualClosingDBO,
-                0
-            );
-
-        /*
-         * Positive:
-         * actual liability > expected liability
-         *
-         * => actuarial loss
-         *
-         * Negative:
-         * actual liability < expected liability
-         *
-         * => actuarial gain
-         */
-
-        const experienceAdjustment =
-            toNumber(
-                params.experienceAdjustment,
-                0
-            );
-
-        const demographicChange =
-            toNumber(
-                params.demographicAssumptionChange,
-                0
-            );
-
-        const financialChange =
-            toNumber(
-                params.financialAssumptionChange,
-                0
-            );
-
-        const total =
-            experienceAdjustment +
-            demographicChange +
-            financialChange;
-
-        return {
-
-            experienceAdjustment,
-
-            demographicAssumptionChange:
-                demographicChange,
-
-            financialAssumptionChange:
-                financialChange,
-
-            total,
-
-            expectedClosing,
-
-            actualClosing
-        };
-    }
-
-
-    /* =========================================================
-       22. SENSITIVITY ENGINE
-    ========================================================= */
-
-    function sensitivity(
-        employees,
-        assumptionsInput = {},
-        variable,
-        shifts = [-0.01, 0.01]
-    ) {
-
-        const base =
-            normalizeAssumptions(
-                assumptionsInput
-            );
-
-        const baseResult =
-            calculatePortfolio(
-                employees,
-                base
-            );
-
-        const scenarios = [];
-
-        shifts.forEach(
-            shift => {
-
-                const scenario =
-                    normalizeAssumptions(
-                        clone(base)
-                    );
-
-                const baseValue =
-                    scenario[variable];
-
-                if (
-                    typeof baseValue !==
-                    "number"
-                ) {
-                    return;
-                }
-
-                scenario[variable] =
+function senaryoAnalizi(
+    personelVerisi
+) {
+
+    const senaryolar = {
+
+        baz: {},
+
+        olumlu: {
+
+            iskontoDegisimi: 0.01,
+
+            maasArtisDegisimi: -0.01,
+
+            devirDegisimi: 0.01
+        },
+
+        olumsuz: {
+
+            iskontoDegisimi: -0.01,
+
+            maasArtisDegisimi: 0.01,
+
+            devirDegisimi: -0.01
+        },
+
+        stres: {
+
+            iskontoDegisimi: -0.02,
+
+            maasArtisDegisimi: 0.02,
+
+            devirDegisimi: -0.02
+        }
+    };
+
+
+    const sonuc = {};
+
+
+    Object.entries(
+        senaryolar
+    ).forEach(
+        ([isim, senaryo]) => {
+
+            const veri = {
+
+                ...personelVerisi,
+
+                iskontoOrani:
+                    (personelVerisi.iskontoOrani || 0)
+                    + (senaryo.iskontoDegisimi || 0),
+
+                maasArtisOrani:
+                    (personelVerisi.maasArtisOrani || 0)
+                    + (senaryo.maasArtisDegisimi || 0),
+
+                devirOrani:
                     Math.max(
                         0,
-                        baseValue +
-                        shift
-                    );
+                        (personelVerisi.devirOrani || 0)
+                        + (senaryo.devirDegisimi || 0)
+                    )
+            };
 
-                const result =
-                    calculatePortfolio(
-                        employees,
-                        scenario
-                    );
 
-                scenarios.push({
+            const analiz =
+                personelAktüeryalAnaliz(
+                    veri
+                );
 
-                    variable,
 
-                    shift,
+            sonuc[isim] = analiz;
+        }
+    );
 
-                    baseValue,
 
-                    scenarioValue:
-                        scenario[variable],
+    return sonuc;
+}
 
-                    DBO:
-                        result.totals.DBO,
 
-                    change:
-                        result.totals.DBO -
-                        baseResult.totals.DBO,
+/* ============================================================
+   21. VARSAYIM KONTROLÜ
+   ============================================================ */
 
-                    percentageChange:
-                        safeDivide(
-                            result.totals.DBO -
-                            baseResult.totals.DBO,
-                            baseResult.totals.DBO
-                        )
-                });
-            }
+function varsayimKontrolu(personel) {
+
+    const uyarilar = [];
+
+    const iskonto =
+        personel.iskontoOrani;
+
+    const maasArtisi =
+        personel.maasArtisOrani;
+
+    const devir =
+        personel.devirOrani;
+
+
+    if (iskonto >
+        TMS19_ENGINE.esikler.yuksekIskonto) {
+
+        uyarilar.push({
+
+            seviye: "Yüksek",
+
+            baslik:
+                "İskonto oranı yüksek",
+
+            mesaj:
+                "İskonto oranı aktüeryal varsayım açısından detaylı olarak desteklenmelidir."
+        });
+    }
+
+
+    if (iskonto <
+        TMS19_ENGINE.esikler.dusukIskonto) {
+
+        uyarilar.push({
+
+            seviye: "Yüksek",
+
+            baslik:
+                "İskonto oranı düşük",
+
+            mesaj:
+                "Düşük iskonto oranı DBO'nun önemli ölçüde artmasına neden olabilir."
+        });
+    }
+
+
+    if (maasArtisi >
+        TMS19_ENGINE.esikler.yuksekMaasArtisi) {
+
+        uyarilar.push({
+
+            seviye: "Orta",
+
+            baslik:
+                "Yüksek maaş artış varsayımı",
+
+            mesaj:
+                "Maaş artış varsayımının enflasyon, kıdem ve şirket ücret politikası ile tutarlılığı değerlendirilmelidir."
+        });
+    }
+
+
+    if (devir >
+        TMS19_ENGINE.esikler.yuksekDevir) {
+
+        uyarilar.push({
+
+            seviye: "Orta",
+
+            baslik:
+                "Yüksek personel devir oranı",
+
+            mesaj:
+                "Devir oranının geçmiş gerçekleşmeler ve geleceğe yönelik beklentilerle desteklenmesi gerekir."
+        });
+    }
+
+
+    if (
+        personel.emeklilikYasi <=
+        personel.mevcutYas
+    ) {
+
+        uyarilar.push({
+
+            seviye: "Kritik",
+
+            baslik:
+                "Emeklilik yaşı kontrolü",
+
+            mesaj:
+                "Mevcut yaş emeklilik yaşına eşit veya daha yüksek."
+        });
+    }
+
+
+    return uyarilar;
+}
+
+
+/* ============================================================
+   22. AKTÜERYAL RİSK SKORU
+   ============================================================ */
+
+function aktüeryalRiskSkoru(
+    personel
+) {
+
+    let skor = 0;
+
+    const uyarilar =
+        varsayimKontrolu(
+            personel
         );
 
-        return {
 
-            variable,
+    uyarilar.forEach(
+        uyari => {
 
-            baseDBO:
-                baseResult.totals.DBO,
-
-            scenarios
-        };
-    }
-
-
-    function calculateFullSensitivity(
-        employees,
-        assumptions = {}
-    ) {
-
-        const variables = [
-
-            "discountRate",
-
-            "salaryGrowthRate",
-
-            "ceilingGrowthRate",
-
-            "turnoverRate",
-
-            "mortalityRate",
-
-            "disabilityRate"
-        ];
-
-        const result = {};
-
-        variables.forEach(
-            variable => {
-
-                result[variable] =
-                    sensitivity(
-                        employees,
-                        assumptions,
-                        variable,
-                        [-0.01, 0.01]
-                    );
+            if (
+                uyari.seviye === "Kritik"
+            ) {
+                skor += 40;
             }
+
+            else if (
+                uyari.seviye === "Yüksek"
+            ) {
+                skor += 25;
+            }
+
+            else if (
+                uyari.seviye === "Orta"
+            ) {
+                skor += 15;
+            }
+
+            else {
+                skor += 5;
+            }
+        }
+    );
+
+
+    skor =
+        Math.min(
+            skor,
+            100
         );
 
-        return result;
+
+    let seviye;
+
+
+    if (skor >= 70) {
+
+        seviye = "Kritik";
+
+    }
+
+    else if (skor >= 50) {
+
+        seviye = "Yüksek";
+
+    }
+
+    else if (skor >= 25) {
+
+        seviye = "Orta";
+
+    }
+
+    else {
+
+        seviye = "Düşük";
     }
 
 
-    /* =========================================================
-       23. DBO MOVEMENT ANALYSIS
-    ========================================================= */
+    return {
 
-    function calculateDBOMovement(
-        opening,
-        closing
-    ) {
+        skor,
 
-        const movement =
-            closing -
-            opening;
+        seviye,
 
-        return {
+        uyarilar
+    };
+}
 
-            openingDBO:
-                opening,
 
-            closingDBO:
-                closing,
+/* ============================================================
+   23. CFO PERSPEKTİFİ
+   ============================================================ */
 
-            movement,
+function cfoYorumu(
+    analiz
+) {
 
-            movementPercentage:
-                safeDivide(
-                    movement,
-                    opening
-                )
-        };
+    const dbo =
+        analiz.analiz.dbo;
+
+    const csc =
+        analiz.analiz.currentServiceCost;
+
+    const risk =
+        aktüeryalRiskSkoru(
+            analiz.personel
+        );
+
+
+    let yorum = "";
+
+
+    if (risk.seviye === "Kritik") {
+
+        yorum =
+            "TMS 19 yükümlülüğü yüksek aktüeryal varsayım riski taşımaktadır. CFO seviyesinde varsayımların bağımsız aktüeryal rapor, geçmiş gerçekleşmeler ve finansal planlama ile mutabakatı önceliklendirilmelidir.";
+
+    }
+
+    else if (risk.seviye === "Yüksek") {
+
+        yorum =
+            "Aktüeryal yükümlülük üzerinde önemli varsayım riski bulunmaktadır. Özellikle iskonto oranı, maaş artışı ve personel devir oranı için duyarlılık analizi yönetim raporlamasına dahil edilmelidir.";
+
+    }
+
+    else if (risk.seviye === "Orta") {
+
+        yorum =
+            "Varsayımlar genel olarak yönetilebilir seviyededir; ancak DBO'nun finansal tablo etkisi ve nakit ödeme profili düzenli olarak izlenmelidir.";
+
+    }
+
+    else {
+
+        yorum =
+            "Aktüeryal varsayımlar mevcut model kapsamında düşük risk seviyesindedir. Yine de yıllık aktüeryal değerleme ve bağımsız makuliyet kontrolleri sürdürülmelidir.";
     }
 
 
-    /* =========================================================
-       24. DISCOUNT CURVE SUPPORT
-    ========================================================= */
+    return {
 
-    function buildDiscountCurve(
-        rates = {}
+        dbo,
+
+        currentServiceCost: csc,
+
+        riskSkoru: risk.skor,
+
+        riskSeviyesi: risk.seviye,
+
+        yorum
+    };
+}
+
+
+/* ============================================================
+   24. YILLIK PROJEKSİYON
+   ============================================================ */
+
+function yillikProjeksiyon(
+    personel,
+    yilSayisi = 10
+) {
+
+    const tablo = [];
+
+    let acilisDbo =
+        dboHesapla(personel).dbo;
+
+
+    for (
+        let yil = 1;
+        yil <= yilSayisi;
+        yil++
     ) {
 
-        const curve = {};
-
-        Object.keys(rates)
-            .sort(
-                (a, b) =>
-                    Number(a) -
-                    Number(b)
-            )
-            .forEach(
-                year => {
-
-                    curve[
-                        Number(year)
-                    ] =
-                        percentage(
-                            rates[year]
-                        );
-                }
+        const maas =
+            gelecektekiMaasHesapla(
+                personel,
+                yil
             );
 
-        return curve;
-    }
+
+        const serviceCost =
+            currentServiceCostHesapla(
+                personel
+            );
 
 
-    /* =========================================================
-       25. ACTUARIAL REPORT SUMMARY
-    ========================================================= */
+        const interestCost =
+            interestCostHesapla(
+                acilisDbo,
+                personel.iskontoOrani
+            );
 
-    function createValuationSummary(
-        portfolioResult
-    ) {
 
-        if (!portfolioResult) {
-            return null;
-        }
+        const kapanisDbo =
+            acilisDbo +
+            serviceCost +
+            interestCost;
 
-        const totals =
-            portfolioResult.totals || {};
 
-        return {
+        tablo.push({
 
-            engineVersion:
-                VERSION,
+            yil,
 
-            valuationDate:
-                portfolioResult.valuationDate,
-
-            employeeCount:
-                totals.employeeCount || 0,
-
-            nominalBenefit:
-                round(
-                    totals.nominalBenefit || 0
+            acilisDbo:
+                yuvarla(
+                    acilisDbo
                 ),
 
-            projectedBenefit:
-                round(
-                    totals.projectedBenefit || 0
-                ),
-
-            expectedPV:
-                round(
-                    totals.expectedPV || 0
-                ),
-
-            DBO:
-                round(
-                    totals.DBO || 0
+            maas:
+                yuvarla(
+                    maas
                 ),
 
             currentServiceCost:
-                round(
-                    totals.currentServiceCost || 0
+                yuvarla(
+                    serviceCost
                 ),
-
-            futureServiceDBO:
-                round(
-                    totals.futureServiceDBO || 0
-                ),
-
-            averageBenefitProbability:
-                round(
-                    totals.averageBenefitProbability || 0,
-                    6
-                )
-        };
-    }
-
-
-    /* =========================================================
-       26. VALIDATION ENGINE
-    ========================================================= */
-
-    function validateEmployee(employee) {
-
-        const errors = [];
-        const warnings = [];
-
-        if (!employee) {
-
-            errors.push(
-                "Employee object is missing."
-            );
-
-            return {
-                valid: false,
-                errors,
-                warnings
-            };
-        }
-
-        if (
-            !employee.monthlySalary &&
-            !employee.salary
-        ) {
-
-            warnings.push(
-                "Monthly salary is zero or missing."
-            );
-        }
-
-        if (
-            !employee.birthDate &&
-            employee.age === undefined
-        ) {
-
-            warnings.push(
-                "Birth date / age is missing."
-            );
-        }
-
-        if (
-            !employee.hireDate &&
-            employee.serviceYears === undefined
-        ) {
-
-            warnings.push(
-                "Hire date / service years is missing."
-            );
-        }
-
-        if (
-            employee.age !== undefined &&
-            (
-                employee.age < 16 ||
-                employee.age > 100
-            )
-        ) {
-
-            errors.push(
-                "Employee age is outside expected range."
-            );
-        }
-
-        if (
-            employee.monthlySalary !== undefined &&
-            employee.monthlySalary < 0
-        ) {
-
-            errors.push(
-                "Monthly salary cannot be negative."
-            );
-        }
-
-        return {
-
-            valid:
-                errors.length === 0,
-
-            errors,
-
-            warnings
-        };
-    }
-
-
-    function validatePortfolio(
-        employees = []
-    ) {
-
-        const result = {
-
-            valid: true,
-
-            employeeCount:
-                employees.length,
-
-            errors: [],
-
-            warnings: []
-
-        };
-
-        employees.forEach(
-            (employee, index) => {
-
-                const validation =
-                    validateEmployee(
-                        employee
-                    );
-
-                validation.errors
-                    .forEach(
-                        error => {
-
-                            result.errors.push({
-                                index,
-                                employeeId:
-                                    employee?.id ||
-                                    employee?.employeeId ||
-                                    null,
-                                message:
-                                    error
-                            });
-                        }
-                    );
-
-                validation.warnings
-                    .forEach(
-                        warning => {
-
-                            result.warnings.push({
-                                index,
-                                employeeId:
-                                    employee?.id ||
-                                    employee?.employeeId ||
-                                    null,
-                                message:
-                                    warning
-                            });
-                        }
-                    );
-            }
-        );
-
-        result.valid =
-            result.errors.length === 0;
-
-        return result;
-    }
-
-
-    /* =========================================================
-       27. CSV EXPORT DATA
-    ========================================================= */
-
-    function flattenEmployeeResult(
-        result
-    ) {
-
-        if (!result) {
-            return null;
-        }
-
-        return {
-
-            EmployeeID:
-                result.employee.id,
-
-            EmployeeName:
-                result.employee.name,
-
-            Age:
-                result.age,
-
-            ServiceYears:
-                round(
-                    result.serviceYears,
-                    2
-                ),
-
-            MonthlySalary:
-                round(
-                    result.currentSalary
-                ),
-
-            CurrentCeiling:
-                round(
-                    result.currentCeiling
-                ),
-
-            NominalBenefit:
-                round(
-                    result.currentNominalBenefit
-                ),
-
-            ProjectedBenefit:
-                round(
-                    result.valuation.projectedBenefit
-                ),
-
-            ExpectedPV:
-                round(
-                    result.valuation.expectedPV
-                ),
-
-            DBO:
-                round(
-                    result.valuation.DBO
-                ),
-
-            CurrentServiceCost:
-                round(
-                    result.valuation.currentServiceCost
-                ),
-
-            FutureServiceDBO:
-                round(
-                    result.valuation.futureServiceDBO
-                ),
-
-            RetirementAge:
-                result.projectedRetirementAge,
-
-            YearsToRetirement:
-                result.yearsToRetirement
-        };
-    }
-
-
-    function createProjectionExport(
-        employeeResult
-    ) {
-
-        if (
-            !employeeResult ||
-            !employeeResult.projection
-        ) {
-            return [];
-        }
-
-        return employeeResult.projection.map(
-            row => ({
-
-                Year:
-                    row.year,
-
-                ProjectedAge:
-                    row.projectedAge,
-
-                ProjectedService:
-                    round(
-                        row.projectedService,
-                        2
-                    ),
-
-                SurvivalProbability:
-                    row.survivalProbability,
-
-                MortalityProbability:
-                    row.mortalityProbability,
-
-                TurnoverProbability:
-                    row.turnoverProbability,
-
-                DisabilityProbability:
-                    row.disabilityProbability,
-
-                RetirementProbability:
-                    row.retirementProbability,
-
-                QualifyingProbability:
-                    row.qualifyingProbability,
-
-                ProjectedSalary:
-                    round(
-                        row.projectedSalary
-                    ),
-
-                ProjectedCeiling:
-                    round(
-                        row.projectedCeiling
-                    ),
-
-                ProjectedBenefit:
-                    round(
-                        row.projectedBenefit
-                    ),
-
-                DiscountRate:
-                    row.discountRate,
-
-                DiscountFactor:
-                    row.discountFactor,
-
-                ExpectedBenefit:
-                    round(
-                        row.expectedBenefit
-                    ),
-
-                PresentValue:
-                    round(
-                        row.presentValue
-                    )
-            })
-        );
-    }
-
-
-    /* =========================================================
-       28. ENGINE API
-    ========================================================= */
-
-    const Engine = {
-
-        version:
-            VERSION,
-
-        defaults:
-            clone(DEFAULTS),
-
-        utils: {
-
-            toNumber,
-
-            percentage,
-
-            clamp,
-
-            round,
-
-            safeDivide,
-
-            parseDate,
-
-            yearsBetween,
-
-            completedYears,
-
-            ageAtDate,
-
-            addYears
-        },
-
-        assumptions: {
-
-            normalize:
-                normalizeAssumptions,
-
-            buildDiscountCurve
-        },
-
-        employee: {
-
-            normalize:
-                normalizeEmployee,
-
-            validate:
-                validateEmployee
-        },
-
-        demographic: {
-
-            mortality:
-                mortalityProbability,
-
-            turnover:
-                turnoverProbability,
-
-            disability:
-                disabilityProbability,
-
-            retirement:
-                retirementProbability,
-
-            competingDecrements:
-                calculateCompetingDecrements
-        },
-
-        compensation: {
-
-            salaryProjection,
-
-            ceilingProjection
-        },
-
-        benefit: {
-
-            calculate:
-                calculateProjectedBenefit
-        },
-
-        discount: {
-
-            factor:
-                discountFactor,
-
-            rate:
-                getDiscountRate
-        },
-
-        projection: {
-
-            calculate:
-                calculateProjectionPath
-        },
-
-        puc: {
-
-            calculate:
-                calculatePUC
-        },
-
-        valuation: {
-
-            employee:
-                calculateEmployee,
-
-            portfolio:
-                calculatePortfolio
-        },
-
-        accounting: {
 
             interestCost:
-                calculateInterestCost,
+                yuvarla(
+                    interestCost
+                ),
 
-            rollForward:
-                calculateRollForward,
+            kapanisDbo:
+                yuvarla(
+                    kapanisDbo
+                )
+        });
 
-            actuarialGainLoss:
-                calculateActuarialGainLoss,
 
-            dboMovement:
-                calculateDBOMovement
+        acilisDbo =
+            kapanisDbo;
+    }
+
+
+    return tablo;
+}
+
+
+/* ============================================================
+   25. TAM AKTÜERYAL RAPOR
+   ============================================================ */
+
+function tamAktüeryalRapor(
+    personelVerisi
+) {
+
+    const personel =
+        personelOlustur(
+            personelVerisi
+        );
+
+
+    const temelAnaliz =
+        personelAktüeryalAnaliz(
+            personel
+        );
+
+
+    const duyarlilik =
+        duyarlilikAnalizi(
+            personel
+        );
+
+
+    const senaryolar =
+        senaryoAnalizi(
+            personel
+        );
+
+
+    const risk =
+        aktüeryalRiskSkoru(
+            personel
+        );
+
+
+    const cfo =
+        cfoYorumu(
+            temelAnaliz
+        );
+
+
+    const projeksiyon =
+        yillikProjeksiyon(
+            personel
+        );
+
+
+    return {
+
+        meta: {
+
+            standart:
+                "TMS 19 – Çalışanlara Sağlanan Faydalar",
+
+            motor:
+                "GK Advisory Aktüeryal Hesaplama Motoru",
+
+            versiyon:
+                TMS19_ENGINE.versiyon,
+
+            tarih:
+                new Date().toISOString()
         },
 
-        sensitivity: {
 
-            calculate:
-                sensitivity,
+        personel,
 
-            full:
-                calculateFullSensitivity
-        },
 
-        validation: {
+        temelAnaliz:
+            temelAnaliz.analiz,
 
-            employee:
-                validateEmployee,
 
-            portfolio:
-                validatePortfolio
-        },
+        duyarlilik,
 
-        reporting: {
 
-            summary:
-                createValuationSummary,
+        senaryolar,
 
-            employee:
-                flattenEmployeeResult,
 
-            projection:
-                createProjectionExport
+        risk,
+
+
+        cfo,
+
+
+        projeksiyon
+    };
+}
+
+
+/* ============================================================
+   26. FORMATLAMA
+   ============================================================ */
+
+function paraFormatla(
+    deger
+) {
+
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+
+            minimumFractionDigits: 0,
+
+            maximumFractionDigits: 0
         }
+    ).format(
+        sayiyaCevir(deger)
+    );
+}
+
+
+function yuzdeFormatla(
+    deger
+) {
+
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+
+            style: "percent",
+
+            minimumFractionDigits: 1,
+
+            maximumFractionDigits: 2
+        }
+    ).format(
+        sayiyaCevir(deger)
+    );
+}
+
+
+/* ============================================================
+   27. DASHBOARD VERİSİ
+   ============================================================ */
+
+function dashboardVerisi(
+    personelVerisi
+) {
+
+    const rapor =
+        tamAktüeryalRapor(
+            personelVerisi
+        );
+
+
+    return {
+
+        "Tanımlanmış Fayda Yükümlülüğü":
+            paraFormatla(
+                rapor.temelAnaliz.dbo
+            ),
+
+        "Current Service Cost":
+            paraFormatla(
+                rapor.temelAnaliz.currentServiceCost
+            ),
+
+        "Beklenen Emeklilik Faydası":
+            paraFormatla(
+                rapor.temelAnaliz.beklenenFayda
+            ),
+
+        "Aktüeryal Risk Skoru":
+            rapor.risk.skor,
+
+        "Risk Seviyesi":
+            rapor.risk.seviye,
+
+        "İskonto Oranı":
+            yuzdeFormatla(
+                personelVerisi.iskontoOrani
+            ),
+
+        "Maaş Artış Oranı":
+            yuzdeFormatla(
+                personelVerisi.maasArtisOrani
+            ),
+
+        "Personel Devir Oranı":
+            yuzdeFormatla(
+                personelVerisi.devirOrani
+            )
+    };
+}
+
+
+/* ============================================================
+   28. HTML DASHBOARD ENTEGRASYONU
+   ============================================================ */
+
+function dashboardGuncelle(
+    personelVerisi
+) {
+
+    const veri =
+        dashboardVerisi(
+            personelVerisi
+        );
+
+
+    Object.entries(
+        veri
+    ).forEach(
+        ([anahtar, deger]) => {
+
+            const element =
+                document.querySelector(
+                    `[data-tms19="${anahtar}"]`
+                );
+
+
+            if (element) {
+
+                element.textContent =
+                    deger;
+            }
+        }
+    );
+}
+
+
+/* ============================================================
+   29. GLOBAL API
+   ============================================================ */
+
+window.TMS19ActuarialEngine = {
+
+    motor:
+        TMS19_ENGINE,
+
+    personelOlustur,
+
+    gelecektekiMaasHesapla,
+
+    emeklilikFaydasiHesapla,
+
+    kalmaOlasiligiHesapla,
+
+    beklenenFaydaHesapla,
+
+    dboHesapla,
+
+    currentServiceCostHesapla,
+
+    interestCostHesapla,
+
+    benefitPaymentHesapla,
+
+    aktüeryalKazancKayipHesapla,
+
+    netYukumlulukHesapla,
+
+    pnlEtkisiHesapla,
+
+    ociEtkisiHesapla,
+
+    personelAktüeryalAnaliz,
+
+    portfoyAktüeryalAnaliz,
+
+    duyarlilikAnalizi,
+
+    senaryoAnalizi,
+
+    varsayimKontrolu,
+
+    aktüeryalRiskSkoru,
+
+    cfoYorumu,
+
+    yillikProjeksiyon,
+
+    tamAktüeryalRapor,
+
+    dashboardVerisi,
+
+    dashboardGuncelle,
+
+    paraFormatla,
+
+    yuzdeFormatla
+};
+
+
+/* ============================================================
+   30. ÖRNEK TEST
+   ============================================================ */
+
+function tms19TestCalistir() {
+
+    const ornekPersonel = {
+
+        id: "PRS-001",
+
+        adSoyad:
+            "Örnek Personel",
+
+        mevcutYas:
+            35,
+
+        hizmetYili:
+            10,
+
+        kalanHizmetYili:
+            15,
+
+        yillikMaas:
+            600000,
+
+        emeklilikYasi:
+            60,
+
+        faydaOrani:
+            0.03,
+
+        devirOrani:
+            0.05,
+
+        iskontoOrani:
+            0.30,
+
+        maasArtisOrani:
+            0.35
     };
 
 
-    /* =========================================================
-       29. GLOBAL EXPORT
-    ========================================================= */
-
-    global.TMS19ActuarialEngine =
-        Engine;
-
-
-    /* =========================================================
-       30. BACKWARD / DEBUG HELPERS
-    ========================================================= */
-
-    global.calculateTMS19Employee =
-        function (
-            employee,
-            assumptions
-        ) {
-
-            return Engine.valuation.employee(
-                employee,
-                assumptions
-            );
-        };
-
-
-    global.calculateTMS19Portfolio =
-        function (
-            employees,
-            assumptions
-        ) {
-
-            return Engine.valuation.portfolio(
-                employees,
-                assumptions
-            );
-        };
-
-
-    global.calculateTMS19Sensitivity =
-        function (
-            employees,
-            assumptions
-        ) {
-
-            return Engine.sensitivity.full(
-                employees,
-                assumptions
-            );
-        };
-
-
-    /* =========================================================
-       31. CONSOLE IDENTIFICATION
-    ========================================================= */
-
-    if (
-        typeof console !== "undefined"
-    ) {
-
-        console.log(
-            `%cGK Advisory TMS 19 Actuarial Engine v${VERSION} loaded`,
-            "font-weight:bold;color:#B08D57;"
+    const rapor =
+        tamAktüeryalRapor(
+            ornekPersonel
         );
-    }
 
 
-})(window);
+    console.group(
+        "TMS 19 Aktüeryal Motor Test"
+    );
+
+
+    console.log(
+        "DBO:",
+        rapor.temelAnaliz.dbo
+    );
+
+
+    console.log(
+        "Current Service Cost:",
+        rapor.temelAnaliz.currentServiceCost
+    );
+
+
+    console.log(
+        "Risk:",
+        rapor.risk
+    );
+
+
+    console.log(
+        "CFO Yorumu:",
+        rapor.cfo
+    );
+
+
+    console.log(
+        "Duyarlılık:",
+        rapor.duyarlilik
+    );
+
+
+    console.groupEnd();
+
+
+    return rapor;
+}
+
+
+/* ============================================================
+   31. MOTOR HAZIR
+   ============================================================ */
+
+console.log(
+    "TMS 19 Aktüeryal Hesaplama Motoru hazır."
+);
+
+console.log(
+    "Kullanım: window.TMS19ActuarialEngine"
+);
