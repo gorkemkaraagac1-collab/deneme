@@ -14079,9 +14079,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v191InitUiWiring() {
-    v191WireNavigation();
-    v191AddUtilityButtons();
-    v191WireExistingContractActions();
+    try { v191WireNavigation(); } catch (error) { console.error("V19.1 sidebar navigation wiring error:", error); }
+    try { v191AddUtilityButtons(); } catch (error) { console.error("V19.1 utility buttons wiring error:", error); }
+    try { v191WireExistingContractActions(); } catch (error) { console.error("V19.1 existing contract actions wiring error:", error); }
     const bulkInput = document.getElementById("bulkFileInput");
     if (bulkInput && bulkInput.dataset.v191Wired !== "1") {
       bulkInput.dataset.v191Wired = "1";
@@ -16570,7 +16570,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return changed;
   }
 
-  v22EnsureCompanyGroupMembership();
+  try {
+    v22EnsureCompanyGroupMembership();
+  } catch (error) {
+    console.error("V22 company/group membership init error:", error);
+  }
 
   function addCompanyToGroup(groupId, companyId, input = {}, options = {}) {
     v22Require("group.manage", { ...options, groupId, companyId });
@@ -18569,20 +18573,36 @@ document.addEventListener("DOMContentLoaded", () => {
     return {version:V24_SCHEMA_VERSION,passed:results.every(x=>x.passed),results};
   }
 
-  v24MigrateData();
+  try {
+    v24MigrateData();
+  } catch (error) {
+    console.error("V24 planning data migration error:", error);
+  }
 
 
   /* ==========================================================
      V23 INITIALIZATION
   ========================================================== */
 
-  v23MigrateData();
+  try {
+    v23MigrateData();
+  } catch (error) {
+    console.error("V23 FX data migration error:", error);
+  }
 
   /* ==========================================================
      INITIALIZATION
   ========================================================== */
 
-  v191InitUiWiring();
-  refresh();
+  try {
+    v191InitUiWiring();
+  } catch (error) {
+    console.error("V19.1 UI wiring init error (sidebar navigation etc.):", error);
+  }
+  try {
+    refresh();
+  } catch (error) {
+    console.error("Initial refresh error:", error);
+  }
 
 });
