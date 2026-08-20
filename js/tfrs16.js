@@ -5837,17 +5837,17 @@ document.addEventListener("DOMContentLoaded", () => {
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-btn" data-mod-action="edit" data-mod-id="${escapeHtml(item.id)}">Düzenle</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="edit" data-mod-id="${escapeHtml(item.id)}">Düzenle</button>`
                     : ""
                 }
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-btn" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}">Uygula</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}">Uygula</button>`
                     : ""
                 }
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-btn" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}">İptal Et</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}">İptal Et</button>`
                     : ""
                 }
               </span>
@@ -5943,7 +5943,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <button
             type="button"
             id="createModificationButton"
-            class="primary-btn"
+            class="primary-button"
             style="margin-top:12px;"
           >
             Modifikasyon Oluştur
@@ -6100,9 +6100,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>${escapeHtml(item.status || "DRAFT")}</span>
             <strong>${formatCurrency(item.liabilityAdjustment || 0)}</strong>
             <span style="display:flex;gap:5px;">
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}">Düzenle</button>` : ""}
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}">Uygula</button>` : ""}
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}">İptal Et</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}">Düzenle</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}">Uygula</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}">İptal Et</button>` : ""}
             </span>
           </div>
         `).join("")
@@ -6140,7 +6140,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
 
-          <button type="button" id="createReassessmentButton" class="primary-btn" style="margin-top:12px;">Reassessment Oluştur</button>
+          <button type="button" id="createReassessmentButton" class="primary-button" style="margin-top:12px;">Reassessment Oluştur</button>
         </div>
 
         <div style="margin-top:16px;">
@@ -6944,7 +6944,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div>
           <h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p>
-          <button type="button" id="exportContractAuditTrailButton" class="secondary-btn" style="margin-top:12px;">↓ Denetim İzini Dışa Aktar</button>
+          <button type="button" id="exportContractAuditTrailButton" class="secondary-button" style="margin-top:12px;">↓ Denetim İzini Dışa Aktar</button>
         </div>
 
 
