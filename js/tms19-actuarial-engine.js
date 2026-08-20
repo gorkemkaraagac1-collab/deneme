@@ -1,46 +1,46 @@
 /* ============================================================
    GK ADVISORY
-   TMS 19 ACTUARIAL ENGINE V2
-   Türkçe Aktüeryal Değerleme Motoru
+   TMS 19 ACTUARIAL ENGINE V3
+   Türkiye Kıdem Tazminatı / Tanımlanmış Fayda Aktüeryal Motoru
 
-   Yaklaşım:
-   - Projected Unit Credit Method
-   - Personel bazlı projeksiyon
-   - Maaş artışı
-   - Turnover
-   - Emeklilik
-   - Ölüm
-   - Hayatta kalma olasılığı
-   - Beklenen fayda
-   - İskonto
-   - DBO
-   - Cari hizmet maliyeti
-   - Faiz maliyeti
-   - OCI / aktüeryal yeniden ölçüm
-   - Duyarlılık analizi
-   - Veri kalite kontrolü
-   - CFO içgörüleri
+   METODOLOJİ
+   ------------------------------------------------------------
+   • Projected Unit Credit Method (PUC)
+   • Personel bazlı değerleme
+   • Gelecekteki maaş projeksiyonu
+   • Kıdem tazminatı tavanı
+   • Personel devir olasılığı
+   • Emeklilik olasılığı
+   • Ölüm olasılığı
+   • Fayda alma olasılığı
+   • İskonto
+   • DBO
+   • Cari hizmet maliyeti
+   • Net faiz maliyeti
+   • Aktüeryal duyarlılık
+   • Veri kalite kontrolü
+   • CFO / Finance Director içgörüleri
 
-   ÖNEMLİ:
-   Bu motor eğitim / analitik / modelleme amaçlıdır.
-   Gerçek aktüeryal raporun yerine geçmez.
+   ÖNEMLİ
+   ------------------------------------------------------------
+   Bu model analitik / eğitim / karar destek amacı taşır.
+   Gerçek aktüeryal değerleme için seçilen aktüeryal varsayımlar,
+   mevzuat, kıdem tazminatı tavanı, aktüeryal tablo ve şirket
+   geçmiş verileri ayrıca doğrulanmalıdır.
 ============================================================ */
 
 
 /* ============================================================
-   ANA NESNE
+   ANA MOTOR
 ============================================================ */
 
 const TMS19 = (() => {
 
-
     /* ========================================================
-       SABİTLER
+       1. GENEL SABİTLER
     ======================================================== */
 
     const SABİTLER = {
-
-        DEFAULT_EMEKLİLİK_YAŞI: 60,
 
         DEFAULT_İSKONTO_ORANI: 0.28,
 
@@ -48,129 +48,102 @@ const TMS19 = (() => {
 
         DEFAULT_TURNOVER_ORANI: 0.08,
 
-        MAKS_PROJEKSİYON_YILI: 45,
+        DEFAULT_EMEKLİLİK_YAŞI: 60,
 
-        MIN_İSKONTO:
-            0.0001,
+        DEFAULT_KIDEM_TAVANI: 50000,
 
-        MAX_İSKONTO:
-            1.00,
+        DEFAULT_KIDEM_KATSAYISI: 1,
 
-        MIN_MAAŞ_ARTIŞ:
-            -0.50,
+        MAX_PROJEKSİYON_YILI: 50,
 
-        MAX_MAAŞ_ARTIŞ:
-            2.00
+        MIN_İSKONTO_ORANI: 0.0001,
+
+        MAX_İSKONTO_ORANI: 1,
+
+        MIN_MAAŞ_ARTIŞI: -0.50,
+
+        MAX_MAAŞ_ARTIŞI: 2,
+
+        MIN_TURNOVER: 0,
+
+        MAX_TURNOVER: 0.90
 
     };
 
 
     /* ========================================================
-       YARDIMCI MATEMATİK
+       2. GENEL YARDIMCI FONKSİYONLAR
     ======================================================== */
 
-    function güvenliSayı(
-        değer,
-        varsayılan = 0
-    ) {
+    function güvenliSayı(değer, varsayılan = 0) {
 
-        const sayı =
-            Number(
-                değer
-            );
+        const sayı = Number(değer);
 
-        return Number.isFinite(
-            sayı
-        )
+        return Number.isFinite(sayı)
             ? sayı
             : varsayılan;
 
     }
 
 
-    function sınırla(
-        değer,
-        min,
-        max
-    ) {
+    function sınırla(değer, minimum, maksimum) {
 
         return Math.min(
             Math.max(
-                değer,
-                min
+                güvenliSayı(değer),
+                minimum
             ),
-            max
+            maksimum
         );
 
     }
 
 
-    function yuvarla(
-        değer,
-        basamak = 2
-    ) {
+    function yuvarla(değer, basamak = 2) {
 
-        const katsayı =
-            Math.pow(
-                10,
-                basamak
-            );
+        const katsayı = Math.pow(10, basamak);
 
-        return (
-            Math.round(
-                güvenliSayı(
-                    değer
-                ) *
-                katsayı
-            )
-            /
-            katsayı
-        );
+        return Math.round(
+            güvenliSayı(değer) * katsayı
+        ) / katsayı;
 
     }
 
 
-    function yüzde(
-        değer
-    ) {
+    function yüzde(değer) {
 
-        return güvenliSayı(
-            değer
-        ) / 100;
+        return güvenliSayı(değer) / 100;
+
+    }
+
+
+    function formatPara(değer) {
+
+        return güvenliSayı(değer).toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }
+        );
 
     }
 
 
     /* ========================================================
-       TARİH FONKSİYONLARI
+       3. TARİH FONKSİYONLARI
     ======================================================== */
 
-    function tarihOku(
-        değer
-    ) {
+    function tarihOku(değer) {
 
-        if (
-            !değer
-        ) {
-
+        if (!değer) {
             return null;
-
         }
 
-        const tarih =
-            new Date(
-                değer
-            );
+        const tarih = new Date(değer);
 
-
-        if (
-            Number.isNaN(
-                tarih.getTime()
-            )
-        ) {
-
+        if (Number.isNaN(tarih.getTime())) {
             return null;
-
         }
 
         return tarih;
@@ -178,43 +151,25 @@ const TMS19 = (() => {
     }
 
 
-    function yaşHesapla(
-        doğumTarihi,
-        değerlemeTarihi
-    ) {
+    function yaşHesapla(doğumTarihi, değerlemeTarihi) {
 
-        const doğum =
-            tarihOku(
-                doğumTarihi
-            );
+        const doğum = tarihOku(doğumTarihi);
 
-        const değerleme =
-            tarihOku(
-                değerlemeTarihi
-            );
+        const değerleme = tarihOku(değerlemeTarihi);
 
-
-        if (
-            !doğum ||
-            !değerleme
-        ) {
-
+        if (!doğum || !değerleme) {
             return null;
-
         }
-
 
         let yaş =
             değerleme.getFullYear()
             -
             doğum.getFullYear();
 
-
         const ay =
             değerleme.getMonth()
             -
             doğum.getMonth();
-
 
         if (
             ay < 0
@@ -232,8 +187,7 @@ const TMS19 = (() => {
 
         }
 
-
-        return yaş;
+        return Math.max(0, yaş);
 
     }
 
@@ -243,26 +197,17 @@ const TMS19 = (() => {
         değerlemeTarihi
     ) {
 
-        const giriş =
-            tarihOku(
-                işeGirişTarihi
-            );
+        const giriş = tarihOku(
+            işeGirişTarihi
+        );
 
-        const değerleme =
-            tarihOku(
-                değerlemeTarihi
-            );
+        const değerleme = tarihOku(
+            değerlemeTarihi
+        );
 
-
-        if (
-            !giriş ||
-            !değerleme
-        ) {
-
+        if (!giriş || !değerleme) {
             return null;
-
         }
-
 
         const gün =
             (
@@ -278,7 +223,6 @@ const TMS19 = (() => {
                 24
             );
 
-
         return Math.max(
             0,
             gün / 365.25
@@ -288,18 +232,14 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       AKTÜERYAL DEMOGRAFİK MODEL
+       4. MORTALİTE MODELİ
     ======================================================== */
 
     /*
-       Örnek yıllık mortalite oranları.
+       Bu oranlar örnek aktüeryal varsayımlardır.
 
-       Gerçek uygulamada:
-       - TÜİK / resmi istatistik
-       - şirket aktüeryal çalışması
-       - seçilen mortality table
-
-       kullanılmalıdır.
+       Gerçek modelde seçilen mortalite tablosu
+       buraya parametre olarak alınmalıdır.
     */
 
     function ölümOlasılığı(
@@ -307,94 +247,85 @@ const TMS19 = (() => {
         cinsiyet = "E"
     ) {
 
-        yaş =
-            güvenliSayı(
-                yaş,
-                40
-            );
+        yaş = güvenliSayı(
+            yaş,
+            40
+        );
 
+        cinsiyet =
+            String(cinsiyet)
+                .toUpperCase();
 
         let oran;
 
-
-        if (
-            yaş < 25
-        ) {
+        if (yaş < 25) {
 
             oran = 0.0005;
 
-        } else if (
-            yaş < 35
-        ) {
+        } else if (yaş < 35) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0010
                     : 0.0015;
 
-        } else if (
-            yaş < 45
-        ) {
+        } else if (yaş < 45) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0018
                     : 0.0025;
 
-        } else if (
-            yaş < 55
-        ) {
+        } else if (yaş < 55) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0035
                     : 0.0050;
 
-        } else if (
-            yaş < 60
-        ) {
+        } else if (yaş < 60) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0055
                     : 0.0080;
 
-        } else if (
-            yaş < 65
-        ) {
+        } else if (yaş < 65) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0080
                     : 0.0120;
 
-        } else if (
-            yaş < 70
-        ) {
+        } else if (yaş < 70) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0120
                     : 0.0180;
 
-        } else if (
-            yaş < 75
-        ) {
+        } else if (yaş < 75) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0200
                     : 0.0300;
 
-        } else {
+        } else if (yaş < 80) {
 
             oran =
                 cinsiyet === "K"
                     ? 0.0450
                     : 0.0600;
 
-        }
+        } else {
 
+            oran =
+                cinsiyet === "K"
+                    ? 0.0900
+                    : 0.1200;
+
+        }
 
         return sınırla(
             oran,
@@ -405,69 +336,63 @@ const TMS19 = (() => {
     }
 
 
-    /*
-       Yaşa göre turnover.
-
-       Gerçek şirket verisi varsa
-       şirket deneyimine göre kalibre edilmelidir.
-    */
+    /* ========================================================
+       5. PERSONEL DEVİR MODELİ
+    ======================================================== */
 
     function devirOlasılığı(
         yaş,
         temelOran
     ) {
 
-        yaş =
-            güvenliSayı(
-                yaş,
-                40
-            );
+        yaş = güvenliSayı(
+            yaş,
+            40
+        );
 
-
-        temelOran =
+        temelOran = sınırla(
             güvenliSayı(
                 temelOran,
                 SABİTLER.DEFAULT_TURNOVER_ORANI
-            );
-
+            ),
+            SABİTLER.MIN_TURNOVER,
+            SABİTLER.MAX_TURNOVER
+        );
 
         let düzeltme;
 
+        if (yaş < 25) {
 
-        if (
-            yaş < 30
-        ) {
+            düzeltme = 1.50;
+
+        } else if (yaş < 30) {
 
             düzeltme = 1.35;
 
-        } else if (
-            yaş < 40
-        ) {
+        } else if (yaş < 40) {
 
             düzeltme = 1.10;
 
-        } else if (
-            yaş < 50
-        ) {
+        } else if (yaş < 50) {
 
             düzeltme = 0.85;
 
-        } else if (
-            yaş < 55
-        ) {
+        } else if (yaş < 55) {
 
             düzeltme = 0.60;
 
+        } else if (yaş < 60) {
+
+            düzeltme = 0.35;
+
         } else {
 
-            düzeltme = 0.30;
+            düzeltme = 0.15;
 
         }
 
-
         return sınırla(
-            temelOran *
-            düzeltme,
+            temelOran * düzeltme,
             0,
             0.80
         );
@@ -475,48 +400,48 @@ const TMS19 = (() => {
     }
 
 
-    /*
-       Emeklilik olasılığı.
-
-       Basit model:
-       Emeklilik yaşına gelene kadar
-       olasılık 0 kabul edilir.
-    */
+    /* ========================================================
+       6. EMEKLİLİK MODELİ
+    ======================================================== */
 
     function emeklilikOlasılığı(
         yaş,
         emeklilikYaşı
     ) {
 
-        if (
-            yaş >=
-            emeklilikYaşı
-        ) {
+        yaş = güvenliSayı(
+            yaş,
+            40
+        );
 
-            return 1;
+        emeklilikYaşı = güvenliSayı(
+            emeklilikYaşı,
+            SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
+        );
 
-        }
+        if (yaş < emeklilikYaşı - 2) {
 
-
-        if (
-            yaş >=
-            emeklilikYaşı - 1
-        ) {
-
-            return 0.90;
+            return 0;
 
         }
 
-
-        if (
-            yaş >=
-            emeklilikYaşı - 2
-        ) {
+        if (yaş === emeklilikYaşı - 2) {
 
             return 0.50;
 
         }
 
+        if (yaş === emeklilikYaşı - 1) {
+
+            return 0.90;
+
+        }
+
+        if (yaş >= emeklilikYaşı) {
+
+            return 1;
+
+        }
 
         return 0;
 
@@ -524,7 +449,7 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       HAYATTA KALMA / FAYDA ALMA OLASILIĞI
+       7. HAYATTA KALMA / HAK KAZANMA OLASILIĞI
     ======================================================== */
 
     function faydaAlmaOlasılığı(
@@ -534,13 +459,7 @@ const TMS19 = (() => {
         varsayımlar
     ) {
 
-        let hayattaKalma =
-            1;
-
-
-        let çalışmayaDevam =
-            1;
-
+        let olasılık = 1;
 
         const cinsiyet =
             personel.cinsiyet
@@ -548,11 +467,6 @@ const TMS19 = (() => {
             personel.Cinsiyet
             ||
             "E";
-
-
-        const temelTurnover =
-            varsayımlar.personelDevirOranı;
-
 
         for (
             let i = 1;
@@ -567,20 +481,17 @@ const TMS19 = (() => {
                 -
                 1;
 
-
             const ölüm =
                 ölümOlasılığı(
                     yaş,
                     cinsiyet
                 );
 
-
             const turnover =
                 devirOlasılığı(
                     yaş,
-                    temelTurnover
+                    varsayımlar.personelDevirOranı
                 );
-
 
             const emeklilik =
                 emeklilikOlasılığı(
@@ -588,59 +499,58 @@ const TMS19 = (() => {
                     varsayımlar.emeklilikYaşı
                 );
 
+            /*
+               Emeklilik veya şirketten ayrılma
+               durumuna ilişkin hak kazanma varsayımı.
 
-            if (
-                emeklilik > 0
-            ) {
+               İstenirse personel bazında override edilebilir.
+            */
 
-                /*
-                   Emeklilik yılına kadar
-                   çalışma devam eder.
-                */
+            let hakKazanma;
 
-                çalışmayaDevam *=
-                    (
-                        1
-                        -
-                        turnover
-                    )
-                    *
-                    (
-                        1
-                        -
-                        ölüm
-                    );
+            if (emeklilik > 0) {
+
+                hakKazanma =
+                    varsayımlar.emeklilikHakKazanmaOranı;
 
             } else {
 
-                çalışmayaDevam *=
-                    (
-                        1
-                        -
-                        turnover
-                    )
-                    *
-                    (
-                        1
-                        -
-                        ölüm
+                hakKazanma =
+                    varsayımlar.ayrılmaHakKazanmaOranı;
+
+            }
+
+            const devam =
+                (
+                    1 - ölüm
+                )
+                *
+                (
+                    1 - turnover
+            );
+
+            olasılık *=
+                devam;
+
+            /*
+               Emeklilik yılında faydanın gerçekleşme
+               olasılığı ayrıca dikkate alınır.
+            */
+
+            if (emeklilik > 0) {
+
+                olasılık *=
+                    Math.max(
+                        0,
+                        hakKazanma
                     );
 
             }
 
-
-            hayattaKalma *=
-                (
-                    1
-                    -
-                    ölüm
-                );
-
         }
 
-
         return sınırla(
-            çalışmayaDevam,
+            olasılık,
             0,
             1
         );
@@ -649,7 +559,7 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       MAAŞ PROJEKSİYONU
+       8. MAAŞ PROJEKSİYONU
     ======================================================== */
 
     function gelecektekiMaaş(
@@ -663,7 +573,6 @@ const TMS19 = (() => {
                 mevcutMaaş
             );
 
-
         maaşArtışOranı =
             sınırla(
                 maaşArtışOranı,
@@ -671,13 +580,11 @@ const TMS19 = (() => {
                 SABİTLER.MAX_MAAŞ_ARTIŞ
             );
 
-
         return (
             mevcutMaaş
             *
             Math.pow(
-                1 +
-                maaşArtışOranı,
+                1 + maaşArtışOranı,
                 yıl
             )
         );
@@ -686,43 +593,118 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       FAYDA FORMÜLÜ
+       9. KIDEME ESAS ÜCRET
     ======================================================== */
 
-    /*
-       Türkiye kıdem tazminatı benzeri
-       basitleştirilmiş analitik model.
-
-       Gerçek uygulamada:
-       - kıdem tazminatı tavanı
-       - yasal ödeme koşulları
-       - ihbar / özel planlar
-       - şirket uygulamaları
-
-       ayrıca modellenmelidir.
-    */
-
-    function faydaHesapla(
+    function kıdemeEsasÜcret(
         maaş,
-        toplamHizmet
+        tavan,
+        katsayı = 1
     ) {
 
-        return (
-            güvenliSayı(
-                maaş
-            )
-            *
+        maaş =
             Math.max(
                 0,
-                toplamHizmet
-            )
-        );
+                güvenliSayı(
+                    maaş
+                )
+            );
+
+        tavan =
+            Math.max(
+                0,
+                güvenliSayı(
+                    tavan
+                )
+            );
+
+        katsayı =
+            Math.max(
+                0,
+                güvenliSayı(
+                    katsayı,
+                    SABİTLER.DEFAULT_KIDEM_KATSAYISI
+                )
+            );
+
+        /*
+           Kıdem tazminatında ücret,
+           ilgili tavan ile sınırlandırılır.
+        */
+
+        const esas =
+            Math.min(
+                maaş,
+                tavan
+            );
+
+        return {
+
+            brütÜcret:
+                maaş,
+
+            kıdemTavanı:
+                tavan,
+
+            kıdemeEsasÜcret:
+                esas,
+
+            tavanAşımı:
+                Math.max(
+                    0,
+                    maaş - tavan
+                ),
+
+            katsayı
+
+        };
 
     }
 
 
     /* ========================================================
-       İSKONTO
+       10. KIDEM TAZMİNATI HESABI
+    ======================================================== */
+
+    function kıdemTazminatıHesapla(
+        maaş,
+        toplamHizmet,
+        varsayımlar
+    ) {
+
+        const ücret =
+            kıdemeEsasÜcret(
+                maaş,
+                varsayımlar.kıdemTazminatıTavanı,
+                varsayımlar.kıdemKatsayısı
+            );
+
+        const brütKıdem =
+            ücret.kıdemeEsasÜcret
+            *
+            Math.max(
+                0,
+                toplamHizmet
+            )
+            *
+            ücret.katsayı;
+
+        return {
+
+            ...ücret,
+
+            toplamHizmet,
+
+            brütKıdemTazminatı:
+                brütKıdem
+
+        };
+
+    }
+
+
+    /* ========================================================
+       11. İSKONTO FAKTÖRÜ
     ======================================================== */
 
     function iskontoFaktörü(
@@ -736,16 +718,18 @@ const TMS19 = (() => {
                     oran,
                     SABİTLER.DEFAULT_İSKONTO_ORANI
                 ),
-                SABİTLER.MIN_İSKONTO,
-                SABİTLER.MAX_İSKONTO
+                SABİTLER.MIN_İSKONTO_ORANI,
+                SABİTLER.MAX_İSKONTO_ORANI
             );
-
 
         return (
             1 /
             Math.pow(
                 1 + oran,
-                yıl
+                Math.max(
+                    0,
+                    yıl
+                )
             )
         );
 
@@ -753,72 +737,97 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       PERSONEL NORMALİZASYONU
+       12. PERSONEL VERİSİ NORMALİZASYONU
     ======================================================== */
 
     function personelNormalizeEt(
-        personel,
+        hamPersonel,
         varsayımlar
     ) {
 
         const mevcutMaaş =
             güvenliSayı(
-                personel.mevcutMaaş
+                hamPersonel.mevcutMaaş
                 ??
-                personel.mevcutMaas
+                hamPersonel.mevcutMaas
                 ??
-                personel.Maaş
+                hamPersonel.brütMaaş
                 ??
-                personel.Maas
-            );
-
-
-        const yaş =
-            güvenliSayı(
-                personel.yaş
+                hamPersonel.brutMaas
                 ??
-                personel.yas
+                hamPersonel.Maaş
                 ??
-                yaşHesapla(
-                    personel.doğumTarihi
-                    ??
-                    personel.dogumTarihi,
-                    varsayımlar.değerlemeTarihi
-                ),
-                40
-            );
-
-
-        const hizmet =
-            güvenliSayı(
-                personel.hizmetSüresi
-                ??
-                personel.hizmetSuresi
-                ??
-                hizmetSüresiHesapla(
-                    personel.işeGirişTarihi
-                    ??
-                    personel.iseGirisTarihi,
-                    varsayımlar.değerlemeTarihi
-                ),
+                hamPersonel.Maas,
                 0
             );
 
+        let yaş =
+            hamPersonel.yaş
+            ??
+            hamPersonel.yas;
+
+        if (
+            yaş === undefined
+            ||
+            yaş === null
+        ) {
+
+            yaş =
+                yaşHesapla(
+                    hamPersonel.doğumTarihi
+                    ??
+                    hamPersonel.dogumTarihi,
+                    varsayımlar.değerlemeTarihi
+                );
+
+        }
+
+        yaş =
+            güvenliSayı(
+                yaş,
+                40
+            );
+
+        let hizmet =
+            hamPersonel.hizmetSüresi
+            ??
+            hamPersonel.hizmetSuresi;
+
+        if (
+            hizmet === undefined
+            ||
+            hizmet === null
+        ) {
+
+            hizmet =
+                hizmetSüresiHesapla(
+                    hamPersonel.işeGirişTarihi
+                    ??
+                    hamPersonel.iseGirisTarihi,
+                    varsayımlar.değerlemeTarihi
+                );
+
+        }
+
+        hizmet =
+            güvenliSayı(
+                hizmet,
+                0
+            );
 
         const emeklilikYaşı =
             güvenliSayı(
-                personel.emeklilikYaşı
+                hamPersonel.emeklilikYaşı
                 ??
-                personel.emeklilikYasi
+                hamPersonel.emeklilikYasi
                 ??
                 varsayımlar.emeklilikYaşı,
                 SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
             );
 
-
         return {
 
-            ...personel,
+            ...hamPersonel,
 
             mevcutMaaş,
 
@@ -830,9 +839,9 @@ const TMS19 = (() => {
             emeklilikYaşı,
 
             cinsiyet:
-                personel.cinsiyet
+                hamPersonel.cinsiyet
                 ??
-                personel.Cinsiyet
+                hamPersonel.Cinsiyet
                 ??
                 "E"
 
@@ -842,7 +851,7 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       PERSONEL BAZLI AKTÜERYAL PROJEKSİYON
+       13. PERSONEL BAZLI AKTÜERYAL PROJEKSİYON
     ======================================================== */
 
     function personelProjeksiyonu(
@@ -856,55 +865,53 @@ const TMS19 = (() => {
                 varsayımlar
             );
 
-
-        const yaş =
+        const başlangıçYaşı =
             personel.yaş;
 
-
-        const hizmet =
+        const mevcutHizmet =
             personel.hizmetSüresi;
-
 
         const emeklilikYaşı =
             personel.emeklilikYaşı;
 
+        /*
+           Emeklilik yaşına kadar projeksiyon.
+        */
+
+        const kalanYıl =
+            Math.max(
+                1,
+                Math.ceil(
+                    emeklilikYaşı
+                    -
+                    başlangıçYaşı
+                )
+            );
 
         const maksimumYıl =
             Math.min(
                 SABİTLER.MAKS_PROJEKSİYON_YILI,
-                Math.max(
-                    1,
-                    emeklilikYaşı
-                    -
-                    yaş
-                    +
-                    1
-                )
+                kalanYıl
             );
-
 
         const yıllık = [];
 
+        let kapanışDBO = 0;
 
-        let DBO =
-            0;
+        let toplamCariHizmet = 0;
 
+        let toplamFaiz = 0;
 
-        let öncekiDBO =
-            0;
+        let toplamBeklenenFayda = 0;
 
+        let toplamBugünküDeğer = 0;
 
-        let toplamCariHizmet =
-            0;
-
-
-        let toplamFaiz =
-            0;
+        let öncekiDBO = 0;
 
 
-        let toplamBeklenenFayda =
-            0;
-
+        /* ----------------------------------------------------
+           YIL BAZLI PROJEKSİYON
+        ---------------------------------------------------- */
 
         for (
             let yıl = 1;
@@ -913,46 +920,59 @@ const TMS19 = (() => {
         ) {
 
             const gelecekYaş =
-                yaş
+                başlangıçYaşı
                 +
                 yıl;
-
 
             const gelecekHizmet =
-                hizmet
+                mevcutHizmet
                 +
                 yıl;
 
-
-            const maaş =
-                gelecektekiMaaş(
+            const gelecektekiMaaş =
+                gelecektekiMaaşFonksiyonu(
                     personel.mevcutMaaş,
                     yıl,
                     varsayımlar.maaşArtışOranı
                 );
 
-
-            const beklenenFayda =
-                faydaHesapla(
-                    maaş,
-                    gelecekHizmet
+            const kıdem =
+                kıdemTazminatıHesapla(
+                    gelecektekiMaaş,
+                    gelecekHizmet,
+                    varsayımlar
                 );
 
+            const ölüm =
+                ölümOlasılığı(
+                    gelecekYaş,
+                    personel.cinsiyet
+                );
+
+            const turnover =
+                devirOlasılığı(
+                    gelecekYaş,
+                    varsayımlar.personelDevirOranı
+                );
+
+            const emeklilik =
+                emeklilikOlasılığı(
+                    gelecekYaş,
+                    emeklilikYaşı
+                );
 
             const faydaOlasılığı =
                 faydaAlmaOlasılığı(
-                    yaş,
+                    başlangıçYaşı,
                     yıl,
                     personel,
                     varsayımlar
                 );
 
-
-            const beklenenFaydaTutari =
-                beklenenFayda
+            const beklenenFayda =
+                kıdem.brütKıdemTazminatı
                 *
                 faydaOlasılığı;
-
 
             const iskonto =
                 iskontoFaktörü(
@@ -960,60 +980,47 @@ const TMS19 = (() => {
                     yıl
                 );
 
-
             const bugünküDeğer =
-                beklenenFaydaTutari
+                beklenenFayda
                 *
                 iskonto;
 
 
-            /*
-               PUC:
-               Toplam faydanın hizmet yılına
-               dağıtılması.
-            */
+            /* ------------------------------------------------
+               PUC ATTRIBUTION
+            ------------------------------------------------ */
 
             const toplamHizmet =
                 Math.max(
                     gelecekHizmet,
-                    1
+                    0.0001
                 );
 
+            /*
+               PUC yaklaşımı:
+               Toplam beklenen fayda,
+               hizmet dönemlerine sistematik olarak dağıtılır.
+            */
 
-            const birimFayda =
-                beklenenFaydaTutari
+            const yıllıkBirimFayda =
+                beklenenFayda
                 /
                 toplamHizmet;
 
-
             const geçmişHizmeteAtfedilen =
-                birimFayda
+                yıllıkBirimFayda
                 *
-                hizmet;
-
+                mevcutHizmet;
 
             const yılDBO =
                 geçmişHizmeteAtfedilen
                 *
                 iskonto;
 
-
-            /*
-               Cari hizmet maliyeti:
-               Bir yıllık ilave hizmetin
-               bugünkü değeri.
-            */
-
             const cariHizmetMaliyeti =
-                birimFayda
+                yıllıkBirimFayda
                 *
                 iskonto;
-
-
-            /*
-               Faiz maliyeti:
-               Önceki DBO × iskonto oranı.
-            */
 
             const faizMaliyeti =
                 öncekiDBO
@@ -1031,18 +1038,43 @@ const TMS19 = (() => {
                 hizmet:
                     gelecekHizmet,
 
-                maaş,
+                maaş:
+                    gelecektekiMaaş,
 
-                beklenenFayda,
+                kıdemTavanı:
+                    kıdem.kıdemTavanı,
+
+                kıdemeEsasÜcret:
+                    kıdem.kıdemeEsasÜcret,
+
+                tavanAşımı:
+                    kıdem.tavanAşımı,
+
+                brütKıdemTazminatı:
+                    kıdem.brütKıdemTazminatı,
+
+                ölümOlasılığı:
+                    ölüm,
+
+                turnoverOlasılığı:
+                    turnover,
+
+                emeklilikOlasılığı:
+                    emeklilik,
 
                 faydaOlasılığı,
 
-                beklenenFaydaTutari,
+                beklenenFayda,
 
                 iskontoFaktörü:
                     iskonto,
 
                 bugünküDeğer,
+
+                PUC:
+                    yıllıkBirimFayda,
+
+                geçmişHizmeteAtfedilen,
 
                 DBO:
                     yılDBO,
@@ -1057,49 +1089,125 @@ const TMS19 = (() => {
             öncekiDBO =
                 yılDBO;
 
-
-            DBO =
+            kapanışDBO =
                 yılDBO;
-
 
             toplamCariHizmet +=
                 cariHizmetMaliyeti;
 
-
             toplamFaiz +=
                 faizMaliyeti;
 
-
             toplamBeklenenFayda +=
-                beklenenFaydaTutari;
+                beklenenFayda;
+
+            toplamBugünküDeğer +=
+                bugünküDeğer;
 
         }
 
 
-        return {
+        /* ----------------------------------------------------
+           BUGÜNKÜ DÖNEM KAPANIŞ DEĞERİ
+        ---------------------------------------------------- */
+
+        const mevcutKıdem =
+            kıdemTazminatıHesapla(
+                personel.mevcutMaaş,
+                mevcutHizmet,
+                varsayımlar
+            );
+
+
+        /*
+           PUC yaklaşımında mevcut hizmet süresine
+           ilişkin yükümlülük, gelecekteki faydanın
+           bugünkü değerinin hizmete atfedilen kısmıdır.
+        */
+
+        let mevcutDBO = 0;
+
+        if (
+            yıllık.length > 0
+        ) {
+
+            mevcutDBO =
+                yıllık[0].DBO;
+
+        }
+
+
+        /*
+           Eğer personel emeklilik yaşına çok yakınsa
+           modelin stabil kalması için mevcut kıdem
+           bilgisi ayrıca tutulur.
+        */
+
+        const sonuç = {
 
             personel,
+
+            mevcutKıdem,
 
             yıllık,
 
             kapanışDBO:
-                DBO,
+
+                mevcutDBO,
+
+            gelecektekiToplamDBO:
+
+                kapanışDBO,
 
             cariHizmetMaliyeti:
+
                 toplamCariHizmet,
 
             faizMaliyeti:
+
                 toplamFaiz,
 
-            toplamBeklenenFayda
+            toplamBeklenenFayda,
+
+            toplamBugünküDeğer,
+
+            emekliliğeKalanYıl:
+
+                Math.max(
+                    0,
+                    emeklilikYaşı
+                    -
+                    personel.yaş
+                )
 
         };
+
+        return sonuç;
 
     }
 
 
     /* ========================================================
-       TOPLU DEĞERLEME
+       14. MAAŞ PROJEKSİYON WRAPPER
+    ======================================================== */
+
+    function gelecektekiMaaşFonksiyonu(
+        mevcutMaaş,
+        yıl,
+        maaşArtışOranı
+    ) {
+
+        return gelecektekiMaaş(
+            mevcutMaaş,
+            yıl,
+            maaşArtışOranı
+        );
+
+    }
+
+
+    /* ========================================================
+       15. TOPLU DEĞERLEME
     ======================================================== */
 
     function değerle(
@@ -1107,24 +1215,21 @@ const TMS19 = (() => {
         varsayımlar
     ) {
 
-        const sonuçlar =
-            [];
+        const sonuçlar = [];
 
+        let toplamDBO = 0;
 
-        let toplamDBO =
-            0;
+        let toplamCariHizmet = 0;
 
+        let toplamFaiz = 0;
 
-        let toplamCariHizmet =
-            0;
+        let toplamBeklenenFayda = 0;
 
+        let toplamBugünküDeğer = 0;
 
-        let toplamFaiz =
-            0;
+        let toplamMevcutKıdem = 0;
 
-
-        let toplamBeklenenFayda =
-            0;
+        let toplamTavanAşımı = 0;
 
 
         personelListesi.forEach(
@@ -1136,26 +1241,30 @@ const TMS19 = (() => {
                         varsayımlar
                     );
 
-
                 sonuçlar.push(
                     sonuç
                 );
 
-
                 toplamDBO +=
                     sonuç.kapanışDBO;
-
 
                 toplamCariHizmet +=
                     sonuç.cariHizmetMaliyeti;
 
-
                 toplamFaiz +=
                     sonuç.faizMaliyeti;
 
-
                 toplamBeklenenFayda +=
                     sonuç.toplamBeklenenFayda;
+
+                toplamBugünküDeğer +=
+                    sonuç.toplamBugünküDeğer;
+
+                toplamMevcutKıdem +=
+                    sonuç.mevcutKıdem.brütKıdemTazminatı;
+
+                toplamTavanAşımı +=
+                    sonuç.mevcutKıdem.tavanAşımı;
 
             }
         );
@@ -1172,7 +1281,13 @@ const TMS19 = (() => {
 
             toplamFaiz,
 
-            toplamBeklenenFayda
+            toplamBeklenenFayda,
+
+            toplamBugünküDeğer,
+
+            toplamMevcutKıdem,
+
+            toplamTavanAşımı
 
         };
 
@@ -1180,36 +1295,18 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       DBO KÖPRÜSÜ
+       16. DBO KÖPRÜSÜ
     ======================================================== */
 
     function dboKöprüsü(
-        değerleme
+        değerleme,
+        açılışDBO = 0,
+        ödemeler = 0,
+        aktüeryalKazançKayıp = 0
     ) {
-
-        const açılış =
-            0;
-
-
-        const cariHizmet =
-            değerleme.toplamCariHizmet;
-
-
-        const faiz =
-            değerleme.toplamFaiz;
-
-
-        const aktüeryal =
-            0;
-
-
-        const ödemeler =
-            0;
-
 
         const kapanış =
             değerleme.toplamDBO;
-
 
         return [
 
@@ -1219,7 +1316,7 @@ const TMS19 = (() => {
                     "Açılış DBO",
 
                 tutar:
-                    açılış,
+                    açılışDBO,
 
                 tür:
                     "base"
@@ -1232,7 +1329,7 @@ const TMS19 = (() => {
                     "Cari Hizmet Maliyeti",
 
                 tutar:
-                    cariHizmet,
+                    değerleme.toplamCariHizmet,
 
                 tür:
                     "pnl"
@@ -1242,10 +1339,10 @@ const TMS19 = (() => {
             {
 
                 açıklama:
-                    "Faiz Maliyeti",
+                    "Net Faiz Maliyeti",
 
                 tutar:
-                    faiz,
+                    değerleme.toplamFaiz,
 
                 tür:
                     "pnl"
@@ -1255,10 +1352,10 @@ const TMS19 = (() => {
             {
 
                 açıklama:
-                    "Aktüeryal Yeniden Ölçüm",
+                    "Aktüeryal Kazanç / Kayıp",
 
                 tutar:
-                    aktüeryal,
+                    aktüeryalKazançKayıp,
 
                 tür:
                     "oci"
@@ -1271,10 +1368,14 @@ const TMS19 = (() => {
                     "Fayda Ödemeleri",
 
                 tutar:
-                    -ödemeler,
+                    -Math.abs(
+                        güvenliSayı(
+                            ödemeler
+                        )
+                    ),
 
                 tür:
-                    "base"
+                    "cash"
 
             },
 
@@ -1297,15 +1398,14 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       YILLIK PROJEKSİYON
+       17. YILLIK PROJEKSİYON
     ======================================================== */
 
     function yıllıkProjeksiyon(
         personelSonuçları
     ) {
 
-        const harita =
-            {};
+        const harita = {};
 
 
         personelSonuçları.forEach(
@@ -1343,6 +1443,9 @@ const TMS19 = (() => {
                                     0,
 
                                 toplamBugünküDeğer:
+                                    0,
+
+                                toplamBrütKıdem:
                                     0
 
                             };
@@ -1358,25 +1461,23 @@ const TMS19 = (() => {
 
                         hedef.personelSayısı++;
 
-
                         hedef.toplamDBO +=
                             dönem.DBO;
-
 
                         hedef.toplamCariHizmetMaliyeti +=
                             dönem.cariHizmetMaliyeti;
 
-
                         hedef.toplamFaizMaliyeti +=
                             dönem.faizMaliyeti;
 
-
                         hedef.toplamBeklenenFayda +=
-                            dönem.beklenenFaydaTutari;
-
+                            dönem.beklenenFayda;
 
                         hedef.toplamBugünküDeğer +=
                             dönem.bugünküDeğer;
+
+                        hedef.toplamBrütKıdem +=
+                            dönem.brütKıdemTazminatı;
 
                     }
                 );
@@ -1385,149 +1486,142 @@ const TMS19 = (() => {
         );
 
 
-        return {
-
-            yıllık:
-                Object.values(
-                    harita
-                ).sort(
-                    (
-                        a,
-                        b
-                    ) =>
-                        a.yıl
-                        -
-                        b.yıl
-                )
-
-        };
+        return Object.values(
+            harita
+        ).sort(
+            (
+                a,
+                b
+            ) =>
+                a.yıl - b.yıl
+        );
 
     }
 
 
     /* ========================================================
-       DUYARLILIK
+       18. DUYARLILIK ANALİZİ
     ======================================================== */
 
-    function tekDuyarlılık(
+    function duyarlılıkHesapla(
         personel,
-        varsayımlar,
-        alan,
-        değişim
+        varsayımlar
     ) {
 
-        const yeni =
-            {
-                ...varsayımlar
-            };
-
-
-        if (
-            alan ===
-            "iskonto"
-        ) {
-
-            yeni.iskontoOranı =
-                varsayımlar.iskontoOranı
-                +
-                değişim;
-
-        }
-
-
-        if (
-            alan ===
-            "maaş"
-        ) {
-
-            yeni.maaşArtışOranı =
-                varsayımlar.maaşArtışOranı
-                +
-                değişim;
-
-        }
-
-
-        const sonuç =
+        const baz =
             değerle(
                 personel,
-                yeni
+                varsayımlar
             );
 
-
-        return {
-
-            dbo:
-                sonuç.toplamDBO
-
-        };
-
-    }
+        const bazDBO =
+            baz.toplamDBO;
 
 
-    function duyarlılık(
-        personel,
-        varsayımlar,
-        bazDBO
-    ) {
-
-        const iskontoMinus =
-            tekDuyarlılık(
-                personel,
-                varsayımlar,
-                "iskonto",
-                -0.01
-            );
-
-
-        const iskontoPlus =
-            tekDuyarlılık(
-                personel,
-                varsayımlar,
-                "iskonto",
-                0.01
-            );
-
-
-        const maaşMinus =
-            tekDuyarlılık(
-                personel,
-                varsayımlar,
-                "maaş",
-                -0.01
-            );
-
-
-        const maaşPlus =
-            tekDuyarlılık(
-                personel,
-                varsayımlar,
-                "maaş",
-                0.01
-            );
-
-
-        function hazırla(
-            veri
+        function senaryo(
+            alan,
+            değişim
         ) {
 
-            const değişim =
-                veri.dbo
+            const yeni =
+                {
+                    ...varsayımlar
+                };
+
+
+            if (
+                alan ===
+                "iskonto"
+            ) {
+
+                yeni.iskontoOranı =
+                    sınırla(
+                        varsayımlar.iskontoOranı
+                        +
+                        değişim,
+                        SABİTLER.MIN_İSKONTO_ORANI,
+                        SABİTLER.MAX_İSKONTO_ORANI
+                    );
+
+            }
+
+
+            if (
+                alan ===
+                "maaş"
+            ) {
+
+                yeni.maaşArtışOranı =
+                    sınırla(
+                        varsayımlar.maaşArtışOranı
+                        +
+                        değişim,
+                        SABİTLER.MIN_MAAŞ_ARTIŞI,
+                        SABİTLER.MAX_MAAŞ_ARTIŞI
+                    );
+
+            }
+
+
+            if (
+                alan ===
+                "turnover"
+            ) {
+
+                yeni.personelDevirOranı =
+                    sınırla(
+                        varsayımlar.personelDevirOranı
+                        +
+                        değişim,
+                        SABİTLER.MIN_TURNOVER,
+                        SABİTLER.MAX_TURNOVER
+                    );
+
+            }
+
+
+            if (
+                alan ===
+                "tavan"
+            ) {
+
+                yeni.kıdemTazminatıTavanı =
+                    Math.max(
+                        0,
+                        varsayımlar.kıdemTazminatıTavanı
+                        *
+                        (
+                            1 +
+                            değişim
+                        )
+                    );
+
+            }
+
+
+            const sonuç =
+                değerle(
+                    personel,
+                    yeni
+                );
+
+
+            const fark =
+                sonuç.toplamDBO
                 -
                 bazDBO;
 
 
             return {
 
-                dbo:
-                    veri.dbo,
+                DBO:
+                    sonuç.toplamDBO,
 
-                change:
-                    değişim,
+                fark,
 
-                changePercent:
+                farkYüzdesi:
                     bazDBO !== 0
-                        ? değişim /
+                        ? fark /
                           bazDBO
                         : 0
 
@@ -1538,42 +1632,117 @@ const TMS19 = (() => {
 
         return {
 
-            discount: {
+            iskontoOranı: {
 
-                minus:
-                    hazırla(
-                        iskontoMinus
+                eksi100bp:
+                    senaryo(
+                        "iskonto",
+                        -0.01
                     ),
 
-                base:
-                    hazırla({
-                        dbo:
-                            bazDBO
-                    }),
+                baz:
+                    {
+                        DBO:
+                            bazDBO,
 
-                plus:
-                    hazırla(
-                        iskontoPlus
+                        fark:
+                            0,
+
+                        farkYüzdesi:
+                            0
+                    },
+
+                artı100bp:
+                    senaryo(
+                        "iskonto",
+                        0.01
                     )
 
             },
 
-            salary: {
 
-                minus:
-                    hazırla(
-                        maaşMinus
+            maaşArtışı: {
+
+                eksi100bp:
+                    senaryo(
+                        "maaş",
+                        -0.01
                     ),
 
-                base:
-                    hazırla({
-                        dbo:
-                            bazDBO
-                    }),
+                baz:
+                    {
+                        DBO:
+                            bazDBO,
 
-                plus:
-                    hazırla(
-                        maaşPlus
+                        fark:
+                            0,
+
+                        farkYüzdesi:
+                            0
+                    },
+
+                artı100bp:
+                    senaryo(
+                        "maaş",
+                        0.01
+                    )
+
+            },
+
+
+            turnover: {
+
+                eksi100bp:
+                    senaryo(
+                        "turnover",
+                        -0.01
+                    ),
+
+                baz:
+                    {
+                        DBO:
+                            bazDBO,
+
+                        fark:
+                            0,
+
+                        farkYüzdesi:
+                            0
+                    },
+
+                artı100bp:
+                    senaryo(
+                        "turnover",
+                        0.01
+                    )
+
+            },
+
+
+            kıdemTavanı: {
+
+                eksi10:
+                    senaryo(
+                        "tavan",
+                        -0.10
+                    ),
+
+                baz:
+                    {
+                        DBO:
+                            bazDBO,
+
+                        fark:
+                            0,
+
+                        farkYüzdesi:
+                            0
+                    },
+
+                artı10:
+                    senaryo(
+                        "tavan",
+                        0.10
                     )
 
             }
@@ -1584,7 +1753,7 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       VERİ KALİTESİ
+       19. VERİ KALİTESİ
     ======================================================== */
 
     function veriKalitesi(
@@ -1592,12 +1761,46 @@ const TMS19 = (() => {
         varsayımlar
     ) {
 
-        let skor =
-            100;
+        let skor = 100;
+
+        const hatalar = [];
+
+        const uyarılar = [];
 
 
-        const hatalar =
-            [];
+        if (
+            !Array.isArray(
+                personel
+            )
+            ||
+            personel.length === 0
+        ) {
+
+            return {
+
+                kaliteSkoru:
+                    0,
+
+                seviye:
+                    "veri yok",
+
+                toplamHata:
+                    1,
+
+                toplamUyarı:
+                    0,
+
+                hatalar:
+                    [
+                        "Personel verisi bulunamadı."
+                    ],
+
+                uyarılar:
+                    []
+
+            };
+
+        }
 
 
         personel.forEach(
@@ -1605,6 +1808,10 @@ const TMS19 = (() => {
                 p,
                 index
             ) => {
+
+                const sıra =
+                    index + 1;
+
 
                 const doğum =
                     tarihOku(
@@ -1627,30 +1834,31 @@ const TMS19 = (() => {
                         p.mevcutMaaş
                         ??
                         p.mevcutMaas
+                        ??
+                        p.brütMaaş
+                        ??
+                        p.brutMaas,
+                        0
                     );
 
 
-                if (
-                    !doğum
-                ) {
+                if (!doğum) {
 
-                    skor -= 8;
+                    skor -= 5;
 
                     hatalar.push(
-                        `Personel ${index + 1}: doğum tarihi eksik.`
+                        `Personel ${sıra}: doğum tarihi bulunamadı.`
                     );
 
                 }
 
 
-                if (
-                    !giriş
-                ) {
+                if (!giriş) {
 
-                    skor -= 8;
+                    skor -= 5;
 
                     hatalar.push(
-                        `Personel ${index + 1}: işe giriş tarihi eksik.`
+                        `Personel ${sıra}: işe giriş tarihi bulunamadı.`
                     );
 
                 }
@@ -1663,7 +1871,24 @@ const TMS19 = (() => {
                     skor -= 10;
 
                     hatalar.push(
-                        `Personel ${index + 1}: geçerli maaş bulunamadı.`
+                        `Personel ${sıra}: geçerli brüt maaş bulunamadı.`
+                    );
+
+                }
+
+
+                if (
+                    doğum
+                    &&
+                    giriş
+                    &&
+                    giriş < doğum
+                ) {
+
+                    skor -= 15;
+
+                    hatalar.push(
+                        `Personel ${sıra}: işe giriş tarihi doğum tarihinden önce.`
                     );
 
                 }
@@ -1676,7 +1901,7 @@ const TMS19 = (() => {
             varsayımlar.iskontoOranı <= 0
         ) {
 
-            skor -= 20;
+            skor -= 15;
 
             hatalar.push(
                 "İskonto oranı geçerli değil."
@@ -1686,14 +1911,42 @@ const TMS19 = (() => {
 
 
         if (
-            varsayımlar.maaşArtışOranı <
-            -0.50
+            varsayımlar.maaşArtışOranı >
+            1
         ) {
 
             skor -= 10;
 
+            uyarılar.push(
+                "Maaş artış varsayımı %100'ün üzerindedir."
+            );
+
+        }
+
+
+        if (
+            varsayımlar.kıdemTazminatıTavanı <= 0
+        ) {
+
+            skor -= 15;
+
             hatalar.push(
-                "Maaş artış oranı olağandışı."
+                "Kıdem tazminatı tavanı geçerli değil."
+            );
+
+        }
+
+
+        if (
+            varsayımlar.emeklilikYaşı < 45
+            ||
+            varsayımlar.emeklilikYaşı > 75
+        ) {
+
+            skor -= 5;
+
+            uyarılar.push(
+                "Emeklilik yaşı olağandışı bir seviyededir."
             );
 
         }
@@ -1715,26 +1968,26 @@ const TMS19 = (() => {
         ) {
 
             seviye =
-                "çok iyi";
+                "Çok İyi";
 
         } else if (
             skor >= 75
         ) {
 
             seviye =
-                "iyi";
+                "İyi";
 
         } else if (
             skor >= 60
         ) {
 
             seviye =
-                "orta";
+                "Orta";
 
         } else {
 
             seviye =
-                "zayıf";
+                "Zayıf";
 
         }
 
@@ -1749,7 +2002,12 @@ const TMS19 = (() => {
             toplamHata:
                 hatalar.length,
 
-            hatalar
+            toplamUyarı:
+                uyarılar.length,
+
+            hatalar,
+
+            uyarılar
 
         };
 
@@ -1757,7 +2015,7 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       RİSK ANALİZİ
+       20. RİSK ANALİZİ
     ======================================================== */
 
     function riskAnalizi(
@@ -1766,65 +2024,96 @@ const TMS19 = (() => {
         sensitivity
     ) {
 
-        const riskler =
-            [];
+        const riskler = [];
 
 
-        const iskontoHassasiyeti =
-            Math.max(
-                Math.abs(
-                    sensitivity.discount.minus.changePercent
-                ),
-                Math.abs(
-                    sensitivity.discount.plus.changePercent
+        function enYüksekEtki(
+            alan
+        ) {
+
+            const değerler =
+                Object.values(
+                    sensitivity[
+                        alan
+                    ]
                 )
+                .map(
+                    x =>
+                        Math.abs(
+                            x.farkYüzdesi
+                            ??
+                            0
+                        )
+                );
+
+            return Math.max(
+                ...değerler
+            );
+
+        }
+
+
+        const iskontoEtki =
+            enYüksekEtki(
+                "iskontoOranı"
             );
 
 
-        const maaşHassasiyeti =
-            Math.max(
-                Math.abs(
-                    sensitivity.salary.minus.changePercent
-                ),
-                Math.abs(
-                    sensitivity.salary.plus.changePercent
-                )
+        const maaşEtki =
+            enYüksekEtki(
+                "maaşArtışı"
+            );
+
+
+        const turnoverEtki =
+            enYüksekEtki(
+                "turnover"
+            );
+
+
+        const tavanEtki =
+            enYüksekEtki(
+                "kıdemTavanı"
             );
 
 
         if (
-            iskontoHassasiyeti >
-            0.10
+            iskontoEtki >= 0.10
         ) {
 
             riskler.push({
 
-                seviye:
-                    "yüksek",
-
                 alan:
                     "İskonto Oranı",
 
+                seviye:
+                    "Yüksek",
+
+                etki:
+                    iskontoEtki,
+
                 açıklama:
-                    "DBO, iskonto oranındaki değişimlere yüksek hassasiyet göstermektedir."
+                    "DBO iskonto oranındaki değişimlere yüksek hassasiyet göstermektedir."
 
             });
 
         } else if (
-            iskontoHassasiyeti >
-            0.05
+            iskontoEtki >= 0.05
         ) {
 
             riskler.push({
 
-                seviye:
-                    "orta",
-
                 alan:
                     "İskonto Oranı",
 
+                seviye:
+                    "Orta",
+
+                etki:
+                    iskontoEtki,
+
                 açıklama:
-                    "İskonto varsayımındaki değişiklik DBO üzerinde anlamlı etki yaratabilir."
+                    "İskonto oranı DBO açısından önemli bir aktüeryal varsayımdır."
 
             });
 
@@ -1832,46 +2121,96 @@ const TMS19 = (() => {
 
 
         if (
-            maaşHassasiyeti >
-            0.10
+            maaşEtki >= 0.10
         ) {
 
             riskler.push({
 
-                seviye:
-                    "yüksek",
-
                 alan:
                     "Maaş Artış Oranı",
 
+                seviye:
+                    "Yüksek",
+
+                etki:
+                    maaşEtki,
+
                 açıklama:
-                    "Gelecekteki maaş artışları DBO üzerinde yüksek hassasiyet yaratmaktadır."
+                    "Uzun vadeli ücret artışları DBO üzerinde yüksek etki yaratmaktadır."
 
             });
 
         } else if (
-            maaşHassasiyeti >
-            0.05
+            maaşEtki >= 0.05
         ) {
 
             riskler.push({
 
-                seviye:
-                    "orta",
-
                 alan:
                     "Maaş Artış Oranı",
 
+                seviye:
+                    "Orta",
+
+                etki:
+                    maaşEtki,
+
                 açıklama:
-                    "Maaş artış varsayımı DBO açısından önemli bir aktüeryal varsayımdır."
+                    "Maaş artış varsayımı DBO üzerinde anlamlı etkiye sahiptir."
 
             });
 
         }
 
 
-        const yaşlar =
-            personel.map(
+        if (
+            tavanEtki >= 0.05
+        ) {
+
+            riskler.push({
+
+                alan:
+                    "Kıdem Tazminatı Tavanı",
+
+                seviye:
+                    "Orta",
+
+                etki:
+                    tavanEtki,
+
+                açıklama:
+                    "Kıdem tazminatı tavanındaki değişiklik DBO üzerinde anlamlı etki yaratmaktadır."
+
+            });
+
+        }
+
+
+        if (
+            turnoverEtki >= 0.05
+        ) {
+
+            riskler.push({
+
+                alan:
+                    "Personel Devir Oranı",
+
+                seviye:
+                    "Orta",
+
+                etki:
+                    turnoverEtki,
+
+                açıklama:
+                    "Personel hareketliliği DBO'nun büyüklüğünü anlamlı şekilde etkileyebilir."
+
+            });
+
+        }
+
+
+        const yaş45Üzeri =
+            personel.filter(
                 p =>
                     güvenliSayı(
                         p.yaş
@@ -1879,13 +2218,7 @@ const TMS19 = (() => {
                         p.yas,
                         0
                     )
-            );
-
-
-        const yaş45Üzeri =
-            yaşlar.filter(
-                yaş =>
-                    yaş >= 45
+                    >= 45
             ).length;
 
 
@@ -1894,41 +2227,23 @@ const TMS19 = (() => {
             &&
             yaş45Üzeri /
             personel.length
-            >
-            0.40
+            >= 0.40
         ) {
 
             riskler.push({
 
-                seviye:
-                    "orta",
-
                 alan:
-                    "Demografik Yapı",
-
-                açıklama:
-                    "Çalışanların önemli bir bölümü 45 yaş üzerindedir. DBO'nun emeklilik ve maaş varsayımlarına duyarlılığı artabilir."
-
-            });
-
-        }
-
-
-        if (
-            personel.length <
-            10
-        ) {
-
-            riskler.push({
+                    "Demografik Risk",
 
                 seviye:
-                    "orta",
+                    "Orta",
 
-                alan:
-                    "Veri Seti",
+                etki:
+                    yaş45Üzeri /
+                    personel.length,
 
                 açıklama:
-                    "Küçük personel popülasyonu aktüeryal varsayımların istatistiksel kalibrasyonunu sınırlayabilir."
+                    "Çalışan popülasyonunun önemli bölümü 45 yaş üzerindedir."
 
             });
 
@@ -1936,6 +2251,9 @@ const TMS19 = (() => {
 
 
         return {
+
+            toplamRisk:
+                riskler.length,
 
             riskler
 
@@ -1945,71 +2263,86 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       CFO YÖNETİCİ ÖZETİ
+       21. CFO YÖNETİCİ ÖZETİ
     ======================================================== */
 
     function yöneticiÖzeti(
         değerleme,
         sensitivity,
-        risk
+        risk,
+        kalite
     ) {
 
         const DBO =
             değerleme.toplamDBO;
 
+        const cariHizmet =
+            değerleme.toplamCariHizmet;
 
-        const PnL =
-            değerleme.toplamCariHizmet
-            +
+        const faiz =
             değerleme.toplamFaiz;
 
+        const dönemPnl =
+            cariHizmet
+            +
+            faiz;
 
-        const OCI =
-            0;
-
-
-        const PnLDBOOranı =
-            DBO !== 0
-                ? PnL / DBO
-                : 0;
+        const tavanAşımı =
+            değerleme.toplamTavanAşımı;
 
 
-        const yorumlar =
-            [];
+        const yorumlar = [];
 
 
         yorumlar.push(
-            `Toplam tanımlanmış fayda yükümlülüğü ${DBO.toLocaleString("tr-TR", {
-                maximumFractionDigits: 0
-            })} TL seviyesindedir.`
+            `Toplam DBO ${formatPara(DBO)} TL seviyesindedir.`
         );
 
 
         yorumlar.push(
-            `Cari hizmet maliyeti ve faiz maliyetinin toplam dönemsel P&L etkisi yaklaşık ${PnL.toLocaleString("tr-TR", {
-                maximumFractionDigits: 0
-            })} TL'dir.`
+            `Cari hizmet maliyeti ${formatPara(cariHizmet)} TL, net faiz maliyeti ise ${formatPara(faiz)} TL'dir.`
         );
+
+
+        yorumlar.push(
+            `Dönemsel P&L etkisi yaklaşık ${formatPara(dönemPnl)} TL'dir.`
+        );
+
+
+        if (
+            tavanAşımı > 0
+        ) {
+
+            yorumlar.push(
+                `Mevcut ücretler üzerinden toplam ${formatPara(tavanAşımı)} TL tutarında kıdem tazminatı tavanı aşımı bulunmaktadır.`
+            );
+
+        }
 
 
         const iskontoEtki =
             Math.max(
                 Math.abs(
-                    sensitivity.discount.minus.changePercent
+                    sensitivity
+                        .iskontoOranı
+                        .eksi100bp
+                        .farkYüzdesi
                 ),
                 Math.abs(
-                    sensitivity.discount.plus.changePercent
+                    sensitivity
+                        .iskontoOranı
+                        .artı100bp
+                        .farkYüzdesi
                 )
             );
 
 
         if (
-            iskontoEtki >
-            0.05
+            iskontoEtki >= 0.05
         ) {
 
             yorumlar.push(
-                "DBO'nun iskonto oranına anlamlı hassasiyeti bulunmaktadır. Finansal kapanışta iskonto oranının destekleyici piyasa verileriyle belgelenmesi önemlidir."
+                "İskonto oranı DBO'nun önemli bir değerleme riskidir. Kapanışta kullanılan iskonto oranının piyasa getirileri ve benzer vadeli yüksek kaliteli tahvil getirileriyle desteklenmesi önerilir."
             );
 
         }
@@ -2018,39 +2351,49 @@ const TMS19 = (() => {
         const maaşEtki =
             Math.max(
                 Math.abs(
-                    sensitivity.salary.minus.changePercent
+                    sensitivity
+                        .maaşArtışı
+                        .eksi100bp
+                        .farkYüzdesi
                 ),
                 Math.abs(
-                    sensitivity.salary.plus.changePercent
+                    sensitivity
+                        .maaşArtışı
+                        .artı100bp
+                        .farkYüzdesi
                 )
             );
 
 
         if (
-            maaşEtki >
-            0.05
+            maaşEtki >= 0.05
         ) {
 
             yorumlar.push(
-                "Maaş artış varsayımı DBO üzerinde anlamlı etkiye sahiptir. Bütçe ve uzun vadeli ücret artış beklentileriyle tutarlılık kontrol edilmelidir."
+                "Maaş artış varsayımı DBO açısından önemli bir risk faktörüdür. Varsayımın bütçe, ücret politikası ve geçmiş gerçekleşmelerle tutarlılığı değerlendirilmelidir."
             );
 
         }
 
 
         if (
-            risk.riskler.length
+            risk.toplamRisk > 0
         ) {
 
             yorumlar.push(
-                `${risk.riskler.length} adet aktüeryal / veri riski tespit edilmiştir.`
+                `${risk.toplamRisk} adet aktüeryal risk alanı belirlenmiştir.`
             );
 
         }
 
 
         yorumlar.push(
-            "CFO perspektifinden temel odak noktaları: DBO volatilitesi, OCI hassasiyeti, iskonto oranı, maaş artışı, çalışan demografisi ve nakit ödeme profili."
+            `Model veri kalite skoru ${yuvarla(kalite.kaliteSkoru, 0)}/100 seviyesindedir.`
+        );
+
+
+        yorumlar.push(
+            "CFO perspektifinden izlenmesi gereken temel göstergeler: DBO, P&L maliyeti, OCI volatilitesi, iskonto oranı, maaş artış oranı, kıdem tazminatı tavanı, çalışan yaş dağılımı ve beklenen nakit ödeme profili."
         );
 
 
@@ -2058,11 +2401,14 @@ const TMS19 = (() => {
 
             DBO,
 
-            PnL,
+            cariHizmet,
 
-            OCI,
+            faiz,
 
-            PnLDBOOranı,
+            dönemPnl,
+
+            oci:
+                0,
 
             yorumlar
 
@@ -2072,12 +2418,12 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       TAM HESAPLAMA
+       22. TAM HESAPLAMA
     ======================================================== */
 
     function tamHesapla(
         personel,
-        varsayımlar
+        hamVarsayımlar = {}
     ) {
 
         if (
@@ -2093,45 +2439,128 @@ const TMS19 = (() => {
         }
 
 
-        varsayımlar =
-            {
+        const varsayımlar = {
 
-                iskontoOranı:
+            /*
+               Finansal varsayımlar
+            */
+
+            iskontoOranı:
+                güvenliSayı(
+                    hamVarsayımlar.iskontoOranı,
+                    SABİTLER.DEFAULT_İSKONTO_ORANI
+                ),
+
+            maaşArtışOranı:
+                güvenliSayı(
+                    hamVarsayımlar.maaşArtışOranı,
+                    SABİTLER.DEFAULT_MAAŞ_ARTIŞ_ORANI
+                ),
+
+
+            /*
+               Demografik varsayımlar
+            */
+
+            personelDevirOranı:
+                güvenliSayı(
+                    hamVarsayımlar.personelDevirOranı,
+                    SABİTLER.DEFAULT_TURNOVER_ORANI
+                ),
+
+            emeklilikYaşı:
+                güvenliSayı(
+                    hamVarsayımlar.emeklilikYaşı,
+                    SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
+                ),
+
+
+            /*
+               Türkiye kıdem tazminatı
+            */
+
+            kıdemTazminatıTavanı:
+                güvenliSayı(
+                    hamVarsayımlar.kıdemTazminatıTavanı,
+                    SABİTLER.DEFAULT_KIDEM_TAVANI
+                ),
+
+            kıdemKatsayısı:
+                güvenliSayı(
+                    hamVarsayımlar.kıdemKatsayısı,
+                    SABİTLER.DEFAULT_KIDEM_KATSAYISI
+                ),
+
+
+            /*
+               Hak kazanma varsayımları
+            */
+
+            emeklilikHakKazanmaOranı:
+                sınırla(
                     güvenliSayı(
-                        varsayımlar?.iskontoOranı,
-                        SABİTLER.DEFAULT_İSKONTO_ORANI
+                        hamVarsayımlar.emeklilikHakKazanmaOranı,
+                        1
                     ),
+                    0,
+                    1
+                ),
 
-                maaşArtışOranı:
+            ayrılmaHakKazanmaOranı:
+                sınırla(
                     güvenliSayı(
-                        varsayımlar?.maaşArtışOranı,
-                        SABİTLER.DEFAULT_MAAŞ_ARTIŞ_ORANI
+                        hamVarsayımlar.ayrılmaHakKazanmaOranı,
+                        0.50
                     ),
+                    0,
+                    1
+                ),
 
-                personelDevirOranı:
-                    güvenliSayı(
-                        varsayımlar?.personelDevirOranı,
-                        SABİTLER.DEFAULT_TURNOVER_ORANI
-                    ),
 
-                emeklilikYaşı:
-                    güvenliSayı(
-                        varsayımlar?.emeklilikYaşı,
-                        SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
-                    ),
+            /*
+               Değerleme tarihi
+            */
 
-                değerlemeTarihi:
-                    varsayımlar?.değerlemeTarihi
-                    ||
-                    new Date()
-                        .toISOString()
-                        .slice(
-                            0,
-                            10
-                        )
+            değerlemeTarihi:
+                hamVarsayımlar.değerlemeTarihi
+                ||
+                new Date()
+                    .toISOString()
+                    .slice(
+                        0,
+                        10
+                    )
 
-            };
+        };
 
+
+        varsayımlar.iskontoOranı =
+            sınırla(
+                varsayımlar.iskontoOranı,
+                SABİTLER.MIN_İSKONTO_ORANI,
+                SABİTLER.MAX_İSKONTO_ORANI
+            );
+
+
+        varsayımlar.maaşArtışOranı =
+            sınırla(
+                varsayımlar.maaşArtışOranı,
+                SABİTLER.MIN_MAAŞ_ARTIŞI,
+                SABİTLER.MAX_MAAŞ_ARTIŞI
+            );
+
+
+        varsayımlar.personelDevirOranı =
+            sınırla(
+                varsayımlar.personelDevirOranı,
+                SABİTLER.MIN_TURNOVER,
+                SABİTLER.MAX_TURNOVER
+            );
+
+
+        /*
+           1. Değerleme
+        */
 
         const değerleme =
             değerle(
@@ -2140,19 +2569,42 @@ const TMS19 = (() => {
             );
 
 
-        const köprü =
+        /*
+           2. DBO köprüsü
+        */
+
+        const dboKöprü =
             dboKöprüsü(
-                değerleme
+                değerleme,
+                güvenliSayı(
+                    hamVarsayımlar.açılışDBO,
+                    0
+                ),
+                güvenliSayı(
+                    hamVarsayımlar.faydaÖdemeleri,
+                    0
+                ),
+                güvenliSayı(
+                    hamVarsayımlar.aktüeryalKazançKayıp,
+                    0
+                )
             );
 
+
+        /*
+           3. Duyarlılık
+        */
 
         const sensitivity =
-            duyarlılık(
+            duyarlılıkHesapla(
                 personel,
-                varsayımlar,
-                değerleme.toplamDBO
+                varsayımlar
             );
 
+
+        /*
+           4. Yıllık projeksiyon
+        */
 
         const projeksiyon =
             yıllıkProjeksiyon(
@@ -2160,12 +2612,20 @@ const TMS19 = (() => {
             );
 
 
+        /*
+           5. Veri kalite
+        */
+
         const kalite =
             veriKalitesi(
                 personel,
                 varsayımlar
             );
 
+
+        /*
+           6. Risk
+        */
 
         const risk =
             riskAnalizi(
@@ -2175,17 +2635,28 @@ const TMS19 = (() => {
             );
 
 
+        /*
+           7. CFO özeti
+        */
+
         const özet =
             yöneticiÖzeti(
                 değerleme,
                 sensitivity,
-                risk
+                risk,
+                kalite
             );
 
 
+        /*
+           8. Ana sonuç objesi
+        */
+
         return {
 
-            /* ANA SONUÇLAR */
+            /* ------------------------------------------------
+               ANA KPI
+            ------------------------------------------------ */
 
             closingDBO:
                 değerleme.toplamDBO,
@@ -2197,24 +2668,40 @@ const TMS19 = (() => {
                 değerleme.toplamFaiz,
 
             oci:
-                0,
+                güvenliSayı(
+                    hamVarsayımlar.aktüeryalKazançKayıp,
+                    0
+                ),
 
             personelSayısı:
                 personel.length,
 
 
-            /* DETAY */
+            /* ------------------------------------------------
+               KIDEM
+            ------------------------------------------------ */
+
+            toplamMevcutKıdem:
+                değerleme.toplamMevcutKıdem,
+
+            toplamTavanAşımı:
+                değerleme.toplamTavanAşımı,
+
+
+            /* ------------------------------------------------
+               DETAY
+            ------------------------------------------------ */
 
             personelSonuçları:
                 değerleme.personelSonuçları,
 
             dboKöprüsü:
-                köprü,
-
-            sensitivity,
+                dboKöprü,
 
             yıllıkProjeksiyon:
                 projeksiyon,
+
+            sensitivity,
 
             veriKalitesi:
                 kalite,
@@ -2226,9 +2713,37 @@ const TMS19 = (() => {
                 özet,
 
 
-            /* MODEL */
+            /* ------------------------------------------------
+               VARSAYIMLAR
+            ------------------------------------------------ */
 
-            varsayımlar
+            varsayımlar,
+
+
+            /* ------------------------------------------------
+               METADATA
+            ------------------------------------------------ */
+
+            model:
+
+                {
+
+                    isim:
+                        "TMS 19 Aktüeryal Değerleme Motoru",
+
+                    sürüm:
+                        "V3",
+
+                    yöntem:
+                        "Projected Unit Credit Method",
+
+                    kapsam:
+                        "Türkiye Kıdem Tazminatı / Tanımlanmış Fayda",
+
+                    değerlemeTarihi:
+                        varsayımlar.değerlemeTarihi
+
+                }
 
         };
 
@@ -2236,16 +2751,291 @@ const TMS19 = (() => {
 
 
     /* ========================================================
-       PUBLIC API
+       23. PERSONEL TABLOSU İÇİN DÜZ VERİ
+    ======================================================== */
+
+    function personelTablosu(
+        sonuç
+    ) {
+
+        if (
+            !sonuç
+            ||
+            !Array.isArray(
+                sonuç.personelSonuçları
+            )
+        ) {
+
+            return [];
+
+        }
+
+
+        return sonuç.personelSonuçları.map(
+            (
+                sonuçPersonel,
+                index
+            ) => {
+
+                const p =
+                    sonuçPersonel.personel;
+
+
+                return {
+
+                    sıra:
+                        index + 1,
+
+                    sicilNo:
+                        p.sicilNo
+                        ??
+                        p.sicil
+                        ??
+                        p.id
+                        ??
+                        "",
+
+                    adSoyad:
+                        p.adSoyad
+                        ??
+                        p.ad
+                        ??
+                        p.name
+                        ??
+                        `Personel ${index + 1}`,
+
+                    yaş:
+                        yuvarla(
+                            p.yaş,
+                            1
+                        ),
+
+                    hizmetSüresi:
+                        yuvarla(
+                            p.hizmetSüresi,
+                            1
+                        ),
+
+                    mevcutMaaş:
+                        p.mevcutMaaş,
+
+                    emeklilikYaşı:
+                        p.emeklilikYaşı,
+
+                    emekliliğeKalanYıl:
+                        sonuçPersonel.emekliliğeKalanYıl,
+
+                    mevcutKıdem:
+                        sonuçPersonel
+                            .mevcutKıdem
+                            .brütKıdemTazminatı,
+
+                    kıdemeEsasÜcret:
+                        sonuçPersonel
+                            .mevcutKıdem
+                            .kıdemeEsasÜcret,
+
+                    tavanAşımı:
+                        sonuçPersonel
+                            .mevcutKıdem
+                            .tavanAşımı,
+
+                    DBO:
+                        sonuçPersonel
+                            .kapanışDBO,
+
+                    cariHizmetMaliyeti:
+                        sonuçPersonel
+                            .cariHizmetMaliyeti,
+
+                    faizMaliyeti:
+                        sonuçPersonel
+                            .faizMaliyeti
+
+                };
+
+            }
+        );
+
+    }
+
+
+    /* ========================================================
+       24. ISKONTO DUYARLILIK TABLOSU
+    ======================================================== */
+
+    function iskontoDuyarlılıkTablosu(
+        sensitivity
+    ) {
+
+        return [
+
+            {
+
+                senaryo:
+                    "İskonto oranı -100 bp",
+
+                DBO:
+                    sensitivity
+                        .iskontoOranı
+                        .eksi100bp
+                        .DBO,
+
+                fark:
+                    sensitivity
+                        .iskontoOranı
+                        .eksi100bp
+                        .fark,
+
+                farkYüzdesi:
+                    sensitivity
+                        .iskontoOranı
+                        .eksi100bp
+                        .farkYüzdesi
+
+            },
+
+            {
+
+                senaryo:
+                    "Baz Senaryo",
+
+                DBO:
+                    sensitivity
+                        .iskontoOranı
+                        .baz
+                        .DBO,
+
+                fark:
+                    0,
+
+                farkYüzdesi:
+                    0
+
+            },
+
+            {
+
+                senaryo:
+                    "İskonto oranı +100 bp",
+
+                DBO:
+                    sensitivity
+                        .iskontoOranı
+                        .artı100bp
+                        .DBO,
+
+                fark:
+                    sensitivity
+                        .iskontoOranı
+                        .artı100bp
+                        .fark,
+
+                farkYüzdesi:
+                    sensitivity
+                        .iskontoOranı
+                        .artı100bp
+                        .farkYüzdesi
+
+            }
+
+        ];
+
+    }
+
+
+    /* ========================================================
+       25. CFO DASHBOARD KPI
+    ======================================================== */
+
+    function dashboardKPI(
+        sonuç
+    ) {
+
+        const DBO =
+            güvenliSayı(
+                sonuç.closingDBO
+            );
+
+        const cariHizmet =
+            güvenliSayı(
+                sonuç.currentServiceCost
+            );
+
+        const faiz =
+            güvenliSayı(
+                sonuç.netInterestCost
+            );
+
+        const PnL =
+            cariHizmet
+            +
+            faiz;
+
+
+        const kalite =
+            sonuç.veriKalitesi
+            ?.kaliteSkoru
+            ??
+            0;
+
+
+        const risk =
+            sonuç.riskAnalizi
+            ?.toplamRisk
+            ??
+            0;
+
+
+        return {
+
+            DBO,
+
+            cariHizmetMaliyeti:
+                cariHizmet,
+
+            faizMaliyeti:
+                faiz,
+
+            dönemPnl:
+                PnL,
+
+            personelSayısı:
+                sonuç.personelSayısı,
+
+            veriKalitesi:
+                kalite,
+
+            riskSayısı:
+                risk,
+
+            mevcutKıdem:
+                sonuç.toplamMevcutKıdem,
+
+            tavanAşımı:
+                sonuç.toplamTavanAşımı
+
+        };
+
+    }
+
+
+    /* ========================================================
+       26. PUBLIC API
     ======================================================== */
 
     return {
+
+        /* Ana motor */
 
         tamHesapla,
 
         değerle,
 
         personelProjeksiyonu,
+
+
+        /* Demografik */
 
         ölümOlasılığı,
 
@@ -2255,20 +3045,43 @@ const TMS19 = (() => {
 
         faydaAlmaOlasılığı,
 
+
+        /* Finansal */
+
         gelecektekiMaaş,
 
-        faydaHesapla,
+        kıdemeEsasÜcret,
+
+        kıdemTazminatıHesapla,
 
         iskontoFaktörü,
+
+
+        /* Analitik */
+
+        duyarlılıkHesapla,
 
         veriKalitesi,
 
         riskAnalizi,
 
+        yöneticiÖzeti,
+
+
+        /* Dashboard */
+
+        personelTablosu,
+
+        iskontoDuyarlılıkTablosu,
+
+        dashboardKPI,
+
+
+        /* Sabitler */
+
         SABİTLER
 
     };
-
 
 })();
 
@@ -2277,14 +3090,152 @@ const TMS19 = (() => {
    GLOBAL ERİŞİM
 ============================================================ */
 
-window.TMS19 =
-    TMS19;
+window.TMS19 = TMS19;
 
 
 /* ============================================================
-   DEBUG
+   MOTOR KONTROL
 ============================================================ */
 
 console.log(
-    "TMS 19 Aktüeryal Motor V2 yüklendi."
+    "GK Advisory — TMS 19 Aktüeryal Motor V3 başarıyla yüklendi."
 );
+
+console.log(
+    "Yöntem:",
+    "Projected Unit Credit Method"
+);
+
+console.log(
+    "Kapsam:",
+    "Türkiye Kıdem Tazminatı / Tanımlanmış Fayda"
+);
+
+
+/* ============================================================
+   GELİŞTİRİCİ TESTİ
+============================================================ */
+
+function TMS19_Test() {
+
+    const örnekPersonel = [
+
+        {
+
+            sicilNo:
+                "1001",
+
+            adSoyad:
+                "Örnek Personel 1",
+
+            doğumTarihi:
+                "1985-05-15",
+
+            işeGirişTarihi:
+                "2015-01-01",
+
+            mevcutMaaş:
+                75000,
+
+            cinsiyet:
+                "E"
+
+        },
+
+        {
+
+            sicilNo:
+                "1002",
+
+            adSoyad:
+                "Örnek Personel 2",
+
+            doğumTarihi:
+                "1990-08-20",
+
+            işeGirişTarihi:
+                "2020-03-01",
+
+            mevcutMaaş:
+                55000,
+
+            cinsiyet:
+                "K"
+
+        }
+
+    ];
+
+
+    const varsayımlar = {
+
+        değerlemeTarihi:
+            new Date()
+                .toISOString()
+                .slice(
+                    0,
+                    10
+                ),
+
+        iskontoOranı:
+            0.28,
+
+        maaşArtışOranı:
+            0.25,
+
+        personelDevirOranı:
+            0.08,
+
+        emeklilikYaşı:
+            60,
+
+        /*
+           Dashboard üzerinden değiştirilmesi önerilir.
+        */
+
+        kıdemTazminatıTavanı:
+            50000,
+
+        kıdemKatsayısı:
+            1,
+
+        emeklilikHakKazanmaOranı:
+            1,
+
+        ayrılmaHakKazanmaOranı:
+            0.50
+
+    };
+
+
+    const sonuç =
+        TMS19.tamHesapla(
+            örnekPersonel,
+            varsayımlar
+        );
+
+
+    console.table(
+        TMS19.personelTablosu(
+            sonuç
+        )
+    );
+
+
+    console.log(
+        "TMS 19 Test Sonucu:",
+        sonuç
+    );
+
+
+    return sonuç;
+
+}
+
+
+/* ============================================================
+   İSTEĞE BAĞLI TEST
+   ============================================================ */
+
+window.TMS19_Test =
+    TMS19_Test;
