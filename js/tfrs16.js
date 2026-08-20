@@ -18267,9 +18267,9 @@ document.addEventListener("DOMContentLoaded", () => {
      remain the source of truth and are not replaced.
   ========================================================== */
 
-  const V24_SCHEMA_VERSION = "24.0";
-  const V24_PLANNING_ENGINE_VERSION = "V24.0";
-  const V24_STORAGE_KEYS = Object.freeze({
+  var V24_SCHEMA_VERSION = "24.0";
+  var V24_PLANNING_ENGINE_VERSION = "V24.0";
+  var V24_STORAGE_KEYS = Object.freeze({
     PLANS: "GK_V24_PLANS",
     VERSIONS: "GK_V24_PLAN_VERSIONS",
     LINES: "GK_V24_PLANNING_LINES",
@@ -18281,15 +18281,15 @@ document.addEventListener("DOMContentLoaded", () => {
     AUDIT: "GK_V24_PLANNING_AUDIT"
   });
 
-  const V24_PLAN_TYPES = Object.freeze(["BUDGET","FORECAST","LATEST_ESTIMATE","TARGET","SCENARIO"]);
-  const V24_PERIOD_TYPES = Object.freeze(["YEAR","QUARTER","MONTH"]);
-  const V24_BUDGET_STATUSES = Object.freeze(["DRAFT","SUBMITTED","REVIEWED","APPROVED","LOCKED"]);
-  const V24_FORECAST_STATUSES = Object.freeze(["DRAFT","FINAL","LOCKED"]);
-  const V24_SCENARIOS = Object.freeze(["BASE","UPSIDE","DOWNSIDE","STRESS"]);
-  const V24_FORECAST_METHODS = Object.freeze(["MANUAL","ACTUAL_PLUS_REMAINING_BUDGET","RUN_RATE","TREND","DRIVER_BASED"]);
-  const V24_VARIANCE_STATUSES = Object.freeze(["GREEN","YELLOW","RED"]);
+  var V24_PLAN_TYPES = Object.freeze(["BUDGET","FORECAST","LATEST_ESTIMATE","TARGET","SCENARIO"]);
+  var V24_PERIOD_TYPES = Object.freeze(["YEAR","QUARTER","MONTH"]);
+  var V24_BUDGET_STATUSES = Object.freeze(["DRAFT","SUBMITTED","REVIEWED","APPROVED","LOCKED"]);
+  var V24_FORECAST_STATUSES = Object.freeze(["DRAFT","FINAL","LOCKED"]);
+  var V24_SCENARIOS = Object.freeze(["BASE","UPSIDE","DOWNSIDE","STRESS"]);
+  var V24_FORECAST_METHODS = Object.freeze(["MANUAL","ACTUAL_PLUS_REMAINING_BUDGET","RUN_RATE","TREND","DRIVER_BASED"]);
+  var V24_VARIANCE_STATUSES = Object.freeze(["GREEN","YELLOW","RED"]);
   const V24_APPROVAL_STATUSES = Object.freeze(["DRAFT","SUBMITTED","REVIEWED","APPROVED","REJECTED"]);
-  const V24_PLANNING_PERMISSIONS = Object.freeze([
+  var V24_PLANNING_PERMISSIONS = Object.freeze([
     "planning.view","planning.create","planning.edit","planning.submit","planning.approve","planning.lock","planning.export",
     "forecast.view","forecast.create","scenario.view","scenario.manage"
   ]);
