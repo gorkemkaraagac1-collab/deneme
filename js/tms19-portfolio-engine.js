@@ -1,200 +1,1166 @@
-/* ============================================================
-   GK ADVISORY
-   TMS 19 — PERSONEL PORTFÖYÜ VE TOPLU DEĞERLEME MOTORU
+"use strict";
 
-   Amaç:
-   - Çoklu personel verisi yönetimi
-   - Personel bazında PUC hesaplama
-   - Toplam DBO
-   - Current Service Cost
-   - Interest Cost
-   - Net Liability
-   - Toplu aktüeryal risk analizi
-   - CFO seviyesinde özetleme
+/*
+===========================================================
+ GK ADVISORY
+ TMS 19 — PORTFÖY / YÖNETİM ANALİZ MOTORU
+-----------------------------------------------------------
+ Amaç:
+ Personel bazlı aktüeryal sonuçları yönetim seviyesinde
+ anlamlandırmak ve TMS 19 dashboard'una aktarmak.
 
-   Not:
-   Bu motor resmi aktüeryal rapor yerine geçmez.
-============================================================ */
+ Katman:
+ Employee Data
+      ↓
+ Actuarial Engine
+      ↓
+ Portfolio Engine
+      ↓
+ CFO / Finance Dashboard
 
-(function (window) {
-
-    "use strict";
-
-    const PortfolioEngine = {
-
-        employees: [],
-
-        results: [],
-
-        portfolioResult: null,
-
-
-        /* ====================================================
-           PERSONEL EKLE
-        ==================================================== */
-
-        addEmployee(employee) {
-
-            const normalized =
-                this.normalizeEmployee(employee);
-
-            this.employees.push(normalized);
-
-            return normalized;
-        },
+ Ana çıktılar:
+ - DBO toplamı
+ - P&L maliyeti
+ - OCI / yeniden ölçüm
+ - DBO roll-forward
+ - Personel yoğunlaşması
+ - Yaş analizi
+ - Hizmet süresi analizi
+ - Departman analizi
+ - Risk skoru
+ - Veri kalitesi
+ - Duyarlılık analizi
+===========================================================
+*/
 
 
-        /* ====================================================
-           PERSONEL LİSTESİNİ YÜKLE
-        ==================================================== */
+window.TMS19PortfolioEngine = (function () {
 
-        loadEmployees(employees) {
 
-            if (!Array.isArray(employees)) {
+    /* =====================================================
+       YARDIMCI FONKSİYONLAR
+    ===================================================== */
 
-                throw new Error(
-                    "Personel verisi bir dizi olmalıdır."
+    function number(value, fallback = 0) {
+
+        const n = Number(value);
+
+        return Number.isFinite(n)
+            ? n
+            : fallback;
+
+    }
+
+
+    function round(value, decimals = 2) {
+
+        const factor =
+            Math.pow(10, decimals);
+
+        return Math.round(
+            value * factor
+        ) / factor;
+
+    }
+
+
+    function percentage(value) {
+
+        return round(
+            value * 100,
+            2
+        );
+
+    }
+
+
+    function average(values) {
+
+        if (!values.length) {
+
+            return 0;
+
+        }
+
+        return values.reduce(
+            (a, b) => a + b,
+            0
+        ) / values.length;
+
+    }
+
+
+    function min(values) {
+
+        if (!values.length) {
+
+            return 0;
+
+        }
+
+        return Math.min(...values);
+
+    }
+
+
+    function max(values) {
+
+        if (!values.length) {
+
+            return 0;
+
+        }
+
+        return Math.max(...values);
+
+    }
+
+
+    /* =====================================================
+       PERSONEL NORMALİZASYONU
+    ===================================================== */
+
+    function normalizeEmployee(employee) {
+
+        return {
+
+            id:
+                employee.employeeNumber ??
+                employee.id ??
+                "",
+
+            name:
+                employee.name ??
+                employee.employeeName ??
+                "Bilinmeyen Personel",
+
+            department:
+                employee.department ??
+                "Belirtilmemiş",
+
+            age:
+                number(
+                    employee.currentAge ??
+                    employee.age
+                ),
+
+            service:
+                number(
+                    employee.yearsOfService ??
+                    employee.serviceYears
+                ),
+
+            salary:
+                number(
+                    employee.currentAnnualSalary ??
+                    employee.annualSalary ??
+                    employee.salary
+                )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       PERSONEL PORTFÖY ÖZETİ
+    ===================================================== */
+
+    function employeeSummary(
+        employees,
+        actuarialResults
+    ) {
+
+        const rows = [];
+
+
+        for (
+            let i = 0;
+            i < employees.length;
+            i++
+        ) {
+
+            const employee =
+                normalizeEmployee(
+                    employees[i]
                 );
 
-            }
 
-            this.employees =
-                employees.map(
-                    employee =>
-                        this.normalizeEmployee(employee)
-                );
-
-            return this.employees;
-        },
+            const actuarial =
+                actuarialResults[i] ||
+                {};
 
 
-        /* ====================================================
-           PERSONEL VERİSİNİ STANDARDİZE ET
-        ==================================================== */
+            rows.push({
 
-        normalizeEmployee(employee) {
-
-            return {
-
-                employeeNumber:
-                    employee.employeeNumber ||
-                    employee.sicilNo ||
-                    "",
+                id:
+                    employee.id,
 
                 name:
-                    employee.name ||
-                    employee.ad ||
-                    "İsimsiz Personel",
+                    employee.name,
 
                 department:
-                    employee.department ||
-                    employee.departman ||
-                    "Belirtilmemiş",
+                    employee.department,
 
-                gender:
-                    employee.gender ||
-                    employee.cinsiyet ||
-                    "",
+                age:
+                    employee.age,
 
-                currentAge:
-                    Number(
-                        employee.currentAge ||
-                        employee.yas ||
-                        0
+                service:
+                    employee.service,
+
+                salary:
+                    round(
+                        employee.salary
                     ),
 
-                yearsOfService:
-                    Number(
-                        employee.yearsOfService ||
-                        employee.hizmetSuresi ||
-                        0
+                dbo:
+                    round(
+                        number(
+                            actuarial.dbo
+                        )
                     ),
 
-                currentAnnualSalary:
-                    Number(
-                        employee.currentAnnualSalary ||
-                        employee.yillikBrutMaas ||
-                        employee.maas ||
-                        0
+                currentServiceCost:
+                    round(
+                        number(
+                            actuarial.currentServiceCost
+                        )
                     ),
 
-                openingDBO:
-                    Number(
-                        employee.openingDBO ||
-                        employee.acilisDBO ||
-                        0
+                interestCost:
+                    round(
+                        number(
+                            actuarial.interestCost
+                        )
                     ),
 
-                planAssets:
-                    Number(
-                        employee.planAssets ||
-                        employee.planVarliklari ||
-                        0
+                actuarialGainLoss:
+                    round(
+                        number(
+                            actuarial.actuarialGainLoss
+                        )
                     ),
 
                 benefitPayments:
-                    Number(
-                        employee.benefitPayments ||
-                        employee.faydaOdemeleri ||
-                        0
-                    ),
-
-                retirementAge:
-                    Number(
-                        employee.retirementAge ||
-                        employee.emeklilikYasi ||
-                        60
-                    ),
-
-                discountRate:
-                    Number(
-                        employee.discountRate ||
-                        employee.iskontoOrani ||
-                        0.30
-                    ),
-
-                salaryIncreaseRate:
-                    Number(
-                        employee.salaryIncreaseRate ||
-                        employee.maasArtisOrani ||
-                        0.30
-                    ),
-
-                inflationRate:
-                    Number(
-                        employee.inflationRate ||
-                        employee.enflasyonOrani ||
-                        0.30
-                    ),
-
-                turnoverRate:
-                    Number(
-                        employee.turnoverRate ||
-                        employee.devirOrani ||
-                        0.05
-                    ),
-
-                benefitRate:
-                    Number(
-                        employee.benefitRate ||
-                        employee.faydaOrani ||
-                        0.03
+                    round(
+                        number(
+                            actuarial.benefitPayments
+                        )
                     )
+
+            });
+
+        }
+
+
+        return rows;
+
+    }
+
+
+    /* =====================================================
+       DBO YOĞUNLAŞMASI
+    ===================================================== */
+
+    function dboConcentration(
+        rows
+    ) {
+
+        if (!rows.length) {
+
+            return {
+
+                top5Share: 0,
+
+                top10Share: 0,
+
+                highestEmployee: null,
+
+                concentrationRisk:
+                    "Veri Yok"
 
             };
 
-        },
+        }
 
 
-        /* ====================================================
-           TOPLU DEĞERLEME
-        ==================================================== */
+        const sorted =
+            [...rows].sort(
+                (a, b) =>
+                    b.dbo - a.dbo
+            );
 
-        calculatePortfolio() {
+
+        const total =
+            rows.reduce(
+                (sum, row) =>
+                    sum + row.dbo,
+                0
+            );
+
+
+        const top5 =
+            sorted
+                .slice(0, 5)
+                .reduce(
+                    (sum, row) =>
+                        sum + row.dbo,
+                    0
+                );
+
+
+        const top10 =
+            sorted
+                .slice(0, 10)
+                .reduce(
+                    (sum, row) =>
+                        sum + row.dbo,
+                    0
+                );
+
+
+        const top5Share =
+            total > 0
+                ? top5 / total
+                : 0;
+
+
+        const top10Share =
+            total > 0
+                ? top10 / total
+                : 0;
+
+
+        let risk =
+            "Düşük";
+
+
+        if (
+            top5Share >= 0.50
+        ) {
+
+            risk =
+                "Yüksek";
+
+        }
+        else if (
+            top5Share >= 0.30
+        ) {
+
+            risk =
+                "Orta";
+
+        }
+
+
+        return {
+
+            top5Share:
+                percentage(
+                    top5Share
+                ),
+
+            top10Share:
+                percentage(
+                    top10Share
+                ),
+
+            highestEmployee:
+                sorted[0] || null,
+
+            concentrationRisk:
+                risk
+
+        };
+
+    }
+
+
+    /* =====================================================
+       YAŞ ANALİZİ
+    ===================================================== */
+
+    function ageAnalysis(
+        employees
+    ) {
+
+        const ages =
+            employees
+                .map(
+                    employee =>
+                        normalizeEmployee(
+                            employee
+                        ).age
+                )
+                .filter(
+                    age => age > 0
+                );
+
+
+        const bands = {
+
+            "30 Yaş Altı": 0,
+
+            "30-39": 0,
+
+            "40-49": 0,
+
+            "50-59": 0,
+
+            "60+": 0
+
+        };
+
+
+        ages.forEach(
+            age => {
+
+                if (
+                    age < 30
+                ) {
+
+                    bands["30 Yaş Altı"]++;
+
+                }
+                else if (
+                    age < 40
+                ) {
+
+                    bands["30-39"]++;
+
+                }
+                else if (
+                    age < 50
+                ) {
+
+                    bands["40-49"]++;
+
+                }
+                else if (
+                    age < 60
+                ) {
+
+                    bands["50-59"]++;
+
+                }
+                else {
+
+                    bands["60+"]++;
+
+                }
+
+            }
+        );
+
+
+        return {
+
+            employeeCount:
+                ages.length,
+
+            averageAge:
+                round(
+                    average(
+                        ages
+                    ),
+                    1
+                ),
+
+            minimumAge:
+                min(ages),
+
+            maximumAge:
+                max(ages),
+
+            bands
+
+        };
+
+    }
+
+
+    /* =====================================================
+       HİZMET SÜRESİ ANALİZİ
+    ===================================================== */
+
+    function serviceAnalysis(
+        employees
+    ) {
+
+        const services =
+            employees
+                .map(
+                    employee =>
+                        normalizeEmployee(
+                            employee
+                        ).service
+                )
+                .filter(
+                    service =>
+                        service >= 0
+                );
+
+
+        const bands = {
+
+            "0-2 Yıl": 0,
+
+            "3-5 Yıl": 0,
+
+            "6-10 Yıl": 0,
+
+            "11-15 Yıl": 0,
+
+            "15+ Yıl": 0
+
+        };
+
+
+        services.forEach(
+            service => {
+
+                if (
+                    service <= 2
+                ) {
+
+                    bands["0-2 Yıl"]++;
+
+                }
+                else if (
+                    service <= 5
+                ) {
+
+                    bands["3-5 Yıl"]++;
+
+                }
+                else if (
+                    service <= 10
+                ) {
+
+                    bands["6-10 Yıl"]++;
+
+                }
+                else if (
+                    service <= 15
+                ) {
+
+                    bands["11-15 Yıl"]++;
+
+                }
+                else {
+
+                    bands["15+ Yıl"]++;
+
+                }
+
+            }
+        );
+
+
+        return {
+
+            averageService:
+                round(
+                    average(
+                        services
+                    ),
+                    1
+                ),
+
+            minimumService:
+                min(services),
+
+            maximumService:
+                max(services),
+
+            bands
+
+        };
+
+    }
+
+
+    /* =====================================================
+       DEPARTMAN ANALİZİ
+    ===================================================== */
+
+    function departmentAnalysis(
+        rows
+    ) {
+
+        const departments = {};
+
+
+        rows.forEach(
+            row => {
+
+                const department =
+                    row.department ||
+                    "Belirtilmemiş";
+
+
+                if (
+                    !departments[
+                        department
+                    ]
+                ) {
+
+                    departments[
+                        department
+                    ] = {
+
+                        department,
+
+                        employeeCount: 0,
+
+                        dbo: 0,
+
+                        salary: 0,
+
+                        currentServiceCost: 0,
+
+                        interestCost: 0,
+
+                        actuarialGainLoss: 0
+
+                    };
+
+                }
+
+
+                const item =
+                    departments[
+                        department
+                    ];
+
+
+                item.employeeCount++;
+
+                item.dbo +=
+                    row.dbo;
+
+                item.salary +=
+                    row.salary;
+
+                item.currentServiceCost +=
+                    row.currentServiceCost;
+
+                item.interestCost +=
+                    row.interestCost;
+
+                item.actuarialGainLoss +=
+                    row.actuarialGainLoss;
+
+            }
+        );
+
+
+        const result =
+            Object.values(
+                departments
+            );
+
+
+        result.forEach(
+            item => {
+
+                item.dbo =
+                    round(
+                        item.dbo
+                    );
+
+                item.salary =
+                    round(
+                        item.salary
+                    );
+
+                item.currentServiceCost =
+                    round(
+                        item.currentServiceCost
+                    );
+
+                item.interestCost =
+                    round(
+                        item.interestCost
+                    );
+
+                item.actuarialGainLoss =
+                    round(
+                        item.actuarialGainLoss
+                    );
+
+            }
+        );
+
+
+        result.sort(
+            (a, b) =>
+                b.dbo - a.dbo
+        );
+
+
+        return result;
+
+    }
+
+
+    /* =====================================================
+       EMEKLİLİK RİSKİ
+    ===================================================== */
+
+    function retirementRisk(
+        employees
+    ) {
+
+        let high = 0;
+
+        let medium = 0;
+
+        let low = 0;
+
+
+        employees.forEach(
+            employee => {
+
+                const e =
+                    normalizeEmployee(
+                        employee
+                    );
+
+
+                const years =
+                    60 - e.age;
+
+
+                if (
+                    years <= 2
+                ) {
+
+                    high++;
+
+                }
+                else if (
+                    years <= 5
+                ) {
+
+                    medium++;
+
+                }
+                else {
+
+                    low++;
+
+                }
+
+            }
+        );
+
+
+        const total =
+            employees.length || 1;
+
+
+        return {
+
+            high,
+
+            medium,
+
+            low,
+
+            highShare:
+                percentage(
+                    high / total
+                ),
+
+            mediumShare:
+                percentage(
+                    medium / total
+                ),
+
+            lowShare:
+                percentage(
+                    low / total
+                )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       P&L / OCI ANALİZİ
+    ===================================================== */
+
+    function pnlOciAnalysis(
+        totals
+    ) {
+
+        const serviceCost =
+            number(
+                totals.currentServiceCost
+            );
+
+
+        const interestCost =
+            number(
+                totals.interestCost
+            );
+
+
+        const actuarialGainLoss =
+            number(
+                totals.actuarialGainLoss
+            );
+
+
+        const benefitPayments =
+            number(
+                totals.benefitPayments
+            );
+
+
+        const pnl =
+            serviceCost +
+            interestCost;
+
+
+        const oci =
+            actuarialGainLoss;
+
+
+        const total =
+            pnl + oci;
+
+
+        return {
+
+            serviceCost:
+                round(
+                    serviceCost
+                ),
+
+            interestCost:
+                round(
+                    interestCost
+                ),
+
+            pnl:
+                round(
+                    pnl
+                ),
+
+            oci:
+                round(
+                    oci
+                ),
+
+            benefitPayments:
+                round(
+                    benefitPayments
+                ),
+
+            total:
+                round(
+                    total
+                )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       RİSK SKORU
+    ===================================================== */
+
+    function riskScore(
+        employees,
+        rows,
+        concentration,
+        retirement
+    ) {
+
+        let score = 0;
+
+
+        /*
+        1. Yaş riski
+        */
+
+        if (
+            retirement.highShare >= 30
+        ) {
+
+            score += 30;
+
+        }
+        else if (
+            retirement.highShare >= 15
+        ) {
+
+            score += 20;
+
+        }
+        else {
+
+            score += 10;
+
+        }
+
+
+        /*
+        2. DBO yoğunlaşması
+        */
+
+        if (
+            concentration.top5Share >= 50
+        ) {
+
+            score += 30;
+
+        }
+        else if (
+            concentration.top5Share >= 30
+        ) {
+
+            score += 20;
+
+        }
+        else {
+
+            score += 10;
+
+        }
+
+
+        /*
+        3. Personel büyüklüğü
+        */
+
+        if (
+            employees.length < 10
+        ) {
+
+            score += 20;
+
+        }
+        else if (
+            employees.length < 50
+        ) {
+
+            score += 10;
+
+        }
+        else {
+
+            score += 5;
+
+        }
+
+
+        /*
+        4. DBO / maaş oranı
+        */
+
+        const totalDBO =
+            rows.reduce(
+                (sum, row) =>
+                    sum + row.dbo,
+                0
+            );
+
+
+        const totalSalary =
+            rows.reduce(
+                (sum, row) =>
+                    sum + row.salary,
+                0
+            );
+
+
+        const ratio =
+            totalSalary > 0
+                ? totalDBO /
+                  totalSalary
+                : 0;
+
+
+        if (
+            ratio >= 2
+        ) {
+
+            score += 20;
+
+        }
+        else if (
+            ratio >= 1
+        ) {
+
+            score += 10;
+
+        }
+        else {
+
+            score += 5;
+
+        }
+
+
+        score =
+            Math.min(
+                score,
+                100
+            );
+
+
+        let level;
+
+
+        if (
+            score >= 75
+        ) {
+
+            level =
+                "Yüksek";
+
+        }
+        else if (
+            score >= 50
+        ) {
+
+            level =
+                "Orta";
+
+        }
+        else {
+
+            level =
+                "Düşük";
+
+        }
+
+
+        return {
+
+            score,
+
+            level,
+
+            dboToSalaryRatio:
+                round(
+                    ratio,
+                    2
+                )
+
+        };
+
+    }
+
+
+    /* =====================================================
+       CFO YÖNETİM ÖZETİ
+    ===================================================== */
+
+    function managementSummary(
+        portfolio
+    ) {
+
+        const totals =
+            portfolio.totals;
+
+
+        const dbo =
+            number(
+                totals.dbo
+            );
+
+
+        const employees =
+            number(
+                totals.employees
+            );
+
+
+        const averageDBO =
+            employees > 0
+                ? dbo / employees
+                : 0;
+
+
+        return {
+
+            toplamDBO:
+                round(
+                    dbo
+                ),
+
+            personelSayisi:
+                employees,
+
+            personelBasinaDBO:
+                round(
+                    averageDBO
+                ),
+
+            karZararMaliyeti:
+                round(
+                    portfolio.profitLossEffect
+                ),
+
+            digerKapsamliGelir:
+                round(
+                    portfolio.ociEffect
+                ),
+
+            toplamNetEtki:
+                round(
+                    portfolio.netDefinedBenefitCost
+                ),
+
+            aktüeryalRisk:
+                portfolio.risk.level,
+
+            veriKalitesi:
+                portfolio.dataQuality.level
+
+        };
+
+    }
+
+
+    /* =====================================================
+       ANA PORTFÖY HESAPLAMASI
+    ===================================================== */
+
+    function analyze(
+        employees = [],
+        actuarialResult = null
+    ) {
+
+        /*
+        Eğer actuarialResult verilmemişse
+        engine'den yeniden hesaplanabilir.
+
+        Ancak normal mimaride:
+        actuarialResult dışarıdan gelir.
+        */
+
+        if (
+            !actuarialResult
+        ) {
 
             if (
-                !window.TMS19ActuarialEngine
+                window.TMS19ActuarialEngine
             ) {
+
+                actuarialResult =
+                    window.TMS19ActuarialEngine.calculate(
+                        employees
+                    );
+
+            }
+            else {
 
                 throw new Error(
                     "TMS19ActuarialEngine bulunamadı."
@@ -202,829 +1168,421 @@
 
             }
 
-
-            this.results =
-                this.employees.map(
-                    employee => {
-
-                        try {
-
-                            const result =
-                                window.TMS19ActuarialEngine
-                                    .analyzeEmployee(
-                                        employee
-                                    );
-
-                            return {
-
-                                employee,
-
-                                result,
-
-                                status: "Başarılı",
-
-                                error: null
-
-                            };
-
-                        }
-
-                        catch (error) {
-
-                            return {
-
-                                employee,
-
-                                result: null,
-
-                                status: "Hatalı",
-
-                                error:
-                                    error.message
-
-                            };
-
-                        }
-
-                    }
-                );
+        }
 
 
-            this.portfolioResult =
-                this.aggregateResults();
-
-
-            return this.portfolioResult;
-
-        },
-
-
-        /* ====================================================
-           TOPLU SONUÇLARI BİRLEŞTİR
-        ==================================================== */
-
-        aggregateResults() {
-
-            const validResults =
-                this.results.filter(
-                    x =>
-                        x.result !== null
-                );
-
-
-            let totalDBO = 0;
-
-            let totalCSC = 0;
-
-            let totalInterest = 0;
-
-            let totalNetInterest = 0;
-
-            let totalNetLiability = 0;
-
-            let totalOpeningDBO = 0;
-
-            let totalPlanAssets = 0;
-
-            let totalPayments = 0;
-
-            let totalEmployees =
-                this.employees.length;
-
-
-            validResults.forEach(
-                item => {
-
-                    const r =
-                        item.result;
-
-                    const e =
-                        item.employee;
-
-
-                    totalDBO +=
-                        Number(
-                            r.puc?.dbo || 0
-                        );
-
-
-                    totalCSC +=
-                        Number(
-                            r.currentServiceCost || 0
-                        );
-
-
-                    totalInterest +=
-                        Number(
-                            r.netInterest
-                                ?.interestCost ||
-                            0
-                        );
-
-
-                    totalNetInterest +=
-                        Number(
-                            r.netInterest
-                                ?.netInterest ||
-                            0
-                        );
-
-
-                    totalNetLiability +=
-                        Number(
-                            r.netLiability || 0
-                        );
-
-
-                    totalOpeningDBO +=
-                        Number(
-                            e.openingDBO || 0
-                        );
-
-
-                    totalPlanAssets +=
-                        Number(
-                            e.planAssets || 0
-                        );
-
-
-                    totalPayments +=
-                        Number(
-                            e.benefitPayments || 0
-                        );
-
-                }
+        const rows =
+            employeeSummary(
+                employees,
+                actuarialResult.employeeResults
             );
 
 
-            const averageAge =
-                this.calculateAverage(
-                    this.employees,
-                    "currentAge"
-                );
+        const concentration =
+            dboConcentration(
+                rows
+            );
 
 
-            const averageService =
-                this.calculateAverage(
-                    this.employees,
-                    "yearsOfService"
-                );
+        const age =
+            ageAnalysis(
+                employees
+            );
 
 
-            const averageSalary =
-                this.calculateAverage(
-                    this.employees,
-                    "currentAnnualSalary"
-                );
+        const service =
+            serviceAnalysis(
+                employees
+            );
 
 
-            const totalSalary =
-                this.employees.reduce(
-                    (sum, employee) =>
-                        sum +
-                        Number(
-                            employee.currentAnnualSalary ||
-                            0
-                        ),
-                    0
-                );
+        const department =
+            departmentAnalysis(
+                rows
+            );
 
 
-            const risk =
-                this.calculatePortfolioRisk();
+        const retirement =
+            retirementRisk(
+                employees
+            );
 
 
-            const departments =
-                this.departmentBreakdown();
+        const pnlOci =
+            pnlOciAnalysis(
+                actuarialResult.totals
+            );
 
 
-            return {
+        /*
+        Veri kalite kontrolü
+        */
 
-                totalEmployees,
-
-                successfulEmployees:
-                    validResults.length,
-
-                failedEmployees:
-                    totalEmployees -
-                    validResults.length,
-
-                totalDBO,
-
-                totalCSC,
-
-                totalInterest,
-
-                totalNetInterest,
-
-                totalNetLiability,
-
-                totalOpeningDBO,
-
-                totalPlanAssets,
-
-                totalPayments,
-
-                totalSalary,
-
-                averageAge,
-
-                averageService,
-
-                averageSalary,
-
-                dboToSalaryRatio:
-                    totalSalary !== 0
-                        ? totalDBO / totalSalary
-                        : 0,
-
-                netLiabilityToSalaryRatio:
-                    totalSalary !== 0
-                        ? totalNetLiability /
-                          totalSalary
-                        : 0,
-
-                risk,
-
-                departments,
-
-                generatedAt:
-                    new Date().toISOString()
-
-            };
-
-        },
+        let dataQualityScore =
+            100;
 
 
-        /* ====================================================
-           ORTALAMA HESAPLA
-        ==================================================== */
+        employees.forEach(
+            employee => {
 
-        calculateAverage(
-            employees,
-            field
+                const e =
+                    normalizeEmployee(
+                        employee
+                    );
+
+
+                if (
+                    !e.age
+                ) {
+
+                    dataQualityScore -= 10;
+
+                }
+
+
+                if (
+                    !e.salary
+                ) {
+
+                    dataQualityScore -= 10;
+
+                }
+
+
+                if (
+                    e.service < 0
+                ) {
+
+                    dataQualityScore -= 10;
+
+                }
+
+            }
+        );
+
+
+        dataQualityScore =
+            Math.max(
+                dataQualityScore,
+                0
+            );
+
+
+        let dataQualityLevel;
+
+
+        if (
+            dataQualityScore >= 90
         ) {
 
-            if (
-                employees.length === 0
-            ) {
+            dataQualityLevel =
+                "Yüksek";
 
-                return 0;
+        }
+        else if (
+            dataQualityScore >= 75
+        ) {
 
-            }
+            dataQualityLevel =
+                "Orta";
 
+        }
+        else {
 
-            const total =
-                employees.reduce(
-                    (sum, employee) =>
-                        sum +
-                        Number(
-                            employee[field] || 0
-                        ),
-                    0
-                );
-
-
-            return (
-                total /
-                employees.length
-            );
-
-        },
-
-
-        /* ====================================================
-           DEPARTMAN KIRILIMI
-        ==================================================== */
-
-        departmentBreakdown() {
-
-            const map = {};
-
-
-            this.results.forEach(
-                item => {
-
-                    if (
-                        !item.result
-                    ) {
-
-                        return;
-
-                    }
-
-
-                    const department =
-                        item.employee.department ||
-                        "Belirtilmemiş";
-
-
-                    if (
-                        !map[department]
-                    ) {
-
-                        map[department] = {
-
-                            department,
-
-                            employeeCount: 0,
-
-                            dbo: 0,
-
-                            currentServiceCost: 0,
-
-                            netLiability: 0
-
-                        };
-
-                    }
-
-
-                    map[department]
-                        .employeeCount++;
-
-
-                    map[department]
-                        .dbo +=
-                        Number(
-                            item.result
-                                .puc?.dbo ||
-                            0
-                        );
-
-
-                    map[department]
-                        .currentServiceCost +=
-                        Number(
-                            item.result
-                                .currentServiceCost ||
-                            0
-                        );
-
-
-                    map[department]
-                        .netLiability +=
-                        Number(
-                            item.result
-                                .netLiability ||
-                            0
-                        );
-
-                }
-            );
-
-
-            return Object.values(map);
-
-        },
-
-
-        /* ====================================================
-           AKTÜERYAL RİSK
-        ==================================================== */
-
-        calculatePortfolioRisk() {
-
-            if (
-                this.results.length === 0
-            ) {
-
-                return {
-
-                    score: 0,
-
-                    level: "Veri Yok",
-
-                    warnings: []
-
-                };
-
-            }
-
-
-            let score = 0;
-
-            const warnings = [];
-
-
-            const successful =
-                this.results.filter(
-                    x =>
-                        x.result
-                );
-
-
-            successful.forEach(
-                item => {
-
-                    const risk =
-                        item.result
-                            ?.risk;
-
-
-                    if (
-                        !risk
-                    ) {
-
-                        return;
-
-                    }
-
-
-                    score +=
-                        Number(
-                            risk.score || 0
-                        );
-
-
-                    if (
-                        Array.isArray(
-                            risk.warnings
-                        )
-                    ) {
-
-                        risk.warnings
-                            .forEach(
-                                warning => {
-
-                                    warnings.push(
-                                        warning
-                                    );
-
-                                }
-                            );
-
-                    }
-
-                }
-            );
-
-
-            const averageScore =
-                successful.length
-                    ? score /
-                      successful.length
-                    : 0;
-
-
-            let level =
+            dataQualityLevel =
                 "Düşük";
 
+        }
 
-            if (
-                averageScore >= 75
-            ) {
 
-                level =
-                    "Kritik";
+        const dataQuality = {
 
-            }
+            score:
+                dataQualityScore,
 
-            else if (
-                averageScore >= 50
-            ) {
+            level:
+                dataQualityLevel
 
-                level =
-                    "Yüksek";
+        };
 
-            }
 
-            else if (
-                averageScore >= 25
-            ) {
+        const risk =
+            riskScore(
+                employees,
+                rows,
+                concentration,
+                retirement
+            );
 
-                level =
-                    "Orta";
 
-            }
+        const result = {
 
+            generatedAt:
+                new Date()
+                    .toISOString(),
 
-            return {
+            employeeCount:
+                employees.length,
 
-                score:
-                    averageScore,
+            totals:
+                actuarialResult.totals,
 
-                level,
+            rows,
 
-                warnings:
-                    [
-                        ...new Set(
-                            warnings
-                        )
-                    ]
+            concentration,
 
-            };
+            age,
 
-        },
+            service,
 
+            department,
 
-        /* ====================================================
-           CFO ÖZETİ
-        ==================================================== */
+            retirement,
 
-        getCFOInsight() {
+            pnlOci,
 
-            if (
-                !this.portfolioResult
-            ) {
+            risk,
 
-                return {
+            dataQuality,
 
-                    headline:
-                        "Henüz değerleme yapılmadı.",
+            rollForward:
+                actuarialResult.rollForward,
 
-                    observations: [],
+            managementSummary: null
 
-                    actions: []
+        };
 
-                };
 
-            }
+        result.managementSummary =
+            managementSummary(
+                result
+            );
 
 
-            const p =
-                this.portfolioResult;
+        return result;
 
+    }
 
-            const observations = [];
 
-            const actions = [];
+    /* =====================================================
+       TOP PERSONEL
+    ===================================================== */
 
+    function topEmployeesByDBO(
+        portfolio,
+        limit = 10
+    ) {
 
-            if (
-                p.dboToSalaryRatio > 1
-            ) {
-
-                observations.push(
-                    "Toplam DBO yıllık personel maliyetinin üzerinde."
-                );
-
-                actions.push(
-                    "Uzun vadeli çalışan faydalarının nakit akışı ve bilanço etkisi ayrıca modellenmeli."
-                );
-
-            }
-
-
-            if (
-                p.risk.score >= 50
-            ) {
-
-                observations.push(
-                    "Portföy seviyesinde aktüeryal risk orta/yüksek seviyede."
-                );
-
-                actions.push(
-                    "İskonto oranı, maaş artış oranı ve turnover varsayımları benchmark edilmelidir."
-                );
-
-            }
-
-
-            if (
-                p.failedEmployees > 0
-            ) {
-
-                observations.push(
-                    `${p.failedEmployees} personelin değerlemesi tamamlanamadı.`
-                );
-
-                actions.push(
-                    "Eksik veya hatalı personel master datası düzeltilmelidir."
-                );
-
-            }
-
-
-            if (
-                observations.length === 0
-            ) {
-
-                observations.push(
-                    "Portföy seviyesinde kritik bir aktüeryal sinyal tespit edilmedi."
-                );
-
-            }
-
-
-            if (
-                actions.length === 0
-            ) {
-
-                actions.push(
-                    "Varsayımların dönemsel olarak gerçekleşen sonuçlarla back-test edilmesi önerilir."
-                );
-
-            }
-
-
-            return {
-
-                headline:
-                    `Toplam DBO ${this.formatTRY(p.totalDBO)} seviyesindedir.`,
-
-                observations,
-
-                actions
-
-            };
-
-        },
-
-
-        /* ====================================================
-           PERSONEL SIRALAMA
-        ==================================================== */
-
-        rankByDBO(
-            limit = 20
+        if (
+            !portfolio ||
+            !portfolio.rows
         ) {
 
-            return [
+            return [];
 
-                ...this.results
+        }
 
-            ]
 
-            .filter(
-                x =>
-                    x.result
-            )
-
+        return [
+            ...portfolio.rows
+        ]
             .sort(
-                (a,b) =>
-                    (
-                        b.result
-                            .puc
-                            .dbo || 0
-                    )
-                    -
-                    (
-                        a.result
-                            .puc
-                            .dbo || 0
-                    )
+                (a, b) =>
+                    b.dbo - a.dbo
             )
-
             .slice(
                 0,
                 limit
             );
 
-        },
+    }
 
 
-        /* ====================================================
-           FORMAT
-        ==================================================== */
+    /* =====================================================
+       TOP DEPARTMANLAR
+    ===================================================== */
 
-        formatTRY(
-            value
+    function topDepartmentsByDBO(
+        portfolio,
+        limit = 10
+    ) {
+
+        if (
+            !portfolio ||
+            !portfolio.department
         ) {
 
-            return new Intl.NumberFormat(
-                "tr-TR",
-                {
-
-                    style:
-                        "currency",
-
-                    currency:
-                        "TRY",
-
-                    maximumFractionDigits:
-                        0
-
-                }
-            ).format(
-                Number(value) || 0
-            );
-
-        },
-
-
-        /* ====================================================
-           DEMO PORTFÖYÜ
-        ==================================================== */
-
-        createSamplePortfolio(
-            count = 25
-        ) {
-
-            const employees = [];
-
-
-            for (
-                let i = 1;
-                i <= count;
-                i++
-            ) {
-
-                const age =
-                    25 +
-                    Math.floor(
-                        Math.random() * 30
-                    );
-
-
-                const service =
-                    Math.min(
-                        Math.floor(
-                            Math.random() *
-                            12
-                        ),
-                        age - 20
-                    );
-
-
-                const salary =
-                    450000 +
-                    Math.floor(
-                        Math.random() *
-                        1250000
-                    );
-
-
-                employees.push({
-
-                    employeeNumber:
-                        `P-${String(i).padStart(4,"0")}`,
-
-                    name:
-                        `Personel ${i}`,
-
-                    department:
-                        [
-                            "Finans",
-                            "Satış",
-                            "Operasyon",
-                            "İnsan Kaynakları",
-                            "Üretim"
-                        ][
-                            i % 5
-                        ],
-
-                    currentAge:
-                        age,
-
-                    yearsOfService:
-                        service,
-
-                    currentAnnualSalary:
-                        salary,
-
-                    openingDBO:
-                        Math.floor(
-                            salary *
-                            0.20 *
-                            Math.max(
-                                service,
-                                1
-                            )
-                        ),
-
-                    planAssets:
-                        0,
-
-                    benefitPayments:
-                        0,
-
-                    retirementAge:
-                        60,
-
-                    discountRate:
-                        0.30,
-
-                    salaryIncreaseRate:
-                        0.30,
-
-                    inflationRate:
-                        0.25,
-
-                    turnoverRate:
-                        0.05,
-
-                    benefitRate:
-                        0.03
-
-                });
-
-            }
-
-
-            return employees;
+            return [];
 
         }
+
+
+        return [
+            ...portfolio.department
+        ]
+            .sort(
+                (a, b) =>
+                    b.dbo - a.dbo
+            )
+            .slice(
+                0,
+                limit
+            );
+
+    }
+
+
+    /* =====================================================
+       YÖNETİMSEL UYARI ÜRETİCİ
+    ===================================================== */
+
+    function generateAlerts(
+        portfolio
+    ) {
+
+        const alerts = [];
+
+
+        if (
+            portfolio.risk.level ===
+            "Yüksek"
+        ) {
+
+            alerts.push({
+
+                severity:
+                    "yüksek",
+
+                title:
+                    "Yüksek Aktüeryal Risk",
+
+                message:
+                    "TMS 19 yükümlülüğünün yaş, yoğunlaşma veya maliyet yapısı açısından yüksek risk taşıdığı görülüyor."
+
+            });
+
+        }
+
+
+        if (
+            portfolio.concentration
+                .top5Share >= 50
+        ) {
+
+            alerts.push({
+
+                severity:
+                    "yüksek",
+
+                title:
+                    "DBO Yoğunlaşması",
+
+                message:
+                    "Toplam DBO'nun önemli bölümü sınırlı sayıdaki personelde yoğunlaşmaktadır."
+
+            });
+
+        }
+
+
+        if (
+            portfolio.retirement
+                .highShare >= 20
+        ) {
+
+            alerts.push({
+
+                severity:
+                    "orta",
+
+                title:
+                    "Yaklaşan Emeklilikler",
+
+                message:
+                    "Çalışan portföyünde kısa vadede emeklilik riski taşıyan önemli sayıda personel bulunmaktadır."
+
+            });
+
+        }
+
+
+        if (
+            portfolio.dataQuality
+                .score < 80
+        ) {
+
+            alerts.push({
+
+                severity:
+                    "orta",
+
+                title:
+                    "Veri Kalitesi",
+
+                message:
+                    "Aktüeryal değerleme öncesinde personel master datasının kontrol edilmesi gerekmektedir."
+
+            });
+
+        }
+
+
+        if (
+            !alerts.length
+        ) {
+
+            alerts.push({
+
+                severity:
+                    "bilgi",
+
+                title:
+                    "Önemli Uyarı Yok",
+
+                message:
+                    "Mevcut veri seti ve varsayımlar kapsamında kritik bir portföy uyarısı oluşmamıştır."
+
+            });
+
+        }
+
+
+        return alerts;
+
+    }
+
+
+    /* =====================================================
+       PUBLIC API
+    ===================================================== */
+
+    return {
+
+        analyze,
+
+        employeeSummary,
+
+        dboConcentration,
+
+        ageAnalysis,
+
+        serviceAnalysis,
+
+        departmentAnalysis,
+
+        retirementRisk,
+
+        pnlOciAnalysis,
+
+        riskScore,
+
+        topEmployeesByDBO,
+
+        topDepartmentsByDBO,
+
+        generateAlerts
 
     };
 
 
-    /* ========================================================
-       GLOBAL
-    ======================================================== */
-
-    window.TMS19PortfolioEngine =
-        PortfolioEngine;
-
-
-})(window);
+})();
