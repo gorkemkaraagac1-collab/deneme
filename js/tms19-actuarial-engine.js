@@ -1,3265 +1,2290 @@
 /* ============================================================
    GK ADVISORY
-   TMS 19 — AKTÜERYAL HESAPLAMA MOTORU
-   ------------------------------------------------------------
-   Projected Unit Credit yaklaşımı
-   Personel bazlı DBO projeksiyonu
-   Aktüeryal varsayımlar
-   Duyarlılık analizi
-   Roll-forward
-   P&L / OCI ayrıştırması
-   ============================================================ */
+   TMS 19 ACTUARIAL ENGINE V2
+   Türkçe Aktüeryal Değerleme Motoru
 
-"use strict";
+   Yaklaşım:
+   - Projected Unit Credit Method
+   - Personel bazlı projeksiyon
+   - Maaş artışı
+   - Turnover
+   - Emeklilik
+   - Ölüm
+   - Hayatta kalma olasılığı
+   - Beklenen fayda
+   - İskonto
+   - DBO
+   - Cari hizmet maliyeti
+   - Faiz maliyeti
+   - OCI / aktüeryal yeniden ölçüm
+   - Duyarlılık analizi
+   - Veri kalite kontrolü
+   - CFO içgörüleri
 
-
-/* ============================================================
-   1. GENEL AYARLAR
-============================================================ */
-
-const TMS19_CONFIG = {
-
-    sürüm: "2.0.0",
-
-    değerlemeTarihi: new Date("2026-12-31"),
-
-    varsayımlar: {
-
-        iskontoOranı: 0.28,
-
-        maaşArtışOranı: 0.25,
-
-        personelDevirOranı: 0.08,
-
-        emeklilikYaşı: 60,
-
-        yıllıkÇalışmaGünü: 365,
-
-        aylıkÇalışmaGünü: 30,
-
-        yıllıkÖdemeArtışOranı: 0.00
-
-    },
-
-    hesaplama: {
-
-        minimumHizmetSüresi: 0,
-
-        maksimumProjeksiyonYılı: 60,
-
-        aylıkProjeksiyon: false,
-
-        terminalDeğer: false
-
-    }
-
-};
-
-
-/* ============================================================
-   2. YARDIMCI FONKSİYONLAR
+   ÖNEMLİ:
+   Bu motor eğitim / analitik / modelleme amaçlıdır.
+   Gerçek aktüeryal raporun yerine geçmez.
 ============================================================ */
 
 
-/**
- * Sayısal değeri güvenli şekilde döndürür.
- */
-function sayıDeğeri(
-    değer,
-    varsayılan = 0
-) {
+/* ============================================================
+   ANA NESNE
+============================================================ */
 
-    if (
-        değer === null ||
-        değer === undefined ||
-        değer === ""
+const TMS19 = (() => {
+
+
+    /* ========================================================
+       SABİTLER
+    ======================================================== */
+
+    const SABİTLER = {
+
+        DEFAULT_EMEKLİLİK_YAŞI: 60,
+
+        DEFAULT_İSKONTO_ORANI: 0.28,
+
+        DEFAULT_MAAŞ_ARTIŞ_ORANI: 0.25,
+
+        DEFAULT_TURNOVER_ORANI: 0.08,
+
+        MAKS_PROJEKSİYON_YILI: 45,
+
+        MIN_İSKONTO:
+            0.0001,
+
+        MAX_İSKONTO:
+            1.00,
+
+        MIN_MAAŞ_ARTIŞ:
+            -0.50,
+
+        MAX_MAAŞ_ARTIŞ:
+            2.00
+
+    };
+
+
+    /* ========================================================
+       YARDIMCI MATEMATİK
+    ======================================================== */
+
+    function güvenliSayı(
+        değer,
+        varsayılan = 0
     ) {
 
-        return varsayılan;
+        const sayı =
+            Number(
+                değer
+            );
+
+        return Number.isFinite(
+            sayı
+        )
+            ? sayı
+            : varsayılan;
 
     }
 
-    const sayı =
-        Number(
-            String(değer)
-                .replace(/\./g, "")
-                .replace(",", ".")
-        );
 
-    return Number.isFinite(sayı)
-        ? sayı
-        : varsayılan;
+    function sınırla(
+        değer,
+        min,
+        max
+    ) {
 
-}
-
-
-/**
- * Tarihi güvenli şekilde oluşturur.
- */
-function tarihDeğeri(
-    değer
-) {
-
-    if (değer instanceof Date) {
-
-        return new Date(
-            değer.getTime()
+        return Math.min(
+            Math.max(
+                değer,
+                min
+            ),
+            max
         );
 
     }
 
-    if (!değer) {
 
-        return null;
+    function yuvarla(
+        değer,
+        basamak = 2
+    ) {
+
+        const katsayı =
+            Math.pow(
+                10,
+                basamak
+            );
+
+        return (
+            Math.round(
+                güvenliSayı(
+                    değer
+                ) *
+                katsayı
+            )
+            /
+            katsayı
+        );
 
     }
 
-    const tarih =
-        new Date(
+
+    function yüzde(
+        değer
+    ) {
+
+        return güvenliSayı(
             değer
-        );
+        ) / 100;
 
-    return Number.isNaN(
-        tarih.getTime()
-    )
-        ? null
-        : tarih;
-
-}
+    }
 
 
-/**
- * Yılları hesaplar.
- */
-function yılFarkı(
-    başlangıç,
-    bitiş
-) {
+    /* ========================================================
+       TARİH FONKSİYONLARI
+    ======================================================== */
 
-    const başlangıçTarihi =
-        tarihDeğeri(
-            başlangıç
-        );
-
-    const bitişTarihi =
-        tarihDeğeri(
-            bitiş
-        );
-
-    if (
-        !başlangıçTarihi ||
-        !bitişTarihi
+    function tarihOku(
+        değer
     ) {
+
+        if (
+            !değer
+        ) {
+
+            return null;
+
+        }
+
+        const tarih =
+            new Date(
+                değer
+            );
+
+
+        if (
+            Number.isNaN(
+                tarih.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+        return tarih;
+
+    }
+
+
+    function yaşHesapla(
+        doğumTarihi,
+        değerlemeTarihi
+    ) {
+
+        const doğum =
+            tarihOku(
+                doğumTarihi
+            );
+
+        const değerleme =
+            tarihOku(
+                değerlemeTarihi
+            );
+
+
+        if (
+            !doğum ||
+            !değerleme
+        ) {
+
+            return null;
+
+        }
+
+
+        let yaş =
+            değerleme.getFullYear()
+            -
+            doğum.getFullYear();
+
+
+        const ay =
+            değerleme.getMonth()
+            -
+            doğum.getMonth();
+
+
+        if (
+            ay < 0
+            ||
+            (
+                ay === 0
+                &&
+                değerleme.getDate()
+                <
+                doğum.getDate()
+            )
+        ) {
+
+            yaş--;
+
+        }
+
+
+        return yaş;
+
+    }
+
+
+    function hizmetSüresiHesapla(
+        işeGirişTarihi,
+        değerlemeTarihi
+    ) {
+
+        const giriş =
+            tarihOku(
+                işeGirişTarihi
+            );
+
+        const değerleme =
+            tarihOku(
+                değerlemeTarihi
+            );
+
+
+        if (
+            !giriş ||
+            !değerleme
+        ) {
+
+            return null;
+
+        }
+
+
+        const gün =
+            (
+                değerleme.getTime()
+                -
+                giriş.getTime()
+            )
+            /
+            (
+                1000 *
+                60 *
+                60 *
+                24
+            );
+
+
+        return Math.max(
+            0,
+            gün / 365.25
+        );
+
+    }
+
+
+    /* ========================================================
+       AKTÜERYAL DEMOGRAFİK MODEL
+    ======================================================== */
+
+    /*
+       Örnek yıllık mortalite oranları.
+
+       Gerçek uygulamada:
+       - TÜİK / resmi istatistik
+       - şirket aktüeryal çalışması
+       - seçilen mortality table
+
+       kullanılmalıdır.
+    */
+
+    function ölümOlasılığı(
+        yaş,
+        cinsiyet = "E"
+    ) {
+
+        yaş =
+            güvenliSayı(
+                yaş,
+                40
+            );
+
+
+        let oran;
+
+
+        if (
+            yaş < 25
+        ) {
+
+            oran = 0.0005;
+
+        } else if (
+            yaş < 35
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0010
+                    : 0.0015;
+
+        } else if (
+            yaş < 45
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0018
+                    : 0.0025;
+
+        } else if (
+            yaş < 55
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0035
+                    : 0.0050;
+
+        } else if (
+            yaş < 60
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0055
+                    : 0.0080;
+
+        } else if (
+            yaş < 65
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0080
+                    : 0.0120;
+
+        } else if (
+            yaş < 70
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0120
+                    : 0.0180;
+
+        } else if (
+            yaş < 75
+        ) {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0200
+                    : 0.0300;
+
+        } else {
+
+            oran =
+                cinsiyet === "K"
+                    ? 0.0450
+                    : 0.0600;
+
+        }
+
+
+        return sınırla(
+            oran,
+            0,
+            0.99
+        );
+
+    }
+
+
+    /*
+       Yaşa göre turnover.
+
+       Gerçek şirket verisi varsa
+       şirket deneyimine göre kalibre edilmelidir.
+    */
+
+    function devirOlasılığı(
+        yaş,
+        temelOran
+    ) {
+
+        yaş =
+            güvenliSayı(
+                yaş,
+                40
+            );
+
+
+        temelOran =
+            güvenliSayı(
+                temelOran,
+                SABİTLER.DEFAULT_TURNOVER_ORANI
+            );
+
+
+        let düzeltme;
+
+
+        if (
+            yaş < 30
+        ) {
+
+            düzeltme = 1.35;
+
+        } else if (
+            yaş < 40
+        ) {
+
+            düzeltme = 1.10;
+
+        } else if (
+            yaş < 50
+        ) {
+
+            düzeltme = 0.85;
+
+        } else if (
+            yaş < 55
+        ) {
+
+            düzeltme = 0.60;
+
+        } else {
+
+            düzeltme = 0.30;
+
+        }
+
+
+        return sınırla(
+            temelOran *
+            düzeltme,
+            0,
+            0.80
+        );
+
+    }
+
+
+    /*
+       Emeklilik olasılığı.
+
+       Basit model:
+       Emeklilik yaşına gelene kadar
+       olasılık 0 kabul edilir.
+    */
+
+    function emeklilikOlasılığı(
+        yaş,
+        emeklilikYaşı
+    ) {
+
+        if (
+            yaş >=
+            emeklilikYaşı
+        ) {
+
+            return 1;
+
+        }
+
+
+        if (
+            yaş >=
+            emeklilikYaşı - 1
+        ) {
+
+            return 0.90;
+
+        }
+
+
+        if (
+            yaş >=
+            emeklilikYaşı - 2
+        ) {
+
+            return 0.50;
+
+        }
+
 
         return 0;
 
     }
 
-    return (
-        bitişTarihi.getTime()
-        -
-        başlangıçTarihi.getTime()
-    )
-    /
-    (
-        365.25 *
-        24 *
-        60 *
-        60 *
-        1000
-    );
 
-}
+    /* ========================================================
+       HAYATTA KALMA / FAYDA ALMA OLASILIĞI
+    ======================================================== */
 
-
-/**
- * İki tarih arasındaki tam yaş.
- */
-function yaşHesapla(
-    doğumTarihi,
-    değerlemeTarihi
-) {
-
-    const doğum =
-        tarihDeğeri(
-            doğumTarihi
-        );
-
-    const değerleme =
-        tarihDeğeri(
-            değerlemeTarihi
-        );
-
-    if (
-        !doğum ||
-        !değerleme
+    function faydaAlmaOlasılığı(
+        başlangıçYaşı,
+        yıl,
+        personel,
+        varsayımlar
     ) {
 
-        return null;
-
-    }
-
-    let yaş =
-        değerleme.getFullYear()
-        -
-        doğum.getFullYear();
-
-    const ay =
-        değerleme.getMonth()
-        -
-        doğum.getMonth();
-
-    if (
-        ay < 0 ||
-        (
-            ay === 0 &&
-            değerleme.getDate()
-            <
-            doğum.getDate()
-        )
-    ) {
-
-        yaş--;
-
-    }
-
-    return yaş;
-
-}
+        let hayattaKalma =
+            1;
 
 
-/**
- * Para yuvarlama.
- */
-function yuvarla(
-    değer,
-    basamak = 2
-) {
-
-    const çarpan =
-        Math.pow(
-            10,
-            basamak
-        );
-
-    return Math.round(
-        sayıDeğeri(
-            değer
-        ) *
-        çarpan
-    ) /
-    çarpan;
-
-}
+        let çalışmayaDevam =
+            1;
 
 
-/**
- * Oran normalizasyonu.
- *
- * Kullanıcı %28 yazarsa:
- * 28 -> 0.28
- *
- * Kullanıcı 0.28 yazarsa:
- * 0.28 -> 0.28
- */
-function oranNormalizeEt(
-    değer
-) {
-
-    const sayı =
-        sayıDeğeri(
-            değer
-        );
-
-    if (
-        Math.abs(sayı) > 1
-    ) {
-
-        return sayı / 100;
-
-    }
-
-    return sayı;
-
-}
-
-
-/**
- * Bugünkü değer.
- */
-function bugünküDeğer(
-    tutar,
-    oran,
-    dönem
-) {
-
-    return sayıDeğeri(
-        tutar
-    )
-    /
-    Math.pow(
-        1 + oran,
-        dönem
-    );
-
-}
-
-
-/**
- * Gelecekteki değer.
- */
-function gelecekDeğer(
-    tutar,
-    oran,
-    dönem
-) {
-
-    return sayıDeğeri(
-        tutar
-    )
-    *
-    Math.pow(
-        1 + oran,
-        dönem
-    );
-
-}
-
-
-/* ============================================================
-   3. PERSONEL VERİ MODELİ
-============================================================ */
-
-
-/**
- * Personel verisini standart modele dönüştürür.
- */
-function personelNormalizeEt(
-    personel,
-    varsayımlar = {}
-) {
-
-    const değerlemeTarihi =
-        tarihDeğeri(
-            varsayımlar.değerlemeTarihi
-        )
-        ||
-        TMS19_CONFIG.değerlemeTarihi;
-
-
-    const doğumTarihi =
-        tarihDeğeri(
-            personel.doğumTarihi
-            ??
-            personel.dogumTarihi
-            ??
-            personel.birthDate
-        );
-
-
-    const işeGirişTarihi =
-        tarihDeğeri(
-            personel.işeGirişTarihi
-            ??
-            personel.iseGirisTarihi
-            ??
-            personel.startDate
-            ??
-            personel.hireDate
-        );
-
-
-    const mevcutMaaş =
-        sayıDeğeri(
-            personel.mevcutMaaş
-            ??
-            personel.mevcutMaas
-            ??
-            personel.salary
-            ??
-            personel.aylıkMaaş
-            ??
-            personel.aylikMaas
-        );
-
-
-    const yıllıkMaaş =
-        sayıDeğeri(
-            personel.yıllıkMaaş
-            ??
-            personel.yillikMaas
-        )
-        ||
-        mevcutMaaş * 12;
-
-
-    const yaş =
-        sayıDeğeri(
-            personel.yaş
-            ??
-            personel.yas
-        )
-        ||
-        yaşHesapla(
-            doğumTarihi,
-            değerlemeTarihi
-        );
-
-
-    const hizmetSüresi =
-        sayıDeğeri(
-            personel.hizmetSüresi
-            ??
-            personel.hizmetSuresi
-        )
-        ||
-        (
-            işeGirişTarihi
-                ? Math.max(
-                    0,
-                    yılFarkı(
-                        işeGirişTarihi,
-                        değerlemeTarihi
-                    )
-                )
-                : 0
-        );
-
-
-    return {
-
-        sicilNo:
-            personel.sicilNo
-            ??
-            personel.sicil
-            ??
-            personel.employeeId
-            ??
-            personel.id
-            ??
-            "",
-
-        adSoyad:
-            personel.adSoyad
-            ??
-            personel.ad
-            ??
-            personel.name
-            ??
-            "",
-
-        cinsiyet:
+        const cinsiyet =
             personel.cinsiyet
-            ??
-            personel.gender
-            ??
-            "",
-
-        doğumTarihi,
-
-        işeGirişTarihi,
-
-        yaş,
-
-        hizmetSüresi,
-
-        mevcutMaaş,
-
-        yıllıkMaaş,
-
-        pozisyon:
-            personel.pozisyon
-            ??
-            personel.position
-            ??
-            "",
-
-        departman:
-            personel.departman
-            ??
-            personel.department
-            ??
-            "",
-
-        emeklilikYaşı:
-            sayıDeğeri(
-                personel.emeklilikYaşı
-                ??
-                personel.emeklilikYasi
-            )
             ||
-            sayıDeğeri(
-                varsayımlar.emeklilikYaşı
-            ),
-
-        devirOranı:
-            oranNormalizeEt(
-                personel.devirOranı
-                ??
-                personel.devirOrani
-                ??
-                varsayımlar.personelDevirOranı
-            ),
-
-        özelFaydaTutarı:
-            sayıDeğeri(
-                personel.özelFaydaTutarı
-                ??
-                personel.ozelFaydaTutari
-            )
-
-    };
-
-}
+            personel.Cinsiyet
+            ||
+            "E";
 
 
-/* ============================================================
-   4. TMS 19 FAYDA FORMÜLÜ
-============================================================ */
+        const temelTurnover =
+            varsayımlar.personelDevirOranı;
 
 
-/**
- * Hizmet yılına bağlı tahmini nihai fayda.
- *
- * Bu fonksiyon şirketin gerçek kıdem / emeklilik
- * formülüyle parametrik hale getirilebilir.
- *
- * Varsayılan yaklaşım:
- *
- * Nihai aylık maaş
- * × toplam hizmet yılı
- *
- * Burada 1 aylık maaş / hizmet yılı
- * temel fayda faktörü olarak kullanılır.
- */
-function nihaiFaydaHesapla(
-    personel,
-    varsayımlar,
-    toplamHizmetYılı,
-    nihaiMaaş
-) {
+        for (
+            let i = 1;
+            i <= yıl;
+            i++
+        ) {
 
-    const faydaFaktörü =
-        sayıDeğeri(
-            varsayımlar.faydaFaktörü,
+            const yaş =
+                başlangıçYaşı
+                +
+                i
+                -
+                1;
+
+
+            const ölüm =
+                ölümOlasılığı(
+                    yaş,
+                    cinsiyet
+                );
+
+
+            const turnover =
+                devirOlasılığı(
+                    yaş,
+                    temelTurnover
+                );
+
+
+            const emeklilik =
+                emeklilikOlasılığı(
+                    yaş,
+                    varsayımlar.emeklilikYaşı
+                );
+
+
+            if (
+                emeklilik > 0
+            ) {
+
+                /*
+                   Emeklilik yılına kadar
+                   çalışma devam eder.
+                */
+
+                çalışmayaDevam *=
+                    (
+                        1
+                        -
+                        turnover
+                    )
+                    *
+                    (
+                        1
+                        -
+                        ölüm
+                    );
+
+            } else {
+
+                çalışmayaDevam *=
+                    (
+                        1
+                        -
+                        turnover
+                    )
+                    *
+                    (
+                        1
+                        -
+                        ölüm
+                    );
+
+            }
+
+
+            hayattaKalma *=
+                (
+                    1
+                    -
+                    ölüm
+                );
+
+        }
+
+
+        return sınırla(
+            çalışmayaDevam,
+            0,
             1
         );
 
-
-    return (
-        nihaiMaaş
-        *
-        toplamHizmetYılı
-        *
-        faydaFaktörü
-    );
-
-}
+    }
 
 
-/* ============================================================
-   5. GELECEK MAAŞ PROJEKSİYONU
-============================================================ */
+    /* ========================================================
+       MAAŞ PROJEKSİYONU
+    ======================================================== */
 
-function gelecektekiMaaşHesapla(
-    mevcutMaaş,
-    maaşArtışOranı,
-    yıl
-) {
-
-    return gelecekDeğer(
+    function gelecektekiMaaş(
         mevcutMaaş,
-        maaşArtışOranı,
-        yıl
-    );
-
-}
-
-
-/* ============================================================
-   6. EMEKLİLİK SÜRESİ
-============================================================ */
-
-function emekliliğeKalanYılHesapla(
-    personel,
-    varsayımlar
-) {
-
-    const yaş =
-        sayıDeğeri(
-            personel.yaş
-        );
-
-
-    const emeklilikYaşı =
-        sayıDeğeri(
-            personel.emeklilikYaşı
-            ||
-            varsayımlar.emeklilikYaşı
-        );
-
-
-    if (
-        yaş <= 0 ||
-        emeklilikYaşı <= 0
+        yıl,
+        maaşArtışOranı
     ) {
 
-        return 0;
+        mevcutMaaş =
+            güvenliSayı(
+                mevcutMaaş
+            );
+
+
+        maaşArtışOranı =
+            sınırla(
+                maaşArtışOranı,
+                SABİTLER.MIN_MAAŞ_ARTIŞ,
+                SABİTLER.MAX_MAAŞ_ARTIŞ
+            );
+
+
+        return (
+            mevcutMaaş
+            *
+            Math.pow(
+                1 +
+                maaşArtışOranı,
+                yıl
+            )
+        );
 
     }
 
 
-    return Math.max(
-        0,
-        emeklilikYaşı - yaş
-    );
+    /* ========================================================
+       FAYDA FORMÜLÜ
+    ======================================================== */
 
-}
+    /*
+       Türkiye kıdem tazminatı benzeri
+       basitleştirilmiş analitik model.
 
+       Gerçek uygulamada:
+       - kıdem tazminatı tavanı
+       - yasal ödeme koşulları
+       - ihbar / özel planlar
+       - şirket uygulamaları
 
-/* ============================================================
-   7. PROJEKSİYON YILI
-============================================================ */
+       ayrıca modellenmelidir.
+    */
 
-function projeksiyonYılıHesapla(
-    personel,
-    varsayımlar
-) {
-
-    const emekliliğeKalan =
-        emekliliğeKalanYılHesapla(
-            personel,
-            varsayımlar
-        );
-
-
-    return Math.min(
-        emekliliğeKalan,
-        sayıDeğeri(
-            varsayımlar.maksimumProjeksiyonYılı,
-            60
-        )
-    );
-
-}
-
-
-/* ============================================================
-   8. DEVRİ / TURNOVER OLASILIĞI
-============================================================ */
-
-function hayattaKalmaOlasılığıHesapla(
-    devirOranı,
-    yıl
-) {
-
-    const oran =
-        Math.max(
-            0,
-            Math.min(
-                1,
-                oranNormalizeEt(
-                    devirOranı
-                )
-            )
-        );
-
-
-    return Math.pow(
-        1 - oran,
-        Math.max(
-            0,
-            yıl
-        )
-    );
-
-}
-
-
-/* ============================================================
-   9. HAK EDİŞ / VESTING
-============================================================ */
-
-
-/**
- * Çalışanın ilgili yılda sistemde kalma
- * olasılığını dikkate alır.
- */
-function hakEdilmeOlasılığıHesapla(
-    personel,
-    yıl
-) {
-
-    return hayattaKalmaOlasılığıHesapla(
-        personel.devirOranı,
-        yıl
-    );
-
-}
-
-
-/* ============================================================
-   10. PUC — SERVICE RATIO
-============================================================ */
-
-
-/**
- * Projected Unit Credit yaklaşımında
- * toplam hizmetin ilgili dönem birimine
- * düşen kısmını hesaplar.
- */
-function hizmetOranıHesapla(
-    mevcutHizmet,
-    toplamHizmet
-) {
-
-    if (
-        toplamHizmet <= 0
+    function faydaHesapla(
+        maaş,
+        toplamHizmet
     ) {
 
-        return 0;
-
-    }
-
-
-    return Math.min(
-        1,
-        Math.max(
-            0,
-            mevcutHizmet /
-            toplamHizmet
-        )
-    );
-
-}
-
-
-/* ============================================================
-   11. PERSONEL BAZLI DBO
-============================================================ */
-
-function personelDBOHesapla(
-    hamPersonel,
-    hamVarsayımlar = {}
-) {
-
-    const varsayımlar = {
-
-        ...TMS19_CONFIG.varsayımlar,
-
-        ...hamVarsayımlar
-
-    };
-
-
-    const personel =
-        personelNormalizeEt(
-            hamPersonel,
-            {
-                ...varsayımlar,
-
-                değerlemeTarihi:
-                    varsayımlar.değerlemeTarihi
-                    ||
-                    TMS19_CONFIG.değerlemeTarihi
-
-            }
-        );
-
-
-    const iskontoOranı =
-        oranNormalizeEt(
-            varsayımlar.iskontoOranı
-        );
-
-
-    const maaşArtışOranı =
-        oranNormalizeEt(
-            varsayımlar.maaşArtışOranı
-            ??
-            varsayımlar.maasArtisOrani
-        );
-
-
-    const mevcutHizmet =
-        Math.max(
-            0,
-            personel.hizmetSüresi
-        );
-
-
-    const emekliliğeKalan =
-        projeksiyonYılıHesapla(
-            personel,
-            varsayımlar
-        );
-
-
-    const toplamHizmet =
-        mevcutHizmet
-        +
-        emekliliğeKalan;
-
-
-    /*
-     * Emeklilikteki tahmini aylık maaş.
-     */
-
-    const emeklilikMaaşı =
-        gelecektekiMaaşHesapla(
-            personel.mevcutMaaş,
-            maaşArtışOranı,
-            emekliliğeKalan
-        );
-
-
-    /*
-     * Emeklilikteki toplam tahmini fayda.
-     */
-
-    const tahminiNihaiFayda =
-        nihaiFaydaHesapla(
-            personel,
-            varsayımlar,
-            toplamHizmet,
-            emeklilikMaaşı
-        );
-
-
-    /*
-     * Mevcut hizmet oranı.
-     */
-
-    const hizmetOranı =
-        hizmetOranıHesapla(
-            mevcutHizmet,
-            toplamHizmet
-        );
-
-
-    /*
-     * PUC ile ilgili hizmete atfedilen
-     * tahmini fayda.
-     */
-
-    const hakEdilmişFayda =
-        tahminiNihaiFayda
-        *
-        hizmetOranı;
-
-
-    /*
-     * Emeklilik tarihine kadar iskonto.
-     */
-
-    const iskontoEdilmişDBO =
-        bugünküDeğer(
-            hakEdilmişFayda,
-            iskontoOranı,
-            emekliliğeKalan
-        );
-
-
-    /*
-     * Personelin sistemde kalma olasılığı.
-     */
-
-    const devamOlasılığı =
-        hakEdilmeOlasılığıHesapla(
-            personel,
-            emekliliğeKalan
-        );
-
-
-    /*
-     * Aktüeryal DBO.
-     */
-
-    const DBO =
-        iskontoEdilmişDBO
-        *
-        devamOlasılığı;
-
-
-    /*
-     * Cari hizmet maliyeti için
-     * gelecek bir yıllık hizmetin
-     * bugünkü değeri.
-     */
-
-    const birYıllıkHizmet =
-        emekliliğeKalan > 0
-            ? (
-                tahminiNihaiFayda
-                /
-                toplamHizmet
-            )
-            : 0;
-
-
-    const cariHizmetMaliyeti =
-        emekliliğeKalan > 0
-            ? bugünküDeğer(
-                birYıllıkHizmet,
-                iskontoOranı,
-                emekliliğeKalan
+        return (
+            güvenliSayı(
+                maaş
             )
             *
-            hayattaKalmaOlasılığıHesapla(
-                personel.devirOranı,
-                emekliliğeKalan
+            Math.max(
+                0,
+                toplamHizmet
             )
-            : 0;
-
-
-    /*
-     * Faiz maliyeti.
-     */
-
-    const faizMaliyeti =
-        DBO *
-        iskontoOranı;
-
-
-    return {
-
-        ...personel,
-
-        mevcutHizmet,
-
-        emekliliğeKalan,
-
-        toplamHizmet,
-
-        emeklilikMaaşı:
-
-            yuvarla(
-                emeklilikMaaşı
-            ),
-
-        tahminiNihaiFayda:
-
-            yuvarla(
-                tahminiNihaiFayda
-            ),
-
-        hizmetOranı:
-
-            yuvarla(
-                hizmetOranı,
-                6
-            ),
-
-        hakEdilmişFayda:
-
-            yuvarla(
-                hakEdilmişFayda
-            ),
-
-        devamOlasılığı:
-
-            yuvarla(
-                devamOlasılığı,
-                6
-            ),
-
-        DBO:
-
-            yuvarla(
-                DBO
-            ),
-
-        cariHizmetMaliyeti:
-
-            yuvarla(
-                cariHizmetMaliyeti
-            ),
-
-        faizMaliyeti:
-
-            yuvarla(
-                faizMaliyeti
-            )
-
-    };
-
-}
-
-
-/* ============================================================
-   12. PORTFÖY HESAPLAMA
-============================================================ */
-
-function portföyHesapla(
-    personelListesi = [],
-    hamVarsayımlar = {}
-) {
-
-    const varsayımlar = {
-
-        ...TMS19_CONFIG.varsayımlar,
-
-        ...hamVarsayımlar
-
-    };
-
-
-    const sonuçlar =
-        personelListesi.map(
-            personel =>
-                personelDBOHesapla(
-                    personel,
-                    varsayımlar
-                )
-        );
-
-
-    const toplamDBO =
-        sonuçlar.reduce(
-            (
-                toplam,
-                personel
-            ) =>
-                toplam
-                +
-                personel.DBO,
-            0
-        );
-
-
-    const toplamCariHizmetMaliyeti =
-        sonuçlar.reduce(
-            (
-                toplam,
-                personel
-            ) =>
-                toplam
-                +
-                personel.cariHizmetMaliyeti,
-            0
-        );
-
-
-    const toplamFaizMaliyeti =
-        sonuçlar.reduce(
-            (
-                toplam,
-                personel
-            ) =>
-                toplam
-                +
-                personel.faizMaliyeti,
-            0
-        );
-
-
-    return {
-
-        personeller:
-            sonuçlar,
-
-        personelSayısı:
-            sonuçlar.length,
-
-        toplamDBO:
-            yuvarla(
-                toplamDBO
-            ),
-
-        toplamCariHizmetMaliyeti:
-            yuvarla(
-                toplamCariHizmetMaliyeti
-            ),
-
-        toplamFaizMaliyeti:
-            yuvarla(
-                toplamFaizMaliyeti
-            )
-
-    };
-
-}
-
-
-/* ============================================================
-   13. AÇILIŞ DBO
-============================================================ */
-
-
-/**
- * Gerçek uygulamada açılış DBO,
- * önceki yıl kapanış aktüeryal raporundan
- * gelmelidir.
- *
- * Eğer kullanıcı veri sağlamazsa
- * kapanış DBO proxy olarak kullanılabilir.
- */
-function açılışDBOHesapla(
-    personelListesi,
-    varsayımlar,
-    manuelAçılışDBO = null
-) {
-
-    if (
-        manuelAçılışDBO !== null &&
-        manuelAçılışDBO !== undefined
-    ) {
-
-        return sayıDeğeri(
-            manuelAçılışDBO
         );
 
     }
 
 
-    /*
-     * Demo / ilk dönem yaklaşımı.
-     *
-     * Üretim sisteminde burası önceki dönem
-     * kapanış verisine bağlanmalıdır.
-     */
-
-    const geçmişVarsayımlar = {
-
-        ...varsayımlar,
-
-        değerlemeTarihi:
-            new Date(
-                (
-                    tarihDeğeri(
-                        varsayımlar.değerlemeTarihi
-                    )
-                    ||
-                    TMS19_CONFIG.değerlemeTarihi
-                ).getFullYear() - 1,
-                11,
-                31
-            )
-
-    };
-
-
-    const geçmiş =
-        portföyHesapla(
-            personelListesi,
-            geçmişVarsayımlar
-        );
-
-
-    return geçmiş.toplamDBO;
-
-}
-
-
-/* ============================================================
-   14. ROLL-FORWARD
-============================================================ */
-
-function rollForwardHesapla(
-    personelListesi,
-    varsayımlar = {},
-    manuelAçılışDBO = null,
-    ödenenFaydalar = 0
-) {
-
-    const portföy =
-        portföyHesapla(
-            personelListesi,
-            varsayımlar
-        );
-
-
-    const kapanışDBO =
-        portföy.toplamDBO;
-
-
-    const açılışDBO =
-        açılışDBOHesapla(
-            personelListesi,
-            varsayımlar,
-            manuelAçılışDBO
-        );
-
-
-    const cariHizmetMaliyeti =
-        portföy.toplamCariHizmetMaliyeti;
-
-
-    const faizMaliyeti =
-        açılışDBO
-        *
-        oranNormalizeEt(
-            varsayımlar.iskontoOranı
-        );
-
-
-    const faydaÖdemeleri =
-        Math.abs(
-            sayıDeğeri(
-                ödenenFaydalar
-            )
-        );
-
-
-    /*
-     * Aktüeryal yeniden ölçüm:
-     *
-     * Kapanış DBO =
-     * Açılış DBO
-     * + Cari hizmet
-     * + Faiz
-     * + Yeniden ölçüm
-     * - Ödemeler
-     *
-     * Buradan yeniden ölçüm solve edilir.
-     */
-
-    const aktüeryalKazançKayıp =
-        kapanışDBO
-        -
-        açılışDBO
-        -
-        cariHizmetMaliyeti
-        -
-        faizMaliyeti
-        +
-        faydaÖdemeleri;
-
-
-    const netPnl =
-        cariHizmetMaliyeti
-        +
-        faizMaliyeti;
-
-
-    return {
-
-        açılışDBO:
-            yuvarla(
-                açılışDBO
-            ),
-
-        cariHizmetMaliyeti:
-            yuvarla(
-                cariHizmetMaliyeti
-            ),
-
-        faizMaliyeti:
-            yuvarla(
-                faizMaliyeti
-            ),
-
-        aktüeryalKazançKayıp:
-            yuvarla(
-                aktüeryalKazançKayıp
-            ),
-
-        ödenenFaydalar:
-            yuvarla(
-                faydaÖdemeleri
-            ),
-
-        kapanışDBO:
-            yuvarla(
-                kapanışDBO
-            ),
-
-        netPnl:
-            yuvarla(
-                netPnl
-            ),
-
-        oci:
-            yuvarla(
-                aktüeryalKazançKayıp
-            ),
-
-        portföy
-
-    };
-
-}
-
-
-/* ============================================================
-   15. DUYARLILIK — GENEL
-============================================================ */
-
-function duyarlılıkHesapla(
-    personelListesi,
-    varsayımlar,
-    bazDBO
-) {
-
-    const baz =
-        portföyHesapla(
-            personelListesi,
-            varsayımlar
-        );
-
-
-    const bazDeğeri =
-        bazDBO ??
-        baz.toplamDBO;
-
-
-    /*
-     * İSKONTO
-     */
-
-    const iskonto =
-        oranNormalizeEt(
-            varsayımlar.iskontoOranı
-        );
-
-
-    const iskontoMinus =
-        portföyHesapla(
-            personelListesi,
-            {
-                ...varsayımlar,
-
-                iskontoOranı:
-                    iskonto - 0.01
-
-            }
-        );
-
-
-    const iskontoPlus =
-        portföyHesapla(
-            personelListesi,
-            {
-                ...varsayımlar,
-
-                iskontoOranı:
-                    iskonto + 0.01
-
-            }
-        );
-
-
-    /*
-     * MAAŞ
-     */
-
-    const maaşArtışı =
-        oranNormalizeEt(
-            varsayımlar.maaşArtışOranı
-            ??
-            varsayımlar.maasArtisOrani
-        );
-
-
-    const maaşMinus =
-        portföyHesapla(
-            personelListesi,
-            {
-                ...varsayımlar,
-
-                maaşArtışOranı:
-                    maaşArtışı - 0.01
-
-            }
-        );
-
-
-    const maaşPlus =
-        portföyHesapla(
-            personelListesi,
-            {
-                ...varsayımlar,
-
-                maaşArtışOranı:
-                    maaşArtışı + 0.01
-
-            }
-        );
-
-
-    function senaryo(
+    /* ========================================================
+       İSKONTO
+    ======================================================== */
+
+    function iskontoFaktörü(
         oran,
-        DBO
+        yıl
     ) {
+
+        oran =
+            sınırla(
+                güvenliSayı(
+                    oran,
+                    SABİTLER.DEFAULT_İSKONTO_ORANI
+                ),
+                SABİTLER.MIN_İSKONTO,
+                SABİTLER.MAX_İSKONTO
+            );
+
+
+        return (
+            1 /
+            Math.pow(
+                1 + oran,
+                yıl
+            )
+        );
+
+    }
+
+
+    /* ========================================================
+       PERSONEL NORMALİZASYONU
+    ======================================================== */
+
+    function personelNormalizeEt(
+        personel,
+        varsayımlar
+    ) {
+
+        const mevcutMaaş =
+            güvenliSayı(
+                personel.mevcutMaaş
+                ??
+                personel.mevcutMaas
+                ??
+                personel.Maaş
+                ??
+                personel.Maas
+            );
+
+
+        const yaş =
+            güvenliSayı(
+                personel.yaş
+                ??
+                personel.yas
+                ??
+                yaşHesapla(
+                    personel.doğumTarihi
+                    ??
+                    personel.dogumTarihi,
+                    varsayımlar.değerlemeTarihi
+                ),
+                40
+            );
+
+
+        const hizmet =
+            güvenliSayı(
+                personel.hizmetSüresi
+                ??
+                personel.hizmetSuresi
+                ??
+                hizmetSüresiHesapla(
+                    personel.işeGirişTarihi
+                    ??
+                    personel.iseGirisTarihi,
+                    varsayımlar.değerlemeTarihi
+                ),
+                0
+            );
+
+
+        const emeklilikYaşı =
+            güvenliSayı(
+                personel.emeklilikYaşı
+                ??
+                personel.emeklilikYasi
+                ??
+                varsayımlar.emeklilikYaşı,
+                SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
+            );
+
 
         return {
 
-            rate:
-                oran,
+            ...personel,
 
-            dbo:
-                DBO,
+            mevcutMaaş,
 
-            change:
-                DBO - bazDeğeri,
+            yaş,
 
-            changePercent:
-                bazDeğeri !== 0
-                    ? (
-                        (
-                            DBO -
-                            bazDeğeri
-                        )
-                        /
-                        bazDeğeri
-                    )
-                    * 100
-                    : 0
+            hizmetSüresi:
+                hizmet,
+
+            emeklilikYaşı,
+
+            cinsiyet:
+                personel.cinsiyet
+                ??
+                personel.Cinsiyet
+                ??
+                "E"
 
         };
 
     }
 
 
-    return {
-
-        discount: {
-
-            minus:
-                senaryo(
-                    iskonto - 0.01,
-                    iskontoMinus.toplamDBO
-                ),
-
-            base:
-                senaryo(
-                    iskonto,
-                    bazDeğeri
-                ),
-
-            plus:
-                senaryo(
-                    iskonto + 0.01,
-                    iskontoPlus.toplamDBO
-                )
-
-        },
-
-
-        salary: {
-
-            minus:
-                senaryo(
-                    maaşArtışı - 0.01,
-                    maaşMinus.toplamDBO
-                ),
-
-            base:
-                senaryo(
-                    maaşArtışı,
-                    bazDeğeri
-                ),
-
-            plus:
-                senaryo(
-                    maaşArtışı + 0.01,
-                    maaşPlus.toplamDBO
-                )
-
-        }
-
-    };
-
-}
-
-
-/* ============================================================
-   16. ANA AKTÜERYAL HESAPLAMA
-============================================================ */
-
-function TMS19AktüeryalHesapla(
-    personelListesi = [],
-    hamVarsayımlar = {},
-    seçenekler = {}
-) {
-
-    const varsayımlar = {
-
-        ...TMS19_CONFIG.varsayımlar,
-
-        ...hamVarsayımlar
-
-    };
-
-
-    /*
-     * Oranları normalize et.
-     */
-
-    varsayımlar.iskontoOranı =
-        oranNormalizeEt(
-            varsayımlar.iskontoOranı
-        );
-
-
-    varsayımlar.maaşArtışOranı =
-        oranNormalizeEt(
-            varsayımlar.maaşArtışOranı
-            ??
-            varsayımlar.maasArtisOrani
-        );
-
-
-    varsayımlar.personelDevirOranı =
-        oranNormalizeEt(
-            varsayımlar.personelDevirOranı
-            ??
-            varsayımlar.personelDevirOrani
-        );
-
-
-    varsayımlar.emeklilikYaşı =
-        sayıDeğeri(
-            varsayımlar.emeklilikYaşı,
-            60
-        );
-
-
-    /*
-     * Personel hesaplama.
-     */
-
-    const portföy =
-        portföyHesapla(
-            personelListesi,
-            varsayımlar
-        );
-
-
-    /*
-     * Roll-forward.
-     */
-
-    const rollForward =
-        rollForwardHesapla(
-            personelListesi,
-            varsayımlar,
-            seçenekler.açılışDBO,
-            seçenekler.ödenenFaydalar
-        );
-
-
-    /*
-     * Duyarlılık.
-     */
-
-    const duyarlılık =
-        duyarlılıkHesapla(
-            personelListesi,
-            varsayımlar,
-            portföy.toplamDBO
-        );
-
-
-    /*
-     * Finansal sonuç.
-     */
-
-    const sonuç = {
-
-        durum:
-            "başarılı",
-
-        hesaplamaTarihi:
-            new Date(),
-
-        değerlemeTarihi:
-            tarihDeğeri(
-                varsayımlar.değerlemeTarihi
-            )
-            ||
-            TMS19_CONFIG.değerlemeTarihi,
-
-        varsayımlar,
-
-        personeller:
-            portföy.personeller,
-
-        personelSayısı:
-            portföy.personelSayısı,
-
-        openingDBO:
-            rollForward.açılışDBO,
-
-        closingDBO:
-            rollForward.kapanışDBO,
-
-        dbo:
-            rollForward.kapanışDBO,
-
-        totalDBO:
-            rollForward.kapanışDBO,
-
-        currentServiceCost:
-            rollForward.cariHizmetMaliyeti,
-
-        serviceCost:
-            rollForward.cariHizmetMaliyeti,
-
-        interestCost:
-            rollForward.faizMaliyeti,
-
-        netInterestCost:
-            rollForward.faizMaliyeti,
-
-        remeasurement:
-            rollForward.aktüeryalKazançKayıp,
-
-        actuarialGainLoss:
-            rollForward.aktüeryalKazançKayıp,
-
-        benefitsPaid:
-            rollForward.ödenenFaydalar,
-
-        oci:
-            rollForward.oci,
-
-        netPnl:
-            rollForward.netPnl,
-
-        rollForward,
-
-        sensitivity:
-            duyarlılık
-
-    };
-
-
-    /*
-     * Global event.
-     */
-
-    try {
-
-        window.dispatchEvent(
-            new CustomEvent(
-                "tms19:calculation-complete",
-                {
-                    detail:
-                        sonuç
-                }
-            )
-        );
-
-    } catch (
-        hata
+    /* ========================================================
+       PERSONEL BAZLI AKTÜERYAL PROJEKSİYON
+    ======================================================== */
+
+    function personelProjeksiyonu(
+        hamPersonel,
+        varsayımlar
     ) {
 
-        console.warn(
-            "TMS 19 event yayınlanamadı:",
-            hata
-        );
-
-    }
-
-
-    return sonuç;
-
-}
-
-
-/* ============================================================
-   17. CSV VERİSİNİ PERSONELE ÇEVİR
-============================================================ */
-
-function CSVPersonelDönüştür(
-    satırlar = []
-) {
-
-    return satırlar.map(
-        satır => {
-
-            return {
-
-                sicilNo:
-                    satır["Sicil No"]
-                    ??
-                    satır["Sicil"]
-                    ??
-                    satır["Employee ID"]
-                    ??
-                    satır["employeeId"],
-
-                adSoyad:
-                    satır["Ad Soyad"]
-                    ??
-                    satır["Ad Soyad"]
-                    ??
-                    satır["Çalışan"]
-                    ??
-                    satır["Employee Name"],
-
-                cinsiyet:
-                    satır["Cinsiyet"]
-                    ??
-                    satır["Gender"],
-
-                doğumTarihi:
-                    satır["Doğum Tarihi"]
-                    ??
-                    satır["Dogum Tarihi"]
-                    ??
-                    satır["Birth Date"],
-
-                işeGirişTarihi:
-                    satır["İşe Giriş Tarihi"]
-                    ??
-                    satır["Ise Giris Tarihi"]
-                    ??
-                    satır["Hire Date"],
-
-                mevcutMaaş:
-                    satır["Mevcut Maaş"]
-                    ??
-                    satır["Mevcut Maas"]
-                    ??
-                    satır["Aylık Maaş"]
-                    ??
-                    satır["Salary"],
-
-                hizmetSüresi:
-                    satır["Hizmet Süresi"]
-                    ??
-                    satır["Hizmet Suresi"],
-
-                yaş:
-                    satır["Yaş"]
-                    ??
-                    satır["Yas"],
-
-                pozisyon:
-                    satır["Pozisyon"],
-
-                departman:
-                    satır["Departman"],
-
-                emeklilikYaşı:
-                    satır["Emeklilik Yaşı"]
-                    ??
-                    satır["Emeklilik Yasi"]
-
-            };
-
-        }
-    );
-
-}
-
-
-/* ============================================================
-   18. VERİ KALİTESİ
-============================================================ */
-
-function TMS19VeriKalitesiKontrol(
-    personelListesi = []
-) {
-
-    const kontroller = {
-
-        toplamPersonel:
-            personelListesi.length,
-
-        sicilEksik:
-            0,
-
-        adEksik:
-            0,
-
-        doğumTarihiEksik:
-            0,
-
-        işeGirişTarihiEksik:
-            0,
-
-        maaşEksik:
-            0,
-
-        negatifMaaş:
-            0,
-
-        emeklilikYaşıUyumsuz:
-            0,
-
-        mükerrerSicil:
-            0
-
-    };
-
-
-    const siciller =
-        new Set();
-
-
-    personelListesi.forEach(
-        hamPersonel => {
-
-            const personel =
-                personelNormalizeEt(
-                    hamPersonel
-                );
-
-
-            if (
-                !personel.sicilNo
-            ) {
-
-                kontroller.sicilEksik++;
-
-            }
-
-
-            if (
-                !personel.adSoyad
-            ) {
-
-                kontroller.adEksik++;
-
-            }
-
-
-            if (
-                !personel.doğumTarihi
-            ) {
-
-                kontroller.doğumTarihiEksik++;
-
-            }
-
-
-            if (
-                !personel.işeGirişTarihi
-            ) {
-
-                kontroller.işeGirişTarihiEksik++;
-
-            }
-
-
-            if (
-                !personel.mevcutMaaş
-            ) {
-
-                kontroller.maaşEksik++;
-
-            }
-
-
-            if (
-                personel.mevcutMaaş < 0
-            ) {
-
-                kontroller.negatifMaaş++;
-
-            }
-
-
-            if (
-                personel.emeklilikYaşı > 0 &&
-                personel.yaş >=
-                personel.emeklilikYaşı
-            ) {
-
-                kontroller.emeklilikYaşıUyumsuz++;
-
-            }
-
-
-            if (
-                personel.sicilNo
-            ) {
-
-                if (
-                    siciller.has(
-                        personel.sicilNo
-                    )
-                ) {
-
-                    kontroller.mükerrerSicil++;
-
-                }
-
-                siciller.add(
-                    personel.sicilNo
-                );
-
-            }
-
-        }
-    );
-
-
-    const toplamHata =
-        Object.keys(
-            kontroller
-        )
-        .filter(
-            anahtar =>
-                anahtar !==
-                "toplamPersonel"
-        )
-        .reduce(
-            (
-                toplam,
-                anahtar
-            ) =>
-                toplam
-                +
-                kontroller[anahtar],
-            0
-        );
-
-
-    const veriSayısı =
-        Math.max(
-            1,
-            personelListesi.length
-        );
-
-
-    /*
-     * Basit fakat açıklanabilir kalite skoru.
-     */
-
-    const hataOranı =
-        toplamHata
-        /
-        (
-            veriSayısı * 9
-        );
-
-
-    const kaliteSkoru =
-        Math.max(
-            0,
-            Math.min(
-                100,
-                100 -
-                (
-                    hataOranı *
-                    100
-                )
-            )
-        );
-
-
-    let seviye =
-        "kritik";
-
-
-    if (
-        kaliteSkoru >= 95
-    ) {
-
-        seviye =
-            "mükemmel";
-
-    } else if (
-        kaliteSkoru >= 85
-    ) {
-
-        seviye =
-            "yüksek";
-
-    } else if (
-        kaliteSkoru >= 70
-    ) {
-
-        seviye =
-            "orta";
-
-    }
-
-
-    return {
-
-        ...kontroller,
-
-        toplamHata,
-
-        kaliteSkoru:
-            yuvarla(
-                kaliteSkoru,
-                1
-            ),
-
-        seviye
-
-    };
-
-}
-
-
-/* ============================================================
-   19. YÖNETİCİ ÖZETİ
-============================================================ */
-
-function TMS19YöneticiÖzeti(
-    sonuç
-) {
-
-    if (!sonuç) {
-
-        return null;
-
-    }
-
-
-    const dbo =
-        sayıDeğeri(
-            sonuç.closingDBO
-        );
-
-
-    const service =
-        sayıDeğeri(
-            sonuç.currentServiceCost
-        );
-
-
-    const interest =
-        sayıDeğeri(
-            sonuç.netInterestCost
-        );
-
-
-    const oci =
-        sayıDeğeri(
-            sonuç.oci
-        );
-
-
-    return {
-
-        DBO:
-            dbo,
-
-        cariHizmetMaliyeti:
-            service,
-
-        faizMaliyeti:
-            interest,
-
-        PnL:
-            service + interest,
-
-        OCI:
-            oci,
-
-        personelSayısı:
-            sonuç.personelSayısı,
-
-        PnLDBOOranı:
-            dbo !== 0
-                ? (
-                    (
-                        service +
-                        interest
-                    )
-                    /
-                    dbo
-                )
-                : 0,
-
-        yorumlar: [
-
-            dbo > 0
-                ? "TMS 19 yükümlülüğü mevcut."
-                : "TMS 19 yükümlülüğü hesaplanamadı.",
-
-            service > 0
-                ? "Cari hizmet maliyeti dönem kâr veya zararını artırmaktadır."
-                : "Cari hizmet maliyeti bulunmamaktadır.",
-
-            Math.abs(oci) > 0
-                ? "Aktüeryal yeniden ölçüm OCI üzerinde etki yaratmaktadır."
-                : "Belirgin aktüeryal yeniden ölçüm etkisi bulunmamaktadır."
-
-        ]
-
-    };
-
-}
-
-
-/* ============================================================
-   20. GLOBAL API
-============================================================ */
-
-window.TMS19 = {
-
-    config:
-        TMS19_CONFIG,
-
-    hesapla:
-        TMS19AktüeryalHesapla,
-
-    personelHesapla:
-        personelDBOHesapla,
-
-    portföyHesapla:
-        portföyHesapla,
-
-    rollForwardHesapla:
-        rollForwardHesapla,
-
-    duyarlılıkHesapla:
-        duyarlılıkHesapla,
-
-    veriKalitesi:
-        TMS19VeriKalitesiKontrol,
-
-    yöneticiÖzeti:
-        TMS19YöneticiÖzeti,
-
-    CSVPersonelDönüştür:
-        CSVPersonelDönüştür
-
-};
-
-
-/* ============================================================
-   21. ESKİ İSİMLERLE UYUMLULUK
-============================================================ */
-
-window.TMS19AktüeryalMotor =
-    TMS19AktüeryalHesapla;
-
-
-window.hesaplaTMS19 =
-    TMS19AktüeryalHesapla;
-
-
-/* ============================================================
-   22. KONSOL BİLGİSİ
-============================================================ */
-
-console.log(
-    "GK Advisory — TMS 19 Aktüeryal Motor v" +
-    TMS19_CONFIG.sürüm +
-    " hazır."
-);
-
-
-/* ============================================================
-   23. DEMO HESAPLAMA FONKSİYONU
-============================================================ */
-
-function TMS19DemoÇalıştır() {
-
-    const demoPersoneller = [
-
-        {
-
-            sicilNo:
-                "10001",
-
-            adSoyad:
-                "Demo Çalışan 1",
-
-            doğumTarihi:
-                "1988-05-10",
-
-            işeGirişTarihi:
-                "2018-01-01",
-
-            mevcutMaaş:
-                75000,
-
-            cinsiyet:
-                "E",
-
-            departman:
-                "Finans"
-
-        },
-
-        {
-
-            sicilNo:
-                "10002",
-
-            adSoyad:
-                "Demo Çalışan 2",
-
-            doğumTarihi:
-                "1992-08-20",
-
-            işeGirişTarihi:
-                "2020-06-01",
-
-            mevcutMaaş:
-                60000,
-
-            cinsiyet:
-                "K",
-
-            departman:
-                "İnsan Kaynakları"
-
-        }
-
-    ];
-
-
-    return TMS19AktüeryalHesapla(
-
-        demoPersoneller,
-
-        {
-
-            iskontoOranı:
-                0.28,
-
-            maaşArtışOranı:
-                0.25,
-
-            personelDevirOranı:
-                0.08,
-
-            emeklilikYaşı:
-                60,
-
-            değerlemeTarihi:
-                "2026-12-31"
-
-        },
-
-        {
-
-            ödenenFaydalar:
-                0
-
-        }
-
-    );
-
-}
-
-
-/* ============================================================
-   24. DEMO API
-============================================================ */
-
-window.TMS19DemoÇalıştır =
-    TMS19DemoÇalıştır;
-
-/* ============================================================
-   25. YILLIK AKTÜERYAL PROJEKSİYON MOTORU
-   ------------------------------------------------------------
-   Personel bazında yıllık projeksiyon üretir.
-   ============================================================ */
-
-function TMS19YıllıkProjeksiyonHesapla(
-    hamPersonel,
-    hamVarsayımlar = {}
-) {
-
-    const varsayımlar = {
-
-        ...TMS19_CONFIG.varsayımlar,
-
-        ...hamVarsayımlar
-
-    };
-
-
-    const personel =
-        personelNormalizeEt(
-            hamPersonel,
-            varsayımlar
-        );
-
-
-    const iskontoOranı =
-        oranNormalizeEt(
-            varsayımlar.iskontoOranı
-        );
-
-
-    const maaşArtışOranı =
-        oranNormalizeEt(
-            varsayımlar.maaşArtışOranı
-        );
-
-
-    const başlangıçTarihi =
-        tarihDeğeri(
-            varsayımlar.değerlemeTarihi
-        )
-        ||
-        TMS19_CONFIG.değerlemeTarihi;
-
-
-    const başlangıçYılı =
-        başlangıçTarihi.getFullYear();
-
-
-    const emeklilikYaşı =
-        sayıDeğeri(
-            personel.emeklilikYaşı,
-            60
-        );
-
-
-    const mevcutYaş =
-        sayıDeğeri(
-            personel.yaş
-        );
-
-
-    const emekliliğeKalan =
-        Math.max(
-            0,
-            emeklilikYaşı -
-            mevcutYaş
-        );
-
-
-    const toplamHizmet =
-        personel.hizmetSüresi +
-        emekliliğeKalan;
-
-
-    const projeksiyonlar = [];
-
-
-    /*
-     * Her gelecek yıl için hesaplama.
-     */
-
-    for (
-        let yıl = 0;
-        yıl <= emekliliğeKalan;
-        yıl++
-    ) {
-
-        const takvimYılı =
-            başlangıçYılı +
-            yıl;
+        const personel =
+            personelNormalizeEt(
+                hamPersonel,
+                varsayımlar
+            );
 
 
         const yaş =
-            mevcutYaş +
-            yıl;
+            personel.yaş;
 
 
         const hizmet =
-            personel.hizmetSüresi +
-            yıl;
+            personel.hizmetSüresi;
 
 
-        /*
-         * Gelecekteki maaş.
-         */
-
-        const maaş =
-            gelecektekiMaaşHesapla(
-                personel.mevcutMaaş,
-                maaşArtışOranı,
-                yıl
-            );
+        const emeklilikYaşı =
+            personel.emeklilikYaşı;
 
 
-        /*
-         * Kümülatif devir olasılığı.
-         */
-
-        const hayattaKalma =
-            hayattaKalmaOlasılığıHesapla(
-                personel.devirOranı,
-                yıl
-            );
-
-
-        /*
-         * Kalan hizmet.
-         */
-
-        const kalanHizmet =
-            Math.max(
-                0,
-                toplamHizmet -
-                hizmet
-            );
-
-
-        /*
-         * İlgili yıldaki tahmini nihai maaş.
-         *
-         * Emeklilik maaşını temel alıyoruz.
-         */
-
-        const emeklilikMaaşı =
-            gelecektekiMaaşHesapla(
-                personel.mevcutMaaş,
-                maaşArtışOranı,
-                emekliliğeKalan
-            );
-
-
-        /*
-         * Tahmini nihai fayda.
-         */
-
-        const nihaiFayda =
-            nihaiFaydaHesapla(
-                personel,
-                varsayımlar,
-                toplamHizmet,
-                emeklilikMaaşı
-            );
-
-
-        /*
-         * İlgili yılda kazanılmış hizmet oranı.
-         */
-
-        const hizmetOranı =
-            hizmetOranıHesapla(
-                hizmet,
-                toplamHizmet
-            );
-
-
-        /*
-         * O yıla kadar kazanılmış fayda.
-         */
-
-        const kazanılmışFayda =
-            nihaiFayda *
-            hizmetOranı;
-
-
-        /*
-         * Emeklilik tarihine kalan süre.
-         */
-
-        const emekliliğeKalanYıl =
-            Math.max(
-                0,
-                emekliliğeKalan -
-                yıl
-            );
-
-
-        /*
-         * İskonto faktörü.
-         */
-
-        const iskontoFaktörü =
-            1 /
-            Math.pow(
-                1 + iskontoOranı,
-                emekliliğeKalanYıl
-            );
-
-
-        /*
-         * Beklenen fayda.
-         */
-
-        const beklenenFayda =
-            kazanılmışFayda *
-            hayattaKalma;
-
-
-        /*
-         * Bugünkü değer.
-         */
-
-        const bugünküDeğerFayda =
-            beklenenFayda *
-            iskontoFaktörü;
-
-
-        /*
-         * Bir sonraki yılın hizmet katkısı.
-         */
-
-        const sonrakiHizmet =
+        const maksimumYıl =
             Math.min(
-                toplamHizmet,
-                hizmet + 1
+                SABİTLER.MAKS_PROJEKSİYON_YILI,
+                Math.max(
+                    1,
+                    emeklilikYaşı
+                    -
+                    yaş
+                    +
+                    1
+                )
             );
 
 
-        const sonrakiHizmetOranı =
-            hizmetOranıHesapla(
-                sonrakiHizmet,
-                toplamHizmet
-            );
+        const yıllık = [];
 
 
-        const hizmetArtışı =
-            Math.max(
-                0,
-                sonrakiHizmetOranı -
-                hizmetOranı
-            );
+        let DBO =
+            0;
 
 
-        /*
-         * Tahmini cari hizmet maliyeti.
-         */
-
-        const tahminiCariHizmet =
-            nihaiFayda *
-            hizmetArtışı *
-            hayattaKalma *
-            iskontoFaktörü;
+        let öncekiDBO =
+            0;
 
 
-        /*
-         * Dönem başı DBO.
-         */
-
-        const dönemBaşıDBO =
-            yıl === 0
-                ? 0
-                : projeksiyonlar[
-                    projeksiyonlar.length - 1
-                ].dönemSonuDBO;
+        let toplamCariHizmet =
+            0;
 
 
-        /*
-         * Faiz maliyeti.
-         */
-
-        const faizMaliyeti =
-            dönemBaşıDBO *
-            iskontoOranı;
+        let toplamFaiz =
+            0;
 
 
-        /*
-         * Dönem sonu DBO.
-         */
-
-        const dönemSonuDBO =
-            bugünküDeğerFayda;
+        let toplamBeklenenFayda =
+            0;
 
 
-        projeksiyonlar.push({
+        for (
+            let yıl = 1;
+            yıl <= maksimumYıl;
+            yıl++
+        ) {
 
-            yıl:
+            const gelecekYaş =
+                yaş
+                +
+                yıl;
 
-                takvimYılı,
 
-            dönem:
+            const gelecekHizmet =
+                hizmet
+                +
+                yıl;
+
+
+            const maaş =
+                gelecektekiMaaş(
+                    personel.mevcutMaaş,
+                    yıl,
+                    varsayımlar.maaşArtışOranı
+                );
+
+
+            const beklenenFayda =
+                faydaHesapla(
+                    maaş,
+                    gelecekHizmet
+                );
+
+
+            const faydaOlasılığı =
+                faydaAlmaOlasılığı(
+                    yaş,
+                    yıl,
+                    personel,
+                    varsayımlar
+                );
+
+
+            const beklenenFaydaTutari =
+                beklenenFayda
+                *
+                faydaOlasılığı;
+
+
+            const iskonto =
+                iskontoFaktörü(
+                    varsayımlar.iskontoOranı,
+                    yıl
+                );
+
+
+            const bugünküDeğer =
+                beklenenFaydaTutari
+                *
+                iskonto;
+
+
+            /*
+               PUC:
+               Toplam faydanın hizmet yılına
+               dağıtılması.
+            */
+
+            const toplamHizmet =
+                Math.max(
+                    gelecekHizmet,
+                    1
+                );
+
+
+            const birimFayda =
+                beklenenFaydaTutari
+                /
+                toplamHizmet;
+
+
+            const geçmişHizmeteAtfedilen =
+                birimFayda
+                *
+                hizmet;
+
+
+            const yılDBO =
+                geçmişHizmeteAtfedilen
+                *
+                iskonto;
+
+
+            /*
+               Cari hizmet maliyeti:
+               Bir yıllık ilave hizmetin
+               bugünkü değeri.
+            */
+
+            const cariHizmetMaliyeti =
+                birimFayda
+                *
+                iskonto;
+
+
+            /*
+               Faiz maliyeti:
+               Önceki DBO × iskonto oranı.
+            */
+
+            const faizMaliyeti =
+                öncekiDBO
+                *
+                varsayımlar.iskontoOranı;
+
+
+            yıllık.push({
 
                 yıl,
 
-            yaş:
+                yaş:
+                    gelecekYaş,
 
-                yaş,
+                hizmet:
+                    gelecekHizmet,
 
-            hizmetYılı:
+                maaş,
 
-                yuvarla(
-                    hizmet,
-                    2
-                ),
+                beklenenFayda,
 
-            kalanHizmet:
+                faydaOlasılığı,
 
-                yuvarla(
-                    kalanHizmet,
-                    2
-                ),
+                beklenenFaydaTutari,
 
-            mevcutMaaş:
+                iskontoFaktörü:
+                    iskonto,
 
-                yuvarla(
-                    maaş
-                ),
+                bugünküDeğer,
 
-            emeklilikMaaşı:
+                DBO:
+                    yılDBO,
 
-                yuvarla(
-                    emeklilikMaaşı
-                ),
+                cariHizmetMaliyeti,
 
-            nihaiFayda:
+                faizMaliyeti
 
-                yuvarla(
-                    nihaiFayda
-                ),
+            });
 
-            hizmetOranı:
 
-                yuvarla(
-                    hizmetOranı,
-                    6
-                ),
+            öncekiDBO =
+                yılDBO;
 
-            hayattaKalmaOlasılığı:
 
-                yuvarla(
-                    hayattaKalma,
-                    6
-                ),
+            DBO =
+                yılDBO;
 
-            iskontoFaktörü:
 
-                yuvarla(
-                    iskontoFaktörü,
-                    8
-                ),
+            toplamCariHizmet +=
+                cariHizmetMaliyeti;
 
-            beklenenFayda:
 
-                yuvarla(
-                    beklenenFayda
-                ),
+            toplamFaiz +=
+                faizMaliyeti;
 
-            bugünküDeğer:
 
-                yuvarla(
-                    bugünküDeğerFayda
-                ),
+            toplamBeklenenFayda +=
+                beklenenFaydaTutari;
+
+        }
+
+
+        return {
+
+            personel,
+
+            yıllık,
+
+            kapanışDBO:
+                DBO,
 
             cariHizmetMaliyeti:
-
-                yuvarla(
-                    tahminiCariHizmet
-                ),
+                toplamCariHizmet,
 
             faizMaliyeti:
+                toplamFaiz,
 
-                yuvarla(
-                    faizMaliyeti
-                ),
+            toplamBeklenenFayda
 
-            dönemBaşıDBO:
-
-                yuvarla(
-                    dönemBaşıDBO
-                ),
-
-            dönemSonuDBO:
-
-                yuvarla(
-                    dönemSonuDBO
-                )
-
-        });
+        };
 
     }
 
 
-    return {
+    /* ========================================================
+       TOPLU DEĞERLEME
+    ======================================================== */
 
-        personel:
+    function değerle(
+        personelListesi,
+        varsayımlar
+    ) {
 
-            personel,
-
-        başlangıçYılı:
-
-            başlangıçYılı,
-
-        emeklilikYılı:
-
-            başlangıçYılı +
-            emekliliğeKalan,
-
-        emekliliğeKalan:
-
-            emekliliğeKalan,
-
-        projeksiyon:
-
-            projeksiyonlar
-
-    };
-
-}
+        const sonuçlar =
+            [];
 
 
-/* ============================================================
-   26. TÜM PERSONEL İÇİN PROJEKSİYON
-============================================================ */
-
-function TMS19TümProjeksiyonlarıHesapla(
-    personelListesi = [],
-    varsayımlar = {}
-) {
-
-    return personelListesi.map(
-        personel =>
-
-            TMS19YıllıkProjeksiyonHesapla(
-                personel,
-                varsayımlar
-            )
-
-    );
-
-}
+        let toplamDBO =
+            0;
 
 
-/* ============================================================
-   27. YILLIK PORTFÖY AKIŞI
-============================================================ */
+        let toplamCariHizmet =
+            0;
 
-function TMS19YıllıkPortföyHesapla(
-    personelListesi = [],
-    varsayımlar = {}
-) {
 
-    const projeksiyonlar =
-        TMS19TümProjeksiyonlarıHesapla(
-            personelListesi,
-            varsayımlar
+        let toplamFaiz =
+            0;
+
+
+        let toplamBeklenenFayda =
+            0;
+
+
+        personelListesi.forEach(
+            personel => {
+
+                const sonuç =
+                    personelProjeksiyonu(
+                        personel,
+                        varsayımlar
+                    );
+
+
+                sonuçlar.push(
+                    sonuç
+                );
+
+
+                toplamDBO +=
+                    sonuç.kapanışDBO;
+
+
+                toplamCariHizmet +=
+                    sonuç.cariHizmetMaliyeti;
+
+
+                toplamFaiz +=
+                    sonuç.faizMaliyeti;
+
+
+                toplamBeklenenFayda +=
+                    sonuç.toplamBeklenenFayda;
+
+            }
         );
 
 
-    const yıllar =
-        new Set();
+        return {
+
+            personelSonuçları:
+                sonuçlar,
+
+            toplamDBO,
+
+            toplamCariHizmet,
+
+            toplamFaiz,
+
+            toplamBeklenenFayda
+
+        };
+
+    }
 
 
-    projeksiyonlar.forEach(
-        personel => {
+    /* ========================================================
+       DBO KÖPRÜSÜ
+    ======================================================== */
 
-            personel.projeksiyon.forEach(
-                dönem => {
+    function dboKöprüsü(
+        değerleme
+    ) {
 
-                    yıllar.add(
-                        dönem.yıl
-                    );
-
-                }
-            );
-
-        }
-    );
+        const açılış =
+            0;
 
 
-    const sonuç =
-        Array.from(
-            yıllar
-        )
-        .sort(
-            (
-                a,
-                b
-            ) =>
-                a - b
-        )
-        .map(
-            yıl => {
-
-                const dönemler = [];
+        const cariHizmet =
+            değerleme.toplamCariHizmet;
 
 
-                projeksiyonlar.forEach(
-                    personel => {
+        const faiz =
+            değerleme.toplamFaiz;
 
-                        const dönem =
-                            personel.projeksiyon.find(
-                                kayıt =>
-                                    kayıt.yıl ===
-                                    yıl
-                            );
 
+        const aktüeryal =
+            0;
+
+
+        const ödemeler =
+            0;
+
+
+        const kapanış =
+            değerleme.toplamDBO;
+
+
+        return [
+
+            {
+
+                açıklama:
+                    "Açılış DBO",
+
+                tutar:
+                    açılış,
+
+                tür:
+                    "base"
+
+            },
+
+            {
+
+                açıklama:
+                    "Cari Hizmet Maliyeti",
+
+                tutar:
+                    cariHizmet,
+
+                tür:
+                    "pnl"
+
+            },
+
+            {
+
+                açıklama:
+                    "Faiz Maliyeti",
+
+                tutar:
+                    faiz,
+
+                tür:
+                    "pnl"
+
+            },
+
+            {
+
+                açıklama:
+                    "Aktüeryal Yeniden Ölçüm",
+
+                tutar:
+                    aktüeryal,
+
+                tür:
+                    "oci"
+
+            },
+
+            {
+
+                açıklama:
+                    "Fayda Ödemeleri",
+
+                tutar:
+                    -ödemeler,
+
+                tür:
+                    "base"
+
+            },
+
+            {
+
+                açıklama:
+                    "Kapanış DBO",
+
+                tutar:
+                    kapanış,
+
+                tür:
+                    "base"
+
+            }
+
+        ];
+
+    }
+
+
+    /* ========================================================
+       YILLIK PROJEKSİYON
+    ======================================================== */
+
+    function yıllıkProjeksiyon(
+        personelSonuçları
+    ) {
+
+        const harita =
+            {};
+
+
+        personelSonuçları.forEach(
+            sonuç => {
+
+                sonuç.yıllık.forEach(
+                    dönem => {
 
                         if (
-                            dönem
+                            !harita[
+                                dönem.yıl
+                            ]
                         ) {
 
-                            dönemler.push(
-                                dönem
-                            );
+                            harita[
+                                dönem.yıl
+                            ] = {
+
+                                yıl:
+                                    dönem.yıl,
+
+                                personelSayısı:
+                                    0,
+
+                                toplamDBO:
+                                    0,
+
+                                toplamCariHizmetMaliyeti:
+                                    0,
+
+                                toplamFaizMaliyeti:
+                                    0,
+
+                                toplamBeklenenFayda:
+                                    0,
+
+                                toplamBugünküDeğer:
+                                    0
+
+                            };
 
                         }
+
+
+                        const hedef =
+                            harita[
+                                dönem.yıl
+                            ];
+
+
+                        hedef.personelSayısı++;
+
+
+                        hedef.toplamDBO +=
+                            dönem.DBO;
+
+
+                        hedef.toplamCariHizmetMaliyeti +=
+                            dönem.cariHizmetMaliyeti;
+
+
+                        hedef.toplamFaizMaliyeti +=
+                            dönem.faizMaliyeti;
+
+
+                        hedef.toplamBeklenenFayda +=
+                            dönem.beklenenFaydaTutari;
+
+
+                        hedef.toplamBugünküDeğer +=
+                            dönem.bugünküDeğer;
 
                     }
                 );
 
+            }
+        );
 
-                return {
 
-                    yıl,
+        return {
 
-                    personelSayısı:
-                        dönemler.length,
+            yıllık:
+                Object.values(
+                    harita
+                ).sort(
+                    (
+                        a,
+                        b
+                    ) =>
+                        a.yıl
+                        -
+                        b.yıl
+                )
 
-                    toplamDBO:
-                        yuvarla(
-                            dönemler.reduce(
-                                (
-                                    toplam,
-                                    dönem
-                                ) =>
-                                    toplam +
-                                    dönem.dönemSonuDBO,
-                                0
-                            )
-                        ),
+        };
 
-                    toplamCariHizmetMaliyeti:
-                        yuvarla(
-                            dönemler.reduce(
-                                (
-                                    toplam,
-                                    dönem
-                                ) =>
-                                    toplam +
-                                    dönem.cariHizmetMaliyeti,
-                                0
-                            )
-                        ),
+    }
 
-                    toplamFaizMaliyeti:
-                        yuvarla(
-                            dönemler.reduce(
-                                (
-                                    toplam,
-                                    dönem
-                                ) =>
-                                    toplam +
-                                    dönem.faizMaliyeti,
-                                0
-                            )
-                        ),
 
-                    toplamBeklenenFayda:
-                        yuvarla(
-                            dönemler.reduce(
-                                (
-                                    toplam,
-                                    dönem
-                                ) =>
-                                    toplam +
-                                    dönem.beklenenFayda,
-                                0
-                            )
-                        ),
+    /* ========================================================
+       DUYARLILIK
+    ======================================================== */
 
-                    toplamBugünküDeğer:
-                        yuvarla(
-                            dönemler.reduce(
-                                (
-                                    toplam,
-                                    dönem
-                                ) =>
-                                    toplam +
-                                    dönem.bugünküDeğer,
-                                0
-                            )
-                        )
+    function tekDuyarlılık(
+        personel,
+        varsayımlar,
+        alan,
+        değişim
+    ) {
 
-                };
+        const yeni =
+            {
+                ...varsayımlar
+            };
+
+
+        if (
+            alan ===
+            "iskonto"
+        ) {
+
+            yeni.iskontoOranı =
+                varsayımlar.iskontoOranı
+                +
+                değişim;
+
+        }
+
+
+        if (
+            alan ===
+            "maaş"
+        ) {
+
+            yeni.maaşArtışOranı =
+                varsayımlar.maaşArtışOranı
+                +
+                değişim;
+
+        }
+
+
+        const sonuç =
+            değerle(
+                personel,
+                yeni
+            );
+
+
+        return {
+
+            dbo:
+                sonuç.toplamDBO
+
+        };
+
+    }
+
+
+    function duyarlılık(
+        personel,
+        varsayımlar,
+        bazDBO
+    ) {
+
+        const iskontoMinus =
+            tekDuyarlılık(
+                personel,
+                varsayımlar,
+                "iskonto",
+                -0.01
+            );
+
+
+        const iskontoPlus =
+            tekDuyarlılık(
+                personel,
+                varsayımlar,
+                "iskonto",
+                0.01
+            );
+
+
+        const maaşMinus =
+            tekDuyarlılık(
+                personel,
+                varsayımlar,
+                "maaş",
+                -0.01
+            );
+
+
+        const maaşPlus =
+            tekDuyarlılık(
+                personel,
+                varsayımlar,
+                "maaş",
+                0.01
+            );
+
+
+        function hazırla(
+            veri
+        ) {
+
+            const değişim =
+                veri.dbo
+                -
+                bazDBO;
+
+
+            return {
+
+                dbo:
+                    veri.dbo,
+
+                change:
+                    değişim,
+
+                changePercent:
+                    bazDBO !== 0
+                        ? değişim /
+                          bazDBO
+                        : 0
+
+            };
+
+        }
+
+
+        return {
+
+            discount: {
+
+                minus:
+                    hazırla(
+                        iskontoMinus
+                    ),
+
+                base:
+                    hazırla({
+                        dbo:
+                            bazDBO
+                    }),
+
+                plus:
+                    hazırla(
+                        iskontoPlus
+                    )
+
+            },
+
+            salary: {
+
+                minus:
+                    hazırla(
+                        maaşMinus
+                    ),
+
+                base:
+                    hazırla({
+                        dbo:
+                            bazDBO
+                    }),
+
+                plus:
+                    hazırla(
+                        maaşPlus
+                    )
+
+            }
+
+        };
+
+    }
+
+
+    /* ========================================================
+       VERİ KALİTESİ
+    ======================================================== */
+
+    function veriKalitesi(
+        personel,
+        varsayımlar
+    ) {
+
+        let skor =
+            100;
+
+
+        const hatalar =
+            [];
+
+
+        personel.forEach(
+            (
+                p,
+                index
+            ) => {
+
+                const doğum =
+                    tarihOku(
+                        p.doğumTarihi
+                        ??
+                        p.dogumTarihi
+                    );
+
+
+                const giriş =
+                    tarihOku(
+                        p.işeGirişTarihi
+                        ??
+                        p.iseGirisTarihi
+                    );
+
+
+                const maaş =
+                    güvenliSayı(
+                        p.mevcutMaaş
+                        ??
+                        p.mevcutMaas
+                    );
+
+
+                if (
+                    !doğum
+                ) {
+
+                    skor -= 8;
+
+                    hatalar.push(
+                        `Personel ${index + 1}: doğum tarihi eksik.`
+                    );
+
+                }
+
+
+                if (
+                    !giriş
+                ) {
+
+                    skor -= 8;
+
+                    hatalar.push(
+                        `Personel ${index + 1}: işe giriş tarihi eksik.`
+                    );
+
+                }
+
+
+                if (
+                    maaş <= 0
+                ) {
+
+                    skor -= 10;
+
+                    hatalar.push(
+                        `Personel ${index + 1}: geçerli maaş bulunamadı.`
+                    );
+
+                }
 
             }
         );
 
 
-    return {
+        if (
+            varsayımlar.iskontoOranı <= 0
+        ) {
 
-        personelBazlı:
-            projeksiyonlar,
+            skor -= 20;
 
-        yıllık:
-            sonuç
-
-    };
-
-}
-
-
-/* ============================================================
-   28. DBO KÖPRÜSÜ
-============================================================ */
-
-function TMS19DBOKöprüsü(
-    rollForward
-) {
-
-    if (
-        !rollForward
-    ) {
-
-        return null;
-
-    }
-
-
-    const açılış =
-        sayıDeğeri(
-            rollForward.açılışDBO
-        );
-
-
-    const hizmet =
-        sayıDeğeri(
-            rollForward.cariHizmetMaliyeti
-        );
-
-
-    const faiz =
-        sayıDeğeri(
-            rollForward.faizMaliyeti
-        );
-
-
-    const aktüeryal =
-        sayıDeğeri(
-            rollForward.aktüeryalKazançKayıp
-        );
-
-
-    const ödemeler =
-        sayıDeğeri(
-            rollForward.ödenenFaydalar
-        );
-
-
-    const kapanış =
-        sayıDeğeri(
-            rollForward.kapanışDBO
-        );
-
-
-    return [
-
-        {
-
-            açıklama:
-                "Açılış DBO",
-
-            tutar:
-                açılış,
-
-            tür:
-                "açılış"
-
-        },
-
-        {
-
-            açıklama:
-                "Cari hizmet maliyeti",
-
-            tutar:
-                hizmet,
-
-            tür:
-                "pnl"
-
-        },
-
-        {
-
-            açıklama:
-                "Faiz maliyeti",
-
-            tutar:
-                faiz,
-
-            tür:
-                "pnl"
-
-        },
-
-        {
-
-            açıklama:
-                "Aktüeryal kazanç / kayıp",
-
-            tutar:
-                aktüeryal,
-
-            tür:
-                "oci"
-
-        },
-
-        {
-
-            açıklama:
-                "Ödenen faydalar",
-
-            tutar:
-                -ödemeler,
-
-            tür:
-                "ödeme"
-
-        },
-
-        {
-
-            açıklama:
-                "Kapanış DBO",
-
-            tutar:
-                kapanış,
-
-            tür:
-                "kapanış"
+            hatalar.push(
+                "İskonto oranı geçerli değil."
+            );
 
         }
 
-    ];
 
-}
+        if (
+            varsayımlar.maaşArtışOranı <
+            -0.50
+        ) {
+
+            skor -= 10;
+
+            hatalar.push(
+                "Maaş artış oranı olağandışı."
+            );
+
+        }
 
 
-/* ============================================================
-   29. RİSK ANALİZİ
-============================================================ */
+        skor =
+            sınırla(
+                skor,
+                0,
+                100
+            );
 
-function TMS19AktüeryalRiskAnalizi(
-    sonuç
-) {
 
-    if (
-        !sonuç
-    ) {
+        let seviye;
 
-        return null;
+
+        if (
+            skor >= 90
+        ) {
+
+            seviye =
+                "çok iyi";
+
+        } else if (
+            skor >= 75
+        ) {
+
+            seviye =
+                "iyi";
+
+        } else if (
+            skor >= 60
+        ) {
+
+            seviye =
+                "orta";
+
+        } else {
+
+            seviye =
+                "zayıf";
+
+        }
+
+
+        return {
+
+            kaliteSkoru:
+                skor,
+
+            seviye,
+
+            toplamHata:
+                hatalar.length,
+
+            hatalar
+
+        };
 
     }
 
 
-    const riskler = [];
+    /* ========================================================
+       RİSK ANALİZİ
+    ======================================================== */
 
-
-    const duyarlılık =
-        sonuç.sensitivity;
-
-
-    if (
-        duyarlılık
+    function riskAnalizi(
+        personel,
+        varsayımlar,
+        sensitivity
     ) {
 
-        const iskontoEtki =
-            Math.abs(
-                sayıDeğeri(
-                    duyarlılık.discount
-                        ?.minus
-                        ?.changePercent
+        const riskler =
+            [];
+
+
+        const iskontoHassasiyeti =
+            Math.max(
+                Math.abs(
+                    sensitivity.discount.minus.changePercent
+                ),
+                Math.abs(
+                    sensitivity.discount.plus.changePercent
                 )
             );
+
+
+        const maaşHassasiyeti =
+            Math.max(
+                Math.abs(
+                    sensitivity.salary.minus.changePercent
+                ),
+                Math.abs(
+                    sensitivity.salary.plus.changePercent
+                )
+            );
+
+
+        if (
+            iskontoHassasiyeti >
+            0.10
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "yüksek",
+
+                alan:
+                    "İskonto Oranı",
+
+                açıklama:
+                    "DBO, iskonto oranındaki değişimlere yüksek hassasiyet göstermektedir."
+
+            });
+
+        } else if (
+            iskontoHassasiyeti >
+            0.05
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "orta",
+
+                alan:
+                    "İskonto Oranı",
+
+                açıklama:
+                    "İskonto varsayımındaki değişiklik DBO üzerinde anlamlı etki yaratabilir."
+
+            });
+
+        }
+
+
+        if (
+            maaşHassasiyeti >
+            0.10
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "yüksek",
+
+                alan:
+                    "Maaş Artış Oranı",
+
+                açıklama:
+                    "Gelecekteki maaş artışları DBO üzerinde yüksek hassasiyet yaratmaktadır."
+
+            });
+
+        } else if (
+            maaşHassasiyeti >
+            0.05
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "orta",
+
+                alan:
+                    "Maaş Artış Oranı",
+
+                açıklama:
+                    "Maaş artış varsayımı DBO açısından önemli bir aktüeryal varsayımdır."
+
+            });
+
+        }
+
+
+        const yaşlar =
+            personel.map(
+                p =>
+                    güvenliSayı(
+                        p.yaş
+                        ??
+                        p.yas,
+                        0
+                    )
+            );
+
+
+        const yaş45Üzeri =
+            yaşlar.filter(
+                yaş =>
+                    yaş >= 45
+            ).length;
+
+
+        if (
+            personel.length > 0
+            &&
+            yaş45Üzeri /
+            personel.length
+            >
+            0.40
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "orta",
+
+                alan:
+                    "Demografik Yapı",
+
+                açıklama:
+                    "Çalışanların önemli bir bölümü 45 yaş üzerindedir. DBO'nun emeklilik ve maaş varsayımlarına duyarlılığı artabilir."
+
+            });
+
+        }
+
+
+        if (
+            personel.length <
+            10
+        ) {
+
+            riskler.push({
+
+                seviye:
+                    "orta",
+
+                alan:
+                    "Veri Seti",
+
+                açıklama:
+                    "Küçük personel popülasyonu aktüeryal varsayımların istatistiksel kalibrasyonunu sınırlayabilir."
+
+            });
+
+        }
+
+
+        return {
+
+            riskler
+
+        };
+
+    }
+
+
+    /* ========================================================
+       CFO YÖNETİCİ ÖZETİ
+    ======================================================== */
+
+    function yöneticiÖzeti(
+        değerleme,
+        sensitivity,
+        risk
+    ) {
+
+        const DBO =
+            değerleme.toplamDBO;
+
+
+        const PnL =
+            değerleme.toplamCariHizmet
+            +
+            değerleme.toplamFaiz;
+
+
+        const OCI =
+            0;
+
+
+        const PnLDBOOranı =
+            DBO !== 0
+                ? PnL / DBO
+                : 0;
+
+
+        const yorumlar =
+            [];
+
+
+        yorumlar.push(
+            `Toplam tanımlanmış fayda yükümlülüğü ${DBO.toLocaleString("tr-TR", {
+                maximumFractionDigits: 0
+            })} TL seviyesindedir.`
+        );
+
+
+        yorumlar.push(
+            `Cari hizmet maliyeti ve faiz maliyetinin toplam dönemsel P&L etkisi yaklaşık ${PnL.toLocaleString("tr-TR", {
+                maximumFractionDigits: 0
+            })} TL'dir.`
+        );
+
+
+        const iskontoEtki =
+            Math.max(
+                Math.abs(
+                    sensitivity.discount.minus.changePercent
+                ),
+                Math.abs(
+                    sensitivity.discount.plus.changePercent
+                )
+            );
+
+
+        if (
+            iskontoEtki >
+            0.05
+        ) {
+
+            yorumlar.push(
+                "DBO'nun iskonto oranına anlamlı hassasiyeti bulunmaktadır. Finansal kapanışta iskonto oranının destekleyici piyasa verileriyle belgelenmesi önemlidir."
+            );
+
+        }
 
 
         const maaşEtki =
-            Math.abs(
-                sayıDeğeri(
-                    duyarlılık.salary
-                        ?.plus
-                        ?.changePercent
+            Math.max(
+                Math.abs(
+                    sensitivity.salary.minus.changePercent
+                ),
+                Math.abs(
+                    sensitivity.salary.plus.changePercent
                 )
             );
 
 
         if (
-            iskontoEtki > 10
+            maaşEtki >
+            0.05
         ) {
 
-            riskler.push({
-
-                seviye:
-                    "yüksek",
-
-                alan:
-                    "İskonto oranı",
-
-                açıklama:
-                    "DBO iskonto oranındaki küçük değişimlere yüksek duyarlılık göstermektedir."
-
-            });
+            yorumlar.push(
+                "Maaş artış varsayımı DBO üzerinde anlamlı etkiye sahiptir. Bütçe ve uzun vadeli ücret artış beklentileriyle tutarlılık kontrol edilmelidir."
+            );
 
         }
 
 
         if (
-            maaşEtki > 10
+            risk.riskler.length
         ) {
 
-            riskler.push({
-
-                seviye:
-                    "yüksek",
-
-                alan:
-                    "Maaş artış varsayımı",
-
-                açıklama:
-                    "DBO maaş artış varsayımına yüksek duyarlılık göstermektedir."
-
-            });
+            yorumlar.push(
+                `${risk.riskler.length} adet aktüeryal / veri riski tespit edilmiştir.`
+            );
 
         }
+
+
+        yorumlar.push(
+            "CFO perspektifinden temel odak noktaları: DBO volatilitesi, OCI hassasiyeti, iskonto oranı, maaş artışı, çalışan demografisi ve nakit ödeme profili."
+        );
+
+
+        return {
+
+            DBO,
+
+            PnL,
+
+            OCI,
+
+            PnLDBOOranı,
+
+            yorumlar
+
+        };
 
     }
 
 
-    if (
-        sonuç.personelSayısı > 0
+    /* ========================================================
+       TAM HESAPLAMA
+    ======================================================== */
+
+    function tamHesapla(
+        personel,
+        varsayımlar
     ) {
 
-        const kişiBaşınaDBO =
-            sonuç.closingDBO
-            /
-            sonuç.personelSayısı;
-
-
         if (
-            kişiBaşınaDBO > 1000000
+            !Array.isArray(
+                personel
+            )
         ) {
 
-            riskler.push({
-
-                seviye:
-                    "izleme",
-
-                alan:
-                    "Kişi başına DBO",
-
-                açıklama:
-                    "Kişi başına düşen DBO yüksek seviyededir; aktüeryal varsayımların kalibrasyonu önemlidir."
-
-            });
+            throw new Error(
+                "Personel verisi dizi formatında olmalıdır."
+            );
 
         }
+
+
+        varsayımlar =
+            {
+
+                iskontoOranı:
+                    güvenliSayı(
+                        varsayımlar?.iskontoOranı,
+                        SABİTLER.DEFAULT_İSKONTO_ORANI
+                    ),
+
+                maaşArtışOranı:
+                    güvenliSayı(
+                        varsayımlar?.maaşArtışOranı,
+                        SABİTLER.DEFAULT_MAAŞ_ARTIŞ_ORANI
+                    ),
+
+                personelDevirOranı:
+                    güvenliSayı(
+                        varsayımlar?.personelDevirOranı,
+                        SABİTLER.DEFAULT_TURNOVER_ORANI
+                    ),
+
+                emeklilikYaşı:
+                    güvenliSayı(
+                        varsayımlar?.emeklilikYaşı,
+                        SABİTLER.DEFAULT_EMEKLİLİK_YAŞI
+                    ),
+
+                değerlemeTarihi:
+                    varsayımlar?.değerlemeTarihi
+                    ||
+                    new Date()
+                        .toISOString()
+                        .slice(
+                            0,
+                            10
+                        )
+
+            };
+
+
+        const değerleme =
+            değerle(
+                personel,
+                varsayımlar
+            );
+
+
+        const köprü =
+            dboKöprüsü(
+                değerleme
+            );
+
+
+        const sensitivity =
+            duyarlılık(
+                personel,
+                varsayımlar,
+                değerleme.toplamDBO
+            );
+
+
+        const projeksiyon =
+            yıllıkProjeksiyon(
+                değerleme.personelSonuçları
+            );
+
+
+        const kalite =
+            veriKalitesi(
+                personel,
+                varsayımlar
+            );
+
+
+        const risk =
+            riskAnalizi(
+                personel,
+                varsayımlar,
+                sensitivity
+            );
+
+
+        const özet =
+            yöneticiÖzeti(
+                değerleme,
+                sensitivity,
+                risk
+            );
+
+
+        return {
+
+            /* ANA SONUÇLAR */
+
+            closingDBO:
+                değerleme.toplamDBO,
+
+            currentServiceCost:
+                değerleme.toplamCariHizmet,
+
+            netInterestCost:
+                değerleme.toplamFaiz,
+
+            oci:
+                0,
+
+            personelSayısı:
+                personel.length,
+
+
+            /* DETAY */
+
+            personelSonuçları:
+                değerleme.personelSonuçları,
+
+            dboKöprüsü:
+                köprü,
+
+            sensitivity,
+
+            yıllıkProjeksiyon:
+                projeksiyon,
+
+            veriKalitesi:
+                kalite,
+
+            riskAnalizi:
+                risk,
+
+            yöneticiÖzeti:
+                özet,
+
+
+            /* MODEL */
+
+            varsayımlar
+
+        };
 
     }
 
 
-    return {
-
-        riskSayısı:
-            riskler.length,
-
-        riskler
-
-    };
-
-}
-
-
-/* ============================================================
-   30. GELİŞMİŞ API
-============================================================ */
-
-window.TMS19.yıllıkProjeksiyon =
-    TMS19YıllıkProjeksiyonHesapla;
-
-
-window.TMS19.tümProjeksiyonlar =
-    TMS19TümProjeksiyonlarıHesapla;
-
-
-window.TMS19.yıllıkPortföy =
-    TMS19YıllıkPortföyHesapla;
-
-
-window.TMS19.DBOKöprüsü =
-    TMS19DBOKöprüsü;
-
-
-window.TMS19.riskAnalizi =
-    TMS19AktüeryalRiskAnalizi;
-
-
-/* ============================================================
-   31. TAM AKTÜERYAL ÇALIŞTIRMA
-============================================================ */
-
-function TMS19TamAktüeryalÇalıştır(
-    personelListesi = [],
-    varsayımlar = {},
-    seçenekler = {}
-) {
-
-    const anaHesaplama =
-        TMS19AktüeryalHesapla(
-            personelListesi,
-            varsayımlar,
-            seçenekler
-        );
-
-
-    const yıllık =
-        TMS19YıllıkPortföyHesapla(
-            personelListesi,
-            varsayımlar
-        );
-
-
-    const veriKalitesi =
-        TMS19VeriKalitesiKontrol(
-            personelListesi
-        );
-
-
-    const yöneticiÖzeti =
-        TMS19YöneticiÖzeti(
-            anaHesaplama
-        );
-
-
-    const riskAnalizi =
-        TMS19AktüeryalRiskAnalizi(
-            anaHesaplama
-        );
-
-
-    const dboKöprüsü =
-        TMS19DBOKöprüsü(
-            anaHesaplama.rollForward
-        );
-
+    /* ========================================================
+       PUBLIC API
+    ======================================================== */
 
     return {
 
-        ...anaHesaplama,
+        tamHesapla,
 
-        yıllıkProjeksiyon:
-            yıllık,
+        değerle,
+
+        personelProjeksiyonu,
+
+        ölümOlasılığı,
+
+        devirOlasılığı,
+
+        emeklilikOlasılığı,
+
+        faydaAlmaOlasılığı,
+
+        gelecektekiMaaş,
+
+        faydaHesapla,
+
+        iskontoFaktörü,
 
         veriKalitesi,
 
-        yöneticiÖzeti,
-
         riskAnalizi,
 
-        dboKöprüsü
+        SABİTLER
 
     };
 
-}
 
-
-window.TMS19.tamHesapla =
-    TMS19TamAktüeryalÇalıştır;
-
-
-window.TMS19TamAktüeryalÇalıştır =
-    TMS19TamAktüeryalÇalıştır;
+})();
 
 
 /* ============================================================
-   32. MOTOR HAZIR
+   GLOBAL ERİŞİM
+============================================================ */
+
+window.TMS19 =
+    TMS19;
+
+
+/* ============================================================
+   DEBUG
 ============================================================ */
 
 console.log(
-    "GK Advisory — TMS 19 Tam Aktüeryal Motor hazır."
-);
-
-console.log(
-    "Aktif modüller:",
-    [
-        "PUC",
-        "DBO",
-        "Cari Hizmet Maliyeti",
-        "Faiz Maliyeti",
-        "Aktüeryal Kazanç/Kayıp",
-        "OCI",
-        "Roll-forward",
-        "Duyarlılık",
-        "Yıllık Projeksiyon",
-        "Veri Kalitesi",
-        "Risk Analizi"
-    ]
+    "TMS 19 Aktüeryal Motor V2 yüklendi."
 );
