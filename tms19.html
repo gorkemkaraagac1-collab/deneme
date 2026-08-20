@@ -3396,3 +3396,772 @@ function aktüeryalHesapla() {
             throw new Error(
                 "Portföy motoru yüklenemedi."
             );
+
+        }
+
+
+        if (
+            !tms19Employees.length
+        ) {
+
+            demoVerisiYukle();
+
+            return;
+
+        }
+
+
+        const assumptions =
+            getAssumptions();
+
+
+        lastActuarialResult =
+            window.TMS19ActuarialEngine.calculate(
+                tms19Employees,
+                assumptions
+            );
+
+
+        lastPortfolioResult =
+            window.TMS19PortfolioEngine.analyze(
+                tms19Employees,
+                lastActuarialResult
+            );
+
+
+        dashboardGuncelle();
+
+
+        duyarlilikGuncelle(
+            assumptions
+        );
+
+
+        hazirlikKontrolu();
+
+
+        console.log(
+            "TMS 19 Aktüeryal Sonuç:",
+            lastActuarialResult
+        );
+
+
+        console.log(
+            "TMS 19 Portföy Sonuç:",
+            lastPortfolioResult
+        );
+
+
+    }
+    catch (error) {
+
+        console.error(
+            error
+        );
+
+
+        alert(
+            "TMS 19 hesaplaması sırasında hata oluştu:\n\n" +
+            error.message
+        );
+
+    }
+
+}
+
+
+/* ========================================================
+   DASHBOARD GÜNCELLE
+======================================================== */
+
+function dashboardGuncelle() {
+
+    const result =
+        lastActuarialResult;
+
+
+    const portfolio =
+        lastPortfolioResult;
+
+
+    if (
+        !result ||
+        !portfolio
+    ) {
+
+        return;
+
+    }
+
+
+    const totals =
+        result.totals;
+
+
+    /* KPI */
+
+    document.getElementById(
+        "kpiDBO"
+    ).textContent =
+        formatMoney(
+            totals.dbo
+        );
+
+
+    document.getElementById(
+        "kpiServiceCost"
+    ).textContent =
+        formatMoney(
+            totals.currentServiceCost
+        );
+
+
+    document.getElementById(
+        "kpiInterest"
+    ).textContent =
+        formatMoney(
+            totals.interestCost
+        );
+
+
+    document.getElementById(
+        "kpiOCI"
+    ).textContent =
+        formatMoney(
+            totals.actuarialGainLoss
+        );
+
+
+    document.getElementById(
+        "kpiEmployees"
+    ).textContent =
+        formatNumber(
+            totals.employees
+        );
+
+
+    document.getElementById(
+        "kpiAverageDBO"
+    ).textContent =
+        formatMoney(
+            portfolio.managementSummary
+                .personelBasinaDBO
+        );
+
+
+    document.getElementById(
+        "kpiRisk"
+    ).textContent =
+        portfolio.risk.level;
+
+
+    document.getElementById(
+        "kpiDataQuality"
+    ).textContent =
+        portfolio.dataQuality.level;
+
+
+    /* Roll-forward */
+
+    document.getElementById(
+        "rfOpening"
+    ).textContent =
+        formatMoney(
+            result.rollForward.openingDBO
+        );
+
+
+    document.getElementById(
+        "rfService"
+    ).textContent =
+        "+" +
+        formatMoney(
+            result.rollForward.currentServiceCost
+        );
+
+
+    document.getElementById(
+        "rfInterest"
+    ).textContent =
+        "+" +
+        formatMoney(
+            result.rollForward.interestCost
+        );
+
+
+    document.getElementById(
+        "rfActuarial"
+    ).textContent =
+        formatMoney(
+            result.rollForward.remeasurement
+        );
+
+
+    document.getElementById(
+        "rfPayments"
+    ).textContent =
+        formatMoney(
+            result.rollForward.benefitPayments
+        );
+
+
+    document.getElementById(
+        "rfClosing"
+    ).textContent =
+        formatMoney(
+            result.rollForward.closingDBO
+        );
+
+
+    /* P&L / OCI */
+
+    document.getElementById(
+        "pnlValue"
+    ).textContent =
+        formatMoney(
+            portfolio.pnlOci.pnl
+        );
+
+
+    document.getElementById(
+        "ociValue"
+    ).textContent =
+        formatMoney(
+            portfolio.pnlOci.oci
+        );
+
+
+    /* Risk */
+
+    document.getElementById(
+        "riskScore"
+    ).textContent =
+        portfolio.risk.score;
+
+
+    document.getElementById(
+        "riskLevel"
+    ).textContent =
+        "Aktüeryal Risk: " +
+        portfolio.risk.level;
+
+
+    document.getElementById(
+        "riskDescription"
+    ).textContent =
+
+        "DBO / maaş oranı " +
+        portfolio.risk.dboToSalaryRatio +
+        "x seviyesindedir. " +
+
+        "Top 5 personelin DBO yoğunlaşması %" +
+        portfolio.concentration.top5Share +
+        " seviyesindedir.";
+
+
+    personelTablosuGuncelle(
+        portfolio
+    );
+
+
+    departmanTablosuGuncelle(
+        portfolio
+    );
+
+
+    uyariGuncelle(
+        portfolio
+    );
+
+}
+
+
+/* ========================================================
+   PERSONEL TABLOSU
+======================================================== */
+
+function personelTablosuGuncelle(
+    portfolio
+) {
+
+    const tbody =
+        document.getElementById(
+            "employeeTable"
+        );
+
+
+    const rows =
+        window.TMS19PortfolioEngine
+            .topEmployeesByDBO(
+                portfolio,
+                10
+            );
+
+
+    if (
+        !rows.length
+    ) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="8"
+                    class="empty"
+                >
+                    Personel verisi bulunmuyor.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        rows.map(
+            row => `
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            ${escapeHtml(row.name)}
+                        </strong>
+                    </td>
+
+                    <td>
+                        ${escapeHtml(row.department)}
+                    </td>
+
+                    <td class="number">
+                        ${formatNumber(row.age)}
+                    </td>
+
+                    <td class="number">
+                        ${formatNumber(row.service)}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(row.salary)}
+                    </td>
+
+                    <td class="number">
+                        <strong>
+                            ${formatMoney(row.dbo)}
+                        </strong>
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            row.currentServiceCost
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            row.interestCost
+                        )}
+                    </td>
+
+                </tr>
+
+            `
+        )
+        .join("");
+
+}
+
+
+/* ========================================================
+   DEPARTMAN TABLOSU
+======================================================== */
+
+function departmanTablosuGuncelle(
+    portfolio
+) {
+
+    const tbody =
+        document.getElementById(
+            "departmentTable"
+        );
+
+
+    const departments =
+        window.TMS19PortfolioEngine
+            .topDepartmentsByDBO(
+                portfolio,
+                10
+            );
+
+
+    if (
+        !departments.length
+    ) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="6"
+                    class="empty"
+                >
+                    Departman verisi bulunmuyor.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        departments.map(
+            row => `
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            ${escapeHtml(
+                                row.department
+                            )}
+                        </strong>
+                    </td>
+
+                    <td class="number">
+                        ${formatNumber(
+                            row.employeeCount
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            row.salary
+                        )}
+                    </td>
+
+                    <td class="number">
+                        <strong>
+                            ${formatMoney(
+                                row.dbo
+                            )}
+                        </strong>
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            row.currentServiceCost
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            row.actuarialGainLoss
+                        )}
+                    </td>
+
+                </tr>
+
+            `
+        )
+        .join("");
+
+}
+
+
+/* ========================================================
+   UYARILAR
+======================================================== */
+
+function uyariGuncelle(
+    portfolio
+) {
+
+    const container =
+        document.getElementById(
+            "alertList"
+        );
+
+
+    const alerts =
+        window.TMS19PortfolioEngine
+            .generateAlerts(
+                portfolio
+            );
+
+
+    container.innerHTML =
+        alerts.map(
+            alert => {
+
+                let cls =
+                    "info";
+
+                let icon =
+                    "i";
+
+
+                if (
+                    alert.severity ===
+                    "yüksek"
+                ) {
+
+                    cls =
+                        "high";
+
+                    icon =
+                        "!";
+
+                }
+                else if (
+                    alert.severity ===
+                    "orta"
+                ) {
+
+                    cls =
+                        "medium";
+
+                    icon =
+                        "⚠";
+
+                }
+
+
+                return `
+
+                    <div class="alert ${cls}">
+
+                        <div class="alert-icon">
+                            ${icon}
+                        </div>
+
+                        <div>
+
+                            <div class="alert-title">
+                                ${escapeHtml(
+                                    alert.title
+                                )}
+                            </div>
+
+                            <div class="alert-message">
+                                ${escapeHtml(
+                                    alert.message
+                                )}
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                `;
+
+            }
+        )
+        .join("");
+
+}
+
+
+/* ========================================================
+   DUYARLILIK
+======================================================== */
+
+function duyarlilikGuncelle(
+    assumptions
+) {
+
+    const tbody =
+        document.getElementById(
+            "sensitivityTable"
+        );
+
+
+    if (
+        !tms19Employees.length
+    ) {
+
+        return;
+
+    }
+
+
+    const scenarios =
+        window.TMS19ActuarialEngine
+            .sensitivityAnalysis(
+                tms19Employees,
+                assumptions
+            );
+
+
+    tbody.innerHTML =
+        scenarios.map(
+            scenario => `
+
+                <tr>
+
+                    <td>
+                        <strong>
+                            ${escapeHtml(
+                                scenario.type
+                            )}
+                        </strong>
+                    </td>
+
+                    <td class="number">
+                        ${formatPercent(
+                            scenario.assumption
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            scenario.dbo
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            scenario.pnl
+                        )}
+                    </td>
+
+                    <td class="number">
+                        ${formatMoney(
+                            scenario.oci
+                        )}
+                    </td>
+
+                </tr>
+
+            `
+        )
+        .join("");
+
+}
+
+
+/* ========================================================
+   VERİ HAZIRLIK KONTROLÜ
+======================================================== */
+
+function hazirlikKontrolu() {
+
+    const readiness =
+        window.TMS19ActuarialEngine
+            .actuarialReadiness(
+                tms19Employees
+            );
+
+
+    document.getElementById(
+        "readinessScore"
+    ).textContent =
+        readiness.score + "/100";
+
+
+    document.getElementById(
+        "readinessLevel"
+    ).textContent =
+        readiness.level;
+
+
+    document.getElementById(
+        "readinessIssues"
+    ).textContent =
+
+        readiness.issues.length
+
+            ? readiness.issues.join(
+                " "
+            )
+
+            : "Kritik veri uyarısı bulunmuyor.";
+
+}
+
+
+/* ========================================================
+   HTML GÜVENLİĞİ
+======================================================== */
+
+function escapeHtml(value) {
+
+    return String(
+        value ?? ""
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /'/g,
+        "&#039;"
+    );
+
+}
+
+
+/* ========================================================
+   BAŞLANGIÇ
+======================================================== */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        console.log(
+            "GK Advisory TMS 19 Dashboard hazır."
+        );
+
+
+        if (
+            !window.TMS19ActuarialEngine
+        ) {
+
+            console.error(
+                "tms19-actuarial-engine.js bulunamadı."
+            );
+
+        }
+
+
+        if (
+            !window.TMS19PortfolioEngine
+        ) {
+
+            console.error(
+                "tms19-portfolio-engine.js bulunamadı."
+            );
+
+        }
+
+    }
+);
+
+
+</script>
+
+
+</body>
+</html>
