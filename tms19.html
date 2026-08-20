@@ -1,869 +1,1757 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>GK Advisory — TMS 19 Aktüeryal Değerleme</title>
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-
-<style>
-
-:root {
-    --bg: #f4f6f8;
-    --surface: #ffffff;
-    --surface-soft: #f8fafc;
-    --border: #e2e8f0;
-    --text: #172033;
-    --muted: #64748b;
-    --navy: #0b1f3a;
-    --navy-2: #142f52;
-    --gold: #b89452;
-    --gold-soft: #f7f0e3;
-    --green: #16845b;
-    --green-soft: #e8f7f0;
-    --yellow: #b7791f;
-    --yellow-soft: #fff7df;
-    --red: #c0392b;
-    --red-soft: #fff0ee;
-    --blue: #2563eb;
-    --blue-soft: #edf4ff;
-    --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-    --radius: 16px;
-}
-
-* {
-    box-sizing: border-box;
-}
-
-html {
-    scroll-behavior: smooth;
-}
-
-body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Inter", sans-serif;
-}
-
-button,
-input,
-select {
-    font-family: inherit;
-}
-
-button {
-    cursor: pointer;
-}
-
-/* =========================================================
-   ÜST BAR
-========================================================= */
-
-.topbar {
-    height: 72px;
-    background: var(--navy);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 34px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 5px 20px rgba(0,0,0,.12);
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.brand-mark {
-    width: 40px;
-    height: 40px;
-    border: 1px solid rgba(184,148,82,.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--gold);
-    font-family: "Playfair Display", serif;
-    font-size: 20px;
-    font-weight: 700;
-}
-
-.brand-title {
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: .04em;
-}
-
-.brand-subtitle {
-    color: #aab7c8;
-    font-size: 11px;
-    margin-top: 2px;
-}
-
-.topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.status-pill {
-    padding: 8px 13px;
-    border-radius: 30px;
-    background: rgba(255,255,255,.08);
-    color: #dce6f2;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.status-dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #3cc98a;
-    margin-right: 6px;
-}
-
-/* =========================================================
-   LAYOUT
-========================================================= */
-
-.page {
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: 30px;
-}
-
-.hero {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 30px;
-    margin-bottom: 28px;
-}
-
-.eyebrow {
-    color: var(--gold);
-    text-transform: uppercase;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .13em;
-    margin-bottom: 9px;
-}
-
-.hero h1 {
-    margin: 0;
-    color: var(--navy);
-    font-family: "Playfair Display", serif;
-    font-size: 36px;
-    line-height: 1.15;
-}
-
-.hero p {
-    margin: 10px 0 0;
-    color: var(--muted);
-    max-width: 780px;
-    line-height: 1.6;
-    font-size: 14px;
-}
-
-.hero-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-/* =========================================================
-   BUTTONS
-========================================================= */
-
-.btn {
-    border: 0;
-    border-radius: 10px;
-    padding: 11px 16px;
-    font-size: 12px;
-    font-weight: 700;
-    transition: .2s ease;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-}
-
-.btn-primary {
-    background: var(--navy);
-    color: white;
-}
-
-.btn-gold {
-    background: var(--gold);
-    color: white;
-}
-
-.btn-light {
-    background: white;
-    border: 1px solid var(--border);
-    color: var(--text);
-}
-
-.btn-green {
-    background: var(--green);
-    color: white;
-}
-
-.btn-danger {
-    background: var(--red);
-    color: white;
-}
-
-/* =========================================================
-   KPI
-========================================================= */
-
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.kpi {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    box-shadow: var(--shadow);
-}
-
-.kpi-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-}
-
-.kpi-value {
-    color: var(--navy);
-    font-size: 25px;
-    font-weight: 800;
-    margin-top: 10px;
-}
-
-.kpi-foot {
-    color: var(--muted);
-    font-size: 11px;
-    margin-top: 6px;
-}
-
-/* =========================================================
-   GRID
-========================================================= */
-
-.grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.grid-main {
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    overflow: hidden;
-}
-
-.card-header {
-    padding: 19px 21px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 15px;
-}
-
-.card-title {
-    color: var(--navy);
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.card-subtitle {
-    color: var(--muted);
-    font-size: 11px;
-    margin-top: 4px;
-}
-
-.card-body {
-    padding: 21px;
-}
-
-/* =========================================================
-   VERİ YÜKLEME
-========================================================= */
-
-.upload-zone {
-    border: 1.5px dashed #bdc8d6;
-    border-radius: 14px;
-    background: var(--surface-soft);
-    padding: 30px 20px;
-    text-align: center;
-    transition: .2s ease;
-}
-
-.upload-zone.dragover {
-    border-color: var(--gold);
-    background: var(--gold-soft);
-}
-
-.upload-icon {
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 12px;
-    border-radius: 12px;
-    background: var(--gold-soft);
-    color: var(--gold);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-}
-
-.upload-zone h3 {
-    margin: 0;
-    color: var(--navy);
-    font-size: 15px;
-}
-
-.upload-zone p {
-    color: var(--muted);
-    font-size: 12px;
-    margin: 7px 0 16px;
-}
-
-.file-input {
-    display: none;
-}
-
-.upload-actions {
-    display: flex;
-    justify-content: center;
-    gap: 9px;
-    flex-wrap: wrap;
-}
-
-/* =========================================================
-   VERİ KALİTESİ
-========================================================= */
-
-.quality-score {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.score-circle {
-    width: 105px;
-    height: 105px;
-    border-radius: 50%;
-    border: 9px solid #e8edf3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.score-number {
-    color: var(--navy);
-    font-size: 22px;
-    font-weight: 800;
-}
-
-.score-label {
-    color: var(--muted);
-    font-size: 9px;
-    font-weight: 700;
-}
-
-.quality-bars {
-    flex: 1;
-}
-
-.quality-row {
-    margin-bottom: 12px;
-}
-
-.quality-row:last-child {
-    margin-bottom: 0;
-}
-
-.quality-label {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 5px;
-}
-
-.progress {
-    height: 7px;
-    border-radius: 20px;
-    background: #edf1f5;
-    overflow: hidden;
-}
-
-.progress-bar {
-    height: 100%;
-    border-radius: 20px;
-    transition: width .4s ease;
-}
-
-.progress-green {
-    background: var(--green);
-}
-
-.progress-yellow {
-    background: var(--yellow);
-}
-
-.progress-red {
-    background: var(--red);
-}
-
-/* =========================================================
-   STATUS CARDS
-========================================================= */
-
-.status-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-}
-
-.status-card {
-    padding: 15px;
-    border-radius: 12px;
-}
-
-.status-card.green {
-    background: var(--green-soft);
-    color: var(--green);
-}
-
-.status-card.yellow {
-    background: var(--yellow-soft);
-    color: var(--yellow);
-}
-
-.status-card.red {
-    background: var(--red-soft);
-    color: var(--red);
-}
-
-.status-card strong {
-    display: block;
-    font-size: 20px;
-}
-
-.status-card span {
-    font-size: 10px;
-    font-weight: 700;
-}
-
-/* =========================================================
-   AKTÜERYAL VARSAYIMLAR
-========================================================= */
-
-.assumption-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-}
-
-.field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.field label {
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.field input,
-.field select {
-    width: 100%;
-    height: 40px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    padding: 0 11px;
-    outline: none;
-    background: white;
-    color: var(--text);
-    font-size: 12px;
-}
-
-.field input:focus,
-.field select:focus {
-    border-color: var(--gold);
-    box-shadow: 0 0 0 3px rgba(184,148,82,.1);
-}
-
-/* =========================================================
-   TABLO
-========================================================= */
-
-.table-wrap {
-    overflow-x: auto;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 850px;
-}
-
-thead {
-    background: #f8fafc;
-}
-
-th {
-    color: var(--muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    text-align: left;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
-}
-
-td {
-    padding: 12px 14px;
-    border-bottom: 1px solid #edf1f5;
-    color: var(--text);
-    font-size: 11px;
-}
-
-tbody tr:hover {
-    background: #fafbfd;
-}
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 5px 8px;
-    border-radius: 20px;
-    font-size: 9px;
-    font-weight: 800;
-}
-
-.badge-green {
-    background: var(--green-soft);
-    color: var(--green);
-}
-
-.badge-yellow {
-    background: var(--yellow-soft);
-    color: var(--yellow);
-}
-
-.badge-red {
-    background: var(--red-soft);
-    color: var(--red);
-}
-
-/* =========================================================
-   ROLL FORWARD
-========================================================= */
-
-.rollforward {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
-}
-
-.roll-item {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 15px;
-    background: var(--surface-soft);
-}
-
-.roll-label {
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
-    min-height: 28px;
-}
-
-.roll-value {
-    color: var(--navy);
-    font-size: 16px;
-    font-weight: 800;
-    margin-top: 8px;
-}
-
-/* =========================================================
-   SONUÇLAR
-========================================================= */
-
-.result-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 13px;
-}
-
-.result {
-    padding: 17px;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-}
-
-.result-label {
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.result-value {
-    color: var(--navy);
-    font-size: 19px;
-    font-weight: 800;
-    margin-top: 7px;
-}
-
-/* =========================================================
-   CFO ÖZET
-========================================================= */
-
-.cfo-box {
-    background: linear-gradient(
-        135deg,
-        #0b1f3a,
-        #18385e
-    );
-    color: white;
-    border-radius: var(--radius);
-    padding: 25px;
-}
-
-.cfo-box .eyebrow {
-    color: #d6b66f;
-}
-
-.cfo-box h2 {
-    font-family: "Playfair Display", serif;
-    font-size: 25px;
-    margin: 0 0 12px;
-}
-
-.cfo-box p {
-    color: #c9d5e4;
-    line-height: 1.65;
-    font-size: 12px;
-}
-
-.cfo-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin-top: 20px;
-}
-
-.cfo-metric {
-    background: rgba(255,255,255,.07);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 11px;
-    padding: 14px;
-}
-
-.cfo-metric span {
-    color: #aebdd0;
-    font-size: 10px;
-}
-
-.cfo-metric strong {
-    display: block;
-    margin-top: 6px;
-    font-size: 17px;
-}
-
-/* =========================================================
-   ALERT
-========================================================= */
-
-.alert {
-    display: none;
-    padding: 13px 15px;
-    border-radius: 10px;
-    font-size: 11px;
-    margin-top: 15px;
-}
-
-.alert.show {
-    display: block;
-}
-
-.alert-info {
-    background: var(--blue-soft);
-    color: var(--blue);
-}
-
-.alert-success {
-    background: var(--green-soft);
-    color: var(--green);
-}
-
-.alert-warning {
-    background: var(--yellow-soft);
-    color: var(--yellow);
-}
-
-.alert-danger {
-    background: var(--red-soft);
-    color: var(--red);
-}
-
-/* =========================================================
-   FOOTER
-========================================================= */
-
-.footer {
-    text-align: center;
-    color: #8b98a9;
-    font-size: 10px;
-    padding: 30px 0 10px;
-}
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 1200px) {
-
-    .kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .assumption-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .result-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .rollforward {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-}
-
-@media (max-width: 800px) {
-
-    .topbar {
-        padding: 0 16px;
-    }
-
-    .status-pill {
-        display: none;
-    }
-
-    .page {
-        padding: 18px;
-    }
-
-    .hero {
-        display: block;
-    }
-
-    .hero h1 {
-        font-size: 29px;
-    }
-
-    .hero-actions {
-        margin-top: 18px;
-    }
-
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .grid-main,
-    .grid-2 {
-        grid-template-columns: 1fr;
-    }
-
-    .status-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .assumption-grid {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .cfo-metrics {
-        grid-template-columns: 1fr 1fr;
-    }
-
-}
-
-@media (max-width: 520px) {
-
-    .kpi-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .assumption-grid,
-    .result-grid,
-    .rollforward {
-        grid-template-columns: 1fr;
-    }
-
-    .quality-score {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .cfo-metrics {
-        grid-template-columns: 1fr;
-    }
-
-}
-
-</style>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        TMS 19 | Çalışanlara Sağlanan Faydalar
+    </title>
+
+    <meta
+        name="description"
+        content="GK Advisory TMS 19 Aktüeryal Değerleme ve Finansal Karar Destek Modülü"
+    >
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        :root {
+
+            --navy: #0b1728;
+            --navy-2: #12243b;
+            --navy-3: #1b3552;
+
+            --gold: #b99a5d;
+            --gold-light: #d8c18d;
+
+            --bg: #f4f6f8;
+            --white: #ffffff;
+
+            --text: #182334;
+            --muted: #6b7685;
+
+            --border: #e2e7ed;
+
+            --green: #2e7d5b;
+            --green-bg: #eaf6f0;
+
+            --red: #b94a48;
+            --red-bg: #fceeed;
+
+            --orange: #b4772c;
+            --orange-bg: #fff5e5;
+
+            --blue: #3567a8;
+            --blue-bg: #edf4fd;
+
+            --shadow:
+                0 8px 30px rgba(
+                    11,
+                    23,
+                    40,
+                    0.07
+                );
+
+            --radius: 14px;
+
+        }
+
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+
+        body {
+
+            margin: 0;
+
+            background:
+                var(--bg);
+
+            color:
+                var(--text);
+
+            font-family:
+                Inter,
+                Arial,
+                sans-serif;
+
+        }
+
+
+        button,
+        input,
+        select {
+
+            font-family:
+                inherit;
+
+        }
+
+
+        /* ==================================================
+           ÜST BAR
+        ================================================== */
+
+        .topbar {
+
+            height: 72px;
+
+            background:
+                var(--navy);
+
+            color:
+                white;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                space-between;
+
+            padding:
+                0 32px;
+
+            position:
+                sticky;
+
+            top: 0;
+
+            z-index: 100;
+
+            border-bottom:
+                1px solid
+                rgba(
+                    255,
+                    255,
+                    255,
+                    .08
+                );
+
+        }
+
+
+        .brand {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            gap: 13px;
+
+        }
+
+
+        .brand-mark {
+
+            width: 38px;
+
+            height: 38px;
+
+            border:
+                1px solid
+                var(--gold);
+
+            border-radius:
+                10px;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            color:
+                var(--gold-light);
+
+            font-weight:
+                700;
+
+            font-size:
+                14px;
+
+        }
+
+
+        .brand-text {
+
+            line-height:
+                1.15;
+
+        }
+
+
+        .brand-title {
+
+            font-family:
+                "Playfair Display",
+                Georgia,
+                serif;
+
+            font-size:
+                18px;
+
+            font-weight:
+                600;
+
+        }
+
+
+        .brand-subtitle {
+
+            color:
+                #9eabbc;
+
+            font-size:
+                10px;
+
+            letter-spacing:
+                1.5px;
+
+            text-transform:
+                uppercase;
+
+            margin-top:
+                3px;
+
+        }
+
+
+        .topbar-right {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            gap:
+                20px;
+
+        }
+
+
+        .period {
+
+            color:
+                #aeb9c8;
+
+            font-size:
+                13px;
+
+        }
+
+
+        .status {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            gap:
+                7px;
+
+            font-size:
+                12px;
+
+            color:
+                #cbd5e1;
+
+        }
+
+
+        .status-dot {
+
+            width:
+                8px;
+
+            height:
+                8px;
+
+            border-radius:
+                50%;
+
+            background:
+                #56b98a;
+
+            box-shadow:
+                0 0 0 4px
+                rgba(
+                    86,
+                    185,
+                    138,
+                    .12
+                );
+
+        }
+
+
+        /* ==================================================
+           ANA LAYOUT
+        ================================================== */
+
+        .layout {
+
+            display:
+                flex;
+
+            min-height:
+                calc(
+                    100vh - 72px
+                );
+
+        }
+
+
+        /* ==================================================
+           SIDEBAR
+        ================================================== */
+
+        .sidebar {
+
+            width:
+                250px;
+
+            background:
+                var(--navy-2);
+
+            color:
+                white;
+
+            padding:
+                24px 15px;
+
+            flex-shrink:
+                0;
+
+        }
+
+
+        .sidebar-section {
+
+            margin-bottom:
+                26px;
+
+        }
+
+
+        .sidebar-label {
+
+            color:
+                #7f90a5;
+
+            font-size:
+                10px;
+
+            font-weight:
+                700;
+
+            letter-spacing:
+                1.4px;
+
+            text-transform:
+                uppercase;
+
+            padding:
+                0 12px;
+
+            margin-bottom:
+                9px;
+
+        }
+
+
+        .nav-item {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            gap:
+                11px;
+
+            color:
+                #c2ccda;
+
+            text-decoration:
+                none;
+
+            padding:
+                11px 12px;
+
+            border-radius:
+                9px;
+
+            font-size:
+                13px;
+
+            margin-bottom:
+                3px;
+
+            cursor:
+                pointer;
+
+            transition:
+                .2s;
+
+        }
+
+
+        .nav-item:hover {
+
+            background:
+                rgba(
+                    255,
+                    255,
+                    255,
+                    .06
+                );
+
+            color:
+                white;
+
+        }
+
+
+        .nav-item.active {
+
+            background:
+                rgba(
+                    185,
+                    154,
+                    93,
+                    .14
+                );
+
+            color:
+                var(--gold-light);
+
+            border-left:
+                3px solid
+                var(--gold);
+
+        }
+
+
+        .nav-icon {
+
+            width:
+                20px;
+
+            text-align:
+                center;
+
+            opacity:
+                .85;
+
+        }
+
+
+        /* ==================================================
+           CONTENT
+        ================================================== */
+
+        .content {
+
+            flex:
+                1;
+
+            min-width:
+                0;
+
+            padding:
+                30px;
+
+        }
+
+
+        .page-header {
+
+            display:
+                flex;
+
+            justify-content:
+                space-between;
+
+            align-items:
+                flex-end;
+
+            margin-bottom:
+                28px;
+
+        }
+
+
+        .eyebrow {
+
+            color:
+                var(--gold);
+
+            text-transform:
+                uppercase;
+
+            letter-spacing:
+                2px;
+
+            font-size:
+                10px;
+
+            font-weight:
+                700;
+
+            margin-bottom:
+                7px;
+
+        }
+
+
+        h1 {
+
+            font-family:
+                "Playfair Display",
+                Georgia,
+                serif;
+
+            font-size:
+                31px;
+
+            margin:
+                0;
+
+            font-weight:
+                600;
+
+            color:
+                var(--navy);
+
+        }
+
+
+        .page-description {
+
+            color:
+                var(--muted);
+
+            font-size:
+                13px;
+
+            margin-top:
+                7px;
+
+        }
+
+
+        .header-actions {
+
+            display:
+                flex;
+
+            gap:
+                8px;
+
+        }
+
+
+        .btn {
+
+            border:
+                1px solid
+                var(--border);
+
+            background:
+                white;
+
+            color:
+                var(--text);
+
+            padding:
+                10px 14px;
+
+            border-radius:
+                9px;
+
+            font-size:
+                12px;
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            transition:
+                .2s;
+
+        }
+
+
+        .btn:hover {
+
+            transform:
+                translateY(-1px);
+
+            box-shadow:
+                0 4px 12px
+                rgba(
+                    0,
+                    0,
+                    0,
+                    .06
+                );
+
+        }
+
+
+        .btn-primary {
+
+            background:
+                var(--navy);
+
+            color:
+                white;
+
+            border-color:
+                var(--navy);
+
+        }
+
+
+        .btn-gold {
+
+            background:
+                var(--gold);
+
+            color:
+                white;
+
+            border-color:
+                var(--gold);
+
+        }
+
+
+        /* ==================================================
+           KPI
+        ================================================== */
+
+        .kpi-grid {
+
+            display:
+                grid;
+
+            grid-template-columns:
+                repeat(
+                    4,
+                    1fr
+                );
+
+            gap:
+                16px;
+
+            margin-bottom:
+                18px;
+
+        }
+
+
+        .kpi-card {
+
+            background:
+                var(--white);
+
+            border:
+                1px solid
+                var(--border);
+
+            border-radius:
+                var(--radius);
+
+            padding:
+                20px;
+
+            box-shadow:
+                var(--shadow);
+
+            position:
+                relative;
+
+            overflow:
+                hidden;
+
+        }
+
+
+        .kpi-card::after {
+
+            content: "";
+
+            position:
+                absolute;
+
+            width:
+                70px;
+
+            height:
+                70px;
+
+            right:
+                -35px;
+
+            bottom:
+                -35px;
+
+            background:
+                rgba(
+                    185,
+                    154,
+                    93,
+                    .08
+                );
+
+            border-radius:
+                50%;
+
+        }
+
+
+        .kpi-label {
+
+            color:
+                var(--muted);
+
+            font-size:
+                11px;
+
+            font-weight:
+                600;
+
+            text-transform:
+                uppercase;
+
+            letter-spacing:
+                .5px;
+
+        }
+
+
+        .kpi-value {
+
+            font-size:
+                25px;
+
+            font-weight:
+                700;
+
+            color:
+                var(--navy);
+
+            margin-top:
+                10px;
+
+            letter-spacing:
+                -.5px;
+
+        }
+
+
+        .kpi-meta {
+
+            margin-top:
+                9px;
+
+            font-size:
+                11px;
+
+            color:
+                var(--muted);
+
+        }
+
+
+        .kpi-accent {
+
+            color:
+                var(--gold);
+
+        }
+
+
+        /* ==================================================
+           SECTION
+        ================================================== */
+
+        .section {
+
+            margin-top:
+                18px;
+
+        }
+
+
+        .section-title {
+
+            display:
+                flex;
+
+            justify-content:
+                space-between;
+
+            align-items:
+                center;
+
+            margin-bottom:
+                12px;
+
+        }
+
+
+        .section-title h2 {
+
+            font-size:
+                15px;
+
+            margin:
+                0;
+
+            color:
+                var(--navy);
+
+        }
+
+
+        .section-title span {
+
+            font-size:
+                11px;
+
+            color:
+                var(--muted);
+
+        }
+
+
+        /* ==================================================
+           CARD
+        ================================================== */
+
+        .card {
+
+            background:
+                white;
+
+            border:
+                1px solid
+                var(--border);
+
+            border-radius:
+                var(--radius);
+
+            box-shadow:
+                var(--shadow);
+
+        }
+
+
+        .card-header {
+
+            padding:
+                17px 20px;
+
+            border-bottom:
+                1px solid
+                var(--border);
+
+            display:
+                flex;
+
+            justify-content:
+                space-between;
+
+            align-items:
+                center;
+
+        }
+
+
+        .card-title {
+
+            font-size:
+                13px;
+
+            font-weight:
+                700;
+
+            color:
+                var(--navy);
+
+        }
+
+
+        .card-subtitle {
+
+            color:
+                var(--muted);
+
+            font-size:
+                11px;
+
+            margin-top:
+                3px;
+
+        }
+
+
+        .card-body {
+
+            padding:
+                20px;
+
+        }
+
+
+        /* ==================================================
+           GRID
+        ================================================== */
+
+        .grid-2 {
+
+            display:
+                grid;
+
+            grid-template-columns:
+                1fr 1fr;
+
+            gap:
+                18px;
+
+        }
+
+
+        .grid-3 {
+
+            display:
+                grid;
+
+            grid-template-columns:
+                repeat(
+                    3,
+                    1fr
+                );
+
+            gap:
+                18px;
+
+        }
+
+
+        /* ==================================================
+           ROLL FORWARD
+        ================================================== */
+
+        .rollforward {
+
+            display:
+                grid;
+
+            grid-template-columns:
+                repeat(
+                    6,
+                    1fr
+                );
+
+            gap:
+                8px;
+
+        }
+
+
+        .rf-item {
+
+            padding:
+                15px 12px;
+
+            border:
+                1px solid
+                var(--border);
+
+            border-radius:
+                10px;
+
+            background:
+                #fbfcfd;
+
+        }
+
+
+        .rf-label {
+
+            color:
+                var(--muted);
+
+            font-size:
+                10px;
+
+            min-height:
+                28px;
+
+        }
+
+
+        .rf-value {
+
+            font-size:
+                16px;
+
+            font-weight:
+                700;
+
+            margin-top:
+                7px;
+
+            color:
+                var(--navy);
+
+        }
+
+
+        .rf-positive {
+
+            color:
+                var(--red);
+
+        }
+
+
+        .rf-negative {
+
+            color:
+                var(--green);
+
+        }
+
+
+        /* ==================================================
+           TABLO
+        ================================================== */
+
+        .table-wrapper {
+
+            overflow-x:
+                auto;
+
+        }
+
+
+        table {
+
+            width:
+                100%;
+
+            border-collapse:
+                collapse;
+
+        }
+
+
+        th {
+
+            text-align:
+                left;
+
+            padding:
+                12px 14px;
+
+            font-size:
+                10px;
+
+            color:
+                var(--muted);
+
+            text-transform:
+                uppercase;
+
+            letter-spacing:
+                .5px;
+
+            background:
+                #f8fafc;
+
+            border-bottom:
+                1px solid
+                var(--border);
+
+            white-space:
+                nowrap;
+
+        }
+
+
+        td {
+
+            padding:
+                12px 14px;
+
+            font-size:
+                12px;
+
+            border-bottom:
+                1px solid
+                #edf0f3;
+
+            white-space:
+                nowrap;
+
+        }
+
+
+        tbody tr:hover {
+
+            background:
+                #fafbfd;
+
+        }
+
+
+        .number {
+
+            text-align:
+                right;
+
+            font-variant-numeric:
+                tabular-nums;
+
+        }
+
+
+        /* ==================================================
+           BADGE
+        ================================================== */
+
+        .badge {
+
+            display:
+                inline-flex;
+
+            align-items:
+                center;
+
+            padding:
+                5px 8px;
+
+            border-radius:
+                999px;
+
+            font-size:
+                10px;
+
+            font-weight:
+                700;
+
+        }
+
+
+        .badge-green {
+
+            background:
+                var(--green-bg);
+
+            color:
+                var(--green);
+
+        }
+
+
+        .badge-orange {
+
+            background:
+                var(--orange-bg);
+
+            color:
+                var(--orange);
+
+        }
+
+
+        .badge-red {
+
+            background:
+                var(--red-bg);
+
+            color:
+                var(--red);
+
+        }
+
+
+        .badge-blue {
+
+            background:
+                var(--blue-bg);
+
+            color:
+                var(--blue);
+
+        }
+
+
+        /* ==================================================
+           RİSK
+        ================================================== */
+
+        .risk-card {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            gap:
+                20px;
+
+        }
+
+
+        .risk-circle {
+
+            width:
+                88px;
+
+            height:
+                88px;
+
+            border-radius:
+                50%;
+
+            background:
+                var(--navy);
+
+            color:
+                white;
+
+            display:
+                flex;
+
+            flex-direction:
+                column;
+
+            justify-content:
+                center;
+
+            align-items:
+                center;
+
+            flex-shrink:
+                0;
+
+        }
+
+
+        .risk-score {
+
+            font-size:
+                24px;
+
+            font-weight:
+                700;
+
+        }
+
+
+        .risk-score-label {
+
+            font-size:
+                8px;
+
+            color:
+                #aab6c6;
+
+            text-transform:
+                uppercase;
+
+        }
+
+
+        .risk-content h3 {
+
+            margin:
+                0 0 5px;
+
+            font-size:
+                15px;
+
+        }
+
+
+        .risk-content p {
+
+            margin:
+                0;
+
+            font-size:
+                11px;
+
+            color:
+                var(--muted);
+
+            line-height:
+                1.5;
+
+        }
+
+
+        /* ==================================================
+           ALERT
+        ================================================== */
+
+        .alert-list {
+
+            display:
+                flex;
+
+            flex-direction:
+                column;
+
+            gap:
+                9px;
+
+        }
+
+
+        .alert {
+
+            display:
+                flex;
+
+            gap:
+                12px;
+
+            padding:
+                12px;
+
+            border-radius:
+                9px;
+
+            border:
+                1px solid
+                var(--border);
+
+        }
+
+
+        .alert-icon {
+
+            width:
+                28px;
+
+            height:
+                28px;
+
+            border-radius:
+                8px;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            font-size:
+                12px;
+
+            flex-shrink:
+                0;
+
+        }
+
+
+        .alert.high {
+
+            background:
+                var(--red-bg);
+
+            border-color:
+                #f2d0cf;
+
+        }
+
+
+        .alert.high .alert-icon {
+
+            background:
+                #f3d2d1;
+
+            color:
+                var(--red);
+
+        }
+
+
+        .alert.medium {
+
+            background:
+                var(--orange-bg);
+
+            border-color:
+                #f2dfbf;
+
+        }
+
+
+        .alert.medium .alert-icon {
+
+            background:
+                #f4dfbd;
+
+            color:
+                var(--orange);
+
+        }
+
+
+        .alert.info {
+
+            background:
+                var(--blue-bg);
+
+            border-color:
+                #d6e3f5;
+
+        }
+
+
+        .alert.info .alert-icon {
+
+            background:
+                #d9e6f7;
+
+            color:
+                var(--blue);
+
+        }
+
+
+        .alert-title {
+
+            font-size:
+                11px;
+
+            font-weight:
+                700;
+
+        }
+
+
+        .alert-message {
+
+            font-size:
+                10px;
+
+            color:
+                var(--muted);
+
+            margin-top:
+                3px;
+
+            line-height:
+                1.4;
+
+        }
+
+
+        /* ==================================================
+           FORM
+        ================================================== */
+
+        .form-grid {
+
+            display:
+                grid;
+
+            grid-template-columns:
+                repeat(
+                    4,
+                    1fr
+                );
+
+            gap:
+                12px;
+
+        }
+
+
+        .form-group {
+
+            display:
+                flex;
+
+            flex-direction:
+                column;
+
+            gap:
+                6px;
+
+        }
+
+
+        .form-group label {
+
+            font-size:
+                10px;
+
+            color:
+                var(--muted);
+
+            font-weight:
+                600;
+
+        }
+
+
+        .form-group input {
+
+            border:
+                1px solid
+                var(--border);
+
+            border-radius:
+                8px;
+
+            padding:
+                10px;
+
+            font-size:
+                12px;
+
+            outline:
+                none;
+
+        }
+
+
+        .form-group input:focus {
+
+            border-color:
+                var(--gold);
+
+            box-shadow:
+                0 0 0 3px
+                rgba(
+                    185,
+                    154,
+                    93,
+                    .10
+                );
+
+        }
+
+
+        /* ==================================================
+           EMPTY
+        ================================================== */
+
+        .empty {
+
+            padding:
+                35px 20px;
+
+            text-align:
+                center;
+
+            color:
+                var(--muted);
+
+            font-size:
+                12px;
+
+        }
+
+
+        /* ==================================================
+           RESPONSIVE
+        ================================================== */
+
+        @media (
+            max-width: 1200px
+        ) {
+
+            .kpi-grid {
+
+                grid-template-columns:
+                    repeat(
+                        2,
+                        1fr
+                    );
+
+            }
+
+            .form-grid {
+
+                grid-template-columns:
+                    repeat(
+                        2,
+                        1fr
+                    );
+
+            }
+
+            .rollforward {
+
+                grid-template-columns:
+                    repeat(
+                        3,
+                        1fr
+                    );
+
+            }
+
+        }
+
+
+        @media (
+            max-width: 850px
+        ) {
+
+            .sidebar {
+
+                display:
+                    none;
+
+            }
+
+            .content {
+
+                padding:
+                    20px;
+
+            }
+
+            .grid-2,
+            .grid-3 {
+
+                grid-template-columns:
+                    1fr;
+
+            }
+
+            .page-header {
+
+                flex-direction:
+                    column;
+
+                align-items:
+                    flex-start;
+
+                gap:
+                    15px;
+
+            }
+
+            .kpi-grid {
+
+                grid-template-columns:
+                    1fr 1fr;
+
+            }
+
+        }
+
+
+        @media (
+            max-width: 560px
+        ) {
+
+            .topbar {
+
+                padding:
+                    0 16px;
+
+            }
+
+            .period {
+
+                display:
+                    none;
+
+            }
+
+            .content {
+
+                padding:
+                    15px;
+
+            }
+
+            h1 {
+
+                font-size:
+                    25px;
+
+            }
+
+            .kpi-grid {
+
+                grid-template-columns:
+                    1fr;
+
+            }
+
+            .form-grid {
+
+                grid-template-columns:
+                    1fr;
+
+            }
+
+            .rollforward {
+
+                grid-template-columns:
+                    1fr 1fr;
+
+            }
+
+        }
+
+    </style>
+
 </head>
 
 
 <body>
 
-<!-- =======================================================
+
+<!-- ======================================================
      ÜST BAR
-======================================================= -->
+====================================================== -->
 
 <header class="topbar">
 
@@ -873,14 +1761,14 @@ tbody tr:hover {
             GK
         </div>
 
-        <div>
+        <div class="brand-text">
 
             <div class="brand-title">
-                GK ADVISORY
+                GK Advisory
             </div>
 
             <div class="brand-subtitle">
-                Financial Intelligence Platform
+                Financial Decision Cockpit
             </div>
 
         </div>
@@ -890,11 +1778,15 @@ tbody tr:hover {
 
     <div class="topbar-right">
 
-        <div class="status-pill">
+        <div class="period">
+            TMS 19 · Aktüeryal Değerleme
+        </div>
+
+        <div class="status">
 
             <span class="status-dot"></span>
 
-            TMS 19 Aktüeryal Motor
+            Sistem Hazır
 
         </div>
 
@@ -903,300 +1795,505 @@ tbody tr:hover {
 </header>
 
 
+<div class="layout">
 
-<main class="page">
+
+<!-- ======================================================
+     SIDEBAR
+====================================================== -->
+
+<aside class="sidebar">
 
 
-<!-- =======================================================
-     HERO
-======================================================= -->
+    <div class="sidebar-section">
 
-<section class="hero">
-
-    <div>
-
-        <div class="eyebrow">
-            TMS 19 • Çalışanlara Sağlanan Faydalar
+        <div class="sidebar-label">
+            Finansal Zekâ
         </div>
 
-        <h1>
-            Aktüeryal Değerleme & Finansal Etki Merkezi
-        </h1>
 
-        <p>
-            Tanımlanmış fayda planlarının aktüeryal değerlemesini,
-            veri kalitesi kontrollerini, DBO hesaplamalarını,
-            roll-forward analizlerini ve finansal raporlama etkilerini
-            tek bir karar destek ortamında yönetin.
-        </p>
+        <a
+            href="financial-decision-cockpit.html"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                ◈
+            </span>
+
+            Ana Dashboard
+
+        </a>
+
+
+        <a
+            href="tms19.html"
+            class="nav-item active"
+        >
+
+            <span class="nav-icon">
+                ◉
+            </span>
+
+            TMS 19
+
+        </a>
+
+
+        <a
+            href="tms29.html"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                ◇
+            </span>
+
+            TMS 29
+
+        </a>
+
+
+        <a
+            href="dcf.html"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                ◆
+            </span>
+
+            DCF Değerleme
+
+        </a>
+
+
+        <a
+            href="working-capital.html"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                ◎
+            </span>
+
+            İşletme Sermayesi
+
+        </a>
 
     </div>
 
 
-    <div class="hero-actions">
+    <div class="sidebar-section">
 
-        <button
-            class="btn btn-light"
-            onclick="TMS19UI.demoVeriYukle()">
-
-            Demo Veri
-
-        </button>
-
-        <button
-            class="btn btn-primary"
-            onclick="document.getElementById('csvFile').click()">
-
-            Excel / CSV Yükle
-
-        </button>
-
-        <button
-            class="btn btn-gold"
-            onclick="TMS19UI.aktuerHaritayiCalistir()">
-
-            Aktüeryal Değerlemeyi Çalıştır
-
-        </button>
-
-    </div>
-
-</section>
-
-
-
-<!-- =======================================================
-     KPI
-======================================================= -->
-
-<section class="kpi-grid">
-
-    <div class="kpi">
-
-        <div class="kpi-label">
-            Toplam Personel
+        <div class="sidebar-label">
+            TMS 19 Analiz
         </div>
 
-        <div
-            class="kpi-value"
-            id="kpiPersonel">
-            0
-        </div>
 
-        <div class="kpi-foot">
-            Aktüeryal portföy
-        </div>
+        <a
+            href="#genel"
+            class="nav-item"
+        >
 
-    </div>
+            <span class="nav-icon">
+                01
+            </span>
 
+            Genel Bakış
 
-    <div class="kpi">
-
-        <div class="kpi-label">
-            Veri Kalitesi
-        </div>
-
-        <div
-            class="kpi-value"
-            id="kpiKalite">
-            %0,0
-        </div>
-
-        <div class="kpi-foot">
-            Veri hazırlık skoru
-        </div>
-
-    </div>
+        </a>
 
 
-    <div class="kpi">
+        <a
+            href="#varsayimlar"
+            class="nav-item"
+        >
 
-        <div class="kpi-label">
-            Açılış DBO
-        </div>
+            <span class="nav-icon">
+                02
+            </span>
 
-        <div
-            class="kpi-value"
-            id="kpiDBO">
-            ₺0
-        </div>
+            Aktüeryal Varsayımlar
 
-        <div class="kpi-foot">
-            Tanımlanmış fayda yükümlülüğü
-        </div>
+        </a>
+
+
+        <a
+            href="#rollforward"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                03
+            </span>
+
+            DBO Roll-forward
+
+        </a>
+
+
+        <a
+            href="#personel"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                04
+            </span>
+
+            Personel Portföyü
+
+        </a>
+
+
+        <a
+            href="#risk"
+            class="nav-item"
+        >
+
+            <span class="nav-icon">
+                05
+            </span>
+
+            Risk & Duyarlılık
+
+        </a>
 
     </div>
 
 
-    <div class="kpi">
-
-        <div class="kpi-label">
-            Çalışan Hizmet Maliyeti
-        </div>
-
-        <div
-            class="kpi-value"
-            id="kpiServiceCost">
-            ₺0
-        </div>
-
-        <div class="kpi-foot">
-            Dönemsel maliyet
-        </div>
-
-    </div>
+</aside>
 
 
-    <div class="kpi">
+<!-- ======================================================
+     ANA İÇERİK
+====================================================== -->
 
-        <div class="kpi-label">
-            Finansal Etki
-        </div>
-
-        <div
-            class="kpi-value"
-            id="kpiNetEffect">
-            ₺0
-        </div>
-
-        <div class="kpi-foot">
-            P&L / OCI perspektifi
-        </div>
-
-    </div>
-
-</section>
+<main class="content">
 
 
+    <!-- HEADER -->
 
-<!-- =======================================================
-     VERİ MERKEZİ + KALİTE
-======================================================= -->
+    <section
+        class="page-header"
+        id="genel"
+    >
 
-<section class="grid-main">
+        <div>
 
+            <div class="eyebrow">
+                TMS 19 · Aktüeryal Karar Motoru
+            </div>
 
-    <!-- VERİ YÜKLEME -->
+            <h1>
+                Çalışanlara Sağlanan Faydalar
+            </h1>
 
-    <div class="card">
+            <div class="page-description">
 
-        <div class="card-header">
-
-            <div>
-
-                <div class="card-title">
-                    Personel Veri Merkezi
-                </div>
-
-                <div class="card-subtitle">
-                    Aktüeryal hesaplama için personel verilerini yönetin
-                </div>
+                Projected Unit Credit yöntemi ile
+                tanımlanmış fayda yükümlülüğü,
+                P&L / OCI etkisi ve aktüeryal risk analizi.
 
             </div>
 
-            <span
-                class="badge badge-green"
-                id="veriDurumu">
-                Veri Bekleniyor
+        </div>
+
+
+        <div class="header-actions">
+
+            <button
+                class="btn"
+                onclick="demoVerisiYukle()"
+            >
+                Demo Veri
+            </button>
+
+            <button
+                class="btn btn-primary"
+                onclick="aktüeryalHesapla()"
+            >
+                Hesaplamayı Çalıştır
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         KPI
+    ================================================== -->
+
+    <section class="kpi-grid">
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Tanımlanmış Fayda Yükümlülüğü
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiDBO"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-meta">
+                Aktüeryal bugünkü değer
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Cari Hizmet Maliyeti
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiServiceCost"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-meta">
+                Dönem P&L etkisi
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Faiz Maliyeti
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiInterest"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-meta">
+                Net faiz etkisi
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Aktüeryal Kazanç / Kayıp
+            </div>
+
+            <div
+                class="kpi-value kpi-accent"
+                id="kpiOCI"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-meta">
+                Diğer kapsamlı gelir
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+    <!-- ==================================================
+         İKİNCİ KPI
+    ================================================== -->
+
+    <section class="kpi-grid">
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Personel Sayısı
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiEmployees"
+            >
+                0
+            </div>
+
+            <div class="kpi-meta">
+                Değerleme kapsamındaki çalışanlar
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Personel Başına DBO
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiAverageDBO"
+            >
+                ₺0
+            </div>
+
+            <div class="kpi-meta">
+                Ortalama yükümlülük
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Aktüeryal Risk
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiRisk"
+            >
+                —
+            </div>
+
+            <div class="kpi-meta">
+                Portföy risk skoru
+            </div>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                Veri Kalitesi
+            </div>
+
+            <div
+                class="kpi-value"
+                id="kpiDataQuality"
+            >
+                —
+            </div>
+
+            <div class="kpi-meta">
+                Aktüeryal veri hazırlık seviyesi
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+    <!-- ==================================================
+         VARSAYIMLAR
+    ================================================== -->
+
+    <section
+        class="section"
+        id="varsayimlar"
+    >
+
+        <div class="section-title">
+
+            <h2>
+                Aktüeryal Varsayımlar
+            </h2>
+
+            <span>
+                Değerleme parametreleri
             </span>
 
         </div>
 
 
-        <div class="card-body">
+        <div class="card">
 
-            <div
-                class="upload-zone"
-                id="uploadZone">
+            <div class="card-body">
 
-                <div class="upload-icon">
-                    ↑
-                </div>
-
-                <h3>
-                    Personel veri dosyanızı yükleyin
-                </h3>
-
-                <p>
-                    CSV formatı desteklenmektedir.
-                    Türkçe veya İngilizce kolon isimleri otomatik tanınır.
-                </p>
+                <div class="form-grid">
 
 
-                <div class="upload-actions">
+                    <div class="form-group">
 
-                    <button
-                        class="btn btn-primary"
-                        onclick="document.getElementById('csvFile').click()">
+                        <label>
+                            İskonto Oranı (%)
+                        </label>
 
-                        Dosya Seç
+                        <input
+                            id="discountRate"
+                            type="number"
+                            step="0.1"
+                            value="30"
+                        >
 
-                    </button>
-
-                    <button
-                        class="btn btn-light"
-                        onclick="TMS19UI.demoVeriYukle()">
-
-                        Örnek Veri Oluştur
-
-                    </button>
-
-                </div>
-
-                <input
-                    type="file"
-                    id="csvFile"
-                    class="file-input"
-                    accept=".csv,.txt">
-
-            </div>
+                    </div>
 
 
-            <div
-                class="alert"
-                id="dataAlert">
-            </div>
+                    <div class="form-group">
+
+                        <label>
+                            Maaş Artış Oranı (%)
+                        </label>
+
+                        <input
+                            id="salaryIncreaseRate"
+                            type="number"
+                            step="0.1"
+                            value="30"
+                        >
+
+                    </div>
 
 
-            <div
-                style="margin-top:20px"
-                class="status-grid">
+                    <div class="form-group">
 
-                <div class="status-card green">
+                        <label>
+                            Personel Devir Oranı (%)
+                        </label>
 
-                    <strong id="gecerliSayi">
-                        0
-                    </strong>
+                        <input
+                            id="turnoverRate"
+                            type="number"
+                            step="0.1"
+                            value="5"
+                        >
 
-                    <span>
-                        Geçerli Kayıt
-                    </span>
-
-                </div>
-
-
-                <div class="status-card yellow">
-
-                    <strong id="uyariSayi">
-                        0
-                    </strong>
-
-                    <span>
-                        Uyarı
-                    </span>
-
-                </div>
+                    </div>
 
 
-                <div class="status-card red">
+                    <div class="form-group">
 
-                    <strong id="hataliSayi">
-                        0
-                    </strong>
+                        <label>
+                            Fayda Oranı (%)
+                        </label>
 
-                    <span>
-                        Hatalı Kayıt
-                    </span>
+                        <input
+                            id="benefitRate"
+                            type="number"
+                            step="0.1"
+                            value="3"
+                        >
+
+                    </div>
+
 
                 </div>
 
@@ -1204,133 +2301,321 @@ tbody tr:hover {
 
         </div>
 
-    </div>
+    </section>
 
 
+    <!-- ==================================================
+         ROLL FORWARD
+    ================================================== -->
 
-    <!-- VERİ KALİTESİ -->
+    <section
+        class="section"
+        id="rollforward"
+    >
 
-    <div class="card">
+        <div class="section-title">
 
-        <div class="card-header">
+            <h2>
+                DBO Roll-forward
+            </h2>
 
-            <div>
-
-                <div class="card-title">
-                    Aktüeryal Veri Kalitesi
-                </div>
-
-                <div class="card-subtitle">
-                    Hesaplama öncesi veri güvenilirliği
-                </div>
-
-            </div>
-
-            <span
-                class="badge badge-yellow"
-                id="kaliteBadge">
-                Kontrol Bekleniyor
+            <span>
+                Tanımlanmış fayda yükümlülüğünün hareketi
             </span>
 
         </div>
 
 
-        <div class="card-body">
+        <div class="card">
 
-            <div class="quality-score">
+            <div class="card-body">
 
-                <div class="score-circle">
+                <div class="rollforward">
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Açılış DBO
+                        </div>
+
+                        <div
+                            class="rf-value"
+                            id="rfOpening"
+                        >
+                            ₺0
+                        </div>
+
+                    </div>
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Cari Hizmet Maliyeti
+                        </div>
+
+                        <div
+                            class="rf-value rf-positive"
+                            id="rfService"
+                        >
+                            +₺0
+                        </div>
+
+                    </div>
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Faiz Maliyeti
+                        </div>
+
+                        <div
+                            class="rf-value rf-positive"
+                            id="rfInterest"
+                        >
+                            +₺0
+                        </div>
+
+                    </div>
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Aktüeryal Yeniden Ölçüm
+                        </div>
+
+                        <div
+                            class="rf-value"
+                            id="rfActuarial"
+                        >
+                            ₺0
+                        </div>
+
+                    </div>
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Fayda Ödemeleri
+                        </div>
+
+                        <div
+                            class="rf-value rf-negative"
+                            id="rfPayments"
+                        >
+                            -₺0
+                        </div>
+
+                    </div>
+
+
+                    <div class="rf-item">
+
+                        <div class="rf-label">
+                            Kapanış DBO
+                        </div>
+
+                        <div
+                            class="rf-value"
+                            id="rfClosing"
+                        >
+                            ₺0
+                        </div>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         P&L / OCI
+    ================================================== -->
+
+    <section class="section">
+
+        <div class="section-title">
+
+            <h2>
+                Finansal Tablo Etkisi
+            </h2>
+
+            <span>
+                TMS 19 sunum perspektifi
+            </span>
+
+        </div>
+
+
+        <div class="grid-2">
+
+
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <div class="card-title">
+                            Kâr veya Zarar
+                        </div>
+
+                        <div class="card-subtitle">
+                            Cari hizmet + faiz maliyeti
+                        </div>
+
+                    </div>
+
+                    <span
+                        class="badge badge-blue"
+                    >
+                        P&L
+                    </span>
+
+                </div>
+
+
+                <div class="card-body">
 
                     <div
-                        class="score-number"
-                        id="qualityScore">
-                        %0
-                    </div>
-
-                    <div class="score-label">
-                        KALİTE
+                        id="pnlValue"
+                        style="
+                            font-size:30px;
+                            font-weight:700;
+                            color:#0b1728;
+                        "
+                    >
+                        ₺0
                     </div>
 
                 </div>
 
+            </div>
 
-                <div class="quality-bars">
 
-                    <div class="quality-row">
+            <div class="card">
 
-                        <div class="quality-label">
+                <div class="card-header">
 
-                            <span>
-                                Geçerli
-                            </span>
+                    <div>
 
-                            <strong id="validPercent">
-                                %0
-                            </strong>
-
+                        <div class="card-title">
+                            Diğer Kapsamlı Gelir
                         </div>
 
-                        <div class="progress">
+                        <div class="card-subtitle">
+                            Aktüeryal yeniden ölçüm
+                        </div>
+
+                    </div>
+
+                    <span
+                        class="badge badge-orange"
+                    >
+                        OCI
+                    </span>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div
+                        id="ociValue"
+                        style="
+                            font-size:30px;
+                            font-weight:700;
+                            color:#0b1728;
+                        "
+                    >
+                        ₺0
+                    </div>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         RİSK
+    ================================================== -->
+
+    <section
+        class="section"
+        id="risk"
+    >
+
+        <div class="section-title">
+
+            <h2>
+                Aktüeryal Risk Görünümü
+            </h2>
+
+            <span>
+                CFO karar destek perspektifi
+            </span>
+
+        </div>
+
+
+        <div class="grid-2">
+
+
+            <div class="card">
+
+                <div class="card-body">
+
+                    <div class="risk-card">
+
+                        <div
+                            class="risk-circle"
+                            id="riskCircle"
+                        >
 
                             <div
-                                class="progress-bar progress-green"
-                                id="validBar"
-                                style="width:0%">
+                                class="risk-score"
+                                id="riskScore"
+                            >
+                                0
+                            </div>
+
+                            <div class="risk-score-label">
+                                skor
                             </div>
 
                         </div>
 
-                    </div>
 
+                        <div class="risk-content">
 
-                    <div class="quality-row">
+                            <h3
+                                id="riskLevel"
+                            >
+                                Değerlendirme Bekleniyor
+                            </h3>
 
-                        <div class="quality-label">
-
-                            <span>
-                                Uyarılı
-                            </span>
-
-                            <strong id="warningPercent">
-                                %0
-                            </strong>
-
-                        </div>
-
-                        <div class="progress">
-
-                            <div
-                                class="progress-bar progress-yellow"
-                                id="warningBar"
-                                style="width:0%">
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="quality-row">
-
-                        <div class="quality-label">
-
-                            <span>
-                                Hatalı
-                            </span>
-
-                            <strong id="invalidPercent">
-                                %0
-                            </strong>
-
-                        </div>
-
-                        <div class="progress">
-
-                            <div
-                                class="progress-bar progress-red"
-                                id="invalidBar"
-                                style="width:0%">
-                            </div>
+                            <p
+                                id="riskDescription"
+                            >
+                                Aktüeryal hesaplama çalıştırıldığında
+                                portföy risk göstergeleri burada
+                                görüntülenecektir.
+                            </p>
 
                         </div>
 
@@ -1341,1853 +2626,773 @@ tbody tr:hover {
             </div>
 
 
-            <div
-                class="alert"
-                id="qualityAlert">
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <div class="card-title">
+                            Yönetim Uyarıları
+                        </div>
+
+                        <div class="card-subtitle">
+                            Öncelikli aksiyon alanları
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div
+                        class="alert-list"
+                        id="alertList"
+                    >
+
+                        <div class="empty">
+                            Henüz hesaplama yapılmadı.
+                        </div>
+
+                    </div>
+
+                </div>
+
             </div>
+
 
         </div>
 
-    </div>
+    </section>
 
-</section>
 
+    <!-- ==================================================
+         PERSONEL
+    ================================================== -->
 
+    <section
+        class="section"
+        id="personel"
+    >
 
-<!-- =======================================================
-     AKTÜERYAL VARSAYIMLAR
-======================================================= -->
+        <div class="section-title">
 
-<section class="card" style="margin-bottom:20px">
-
-    <div class="card-header">
-
-        <div>
-
-            <div class="card-title">
-                Aktüeryal Varsayımlar
-            </div>
-
-            <div class="card-subtitle">
-                Değerleme modelinin temel finansal ve demografik varsayımları
-            </div>
-
-        </div>
-
-        <span class="badge badge-green">
-            Model Parametreleri
-        </span>
-
-    </div>
-
-
-    <div class="card-body">
-
-        <div class="assumption-grid">
-
-            <div class="field">
-
-                <label>
-                    İskonto Oranı
-                </label>
-
-                <input
-                    type="number"
-                    id="iskontoOrani"
-                    value="30"
-                    step="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Maaş Artış Oranı
-                </label>
-
-                <input
-                    type="number"
-                    id="maasArtisOrani"
-                    value="30"
-                    step="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Enflasyon Oranı
-                </label>
-
-                <input
-                    type="number"
-                    id="enflasyonOrani"
-                    value="25"
-                    step="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Personel Devir Oranı
-                </label>
-
-                <input
-                    type="number"
-                    id="devirOrani"
-                    value="5"
-                    step="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Emeklilik Yaşı
-                </label>
-
-                <input
-                    type="number"
-                    id="emeklilikYasi"
-                    value="60"
-                    step="1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Fayda Oranı
-                </label>
-
-                <input
-                    type="number"
-                    id="faydaOrani"
-                    value="3"
-                    step="0.1">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Değerleme Tarihi
-                </label>
-
-                <input
-                    type="date"
-                    id="degerlemeTarihi">
-
-            </div>
-
-
-            <div class="field">
-
-                <label>
-                    Para Birimi
-                </label>
-
-                <select id="paraBirimi">
-
-                    <option value="TRY">
-                        Türk Lirası
-                    </option>
-
-                    <option value="EUR">
-                        Euro
-                    </option>
-
-                    <option value="USD">
-                        ABD Doları
-                    </option>
-
-                </select>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-
-<!-- =======================================================
-     AKTÜERYAL SONUÇLAR
-======================================================= -->
-
-<section class="card" style="margin-bottom:20px">
-
-    <div class="card-header">
-
-        <div>
-
-            <div class="card-title">
-                Aktüeryal Değerleme Sonuçları
-            </div>
-
-            <div class="card-subtitle">
-                Tanımlanmış fayda yükümlülüğü ve dönemsel finansal etkiler
-            </div>
-
-        </div>
-
-        <button
-            class="btn btn-gold"
-            onclick="TMS19UI.aktuerHaritayiCalistir()">
-
-            Hesaplamayı Yenile
-
-        </button>
-
-    </div>
-
-
-    <div class="card-body">
-
-        <div class="result-grid">
-
-            <div class="result">
-
-                <div class="result-label">
-                    Dönem Başı DBO
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucDBO">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    Cari Hizmet Maliyeti
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucServiceCost">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    Faiz Maliyeti
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucInterest">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    Aktüeryal Kazanç / Kayıp
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucRemeasurement">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    Fayda Ödemeleri
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucPayments">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    Dönem Sonu DBO
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucClosingDBO">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    P&L Etkisi
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucPL">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="result">
-
-                <div class="result-label">
-                    OCI Etkisi
-                </div>
-
-                <div
-                    class="result-value"
-                    id="sonucOCI">
-                    ₺0
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-
-<!-- =======================================================
-     ROLL FORWARD
-======================================================= -->
-
-<section class="card" style="margin-bottom:20px">
-
-    <div class="card-header">
-
-        <div>
-
-            <div class="card-title">
-                DBO Roll-Forward
-            </div>
-
-            <div class="card-subtitle">
-                Tanımlanmış fayda yükümlülüğünün dönemsel hareketi
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="card-body">
-
-        <div class="rollforward">
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Dönem Başı DBO
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollOpening">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Cari Hizmet Maliyeti
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollService">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Net Faiz
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollInterest">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Yeniden Ölçüm
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollRemeasurement">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Fayda Ödemeleri
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollPayments">
-                    ₺0
-                </div>
-
-            </div>
-
-
-            <div class="roll-item">
-
-                <div class="roll-label">
-                    Dönem Sonu DBO
-                </div>
-
-                <div
-                    class="roll-value"
-                    id="rollClosing">
-                    ₺0
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</section>
-
-
-
-<!-- =======================================================
-     PERSONEL TABLOSU
-======================================================= -->
-
-<section class="card" style="margin-bottom:20px">
-
-    <div class="card-header">
-
-        <div>
-
-            <div class="card-title">
-                Aktüeryal Personel Portföyü
-            </div>
-
-            <div class="card-subtitle">
-                Personel bazında aktüeryal veri kontrolü
-            </div>
-
-        </div>
-
-        <span
-            class="badge badge-green"
-            id="portfolioBadge">
-            0 Personel
-        </span>
-
-    </div>
-
-
-    <div class="table-wrap">
-
-        <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>
-                        Sicil
-                    </th>
-
-                    <th>
-                        Personel
-                    </th>
-
-                    <th>
-                        Departman
-                    </th>
-
-                    <th>
-                        Yaş
-                    </th>
-
-                    <th>
-                        Hizmet
-                    </th>
-
-                    <th>
-                        Yıllık Maaş
-                    </th>
-
-                    <th>
-                        Açılış DBO
-                    </th>
-
-                    <th>
-                        Durum
-                    </th>
-
-                </tr>
-
-            </thead>
-
-
-            <tbody id="personelTableBody">
-
-                <tr>
-
-                    <td
-                        colspan="8"
-                        style="text-align:center;color:#94a3b8;padding:35px">
-
-                        Henüz personel verisi yüklenmedi.
-
-                    </td>
-
-                </tr>
-
-            </tbody>
-
-        </table>
-
-    </div>
-
-</section>
-
-
-
-<!-- =======================================================
-     CFO KARAR ÖZETİ
-======================================================= -->
-
-<section class="cfo-box">
-
-    <div class="eyebrow">
-        CFO Perspektifi
-    </div>
-
-    <h2>
-        Aktüeryal Risk ve Finansal Karar Özeti
-    </h2>
-
-    <p id="cfoSummary">
-
-        Personel veri seti yüklendiğinde sistem;
-        DBO hareketlerini, dönemsel hizmet maliyetini,
-        faiz etkisini, yeniden ölçüm sonuçlarını ve
-        P&L / OCI etkilerini CFO perspektifinden değerlendirecektir.
-
-    </p>
-
-
-    <div class="cfo-metrics">
-
-        <div class="cfo-metric">
+            <h2>
+                Personel Bazlı Aktüeryal Analiz
+            </h2>
 
             <span>
-                DBO / Personel
+                En yüksek DBO'ya sahip çalışanlar
             </span>
-
-            <strong id="cfoDBOPerPerson">
-                ₺0
-            </strong>
 
         </div>
 
 
-        <div class="cfo-metric">
+        <div class="card">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Personel
+                            </th>
+
+                            <th>
+                                Departman
+                            </th>
+
+                            <th class="number">
+                                Yaş
+                            </th>
+
+                            <th class="number">
+                                Hizmet
+                            </th>
+
+                            <th class="number">
+                                Yıllık Maaş
+                            </th>
+
+                            <th class="number">
+                                DBO
+                            </th>
+
+                            <th class="number">
+                                Hizmet Maliyeti
+                            </th>
+
+                            <th class="number">
+                                Faiz Maliyeti
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody
+                        id="employeeTable"
+                    >
+
+                        <tr>
+
+                            <td
+                                colspan="8"
+                                class="empty"
+                            >
+                                Henüz personel verisi bulunmuyor.
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         DEPARTMAN
+    ================================================== -->
+
+    <section class="section">
+
+        <div class="section-title">
+
+            <h2>
+                Departman Bazlı DBO
+            </h2>
 
             <span>
-                Ortalama Hizmet
+                Yükümlülük yoğunlaşması
             </span>
-
-            <strong id="cfoAvgService">
-                0,0 yıl
-            </strong>
 
         </div>
 
 
-        <div class="cfo-metric">
+        <div class="card">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Departman
+                            </th>
+
+                            <th class="number">
+                                Personel
+                            </th>
+
+                            <th class="number">
+                                Toplam Maaş
+                            </th>
+
+                            <th class="number">
+                                DBO
+                            </th>
+
+                            <th class="number">
+                                Hizmet Maliyeti
+                            </th>
+
+                            <th class="number">
+                                Aktüeryal Kazanç / Kayıp
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody
+                        id="departmentTable"
+                    >
+
+                        <tr>
+
+                            <td
+                                colspan="6"
+                                class="empty"
+                            >
+                                Henüz veri bulunmuyor.
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         DUYARLILIK
+    ================================================== -->
+
+    <section class="section">
+
+        <div class="section-title">
+
+            <h2>
+                Duyarlılık Analizi
+            </h2>
 
             <span>
-                Ortalama Yaş
+                Varsayımlardaki değişimin DBO etkisi
             </span>
-
-            <strong id="cfoAvgAge">
-                0,0
-            </strong>
 
         </div>
 
 
-        <div class="cfo-metric">
+        <div class="card">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Senaryo
+                            </th>
+
+                            <th class="number">
+                                Varsayım
+                            </th>
+
+                            <th class="number">
+                                DBO
+                            </th>
+
+                            <th class="number">
+                                P&L
+                            </th>
+
+                            <th class="number">
+                                OCI
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody
+                        id="sensitivityTable"
+                    >
+
+                        <tr>
+
+                            <td
+                                colspan="5"
+                                class="empty"
+                            >
+                                Hesaplama sonrası duyarlılık
+                                sonuçları görüntülenecektir.
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         AKTÜERYAL KONTROL
+    ================================================== -->
+
+    <section class="section">
+
+        <div class="section-title">
+
+            <h2>
+                Aktüeryal Veri Hazırlık Kontrolü
+            </h2>
 
             <span>
-                Aktüeryal Hazırlık
+                Değerleme öncesi veri kalitesi
             </span>
-
-            <strong id="cfoReadiness">
-                Hazır Değil
-            </strong>
 
         </div>
 
-    </div>
 
-</section>
+        <div class="card">
+
+            <div class="card-body">
+
+                <div class="grid-3">
 
 
+                    <div>
 
-<div class="footer">
+                        <div
+                            style="
+                                color:#6b7685;
+                                font-size:10px;
+                                text-transform:uppercase;
+                                font-weight:600;
+                            "
+                        >
+                            Hazırlık Skoru
+                        </div>
 
-    GK Advisory — Financial Decision Cockpit
-    • TMS 19 Aktüeryal Değerleme Modülü
-    • Yönetim Karar Destek Sistemi
+                        <div
+                            id="readinessScore"
+                            style="
+                                font-size:26px;
+                                font-weight:700;
+                                margin-top:8px;
+                            "
+                        >
+                            —
+                        </div>
 
-</div>
+                    </div>
+
+
+                    <div>
+
+                        <div
+                            style="
+                                color:#6b7685;
+                                font-size:10px;
+                                text-transform:uppercase;
+                                font-weight:600;
+                            "
+                        >
+                            Durum
+                        </div>
+
+                        <div
+                            id="readinessLevel"
+                            style="
+                                font-size:15px;
+                                font-weight:700;
+                                margin-top:10px;
+                            "
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div>
+
+                        <div
+                            style="
+                                color:#6b7685;
+                                font-size:10px;
+                                text-transform:uppercase;
+                                font-weight:600;
+                            "
+                        >
+                            Veri Uyarıları
+                        </div>
+
+                        <div
+                            id="readinessIssues"
+                            style="
+                                font-size:12px;
+                                margin-top:10px;
+                                color:#6b7685;
+                            "
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         FOOTER
+    ================================================== -->
+
+    <footer
+        style="
+            margin-top:40px;
+            padding:20px 0 10px;
+            border-top:1px solid #e2e7ed;
+            color:#8a94a3;
+            font-size:10px;
+            display:flex;
+            justify-content:space-between;
+            gap:20px;
+        "
+    >
+
+        <div>
+            GK Advisory · Financial Decision Cockpit
+        </div>
+
+        <div>
+            TMS 19 · Aktüeryal Karar Destek Modülü
+        </div>
+
+    </footer>
+
 
 </main>
 
+</div>
 
 
-<!-- =======================================================
-     JAVASCRIPT
-======================================================= -->
+<!-- ======================================================
+     JAVASCRIPT ENGINE'LER
+====================================================== -->
 
 <script src="js/tms19-actuarial-engine.js"></script>
-
-<script src="js/tms19-data-engine.js"></script>
 
 <script src="js/tms19-portfolio-engine.js"></script>
 
 
-
 <script>
 
-"use strict";
+
+/* ========================================================
+   GLOBAL VERİ
+======================================================== */
+
+let tms19Employees = [];
+
+let lastActuarialResult = null;
+
+let lastPortfolioResult = null;
 
 
-/* =========================================================
-   TMS 19 UI
-========================================================= */
+/* ========================================================
+   FORMATLAMA
+======================================================== */
 
-window.TMS19UI = {
+function formatMoney(value) {
 
-
-    formatTRY(value) {
-
-        return new Intl.NumberFormat(
-            "tr-TR",
-            {
-                style: "currency",
-                currency: "TRY",
-                maximumFractionDigits: 0
-            }
-        ).format(
-            Number(value) || 0
-        );
-
-    },
+    const number =
+        Number(value) || 0;
 
 
-    formatNumber(value) {
-
-        return new Intl.NumberFormat(
-            "tr-TR",
-            {
-                maximumFractionDigits: 1
-            }
-        ).format(
-            Number(value) || 0
-        );
-
-    },
-
-
-    showAlert(
-        elementId,
-        message,
-        type
-    ) {
-
-        const el =
-            document.getElementById(
-                elementId
-            );
-
-        if (!el) return;
-
-        el.className =
-            "alert alert-" +
-            type +
-            " show";
-
-        el.textContent =
-            message;
-
-    },
-
-
-    demoVeriYukle() {
-
-        if (
-            !window.TMS19DataEngine
-        ) {
-
-            this.showAlert(
-                "dataAlert",
-                "Veri motoru yüklenemedi.",
-                "danger"
-            );
-
-            return;
-
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+            style: "currency",
+            currency: "TRY",
+            maximumFractionDigits: 0
         }
+    ).format(number);
+
+}
 
 
-        const result =
-            TMS19DataEngine
-                .createSampleDataset(
-                    25
-                );
+function formatNumber(value) {
 
-
-        this.renderQuality(
-            result.quality
-        );
-
-
-        this.renderEmployees(
-            result.employees
-        );
-
-
-        this.updateKPIs(
-            result.employees
-        );
-
-
-        document
-            .getElementById(
-                "veriDurumu"
-            )
-            .textContent =
-            "Demo Veri Aktif";
-
-
-        this.showAlert(
-            "dataAlert",
-            "25 kişilik örnek personel veri seti başarıyla oluşturuldu.",
-            "success"
-        );
-
-
-        this.showAlert(
-            "qualityAlert",
-            "Veri kalite kontrolü tamamlandı. Aktüeryal değerlemeye geçebilirsiniz.",
-            "success"
-        );
-
-    },
-
-
-    handleCSV(
-        text
-    ) {
-
-        try {
-
-            const result =
-                TMS19DataEngine
-                    .parseCSV(
-                        text
-                    );
-
-
-            this.renderQuality(
-                result.quality
-            );
-
-
-            this.renderEmployees(
-                result.employees
-            );
-
-
-            this.updateKPIs(
-                result.employees
-            );
-
-
-            document
-                .getElementById(
-                    "veriDurumu"
-                )
-                .textContent =
-                "Veri Yüklendi";
-
-
-            this.showAlert(
-                "dataAlert",
-                result.employees.length +
-                " personel kaydı başarıyla okundu.",
-                "success"
-            );
-
-
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+            maximumFractionDigits: 0
         }
-        catch (error) {
-
-            console.error(
-                error
-            );
-
-
-            this.showAlert(
-                "dataAlert",
-                error.message ||
-                "Dosya okunurken hata oluştu.",
-                "danger"
-            );
-
-        }
-
-    },
-
-
-    renderQuality(
-        quality
-    ) {
-
-        if (!quality) return;
-
-
-        const total =
-            quality.total || 0;
-
-
-        const valid =
-            quality.validCount || 0;
-
-
-        const warning =
-            quality.warningCount || 0;
-
-
-        const invalid =
-            quality.invalidCount || 0;
-
-
-        const validPct =
-            total
-                ? (valid / total) * 100
-                : 0;
-
-
-        const warningPct =
-            total
-                ? (warning / total) * 100
-                : 0;
-
-
-        const invalidPct =
-            total
-                ? (invalid / total) * 100
-                : 0;
-
-
-        document
-            .getElementById(
-                "qualityScore"
-            )
-            .textContent =
-            "%" +
-            this.formatNumber(
-                quality.qualityScore || 0
-            );
-
-
-        document
-            .getElementById(
-                "validPercent"
-            )
-            .textContent =
-            "%" +
-            this.formatNumber(
-                validPct
-            );
-
-
-        document
-            .getElementById(
-                "warningPercent"
-            )
-            .textContent =
-            "%" +
-            this.formatNumber(
-                warningPct
-            );
-
-
-        document
-            .getElementById(
-                "invalidPercent"
-            )
-            .textContent =
-            "%" +
-            this.formatNumber(
-                invalidPct
-            );
-
-
-        document
-            .getElementById(
-                "validBar"
-            )
-            .style.width =
-            validPct +
-            "%";
-
-
-        document
-            .getElementById(
-                "warningBar"
-            )
-            .style.width =
-            warningPct +
-            "%";
-
-
-        document
-            .getElementById(
-                "invalidBar"
-            )
-            .style.width =
-            invalidPct +
-            "%";
-
-
-        document
-            .getElementById(
-                "gecerliSayi"
-            )
-            .textContent =
-            valid;
-
-
-        document
-            .getElementById(
-                "uyariSayi"
-            )
-            .textContent =
-            warning;
-
-
-        document
-            .getElementById(
-                "hataliSayi"
-            )
-            .textContent =
-            invalid;
-
-
-        const badge =
-            document.getElementById(
-                "kaliteBadge"
-            );
-
-
-        if (
-            quality.qualityScore >= 95
-        ) {
-
-            badge.className =
-                "badge badge-green";
-
-        }
-        else if (
-            quality.qualityScore >= 70
-        ) {
-
-            badge.className =
-                "badge badge-yellow";
-
-        }
-        else {
-
-            badge.className =
-                "badge badge-red";
-
-        }
-
-
-        badge.textContent =
-            quality.qualityLevel;
-
-
-        if (
-            quality.readyForActuarial
-        ) {
-
-            this.showAlert(
-                "qualityAlert",
-                "Veri seti aktüeryal hesaplamaya hazır.",
-                "success"
-            );
-
-        }
-        else {
-
-            this.showAlert(
-                "qualityAlert",
-                invalid +
-                " kayıt aktüeryal hesaplama öncesinde düzeltilmelidir.",
-                "warning"
-            );
-
-        }
-
-    },
-
-
-    renderEmployees(
-        employees
-    ) {
-
-        const tbody =
-            document.getElementById(
-                "personelTableBody"
-            );
-
-
-        if (
-            !employees ||
-            !employees.length
-        ) {
-
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="8"
-                        style="text-align:center;color:#94a3b8;padding:35px">
-                        Personel verisi bulunamadı.
-                    </td>
-                </tr>
-            `;
-
-            return;
-
-        }
-
-
-        const maxRows =
-            Math.min(
-                employees.length,
-                100
-            );
-
-
-        let html = "";
-
-
-        for (
-            let i = 0;
-            i < maxRows;
-            i++
-        ) {
-
-            const e =
-                employees[i];
-
-
-            const validation =
-                TMS19DataEngine
-                    .validateEmployee(
-                        e,
-                        i
-                    );
-
-
-            let badge =
-                `<span class="badge badge-green">
-                    Geçerli
-                </span>`;
-
-
-            if (
-                !validation.valid
-            ) {
-
-                badge =
-                    `<span class="badge badge-red">
-                        Hatalı
-                    </span>`;
-
-            }
-            else if (
-                validation.warning
-            ) {
-
-                badge =
-                    `<span class="badge badge-yellow">
-                        Uyarı
-                    </span>`;
-
-            }
-
-
-            html += `
-
-                <tr>
-
-                    <td>
-                        ${e.employeeNumber || "-"}
-                    </td>
-
-                    <td>
-                        <strong>
-                            ${e.name || "-"}
-                        </strong>
-                    </td>
-
-                    <td>
-                        ${e.department || "-"}
-                    </td>
-
-                    <td>
-                        ${this.formatNumber(
-                            e.currentAge
-                        )}
-                    </td>
-
-                    <td>
-                        ${this.formatNumber(
-                            e.yearsOfService
-                        )} yıl
-                    </td>
-
-                    <td>
-                        ${this.formatTRY(
-                            e.currentAnnualSalary
-                        )}
-                    </td>
-
-                    <td>
-                        ${this.formatTRY(
-                            e.openingDBO
-                        )}
-                    </td>
-
-                    <td>
-                        ${badge}
-                    </td>
-
-                </tr>
-
-            `;
-
-        }
-
-
-        tbody.innerHTML =
-            html;
-
-
-        document
-            .getElementById(
-                "portfolioBadge"
-            )
-            .textContent =
-            employees.length +
-            " Personel";
-
-    },
-
-
-    updateKPIs(
-        employees
-    ) {
-
-        if (
-            !employees ||
-            !employees.length
-        ) return;
-
-
-        const totalDBO =
-            employees.reduce(
-                (
-                    sum,
-                    e
-                ) =>
-                    sum +
-                    (
-                        Number(
-                            e.openingDBO
-                        ) || 0
-                    ),
-                0
-            );
-
-
-        const totalSalary =
-            employees.reduce(
-                (
-                    sum,
-                    e
-                ) =>
-                    sum +
-                    (
-                        Number(
-                            e.currentAnnualSalary
-                        ) || 0
-                    ),
-                0
-            );
-
-
-        const avgAge =
-            employees.reduce(
-                (
-                    sum,
-                    e
-                ) =>
-                    sum +
-                    (
-                        Number(
-                            e.currentAge
-                        ) || 0
-                    ),
-                0
-            )
-            /
-            employees.length;
-
-
-        const avgService =
-            employees.reduce(
-                (
-                    sum,
-                    e
-                ) =>
-                    sum +
-                    (
-                        Number(
-                            e.yearsOfService
-                        ) || 0
-                    ),
-                0
-            )
-            /
-            employees.length;
-
-
-        document
-            .getElementById(
-                "kpiPersonel"
-            )
-            .textContent =
-            employees.length;
-
-
-        document
-            .getElementById(
-                "kpiDBO"
-            )
-            .textContent =
-            this.formatTRY(
-                totalDBO
-            );
-
-
-        document
-            .getElementById(
-                "cfoDBOPerPerson"
-            )
-            .textContent =
-            this.formatTRY(
-                totalDBO /
-                employees.length
-            );
-
-
-        document
-            .getElementById(
-                "cfoAvgAge"
-            )
-            .textContent =
-            this.formatNumber(
-                avgAge
-            );
-
-
-        document
-            .getElementById(
-                "cfoAvgService"
-            )
-            .textContent =
-            this.formatNumber(
-                avgService
-            ) +
-            " yıl";
-
-
-        /*
-           Basit ön izleme hizmet maliyeti.
-
-           Gerçek aktüeryal hesaplama,
-           actuarial engine ile değiştirilecektir.
-        */
-
-        const serviceCost =
-            totalSalary *
-            0.03;
-
-
-        document
-            .getElementById(
-                "kpiServiceCost"
-            )
-            .textContent =
-            this.formatTRY(
-                serviceCost
-            );
-
-
-        document
-            .getElementById(
-                "sonucDBO"
-            )
-            .textContent =
-            this.formatTRY(
-                totalDBO
-            );
-
-
-        document
-            .getElementById(
-                "sonucServiceCost"
-            )
-            .textContent =
-            this.formatTRY(
-                serviceCost
-            );
-
-
-        document
-            .getElementById(
-                "rollOpening"
-            )
-            .textContent =
-            this.formatTRY(
-                totalDBO
-            );
-
-
-        document
-            .getElementById(
-                "rollService"
-            )
-            .textContent =
-            this.formatTRY(
-                serviceCost
-            );
-
-
-        const interest =
-            totalDBO *
-            0.30;
-
-
-        document
-            .getElementById(
-                "sonucInterest"
-            )
-            .textContent =
-            this.formatTRY(
-                interest
-            );
-
-
-        document
-            .getElementById(
-                "rollInterest"
-            )
-            .textContent =
-            this.formatTRY(
-                interest
-            );
-
-
-        const closingDBO =
-            totalDBO +
-            serviceCost +
-            interest;
-
-
-        document
-            .getElementById(
-                "sonucClosingDBO"
-            )
-            .textContent =
-            this.formatTRY(
-                closingDBO
-            );
-
-
-        document
-            .getElementById(
-                "rollClosing"
-            )
-            .textContent =
-            this.formatTRY(
-                closingDBO
-            );
-
-
-        document
-            .getElementById(
-                "kpiNetEffect"
-            )
-            .textContent =
-            this.formatTRY(
-                serviceCost +
-                interest
-            );
-
-
-        document
-            .getElementById(
-                "sonucPL"
-            )
-            .textContent =
-            this.formatTRY(
-                serviceCost +
-                interest
-            );
-
-
-        document
-            .getElementById(
-                "sonucOCI"
-            )
-            .textContent =
-            this.formatTRY(
-                0
-            );
-
-
-        document
-            .getElementById(
-                "rollRemeasurement"
-            )
-            .textContent =
-            this.formatTRY(
-                0
-            );
-
-
-        document
-            .getElementById(
-                "rollPayments"
-            )
-            .textContent =
-            this.formatTRY(
-                0
-            );
-
-
-        document
-            .getElementById(
-                "sonucRemeasurement"
-            )
-            .textContent =
-            this.formatTRY(
-                0
-            );
-
-
-        document
-            .getElementById(
-                "sonucPayments"
-            )
-            .textContent =
-            this.formatTRY(
-                0
-            );
-
-
-        document
-            .getElementById(
-                "cfoReadiness"
-            )
-            .textContent =
-            "Hazır";
-
-
-        document
-            .getElementById(
-                "cfoSummary"
-            )
-            .textContent =
-            `Portföyde ${employees.length} personel bulunmaktadır. ` +
-            `Toplam açılış DBO ${this.formatTRY(totalDBO)} seviyesindedir. ` +
-            `Ortalama yaş ${this.formatNumber(avgAge)}, ` +
-            `ortalama hizmet süresi ise ${this.formatNumber(avgService)} yıldır. ` +
-            `Bir sonraki aşamada demografik ve finansal varsayımların ` +
-            `aktüeryal modele bağlanmasıyla P&L ve OCI etkileri daha detaylı analiz edilecektir.`;
-
-    },
-
-
-    aktuerHaritayiCalistir() {
-
-        const employees =
-            TMS19DataEngine
-                ? TMS19DataEngine
-                    .getActuarialDataset()
-                : [];
-
-
-        if (
-            !employees.length
-        ) {
-
-            this.showAlert(
-                "dataAlert",
-                "Önce personel verisi yüklemeli veya demo veri oluşturmalısınız.",
-                "warning"
-            );
-
-            return;
-
-        }
-
-
-        /*
-           Mevcut aktüeryal engine mevcutsa
-           burada devreye alınacak.
-
-           Öncelikle farklı engine isimleri
-           için güvenli kontrol yapıyoruz.
-        */
-
-        try {
-
-            if (
-                window.TMS19ActuarialEngine &&
-                typeof
-                window.TMS19ActuarialEngine
-                    .calculate ===
-                "function"
-            ) {
-
-                const assumptions = {
-
-                    discountRate:
-                        Number(
-                            document
-                                .getElementById(
-                                    "iskontoOrani"
-                                )
-                                .value
-                        ) / 100,
-
-                    salaryIncreaseRate:
-                        Number(
-                            document
-                                .getElementById(
-                                    "maasArtisOrani"
-                                )
-                                .value
-                        ) / 100,
-
-                    inflationRate:
-                        Number(
-                            document
-                                .getElementById(
-                                    "enflasyonOrani"
-                                )
-                                .value
-                        ) / 100,
-
-                    turnoverRate:
-                        Number(
-                            document
-                                .getElementById(
-                                    "devirOrani"
-                                )
-                                .value
-                        ) / 100,
-
-                    retirementAge:
-                        Number(
-                            document
-                                .getElementById(
-                                    "emeklilikYasi"
-                                )
-                                .value
-                        ),
-
-                    benefitRate:
-                        Number(
-                            document
-                                .getElementById(
-                                    "faydaOrani"
-                                )
-                                .value
-                        ) / 100
-
-                };
-
-
-                const result =
-                    window.TMS19ActuarialEngine
-                        .calculate(
-                            employees,
-                            assumptions
-                        );
-
-
-                if (result) {
-
-                    console.log(
-                        "TMS 19 Aktüeryal Sonuç:",
-                        result
-                    );
-
-                }
-
-            }
-
-        }
-        catch (error) {
-
-            console.warn(
-                "Aktüeryal engine sonucu:",
-                error
-            );
-
-        }
-
-
-        this.showAlert(
-            "qualityAlert",
-            "Aktüeryal değerleme çalıştırıldı. Sonuçlar güncellendi.",
-            "success"
-        );
-
-    }
-
-};
-
-
-
-/* =========================================================
-   DOSYA YÜKLEME
-========================================================= */
-
-document
-    .getElementById(
-        "csvFile"
-    )
-    .addEventListener(
-        "change",
-        function(event) {
-
-            const file =
-                event.target.files[0];
-
-
-            if (!file) return;
-
-
-            const reader =
-                new FileReader();
-
-
-            reader.onload =
-                function(e) {
-
-                    TMS19UI.handleCSV(
-                        e.target.result
-                    );
-
-                };
-
-
-            reader.onerror =
-                function() {
-
-                    TMS19UI.showAlert(
-                        "dataAlert",
-                        "Dosya okunamadı.",
-                        "danger"
-                    );
-
-                };
-
-
-            reader.readAsText(
-                file,
-                "UTF-8"
-            );
-
-        }
+    ).format(
+        Number(value) || 0
     );
 
+}
 
 
-/* =========================================================
-   DRAG & DROP
-========================================================= */
+function formatPercent(value) {
 
-const uploadZone =
+    return new Intl.NumberFormat(
+        "tr-TR",
+        {
+            maximumFractionDigits: 1
+        }
+    ).format(
+        Number(value) || 0
+    ) + "%";
+
+}
+
+
+/* ========================================================
+   DEMO VERİ
+======================================================== */
+
+function demoVerisiYukle() {
+
+    tms19Employees = [
+
+        {
+            id: "P001",
+            name: "Ahmet Yılmaz",
+            department: "Finans",
+            age: 54,
+            service: 18,
+            salary: 720000,
+            retirementAge: 60,
+            openingDBO: 2800000
+        },
+
+        {
+            id: "P002",
+            name: "Ayşe Demir",
+            department: "İnsan Kaynakları",
+            age: 47,
+            service: 12,
+            salary: 580000,
+            retirementAge: 60,
+            openingDBO: 1450000
+        },
+
+        {
+            id: "P003",
+            name: "Mehmet Kaya",
+            department: "Operasyon",
+            age: 41,
+            service: 8,
+            salary: 510000,
+            retirementAge: 60,
+            openingDBO: 850000
+        },
+
+        {
+            id: "P004",
+            name: "Zeynep Şahin",
+            department: "Finans",
+            age: 36,
+            service: 6,
+            salary: 470000,
+            retirementAge: 60,
+            openingDBO: 510000
+        },
+
+        {
+            id: "P005",
+            name: "Can Aydın",
+            department: "Satış",
+            age: 32,
+            service: 4,
+            salary: 430000,
+            retirementAge: 60,
+            openingDBO: 330000
+        },
+
+        {
+            id: "P006",
+            name: "Elif Arslan",
+            department: "Pazarlama",
+            age: 29,
+            service: 3,
+            salary: 390000,
+            retirementAge: 60,
+            openingDBO: 250000
+        },
+
+        {
+            id: "P007",
+            name: "Burak Çelik",
+            department: "Operasyon",
+            age: 57,
+            service: 22,
+            salary: 680000,
+            retirementAge: 60,
+            openingDBO: 3100000
+        },
+
+        {
+            id: "P008",
+            name: "Selin Koç",
+            department: "Finans",
+            age: 44,
+            service: 10,
+            salary: 550000,
+            retirementAge: 60,
+            openingDBO: 920000
+        },
+
+        {
+            id: "P009",
+            name: "Murat Özkan",
+            department: "Satış",
+            age: 52,
+            service: 15,
+            salary: 620000,
+            retirementAge: 60,
+            openingDBO: 1750000
+        },
+
+        {
+            id: "P010",
+            name: "Derya Akın",
+            department: "İnsan Kaynakları",
+            age: 39,
+            service: 7,
+            salary: 450000,
+            retirementAge: 60,
+            openingDBO: 480000
+
+        }
+
+    ];
+
+
     document.getElementById(
-        "uploadZone"
-    );
+        "alertList"
+    ).innerHTML = `
+
+        <div class="alert info">
+
+            <div class="alert-icon">
+                ✓
+            </div>
+
+            <div>
+
+                <div class="alert-title">
+                    Demo veri yüklendi
+                </div>
+
+                <div class="alert-message">
+                    ${tms19Employees.length}
+                    personelden oluşan örnek portföy hazır.
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
 
 
-uploadZone.addEventListener(
-    "dragover",
-    function(event) {
+    aktüeryalHesapla();
 
-        event.preventDefault();
-
-        uploadZone.classList.add(
-            "dragover"
-        );
-
-    }
-);
+}
 
 
-uploadZone.addEventListener(
-    "dragleave",
-    function() {
+/* ========================================================
+   VARSAYIMLARI OKU
+======================================================== */
 
-        uploadZone.classList.remove(
-            "dragover"
-        );
+function getAssumptions() {
 
-    }
-);
+    return {
 
+        discountRate:
 
-uploadZone.addEventListener(
-    "drop",
-    function(event) {
-
-        event.preventDefault();
-
-        uploadZone.classList.remove(
-            "dragover"
-        );
+            (
+                Number(
+                    document.getElementById(
+                        "discountRate"
+                    ).value
+                ) || 0
+            ) / 100,
 
 
-        const file =
-            event.dataTransfer.files[0];
+        salaryIncreaseRate:
+
+            (
+                Number(
+                    document.getElementById(
+                        "salaryIncreaseRate"
+                    ).value
+                ) || 0
+            ) / 100,
 
 
-        if (!file) return;
+        turnoverRate:
+
+            (
+                Number(
+                    document.getElementById(
+                        "turnoverRate"
+                    ).value
+                ) || 0
+            ) / 100,
 
 
-        const reader =
-            new FileReader();
+        benefitRate:
+
+            (
+                Number(
+                    document.getElementById(
+                        "benefitRate"
+                    ).value
+                ) || 0
+            ) / 100,
 
 
-        reader.onload =
-            function(e) {
-
-                TMS19UI.handleCSV(
-                    e.target.result
-                );
-
-            };
+        mortalityRate:
+            0.001,
 
 
-        reader.readAsText(
-            file,
-            "UTF-8"
-        );
+        retirementAge:
+            60
 
-    }
-);
+    };
 
+}
 
 
-/* =========================================================
-   TARİH
-========================================================= */
+/* ========================================================
+   AKTÜERYAL HESAPLAMA
+======================================================== */
 
-document
-    .getElementById(
-        "degerlemeTarihi"
-    )
-    .value =
-    new Date()
-        .toISOString()
-        .split("T")[0];
+function aktüeryalHesapla() {
+
+    try {
 
 
+        if (
+            !window.TMS19ActuarialEngine
+        ) {
 
-/* =========================================================
-   BAŞLANGIÇ
-========================================================= */
+            throw new Error(
+                "Aktüeryal motor yüklenemedi."
+            );
 
-console.log(
-    "GK Advisory — TMS 19 Aktüeryal Dashboard hazır."
-);
+        }
 
-</script>
 
-</body>
-</html>
+        if (
+            !window.TMS19PortfolioEngine
+        ) {
+
+            throw new Error(
+                "Portföy motoru yüklenemedi."
+            );
