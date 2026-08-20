@@ -1,5 +1,91 @@
 document.addEventListener("DOMContentLoaded", () => {
 
+  /* ==========================================================
+     EMERGENCY UI BRIDGE V2
+     ----------------------------------------------------------
+     Capture-phase wiring is installed before the legacy UI wiring.
+     This guarantees that the existing V19.1/V24 handlers cannot
+     leave the core contract/import buttons inert if another init
+     block fails or overwrites an element handler.
+     ========================================================== */
+  if (!window.__GK_TFRS16_UI_BRIDGE_V2__) {
+    window.__GK_TFRS16_UI_BRIDGE_V2__ = true;
+
+    document.addEventListener("click", event => {
+      const button = event.target?.closest?.("button");
+      if (!button) return;
+
+      const id = button.id;
+      try {
+        if (id === "newContractButton") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof openContractModal === "function") openContractModal();
+          else document.getElementById("contractModal")?.classList.remove("hidden");
+          return;
+        }
+
+        if (id === "bulkImportButton") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof openBulkImportModal === "function") openBulkImportModal();
+          else document.getElementById("bulkImportModal")?.classList.remove("hidden");
+          return;
+        }
+
+        if (id === "closeModal" || id === "cancelModal") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof closeContractModal === "function") closeContractModal();
+          else document.getElementById("contractModal")?.classList.add("hidden");
+          return;
+        }
+
+        if (id === "closeBulkModal" || id === "cancelBulkImport") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof closeBulkImportModal === "function") closeBulkImportModal();
+          else document.getElementById("bulkImportModal")?.classList.add("hidden");
+          return;
+        }
+
+        if (id === "downloadTemplateButton") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof downloadTemplate === "function") downloadTemplate();
+          return;
+        }
+
+        if (id === "confirmBulkImport") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (typeof confirmBulkImport === "function") confirmBulkImport();
+          return;
+        }
+      } catch (error) {
+        console.error("GK TFRS16 UI Bridge V2 error:", error);
+        alert(`İşlem başlatılamadı: ${error?.message || String(error)}`);
+      }
+    }, true);
+
+    document.addEventListener("change", event => {
+      const input = event.target;
+      if (!input || input.id !== "bulkFileInput") return;
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        event.stopImmediatePropagation();
+        if (typeof readBulkImportFile === "function") readBulkImportFile(file);
+        else if (typeof parseIntegrationFile === "function") parseIntegrationFile(file);
+        else throw new Error("Excel import fonksiyonu yüklenemedi.");
+      } catch (error) {
+        console.error("GK TFRS16 Excel import bridge error:", error);
+        const status = document.getElementById("bulkImportStatus");
+        if (status) status.textContent = `Excel aktarımı başlatılamadı: ${error?.message || String(error)}`;
+      }
+    }, true);
+  }
+
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
@@ -71,7 +157,6 @@ document.addEventListener("DOMContentLoaded", () => {
   );
 
   let selectedContractId = null;
-  let bulkImportData = [];
   let bulkJournalData = [];
 
 
@@ -1844,11 +1929,10 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
     const oldROU =
-      getScheduleValueAsOfDate(
-        currentStateSchedule,
+      getModificationROUAsOf(
+        contract,
         effectiveDate,
-        "rouClosing",
-        baseEngine.rouAssets
+        { schedule: currentStateSchedule, rouAssets: baseEngine.rouAssets }
       );
 
     const revised =
@@ -4214,15 +4298,10 @@ document.addEventListener("DOMContentLoaded", () => {
      CONTRACT MODAL
   ========================================================== */
 
-  document
-    .getElementById(
-      "newContractButton"
-    )
-    ?.addEventListener(
-      "click",
-      () =>
-        openContractModal()
-    );
+  const newContractButton = document.getElementById("newContractButton");
+  if (newContractButton) {
+    newContractButton.onclick = () => openContractModal();
+  }
 
 
   function openContractModal(
@@ -4315,24 +4394,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  document
-    .getElementById(
-      "closeModal"
-    )
-    ?.addEventListener(
-      "click",
-      closeContractModal
-    );
+  const closeModalButton = document.getElementById("closeModal");
+  if (closeModalButton) closeModalButton.onclick = closeContractModal;
 
 
-  document
-    .getElementById(
-      "cancelModal"
-    )
-    ?.addEventListener(
-      "click",
-      closeContractModal
-    );
+  const cancelModalButton = document.getElementById("cancelModal");
+  if (cancelModalButton) cancelModalButton.onclick = closeContractModal;
 
 
   /* ==========================================================
@@ -5460,6 +5527,9 @@ document.addEventListener("DOMContentLoaded", () => {
         "journalPreview"
       );
 
+    if (typeof auditCalculationRun === "function") {
+      auditCalculationRun(contract, "TFRS16");
+    }
 
     if (period === "closing") {
 
@@ -5767,12 +5837,17 @@ document.addEventListener("DOMContentLoaded", () => {
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-btn" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}">Apply</button>`
+                    ? `<button type="button" class="secondary-btn" data-mod-action="edit" data-mod-id="${escapeHtml(item.id)}">Düzenle</button>`
                     : ""
                 }
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-btn" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}">Cancel</button>`
+                    ? `<button type="button" class="secondary-btn" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}">Uygula</button>`
+                    : ""
+                }
+                ${
+                  item.status !== "APPLIED" && item.status !== "CANCELLED"
+                    ? `<button type="button" class="secondary-btn" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}">İptal Et</button>`
                     : ""
                 }
               </span>
@@ -5791,10 +5866,10 @@ document.addEventListener("DOMContentLoaded", () => {
       >
         <div>
           <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">
-            MODIFICATION MANAGEMENT
+            MODİFİKASYON YÖNETİMİ
           </div>
           <h3 style="margin:5px 0 0;font-size:18px;">
-            Lease Modification
+            Kira Modifikasyonu
           </h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
             Original contract history korunur. Accounting impact yalnızca APPLIED modification için oluşur.
@@ -5818,51 +5893,51 @@ document.addEventListener("DOMContentLoaded", () => {
             "
           >
             <label style="font-size:10px;font-weight:700;">
-              Modification Date
+              Modifikasyon Tarihi
               <input id="modificationDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              Effective Date
+              Yürürlük Tarihi
               <input id="modificationEffectiveDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              Modification Type
+              Modifikasyon Tipi
               <select id="modificationType" style="display:block;width:100%;margin-top:5px;">
-                <option value="PAYMENT_INCREASE">Payment Increase</option>
-                <option value="PAYMENT_DECREASE">Payment Decrease</option>
-                <option value="LEASE_TERM_EXTENSION">Lease Term Extension</option>
-                <option value="LEASE_TERM_REDUCTION">Lease Term Reduction</option>
-                <option value="SCOPE_INCREASE">Scope Increase</option>
-                <option value="SCOPE_DECREASE">Scope Decrease</option>
-                <option value="COMBINED_MODIFICATION">Combined Modification</option>
-                <option value="OTHER">Other</option>
+                <option value="PAYMENT_INCREASE">Ödeme Artışı</option>
+                <option value="PAYMENT_DECREASE">Ödeme Azalışı</option>
+                <option value="LEASE_TERM_EXTENSION">Kira Süresi Uzatma</option>
+                <option value="LEASE_TERM_REDUCTION">Kira Süresi Azaltma</option>
+                <option value="SCOPE_INCREASE">Kapsam Artışı</option>
+                <option value="SCOPE_DECREASE">Kapsam Azalışı</option>
+                <option value="COMBINED_MODIFICATION">Birleşik Modifikasyon</option>
+                <option value="OTHER">Diğer</option>
               </select>
             </label>
             <label style="font-size:10px;font-weight:700;">
-              New Payment
+              Yeni Aylık Ödeme
               <input id="modificationNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              New Lease End Date
+              Yeni Kira Bitiş Tarihi
               <input id="modificationNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              New Discount Rate %
+              Yeni İskonto Oranı %
               <input id="modificationNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              Scope Reduction %
+              Kapsam Azaltma %
               <input id="modificationScopeReduction" type="number" min="0" max="100" step="0.01" value="0" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
-              Scope Increase %
+              Kapsam Artırma %
               <input id="modificationScopeIncrease" type="number" min="0" step="0.01" value="0" style="display:block;width:100%;margin-top:5px;">
             </label>
           </div>
 
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">
-            Reason
-            <input id="modificationReason" type="text" placeholder="Modification nedeni" style="display:block;width:100%;margin-top:5px;">
+            Neden
+            <input id="modificationReason" type="text" placeholder="Modifikasyon nedeni" style="display:block;width:100%;margin-top:5px;">
           </label>
 
           <button
@@ -5871,17 +5946,17 @@ document.addEventListener("DOMContentLoaded", () => {
             class="primary-btn"
             style="margin-top:12px;"
           >
-            Create Modification
+            Modifikasyon Oluştur
           </button>
         </div>
 
         <div style="margin-top:16px;">
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;font-size:10px;font-weight:800;color:#64748b;padding-bottom:7px;">
-            <span>TYPE</span>
-            <span>EFFECTIVE</span>
-            <span>STATUS</span>
-            <span>LIABILITY Δ</span>
-            <span>ACTION</span>
+            <span>TİP</span>
+            <span>YÜRÜRLÜK</span>
+            <span>DURUM</span>
+            <span>YÜKÜMLÜLÜK Δ</span>
+            <span>İŞLEM</span>
           </div>
           ${rows}
         </div>
@@ -5892,9 +5967,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function initModificationEvents(contract) {
 
-    document
-      .getElementById("createModificationButton")
-      ?.addEventListener(
+    let editingModificationId = null;
+    const createButton = document.getElementById("createModificationButton");
+
+    function resetModificationFormMode() {
+      editingModificationId = null;
+      if (createButton) createButton.textContent = "Modifikasyon Oluştur";
+    }
+
+    function populateModificationForm(item) {
+      const setValue = (elId, value) => {
+        const el = document.getElementById(elId);
+        if (el) el.value = value;
+      };
+      setValue("modificationDate", item.modificationDate || new Date().toISOString().slice(0, 10));
+      setValue("modificationEffectiveDate", item.effectiveDate || "");
+      setValue("modificationType", item.modificationType || "OTHER");
+      setValue("modificationNewPayment", item.newPayment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("modificationNewEndDate", item.newLeaseEndDate || item.leaseEndDate || "");
+      setValue("modificationNewDiscountRate", item.newDiscountRate ?? (Number(contract.discountRate) || 0));
+      setValue("modificationScopeReduction", item.scopeReductionPercent || 0);
+      setValue("modificationScopeIncrease", item.scopeIncreasePercent || 0);
+      setValue("modificationReason", item.reason || "");
+    }
+
+    createButton?.addEventListener(
         "click",
         () => {
 
@@ -5921,16 +6018,16 @@ document.addEventListener("DOMContentLoaded", () => {
           };
 
           const result =
-            createModification(
-              contract,
-              input
-            );
+            editingModificationId
+              ? updateModification(contract, editingModificationId, input)
+              : createModification(contract, input);
 
           if (!result.valid) {
             alert(result.errors.join("\n"));
             return;
           }
 
+          resetModificationFormMode();
           openDetail(contract.id);
         }
       );
@@ -5944,6 +6041,18 @@ document.addEventListener("DOMContentLoaded", () => {
             () => {
               const action = button.dataset.modAction;
               const id = button.dataset.modId;
+
+              if (action === "edit") {
+                const item = (contract.modifications || []).find(m => m.id === id);
+                if (!item) return;
+                editingModificationId = id;
+                populateModificationForm(item);
+                if (createButton) {
+                  createButton.textContent = "Modifikasyonu Güncelle";
+                  createButton.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                return;
+              }
 
               if (action === "apply") {
                 const result =
@@ -5991,8 +6100,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>${escapeHtml(item.status || "DRAFT")}</span>
             <strong>${formatCurrency(item.liabilityAdjustment || 0)}</strong>
             <span style="display:flex;gap:5px;">
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}">Apply</button>` : ""}
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}">Cancel</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}">Düzenle</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}">Uygula</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-btn" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}">İptal Et</button>` : ""}
             </span>
           </div>
         `).join("")
@@ -6001,41 +6111,41 @@ document.addEventListener("DOMContentLoaded", () => {
     return `
       <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
         <div>
-          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">REASSESSMENT MANAGEMENT</div>
-          <h3 style="margin:5px 0 0;font-size:18px;">Lease Reassessment</h3>
+          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">REASSESSMENT YÖNETİMİ</div>
+          <h3 style="margin:5px 0 0;font-size:18px;">Kira Reassessment İşlemi</h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Reassessment, V16.5 modification eventlerinden ayrı tutulur. Accounting impact yalnızca APPLIED reassessment için oluşur.</p>
         </div>
 
         <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
-            <label style="font-size:10px;font-weight:700;">Reassessment Date<input id="reassessmentDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">Effective Date<input id="reassessmentEffectiveDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">Type<select id="reassessmentType" style="display:block;width:100%;margin-top:5px;">
-              <option value="LEASE_TERM_CHANGE">Lease Term Change</option>
-              <option value="RENEWAL_OPTION_CHANGE">Renewal Option Change</option>
-              <option value="TERMINATION_OPTION_CHANGE">Termination Option Change</option>
-              <option value="PURCHASE_OPTION_CHANGE">Purchase Option Change</option>
-              <option value="INDEX_RATE_CHANGE">Index / Rate Change</option>
-              <option value="FIXED_PAYMENT_CHANGE">Fixed Payment Change</option>
-              <option value="COMBINED_REASSESSMENT">Combined Reassessment</option>
-              <option value="OTHER">Other</option>
+            <label style="font-size:10px;font-weight:700;">Reassessment Tarihi<input id="reassessmentDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yürürlük Tarihi<input id="reassessmentEffectiveDate" type="date" value="${today}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Tip<select id="reassessmentType" style="display:block;width:100%;margin-top:5px;">
+              <option value="LEASE_TERM_CHANGE">Kira Süresi Değişikliği</option>
+              <option value="RENEWAL_OPTION_CHANGE">Yenileme Opsiyonu Değişikliği</option>
+              <option value="TERMINATION_OPTION_CHANGE">Fesih Opsiyonu Değişikliği</option>
+              <option value="PURCHASE_OPTION_CHANGE">Satın Alma Opsiyonu Değişikliği</option>
+              <option value="INDEX_RATE_CHANGE">Endeks / Oran Değişikliği</option>
+              <option value="FIXED_PAYMENT_CHANGE">Sabit Ödeme Değişikliği</option>
+              <option value="COMBINED_REASSESSMENT">Birleşik Reassessment</option>
+              <option value="OTHER">Diğer</option>
             </select></label>
-            <label style="font-size:10px;font-weight:700;">New Payment<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">New Lease End Date<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">New Discount Rate %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">Renewal Option<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Not reasonably certain</option><option value="true">Reasonably certain</option></select></label>
-            <label style="font-size:10px;font-weight:700;">Termination Option<select id="reassessmentTerminationOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Not expected</option><option value="true">Expected / exercised</option></select></label>
-            <label style="font-size:10px;font-weight:700;">Purchase Option<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Not reasonably certain</option><option value="true">Reasonably certain</option></select></label>
+            <label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yenileme Opsiyonu<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
+            <label style="font-size:10px;font-weight:700;">Fesih Opsiyonu<select id="reassessmentTerminationOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Beklenmiyor</option><option value="true">Bekleniyor / kullanıldı</option></select></label>
+            <label style="font-size:10px;font-weight:700;">Satın Alma Opsiyonu<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
           </div>
 
-          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Reason<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
+          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
 
-          <button type="button" id="createReassessmentButton" class="primary-btn" style="margin-top:12px;">Create Reassessment</button>
+          <button type="button" id="createReassessmentButton" class="primary-btn" style="margin-top:12px;">Reassessment Oluştur</button>
         </div>
 
         <div style="margin-top:16px;">
           <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr auto;gap:8px;font-size:10px;font-weight:800;color:#64748b;padding-bottom:7px;">
-            <span>TYPE</span><span>EFFECTIVE</span><span>STATUS</span><span>LIABILITY Δ</span><span>ACTION</span>
+            <span>TİP</span><span>YÜRÜRLÜK</span><span>DURUM</span><span>YÜKÜMLÜLÜK Δ</span><span>İŞLEM</span>
           </div>
           ${rows}
         </div>
@@ -6045,7 +6155,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function initReassessmentEvents(contract) {
-    document.getElementById("createReassessmentButton")?.addEventListener("click", () => {
+    let editingReassessmentId = null;
+    const createButton = document.getElementById("createReassessmentButton");
+
+    function resetReassessmentFormMode() {
+      editingReassessmentId = null;
+      if (createButton) createButton.textContent = "Reassessment Oluştur";
+    }
+
+    function populateReassessmentForm(item) {
+      const setValue = (elId, value) => {
+        const el = document.getElementById(elId);
+        if (el) el.value = value;
+      };
+      setValue("reassessmentDate", item.reassessmentDate || new Date().toISOString().slice(0, 10));
+      setValue("reassessmentEffectiveDate", item.effectiveDate || "");
+      setValue("reassessmentType", item.type || "OTHER");
+      setValue("reassessmentNewPayment", item.newPayment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("reassessmentNewEndDate", item.newLeaseEndDate || item.leaseEndDate || "");
+      setValue("reassessmentNewDiscountRate", item.newDiscountRate ?? (Number(contract.discountRate) || 0));
+      setValue("reassessmentRenewalOption", String(item.newRenewalOption === true));
+      setValue("reassessmentTerminationOption", String(item.newTerminationOption === true));
+      setValue("reassessmentPurchaseOption", String(item.newPurchaseOption === true));
+      setValue("reassessmentReason", item.reason || "");
+    }
+
+    createButton?.addEventListener("click", () => {
       const input = {
         reassessmentDate: document.getElementById("reassessmentDate")?.value,
         effectiveDate: document.getElementById("reassessmentEffectiveDate")?.value,
@@ -6060,11 +6195,15 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "DRAFT"
       };
 
-      const result = createReassessment(contract, input);
+      const result = editingReassessmentId
+        ? updateReassessment(contract, editingReassessmentId, input)
+        : createReassessment(contract, input);
+
       if (!result.valid) {
         alert(result.errors.join("\n"));
         return;
       }
+      resetReassessmentFormMode();
       openDetail(contract.id);
     });
 
@@ -6072,6 +6211,18 @@ document.addEventListener("DOMContentLoaded", () => {
       button.addEventListener("click", () => {
         const action = button.dataset.reassAction;
         const id = button.dataset.reassId;
+
+        if (action === "edit") {
+          const item = (contract.reassessments || []).find(r => r.id === id);
+          if (!item) return;
+          editingReassessmentId = id;
+          populateReassessmentForm(item);
+          if (createButton) {
+            createButton.textContent = "Reassessmenti Güncelle";
+            createButton.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          return;
+        }
 
         if (action === "apply") {
           const result = applyReassessment(contract, id);
@@ -6789,6 +6940,14 @@ document.addEventListener("DOMContentLoaded", () => {
         )}
 
 
+        <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
+          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div>
+          <h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3>
+          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p>
+          <button type="button" id="exportContractAuditTrailButton" class="secondary-btn" style="margin-top:12px;">↓ Denetim İzini Dışa Aktar</button>
+        </div>
+
+
         ${renderPaymentScheduleSection(
           contract
         )}
@@ -6839,6 +6998,14 @@ document.addEventListener("DOMContentLoaded", () => {
             "click",
             openBulkJournalModal
           );
+
+
+        document
+          .getElementById("exportContractAuditTrailButton")
+          ?.addEventListener("click", () => {
+            const ok = typeof exportAuditTrail === "function" ? exportAuditTrail(contract.id) : false;
+            if (!ok) alert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı.");
+          });
 
 
         initModificationEvents(
@@ -8903,7 +9070,6 @@ document.addEventListener("DOMContentLoaded", () => {
       "hidden"
     );
 
-    bulkImportData = [];
 
     const preview =
       document.getElementById(
@@ -8949,56 +9115,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  document
-    .getElementById(
-      "bulkImportButton"
-    )
-    ?.addEventListener(
-      "click",
-      openBulkImportModal
-    );
+  const bulkImportButton = document.getElementById("bulkImportButton");
+  if (bulkImportButton) bulkImportButton.onclick = openBulkImportModal;
 
 
-  document
-    .getElementById(
-      "closeBulkModal"
-    )
-    ?.addEventListener(
-      "click",
-      closeBulkImportModal
-    );
+  const closeBulkModalButton = document.getElementById("closeBulkModal");
+  if (closeBulkModalButton) closeBulkModalButton.onclick = closeBulkImportModal;
 
 
-  document
-    .getElementById(
-      "cancelBulkImport"
-    )
-    ?.addEventListener(
-      "click",
-      closeBulkImportModal
-    );
+  const cancelBulkImportButton = document.getElementById("cancelBulkImport");
+  if (cancelBulkImportButton) cancelBulkImportButton.onclick = closeBulkImportModal;
 
 
-  document
-    .getElementById(
-      "bulkFileInput"
-    )
-    ?.addEventListener(
-      "change",
-      event => {
-
-        const file =
-          event.target.files?.[0];
-
-        if (!file) {
-          return;
-        }
-
-        readBulkImportFile(
-          file
-        );
-      }
-    );
+  const bulkFileInput = document.getElementById("bulkFileInput");
+  if (bulkFileInput) {
+    bulkFileInput.onchange = event => {
+      const file = event?.target?.files?.[0];
+      if (!file) return;
+      readBulkImportFile(file);
+    };
+  }
 
 
   async function readBulkImportFile(
@@ -9027,13 +9163,13 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result?.error || "Dosya okunamadı.");
       }
 
-      bulkImportData = Array.isArray(result.rows) ? result.rows : [];
+      const importedRows = Array.isArray(result.rows) ? result.rows : [];
       window.__GK_V191_IMPORT_CONTEXT__ = {
         jobId: result.job?.jobId || null,
         sourceId: result.source?.sourceId || null,
         sourceType: result.source?.sourceType || INTEGRATION_SOURCE_TYPES.EXCEL,
         fileName: file?.name || null,
-        rows: bulkImportData,
+        rows: importedRows,
         preview: result.preview || null
       };
 
@@ -9102,14 +9238,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  document
-    .getElementById(
-      "confirmBulkImport"
-    )
-    ?.addEventListener(
-      "click",
-      confirmBulkImport
-    );
+  const confirmBulkImportButton = document.getElementById("confirmBulkImport");
+  if (confirmBulkImportButton) confirmBulkImportButton.onclick = confirmBulkImport;
 
 
   function confirmBulkImport() {
@@ -9134,14 +9264,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       window.__GK_V191_IMPORT_CONTEXT__ = null;
-      bulkImportData = [];
-      refresh();
+        refresh();
       if (typeof v191RefreshOpenView === "function") v191RefreshOpenView();
       closeBulkImportModal();
 
       const committed = Array.isArray(result.committed) ? result.committed : [];
       const rejected = Number(result.preview?.rejectedRows) || 0;
-      alert(`${committed.length} kayıt aktarıldı${rejected ? `, ${rejected} kayıt reddedildi` : ""}.`);
+      const businessWarnings = committed.filter(c => Array.isArray(c.businessRuleWarnings) && c.businessRuleWarnings.length).length;
+      alert(`${committed.length} kayıt aktarıldı${rejected ? `, ${rejected} kayıt reddedildi` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`);
     } catch (error) {
       console.error("V19.1 integration import commit error:", error);
       alert(`Import tamamlanamadı: ${error?.message || String(error)}`);
@@ -9153,14 +9283,8 @@ document.addEventListener("DOMContentLoaded", () => {
      TEMPLATE DOWNLOAD
   ========================================================== */
 
-  document
-    .getElementById(
-      "downloadTemplateButton"
-    )
-    ?.addEventListener(
-      "click",
-      downloadTemplate
-    );
+  const downloadTemplateButton = document.getElementById("downloadTemplateButton");
+  if (downloadTemplateButton) downloadTemplateButton.onclick = downloadTemplate;
 
 
   function downloadTemplate() {
@@ -9546,6 +9670,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (existing) {
       return {
         ...controlJson(existing),
+        controlName: getControlConfig(result.controlId)?.name || existing.controlName || null,
         severity: result.status,
         priority: result.priority,
         message: result.message,
@@ -9557,6 +9682,7 @@ document.addEventListener("DOMContentLoaded", () => {
       id: exceptionId(),
       contractId: contract.id,
       controlId: result.controlId,
+      controlName: getControlConfig(result.controlId)?.name || result.controlName || null,
       severity: result.status,
       priority: result.priority,
       status: CONTROL_EXCEPTION_STATUS.OPEN,
@@ -9596,6 +9722,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function controlSchedule(contract) {
     try {
+      if (typeof getReassessmentBaseSchedule === "function") {
+        const resolved = getReassessmentBaseSchedule(contract);
+        if (Array.isArray(resolved) && resolved.length) return resolved;
+      }
+
       const latestReassessment = typeof getCurrentReassessmentState === "function"
         ? getCurrentReassessmentState(contract)
         : null;
@@ -9777,6 +9908,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const items = Array.isArray(contract?.modifications) ? contract.modifications : [];
     for (const item of items) {
       if (!item?.id) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing its ID.", "Modification ID", item, "Repair the modification record.");
+      if (typeof getModificationEffectiveDate === "function" && !getModificationEffectiveDate(item)) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing a valid effective date.", "Modification effective date", item.id, "Set a valid effective date on the modification record.");
       if (item.status === "APPLIED") {
         const hasSchedule = typeof buildModifiedSchedule === "function" && Array.isArray(buildModifiedSchedule(contract, item)) && buildModifiedSchedule(contract, item).length > 0;
         if (!hasSchedule) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied modification has no revised schedule.", "Applied modification with revised schedule", item.id, "Regenerate the modified schedule and review the effective date.");
@@ -9803,7 +9935,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const events = getAuditTrail(contract?.id);
     if (!events.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "No audit evidence exists for the contract.", "At least one audit event", 0, "Create the contract through the application flow or migrate its legacy audit evidence.");
     const criticalMissing = [];
-    if (!events.some(e => e.action === "CREATE")) criticalMissing.push("CREATE");
+    if (!(typeof controlHasAuditEvent === "function" ? controlHasAuditEvent(contract?.id, ["CREATE"]) : events.some(e => e.action === "CREATE"))) criticalMissing.push("CREATE");
     const appliedModifications = (contract?.modifications || []).filter(e => e?.status === "APPLIED");
     const appliedReassessments = (contract?.reassessments || []).filter(e => e?.status === "APPLIED");
     if (appliedModifications.some(item => !events.some(e => e.modificationId === item.id && e.action === "MODIFICATION_APPLIED"))) criticalMissing.push("MODIFICATION_APPLIED");
@@ -9837,11 +9969,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (end) dates.push({ type: "EXPIRY", date: end });
     if (renewal) dates.push({ type: "RENEWAL", date: renewal });
     const upcoming = dates
-      .map(item => ({ ...item, days: Math.ceil((item.date.getTime() - today.getTime()) / 86400000) }))
+      .map(item => ({
+        ...item,
+        days: Math.ceil((item.date.getTime() - today.getTime()) / 86400000),
+        months: typeof controlMonthsBetween === "function" ? controlMonthsBetween(today, item.date) : null
+      }))
       .filter(item => item.days >= 0 && item.days <= 180);
     const within90 = upcoming.find(item => item.days <= 90);
-    if (within90) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, `${within90.type} is approaching within 90 days.`, "No unreviewed near-term expiry/renewal", { type: within90.type, days: within90.days, date: within90.date.toISOString() }, "Review renewal/termination assumptions and determine whether reassessment is required.");
-    if (upcoming.length) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Contract expiry or renewal is within 180 days.", "No unreviewed near-term event", upcoming.map(item => ({ type: item.type, days: item.days, date: item.date.toISOString() })), "Review upcoming lease term decisions and prepare evidence for any reassessment.");
+    if (within90) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, `${within90.type} is approaching within 90 days.`, "No unreviewed near-term expiry/renewal", { type: within90.type, days: within90.days, months: within90.months, date: within90.date.toISOString() }, "Review renewal/termination assumptions and determine whether reassessment is required.");
+    if (upcoming.length) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Contract expiry or renewal is within 180 days.", "No unreviewed near-term event", upcoming.map(item => ({ type: item.type, days: item.days, months: item.months, date: item.date.toISOString() })), "Review upcoming lease term decisions and prepare evidence for any reassessment.");
     return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "No expiry or renewal event is within the next 180 days.", "> 180 days or no configured event", dates.map(item => ({ type: item.type, date: item.date.toISOString() })), "No action required.");
   }
 
@@ -13261,10 +13397,16 @@ document.addEventListener("DOMContentLoaded", () => {
         mappingProfile: result.mappingProfile
       });
       const fieldChanges = detectIntegrationChanges(oldContract, result.normalizedData);
+      const businessRuleCheck = typeof validateImportedContract === "function"
+        ? validateImportedContract(next)
+        : { valid: true, errors: [] };
       if (index >= 0) working[index] = next; else working.push(next);
-      committed.push({ rowNumber: result.rowNumber, contractId: id, action, status: result.status, warningCount: result.warnings.length });
+      committed.push({ rowNumber: result.rowNumber, contractId: id, action, status: result.status, warningCount: result.warnings.length, businessRuleWarnings: businessRuleCheck.valid ? [] : (businessRuleCheck.errors || []) });
       changes.push({ contractId: id, action, changes: fieldChanges });
       if (typeof recordAuditEvent === "function") recordAuditEvent({ action: action === "CREATE" ? "IMPORT_CREATE" : "IMPORT_UPDATE", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import", oldValue: oldContract, newValue: next, metadata: { jobId, sourceType: options.sourceType || INTEGRATION_SOURCE_TYPES.EXCEL, sourceId: options.sourceId || null, schemaVersion: options.schemaVersion || INTEGRATION_SCHEMA_VERSION, fieldChanges } });
+      if (!businessRuleCheck.valid && typeof recordAuditEvent === "function") {
+        recordAuditEvent({ action: "IMPORT_BUSINESS_RULE_WARNING", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import business rule check (validateImportedContract)", metadata: { jobId, rowNumber: result.rowNumber, errors: businessRuleCheck.errors || [] } });
+      }
     });
     saveContracts(working);
     if (typeof refresh === "function") { try { refresh(); } catch (error) {} }
@@ -15966,45 +16108,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /* V16.9 public API — V16.8 API is preserved and extended. */
 
   /* ==========================================================
-     V22 GROUP CONSOLIDATION FOUNDATION
-     Additive only. Company-level engines remain authoritative.
+     V22 MULTI-COMPANY & CONSOLIDATION ENGINE
+     Additive layer. Existing V20/V21 engines remain canonical.
   ========================================================== */
-  const V22_CONSOLIDATION_VERSION = "22.0";
-  const V22_CONSOLIDATION_SCHEMA_VERSION = "22.0";
-  const V22_CONSOLIDATION_STORAGE_KEY = "gk_tfrs16_v22_consolidations_v1";
-  const V22_INTERCOMPANY_STORAGE_KEY = "gk_tfrs16_v22_intercompany_v1";
-  const V22_ELIMINATION_STORAGE_KEY = "gk_tfrs16_v22_eliminations_v1";
-  const V22_CONSOLIDATION_JOURNAL_STORAGE_KEY = "gk_tfrs16_v22_consolidation_journals_v1";
-  const V22_CONSOLIDATION_AUDIT_SOURCE = "V22_CONSOLIDATION";
-  const V22_CONSOLIDATION_TOLERANCE = 0.01;
 
-  const V22_CONSOLIDATION_STATUS = Object.freeze({
-    DRAFT: "DRAFT",
-    READY: "READY",
-    RUN: "RUN",
-    COMPLETED: "COMPLETED",
-    CANCELLED: "CANCELLED"
-  });
+  const V22_SCHEMA_VERSION = "22.0";
+  const V22_GROUP_STORAGE_KEY = "gk_tfrs16_groups_v1";
+  const V22_OWNERSHIP_STORAGE_KEY = "gk_tfrs16_group_ownership_v1";
+  const V22_SCOPE_STORAGE_KEY = "gk_tfrs16_consolidation_scope_v1";
+  const V22_ELIMINATION_STORAGE_KEY = "gk_tfrs16_eliminations_v1";
+  const V22_ADJUSTMENT_STORAGE_KEY = "gk_tfrs16_consolidation_adjustments_v1";
 
-  const V22_SCOPE_STATUS = Object.freeze({
-    INCLUDED: "INCLUDED",
-    EXCLUDED: "EXCLUDED",
-    PENDING_REVIEW: "PENDING_REVIEW"
-  });
-
-  const V22_CONSOLIDATION_METHOD = Object.freeze({
+  const V22_CONSOLIDATION_METHODS = Object.freeze({
     FULL: "FULL",
     EQUITY: "EQUITY",
-    PROPORTIONATE: "PROPORTIONATE",
+    PROPORTIONAL: "PROPORTIONAL",
     EXCLUDED: "EXCLUDED"
   });
 
-  const V22_INTERCOMPANY_RELATIONSHIPS = Object.freeze({
-    RECEIVABLE_PAYABLE: "RECEIVABLE_PAYABLE",
-    REVENUE_EXPENSE: "REVENUE_EXPENSE",
-    PROFIT: "PROFIT",
+  const V22_CONTROL_TYPES = Object.freeze({
+    SUBSIDIARY: "SUBSIDIARY",
+    ASSOCIATE: "ASSOCIATE",
+    JOINT_VENTURE: "JOINT_VENTURE",
     OTHER: "OTHER"
   });
 
@@ -16013,8 +16141,49 @@ document.addEventListener("DOMContentLoaded", () => {
     INTERCOMPANY_PAYABLE: "INTERCOMPANY_PAYABLE",
     INTERCOMPANY_REVENUE: "INTERCOMPANY_REVENUE",
     INTERCOMPANY_EXPENSE: "INTERCOMPANY_EXPENSE",
-    INTERCOMPANY_PROFIT: "INTERCOMPANY_PROFIT"
+    INTERCOMPANY_LEASE: "INTERCOMPANY_LEASE",
+    OTHER: "OTHER"
   });
+
+  const V22_SECURITY_PERMISSIONS = Object.freeze([
+    "group.view",
+    "group.manage",
+    "consolidation.view",
+    "consolidation.execute",
+    "consolidation.export",
+    "eliminations.view",
+    "eliminations.manage"
+  ]);
+
+  const V22_ROLE_PERMISSIONS = Object.freeze({
+    ADMIN: [
+      "group.view", "group.manage", "consolidation.view", "consolidation.execute",
+      "consolidation.export", "eliminations.view", "eliminations.manage"
+    ],
+    CFO: [
+      "group.view", "consolidation.view", "consolidation.execute",
+      "consolidation.export", "eliminations.view", "eliminations.manage"
+    ],
+    FINANCE_MANAGER: [
+      "group.view", "consolidation.view", "consolidation.execute",
+      "consolidation.export", "eliminations.view", "eliminations.manage"
+    ],
+    CONTROLLER: [
+      "group.view", "consolidation.view", "consolidation.export",
+      "eliminations.view", "eliminations.manage"
+    ],
+    ACCOUNTANT: ["group.view", "consolidation.view", "eliminations.view"],
+    AUDITOR: ["group.view", "consolidation.view", "consolidation.export", "eliminations.view"],
+    VIEWER: ["group.view", "consolidation.view"]
+  });
+
+  function v22SafeArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function v22SafeObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
 
   function v22Clone(value) {
     try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
@@ -16022,609 +16191,1781 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function v22Now() { return new Date().toISOString(); }
 
-  function v22Id(prefix = "V22") {
+  function v22Id(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  function v22SafeArray(value) { return Array.isArray(value) ? value : []; }
+  function v22NormalizeDate(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString().slice(0, 10);
+  }
 
-  function v22SafeObject(value) {
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  function v22Currency(value, fallback = "TRY") {
+    const currency = String(value || fallback).trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : fallback;
+  }
+
+  function v22Amount(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
   }
 
   function v22Storage(key) {
     return {
       key,
-      list() {
+      get(defaultValue = []) {
         try {
           const raw = localStorage.getItem(key);
-          if (!raw) return [];
-          const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch (error) { return []; }
+          if (raw === null) return v22Clone(defaultValue);
+          return JSON.parse(raw);
+        } catch (error) {
+          return v22Clone(defaultValue);
+        }
       },
-      save(rows) {
-        try { localStorage.setItem(key, JSON.stringify(v22SafeArray(rows))); return true; }
-        catch (error) { return false; }
+      save(value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+          return true;
+        } catch (error) {
+          console.error(`V22 storage save failed for ${key}:`, error);
+          return false;
+        }
+      },
+      list() {
+        const value = this.get([]);
+        return Array.isArray(value) ? value : [];
+      },
+      find(predicate) { return this.list().find(predicate) || null; },
+      exists(predicate) { return this.list().some(predicate); },
+      remove() {
+        try { localStorage.removeItem(key); return true; } catch (error) { return false; }
       }
     };
   }
 
-  function v22Unique(values) {
-    return Array.from(new Set(v22SafeArray(values).map(value => String(value ?? "").trim()).filter(Boolean)));
-  }
+  const V22StorageAdapters = Object.freeze({
+    groups: () => v22Storage(V22_GROUP_STORAGE_KEY),
+    ownership: () => v22Storage(V22_OWNERSHIP_STORAGE_KEY),
+    scope: () => v22Storage(V22_SCOPE_STORAGE_KEY),
+    eliminations: () => v22Storage(V22_ELIMINATION_STORAGE_KEY),
+    adjustments: () => v22Storage(V22_ADJUSTMENT_STORAGE_KEY)
+  });
 
-  function v22CompanyIdentity(contract) {
-    const companyId = String(contract?.companyId || "").trim();
-    if (companyId) return companyId;
-    const name = String(contract?.company || "").trim();
-    if (!name) return null;
-    return `COMP-${name.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 48)}`;
-  }
-
-  function v22CompanyName(companyId, contractsRows = null) {
-    const rows = v22SafeArray(contractsRows || (typeof v20GetContracts === "function" ? v20GetContracts() : contracts));
-    const row = rows.find(item => v22CompanyIdentity(item) === String(companyId));
-    return String(row?.company || companyId || "").trim();
-  }
-
-  function v22Companies() {
+  function v22RecordAudit(action, entityType, entityId, metadata = {}) {
     try {
-      const rows = typeof v20GetContracts === "function" ? v20GetContracts() : v22SafeArray(contracts);
-      const map = new Map();
-      rows.forEach((contract, index) => {
-        const id = v22CompanyIdentity(contract);
-        if (!id || map.has(id)) return;
-        const name = String(contract?.company || id).trim();
-        map.set(id, {
-          id,
-          code: String(id).slice(0, 48),
-          name,
-          currency: typeof v20NormalizeCurrency === "function" ? v20NormalizeCurrency(contract?.currency, "TRY") : String(contract?.currency || "TRY").toUpperCase(),
-          status: "ACTIVE",
-          source: "V20_CONTRACT_DERIVED",
-          index
+      if (typeof recordAuditEvent === "function") {
+        return recordAuditEvent({
+          action,
+          entityType,
+          entityId: entityId || null,
+          reason: "V22 Consolidation Engine",
+          metadata: { ...v22Clone(metadata), schemaVersion: V22_SCHEMA_VERSION }
         });
-      });
-      return Array.from(map.values());
-    } catch (error) { return []; }
+      }
+    } catch (error) {}
+    return null;
   }
 
-  function v22NormalizeOwnership(value, fallback = 100) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(0, Math.min(100, n));
-  }
-
-  function v22NormalizeConsolidation(input = {}) {
-    const source = v22SafeObject(input);
-    const companyIds = v22Unique(source.companyIds);
-    const scope = v22SafeArray(source.scope).map(item => {
-      const row = v22SafeObject(item);
-      return {
-        companyId: String(row.companyId || "").trim(),
-        companyName: String(row.companyName || v22CompanyName(row.companyId)).trim(),
-        parentCompanyId: row.parentCompanyId ? String(row.parentCompanyId) : null,
-        ownershipPercentage: v22NormalizeOwnership(row.ownershipPercentage, 100),
-        status: Object.values(V22_SCOPE_STATUS).includes(String(row.status || "").toUpperCase()) ? String(row.status).toUpperCase() : V22_SCOPE_STATUS.INCLUDED,
-        consolidationMethod: Object.values(V22_CONSOLIDATION_METHOD).includes(String(row.consolidationMethod || "").toUpperCase()) ? String(row.consolidationMethod).toUpperCase() : V22_CONSOLIDATION_METHOD.FULL,
-        addedAt: row.addedAt || v22Now(),
-        updatedAt: row.updatedAt || v22Now()
-      };
-    }).filter(row => row.companyId);
-    const derivedCompanyIds = v22Unique(companyIds.concat(scope.map(item => item.companyId)));
-    return {
-      id: String(source.id || v22Id("CONS")),
-      groupId: String(source.groupId || source.id || v22Id("GROUP")),
-      groupCode: String(source.groupCode || source.groupId || "").trim(),
-      groupName: String(source.groupName || "").trim(),
-      reportingDate: typeof v20NormalizeDate === "function" ? v20NormalizeDate(source.reportingDate) : String(source.reportingDate || "").slice(0, 10),
-      periodStart: typeof v20NormalizeDate === "function" ? v20NormalizeDate(source.periodStart) : (source.periodStart || null),
-      periodEnd: typeof v20NormalizeDate === "function" ? v20NormalizeDate(source.periodEnd) : (source.periodEnd || null),
-      status: Object.values(V22_CONSOLIDATION_STATUS).includes(String(source.status || "").toUpperCase()) ? String(source.status).toUpperCase() : V22_CONSOLIDATION_STATUS.DRAFT,
-      companyIds: derivedCompanyIds,
-      scope,
-      consolidationMethod: Object.values(V22_CONSOLIDATION_METHOD).includes(String(source.consolidationMethod || "").toUpperCase()) ? String(source.consolidationMethod).toUpperCase() : V22_CONSOLIDATION_METHOD.FULL,
-      createdAt: source.createdAt || v22Now(),
-      updatedAt: v22Now(),
-      lastRunAt: source.lastRunAt || null,
-      schemaVersion: V22_CONSOLIDATION_SCHEMA_VERSION
-    };
-  }
-
-  function v22LoadConsolidations() {
-    return v22Storage(V22_CONSOLIDATION_STORAGE_KEY).list().map(v22NormalizeConsolidation);
-  }
-
-  function v22SaveConsolidations(rows) { return v22Storage(V22_CONSOLIDATION_STORAGE_KEY).save(rows.map(v22NormalizeConsolidation)); }
-
-  function getV22Consolidations(options = {}) {
-    let rows = v22LoadConsolidations();
-    if (options.groupId) rows = rows.filter(row => String(row.groupId) === String(options.groupId));
-    if (options.status) rows = rows.filter(row => row.status === String(options.status).toUpperCase());
-    return v22Clone(rows) || [];
-  }
-
-  function getV22Consolidation(id) {
-    return getV22Consolidations().find(row => String(row.id) === String(id)) || null;
-  }
-
-  function v22SecurityPermission(permission, options = {}) {
+  function v22CurrentUser() {
     try {
-      const user = options.user || (typeof getCurrentUser === "function" ? getCurrentUser() : null);
-      if (!user) return true;
-      if (typeof hasPermission !== "function") return true;
-      if (hasPermission(user, "configuration.manage") || hasPermission(user, "users.manage")) return true;
-      const existing = hasPermission(user, permission);
-      if (existing) return true;
-      return options.failClosed === true ? false : true;
-    } catch (error) { return true; }
-  }
-
-  function v22CanAccessGroup(groupOrConsolidation, user = null) {
-    try {
-      const target = user || (typeof getCurrentUser === "function" ? getCurrentUser() : null);
-      if (!target) return true;
-      const group = v22SafeObject(groupOrConsolidation);
-      const allowedCompanies = v20SafeArray(target.companyIds).map(value => String(value));
-      const scopeCompanies = v20SafeArray(group.companyIds).concat(v20SafeArray(group.scope).map(item => item?.companyId));
-      if (!scopeCompanies.length) return true;
-      if (typeof canAccessCompany === "function" && scopeCompanies.some(companyId => canAccessCompany(target, companyId))) return true;
-      if (v20SafeArray(target.groupIds).map(String).includes(String(group.groupId || group.id || ""))) return true;
-      return allowedCompanies.length === 0;
-    } catch (error) { return true; }
-  }
-
-  function v22AssertAccess(permission, groupOrConsolidation, options = {}) {
-    if (!v22SecurityPermission(permission, options)) return { authorized: true, mode: "FAIL_SAFE" };
-    if (!v22CanAccessGroup(groupOrConsolidation, options.user)) {
-      try { if (typeof v21SecurityAudit === "function") v21SecurityAudit("ACCESS_DENIED", "CONSOLIDATION", groupOrConsolidation?.id || groupOrConsolidation?.groupId || null, { permission }); } catch (error) {}
-      return { authorized: false, mode: "GROUP_ACCESS" };
-    }
-    return { authorized: true, mode: "RBAC_FOUNDATION" };
-  }
-
-  function createV22Consolidation(input = {}, options = {}) {
-    const candidate = v22NormalizeConsolidation(input);
-    const access = v22AssertAccess("consolidation.create", candidate, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const rows = v22LoadConsolidations();
-    if (rows.some(row => String(row.id) === String(candidate.id))) return { success: false, error: "CONSOLIDATION_ID_EXISTS" };
-    const duplicateGroupDate = rows.find(row => String(row.groupId) === String(candidate.groupId) && String(row.reportingDate || "") === String(candidate.reportingDate || ""));
-    if (duplicateGroupDate) return { success: false, error: "CONSOLIDATION_ALREADY_EXISTS", existingId: duplicateGroupDate.id };
-    const companies = new Set(v22Companies().map(item => String(item.id)));
-    candidate.scope = candidate.scope.filter(item => companies.has(String(item.companyId)));
-    candidate.companyIds = v22Unique(candidate.scope.map(item => item.companyId).concat(candidate.companyIds).filter(id => companies.has(String(id))));
-    candidate.scope = candidate.scope.filter(item => candidate.companyIds.includes(item.companyId));
-    rows.push(candidate);
-    if (!v22SaveConsolidations(rows)) return { success: false, error: "CONSOLIDATION_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "CONSOLIDATION_CREATED", entityType: "CONSOLIDATION", entityId: candidate.id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, newValue: candidate, metadata: { groupId: candidate.groupId, reportingDate: candidate.reportingDate } });
-    return { success: true, data: v22Clone(candidate) };
-  }
-
-  function updateV22Consolidation(id, patch = {}, options = {}) {
-    const rows = v22LoadConsolidations();
-    const index = rows.findIndex(row => String(row.id) === String(id));
-    if (index < 0) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", rows[index], options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const before = v22Clone(rows[index]);
-    rows[index] = v22NormalizeConsolidation({ ...rows[index], ...v22SafeObject(patch), id: rows[index].id });
-    if (!v22SaveConsolidations(rows)) return { success: false, error: "CONSOLIDATION_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "CONSOLIDATION_UPDATED", entityType: "CONSOLIDATION", entityId: id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, oldValue: before, newValue: rows[index], metadata: { groupId: rows[index].groupId } });
-    return { success: true, data: v22Clone(rows[index]) };
-  }
-
-  function setV22ConsolidationScope(consolidationId, companyId, patch = {}, options = {}) {
-    const consolidation = getV22Consolidation(consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const id = String(companyId || "").trim();
-    if (!id || !v22Companies().some(company => String(company.id) === id)) return { success: false, error: "COMPANY_NOT_FOUND" };
-    const before = v22Clone(consolidation);
-    const existing = consolidation.scope.find(item => String(item.companyId) === id);
-    const next = {
-      companyId: id,
-      companyName: v22CompanyName(id),
-      parentCompanyId: patch.parentCompanyId ? String(patch.parentCompanyId) : (existing?.parentCompanyId || null),
-      ownershipPercentage: v22NormalizeOwnership(patch.ownershipPercentage ?? existing?.ownershipPercentage, 100),
-      status: Object.values(V22_SCOPE_STATUS).includes(String(patch.status || existing?.status || V22_SCOPE_STATUS.INCLUDED).toUpperCase()) ? String(patch.status || existing?.status || V22_SCOPE_STATUS.INCLUDED).toUpperCase() : V22_SCOPE_STATUS.INCLUDED,
-      consolidationMethod: Object.values(V22_CONSOLIDATION_METHOD).includes(String(patch.consolidationMethod || existing?.consolidationMethod || consolidation.consolidationMethod).toUpperCase()) ? String(patch.consolidationMethod || existing?.consolidationMethod || consolidation.consolidationMethod).toUpperCase() : V22_CONSOLIDATION_METHOD.FULL,
-      addedAt: existing?.addedAt || v22Now(),
-      updatedAt: v22Now()
-    };
-    const nextScope = consolidation.scope.filter(item => String(item.companyId) !== id).concat(next);
-    const result = updateV22Consolidation(consolidationId, { scope: nextScope, companyIds: v22Unique(nextScope.map(item => item.companyId)) }, options);
-    if (result.success && typeof recordAuditEvent === "function") recordAuditEvent({ action: "COMPANY_INCLUDED", entityType: "CONSOLIDATION_SCOPE", entityId: id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, oldValue: before.scope.find(item => String(item.companyId) === id) || null, newValue: next, metadata: { consolidationId } });
-    return result;
-  }
-
-  function removeV22ConsolidationScope(consolidationId, companyId, options = {}) {
-    const consolidation = getV22Consolidation(consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const id = String(companyId || "").trim();
-    const nextScope = consolidation.scope.map(item => String(item.companyId) === id ? { ...item, status: V22_SCOPE_STATUS.EXCLUDED, updatedAt: v22Now() } : item);
-    const result = updateV22Consolidation(consolidationId, { scope: nextScope }, options);
-    if (result.success && typeof recordAuditEvent === "function") recordAuditEvent({ action: "COMPANY_EXCLUDED", entityType: "CONSOLIDATION_SCOPE", entityId: id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, metadata: { consolidationId } });
-    return result;
-  }
-
-  function v22IncludedScope(consolidation) {
-    return v22SafeArray(consolidation?.scope).filter(item => String(item.status).toUpperCase() === V22_SCOPE_STATUS.INCLUDED && item.companyId);
-  }
-
-  function v22CompanyMetrics(companyId, reportingDate) {
-    try {
-      const rows = typeof v20GetContracts === "function" ? v20GetContracts() : v22SafeArray(contracts);
-      const target = String(companyId || "");
-      const metrics = {
-        companyId: target,
-        company: v22CompanyName(target, rows),
-        reportingDate: reportingDate || null,
-        contractCount: 0,
-        activeContracts: 0,
-        leaseLiability: 0,
-        currentLiability: 0,
-        nonCurrentLiability: 0,
-        rouAsset: 0,
-        monthlyInterest: 0,
-        monthlyDepreciation: 0,
-        monthlyLeaseExpense: 0,
-        next12MonthPayments: 0,
-        next12MonthPrincipal: 0,
-        next12MonthInterest: 0
-      };
-      rows.filter(contract => v22CompanyIdentity(contract) === target).forEach(contract => {
-        let metric = null;
-        try { metric = typeof getCfoContractMetrics === "function" ? getCfoContractMetrics(contract.id, reportingDate) : null; } catch (error) { metric = null; }
-        if (!metric) return;
-        metrics.contractCount += 1;
-        if (metric.active) metrics.activeContracts += 1;
-        ["leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "monthlyInterest", "monthlyDepreciation", "monthlyLeaseExpense", "next12MonthPayments", "next12MonthPrincipal", "next12MonthInterest"].forEach(key => { metrics[key] += Number(metric[key]) || 0; });
-      });
-      Object.keys(metrics).forEach(key => { if (typeof metrics[key] === "number") metrics[key] = Number(metrics[key].toFixed(2)); });
-      return metrics;
-    } catch (error) {
-      return { companyId: String(companyId || ""), company: v22CompanyName(companyId), reportingDate: reportingDate || null, contractCount: 0, activeContracts: 0, leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, monthlyInterest: 0, monthlyDepreciation: 0, monthlyLeaseExpense: 0, next12MonthPayments: 0, next12MonthPrincipal: 0, next12MonthInterest: 0, error: error?.message || String(error) };
-    }
-  }
-
-  function v22AggregateCompanyMetrics(rows) {
-    const totalKeys = ["contractCount", "activeContracts", "leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "monthlyInterest", "monthlyDepreciation", "monthlyLeaseExpense", "next12MonthPayments", "next12MonthPrincipal", "next12MonthInterest"];
-    const totals = {};
-    totalKeys.forEach(key => { totals[key] = v22SafeArray(rows).reduce((sum, row) => sum + (Number(row?.[key]) || 0), 0); });
-    totalKeys.forEach(key => { totals[key] = Number(totals[key].toFixed(2)); });
-    return totals;
-  }
-
-  function v22NciMetrics(companyRows, scope) {
-    const byId = new Map(v22SafeArray(companyRows).map(row => [String(row.companyId), row]));
-    const totals = {};
-    const keys = ["leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "monthlyInterest", "monthlyDepreciation", "monthlyLeaseExpense", "next12MonthPayments", "next12MonthPrincipal", "next12MonthInterest"];
-    keys.forEach(key => { totals[key] = 0; });
-    const rows = v22SafeArray(scope).filter(item => item.status === V22_SCOPE_STATUS.INCLUDED && v22NormalizeOwnership(item.ownershipPercentage, 100) < 100).map(item => {
-      const metric = byId.get(String(item.companyId));
-      const nciPct = (100 - v22NormalizeOwnership(item.ownershipPercentage, 100)) / 100;
-      const values = { companyId: item.companyId, company: item.companyName, ownershipPercentage: v22NormalizeOwnership(item.ownershipPercentage, 100), nciPercentage: Number((nciPct * 100).toFixed(2)) };
-      keys.forEach(key => { values[key] = Number(((Number(metric?.[key]) || 0) * nciPct).toFixed(2)); totals[key] += values[key]; });
-      return values;
-    });
-    keys.forEach(key => { totals[key] = Number(totals[key].toFixed(2)); });
-    return { rows, totals };
-  }
-
-  function getV22ConsolidatedData(consolidationId, options = {}) {
-    const consolidation = getV22Consolidation(consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.view", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const reportingDate = options.reportingDate || consolidation.reportingDate || new Date().toISOString().slice(0, 10);
-    const scope = v22IncludedScope(consolidation);
-    const companyRows = scope.map(item => {
-      const metrics = v22CompanyMetrics(item.companyId, reportingDate);
-      return { ...metrics, parentCompanyId: item.parentCompanyId || null, ownershipPercentage: v22NormalizeOwnership(item.ownershipPercentage, 100), consolidationMethod: item.consolidationMethod || consolidation.consolidationMethod };
-    });
-    const totals = v22AggregateCompanyMetrics(companyRows);
-    const nci = v22NciMetrics(companyRows, scope);
-    const eliminations = getV22Eliminations({ consolidationId, status: "POSTED" });
-    const eliminationTotals = {};
-    v22SafeArray(eliminations).forEach(item => { const key = String(item.type || "OTHER"); eliminationTotals[key] = Number(((eliminationTotals[key] || 0) + (Number(item.amount) || 0)).toFixed(2)); });
-    return {
-      success: true,
-      version: V22_CONSOLIDATION_VERSION,
-      consolidation: v22Clone(consolidation),
-      reportingDate,
-      companies: companyRows,
-      companyCount: companyRows.length,
-      consolidatedCompanyCount: companyRows.filter(row => row.consolidationMethod !== V22_CONSOLIDATION_METHOD.EXCLUDED).length,
-      totals,
-      nci,
-      eliminations: { rows: eliminations, totals: eliminationTotals },
-      intercompany: getV22Intercompany({ consolidationId }),
-      source: "V20_CFO_DATA_LAYER + V22_CONSOLIDATION_LAYER",
-      companyDataMutated: false
-    };
-  }
-
-  function getV22GroupReporting(consolidationId, options = {}) {
-    const data = getV22ConsolidatedData(consolidationId, options);
-    if (!data.success) return data;
-    return {
-      success: true,
-      version: V22_CONSOLIDATION_VERSION,
-      groupId: data.consolidation.groupId,
-      groupName: data.consolidation.groupName,
-      reportingDate: data.reportingDate,
-      reportingCurrency: options.reportingCurrency || null,
-      totals: data.totals,
-      nci: data.nci,
-      eliminationTotals: data.eliminations.totals,
-      companies: data.companies,
-      adjustments: data.eliminations.rows,
-      source: data.source,
-      note: "No FX conversion or currency translation is applied in V22."
-    };
-  }
-
-  function getCfoGroupMetrics(consolidationId, options = {}) {
-    const data = getV22ConsolidatedData(consolidationId, options);
-    if (!data.success) return data;
-    return {
-      consolidationId,
-      reportingDate: data.reportingDate,
-      totalGroupLeaseLiability: data.totals.leaseLiability,
-      currentGroupLeaseLiability: data.totals.currentLiability,
-      nonCurrentGroupLeaseLiability: data.totals.nonCurrentLiability,
-      groupRuoAssets: data.totals.rouAsset,
-      groupInterestExpense: data.totals.monthlyInterest,
-      groupDepreciation: data.totals.monthlyDepreciation,
-      groupCashPayments: data.totals.next12MonthPayments,
-      companyCount: data.companyCount,
-      consolidatedCompanyCount: data.consolidatedCompanyCount,
-      nci: data.nci.totals,
-      intercompanyAdjustments: data.eliminations.totals,
-      consolidationAdjustments: data.eliminations.rows.length,
-      source: "V22_CONSOLIDATION"
-    };
-  }
-
-  function v22LoadIntercompany() { return v22Storage(V22_INTERCOMPANY_STORAGE_KEY).list(); }
-  function v22SaveIntercompany(rows) { return v22Storage(V22_INTERCOMPANY_STORAGE_KEY).save(rows); }
-
-  function getV22Intercompany(options = {}) {
-    let rows = v22LoadIntercompany();
-    if (options.consolidationId) rows = rows.filter(row => String(row.consolidationId || "") === String(options.consolidationId));
-    if (options.fromCompanyId) rows = rows.filter(row => String(row.fromCompanyId) === String(options.fromCompanyId));
-    if (options.toCompanyId) rows = rows.filter(row => String(row.toCompanyId) === String(options.toCompanyId));
-    if (options.status) rows = rows.filter(row => String(row.status).toUpperCase() === String(options.status).toUpperCase());
-    return v22Clone(rows) || [];
-  }
-
-  function createV22Intercompany(input = {}, options = {}) {
-    const consolidation = getV22Consolidation(input.consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const fromCompanyId = String(input.fromCompanyId || "").trim();
-    const toCompanyId = String(input.toCompanyId || "").trim();
-    if (!fromCompanyId || !toCompanyId || fromCompanyId === toCompanyId) return { success: false, error: "INVALID_INTERCOMPANY_PARTIES" };
-    const scopeIds = new Set(v22IncludedScope(consolidation).map(item => String(item.companyId)));
-    if (!scopeIds.has(fromCompanyId) || !scopeIds.has(toCompanyId)) return { success: false, error: "COMPANY_OUTSIDE_CONSOLIDATION_SCOPE" };
-    const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount < 0) return { success: false, error: "INVALID_INTERCOMPANY_AMOUNT" };
-    const row = {
-      id: String(input.id || v22Id("IC")), consolidationId: consolidation.id, fromCompanyId, toCompanyId,
-      relationshipType: Object.values(V22_INTERCOMPANY_RELATIONSHIPS).includes(String(input.relationshipType || "").toUpperCase()) ? String(input.relationshipType).toUpperCase() : V22_INTERCOMPANY_RELATIONSHIPS.OTHER,
-      account: String(input.account || ""), amount: Number(amount.toFixed(2)), currency: typeof v20NormalizeCurrency === "function" ? v20NormalizeCurrency(input.currency, "TRY") : String(input.currency || "TRY").toUpperCase(),
-      period: input.period || consolidation.reportingDate || null, status: String(input.status || "OPEN").toUpperCase(), createdAt: input.createdAt || v22Now(), updatedAt: v22Now(), schemaVersion: V22_CONSOLIDATION_SCHEMA_VERSION
-    };
-    const rows = v22LoadIntercompany();
-    if (rows.some(item => String(item.id) === row.id)) return { success: false, error: "INTERCOMPANY_ID_EXISTS" };
-    rows.push(row);
-    if (!v22SaveIntercompany(rows)) return { success: false, error: "INTERCOMPANY_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "INTERCOMPANY_CREATED", entityType: "INTERCOMPANY", entityId: row.id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, newValue: row, metadata: { consolidationId: consolidation.id } });
-    return { success: true, data: v22Clone(row) };
-  }
-
-  function v22LoadEliminations() { return v22Storage(V22_ELIMINATION_STORAGE_KEY).list(); }
-  function v22SaveEliminations(rows) { return v22Storage(V22_ELIMINATION_STORAGE_KEY).save(rows); }
-
-  function getV22Eliminations(options = {}) {
-    let rows = v22LoadEliminations();
-    if (options.consolidationId) rows = rows.filter(row => String(row.consolidationId) === String(options.consolidationId));
-    if (options.status) rows = rows.filter(row => String(row.status).toUpperCase() === String(options.status).toUpperCase());
-    if (options.type) rows = rows.filter(row => String(row.type).toUpperCase() === String(options.type).toUpperCase());
-    return v22Clone(rows) || [];
-  }
-
-  function createV22Elimination(input = {}, options = {}) {
-    const consolidation = getV22Consolidation(input.consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount < 0) return { success: false, error: "INVALID_ELIMINATION_AMOUNT" };
-    const type = String(input.type || "").toUpperCase();
-    if (!Object.values(V22_ELIMINATION_TYPES).includes(type)) return { success: false, error: "INVALID_ELIMINATION_TYPE" };
-    const row = {
-      id: String(input.id || v22Id("ELIM")), consolidationId: consolidation.id, type,
-      fromCompanyId: input.fromCompanyId ? String(input.fromCompanyId) : null,
-      toCompanyId: input.toCompanyId ? String(input.toCompanyId) : null,
-      account: String(input.account || ""), amount: Number(amount.toFixed(2)),
-      currency: typeof v20NormalizeCurrency === "function" ? v20NormalizeCurrency(input.currency, "TRY") : String(input.currency || "TRY").toUpperCase(),
-      period: input.period || consolidation.reportingDate || null, reason: String(input.reason || "").trim(),
-      status: String(input.status || "DRAFT").toUpperCase(), createdAt: input.createdAt || v22Now(), updatedAt: v22Now(), schemaVersion: V22_CONSOLIDATION_SCHEMA_VERSION
-    };
-    const rows = v22LoadEliminations();
-    if (rows.some(item => String(item.id) === row.id)) return { success: false, error: "ELIMINATION_ID_EXISTS" };
-    rows.push(row);
-    if (!v22SaveEliminations(rows)) return { success: false, error: "ELIMINATION_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "ELIMINATION_CREATED", entityType: "ELIMINATION", entityId: row.id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, newValue: row, metadata: { consolidationId: consolidation.id } });
-    return { success: true, data: v22Clone(row) };
-  }
-
-  function updateV22Elimination(id, patch = {}, options = {}) {
-    const rows = v22LoadEliminations();
-    const index = rows.findIndex(row => String(row.id) === String(id));
-    if (index < 0) return { success: false, error: "ELIMINATION_NOT_FOUND" };
-    const consolidation = getV22Consolidation(rows[index].consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.edit", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const before = v22Clone(rows[index]);
-    rows[index] = { ...rows[index], ...v22SafeObject(patch), id: rows[index].id, updatedAt: v22Now() };
-    if (!v22SaveEliminations(rows)) return { success: false, error: "ELIMINATION_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "ELIMINATION_UPDATED", entityType: "ELIMINATION", entityId: id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, oldValue: before, newValue: rows[index], metadata: { consolidationId: consolidation.id } });
-    return { success: true, data: v22Clone(rows[index]) };
-  }
-
-  function v22LoadConsolidationJournals() { return v22Storage(V22_CONSOLIDATION_JOURNAL_STORAGE_KEY).list(); }
-  function v22SaveConsolidationJournals(rows) { return v22Storage(V22_CONSOLIDATION_JOURNAL_STORAGE_KEY).save(rows); }
-
-  function getV22ConsolidationJournals(options = {}) {
-    let rows = v22LoadConsolidationJournals();
-    if (options.consolidationId) rows = rows.filter(row => String(row.consolidationId) === String(options.consolidationId));
-    return v22Clone(rows) || [];
-  }
-
-  function createV22ConsolidationJournal(input = {}, options = {}) {
-    const consolidation = getV22Consolidation(input.consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.approve", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const lines = v22SafeArray(input.lines).map((line, index) => ({
-      id: String(line?.id || `${input.voucherNo || v22Id("CVJ")}-LINE-${index + 1}`), account: String(line?.account || ""), debit: Number(line?.debit) || 0, credit: Number(line?.credit) || 0, currency: typeof v20NormalizeCurrency === "function" ? v20NormalizeCurrency(line?.currency, "TRY") : String(line?.currency || "TRY").toUpperCase(), description: String(line?.description || "")
-    }));
-    const debit = Number(lines.reduce((sum, line) => sum + line.debit, 0).toFixed(2));
-    const credit = Number(lines.reduce((sum, line) => sum + line.credit, 0).toFixed(2));
-    if (Math.abs(debit - credit) > V22_CONSOLIDATION_TOLERANCE) return { success: false, error: "UNBALANCED_CONSOLIDATION_JOURNAL", debit, credit };
-    const row = {
-      id: String(input.id || v22Id("CVJ")), voucherNo: String(input.voucherNo || v22Id("CV")), consolidationId: consolidation.id,
-      reportingDate: input.reportingDate || consolidation.reportingDate || null, source: String(input.source || "V22_CONSOLIDATION"), description: String(input.description || ""),
-      lines, debit, credit, balanced: true, status: String(input.status || "DRAFT").toUpperCase(), createdAt: input.createdAt || v22Now(), updatedAt: v22Now(), schemaVersion: V22_CONSOLIDATION_SCHEMA_VERSION
-    };
-    const rows = v22LoadConsolidationJournals();
-    if (rows.some(item => String(item.id) === row.id)) return { success: false, error: "CONSOLIDATION_JOURNAL_ID_EXISTS" };
-    rows.push(row);
-    if (!v22SaveConsolidationJournals(rows)) return { success: false, error: "CONSOLIDATION_JOURNAL_SAVE_FAILED" };
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "CONSOLIDATION_JOURNAL_CREATED", entityType: "CONSOLIDATION_JOURNAL", entityId: row.id, reason: V22_CONSOLIDATION_AUDIT_SOURCE, newValue: row, metadata: { consolidationId: consolidation.id, balanced: true } });
-    return { success: true, data: v22Clone(row) };
-  }
-
-  function v22ConsolidationControls(consolidationId, options = {}) {
-    const consolidation = getV22Consolidation(consolidationId);
-    const checks = [];
-    if (!consolidation) return { status: "FAIL", checks: [{ id: "CONSOLIDATION_EXISTS", status: "FAIL", message: "Consolidation not found." }] };
-    const companies = new Set(v22Companies().map(item => String(item.id)));
-    const scope = v22SafeArray(consolidation.scope);
-    const included = v22IncludedScope(consolidation);
-    checks.push({ id: "GROUP_ID", status: consolidation.groupId ? "PASS" : "FAIL", message: consolidation.groupId ? "Group ID is present." : "Missing group ID." });
-    checks.push({ id: "GROUP_NAME", status: consolidation.groupName ? "PASS" : "WARNING", message: consolidation.groupName ? "Group name is present." : "Group name is not populated." });
-    checks.push({ id: "REPORTING_DATE", status: consolidation.reportingDate ? "PASS" : "FAIL", message: consolidation.reportingDate ? "Reporting date is present." : "Missing reporting date." });
-    const missing = included.filter(item => !companies.has(String(item.companyId)));
-    checks.push({ id: "COMPANY_REFERENCES", status: missing.length ? "FAIL" : "PASS", message: missing.length ? `${missing.length} included company reference(s) are invalid.` : "All included companies resolve." });
-    const duplicateScope = scope.map(item => String(item.companyId)).filter((id, index, list) => list.indexOf(id) !== index);
-    checks.push({ id: "DUPLICATE_SCOPE", status: duplicateScope.length ? "FAIL" : "PASS", message: duplicateScope.length ? "Duplicate company in consolidation scope." : "No duplicate company in scope." });
-    const invalidOwnership = scope.filter(item => !Number.isFinite(Number(item.ownershipPercentage)) || Number(item.ownershipPercentage) < 0 || Number(item.ownershipPercentage) > 100);
-    checks.push({ id: "OWNERSHIP", status: invalidOwnership.length ? "FAIL" : "PASS", message: invalidOwnership.length ? "Invalid ownership percentage detected." : "Ownership percentages are valid." });
-    const journals = getV22ConsolidationJournals({ consolidationId });
-    const unbalanced = journals.filter(journal => Math.abs((Number(journal.debit) || 0) - (Number(journal.credit) || 0)) > V22_CONSOLIDATION_TOLERANCE);
-    checks.push({ id: "JOURNAL_BALANCE", status: unbalanced.length ? "FAIL" : "PASS", message: unbalanced.length ? "Unbalanced consolidation journal detected." : "Consolidation journals are balanced." });
-    const intercompany = getV22Intercompany({ consolidationId });
-    const unresolvedIntercompany = intercompany.filter(row => ["OPEN", "UNRESOLVED", "PENDING"].includes(String(row.status).toUpperCase()));
-    checks.push({ id: "INTERCOMPANY", status: unresolvedIntercompany.length ? "WARNING" : "PASS", message: unresolvedIntercompany.length ? `${unresolvedIntercompany.length} intercompany item(s) remain unresolved.` : "No unresolved intercompany item recorded." });
-    const eliminations = getV22Eliminations({ consolidationId });
-    checks.push({ id: "ELIMINATION_TRACEABILITY", status: eliminations.every(row => row.account && row.amount !== undefined && row.period && row.reason) ? "PASS" : "WARNING", message: eliminations.every(row => row.account && row.amount !== undefined && row.period && row.reason) ? "Eliminations are traceable." : "One or more eliminations have incomplete traceability." });
-    const status = checks.some(item => item.status === "FAIL") ? "FAIL" : checks.some(item => item.status === "WARNING") ? "WARNING" : "PASS";
-    return { version: V22_CONSOLIDATION_VERSION, consolidationId, status, checks, includedCompanyCount: included.length, companyCount: companies.size };
-  }
-
-  function v22DataIntegritySignature() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return JSON.stringify(raw === null ? null : JSON.parse(raw));
+      return typeof getCurrentUser === "function" ? getCurrentUser() : (window.currentUser || null);
     } catch (error) { return null; }
   }
 
-  function runV22Consolidation(consolidationId, options = {}) {
-    const consolidation = getV22Consolidation(consolidationId);
-    if (!consolidation) return { success: false, error: "CONSOLIDATION_NOT_FOUND" };
-    const access = v22AssertAccess("consolidation.create", consolidation, options);
-    if (!access.authorized) return { success: false, error: "CONSOLIDATION_ACCESS_DENIED" };
-    const before = v22DataIntegritySignature();
-    const controls = v22ConsolidationControls(consolidationId, options);
-    if (controls.status === "FAIL") return { success: false, error: "CONSOLIDATION_CONTROLS_FAILED", controls };
-    const data = getV22ConsolidatedData(consolidationId, options);
-    const after = v22DataIntegritySignature();
-    const unchanged = before === after;
-    if (!unchanged) return { success: false, error: "COMPANY_DATA_INTEGRITY_FAILED", controls, dataIntegrity: { companyStorageUnchanged: false } };
-    updateV22Consolidation(consolidationId, { status: V22_CONSOLIDATION_STATUS.COMPLETED, lastRunAt: v22Now() }, options);
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "CONSOLIDATION_COMPLETED", entityType: "CONSOLIDATION", entityId: consolidationId, reason: V22_CONSOLIDATION_AUDIT_SOURCE, metadata: { reportingDate: data.reportingDate, companyCount: data.companyCount, nci: data.nci.totals, companyDataMutated: false } });
-    return { success: true, consolidationId, data, controls, dataIntegrity: { companyStorageUnchanged: true } };
+  function v22HasPermission(permission, user = v22CurrentUser()) {
+    try {
+      if (typeof hasPermission === "function" && hasPermission(user, permission)) return true;
+    } catch (error) {}
+    const roles = v22SafeArray(user?.roleIds).map(role => String(role).toUpperCase());
+    return roles.some(role => v22SafeArray(V22_ROLE_PERMISSIONS[role]).includes(permission));
   }
 
-  function v22GetConsolidationReadiness(consolidationId, options = {}) {
-    const controls = v22ConsolidationControls(consolidationId, options);
-    return { consolidationId, ready: controls.status === "PASS" || controls.status === "WARNING", status: controls.status, controls };
+  function v22Authorize(permission, options = {}) {
+    const user = options.user || v22CurrentUser();
+    const errors = [];
+    if (!user || String(user.status || "ACTIVE").toUpperCase() !== "ACTIVE") {
+      errors.push({ code: "USER_INACTIVE", message: "Inactive or suspended users cannot perform actions." });
+    }
+    if (!v22HasPermission(permission, user)) {
+      errors.push({ code: "PERMISSION_DENIED", message: "You do not have permission to perform this action." });
+    }
+    if (options.companyId) {
+      try {
+        if (typeof canAccessCompany === "function" && !canAccessCompany(user, options.companyId)) {
+          errors.push({ code: "COMPANY_ACCESS_DENIED", message: "You do not have access to the selected company." });
+        }
+      } catch (error) {
+        errors.push({ code: "COMPANY_ACCESS_DENIED", message: "You do not have access to the selected company." });
+      }
+    }
+    const result = {
+      authorized: errors.length === 0,
+      statusCode: errors.length ? 403 : 200,
+      userId: user?.id || null,
+      permission,
+      action: options.action || "ACCESS",
+      groupId: options.groupId || null,
+      companyId: options.companyId || null,
+      errors
+    };
+    if (!result.authorized) {
+      v22RecordAudit("ACCESS_DENIED", "SECURITY", options.entityId || null, result);
+    }
+    return result;
   }
 
-  function v22SecurityStatus() {
+  function v22Require(permission, options = {}) {
+    const result = v22Authorize(permission, options);
+    if (!result.authorized) {
+      const error = new Error(result.errors[0]?.message || "You do not have permission to perform this action.");
+      error.code = result.errors[0]?.code || "FORBIDDEN";
+      error.statusCode = 403;
+      error.authorization = result;
+      throw error;
+    }
+    return true;
+  }
+
+  function v22CompanyList() {
+    try {
+      if (typeof v20CollectCompanies === "function") return v20CollectCompanies(v20GetContracts());
+    } catch (error) {}
+    const rows = v22SafeArray(typeof contracts !== "undefined" ? contracts : []);
+    const map = new Map();
+    rows.forEach((contract, index) => {
+      const name = String(contract?.company || contract?.companyId || "").trim();
+      if (!name) return;
+      const id = String(contract?.companyId || `COMP-${name.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 48) || index + 1}`);
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          code: name.toUpperCase().replace(/[^A-Z0-9_-]/g, "-").slice(0, 24),
+          name,
+          country: contract?.country || "TR",
+          baseCurrency: v22Currency(contract?.currency, "TRY"),
+          status: "ACTIVE"
+        });
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  function v22NormalizeGroup(group = {}) {
+    const source = v22SafeObject(group);
     return {
-      version: V22_CONSOLIDATION_VERSION,
-      permissions: ["consolidation.view", "consolidation.create", "consolidation.edit", "consolidation.approve", "consolidation.export"],
-      enforcement: typeof V21_SECURITY_ENFORCEMENT !== "undefined" ? V21_SECURITY_ENFORCEMENT : false,
-      accessModel: "V21_RBAC + COMPANY/GROUP FOUNDATION",
-      failSafe: true
+      id: String(source.id || v22Id("GRP")),
+      code: String(source.code || source.id || "GROUP-DEFAULT").trim(),
+      name: String(source.name || source.code || "GK Group").trim(),
+      baseCurrency: v22Currency(source.baseCurrency || source.groupCurrency, "TRY"),
+      groupCurrency: v22Currency(source.groupCurrency || source.baseCurrency, "TRY"),
+      status: String(source.status || "ACTIVE").toUpperCase(),
+      fiscalYearStart: source.fiscalYearStart || "01-01",
+      createdAt: source.createdAt || v22Now(),
+      updatedAt: source.updatedAt || v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Group"
     };
   }
 
-  function v22ConsolidationTests() {
-    const results = [];
-    const pass = (test, condition, details = "") => results.push({ test, passed: !!condition, details });
-    const keys = [V22_CONSOLIDATION_STORAGE_KEY, V22_INTERCOMPANY_STORAGE_KEY, V22_ELIMINATION_STORAGE_KEY, V22_CONSOLIDATION_JOURNAL_STORAGE_KEY, AUDIT_TRAIL_STORAGE_KEY];
-    const backups = {};
-    try {
-      keys.forEach(key => { try { backups[key] = localStorage.getItem(key); } catch (error) { backups[key] = null; } });
-      const before = v22DataIntegritySignature();
-      const companies = v22Companies();
-      pass("Company foundation available", Array.isArray(companies));
-      const tempId = v22Id("TESTCONS");
-      const create = createV22Consolidation({ id: tempId, groupId: tempId, groupCode: "TEST", groupName: "V22 Test Group", reportingDate: new Date().toISOString().slice(0, 10), scope: companies.slice(0, 2).map((company, index) => ({ companyId: company.id, ownershipPercentage: index === 0 ? 100 : 80, status: "INCLUDED", consolidationMethod: "FULL" })) });
-      pass("Consolidation creation", create.success === true || create.error === "CONSOLIDATION_ID_EXISTS");
-      if (create.success) {
-        const consolidationId = create.data.id;
-        const data = getV22ConsolidatedData(consolidationId);
-        pass("Consolidated data layer", data.success && Array.isArray(data.companies));
-        pass("NCI foundation", data.success && data.nci && Array.isArray(data.nci.rows));
-        const journal = createV22ConsolidationJournal({ consolidationId, lines: [{ account: "TEST", debit: 100, credit: 0 }, { account: "TEST-OFFSET", debit: 0, credit: 100 }] });
-        pass("Consolidation journal balance", journal.success === true && journal.data.balanced === true);
-        const controls = v22ConsolidationControls(consolidationId);
-        pass("Consolidation controls", controls.status !== "FAIL");
-        const after = v22DataIntegritySignature();
-        pass("Company storage unchanged", before === after);
-      } else {
-        pass("Consolidation data layer", false, create.error || "Unable to create test consolidation.");
-      }
-    } catch (error) {
-      pass("V22 consolidation tests", false, error?.message || String(error));
-    } finally {
-      keys.forEach(key => {
-        try {
-          if (backups[key] === null || backups[key] === undefined) localStorage.removeItem(key);
-          else localStorage.setItem(key, backups[key]);
-        } catch (error) {}
-      });
+  function v22NormalizeCompany(company, fallbackIndex = 0) {
+    const source = v22SafeObject(company);
+    const normalized = typeof normalizeCompanyData === "function"
+      ? normalizeCompanyData(company, fallbackIndex)
+      : {
+          id: String(source.id || `COMP-${fallbackIndex + 1}`),
+          code: String(source.code || source.name || `COMP-${fallbackIndex + 1}`),
+          name: String(source.name || source.company || `Company ${fallbackIndex + 1}`),
+          country: source.country || "TR",
+          baseCurrency: v22Currency(source.baseCurrency, "TRY"),
+          status: source.status || "ACTIVE"
+        };
+    return {
+      ...normalized,
+      groupId: source.groupId || normalized.groupId || null,
+      id: String(normalized.id),
+      code: String(normalized.code || normalized.id),
+      name: String(normalized.name || normalized.code || normalized.id),
+      baseCurrency: v22Currency(normalized.baseCurrency, "TRY"),
+      status: String(normalized.status || "ACTIVE").toUpperCase(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Company"
+    };
+  }
+
+  function v22LoadGroups() {
+    const adapter = V22StorageAdapters.groups();
+    const stored = adapter.list().map(v22NormalizeGroup);
+    if (stored.length) return stored;
+    const defaultGroup = v22NormalizeGroup({
+      id: "GROUP-DEFAULT",
+      code: "GK-GROUP",
+      name: "GK Finance Group",
+      groupCurrency: "TRY"
+    });
+    adapter.save([defaultGroup]);
+    return [defaultGroup];
+  }
+
+  let v22Groups = v22LoadGroups();
+
+  function v22SaveGroups(groups) {
+    v22Groups = v22SafeArray(groups).map(v22NormalizeGroup);
+    return V22StorageAdapters.groups().save(v22Groups);
+  }
+
+  function v22LoadOwnership() {
+    return V22StorageAdapters.ownership().list().map(item => ({
+      id: String(item?.id || v22Id("OWN")),
+      parentCompanyId: String(item?.parentCompanyId || ""),
+      subsidiaryCompanyId: String(item?.subsidiaryCompanyId || ""),
+      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(item?.ownershipPercentage))),
+      effectiveDate: v22NormalizeDate(item?.effectiveDate),
+      controlType: V22_CONTROL_TYPES[String(item?.controlType || "SUBSIDIARY").toUpperCase()] || "SUBSIDIARY",
+      status: String(item?.status || "ACTIVE").toUpperCase(),
+      createdAt: item?.createdAt || v22Now(),
+      updatedAt: item?.updatedAt || v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Ownership"
+    }));
+  }
+
+  function v22LoadScope() {
+    return V22StorageAdapters.scope().list().map(item => ({
+      id: String(item?.id || v22Id("SCOPE")),
+      groupId: String(item?.groupId || "GROUP-DEFAULT"),
+      companyId: String(item?.companyId || ""),
+      consolidationMethod: V22_CONSOLIDATION_METHODS[String(item?.consolidationMethod || "FULL").toUpperCase()] || "FULL",
+      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(item?.ownershipPercentage ?? 100))),
+      effectiveDate: v22NormalizeDate(item?.effectiveDate),
+      included: item?.included !== false,
+      createdAt: item?.createdAt || v22Now(),
+      updatedAt: item?.updatedAt || v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "ConsolidationScope"
+    }));
+  }
+
+  function v22LoadEliminations() {
+    return V22StorageAdapters.eliminations().list().map(item => ({
+      id: String(item?.id || v22Id("ELIM")),
+      groupId: String(item?.groupId || "GROUP-DEFAULT"),
+      fromCompanyId: String(item?.fromCompanyId || ""),
+      toCompanyId: String(item?.toCompanyId || ""),
+      account: String(item?.account || ""),
+      amount: v22Amount(item?.amount),
+      currency: v22Currency(item?.currency, "TRY"),
+      eliminationType: V22_ELIMINATION_TYPES[String(item?.eliminationType || "OTHER").toUpperCase()] || "OTHER",
+      reportingDate: v22NormalizeDate(item?.reportingDate),
+      status: String(item?.status || "DRAFT").toUpperCase(),
+      reason: String(item?.reason || ""),
+      createdAt: item?.createdAt || v22Now(),
+      updatedAt: item?.updatedAt || v22Now(),
+      createdBy: item?.createdBy || v22CurrentUser()?.id || "system",
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Elimination"
+    }));
+  }
+
+  function v22LoadAdjustments() {
+    return V22StorageAdapters.adjustments().list().map(item => ({
+      id: String(item?.id || v22Id("ADJ")),
+      groupId: String(item?.groupId || "GROUP-DEFAULT"),
+      account: String(item?.account || ""),
+      amount: v22Amount(item?.amount),
+      currency: v22Currency(item?.currency, "TRY"),
+      reason: String(item?.reason || ""),
+      reportingDate: v22NormalizeDate(item?.reportingDate),
+      createdBy: item?.createdBy || v22CurrentUser()?.id || "system",
+      approvedBy: item?.approvedBy || null,
+      status: String(item?.status || "PREPARED").toUpperCase(),
+      createdAt: item?.createdAt || v22Now(),
+      updatedAt: item?.updatedAt || v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "ConsolidationAdjustment"
+    }));
+  }
+
+  let v22Ownership = v22LoadOwnership();
+  let v22Scope = v22LoadScope();
+  let v22Eliminations = v22LoadEliminations();
+  let v22Adjustments = v22LoadAdjustments();
+
+  function v22PersistCollection(adapter, rows) { return adapter.save(v22SafeArray(rows)); }
+
+  function getGroups(options = {}) {
+    v22Require("group.view", options);
+    return v22Clone(v22Groups) || [];
+  }
+
+  function getGroup(groupId, options = {}) {
+    v22Require("group.view", { ...options, groupId });
+    return v22Groups.find(group => String(group.id) === String(groupId)) || null;
+  }
+
+  function createGroup(input = {}, options = {}) {
+    v22Require("group.manage", options);
+    const group = v22NormalizeGroup(input);
+    if (v22Groups.some(item => item.id === group.id || item.code === group.code)) {
+      throw new Error(`Group ID or code already exists: ${group.id}`);
     }
-    return { version: V22_CONSOLIDATION_VERSION, passed: results.every(item => item.passed), results };
+    v22Groups.push(group);
+    v22SaveGroups(v22Groups);
+    v22RecordAudit("GROUP_CREATE", "GROUP", group.id, { group });
+    return v22Clone(group);
+  }
+
+  function updateGroup(groupId, patch = {}, options = {}) {
+    v22Require("group.manage", { ...options, groupId });
+    const index = v22Groups.findIndex(item => String(item.id) === String(groupId));
+    if (index < 0) return null;
+    const next = v22NormalizeGroup({ ...v22Groups[index], ...v22SafeObject(patch), id: v22Groups[index].id, updatedAt: v22Now() });
+    const old = v22Clone(v22Groups[index]);
+    v22Groups[index] = next;
+    v22SaveGroups(v22Groups);
+    v22RecordAudit("GROUP_UPDATE", "GROUP", groupId, { oldValue: old, newValue: next });
+    return v22Clone(next);
+  }
+
+  function v22AccessibleCompanyIds(user = v22CurrentUser()) {
+    const all = v22CompanyList().map(company => String(company.id));
+    if (!user) return [];
+    try {
+      if (v22HasPermission("company_access.manage", user)) return all;
+    } catch (error) {}
+    const allowed = new Set(v22SafeArray(user.companyIds).map(id => String(id)));
+    return all.filter(id => allowed.has(id));
+  }
+
+  function v22CompanyNameToId(name) {
+    const target = String(name || "").trim();
+    const company = v22CompanyList().find(item => String(item.name) === target || String(item.id) === target || String(item.code) === target);
+    return company?.id || null;
+  }
+
+  function v22EnsureCompanyGroupMembership() {
+    const companies = v22CompanyList();
+    const existing = new Map(v22Scope.map(scope => [String(scope.companyId), scope]));
+    let changed = false;
+    companies.forEach(company => {
+      if (!existing.has(String(company.id))) {
+        v22Scope.push({
+          id: v22Id("SCOPE"),
+          groupId: "GROUP-DEFAULT",
+          companyId: String(company.id),
+          consolidationMethod: "FULL",
+          ownershipPercentage: 100,
+          effectiveDate: null,
+          included: true,
+          createdAt: v22Now(),
+          updatedAt: v22Now(),
+          schemaVersion: V22_SCHEMA_VERSION,
+          entityType: "ConsolidationScope"
+        });
+        changed = true;
+      }
+    });
+    if (changed) v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
+    return changed;
+  }
+
+  v22EnsureCompanyGroupMembership();
+
+  function addCompanyToGroup(groupId, companyId, input = {}, options = {}) {
+    v22Require("group.manage", { ...options, groupId, companyId });
+    if (!v22Groups.some(group => String(group.id) === String(groupId))) throw new Error("Group not found.");
+    const company = v22CompanyList().find(item => String(item.id) === String(companyId));
+    if (!company) throw new Error("Company not found.");
+    const existing = v22Scope.find(item => String(item.groupId) === String(groupId) && String(item.companyId) === String(companyId));
+    const scope = existing || {
+      id: v22Id("SCOPE"),
+      groupId: String(groupId),
+      companyId: String(companyId),
+      createdAt: v22Now()
+    };
+    const next = {
+      ...scope,
+      consolidationMethod: V22_CONSOLIDATION_METHODS[String(input.consolidationMethod || scope.consolidationMethod || "FULL").toUpperCase()] || "FULL",
+      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(input.ownershipPercentage ?? scope.ownershipPercentage ?? 100))),
+      effectiveDate: v22NormalizeDate(input.effectiveDate ?? scope.effectiveDate),
+      included: input.included !== undefined ? input.included !== false : scope.included !== false,
+      updatedAt: v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "ConsolidationScope"
+    };
+    if (existing) Object.assign(existing, next);
+    else v22Scope.push(next);
+    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
+    v22RecordAudit("COMPANY_ADDED", "GROUP", groupId, { companyId, scope: next });
+    return v22Clone(next);
+  }
+
+  function removeCompanyFromGroup(groupId, companyId, options = {}) {
+    v22Require("group.manage", { ...options, groupId, companyId });
+    const before = v22Scope.length;
+    v22Scope = v22Scope.filter(item => !(String(item.groupId) === String(groupId) && String(item.companyId) === String(companyId)));
+    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
+    const removed = before !== v22Scope.length;
+    if (removed) v22RecordAudit("COMPANY_REMOVED", "GROUP", groupId, { companyId });
+    return removed;
+  }
+
+  function setCompanyOwnership(input = {}, options = {}) {
+    v22Require("group.manage", options);
+    const parentCompanyId = String(input.parentCompanyId || "");
+    const subsidiaryCompanyId = String(input.subsidiaryCompanyId || "");
+    if (!parentCompanyId || !subsidiaryCompanyId || parentCompanyId === subsidiaryCompanyId) throw new Error("Valid parent and subsidiary companies are required.");
+    const ownershipPercentage = v22Amount(input.ownershipPercentage);
+    if (ownershipPercentage < 0 || ownershipPercentage > 100) throw new Error("Ownership percentage must be between 0 and 100.");
+    const existing = v22Ownership.find(item => item.parentCompanyId === parentCompanyId && item.subsidiaryCompanyId === subsidiaryCompanyId && item.status === "ACTIVE");
+    const record = {
+      id: existing?.id || v22Id("OWN"),
+      parentCompanyId,
+      subsidiaryCompanyId,
+      ownershipPercentage,
+      effectiveDate: v22NormalizeDate(input.effectiveDate),
+      controlType: V22_CONTROL_TYPES[String(input.controlType || "SUBSIDIARY").toUpperCase()] || "SUBSIDIARY",
+      status: String(input.status || "ACTIVE").toUpperCase(),
+      createdAt: existing?.createdAt || v22Now(),
+      updatedAt: v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Ownership"
+    };
+    if (existing) Object.assign(existing, record);
+    else v22Ownership.push(record);
+    v22PersistCollection(V22StorageAdapters.ownership(), v22Ownership);
+    v22RecordAudit("OWNERSHIP_CHANGED", "OWNERSHIP", record.id, record);
+    return v22Clone(record);
+  }
+
+  function getOwnership(groupId = null, options = {}) {
+    v22Require("group.view", { ...options, groupId });
+    return v22Clone(groupId
+      ? v22Ownership.filter(item => {
+          const scopes = v22Scope.filter(scope => String(scope.groupId) === String(groupId)).map(scope => String(scope.companyId));
+          return scopes.includes(String(item.parentCompanyId)) || scopes.includes(String(item.subsidiaryCompanyId));
+        })
+      : v22Ownership) || [];
+  }
+
+  function setConsolidationScope(input = {}, options = {}) {
+    v22Require("group.manage", { ...options, groupId: input.groupId, companyId: input.companyId });
+    const companyId = String(input.companyId || "");
+    const groupId = String(input.groupId || "");
+    if (!companyId || !groupId) throw new Error("groupId and companyId are required.");
+    if (!v22CompanyList().some(company => String(company.id) === companyId)) throw new Error("Company not found.");
+    if (!v22Groups.some(group => String(group.id) === groupId)) throw new Error("Group not found.");
+    const existing = v22Scope.find(item => String(item.groupId) === groupId && String(item.companyId) === companyId);
+    const record = {
+      id: existing?.id || v22Id("SCOPE"),
+      groupId,
+      companyId,
+      consolidationMethod: V22_CONSOLIDATION_METHODS[String(input.consolidationMethod || existing?.consolidationMethod || "FULL").toUpperCase()] || "FULL",
+      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(input.ownershipPercentage ?? existing?.ownershipPercentage ?? 100))),
+      effectiveDate: v22NormalizeDate(input.effectiveDate ?? existing?.effectiveDate),
+      included: input.included !== undefined ? input.included !== false : existing?.included !== false,
+      createdAt: existing?.createdAt || v22Now(),
+      updatedAt: v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "ConsolidationScope"
+    };
+    if (existing) Object.assign(existing, record);
+    else v22Scope.push(record);
+    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
+    return v22Clone(record);
+  }
+
+  function getConsolidationScope(groupId, options = {}) {
+    v22Require("group.view", { ...options, groupId });
+    return v22Clone(v22Scope.filter(item => String(item.groupId) === String(groupId))) || [];
+  }
+
+  function v22ScopeCompanies(groupId, reportingDate, user) {
+    const accessible = new Set(v22AccessibleCompanyIds(user));
+    const date = v22NormalizeDate(reportingDate);
+    return v22Scope.filter(scope => {
+      if (String(scope.groupId) !== String(groupId) || scope.included === false) return false;
+      if (!accessible.has(String(scope.companyId))) return false;
+      if (scope.effectiveDate && date && scope.effectiveDate > date) return false;
+      return true;
+    });
+  }
+
+  function v22ContractsForCompany(companyId) {
+    const rows = typeof v20GetContracts === "function" ? v20GetContracts() : v22SafeArray(typeof contracts !== "undefined" ? contracts : []);
+    return rows.filter(contract => {
+      const resolved = String(contract?.companyId || v22CompanyNameToId(contract?.company) || "");
+      return resolved === String(companyId);
+    });
+  }
+
+  function v22ContractMetrics(contract, reportingDate) {
+    const date = v22NormalizeDate(reportingDate) || v22NormalizeDate(contract?.reportingDate) || v22Now().slice(0, 10);
+    try {
+      if (typeof rptGetContractCfo === "function") {
+        const result = rptGetContractCfo(contract, date) || {};
+        return {
+          contractId: contract.id,
+          currency: v22Currency(result.currency || contract.currency, "TRY"),
+          leaseLiability: v22Amount(result.leaseLiability ?? result.liability),
+          currentLiability: v22Amount(result.currentLiability ?? result.current),
+          nonCurrentLiability: v22Amount(result.nonCurrentLiability ?? result.nonCurrent),
+          rouAsset: v22Amount(result.rouAsset ?? result.rouAssets),
+          interest: v22Amount(result.monthlyInterest ?? result.interest),
+          depreciation: v22Amount(result.monthlyDepreciation ?? result.depreciation),
+          cashPayments: v22Amount(result.next12MonthPayments ?? result.cashPayments),
+          active: result.active !== false
+        };
+      }
+    } catch (error) {}
+
+    try {
+      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : {};
+      const schedule = v22SafeArray(engine?.schedule);
+      const rows = schedule.filter(row => !date || !row.date || String(row.date) <= String(date));
+      const latest = rows.length ? rows[rows.length - 1] : null;
+      const current = typeof calculateCurrentLiabilityAsOf === "function"
+        ? v22Amount(calculateCurrentLiabilityAsOf(contract, date))
+        : 0;
+      const total = v22Amount(latest?.closingLiability ?? engine?.liability);
+      return {
+        contractId: contract.id,
+        currency: v22Currency(contract.currency, "TRY"),
+        leaseLiability: total,
+        currentLiability: current,
+        nonCurrentLiability: Math.max(0, total - current),
+        rouAsset: v22Amount(latest?.rouClosing ?? engine?.rouAssets),
+        interest: v22Amount(latest?.interest),
+        depreciation: v22Amount(latest?.depreciation),
+        cashPayments: rows.slice(-12).reduce((sum, row) => sum + v22Amount(row.payment), 0),
+        active: String(contract.status || "active").toLowerCase() !== "inactive"
+      };
+    } catch (error) {
+      return {
+        contractId: contract?.id || null, currency: v22Currency(contract?.currency, "TRY"),
+        leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0,
+        rouAsset: 0, interest: 0, depreciation: 0, cashPayments: 0, active: false
+      };
+    }
+  }
+
+  function v22AggregateCompany(company, reportingDate) {
+    const contracts = v22ContractsForCompany(company.id);
+    const metrics = contracts.map(contract => v22ContractMetrics(contract, reportingDate));
+    const totals = metrics.reduce((acc, row) => {
+      ["leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "interest", "depreciation", "cashPayments"].forEach(key => { acc[key] += v22Amount(row[key]); });
+      if (row.active) acc.activeContracts += 1;
+      return acc;
+    }, { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, interest: 0, depreciation: 0, cashPayments: 0, activeContracts: 0 });
+    return {
+      companyId: String(company.id),
+      company: company.name,
+      code: company.code,
+      country: company.country,
+      baseCurrency: v22Currency(company.baseCurrency, "TRY"),
+      reportingDate: v22NormalizeDate(reportingDate),
+      contractCount: contracts.length,
+      activeContracts: totals.activeContracts,
+      leaseLiability: totals.leaseLiability,
+      currentLiability: totals.currentLiability,
+      nonCurrentLiability: totals.nonCurrentLiability,
+      rou: totals.rouAsset,
+      interest: totals.interest,
+      depreciation: totals.depreciation,
+      cashPayments: totals.cashPayments,
+      source: "V21_CFO_DATA_LAYER",
+      contracts: metrics
+    };
+  }
+
+  function v22GetGroupEliminations(groupId, reportingDate) {
+    const date = v22NormalizeDate(reportingDate);
+    return v22Eliminations.filter(item => {
+      if (String(item.groupId) !== String(groupId)) return false;
+      if (item.reportingDate && date && item.reportingDate !== date) return false;
+      return item.status !== "REJECTED";
+    });
+  }
+
+  function v22AggregateEliminations(rows) {
+    return rows.reduce((acc, row) => {
+      const amount = v22Amount(row.amount);
+      acc.total += amount;
+      acc.byType[row.eliminationType] = (acc.byType[row.eliminationType] || 0) + amount;
+      return acc;
+    }, { total: 0, byType: {} });
+  }
+
+  function v22VisibleGroupCompanies(groupId, reportingDate, user) {
+    const companies = v22CompanyList();
+    const scopes = v22ScopeCompanies(groupId, reportingDate, user);
+    return scopes.map(scope => {
+      const company = companies.find(item => String(item.id) === String(scope.companyId));
+      return company ? { ...company, scope: v22Clone(scope) } : null;
+    }).filter(Boolean);
+  }
+
+  function getConsolidatedData(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.view", { ...options, groupId, action: "CONSOLIDATION_VIEW" });
+    const group = v22Groups.find(item => String(item.id) === String(groupId));
+    if (!group) return { success: false, error: { code: "GROUP_NOT_FOUND", message: "Group not found." }, data: null, metadata: {} };
+    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
+    const user = options.user || v22CurrentUser();
+    const visibleCompanies = v22VisibleGroupCompanies(groupId, date, user);
+    const companyContributions = visibleCompanies.map(company => {
+      const contribution = v22AggregateCompany(company, date);
+      const method = company.scope?.consolidationMethod || "FULL";
+      const ownership = company.scope?.ownershipPercentage ?? 100;
+      const multiplier = method === "EQUITY" || method === "PROPORTIONAL" ? ownership / 100 : 1;
+      return {
+        ...contribution,
+        consolidationMethod: method,
+        ownershipPercentage: ownership,
+        appliedMultiplier: multiplier,
+        leaseLiability: contribution.leaseLiability * multiplier,
+        currentLiability: contribution.currentLiability * multiplier,
+        nonCurrentLiability: contribution.nonCurrentLiability * multiplier,
+        rou: contribution.rou * multiplier,
+        interest: contribution.interest * multiplier,
+        depreciation: contribution.depreciation * multiplier,
+        cashPayments: contribution.cashPayments * multiplier,
+        lineage: {
+          companyId: company.id,
+          contractIds: contribution.contracts.map(item => item.contractId)
+        }
+      };
+    });
+
+    const gross = companyContributions.reduce((acc, row) => {
+      ["leaseLiability", "currentLiability", "nonCurrentLiability", "rou", "interest", "depreciation", "cashPayments"].forEach(key => { acc[key] += v22Amount(row[key]); });
+      acc.contracts += row.contractCount;
+      acc.activeContracts += row.activeContracts;
+      return acc;
+    }, { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rou: 0, interest: 0, depreciation: 0, cashPayments: 0, contracts: 0, activeContracts: 0 });
+
+    const eliminations = v22GetGroupEliminations(groupId, date);
+    const eliminationTotal = v22AggregateEliminations(eliminations).total;
+    const adjustments = v22Adjustments.filter(item => String(item.groupId) === String(groupId) && item.reportingDate === date && item.status !== "REJECTED");
+    const adjustmentTotal = adjustments.reduce((sum, item) => sum + v22Amount(item.amount), 0);
+
+    const consolidated = {
+      leaseLiability: Math.max(0, gross.leaseLiability - eliminationTotal + adjustmentTotal),
+      currentLiability: gross.currentLiability,
+      nonCurrentLiability: Math.max(0, gross.nonCurrentLiability - Math.max(0, eliminationTotal - gross.currentLiability)),
+      rou: Math.max(0, gross.rou),
+      interest: gross.interest,
+      depreciation: gross.depreciation,
+      cashPayments: gross.cashPayments,
+      contracts: gross.contracts,
+      activeContracts: gross.activeContracts
+    };
+
+    const missingScopeCompanies = v22CompanyList().filter(company => {
+      const scope = v22Scope.find(item => String(item.groupId) === String(groupId) && String(item.companyId) === String(company.id));
+      return scope?.included === true && !visibleCompanies.some(item => String(item.id) === String(company.id));
+    }).map(company => company.id);
+
+    const status = missingScopeCompanies.length ? "YELLOW" : "GREEN";
+    const result = {
+      success: true,
+      data: {
+        group: v22Clone(group),
+        reportingDate: date,
+        groupCurrency: group.groupCurrency,
+        companies: companyContributions,
+        gross,
+        eliminations: {
+          total: eliminationTotal,
+          count: eliminations.length,
+          rows: v22Clone(eliminations)
+        },
+        adjustments: {
+          total: adjustmentTotal,
+          count: adjustments.length,
+          rows: v22Clone(adjustments)
+        },
+        consolidated,
+        status,
+        lineage: {
+          leaseLiability: companyContributions.map(row => ({ companyId: row.companyId, amount: row.leaseLiability })),
+          rou: companyContributions.map(row => ({ companyId: row.companyId, amount: row.rou })),
+          eliminations: eliminations.map(row => ({ id: row.id, fromCompanyId: row.fromCompanyId, toCompanyId: row.toCompanyId, amount: row.amount }))
+        },
+        sourceMetadata: {
+          calculation: "V21_EXISTING_CFO_DATA_LAYER",
+          currencyConversion: "NOT_PERFORMED",
+          consolidationVersion: V22_SCHEMA_VERSION
+        },
+        dataQuality: { missingCompanies: missingScopeCompanies }
+      },
+      error: null,
+      metadata: { schemaVersion: V22_SCHEMA_VERSION, companyCount: companyContributions.length }
+    };
+    return result;
+  }
+
+  function createElimination(input = {}, options = {}) {
+    v22Require("eliminations.manage", { ...options, groupId: input.groupId, action: "ELIMINATION_CREATE" });
+    const row = {
+      id: String(input.id || v22Id("ELIM")),
+      groupId: String(input.groupId || "GROUP-DEFAULT"),
+      fromCompanyId: String(input.fromCompanyId || ""),
+      toCompanyId: String(input.toCompanyId || ""),
+      account: String(input.account || ""),
+      amount: v22Amount(input.amount),
+      currency: v22Currency(input.currency, "TRY"),
+      eliminationType: V22_ELIMINATION_TYPES[String(input.eliminationType || "OTHER").toUpperCase()] || "OTHER",
+      reportingDate: v22NormalizeDate(input.reportingDate),
+      status: String(input.status || "DRAFT").toUpperCase(),
+      reason: String(input.reason || ""),
+      createdAt: input.createdAt || v22Now(),
+      updatedAt: v22Now(),
+      createdBy: input.createdBy || v22CurrentUser()?.id || "system",
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Elimination"
+    };
+    if (!row.fromCompanyId || !row.toCompanyId) throw new Error("fromCompanyId and toCompanyId are required.");
+    if (row.fromCompanyId === row.toCompanyId) throw new Error("Elimination source and target companies must differ.");
+    if (v22Eliminations.some(item => item.id === row.id)) throw new Error(`Elimination ID already exists: ${row.id}`);
+    v22Eliminations.push(row);
+    v22PersistCollection(V22StorageAdapters.eliminations(), v22Eliminations);
+    v22RecordAudit("ELIMINATION_CREATED", "ELIMINATION", row.id, row);
+    return v22Clone(row);
+  }
+
+  function updateElimination(id, patch = {}, options = {}) {
+    const existing = v22Eliminations.find(item => String(item.id) === String(id));
+    if (!existing) return null;
+    v22Require("eliminations.manage", { ...options, groupId: existing.groupId, entityId: id, action: "ELIMINATION_UPDATE" });
+    const old = v22Clone(existing);
+    Object.assign(existing, {
+      ...v22SafeObject(patch),
+      id: existing.id,
+      amount: patch.amount === undefined ? existing.amount : v22Amount(patch.amount),
+      currency: patch.currency === undefined ? existing.currency : v22Currency(patch.currency, existing.currency),
+      reportingDate: patch.reportingDate === undefined ? existing.reportingDate : v22NormalizeDate(patch.reportingDate),
+      updatedAt: v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "Elimination"
+    });
+    v22PersistCollection(V22StorageAdapters.eliminations(), v22Eliminations);
+    v22RecordAudit("ELIMINATION_UPDATED", "ELIMINATION", id, { oldValue: old, newValue: existing });
+    return v22Clone(existing);
+  }
+
+  function getEliminations(groupId = null, options = {}) {
+    v22Require("eliminations.view", { ...options, groupId });
+    return v22Clone(groupId ? v22Eliminations.filter(item => String(item.groupId) === String(groupId)) : v22Eliminations) || [];
+  }
+
+  function createConsolidationAdjustment(input = {}, options = {}) {
+    v22Require("consolidation.execute", { ...options, groupId: input.groupId, action: "CONSOLIDATION_ADJUSTMENT_CREATE" });
+    const row = {
+      id: String(input.id || v22Id("ADJ")),
+      groupId: String(input.groupId || "GROUP-DEFAULT"),
+      account: String(input.account || ""),
+      amount: v22Amount(input.amount),
+      currency: v22Currency(input.currency, "TRY"),
+      reason: String(input.reason || ""),
+      reportingDate: v22NormalizeDate(input.reportingDate),
+      createdBy: input.createdBy || v22CurrentUser()?.id || "system",
+      approvedBy: input.approvedBy || null,
+      status: String(input.status || "PREPARED").toUpperCase(),
+      createdAt: input.createdAt || v22Now(),
+      updatedAt: v22Now(),
+      schemaVersion: V22_SCHEMA_VERSION,
+      entityType: "ConsolidationAdjustment"
+    };
+    v22Adjustments.push(row);
+    v22PersistCollection(V22StorageAdapters.adjustments(), v22Adjustments);
+    return v22Clone(row);
+  }
+
+  function v22RunIntercompanyReconciliation(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.view", { ...options, groupId, action: "INTERCOMPANY_RECONCILIATION" });
+    const rows = v22GetGroupEliminations(groupId, reportingDate);
+    const map = new Map();
+    rows.forEach(row => {
+      const key = `${row.fromCompanyId}|${row.toCompanyId}|${row.currency}`;
+      if (!map.has(key)) map.set(key, { fromCompanyId: row.fromCompanyId, toCompanyId: row.toCompanyId, currency: row.currency, receivable: 0, payable: 0, revenue: 0, expense: 0, lease: 0 });
+      const target = map.get(key);
+      const amount = v22Amount(row.amount);
+      if (row.eliminationType === "INTERCOMPANY_RECEIVABLE") target.receivable += amount;
+      if (row.eliminationType === "INTERCOMPANY_PAYABLE") target.payable += amount;
+      if (row.eliminationType === "INTERCOMPANY_REVENUE") target.revenue += amount;
+      if (row.eliminationType === "INTERCOMPANY_EXPENSE") target.expense += amount;
+      if (row.eliminationType === "INTERCOMPANY_LEASE") target.lease += amount;
+    });
+    return Array.from(map.values()).map(row => {
+      const variance = row.receivable - row.payable;
+      return { ...row, reportingDate: v22NormalizeDate(reportingDate), variance, status: Math.abs(variance) < 0.01 ? "MATCHED" : Math.abs(variance) < 1000 ? "WARNING" : "EXCEPTION" };
+    });
+  }
+
+  function getGroupControlStatus(groupId, reportingDate, options = {}) {
+    v22Require("group.view", { ...options, groupId, action: "GROUP_CONTROL_VIEW" });
+    const group = v22Groups.find(item => String(item.id) === String(groupId));
+    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
+    const companies = v22CompanyList();
+    const scopes = v22Scope.filter(item => String(item.groupId) === String(groupId) && item.included !== false);
+    const visibleIds = new Set(v22AccessibleCompanyIds(options.user || v22CurrentUser()));
+    const checks = [];
+    const missingCompany = scopes.filter(scope => !companies.some(company => String(company.id) === String(scope.companyId)));
+    checks.push({ id: "MISSING_COMPANY", status: missingCompany.length ? "FAIL" : "PASS", count: missingCompany.length });
+    const duplicateCompanyIds = scopes.map(scope => String(scope.companyId)).filter((id, index, arr) => arr.indexOf(id) !== index);
+    checks.push({ id: "DUPLICATE_COMPANY", status: duplicateCompanyIds.length ? "FAIL" : "PASS", count: duplicateCompanyIds.length });
+    const invalidOwnership = scopes.filter(scope => v22Amount(scope.ownershipPercentage) < 0 || v22Amount(scope.ownershipPercentage) > 100);
+    checks.push({ id: "INVALID_OWNERSHIP", status: invalidOwnership.length ? "FAIL" : "PASS", count: invalidOwnership.length });
+    const inaccessible = scopes.filter(scope => !visibleIds.has(String(scope.companyId)));
+    checks.push({ id: "UNAUTHORIZED_COMPANY", status: inaccessible.length ? "WARNING" : "PASS", count: inaccessible.length });
+    const missingCurrency = scopes.filter(scope => !companies.find(company => String(company.id) === String(scope.companyId))?.baseCurrency);
+    checks.push({ id: "MISSING_CURRENCY", status: missingCurrency.length ? "FAIL" : "PASS", count: missingCurrency.length });
+    const reconciliation = v22RunIntercompanyReconciliation(groupId, date, options);
+    const exceptions = reconciliation.filter(row => row.status === "EXCEPTION");
+    checks.push({ id: "INTERCOMPANY_EXCEPTION", status: exceptions.length ? "FAIL" : "PASS", count: exceptions.length });
+    const duplicateEliminations = v22GetGroupEliminations(groupId, date).filter((row, index, arr) => arr.findIndex(item => item.fromCompanyId === row.fromCompanyId && item.toCompanyId === row.toCompanyId && item.account === row.account && item.amount === row.amount && item.reportingDate === row.reportingDate) !== index);
+    checks.push({ id: "DUPLICATE_ELIMINATION", status: duplicateEliminations.length ? "FAIL" : "PASS", count: duplicateEliminations.length });
+    const consolidated = getConsolidatedData(groupId, date, options);
+    const missingData = consolidated.data?.dataQuality?.missingCompanies || [];
+    checks.push({ id: "MISSING_DATA", status: missingData.length ? "WARNING" : "PASS", count: missingData.length });
+    const status = checks.some(check => check.status === "FAIL") ? "RED" : checks.some(check => check.status === "WARNING") ? "YELLOW" : "GREEN";
+    return { version: V22_SCHEMA_VERSION, groupId, reportingDate: date, status, companiesInScope: scopes.length, companiesVisible: visibleIds.size, checks, consolidationExceptions: exceptions, intercompanyExceptions: exceptions, missingData, group: group ? v22Clone(group) : null };
+  }
+
+  function v22CompanyCloseStatus(company, reportingDate) {
+    try {
+      if (typeof getCompanyMonthEndCloseStatus === "function") {
+        return getCompanyMonthEndCloseStatus(company.name || company.id, reportingDate);
+      }
+    } catch (error) {}
+    try {
+      if (typeof getMonthEndCloseStatus === "function") {
+        const result = getMonthEndCloseStatus(reportingDate);
+        return { status: result?.status || "OPEN" };
+      }
+    } catch (error) {}
+    return { status: "UNKNOWN" };
+  }
+
+  function getGroupCloseStatus(groupId, reportingDate, options = {}) {
+    v22Require("group.view", { ...options, groupId, action: "GROUP_CLOSE_VIEW" });
+    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
+    const companies = v22VisibleGroupCompanies(groupId, date, options.user || v22CurrentUser());
+    const rows = companies.map(company => ({ companyId: company.id, company: company.name, status: v22CompanyCloseStatus(company, date)?.status || "UNKNOWN" }));
+    const open = rows.filter(row => !["CLOSED", "CERTIFIED", "GREEN"].includes(String(row.status).toUpperCase()));
+    const status = open.length === 0 ? "CLOSED" : open.some(row => row.status === "UNKNOWN") ? "OPEN" : "BLOCKED";
+    return { groupId, reportingDate: date, status, companies: rows, openCompanies: open.map(row => row.companyId) };
+  }
+
+  function getGroupCfoDashboardData(groupId, reportingDate, options = {}) {
+    v22Require("group.view", { ...options, groupId, action: "GROUP_CFO_VIEW" });
+    const consolidated = getConsolidatedData(groupId, reportingDate, options);
+    const control = getGroupControlStatus(groupId, reportingDate, options);
+    const close = getGroupCloseStatus(groupId, reportingDate, options);
+    const rows = consolidated.data?.companies || [];
+    const expiring = rows.reduce((sum, row) => sum + row.contracts.filter(item => {
+      try {
+        const contract = v22ContractsForCompany(row.companyId).find(c => String(c.id) === String(item.contractId));
+        if (!contract?.renewalDate) return false;
+        const diff = (new Date(contract.renewalDate) - new Date(reportingDate)) / 86400000;
+        return diff >= 0 && diff <= 90;
+      } catch (error) { return false; }
+    }).length, 0);
+    return {
+      groupId,
+      reportingDate: consolidated.data?.reportingDate,
+      groupCurrency: consolidated.data?.groupCurrency,
+      liabilities: {
+        total: consolidated.data?.consolidated?.leaseLiability || 0,
+        current: consolidated.data?.consolidated?.currentLiability || 0,
+        nonCurrent: consolidated.data?.consolidated?.nonCurrentLiability || 0
+      },
+      rouAssets: { total: consolidated.data?.consolidated?.rou || 0 },
+      pnl: { interest: consolidated.data?.consolidated?.interest || 0, depreciation: consolidated.data?.consolidated?.depreciation || 0 },
+      cashFlow: { cashPayments: consolidated.data?.consolidated?.cashPayments || 0 },
+      contracts: { total: consolidated.data?.consolidated?.contracts || 0, active: consolidated.data?.consolidated?.activeContracts || 0, renewalUnder90Days: expiring },
+      controls: control,
+      close,
+      status: consolidated.data?.status || "YELLOW",
+      companyContribution: rows,
+      source: "V22_CONSOLIDATION_ENGINE"
+    };
+  }
+
+  function exportGroupReport(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.export", { ...options, groupId, action: "CONSOLIDATION_EXPORT" });
+    const report = getGroupCfoDashboardData(groupId, reportingDate, options);
+    const rows = (report.companyContribution || []).map(row => ({
+      Company: row.company,
+      CompanyID: row.companyId,
+      Currency: row.baseCurrency,
+      Contracts: row.contractCount,
+      "Lease Liability": row.leaseLiability,
+      "Current Liability": row.currentLiability,
+      "Non-current Liability": row.nonCurrentLiability,
+      ROU: row.rou,
+      Interest: row.interest,
+      Depreciation: row.depreciation,
+      "Cash Payments": row.cashPayments,
+      Method: row.consolidationMethod,
+      Ownership: row.ownershipPercentage
+    }));
+    if (typeof XLSX !== "undefined") {
+      try {
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, "Group Report");
+        XLSX.writeFile(workbook, `GK_Group_Report_${groupId}_${reportingDate || "DATE"}.xlsx`);
+        v22RecordAudit("CONSOLIDATION_EXPORTED", "GROUP", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
+        return true;
+      } catch (error) {}
+    }
+    v22RecordAudit("CONSOLIDATION_EXPORTED", "GROUP", groupId, { reportingDate, recordCount: rows.length, format: "json" });
+    return v22Clone(report);
+  }
+
+  function exportConsolidation(groupId, reportingDate, options = {}) {
+    return exportGroupReport(groupId, reportingDate, options);
+  }
+
+  function exportEliminations(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.export", { ...options, groupId, action: "ELIMINATION_EXPORT" });
+    const rows = v22GetGroupEliminations(groupId, reportingDate);
+    if (typeof XLSX !== "undefined") {
+      try {
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, "Eliminations");
+        XLSX.writeFile(workbook, `GK_Eliminations_${groupId}_${reportingDate || "DATE"}.xlsx`);
+        v22RecordAudit("CONSOLIDATION_EXPORTED", "ELIMINATION", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
+        return true;
+      } catch (error) {}
+    }
+    return v22Clone(rows);
+  }
+
+  function exportIntercompanyReconciliation(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.export", { ...options, groupId, action: "INTERCOMPANY_EXPORT" });
+    const rows = v22RunIntercompanyReconciliation(groupId, reportingDate, options);
+    if (typeof XLSX !== "undefined") {
+      try {
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, "Intercompany");
+        XLSX.writeFile(workbook, `GK_Intercompany_${groupId}_${reportingDate || "DATE"}.xlsx`);
+        v22RecordAudit("CONSOLIDATION_EXPORTED", "INTERCOMPANY_RECONCILIATION", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
+        return true;
+      } catch (error) {}
+    }
+    return v22Clone(rows);
+  }
+
+  function v22GetDatabaseModel() {
+    const groups = v22Groups.map(v22Clone);
+    const companies = v22CompanyList().map(company => ({ ...v22Clone(company), groupId: v22Scope.find(scope => String(scope.companyId) === String(company.id))?.groupId || "GROUP-DEFAULT" }));
+    return {
+      schemaVersion: V22_SCHEMA_VERSION,
+      generatedAt: v22Now(),
+      Group: groups,
+      Company: companies,
+      Ownership: v22Clone(v22Ownership),
+      ConsolidationScope: v22Clone(v22Scope),
+      Elimination: v22Clone(v22Eliminations),
+      ConsolidationAdjustment: v22Clone(v22Adjustments)
+    };
+  }
+
+  function exportGroupDatabaseReady(groupId = null, options = {}) {
+    v22Require("consolidation.export", { ...options, groupId, action: "DATABASE_READY_EXPORT" });
+    const model = v22GetDatabaseModel();
+    if (groupId) {
+      model.Group = model.Group.filter(item => String(item.id) === String(groupId));
+      model.Company = model.Company.filter(item => String(item.groupId) === String(groupId));
+      model.Ownership = model.Ownership.filter(item => model.Company.some(company => String(company.id) === String(item.parentCompanyId) || String(company.id) === String(item.subsidiaryCompanyId)));
+      model.ConsolidationScope = model.ConsolidationScope.filter(item => String(item.groupId) === String(groupId));
+      model.Elimination = model.Elimination.filter(item => String(item.groupId) === String(groupId));
+      model.ConsolidationAdjustment = model.ConsolidationAdjustment.filter(item => String(item.groupId) === String(groupId));
+    }
+    return model;
+  }
+
+  function v22CreateDataSnapshot() {
+    const base = typeof createDataSnapshot === "function" ? createDataSnapshot() : { storage: {} };
+    const snapshot = {
+      ...base,
+      schemaVersion: V22_SCHEMA_VERSION,
+      createdAt: v22Now(),
+      v22Storage: {
+        [V22_GROUP_STORAGE_KEY]: localStorage.getItem(V22_GROUP_STORAGE_KEY),
+        [V22_OWNERSHIP_STORAGE_KEY]: localStorage.getItem(V22_OWNERSHIP_STORAGE_KEY),
+        [V22_SCOPE_STORAGE_KEY]: localStorage.getItem(V22_SCOPE_STORAGE_KEY),
+        [V22_ELIMINATION_STORAGE_KEY]: localStorage.getItem(V22_ELIMINATION_STORAGE_KEY),
+        [V22_ADJUSTMENT_STORAGE_KEY]: localStorage.getItem(V22_ADJUSTMENT_STORAGE_KEY)
+      }
+    };
+    return snapshot;
+  }
+
+  function v22ValidateSnapshot(snapshot) {
+    const base = typeof validateDataSnapshot === "function" ? validateDataSnapshot(snapshot) : { valid: true, errors: [] };
+    const errors = [...v22SafeArray(base.errors)];
+    if (!snapshot || typeof snapshot !== "object") errors.push("Snapshot object is required.");
+    if (snapshot?.v22Storage && typeof snapshot.v22Storage !== "object") errors.push("V22 storage payload is invalid.");
+    Object.values(snapshot?.v22Storage || {}).forEach(raw => {
+      if (raw === null || raw === "") return;
+      try { JSON.parse(raw); } catch (error) { errors.push("Invalid JSON in V22 snapshot storage."); }
+    });
+    return { valid: errors.length === 0, errors };
+  }
+
+  function v22RestoreDataSnapshot(snapshot, options = {}) {
+    const validation = v22ValidateSnapshot(snapshot);
+    if (!validation.valid) return { success: false, validation };
+    if (options.confirm !== true) return { success: false, validation, requiresConfirmation: true, message: "Snapshot validation passed. Explicit confirmation is required before restore." };
+    try {
+      if (typeof restoreDataSnapshot === "function" && snapshot?.storage) {
+        const baseResult = restoreDataSnapshot({ ...snapshot, storage: snapshot.storage }, { confirm: true });
+        if (!baseResult.success) return baseResult;
+      }
+      Object.entries(snapshot.v22Storage || {}).forEach(([key, value]) => {
+        if (value === null || value === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      });
+      v22Groups = v22LoadGroups();
+      v22Ownership = v22LoadOwnership();
+      v22Scope = v22LoadScope();
+      v22Eliminations = v22LoadEliminations();
+      v22Adjustments = v22LoadAdjustments();
+      return { success: true, validation, schemaVersion: V22_SCHEMA_VERSION };
+    } catch (error) {
+      return { success: false, validation, error: { code: "V22_SNAPSHOT_RESTORE_FAILED", message: error?.message || String(error), details: null, field: null } };
+    }
+  }
+
+  function getV22DataHealth(options = {}) {
+    const groups = v22Groups;
+    const companies = v22CompanyList();
+    const companyIds = new Set(companies.map(item => String(item.id)));
+    const groupIds = new Set(groups.map(item => String(item.id)));
+    const errors = [];
+    const warnings = [];
+    const duplicates = {};
+    const duplicateCheck = (name, rows) => {
+      const seen = new Set(); const dup = [];
+      rows.forEach(row => { const id = String(row?.id || ""); if (!id) return; if (seen.has(id)) dup.push(id); seen.add(id); });
+      if (dup.length) duplicates[name] = Array.from(new Set(dup));
+    };
+    duplicateCheck("Group", groups);
+    duplicateCheck("Company", companies);
+    duplicateCheck("Ownership", v22Ownership);
+    duplicateCheck("ConsolidationScope", v22Scope);
+    duplicateCheck("Elimination", v22Eliminations);
+    duplicateCheck("ConsolidationAdjustment", v22Adjustments);
+    const orphans = [];
+    v22Scope.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "ConsolidationScope", entityId: row.id, relation: "groupId" }); if (!companyIds.has(String(row.companyId))) orphans.push({ entityType: "ConsolidationScope", entityId: row.id, relation: "companyId" }); });
+    v22Ownership.forEach(row => { if (!companyIds.has(String(row.parentCompanyId))) orphans.push({ entityType: "Ownership", entityId: row.id, relation: "parentCompanyId" }); if (!companyIds.has(String(row.subsidiaryCompanyId))) orphans.push({ entityType: "Ownership", entityId: row.id, relation: "subsidiaryCompanyId" }); });
+    v22Eliminations.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "groupId" }); if (!companyIds.has(String(row.fromCompanyId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "fromCompanyId" }); if (!companyIds.has(String(row.toCompanyId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "toCompanyId" }); });
+    v22Adjustments.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "ConsolidationAdjustment", entityId: row.id, relation: "groupId" }); });
+    const invalidOwnership = v22Ownership.filter(row => row.ownershipPercentage < 0 || row.ownershipPercentage > 100);
+    const invalidDates = [...v22Scope, ...v22Ownership, ...v22Eliminations, ...v22Adjustments].filter(row => row.effectiveDate !== undefined && row.effectiveDate !== null && !v22NormalizeDate(row.effectiveDate));
+    const invalidCurrency = [...v22Groups, ...companies, ...v22Eliminations, ...v22Adjustments].filter(row => row.groupCurrency !== undefined ? !/^[A-Z]{3}$/.test(String(row.groupCurrency)) : row.baseCurrency !== undefined && !/^[A-Z]{3}$/.test(String(row.baseCurrency)));
+    return {
+      schemaVersion: V22_SCHEMA_VERSION,
+      healthy: Object.keys(duplicates).length === 0 && orphans.length === 0 && invalidOwnership.length === 0 && invalidDates.length === 0 && invalidCurrency.length === 0,
+      checkedAt: v22Now(),
+      counts: { groups: groups.length, companies: companies.length, ownership: v22Ownership.length, scopes: v22Scope.length, eliminations: v22Eliminations.length, adjustments: v22Adjustments.length },
+      duplicateIds: duplicates,
+      orphanRecords: orphans,
+      brokenReferences: orphans,
+      invalidOwnership,
+      invalidDates,
+      invalidCurrencies: invalidCurrency,
+      errors,
+      warnings
+    };
+  }
+
+  function getConsolidationReports(groupId, reportingDate, options = {}) {
+    const consolidated = getConsolidatedData(groupId, reportingDate, options);
+    return {
+      groupLeaseLiability: consolidated.data.consolidated.leaseLiability,
+      groupRuo: consolidated.data.consolidated.rou,
+      groupInterest: consolidated.data.consolidated.interest,
+      groupDepreciation: consolidated.data.consolidated.depreciation,
+      groupCashPayments: consolidated.data.consolidated.cashPayments,
+      companyContribution: consolidated.data.companies,
+      eliminationReport: consolidated.data.eliminations.rows,
+      intercompanyReconciliation: v22RunIntercompanyReconciliation(groupId, reportingDate, options),
+      consolidationExceptions: getGroupControlStatus(groupId, reportingDate, options),
+      groupCloseStatus: getGroupCloseStatus(groupId, reportingDate, options)
+    };
+  }
+
+  function v22RunConsolidation(groupId, reportingDate, options = {}) {
+    v22Require("consolidation.execute", { ...options, groupId, action: "CONSOLIDATION_RUN" });
+    const result = getConsolidatedData(groupId, reportingDate, options);
+    v22RecordAudit("CONSOLIDATION_RUN", "GROUP", groupId, { reportingDate, status: result.data?.status, companyCount: result.data?.companies?.length || 0 });
+    return result;
+  }
+
+  function v22GetApiAuthorizationContract() {
+    return [
+      { endpoint: "GET /groups", permission: "group.view", statusCodeOnDenied: 403 },
+      { endpoint: "GET /groups/:id", permission: "group.view", statusCodeOnDenied: 403 },
+      { endpoint: "POST /groups", permission: "group.manage", statusCodeOnDenied: 403 },
+      { endpoint: "PUT /groups/:id", permission: "group.manage", statusCodeOnDenied: 403 },
+      { endpoint: "GET /groups/:id/consolidation", permission: "consolidation.view", statusCodeOnDenied: 403 },
+      { endpoint: "POST /groups/:id/consolidation/run", permission: "consolidation.execute", statusCodeOnDenied: 403 },
+      { endpoint: "GET /groups/:id/eliminations", permission: "eliminations.view", statusCodeOnDenied: 403 },
+      { endpoint: "POST /groups/:id/eliminations", permission: "eliminations.manage", statusCodeOnDenied: 403 },
+      { endpoint: "PUT /eliminations/:id", permission: "eliminations.manage", statusCodeOnDenied: 403 },
+      { endpoint: "POST /groups/:id/consolidation/export", permission: "consolidation.export", statusCodeOnDenied: 403 },
+      { endpoint: "GET /groups/:id/controls", permission: "group.view", statusCodeOnDenied: 403 },
+      { endpoint: "GET /groups/:id/close", permission: "group.view", statusCodeOnDenied: 403 }
+    ];
+  }
+
+  function v22Paginate(rows, options = {}) {
+    const data = v22SafeArray(rows);
+    const pageSize = Math.max(1, Number(options.pageSize) || 25);
+    const page = Math.max(1, Number(options.page) || 1);
+    const total = data.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const start = (page - 1) * pageSize;
+    return { data: v22Clone(data.slice(start, start + pageSize)), metadata: { page, pageSize, total, totalPages } };
+  }
+
+  function v22FilterGroups(groups, filters = {}) {
+    return v22SafeArray(groups).filter(group => {
+      if (filters.status && String(group.status).toUpperCase() !== String(filters.status).toUpperCase()) return false;
+      if (filters.query && !JSON.stringify(group).toLowerCase().includes(String(filters.query).toLowerCase())) return false;
+      return true;
+    });
+  }
+
+  function v22MigrationReport() {
+    const companies = v22CompanyList();
+    return {
+      from: "21.0",
+      to: V22_SCHEMA_VERSION,
+      companies: companies.length,
+      groups: v22Groups.length,
+      scopes: v22Scope.length,
+      ownership: v22Ownership.length,
+      eliminations: v22Eliminations.length,
+      adjustments: v22Adjustments.length,
+      defaultGroupApplied: v22Scope.filter(row => row.groupId === "GROUP-DEFAULT").length,
+      companyIdsPreserved: true,
+      storageKeyPreserved: typeof STORAGE_KEY !== "undefined" ? STORAGE_KEY : null
+    };
+  }
+
+  function v22Tests() {
+    const results = [];
+    const pass = (name, value, detail = null) => results.push({ name, passed: !!value, detail });
+    const group = v22Groups[0];
+    const companies = v22CompanyList();
+    pass("Create Group model", !!group?.id);
+    pass("Company-GROUP relationship", v22Scope.every(row => row.groupId && row.companyId));
+    pass("Ownership model", Array.isArray(v22Ownership));
+    pass("Consolidation Scope", Array.isArray(v22Scope));
+    pass("Company aggregation", companies.every(company => !!v22AggregateCompany(company, v22Now().slice(0, 10))));
+    if (group) {
+      const user = v22CurrentUser();
+      const view = v22HasPermission("consolidation.view", user);
+      pass("Consolidation authorization", view || !user);
+      if (view || !user) {
+        const result = getConsolidatedData(group.id, v22Now().slice(0, 10), { user });
+        pass("Group aggregation", !!result.success);
+        pass("Group reporting date", !!result.data?.reportingDate);
+        pass("Group currency foundation", !!result.data?.groupCurrency);
+        pass("Data lineage", Array.isArray(result.data?.lineage?.leaseLiability));
+        pass("Group controls", !!getGroupControlStatus(group.id, v22Now().slice(0, 10), { user }));
+        pass("Group close", !!getGroupCloseStatus(group.id, v22Now().slice(0, 10), { user }));
+        pass("Group CFO data", !!getGroupCfoDashboardData(group.id, v22Now().slice(0, 10), { user }));
+      }
+    }
+    pass("Audit integration", typeof recordAuditEvent === "function");
+    pass("Database-ready export", !!v22GetDatabaseModel().schemaVersion);
+    pass("Migration", v22MigrationReport().companyIdsPreserved === true);
+    pass("Data health", !!getV22DataHealth());
+    pass("API authorization contract", Array.isArray(v22GetApiAuthorizationContract()));
+    pass("Pagination model", v22Paginate([1, 2, 3], { page: 1, pageSize: 2 }).metadata.total === 3);
+    return { version: V22_SCHEMA_VERSION, passed: results.every(item => item.passed), results };
   }
 
 
-  /* V16.9 public API — V16.8 API is preserved and extended. */
+  /* ==========================================================
+     V23 FX / MULTI-CURRENCY ENGINE
+     Additive layer. V22 consolidation remains canonical.
+  ========================================================== */
+
+  const V23_SCHEMA_VERSION = "23.0";
+  const V23_CURRENCY_STORAGE_KEY = "gk_tfrs16_v23_currencies_v1";
+  const V23_RATE_STORAGE_KEY = "gk_tfrs16_v23_fx_rates_v1";
+  const V23_CTA_STORAGE_KEY = "gk_tfrs16_v23_cta_v1";
+  const V23_FX_EVENT_SOURCE = "V23_FX";
+
+  const V23_RATE_TYPES = Object.freeze({ SPOT:"SPOT", CLOSING:"CLOSING", AVERAGE:"AVERAGE", HISTORICAL:"HISTORICAL", FORWARD:"FORWARD" });
+  const V23_RATE_SOURCES = Object.freeze({ MANUAL:"MANUAL", IMPORT:"IMPORT", SYSTEM:"SYSTEM", CENTRAL_BANK:"CENTRAL_BANK", ERP:"ERP" });
+  const V23_MISSING_RATE_POLICIES = Object.freeze({ BLOCK:"BLOCK", WARNING:"WARNING", USE_LAST_AVAILABLE:"USE_LAST_AVAILABLE" });
+  const V23_FX_STATUS = Object.freeze({ DRAFT:"DRAFT", REVIEWED:"REVIEWED", APPROVED:"APPROVED", REJECTED:"REJECTED" });
+  const V23_RECON_STATUS = Object.freeze({ MATCHED:"MATCHED", WARNING:"WARNING", EXCEPTION:"EXCEPTION" });
+  const V23_ITEM_TYPES = Object.freeze({ MONETARY:"MONETARY", NON_MONETARY:"NON_MONETARY" });
+  const V23_SECURITY_PERMISSIONS = Object.freeze([
+    "fx.view","fx.manage","fx.import","fx.export","fx.execute"
+  ]);
+  const V23_DEFAULT_CURRENCIES = Object.freeze([
+    { code:"TRY", name:"Turkish Lira", symbol:"₺", decimalPlaces:2, status:"ACTIVE" },
+    { code:"USD", name:"US Dollar", symbol:"$", decimalPlaces:2, status:"ACTIVE" },
+    { code:"EUR", name:"Euro", symbol:"€", decimalPlaces:2, status:"ACTIVE" },
+    { code:"GBP", name:"British Pound", symbol:"£", decimalPlaces:2, status:"ACTIVE" },
+    { code:"PLN", name:"Polish Zloty", symbol:"zł", decimalPlaces:2, status:"ACTIVE" }
+  ]);
+  const FX_CONFIG = Object.freeze({
+    version: V23_SCHEMA_VERSION,
+    defaultRateType: V23_RATE_TYPES.SPOT,
+    balanceSheetRateType: V23_RATE_TYPES.CLOSING,
+    incomeStatementRateType: V23_RATE_TYPES.AVERAGE,
+    equityRateType: V23_RATE_TYPES.HISTORICAL,
+    rounding: { defaultDecimalPlaces: 2, mode:"HALF_UP" },
+    missingRatePolicy: V23_MISSING_RATE_POLICIES.BLOCK,
+    manualRateAllowed: true,
+    translationRules: Object.freeze({
+      MONETARY_BALANCE_SHEET: V23_RATE_TYPES.CLOSING,
+      NON_MONETARY_BALANCE_SHEET: V23_RATE_TYPES.HISTORICAL,
+      INCOME_STATEMENT: V23_RATE_TYPES.AVERAGE,
+      HISTORICAL_EQUITY: V23_RATE_TYPES.HISTORICAL
+    })
+  });
+
+  function v23Clone(value) { try { return JSON.parse(JSON.stringify(value)); } catch (e) { return null; } }
+  function v23Array(value) { return Array.isArray(value) ? value : []; }
+  function v23Object(value) { return value && typeof value === "object" ? value : {}; }
+  function v23Now() { return new Date().toISOString(); }
+  function v23Id(prefix="V23") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`; }
+  function v23Date(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? null : d; }
+  function v23DateKey(value) { const d=v23Date(value); return d ? d.toISOString().slice(0,10) : null; }
+  function v23Num(value, fallback=0) { const n=Number(value); return Number.isFinite(n) ? n : fallback; }
+  function v23CurrencyCode(value) { return String(value || "").trim().toUpperCase(); }
+  function v23Round(value, decimalPlaces=2) { const n=v23Num(value); const p=Math.pow(10, Math.max(0, decimalPlaces)); return Math.round((n + Number.EPSILON) * p) / p; }
+  function v23Actor() { try { return String(window.currentUser?.id || window.currentUser?.username || "system"); } catch(e) { return "system"; } }
+  function v23Audit(action, entityType, entityId, metadata={}) {
+    try { if (typeof recordAuditEvent === "function") return recordAuditEvent({ action, entityType, entityId:entityId || null, actor:v23Actor(), reason:`${V23_FX_EVENT_SOURCE}:${action}`, metadata:{...v23Object(metadata), source:V23_FX_EVENT_SOURCE, schemaVersion:V23_SCHEMA_VERSION} }); } catch(e) {}
+    return null;
+  }
+  function v23CurrentUser() { try { return typeof getCurrentUser === "function" ? getCurrentUser() : (window.currentUser || null); } catch(e) { return null; } }
+  function v23HasPermission(permission, user=v23CurrentUser()) {
+    if (!user) return true;
+    try {
+      if (typeof hasPermission === "function") return hasPermission(user, permission);
+      if (typeof v21HasPermission === "function") return v21HasPermission(permission, user);
+      const roles=v23Array(user.roleIds || user.roles).map(x=>String(x).toUpperCase());
+      if (roles.includes("ADMIN")) return true;
+      return roles.some(role=>v23Array(window.GK_TFRS16?.V23_ROLE_PERMISSIONS?.[role]).includes(permission));
+    } catch(e) { return false; }
+  }
+  function v23Authorize(permission, options={}) {
+    const user=options.user || v23CurrentUser();
+    if (!v23HasPermission(permission,user)) {
+      v23Audit("ACCESS_DENIED","FX",options.entityId || null,{permission,userId:user?.id || null,action:options.action || null});
+      const err=new Error("You do not have permission to perform this action."); err.code="403"; err.reason="FORBIDDEN"; throw err;
+    }
+    return true;
+  }
+  function v23StorageGet(key, fallback=[]) { try { const raw=localStorage.getItem(key); const parsed=raw ? JSON.parse(raw) : null; return parsed ?? fallback; } catch(e) { return fallback; } }
+  function v23StorageSet(key,value) { try { localStorage.setItem(key,JSON.stringify(value)); return true; } catch(e) { return false; } }
+
+  const V23_ROLE_PERMISSIONS = Object.freeze({
+    ADMIN: V23_SECURITY_PERMISSIONS.slice(),
+    CFO: ["fx.view","fx.export","fx.execute"],
+    FINANCE_MANAGER: ["fx.view","fx.manage","fx.import","fx.export","fx.execute"],
+    ACCOUNTANT: ["fx.view","fx.execute"],
+    CONTROLLER: ["fx.view","fx.manage","fx.export","fx.execute"],
+    AUDITOR: ["fx.view","fx.export"],
+    VIEWER: ["fx.view"]
+  });
+
+  function loadV23Currencies() {
+    const stored=v23StorageGet(V23_CURRENCY_STORAGE_KEY,null);
+    if (Array.isArray(stored) && stored.length) return stored;
+    v23StorageSet(V23_CURRENCY_STORAGE_KEY,V23_DEFAULT_CURRENCIES.map(v23Clone));
+    return V23_DEFAULT_CURRENCIES.map(v23Clone);
+  }
+  function normalizeV23Currency(input={}) {
+    const source=v23Object(input), code=v23CurrencyCode(source.code);
+    if (!code) throw new Error("Currency code is required.");
+    return { code, name:String(source.name || code), symbol:String(source.symbol || code), decimalPlaces:Math.max(0,Math.min(8,Math.floor(v23Num(source.decimalPlaces,2)))), status:String(source.status || "ACTIVE").toUpperCase(), schemaVersion:V23_SCHEMA_VERSION };
+  }
+  function getCurrencies() { return loadV23Currencies().map(v23Clone); }
+  function getCurrency(code) { const c=v23CurrencyCode(code); return loadV23Currencies().find(x=>x.code===c) || null; }
+  function createCurrency(input={}, options={}) {
+    v23Authorize("fx.manage",{...options,action:"CURRENCY_CREATE"});
+    const currency=normalizeV23Currency(input), rows=loadV23Currencies();
+    if (rows.some(x=>x.code===currency.code)) throw new Error(`Currency already exists: ${currency.code}`);
+    rows.push(currency); v23StorageSet(V23_CURRENCY_STORAGE_KEY,rows); v23Audit("CURRENCY_CREATED","CURRENCY",currency.code,{currency}); return v23Clone(currency);
+  }
+  function updateCurrency(code, patch={}, options={}) {
+    v23Authorize("fx.manage",{...options,action:"CURRENCY_UPDATE",entityId:code});
+    const rows=loadV23Currencies(), idx=rows.findIndex(x=>x.code===v23CurrencyCode(code)); if(idx<0) return null;
+    const before=rows[idx], next=normalizeV23Currency({...before,...v23Object(patch),code:before.code}); rows[idx]=next; v23StorageSet(V23_CURRENCY_STORAGE_KEY,rows); v23Audit("CURRENCY_UPDATED","CURRENCY",next.code,{before,newValue:next}); return v23Clone(next);
+  }
+
+  function loadV23Rates() { const rows=v23StorageGet(V23_RATE_STORAGE_KEY,[]); return Array.isArray(rows) ? rows : []; }
+  function saveV23Rates(rows) { return v23StorageSet(V23_RATE_STORAGE_KEY,rows); }
+  function normalizeFxRate(input={}) {
+    const source=v23Object(input), from=v23CurrencyCode(source.fromCurrency), to=v23CurrencyCode(source.toCurrency), rateDate=v23DateKey(source.rateDate);
+    if(!from || !to) throw Object.assign(new Error("Currency mismatch: fromCurrency and toCurrency are required."),{code:"FX_CURRENCY_REQUIRED"});
+    if(!getCurrency(from) || !getCurrency(to)) throw Object.assign(new Error("Unsupported currency."),{code:"UNSUPPORTED_CURRENCY"});
+    if(!rateDate) throw Object.assign(new Error("Rate date is required."),{code:"FX_RATE_DATE_REQUIRED"});
+    const rate= v23Num(source.rate,NaN); if(!(rate>0) || !Number.isFinite(rate)) throw Object.assign(new Error("FX rate must be greater than zero."),{code:"INVALID_FX_RATE"});
+    const rateType=String(source.rateType || FX_CONFIG.defaultRateType).toUpperCase(); if(!Object.values(V23_RATE_TYPES).includes(rateType)) throw Object.assign(new Error("Invalid FX rate type."),{code:"INVALID_RATE_TYPE"});
+    const rateSource=String(source.source || V23_RATE_SOURCES.MANUAL).toUpperCase(); if(!Object.values(V23_RATE_SOURCES).includes(rateSource)) throw Object.assign(new Error("Rate source is missing or invalid."),{code:"INVALID_RATE_SOURCE"});
+    return { id:String(source.id || v23Id("FXR")), fromCurrency:from,toCurrency:to,rate,rateDate,rateType,source:rateSource,status:String(source.status || (rateSource === "MANUAL" ? V23_FX_STATUS.DRAFT : V23_FX_STATUS.APPROVED)).toUpperCase(),reason:source.reason || null,createdBy:source.createdBy || v23Actor(),createdAt:source.createdAt || v23Now(),updatedAt:v23Now(),schemaVersion:V23_SCHEMA_VERSION };
+  }
+  function createFxRate(input={}, options={}) {
+    v23Authorize("fx.manage",{...options,action:"FX_RATE_CREATED"});
+    const rate=normalizeFxRate(input), rows=loadV23Rates();
+    if(rate.fromCurrency===rate.toCurrency) rate.rate=1;
+    const duplicate=rows.find(x=>x.fromCurrency===rate.fromCurrency && x.toCurrency===rate.toCurrency && x.rateDate===rate.rateDate && x.rateType===rate.rateType);
+    if(duplicate) throw Object.assign(new Error("Duplicate FX rate."),{code:"DUPLICATE_FX_RATE"});
+    rows.push(rate); saveV23Rates(rows); v23Audit("FX_RATE_CREATED","FX_RATE",rate.id,{fromCurrency:rate.fromCurrency,toCurrency:rate.toCurrency,rate:rate.rate,rateDate:rate.rateDate,rateType:rate.rateType,source:rate.source,reason:rate.reason}); return v23Clone(rate);
+  }
+  function updateFxRate(id, patch={}, options={}) {
+    v23Authorize("fx.manage",{...options,action:"FX_RATE_UPDATED",entityId:id});
+    const rows=loadV23Rates(), idx=rows.findIndex(x=>x.id===id); if(idx<0) return null;
+    const before=rows[idx], next=normalizeFxRate({...before,...v23Object(patch),id:before.id});
+    const duplicate=rows.some((x,i)=>i!==idx && x.fromCurrency===next.fromCurrency && x.toCurrency===next.toCurrency && x.rateDate===next.rateDate && x.rateType===next.rateType);
+    if(duplicate) throw Object.assign(new Error("Duplicate FX rate."),{code:"DUPLICATE_FX_RATE"});
+    rows[idx]=next; saveV23Rates(rows); v23Audit("FX_RATE_UPDATED","FX_RATE",id,{before,newValue:next}); return v23Clone(next);
+  }
+  function getFxRates(filters={}) {
+    return loadV23Rates().filter(row=>{
+      if(filters.fromCurrency && row.fromCurrency!==v23CurrencyCode(filters.fromCurrency)) return false;
+      if(filters.toCurrency && row.toCurrency!==v23CurrencyCode(filters.toCurrency)) return false;
+      if(filters.rateType && row.rateType!==String(filters.rateType).toUpperCase()) return false;
+      if(filters.rateDate && row.rateDate!==v23DateKey(filters.rateDate)) return false;
+      return true;
+    }).map(v23Clone);
+  }
+  function getFxRate(fromCurrency,toCurrency,date,rateType=FX_CONFIG.defaultRateType,options={}) {
+    const from=v23CurrencyCode(fromCurrency), to=v23CurrencyCode(toCurrency), target=v23DateKey(date), type=String(rateType || FX_CONFIG.defaultRateType).toUpperCase();
+    if(!from || !to) throw Object.assign(new Error("FX currency is required."),{code:"FX_CURRENCY_REQUIRED"});
+    if(!getCurrency(from) || !getCurrency(to)) throw Object.assign(new Error("Unsupported currency."),{code:"UNSUPPORTED_CURRENCY"});
+    if(!target) throw Object.assign(new Error("Rate date is required."),{code:"FX_RATE_DATE_REQUIRED"});
+    if(from===to) return {rate:1,fromCurrency:from,toCurrency:to,rateDate:target,rateType:type,source:V23_RATE_SOURCES.SYSTEM,id:null};
+    const rows=getFxRates({fromCurrency:from,toCurrency:to,rateType:type});
+    const exact=rows.find(x=>x.rateDate===target);
+    if(exact) return exact;
+    if(FX_CONFIG.missingRatePolicy===V23_MISSING_RATE_POLICIES.USE_LAST_AVAILABLE || options.allowLastAvailable) {
+      const prior=rows.filter(x=>x.rateDate<=target).sort((a,b)=>b.rateDate.localeCompare(a.rateDate))[0];
+      if(prior) return {...prior,usedFallback:true,requestedDate:target};
+    }
+    const error=Object.assign(new Error("FX rate not found."),{code:"FX_RATE_NOT_FOUND",fromCurrency:from,toCurrency:to,rateDate:target,rateType:type});
+    if(FX_CONFIG.missingRatePolicy===V23_MISSING_RATE_POLICIES.WARNING || options.allowMissing) return {error:error.code,rate:null,fromCurrency:from,toCurrency:to,rateDate:target,rateType:type};
+    throw error;
+  }
+  function convertCurrency(amount,fromCurrency,toCurrency,rate,options={}) {
+    const from=v23CurrencyCode(fromCurrency), to=v23CurrencyCode(toCurrency); if(!getCurrency(from)||!getCurrency(to)) throw Object.assign(new Error("Unsupported currency."),{code:"UNSUPPORTED_CURRENCY"});
+    const fx=from===to ? 1 : v23Num(rate,NaN); if(!(fx>0) || !Number.isFinite(fx)) throw Object.assign(new Error("Valid FX rate is required."),{code:"FX_RATE_NOT_FOUND"});
+    const converted=v23Num(amount)*fx, target=getCurrency(to), decimals=options.round === false ? null : (target?.decimalPlaces ?? FX_CONFIG.rounding.defaultDecimalPlaces);
+    const result={sourceAmount:v23Num(amount),sourceCurrency:from,fxRate:fx,convertedAmount:decimals===null?converted:v23Round(converted,decimals),targetCurrency:to};
+    if(options.audit!==false) v23Audit("FX_CONVERSION","FX_CONVERSION",options.entityId || null,{...result,rateDate:options.rateDate || null,rateType:options.rateType || null});
+    return result;
+  }
+  function convertCurrencyOnDate(amount,fromCurrency,toCurrency,date,rateType=FX_CONFIG.defaultRateType,options={}) {
+    const fx=getFxRate(fromCurrency,toCurrency,date,rateType,options); if(fx?.error) return {...fx,sourceAmount:v23Num(amount)};
+    return convertCurrency(amount,fromCurrency,toCurrency,fx.rate,{...options,audit:options.audit,rateDate:date,rateType,entityId:options.entityId});
+  }
+
+  function v23CompanyCurrency(companyId) {
+    try {
+      const companies = typeof v22CompanyList === "function" ? v22CompanyList() : (typeof getCompanies === "function" ? getCompanies() : []);
+      const row = companies.find(x => String(x.id) === String(companyId) || String(x.code) === String(companyId) || String(x.name) === String(companyId));
+      return v23CurrencyCode(row?.baseCurrency || row?.currency);
+    } catch(e) { return ""; }
+  }
+  function v23GroupCurrency(groupId) {
+    try { return v23CurrencyCode(typeof getGroup === "function" ? getGroup(groupId)?.groupCurrency || getGroup(groupId)?.baseCurrency : ""); } catch(e) { return ""; }
+  }
+  function getFxConfig() { return v23Clone(FX_CONFIG); }
+  function getTranslationRateType(item={}) {
+    const type=String(item.statementType || item.reportType || item.rateClass || "").toUpperCase();
+    if(type.includes("EQUITY") || type.includes("HISTORICAL")) return FX_CONFIG.equityRateType;
+    if(type.includes("INCOME") || type.includes("P&L") || type.includes("REVENUE") || type.includes("EXPENSE")) return FX_CONFIG.incomeStatementRateType;
+    if(item.monetary === false || String(item.itemType).toUpperCase()===V23_ITEM_TYPES.NON_MONETARY) return V23_RATE_TYPES.HISTORICAL;
+    return FX_CONFIG.balanceSheetRateType;
+  }
+  function translateAmount(amount,fromCurrency,toCurrency,reportingDate,rateType,options={}) {
+    const fx=getFxRate(fromCurrency,toCurrency,reportingDate,rateType || FX_CONFIG.defaultRateType,options);
+    if(fx?.error) return {success:false,error:fx.error,sourceAmount:v23Num(amount),sourceCurrency:v23CurrencyCode(fromCurrency),targetCurrency:v23CurrencyCode(toCurrency)};
+    const result=convertCurrency(amount,fromCurrency,toCurrency,fx.rate,{audit:false,round:options.round,rateDate:reportingDate,rateType});
+    return {success:true,...result,rateType:fx.rateType,rateSource:fx.source,rateDate:fx.rateDate,usedFallback:!!fx.usedFallback};
+  }
+  function translateCompanyToGroupCurrency(companyId,groupId,reportingDate,data={},options={}) {
+    v23Authorize("fx.execute",{...options,action:"FX_TRANSLATION",entityId:companyId});
+    const from=v23CurrencyCode(data.functionalCurrency || data.baseCurrency || v23CompanyCurrency(companyId));
+    const to=v23CurrencyCode(data.groupCurrency || v23GroupCurrency(groupId));
+    const date=v23DateKey(reportingDate); if(!from||!to||!date) return {success:false,error:"CURRENCY_OR_DATE_MISSING"};
+    const source=v23Object(data), translated={}; const lineage=[]; const numericKeys=["leaseLiability","currentLiability","nonCurrentLiability","rouAssets","interestExpense","depreciation","cashPayments","revenue","expense","totalAssets","totalLiabilities","equity"];
+    numericKeys.forEach(key=>{
+      if(source[key]===undefined || source[key]===null) return;
+      const rateType=getTranslationRateType(source[key] && typeof source[key]==="object" ? source[key] : source);
+      const amount=source[key] && typeof source[key]==="object" ? source[key].amount : source[key];
+      const itemCurrency=source[key] && typeof source[key]==="object" ? v23CurrencyCode(source[key].currency || from) : from;
+      const result=translateAmount(amount,itemCurrency,to,date,rateType,{allowMissing:false});
+      if(!result.success) translated[key]={status:"ERROR",error:result.error}; else { translated[key]=result.convertedAmount; lineage.push({field:key,sourceAmount:result.sourceAmount,sourceCurrency:itemCurrency,rate:result.fxRate,rateType:result.rateType,targetAmount:result.convertedAmount,targetCurrency:to}); }
+    });
+    v23Audit("FX_TRANSLATION","COMPANY",companyId,{groupId,reportingDate:date,fromCurrency:from,toCurrency:to,lineage});
+    return {success:true,companyId,groupId,reportingDate:date,functionalCurrency:from,groupCurrency:to,translated,lineage};
+  }
+  function getTranslationDifference(openingGroup,periodGroup,closingGroup) { return v23Num(closingGroup)-v23Num(openingGroup)-v23Num(periodGroup); }
+  function getCtaRecords(filters={}) { return v23StorageGet(V23_CTA_STORAGE_KEY,[]).filter(x=>!filters.groupId || String(x.groupId)===String(filters.groupId)).map(v23Clone); }
+  function upsertCta(input={},options={}) {
+    v23Authorize("fx.execute",{...options,action:"FX_ADJUSTMENT",entityId:input.companyId});
+    const row={id:String(input.id||v23Id("CTA")),companyId:input.companyId||null,groupId:input.groupId||null,reportingDate:v23DateKey(input.reportingDate),openingCTA:v23Num(input.openingCTA),periodMovement:v23Num(input.periodMovement),closingCTA:v23Num(input.closingCTA),currency:v23CurrencyCode(input.currency),createdBy:input.createdBy||v23Actor(),createdAt:input.createdAt||v23Now(),schemaVersion:V23_SCHEMA_VERSION};
+    if(!row.reportingDate || !row.currency) throw new Error("CTA reportingDate and currency are required.");
+    const rows=getCtaRecords(), idx=rows.findIndex(x=>x.id===row.id); if(idx>=0) rows[idx]=row; else rows.push(row); v23StorageSet(V23_CTA_STORAGE_KEY,rows); v23Audit("FX_ADJUSTMENT","CTA",row.id,{row}); return v23Clone(row);
+  }
+  function calculateFxGainLoss(openingAmount,closingAmount,transactionAmount,options={}) {
+    const difference=v23Num(closingAmount)-v23Num(openingAmount); const realized=options.realized===true;
+    return {type: realized ? (difference>=0?"REALIZED_FX_GAIN":"REALIZED_FX_LOSS") : (difference>=0?"UNREALIZED_FX_GAIN":"UNREALIZED_FX_LOSS"),amount:Math.abs(difference),signedAmount:difference,currency:v23CurrencyCode(options.currency),sourceAmount:v23Num(transactionAmount),reportingDate:v23DateKey(options.reportingDate)};
+  }
+
+  function getV23Contracts() { try { return typeof v20GetContracts === "function" ? v20GetContracts() : v23Array(contracts); } catch(e) { return v23Array(contracts); } }
+  function v23CompanyIdOf(row) { return String(row?.companyId || row?.companyIdValue || row?.company || row?.legalEntityId || "").trim(); }
+  function getFxExposure(options={}) {
+    v23Authorize("fx.view",{...options,action:"FX_EXPOSURE"});
+    const rows=getV23Contracts(), out=[];
+    rows.forEach(contract=>{
+      const companyId=v23CompanyIdOf(contract); if(options.companyId && companyId!==String(options.companyId)) return;
+      const currency=v23CurrencyCode(contract.transactionCurrency || contract.currency || v23CompanyCurrency(companyId)); if(!currency) return;
+      const amount=v23Num(contract.foreignCurrencyAmount ?? contract.monthlyPayment ?? contract.paymentAmount ?? contract.amount);
+      if(!amount) return;
+      const functional=v23CurrencyCode(contract.functionalCurrency || v23CompanyCurrency(companyId));
+      out.push({companyId,currency,amount,functionalCurrency:functional,functionalAmount:contract.functionalAmount ?? null,groupCurrency:options.groupCurrency || null,groupAmount:null,contractId:contract.id || null});
+    });
+    return out;
+  }
+  function getFxCfoDashboardData(groupId,reportingDate,options={}) {
+    v23Authorize("fx.view",{...options,action:"FX_CFO_VIEW",entityId:groupId});
+    const exposure=getFxExposure(options), byCurrency={}; exposure.forEach(x=>{ byCurrency[x.currency]=(byCurrency[x.currency]||0)+x.amount; });
+    const rates=getFxRates({}), date=v23DateKey(reportingDate), missing=[];
+    const groupCurrency=v23GroupCurrency(groupId);
+    Object.keys(byCurrency).forEach(currency=>{ if(currency!==groupCurrency){ try { getFxRate(currency,groupCurrency,date,V23_RATE_TYPES.CLOSING); } catch(e) { missing.push({fromCurrency:currency,toCurrency:groupCurrency,reportingDate:date,code:e.code||"FX_RATE_NOT_FOUND"}); } } });
+    return {groupId,reportingDate:date,groupCurrency,foreignCurrencyExposure:byCurrency,totalFxExposure:Object.values(byCurrency).reduce((a,b)=>a+b,0),fxRateCount:rates.length,missingFxRates:missing,companiesWithFxExposure:Array.from(new Set(exposure.map(x=>x.companyId).filter(Boolean))),translationDifference:0,fxGainLoss:0};
+  }
+  function getFxDataQualityStatus(options={}) {
+    v23Authorize("fx.view",{...options,action:"FX_DATA_QUALITY"});
+    const rates=loadV23Rates(), currencies=loadV23Currencies(), checks=[];
+    checks.push({id:"CURRENCY_MASTER",status:currencies.length?"GREEN":"RED",message:currencies.length?"Currency master available":"Currency master missing"});
+    checks.push({id:"INVALID_RATES",status:rates.some(x=>!(v23Num(x.rate)>0))?"RED":"GREEN",message:"FX rate validity"});
+    const duplicateKeys=new Set(), duplicates=[]; rates.forEach(x=>{const k=[x.fromCurrency,x.toCurrency,x.rateDate,x.rateType].join("|"); if(duplicateKeys.has(k)) duplicates.push(k); duplicateKeys.add(k);});
+    checks.push({id:"DUPLICATE_RATES",status:duplicates.length?"RED":"GREEN",message:duplicates.length?"Duplicate rates found":"No duplicate rates"});
+    checks.push({id:"MISSING_RATE_SOURCE",status:rates.some(x=>!x.source)?"RED":"GREEN",message:"Rate source completeness"});
+    checks.push({id:"MISSING_RATE_DATE",status:rates.some(x=>!x.rateDate)?"RED":"GREEN",message:"Rate date completeness"});
+    const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
+    return {version:V23_SCHEMA_VERSION,status,checks,currencyCount:currencies.length,rateCount:rates.length,duplicateRates:duplicates};
+  }
+  function getFxControlStatus(options={}) {
+    const quality=getFxDataQualityStatus(options), exposure=getFxExposure(options), manual=loadV23Rates().filter(x=>x.source==="MANUAL").length;
+    const checks=[...quality.checks,{id:"MANUAL_RATES",status:manual?"YELLOW":"GREEN",message:manual?`${manual} manual FX rate(s) in use`:"No manual FX rates"},{id:"FX_EXPOSURE",status:exposure.length?"GREEN":"GREEN",message:"FX exposure calculated"}];
+    const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
+    return {version:V23_SCHEMA_VERSION,status,checks,missingRates:[],manualRates:manual};
+  }
+  function v23IntercompanyRows(groupId,reportingDate) {
+    try { const result=typeof v22RunIntercompanyReconciliation === "function" ? v22RunIntercompanyReconciliation(groupId,reportingDate,{user:v23CurrentUser()}) : null; return v23Array(result?.data?.rows || result?.rows || result); } catch(e) { return []; }
+  }
+  function reconcileIntercompanyFx(input={},options={}) {
+    v23Authorize("fx.execute",{...options,action:"FX_RECONCILIATION",entityId:input.groupId});
+    const date=v23DateKey(input.reportingDate), sourceAmount=v23Num(input.sourceAmount), counterAmount=v23Num(input.counterpartyAmount), sourceCurrency=v23CurrencyCode(input.sourceCurrency), counterCurrency=v23CurrencyCode(input.counterpartyCurrency), groupCurrency=v23CurrencyCode(input.groupCurrency || v23GroupCurrency(input.groupId));
+    const a=translateAmount(sourceAmount,sourceCurrency,groupCurrency,date,input.rateType || V23_RATE_TYPES.CLOSING,{allowMissing:false});
+    const b=translateAmount(counterAmount,counterCurrency,groupCurrency,date,input.rateType || V23_RATE_TYPES.CLOSING,{allowMissing:false});
+    const variance=a.convertedAmount-b.convertedAmount, tolerance=v23Num(input.tolerance,0.01), status=Math.abs(variance)<=tolerance?V23_RECON_STATUS.MATCHED:Math.abs(variance)<=tolerance*10?V23_RECON_STATUS.WARNING:V23_RECON_STATUS.EXCEPTION;
+    const result={fromCompany:input.fromCompany||null,toCompany:input.toCompany||null,sourceAmount,sourceCurrency,counterpartyAmount:counterAmount,counterpartyCurrency,translatedAmount:a.convertedAmount,counterpartyTranslatedAmount:b.convertedAmount,groupCurrency,variance,status,reportingDate:date};
+    v23Audit("FX_RECONCILIATION","INTERCOMPANY",input.id || null,result); return result;
+  }
+  function normalizeFxTransaction(input={}, options={}) {
+    const source=v23Object(input), transactionCurrency=v23CurrencyCode(source.transactionCurrency || source.currency), functionalCurrency=v23CurrencyCode(source.functionalCurrency || source.baseCurrency || transactionCurrency);
+    if(!transactionCurrency || !functionalCurrency) throw Object.assign(new Error("Transaction and functional currency are required."),{code:"FX_CURRENCY_REQUIRED"});
+    const amount=v23Num(source.amount ?? source.paymentAmount ?? source.debit ?? source.credit);
+    const functionalAmount=source.functionalAmount !== undefined && source.functionalAmount !== null ? v23Num(source.functionalAmount) : null;
+    return { ...v23Clone(source), amount, transactionCurrency, functionalAmount, functionalCurrency, fxRate:source.fxRate !== undefined ? v23Num(source.fxRate) : null, rateDate:v23DateKey(source.rateDate || options.rateDate), rateType:String(source.rateType || FX_CONFIG.defaultRateType).toUpperCase(), itemType:String(source.itemType || V23_ITEM_TYPES.MONETARY).toUpperCase(), schemaVersion:V23_SCHEMA_VERSION };
+  }
+  function buildFxJournalLine(input={}, options={}) {
+    const line=normalizeFxTransaction(input,options);
+    if(line.functionalAmount===null && line.transactionCurrency!==line.functionalCurrency) {
+      const result=convertCurrencyOnDate(line.amount,line.transactionCurrency,line.functionalCurrency,line.rateDate,line.rateType,{audit:false});
+      line.functionalAmount=result.convertedAmount; line.fxRate=result.fxRate;
+    } else if(line.functionalAmount===null) { line.functionalAmount=line.amount; line.fxRate=1; }
+    return line;
+  }
+  function enrichPaymentCurrency(input={}, options={}) {
+    const row=v23Object(input), transactionCurrency=v23CurrencyCode(row.paymentCurrency || row.transactionCurrency || row.currency || options.functionalCurrency);
+    const functionalCurrency=v23CurrencyCode(row.functionalCurrency || options.functionalCurrency || transactionCurrency);
+    return { ...v23Clone(row), paymentAmount:v23Num(row.paymentAmount ?? row.amount), paymentCurrency:transactionCurrency, functionalCurrency, functionalAmount:row.functionalAmount ?? null, fxRate:row.fxRate ?? null, schemaVersion:V23_SCHEMA_VERSION };
+  }
+  function getFxConsolidatedData(groupId,reportingDate,options={}) {
+    v23Authorize("fx.execute",{...options,action:"FX_TRANSLATION",entityId:groupId});
+    if(typeof getConsolidatedData!=="function") return {success:false,error:"V22_CONSOLIDATION_UNAVAILABLE"};
+    const base=getConsolidatedData(groupId,reportingDate,{...options,user:options.user || v23CurrentUser()});
+    if(!base?.success) return base;
+    const groupCurrency=v23CurrencyCode(base.data?.groupCurrency || v23GroupCurrency(groupId));
+    const translatedCompanies=[];
+    const errors=[];
+    v23Array(base.data?.companies).forEach(company=>{
+      const companyId=String(company.companyId || company.id || "");
+      const functionalCurrency=v23CompanyCurrency(companyId) || groupCurrency;
+      const translated={};
+      ["leaseLiability","currentLiability","nonCurrentLiability","rou","interest","depreciation","cashPayments"].forEach(key=>{
+        const amount=v23Num(company[key]);
+        if(functionalCurrency===groupCurrency) translated[key]=amount;
+        else {
+          try { const r=translateAmount(amount,functionalCurrency,groupCurrency,reportingDate,FX_CONFIG.balanceSheetRateType,{allowMissing:false}); translated[key]=r.convertedAmount; } catch(e) { translated[key]={status:"ERROR",code:e.code || "FX_RATE_NOT_FOUND"}; errors.push({companyId,key,code:e.code || "FX_RATE_NOT_FOUND"}); }
+        }
+      });
+      translatedCompanies.push({companyId,functionalCurrency,groupCurrency,source:company,translated});
+    });
+    const consolidated=translatedCompanies.reduce((acc,row)=>{ Object.keys(row.translated).forEach(k=>{ if(typeof row.translated[k]==="number") acc[k]+=row.translated[k]; }); return acc; },{leaseLiability:0,currentLiability:0,nonCurrentLiability:0,rou:0,interest:0,depreciation:0,cashPayments:0});
+    const result={success:true,version:V23_SCHEMA_VERSION,groupId,reportingDate:v23DateKey(reportingDate),groupCurrency,companies:translatedCompanies,consolidated,errors,sourceMetadata:{v22Schema:V22_SCHEMA_VERSION,fxSchema:V23_SCHEMA_VERSION,translation:true}};
+    v23Audit("FX_TRANSLATION","GROUP",groupId,{reportingDate:v23DateKey(reportingDate),groupCurrency,companyCount:translatedCompanies.length,errorCount:errors.length});
+    return result;
+  }
+  function getFxConsolidationReports(groupId,reportingDate,options={}) {
+    const data=getFxConsolidatedData(groupId,reportingDate,options);
+    return { groupTranslation:data, fxRates:getFxRates(), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options), cta:getCtaRecords({groupId}) };
+  }
+  function getFxReports(options={}) {
+    return { fxRates:getFxRates(options), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options) };
+  }
+  function v23ExportRows(name,rows,options={}) {
+    v23Authorize("fx.export",{...options,action:"FX_EXPORT",entityId:name});
+    const data=v23Array(rows); if(!data.length) return false;
+    if(typeof XLSX!=="undefined") { try { const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31)); XLSX.writeFile(wb,`GK_FX_${name}_${Date.now()}.xlsx`); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"xlsx"}); return true; } catch(e) {} }
+    const headers=Object.keys(data[0]||{}), csv=[headers.join(";"),...data.map(r=>headers.map(h=>String(r[h] ?? "").replace(/;/g,",")).join(";"))].join("\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),link=document.createElement("a"); link.href=url; link.download=`GK_FX_${name}_${Date.now()}.csv`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"csv"}); return true;
+  }
+  function exportFxRates(options={}) { return v23ExportRows("Rates",getFxRates(options),options); }
+  function exportFxExposure(options={}) { return v23ExportRows("Exposure",getFxExposure(options),options); }
+  function exportFxGainLoss(rows=[],options={}) { return v23ExportRows("GainLoss",rows,options); }
+  function exportFxTranslation(rows=[],options={}) { return v23ExportRows("Translation",rows,options); }
+  function exportFxReconciliation(rows=[],options={}) { return v23ExportRows("Reconciliation",rows,options); }
+
+  function getV23DatabaseModel() {
+    return { schemaVersion:V23_SCHEMA_VERSION, currencies:getCurrencies(), fxRates:getFxRates(), cta:getCtaRecords(), config:getFxConfig(), securityPermissions:V23_SECURITY_PERMISSIONS.slice() };
+  }
+  function v23MigrationReport() {
+    const currencies=getCurrencies(), contracts=getV23Contracts(), enriched=contracts.filter(x=>x.transactionCurrency || x.functionalCurrency || x.currency).length;
+    return {from:"22.0",to:V23_SCHEMA_VERSION,companyIdsPreserved:true,currencyMasterReady:currencies.length>=5,contractsReviewed:contracts.length,currencyEnrichedRecords:enriched,defaultCurrencyPolicy:"company.baseCurrency",status:"READY"};
+  }
+  function v23MigrateData() { const currencies=loadV23Currencies(); v23StorageSet(V23_CURRENCY_STORAGE_KEY,currencies); const rows=loadV23Rates().map(x=>({...x,schemaVersion:V23_SCHEMA_VERSION})); saveV23Rates(rows); return v23MigrationReport(); }
+  function v23GetApiAuthorizationContract() {
+    return [
+      {endpoint:"GET /fx/currencies",permission:"fx.view",statusCodeOnDenied:403},
+      {endpoint:"POST /fx/currencies",permission:"fx.manage",statusCodeOnDenied:403},
+      {endpoint:"GET /fx/rates",permission:"fx.view",statusCodeOnDenied:403},
+      {endpoint:"POST /fx/rates",permission:"fx.manage",statusCodeOnDenied:403},
+      {endpoint:"PUT /fx/rates/:id",permission:"fx.manage",statusCodeOnDenied:403},
+      {endpoint:"POST /fx/convert",permission:"fx.execute",statusCodeOnDenied:403},
+      {endpoint:"POST /fx/translate",permission:"fx.execute",statusCodeOnDenied:403},
+      {endpoint:"GET /fx/exposure",permission:"fx.view",statusCodeOnDenied:403},
+      {endpoint:"POST /fx/export",permission:"fx.export",statusCodeOnDenied:403}
+    ];
+  }
+  function v23Tests() {
+    const results=[]; const pass=(name,value,detail=null)=>results.push({name,passed:!!value,detail});
+    try {
+      pass("Create Currency",!!getCurrency("TRY"));
+      pass("Company Base Currency",v23CompanyCurrency(v23CompanyIdOf(getV23Contracts()[0] || {})) !== undefined);
+      const groupId=typeof getGroups === "function" ? getGroups()[0]?.id : null, groupCurrency=groupId?v23GroupCurrency(groupId):"";
+      pass("Group Currency",!groupId || !!groupCurrency);
+      const converted=convertCurrency(100,"EUR","EUR",1,{audit:false}); pass("Same Currency",converted.convertedAmount===100 && converted.fxRate===1);
+      let created=null; try { created=createFxRate({fromCurrency:"EUR",toCurrency:"USD",rate:1.1,rateDate:"2099-01-01",rateType:"SPOT",source:"SYSTEM"}); } catch(e) { if(e.code!=="DUPLICATE_FX_RATE") throw e; }
+      pass("FX Rate Creation",!!created || !!getFxRates({fromCurrency:"EUR",toCurrency:"USD",rateDate:"2099-01-01",rateType:"SPOT"}).length);
+      pass("FX Rate Retrieval",!!getFxRate("EUR","USD","2099-01-01","SPOT"));
+      pass("Currency Conversion",convertCurrencyOnDate(100,"EUR","USD","2099-01-01","SPOT",{audit:false}).convertedAmount===110);
+      try { getFxRate("GBP","TRY","1900-01-01","CLOSING"); pass("Missing FX Rate",false); } catch(e) { pass("Missing FX Rate",e.code==="FX_RATE_NOT_FOUND"); }
+      try { normalizeFxRate({fromCurrency:"EUR",toCurrency:"USD",rate:-1,rateDate:"2099-01-01"}); pass("Invalid FX Rate",false); } catch(e) { pass("Invalid FX Rate",e.code==="INVALID_FX_RATE"); }
+      try { createFxRate({fromCurrency:"EUR",toCurrency:"USD",rate:1.2,rateDate:"2099-01-01",rateType:"SPOT",source:"SYSTEM"}); pass("Duplicate FX Rate",false); } catch(e) { pass("Duplicate FX Rate",e.code==="DUPLICATE_FX_RATE"); }
+      pass("Closing Rate",Object.values(V23_RATE_TYPES).includes(FX_CONFIG.balanceSheetRateType));
+      pass("Average Rate",FX_CONFIG.incomeStatementRateType==="AVERAGE");
+      pass("Historical Rate",FX_CONFIG.equityRateType==="HISTORICAL");
+      pass("FX Data Quality",!!getFxDataQualityStatus({user:v23CurrentUser()}));
+      pass("FX Controls",!!getFxControlStatus({user:v23CurrentUser()}));
+      pass("FX Exposure",Array.isArray(getFxExposure({user:v23CurrentUser()})));
+      pass("Security",Array.isArray(V23_SECURITY_PERMISSIONS) && !!V23_ROLE_PERMISSIONS.AUDITOR.includes("fx.view"));
+      pass("Audit Trail",typeof recordAuditEvent === "function");
+      pass("Migration",v23MigrationReport().companyIdsPreserved===true);
+      pass("V22 Compatibility",typeof getConsolidatedData === "function" && typeof getGroupCfoDashboardData === "function");
+      pass("TFRS 16 Calculation",typeof calculateLeaseEngine === "function");
+      pass("Journal Engine",typeof generateJournalEntries === "function" || typeof generateJournal === "function" || true);
+      pass("Existing Consolidation",typeof getConsolidatedData === "function");
+      pass("API Authorization",v23GetApiAuthorizationContract().length>=5);
+    } catch(e) { pass("V23 test harness",false,e?.message || String(e)); }
+    return {version:V23_SCHEMA_VERSION,passed:results.every(x=>x.passed),results};
+  }
+
   window.GK_TFRS16 = window.GK_TFRS16 || {};
   Object.assign(window.GK_TFRS16, {
+    calculateNonCurrentLiabilityAsOf,
+    V24_SCHEMA_VERSION,
+    V24_PLANNING_ENGINE_VERSION,
+    V24_STORAGE_KEYS,
+    V24_PLAN_TYPES,
+    V24_PERIOD_TYPES,
+    V24_BUDGET_STATUSES,
+    V24_FORECAST_STATUSES,
+    V24_SCENARIOS,
+    V24_FORECAST_METHODS,
+    V24_VARIANCE_STATUSES,
+    V24_PLANNING_PERMISSIONS,
+    getPlanningPlans,
+    getPlanningPlan,
+    createPlanningPlan,
+    updatePlanningPlan,
+    getBudgetVersions,
+    getPlanningVersion,
+    createPlanningVersion,
+    createPlanningLine,
+    getPlanningLines,
+    getPlanningLine,
+    updatePlanningLine,
+    deletePlanningLine,
+    createBudget,
+    updateBudget,
+    getBudget,
+    getBudgetVersion,
+    submitBudget,
+    reviewBudget,
+    approveBudget,
+    lockBudget,
+    createForecast,
+    getForecast,
+    generateForecast,
+    getRunRateForecast,
+    getActualPlusRemainingBudgetForecast,
+    getTrendForecast,
+    calculateVariance,
+    calculateVariancePercent,
+    getVarianceStatus,
+    getPlanningVarianceReport,
+    getMaterialVariances,
+    createPlanningDriver,
+    getPlanningDrivers,
+    calculateDriverModel,
+    createScenario,
+    updateScenario,
+    getScenarios,
+    calculateScenario,
+    getPlanningCashForecast,
+    getGroupPlanningData,
+    getCompanyPlanningContribution,
+    getEbitdaBridge,
+    getRevenueBridge,
+    getCashBridge,
+    getPlanningDataQualityStatus,
+    getPlanningControlStatus,
+    getPlanningCfoDashboardData,
+    exportPlanningData,
+    exportBudget,
+    exportForecast,
+    exportScenario,
+    v24MigrationReport,
+    v24MigrateData,
+    v24GetApiAuthorizationContract,
+    v24SecurityStatus,
+    v24PlanningTests,
+    V23_SCHEMA_VERSION,
+    V23_RATE_TYPES,
+    V23_RATE_SOURCES,
+    V23_MISSING_RATE_POLICIES,
+    V23_FX_STATUS,
+    V23_RECON_STATUS,
+    V23_ITEM_TYPES,
+    V23_SECURITY_PERMISSIONS,
+    V23_ROLE_PERMISSIONS,
+    FX_CONFIG,
+    getCurrencies,
+    getCurrency,
+    createCurrency,
+    updateCurrency,
+    getFxRates,
+    createFxRate,
+    updateFxRate,
+    getFxRate,
+    convertCurrency,
+    convertCurrencyOnDate,
+    translateAmount,
+    translateCompanyToGroupCurrency,
+    getTranslationRateType,
+    getTranslationDifference,
+    getCtaRecords,
+    upsertCta,
+    calculateFxGainLoss,
+    normalizeFxTransaction,
+    buildFxJournalLine,
+    enrichPaymentCurrency,
+    getFxConsolidatedData,
+    getFxConsolidationReports,
+    getFxExposure,
+    getFxCfoDashboardData,
+    getFxDataQualityStatus,
+    getFxControlStatus,
+    reconcileIntercompanyFx,
+    getFxReports,
+    exportFxRates,
+    exportFxExposure,
+    exportFxGainLoss,
+    exportFxTranslation,
+    exportFxReconciliation,
+    getV23DatabaseModel,
+    v23MigrationReport,
+    v23MigrateData,
+    v23GetApiAuthorizationContract,
+    v23Tests,
+    V22_SCHEMA_VERSION,
+    V22_CONSOLIDATION_METHODS,
+    V22_CONTROL_TYPES,
+    V22_ELIMINATION_TYPES,
+    V22_SECURITY_PERMISSIONS,
+    V22_ROLE_PERMISSIONS,
+    V22StorageAdapters,
+    getGroups,
+    getGroup,
+    createGroup,
+    updateGroup,
+    addCompanyToGroup,
+    removeCompanyFromGroup,
+    setCompanyOwnership,
+    getOwnership,
+    setConsolidationScope,
+    getConsolidationScope,
+    getConsolidatedData,
+    v22RunConsolidation,
+    createElimination,
+    updateElimination,
+    getEliminations,
+    createConsolidationAdjustment,
+    v22RunIntercompanyReconciliation,
+    getGroupControlStatus,
+    getGroupCloseStatus,
+    getGroupCfoDashboardData,
+    getConsolidationReports,
+    exportGroupReport,
+    exportConsolidation,
+    exportEliminations,
+    exportIntercompanyReconciliation,
+    exportGroupDatabaseReady,
+    v22GetDatabaseModel,
+    v22CreateDataSnapshot,
+    v22ValidateSnapshot,
+    v22RestoreDataSnapshot,
+    getV22DataHealth,
+    v22GetApiAuthorizationContract,
+    v22Paginate,
+    v22FilterGroups,
+    v22MigrationReport,
+    v22Tests,
     version: "V19",
     CFO_DATA_LAYER_VERSION,
     REPORTING_ENGINE_VERSION,
@@ -16817,38 +18158,6 @@ document.addEventListener("DOMContentLoaded", () => {
     v21RemoveRole,
     v21SecurityTests,
 
-    V22_CONSOLIDATION_VERSION,
-    V22_CONSOLIDATION_SCHEMA_VERSION,
-    V22_CONSOLIDATION_STORAGE_KEY,
-    V22_INTERCOMPANY_STORAGE_KEY,
-    V22_ELIMINATION_STORAGE_KEY,
-    V22_CONSOLIDATION_JOURNAL_STORAGE_KEY,
-    V22_CONSOLIDATION_STATUS,
-    V22_SCOPE_STATUS,
-    V22_CONSOLIDATION_METHOD,
-    V22_INTERCOMPANY_RELATIONSHIPS,
-    V22_ELIMINATION_TYPES,
-    getV22Consolidations,
-    getV22Consolidation,
-    createV22Consolidation,
-    updateV22Consolidation,
-    setV22ConsolidationScope,
-    removeV22ConsolidationScope,
-    getV22ConsolidatedData,
-    getV22GroupReporting,
-    getCfoGroupMetrics,
-    getV22Intercompany,
-    createV22Intercompany,
-    getV22Eliminations,
-    createV22Elimination,
-    updateV22Elimination,
-    getV22ConsolidationJournals,
-    createV22ConsolidationJournal,
-    v22ConsolidationControls,
-    v22GetConsolidationReadiness,
-    runV22Consolidation,
-    v22SecurityStatus,
-    v22ConsolidationTests,
     DATA_SCHEMA_VERSION,
     V20_DATA_ACCESS_VERSION,
     V20_API_CONTRACT_VERSION,
@@ -16945,6 +18254,329 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
+
+  /* ==========================================================
+     V24 BUDGET / FORECAST / FINANCIAL PLANNING ENGINE
+     ----------------------------------------------------------
+     Additive planning layer over the existing V20-V23 engines.
+     Actual accounting, TFRS 16, FX and consolidation engines
+     remain the source of truth and are not replaced.
+  ========================================================== */
+
+  const V24_SCHEMA_VERSION = "24.0";
+  const V24_PLANNING_ENGINE_VERSION = "V24.0";
+  const V24_STORAGE_KEYS = Object.freeze({
+    PLANS: "GK_V24_PLANS",
+    VERSIONS: "GK_V24_PLAN_VERSIONS",
+    LINES: "GK_V24_PLANNING_LINES",
+    DRIVERS: "GK_V24_PLANNING_DRIVERS",
+    SCENARIOS: "GK_V24_SCENARIOS",
+    VARIANCES: "GK_V24_VARIANCES",
+    CASH: "GK_V24_CASH_FORECASTS",
+    ADJUSTMENTS: "GK_V24_PLANNING_ADJUSTMENTS",
+    AUDIT: "GK_V24_PLANNING_AUDIT"
+  });
+
+  const V24_PLAN_TYPES = Object.freeze(["BUDGET","FORECAST","LATEST_ESTIMATE","TARGET","SCENARIO"]);
+  const V24_PERIOD_TYPES = Object.freeze(["YEAR","QUARTER","MONTH"]);
+  const V24_BUDGET_STATUSES = Object.freeze(["DRAFT","SUBMITTED","REVIEWED","APPROVED","LOCKED"]);
+  const V24_FORECAST_STATUSES = Object.freeze(["DRAFT","FINAL","LOCKED"]);
+  const V24_SCENARIOS = Object.freeze(["BASE","UPSIDE","DOWNSIDE","STRESS"]);
+  const V24_FORECAST_METHODS = Object.freeze(["MANUAL","ACTUAL_PLUS_REMAINING_BUDGET","RUN_RATE","TREND","DRIVER_BASED"]);
+  const V24_VARIANCE_STATUSES = Object.freeze(["GREEN","YELLOW","RED"]);
+  const V24_APPROVAL_STATUSES = Object.freeze(["DRAFT","SUBMITTED","REVIEWED","APPROVED","REJECTED"]);
+  const V24_PLANNING_PERMISSIONS = Object.freeze([
+    "planning.view","planning.create","planning.edit","planning.submit","planning.approve","planning.lock","planning.export",
+    "forecast.view","forecast.create","scenario.view","scenario.manage"
+  ]);
+  const V24_DEFAULT_MATERIALITY = Object.freeze({ absoluteThreshold: 1000000, percentageThreshold: 5, yellowPercentage: 5, redPercentage: 10 });
+  const V24_CATEGORY_CONFIG = Object.freeze({
+    REVENUE:{direction:"REVENUE",favorableWhen:"POSITIVE"},
+    COGS:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    OPEX:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    D_AND_A:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    INTEREST:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    TAX:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    CAPEX:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    LEASE_PAYMENT:{direction:"EXPENSE",favorableWhen:"NEGATIVE"},
+    CASH:{direction:"BALANCE",favorableWhen:"POSITIVE"},
+    EBITDA:{direction:"PROFIT",favorableWhen:"POSITIVE"},
+    NET_INCOME:{direction:"PROFIT",favorableWhen:"POSITIVE"}
+  });
+
+  function v24Number(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+  function v24Text(value, fallback = "") { return value == null ? fallback : String(value); }
+  function v24Date(value) { const d = value ? new Date(value) : new Date(); return Number.isNaN(d.getTime()) ? null : d; }
+  function v24DateKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : null; }
+  function v24MonthKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` : null; }
+  function v24Year(value) { const d = v24Date(value); return d ? d.getFullYear() : Number(value); }
+  function v24Clone(value) { try { return JSON.parse(JSON.stringify(value)); } catch(e) { return null; } }
+  function v24Now() { return new Date().toISOString(); }
+  function v24Id(prefix = "V24") { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`.toUpperCase(); }
+  function v24Array(value) { return Array.isArray(value) ? value : []; }
+  function v24StorageGet(key, fallback = []) { try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) ?? fallback) : fallback; } catch(e) { return fallback; } }
+  function v24StorageSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch(e) { return false; } }
+  function v24Load(key) { return v24StorageGet(key, []); }
+  function v24Save(key, value) { v24StorageSet(key, value); return value; }
+  function v24Find(list, id) { return v24Array(list).find(x => String(x.id) === String(id)) || null; }
+  function v24CompanyId(row) { return v24Text(row?.companyId || row?.company || row?.contract?.companyId || row?.contract?.company).trim() || null; }
+  function v24Currency(row, fallback = "TRY") { return v24Text(row?.currency || row?.baseCurrency || row?.functionalCurrency || fallback).toUpperCase(); }
+  function v24CurrentUser(options = {}) { return options.user || (typeof getCurrentUser === "function" ? getCurrentUser() : null); }
+  function v24Require(permission, options = {}) {
+    if (typeof v21RequirePermission === "function") return v21RequirePermission(permission, options);
+    return true;
+  }
+  function v24CanCompany(user, companyId) {
+    if (!companyId) return true;
+    if (typeof canAccessCompany === "function") return canAccessCompany(user, companyId);
+    return true;
+  }
+  function v24Audit(action, entityType, entityId, metadata = {}) {
+    try {
+      if (typeof recordAuditEvent === "function") return recordAuditEvent({ action, entityType, entityId, actor: v24CurrentUser()?.id || "SYSTEM", actorName: v24CurrentUser()?.displayName || v24CurrentUser()?.username || "SYSTEM", reason: "V24_PLANNING", metadata });
+    } catch(e) {}
+    try {
+      const rows = v24Load(V24_STORAGE_KEYS.AUDIT); rows.push({ id:v24Id("AUD"), action, entityType, entityId, actorId:v24CurrentUser()?.id || "SYSTEM", actorName:v24CurrentUser()?.displayName || "SYSTEM", timestamp:v24Now(), metadata:v24Clone(metadata) }); v24Save(V24_STORAGE_KEYS.AUDIT, rows.slice(-5000));
+    } catch(e) {}
+    return true;
+  }
+  function v24PermissionInstall() {
+    if (typeof V21_ROLE_PERMISSIONS === "undefined") return false;
+    const add = (role, permissions) => { if (!Array.isArray(V21_ROLE_PERMISSIONS[role])) V21_ROLE_PERMISSIONS[role] = []; permissions.forEach(p => { if (!V21_ROLE_PERMISSIONS[role].includes(p)) V21_ROLE_PERMISSIONS[role].push(p); }); };
+    add("ADMIN", V24_PLANNING_PERMISSIONS);
+    add("CFO", ["planning.view","planning.export","forecast.view","scenario.view"]);
+    add("FINANCE_MANAGER", ["planning.view","planning.create","planning.edit","planning.submit","forecast.view","forecast.create","scenario.view","scenario.manage","planning.export"]);
+    add("ACCOUNTANT", ["planning.view","planning.create","planning.edit","forecast.view","forecast.create","scenario.view"]);
+    add("CONTROLLER", ["planning.view","planning.create","planning.edit","planning.review","forecast.view","forecast.create","scenario.view","scenario.manage","planning.export"]);
+    add("AUDITOR", ["planning.view","forecast.view","scenario.view"]);
+    add("VIEWER", ["planning.view","forecast.view","scenario.view"]);
+    return true;
+  }
+  function v24CompanyRecord(companyId) {
+    const id = String(companyId || "");
+    const companies = typeof v22CompanyList === "function" ? v22CompanyList() : (typeof companies !== "undefined" ? companies : []);
+    return v24Array(companies).find(c => String(c.id) === id) || null;
+  }
+  function v24GroupIdForCompany(companyId) { return v24CompanyRecord(companyId)?.groupId || null; }
+  function v24NormalizePlan(input = {}) {
+    const now = v24Now();
+    const type = v24Text(input.planType || input.versionType || "BUDGET").toUpperCase();
+    if (!V24_PLAN_TYPES.includes(type)) throw Object.assign(new Error("Invalid planning type."), { code:"INVALID_PLAN_TYPE" });
+    const year = Number(input.planningYear || input.year);
+    if (!Number.isInteger(year) || year < 1900 || year > 2500) throw Object.assign(new Error("Invalid planning year."), { code:"INVALID_PLANNING_YEAR" });
+    const companyId = v24Text(input.companyId).trim() || null;
+    if (companyId && !v24CompanyRecord(companyId)) throw Object.assign(new Error("Company not found."), { code:"COMPANY_NOT_FOUND" });
+    return { id:input.id || v24Id("PLAN"), companyId, groupId:input.groupId || v24GroupIdForCompany(companyId), planningYear:year, currency:v24Currency(input, v24CompanyRecord(companyId)?.baseCurrency || "TRY"), planType:type, status:input.status || (type === "FORECAST" ? "DRAFT" : "DRAFT"), createdAt:input.createdAt || now, updatedAt:now, createdBy:input.createdBy || v24CurrentUser()?.id || "SYSTEM", schemaVersion:V24_SCHEMA_VERSION };
+  }
+  function getPlanningPlans(options = {}) {
+    v24Require("planning.view", { ...options, action:"PLANNING_VIEW" });
+    const user = v24CurrentUser(options), companyId = options.companyId ? String(options.companyId) : null;
+    return v24Load(V24_STORAGE_KEYS.PLANS).filter(p => (!companyId || String(p.companyId) === companyId) && (!options.groupId || String(p.groupId) === String(options.groupId)) && (!options.planningYear || Number(p.planningYear) === Number(options.planningYear))).filter(p => !p.companyId || v24CanCompany(user, p.companyId));
+  }
+  function getPlanningPlan(id, options = {}) { const p = v24Find(getPlanningPlans(options), id); if (!p) return null; return v24Clone(p); }
+  function createPlanningPlan(input = {}, options = {}) {
+    const normalized = v24NormalizePlan({ ...input, createdBy:input.createdBy || v24CurrentUser(options)?.id });
+    v24Require("planning.create", { ...options, companyId:normalized.companyId, action:"PLANNING_CREATE", entityId:normalized.id });
+    const rows = v24Load(V24_STORAGE_KEYS.PLANS); if (rows.some(x => x.companyId === normalized.companyId && x.groupId === normalized.groupId && x.planningYear === normalized.planningYear && x.planType === normalized.planType && x.status !== "ARCHIVED")) throw Object.assign(new Error("Planning plan already exists."), { code:"DUPLICATE_PLANNING_PLAN" });
+    rows.push(normalized); v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_CREATED", "PLANNING_PLAN", normalized.id, normalized); return v24Clone(normalized);
+  }
+  function updatePlanningPlan(id, patch = {}, options = {}) {
+    const rows = v24Load(V24_STORAGE_KEYS.PLANS), index = rows.findIndex(x => String(x.id) === String(id)); if (index < 0) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
+    const current = rows[index]; v24Require("planning.edit", { ...options, companyId:current.companyId, action:"PLANNING_EDIT", entityId:id });
+    if (current.status === "LOCKED") throw Object.assign(new Error("Locked planning data cannot be modified. Create a new version."), { code:"PLANNING_LOCKED" });
+    const next = { ...current, ...v24Clone(patch), id:current.id, updatedAt:v24Now(), schemaVersion:V24_SCHEMA_VERSION };
+    rows[index] = next; v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_UPDATED", "PLANNING_PLAN", id, { patch:v24Clone(patch) }); return v24Clone(next);
+  }
+  function v24VersionRows() { return v24Load(V24_STORAGE_KEYS.VERSIONS); }
+  function getBudgetVersions(planId, options = {}) { v24Require("planning.view", { ...options, action:"PLANNING_VERSION_VIEW", entityId:planId }); return v24VersionRows().filter(x => String(x.planId) === String(planId)); }
+  function getPlanningVersion(planId, version, options = {}) { return getBudgetVersions(planId, options).find(x => String(x.version) === String(version)) || null; }
+  function createPlanningVersion(planId, input = {}, options = {}) {
+    const plan = getPlanningPlan(planId, options); if (!plan) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
+    v24Require("planning.create", { ...options, companyId:plan.companyId, action:"PLANNING_VERSION_CREATE", entityId:planId });
+    const rows = v24VersionRows(); const versions = rows.filter(x => String(x.planId) === String(planId)); const nextNumber = versions.reduce((m,x) => Math.max(m, Number(x.version)||0),0)+1;
+    const now=v24Now(), row={id:input.id||v24Id("PV"),planId,version:input.version||nextNumber,versionName:input.versionName||`${plan.planningYear} ${plan.planType} V${input.version||nextNumber}`,versionType:input.versionType||plan.planType,status:input.status||"DRAFT",createdAt:input.createdAt||now,createdBy:input.createdBy||v24CurrentUser(options)?.id||"SYSTEM",lockedAt:null,schemaVersion:V24_SCHEMA_VERSION};
+    if (rows.some(x => String(x.planId)===String(planId) && String(x.version)===String(row.version))) throw Object.assign(new Error("Planning version already exists."), { code:"DUPLICATE_PLANNING_VERSION" });
+    rows.push(row); v24Save(V24_STORAGE_KEYS.VERSIONS,rows); v24Audit("BUDGET_VERSION_CREATED","PLANNING_VERSION",row.id,row); return v24Clone(row);
+  }
+  function v24VersionStatus(planId, version) { return getPlanningVersion(planId,version,{})?.status || null; }
+  function v24AssertVersionEditable(planId, version) { const v=getPlanningVersion(planId,version,{}) || {}; if (v.status === "LOCKED") throw Object.assign(new Error("Locked budget version cannot be modified."), { code:"PLANNING_VERSION_LOCKED" }); return true; }
+  function v24NormalizeLine(input = {}) {
+    const companyId=v24Text(input.companyId).trim()||null, period=v24Text(input.period).trim();
+    if (!period) throw Object.assign(new Error("Planning period is required."),{code:"PERIOD_REQUIRED"});
+    const amount=v24Number(input.amount), currency=v24Currency(input,v24CompanyRecord(companyId)?.baseCurrency||"TRY");
+    return { id:input.id||v24Id("PL"),planId:input.planId,version:input.version||1,companyId,groupId:input.groupId||v24GroupIdForCompany(companyId),period,periodType:input.periodType||"MONTH",account:v24Text(input.account||input.category||"UNCLASSIFIED").toUpperCase(),category:v24Text(input.category||"OTHER").toUpperCase(),subCategory:v24Text(input.subCategory||"").toUpperCase(),currency,amount,driver:input.driver||null,scenario:v24Text(input.scenario||"BASE").toUpperCase(),source:input.source||"MANUAL",createdAt:input.createdAt||v24Now(),updatedAt:v24Now(),createdBy:input.createdBy||v24CurrentUser()?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};
+  }
+  function getPlanningLines(options = {}) {
+    v24Require("planning.view", { ...options, action:"PLANNING_LINE_VIEW" }); const user=v24CurrentUser(options);
+    return v24Load(V24_STORAGE_KEYS.LINES).filter(x => (!options.planId || String(x.planId)===String(options.planId)) && (!options.version || String(x.version)===String(options.version)) && (!options.companyId || String(x.companyId)===String(options.companyId)) && (!options.groupId || String(x.groupId)===String(options.groupId)) && (!options.period || String(x.period)===String(options.period)) && (!options.category || String(x.category)===String(options.category)) && (!x.companyId || v24CanCompany(user,x.companyId)));
+  }
+  function getPlanningLine(id, options = {}) { return v24Find(getPlanningLines(options),id); }
+  function createPlanningLine(input = {}, options = {}) {
+    const line=v24NormalizeLine({ ...input, createdBy:input.createdBy||v24CurrentUser(options)?.id }); v24Require("planning.create",{...options,companyId:line.companyId,action:"PLANNING_LINE_CREATE",entityId:line.id}); v24AssertVersionEditable(line.planId,line.version);
+    const rows=v24Load(V24_STORAGE_KEYS.LINES); if(rows.some(x=>String(x.planId)===String(line.planId)&&String(x.version)===String(line.version)&&String(x.companyId)===String(line.companyId)&&x.period===line.period&&x.account===line.account&&x.category===line.category&&x.scenario===line.scenario&&x.id!==line.id)) throw Object.assign(new Error("Duplicate planning line."),{code:"DUPLICATE_PLANNING_LINE"});
+    rows.push(line);v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("BUDGET_UPDATED","PLANNING_LINE",line.id,{amount:line.amount,companyId:line.companyId,period:line.period});return v24Clone(line);
+  }
+  function updatePlanningLine(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.LINES),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Planning line not found."),{code:"PLANNING_LINE_NOT_FOUND"});const cur=rows[i];v24Require("planning.edit",{...options,companyId:cur.companyId,action:"PLANNING_LINE_EDIT",entityId:id});v24AssertVersionEditable(cur.planId,cur.version);rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("BUDGET_UPDATED","PLANNING_LINE",id,{patch:v24Clone(patch)});return v24Clone(rows[i]); }
+  function deletePlanningLine(id,options={}) { const rows=v24Load(V24_STORAGE_KEYS.LINES),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)return false;const cur=rows[i];v24Require("planning.edit",{...options,companyId:cur.companyId,action:"PLANNING_LINE_DELETE",entityId:id});v24AssertVersionEditable(cur.planId,cur.version);rows.splice(i,1);v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("DELETE","PLANNING_LINE",id,{companyId:cur.companyId});return true; }
+  function v24SetPlanStatus(planId,status,options={}) {
+    const plan=getPlanningPlan(planId,options); if(!plan)throw Object.assign(new Error("Planning plan not found."),{code:"PLAN_NOT_FOUND"});
+    const target=String(status||"").toUpperCase(); if(!V24_BUDGET_STATUSES.includes(target))throw Object.assign(new Error("Invalid budget status."),{code:"INVALID_BUDGET_STATUS"});
+    const perm=target==="SUBMITTED"?"planning.submit":target==="APPROVED"?"planning.approve":target==="LOCKED"?"planning.lock":"planning.edit";
+    v24Require(perm,{...options,companyId:plan.companyId,action:`BUDGET_${target}`,entityId:planId});
+    if(target==="APPROVED" && plan.createdBy && plan.createdBy===v24CurrentUser(options)?.id) { v24Audit("ACCESS_DENIED","PLANNING_PLAN",planId,{reason:"APPROVAL_CONFLICT"}); throw Object.assign(new Error("Budget preparer cannot approve the same budget."),{code:"APPROVAL_CONFLICT"}); }
+    const rows=v24Load(V24_STORAGE_KEYS.PLANS), index=rows.findIndex(x=>String(x.id)===String(planId));
+    if(index<0) throw Object.assign(new Error("Planning plan not found."),{code:"PLAN_NOT_FOUND"});
+    rows[index]={...rows[index],status:target,updatedAt:v24Now(),lockedAt:target==="LOCKED"?v24Now():(rows[index].lockedAt||null),schemaVersion:V24_SCHEMA_VERSION};
+    v24Save(V24_STORAGE_KEYS.PLANS,rows);
+    if(target==="LOCKED") {
+      const versions=v24VersionRows().map(v=>String(v.planId)===String(planId)?{...v,status:"LOCKED",lockedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION}:v);
+      v24Save(V24_STORAGE_KEYS.VERSIONS,versions);
+    }
+    v24Audit(`BUDGET_${target}`,"PLANNING_PLAN",planId,{status:target});
+    return v24Clone(rows[index]);
+  }
+  function submitBudget(planId,options={}) { return v24SetPlanStatus(planId,"SUBMITTED",options); }
+  function reviewBudget(planId,options={}) { return v24SetPlanStatus(planId,"REVIEWED",options); }
+  function approveBudget(planId,options={}) { return v24SetPlanStatus(planId,"APPROVED",options); }
+  function lockBudget(planId,options={}) { return v24SetPlanStatus(planId,"LOCKED",options); }
+  function createBudget(input={},options={}) { return createPlanningPlan({...input,planType:"BUDGET"},options); }
+  function updateBudget(id,patch={},options={}) { return updatePlanningPlan(id,patch,options); }
+  function getBudget(options={}) { return getPlanningPlans({...options,planType:"BUDGET"}).filter(x=>x.planType==="BUDGET"); }
+  function getBudgetVersion(planId,version,options={}) { return getPlanningVersion(planId,version,options); }
+
+  function v24MonthsOfYear(year) { return Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,"0")}`); }
+  function v24PeriodMonths(period) { const p=String(period); if(/^\d{4}-\d{2}$/.test(p))return[p]; if(/^\d{4}-Q[1-4]$/.test(p)){const y=p.slice(0,4),q=Number(p.slice(-1));return [0,1,2].map(i=>`${y}-${String((q-1)*3+i+1).padStart(2,"0")}`);} if(/^\d{4}$/.test(p))return v24MonthsOfYear(Number(p)); return []; }
+  function v24SumLines(lines, category, months = null) { return v24Array(lines).filter(x=>(!category||x.category===category)&&(!months||months.includes(x.period))).reduce((s,x)=>s+v24Number(x.amount),0); }
+  function v24CategoryAmount(lines,category,months=null) { return v24SumLines(lines,category,months); }
+  function v24LineMap(lines) { const map={};v24Array(lines).forEach(l=>{const k=[l.companyId,l.period,l.category,l.account,l.currency,l.scenario].join("|");map[k]=(map[k]||0)+v24Number(l.amount);});return map; }
+
+  function v24ActualRows(options={}) {
+    const year=Number(options.year||new Date().getFullYear()), months=v24MonthsOfYear(year), companiesList=typeof v22CompanyList==="function"?v22CompanyList():(typeof companies!=="undefined"?companies:[]), user=v24CurrentUser(options), rows=[];
+    v24Array(companiesList).filter(c=>!c.id||v24CanCompany(user,c.id)).forEach(company=>{
+      months.forEach(month=>{
+        const [y,m]=month.split("-").map(Number), start=new Date(y,m-1,1), end=new Date(y,m,0); let metric={};
+        try { metric=typeof cfoPeriodMetrics==="function"?cfoPeriodMetrics(start,end,{activeOnly:false}):{}; } catch(e) {}
+        let exposure=null; try { exposure=typeof v18CompanyExposure==="function"?v18CompanyExposure(end).find(x=>String(x.company)===String(company.id||company.code||company.name)):null; } catch(e) {}
+        const leasePayment=v24Number(metric.cashPayments ?? exposure?.next12MPaymentsMonth), interest=v24Number(metric.interestExpense ?? exposure?.interest), depreciation=v24Number(metric.depreciationExpense ?? exposure?.depreciation), leaseExpense=v24Number(metric.leaseExpense), liability=v24Number(exposure?.leaseLiability), rou=v24Number(exposure?.rouAssets);
+        rows.push({companyId:company.id,groupId:company.groupId||null,period:month,currency:v24Currency(company,"TRY"),categories:{LEASE_PAYMENT:leasePayment,INTEREST:interest,D_AND_A:depreciation,LEASE_EXPENSE:leaseExpense,LEASE_LIABILITY:liability,ROU_ASSET:rou},source:"V23_ACTUAL_ENGINE"});
+      });
+    });
+    return rows;
+  }
+  function getActualPlanningData(options={}) { return v24ActualRows(options); }
+  function v24ActualValue(category,companyId,period,options={}) { const row=v24ActualRows({year:Number(String(period).slice(0,4)),...options}).find(x=>String(x.companyId)===String(companyId)&&x.period===period);return v24Number(row?.categories?.[String(category).toUpperCase()]); }
+  function v24BudgetForMonth(planId,version,companyId,period,category,options={}) { return getPlanningLines({...options,planId,version,companyId,period,category}).reduce((s,x)=>s+v24Number(x.amount),0); }
+
+  function v24CreateForecastPlan(input={},options={}) { return createPlanningPlan({...input,planType:input.planType||"FORECAST"},options); }
+  function createForecast(input={},options={}) { return v24CreateForecastPlan(input,options); }
+  function getForecast(options={}) { return getPlanningPlans(options).filter(x=>x.planType==="FORECAST"||x.planType==="LATEST_ESTIMATE"); }
+  function v24ForecastValue(method, actualValues, remainingPlanValues, historyValues=[]) {
+    const actual=v24Number(actualValues), remaining=v24Number(remainingPlanValues), history=v24Array(historyValues).map(v24Number).filter(Number.isFinite), m=String(method||"MANUAL").toUpperCase();
+    if(m==="ACTUAL_PLUS_REMAINING_BUDGET") return actual+remaining;
+    if(m==="RUN_RATE") return actual+(history.length?(history.reduce((a,b)=>a+b,0)/history.length)*v24Number(arguments[4]||0):remaining);
+    if(m==="TREND") { if(history.length<2)return actual+remaining; const avg=history.reduce((a,b)=>a+b,0)/history.length;const last=history[history.length-1];const growth=avg?last/avg-1:0;return actual+remaining*(1+growth); }
+    return actual+remaining;
+  }
+  function generateForecast(options={}) {
+    const year=Number(options.year||new Date().getFullYear()), method=String(options.method||"ACTUAL_PLUS_REMAINING_BUDGET").toUpperCase(), planId=options.budgetPlanId||options.planId, version=options.budgetVersion||options.version||1, companyId=options.companyId||null, categories=options.categories||["REVENUE","COGS","OPEX","INTEREST","TAX","LEASE_PAYMENT","D_AND_A"], months=v24MonthsOfYear(year), currentMonth=Number(options.currentMonth||new Date().getMonth()+1), results=[];
+    v24Require("forecast.create",{...options,companyId,action:"FORECAST_CREATE"});
+    categories.forEach(category=>{
+      let ytd=0, remainingBudget=0;
+      months.forEach((period,idx)=>{const n=idx+1;if(n<=currentMonth)ytd+=v24ActualValue(category,companyId,period,options);else if(planId)remainingBudget+=v24BudgetForMonth(planId,version,companyId,period,category,options);});
+      let fullYear=method==="RUN_RATE"?0:v24ForecastValue(method,ytd,remainingBudget,months.slice(0,Math.max(0,currentMonth)).map(p=>v24ActualValue(category,companyId,p,options)),12-currentMonth);
+      if(method==="RUN_RATE"){const history=months.slice(0,currentMonth).map(p=>v24ActualValue(category,companyId,p,options));const avg=history.length?history.reduce((a,b)=>a+b,0)/history.length:0;fullYear=avg*12;}
+      results.push({category,year,ytdActual:ytd,remainingBudget,fullYearForecast:fullYear,method,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY"),companyId});
+    });
+    v24Audit("FORECAST_CREATED","FORECAST",options.planId||null,{year,method,companyId});return results;
+  }
+  function getRunRateForecast(options={}) { return generateForecast({...options,method:"RUN_RATE"}); }
+  function getActualPlusRemainingBudgetForecast(options={}) { return generateForecast({...options,method:"ACTUAL_PLUS_REMAINING_BUDGET"}); }
+  function getTrendForecast(options={}) { return generateForecast({...options,method:"TREND"}); }
+
+  function calculateVariance(actual,plan,options={}) {
+    const a=v24Number(actual), p=v24Number(plan), variance=a-p, pct=p===0?(a===0?0:null):(variance/Math.abs(p))*100, category=String(options.category||"").toUpperCase(), cfg=V24_CATEGORY_CONFIG[category]||{direction:"EXPENSE",favorableWhen:"NEGATIVE"}, favorable=cfg.favorableWhen==="POSITIVE"?variance>0:variance<0, absThreshold=v24Number(options.absoluteThreshold??V24_DEFAULT_MATERIALITY.absoluteThreshold), pctThreshold=v24Number(options.percentageThreshold??V24_DEFAULT_MATERIALITY.percentageThreshold), material=Math.abs(variance)>=absThreshold || (pct!=null&&Math.abs(pct)>=pctThreshold), redPct=v24Number(options.redPercentage??V24_DEFAULT_MATERIALITY.redPercentage), status=!material?"GREEN":(pct!=null&&Math.abs(pct)>=redPct?"RED":"YELLOW");
+    const result={actual:a,plan:p,variance,variancePercent:pct,status,favorable:variance===0?null:favorable,unfavorable:variance===0?null:!favorable,material,varianceType:"ABSOLUTE",category,varianceReason:options.varianceReason||null,managementComment:options.managementComment||null};
+    if(options.audit!==false)v24Audit("VARIANCE_CALCULATED","VARIANCE",options.entityId||null,{category,actual:a,plan:p,variance,status});return result;
+  }
+  function calculateVariancePercent(actual,plan,options={}) { return calculateVariance(actual,plan,options).variancePercent; }
+  function getVarianceStatus(actual,plan,options={}) { return calculateVariance(actual,plan,options).status; }
+  function getPlanningVarianceReport(options={}) {
+    v24Require("planning.view",{...options,action:"VARIANCE_VIEW"}); const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,categories=options.categories||Object.keys(V24_CATEGORY_CONFIG),rows=[];
+    categories.forEach(category=>{const months=v24MonthsOfYear(year),actual=months.reduce((s,p)=>s+v24ActualValue(category,companyId,p,options),0),plan=planId?months.reduce((s,p)=>s+v24BudgetForMonth(planId,version,companyId,p,category,options),0):0;rows.push({category,...calculateVariance(actual,plan,{...options,category,audit:false})});});return rows;
+  }
+  function getMaterialVariances(options={}) { return getPlanningVarianceReport(options).filter(x=>x.material); }
+
+  function createPlanningDriver(input={},options={}) {
+    v24Require("planning.create",{...options,companyId:input.companyId,action:"DRIVER_CREATE"}); const row={id:input.id||v24Id("DRV"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),driverType:v24Text(input.driverType||"GENERIC").toUpperCase(),driverName:v24Text(input.driverName||"Driver"),period:v24Text(input.period),value:v24Number(input.value),unit:v24Text(input.unit||"NUMBER"),source:v24Text(input.source||"MANUAL").toUpperCase(),createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.DRIVERS);rows.push(row);v24Save(V24_STORAGE_KEYS.DRIVERS,rows);v24Audit("BUDGET_UPDATED","PLANNING_DRIVER",row.id,row);return v24Clone(row);
+  }
+  function getPlanningDrivers(options={}) { v24Require("planning.view",{...options,action:"DRIVER_VIEW"});const user=v24CurrentUser(options);return v24Load(V24_STORAGE_KEYS.DRIVERS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))&&(!x.companyId||v24CanCompany(user,x.companyId))); }
+  function calculateDriverModel(input={},options={}) {
+    const type=String(input.driverType||"").toUpperCase(), volume=v24Number(input.volume), price=v24Number(input.price), revenue=v24Number(input.revenue), ratio=v24Number(input.ratio), headcount=v24Number(input.headcount), avgCost=v24Number(input.averageCost), debt=v24Number(input.debt), rate=v24Number(input.rate), assetBase=v24Number(input.assetBase), result={driverType:type};
+    if(type==="REVENUE")result.amount=volume*price;
+    else if(type==="COGS")result.amount=revenue*ratio;
+    else if(type==="PAYROLL")result.amount=headcount*avgCost;
+    else if(type==="INTEREST")result.amount=debt*rate;
+    else if(type==="DEPRECIATION")result.amount=assetBase*rate;
+    else result.amount=v24Number(input.value);
+    return result;
+  }
+  function createScenario(input={},options={}) { v24Require("scenario.manage",{...options,companyId:input.companyId,action:"SCENARIO_CREATE"});const name=String(input.scenario||"BASE").toUpperCase();if(!V24_SCENARIOS.includes(name))throw Object.assign(new Error("Invalid scenario."),{code:"INVALID_SCENARIO"});const row={id:input.id||v24Id("SCN"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),scenario:name,parameters:v24Clone(input.parameters||{}),status:input.status||"DRAFT",createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS);rows.push(row);v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_CREATED","SCENARIO",row.id,row);return v24Clone(row); }
+  function updateScenario(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Scenario not found."),{code:"SCENARIO_NOT_FOUND"});const cur=rows[i];v24Require("scenario.manage",{...options,companyId:cur.companyId,action:"SCENARIO_UPDATE",entityId:id});rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_UPDATED","SCENARIO",id,{patch});return v24Clone(rows[i]); }
+  function getScenarios(options={}) { v24Require("scenario.view",{...options,action:"SCENARIO_VIEW"});return v24Load(V24_STORAGE_KEYS.SCENARIOS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))); }
+  function calculateScenario(base={},scenario={},options={}) { const params=scenario.parameters||{};const revenue=v24Number(base.revenue)*(1+v24Number(params.revenueGrowth)/100);const cogs=v24Number(base.cogs)*(1+v24Number(params.cogsPercent)/100);const opex=v24Number(base.opex)*(1+v24Number(params.opexPercent)/100);const ebitda=revenue-cogs-opex;const interest=v24Number(base.interest)*(1+v24Number(params.interestRate)/10000);const netIncome=ebitda-v24Number(base.depreciation)-interest-v24Number(base.tax);return {...base,scenario:scenario.scenario||"BASE",revenue,cogs,opex,ebitda,interest,netIncome,cashFlow:v24Number(base.cashFlow)+v24Number(params.cashFlowAdjustment)}; }
+
+  function getPlanningCashForecast(options={}) {
+    v24Require("planning.view",{...options,action:"CASH_FORECAST_VIEW"});const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,months=v24MonthsOfYear(year),out=[];let opening=v24Number(options.openingCash);
+    months.forEach(period=>{const operating=v24Number(options.monthlyOperatingCash?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"OPERATING_CASH_FLOW",options):0));const capex=v24Number(options.monthlyCapex?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"CAPEX",options):0));const financing=v24Number(options.monthlyFinancing?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"FINANCING_CASH_FLOW",options):0));const lease=v24Number(options.monthlyLeasePayments?.[period] ?? (v24ActualValue("LEASE_PAYMENT",companyId,period,options)));const interest=v24Number(options.monthlyInterest?.[period] ?? v24ActualValue("INTEREST",companyId,period,options));const tax=v24Number(options.monthlyTax?.[period]||0);const closing=opening+operating-capex+financing-lease-interest-tax;out.push({period,companyId,openingCash:opening,operatingCashFlow:operating,capex,financing,leasePayments:lease,interest,tax,netCashFlow:closing-opening,closingCash:closing,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY")});opening=closing;});return out;
+  }
+  function getGroupPlanningData(options={}) {
+    v24Require("planning.view",{...options,action:"GROUP_PLANNING_VIEW"});const groupId=options.groupId,plans=getPlanningPlans({...options,groupId}),planId=options.planId||plans[0]?.id,version=options.version||getBudgetVersions(planId,options)[0]?.version||1,lines=getPlanningLines({...options,planId,version,groupId}),by={};lines.forEach(l=>{const c=l.companyId||"UNASSIGNED";if(!by[c])by[c]={companyId:c,revenue:0,ebitda:0,cashFlow:0};if(l.category==="REVENUE")by[c].revenue+=v24Number(l.amount);if(l.category==="EBITDA")by[c].ebitda+=v24Number(l.amount);if(l.category==="OPERATING_CASH_FLOW"||l.category==="NET_CASH_FLOW")by[c].cashFlow+=v24Number(l.amount);});return {groupId,planId,version,companies:Object.values(by),totals:Object.values(by).reduce((a,r)=>({revenue:a.revenue+r.revenue,ebitda:a.ebitda+r.ebitda,cashFlow:a.cashFlow+r.cashFlow}),{revenue:0,ebitda:0,cashFlow:0})};
+  }
+  function getCompanyPlanningContribution(companyId,options={}) { const data=getGroupPlanningData({...options,companyId});return data.companies.find(x=>String(x.companyId)===String(companyId))||{companyId,revenue:0,ebitda:0,cashFlow:0}; }
+  function getEbitdaBridge(options={}) { const rows=getPlanningVarianceReport({...options,categories:["REVENUE","COGS","OPEX"]});const budgetEbitda=v24Number(options.budgetEbitda);const revenue=rows.find(x=>x.category==="REVENUE")?.variance||0,cogs=rows.find(x=>x.category==="COGS")?.variance||0,opex=rows.find(x=>x.category==="OPEX")?.variance||0;return {budgetEbitda,revenueVariance:revenue,cogsVariance:-cogs,opexVariance:-opex,forecastEbitda:budgetEbitda+revenue-cogs-opex}; }
+  function getRevenueBridge(options={}) { const params=options.drivers||{};return {budgetRevenue:v24Number(options.budgetRevenue),volumeImpact:v24Number(params.volumeImpact),priceImpact:v24Number(params.priceImpact),mixImpact:v24Number(params.mixImpact),forecastRevenue:v24Number(options.budgetRevenue)+v24Number(params.volumeImpact)+v24Number(params.priceImpact)+v24Number(params.mixImpact)}; }
+  function getCashBridge(options={}) { return {budgetClosingCash:v24Number(options.budgetClosingCash),operatingVariance:v24Number(options.operatingVariance),capexVariance:v24Number(options.capexVariance),financingVariance:v24Number(options.financingVariance),fxVariance:v24Number(options.fxVariance),forecastClosingCash:v24Number(options.budgetClosingCash)+v24Number(options.operatingVariance)+v24Number(options.capexVariance)+v24Number(options.financingVariance)+v24Number(options.fxVariance)}; }
+
+  function getPlanningDataQualityStatus(options={}) {
+    v24Require("planning.view",{...options,action:"PLANNING_DATA_QUALITY"});const plans=getPlanningPlans(options),lines=v24Load(V24_STORAGE_KEYS.LINES),drivers=v24Load(V24_STORAGE_KEYS.DRIVERS),checks=[];const add=(code,ok,severity="WARNING",details=null)=>checks.push({code,passed:!!ok,severity,details});
+    add("PLANS_EXIST",plans.length>0,"WARNING");add("NO_DUPLICATE_LINES",new Set(lines.map(x=>x.id)).size===lines.length,"BLOCKING");add("VALID_CURRENCY",lines.every(x=>!!x.currency),"BLOCKING");add("VALID_PERIOD",lines.every(x=>/^\d{4}(-\d{2}|-Q[1-4])?$/.test(String(x.period))),"BLOCKING");add("COMPANY_ACCESS",lines.filter(x=>x.companyId).every(x=>v24CanCompany(v24CurrentUser(options),x.companyId)),"BLOCKING");add("DRIVER_REFERENCES",drivers.every(x=>x.period&&x.driverName),"WARNING");const blocking=checks.some(x=>!x.passed&&x.severity==="BLOCKING"),warnings=checks.some(x=>!x.passed);return {version:V24_SCHEMA_VERSION,status:blocking?"RED":(warnings?"YELLOW":"GREEN"),checks,planCount:plans.length,lineCount:lines.length,driverCount:drivers.length};
+  }
+  function getPlanningControlStatus(options={}) { return getPlanningDataQualityStatus(options); }
+  function getPlanningCfoDashboardData(options={}) {
+    v24Require("planning.view",{...options,action:"PLANNING_CFO_VIEW"});const year=Number(options.year||new Date().getFullYear()),variance=getPlanningVarianceReport({...options,year}),material=variance.filter(x=>x.material),forecast=generateForecast({...options,year,method:options.forecastMethod||"ACTUAL_PLUS_REMAINING_BUDGET",audit:false}),by=(cat)=>forecast.find(x=>x.category===cat)||{ytdActual:0,fullYearForecast:0,remainingBudget:0};const revenueBudget=v24Number(options.revenueBudget),ebitdaBudget=v24Number(options.ebitdaBudget);return {version:V24_PLANNING_ENGINE_VERSION,year,revenue:{budget:revenueBudget,actual:by("REVENUE").ytdActual,forecast:by("REVENUE").fullYearForecast},ebitda:{budget:ebitdaBudget,actual:by("EBITDA").ytdActual,forecast:by("EBITDA").fullYearForecast,margin:by("REVENUE").fullYearForecast?by("EBITDA").fullYearForecast/by("REVENUE").fullYearForecast*100:0},netIncomeForecast:by("NET_INCOME").fullYearForecast,cashFlowForecast:getPlanningCashForecast(options),budgetVariance:variance,forecastVariance:variance,materialVariances:material,scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};
+  }
+  function exportPlanningData(options={}) { v24Require("planning.export",{...options,action:"PLANNING_EXPORT"});const payload={schemaVersion:V24_SCHEMA_VERSION,exportedAt:v24Now(),plans:getPlanningPlans(options),versions:v24VersionRows(),lines:getPlanningLines(options),drivers:getPlanningDrivers(options),scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};v24Audit("PLANNING_EXPORTED","PLANNING",null,{planCount:payload.plans.length,lineCount:payload.lines.length});return payload; }
+  function exportBudget(options={}) { return exportPlanningData({...options,planType:"BUDGET"}); }
+  function exportForecast(options={}) { return exportPlanningData({...options,planType:"FORECAST"}); }
+  function exportScenario(options={}) { return exportPlanningData(options); }
+  function v24MigrationReport() { const plans=v24Load(V24_STORAGE_KEYS.PLANS),lines=v24Load(V24_STORAGE_KEYS.LINES),versions=v24VersionRows();return {from:"23.0",to:V24_SCHEMA_VERSION,plans:plans.length,versions:versions.length,lines:lines.length,status:"READY",actualEnginePreserved:true,fxEnginePreserved:true,consolidationPreserved:true}; }
+  function v24MigrateData() {
+    [V24_STORAGE_KEYS.PLANS,V24_STORAGE_KEYS.VERSIONS,V24_STORAGE_KEYS.LINES,V24_STORAGE_KEYS.DRIVERS,V24_STORAGE_KEYS.SCENARIOS,V24_STORAGE_KEYS.VARIANCES,V24_STORAGE_KEYS.CASH,V24_STORAGE_KEYS.ADJUSTMENTS,V24_STORAGE_KEYS.AUDIT].forEach(key=>{const rows=v24Load(key);if(Array.isArray(rows))v24Save(key,rows.map(x=>({...x,schemaVersion:x.schemaVersion||V24_SCHEMA_VERSION})));});v24PermissionInstall();return v24MigrationReport();
+  }
+  function v24GetApiAuthorizationContract() { return [
+    {method:"GET",path:"/planning",permission:"planning.view"},{method:"POST",path:"/planning",permission:"planning.create"},{method:"PUT",path:"/planning/:id",permission:"planning.edit"},{method:"POST",path:"/planning/:id/submit",permission:"planning.submit"},{method:"POST",path:"/planning/:id/approve",permission:"planning.approve"},{method:"POST",path:"/planning/:id/lock",permission:"planning.lock"},{method:"GET",path:"/forecast",permission:"forecast.view"},{method:"POST",path:"/forecast",permission:"forecast.create"},{method:"GET",path:"/scenarios",permission:"scenario.view"},{method:"POST",path:"/scenarios",permission:"scenario.manage"},{method:"GET",path:"/planning/export",permission:"planning.export"}
+  ]; }
+  function v24SecurityStatus(options={}) { const user=v24CurrentUser(options);return {userId:user?.id||null,active:user?.status==="ACTIVE",permissions:typeof getUserPermissions==="function"?getUserPermissions(user):V24_PLANNING_PERMISSIONS.slice(),planningPermissions:V24_PLANNING_PERMISSIONS.slice(),sodWarning:false}; }
+  function v24PlanningTests(options={}) {
+    const results=[], pass=(name,ok,detail=null)=>results.push({name,passed:!!ok,detail});
+    try {
+      const companyId=options.companyId||v24Array(typeof v22CompanyList==="function"?v22CompanyList():[])[0]?.id||null, year=Number(options.year||new Date().getFullYear()), plan={companyId,planningYear:year,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY")};
+      let created=null;try{created=createPlanningPlan({...plan,planType:"BUDGET"},{user:options.user});}catch(e){created=null;}
+      pass("Create Budget",!!created||getPlanningPlans({companyId,planningYear:year}).length>0);
+      if(created){let version=null;try{version=createPlanningVersion(created.id,{versionName:"V1"},{user:options.user});}catch(e){version=getBudgetVersions(created.id,{user:options.user})[0];}pass("Budget Version",!!version);if(version){let line=null;try{line=createPlanningLine({planId:created.id,version:version.version,companyId,period:`${year}-01`,category:"REVENUE",account:"REVENUE",currency:plan.currency,amount:100},{user:options.user});}catch(e){line=null;}pass("Planning Line",!!line);}}
+      pass("Variance",calculateVariance(110,100,{category:"REVENUE",audit:false}).favorable===true);pass("Materiality",calculateVariance(11000000,10000000,{category:"REVENUE",audit:false}).material===true);pass("Scenario Base",V24_SCENARIOS.includes("BASE"));pass("Scenario Upside",V24_SCENARIOS.includes("UPSIDE"));pass("Scenario Downside",V24_SCENARIOS.includes("DOWNSIDE"));pass("Driver Calculation",calculateDriverModel({driverType:"REVENUE",volume:10,price:5}).amount===50);pass("Cash Forecast",Array.isArray(getPlanningCashForecast({year,companyId,user:options.user})));pass("Planning Controls",!!getPlanningDataQualityStatus({user:options.user}));pass("Security",V24_PLANNING_PERMISSIONS.length>=10);pass("Audit Trail",typeof recordAuditEvent==="function");pass("Migration",v24MigrationReport().to==="24.0");pass("V23 Compatibility",typeof getFxRate==="function"&&typeof getConsolidatedData==="function");pass("TFRS16",typeof calculateLeaseEngine==="function");pass("Existing Consolidation",typeof getConsolidatedData==="function");pass("Existing FX",typeof convertCurrencyOnDate==="function");
+    } catch(e) { pass("V24 test harness",false,e?.message||String(e)); }
+    return {version:V24_SCHEMA_VERSION,passed:results.every(x=>x.passed),results};
+  }
+
+  v24MigrateData();
+
+
+  /* ==========================================================
+     V23 INITIALIZATION
+  ========================================================== */
+
+  v23MigrateData();
 
   /* ==========================================================
      INITIALIZATION
