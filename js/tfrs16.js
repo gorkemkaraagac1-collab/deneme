@@ -14523,7 +14523,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  const V20StorageAdapters = {
+  var V20StorageAdapters = {
     contracts: () => v20LocalStorageAdapter(STORAGE_KEY),
     audit: () => v20LocalStorageAdapter(AUDIT_TRAIL_STORAGE_KEY),
     controls: () => v20LocalStorageAdapter(
