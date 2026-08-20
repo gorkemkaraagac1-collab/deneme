@@ -1,2080 +1,2261 @@
-/* =========================================================
-   GK ADVISORY
-   TMS 19 — PERSONEL VERİ MOTORU
-   tms19-data-engine.js
+/* ============================================================
+   GK ADVISORY — TMS 19 DATA ENGINE
+   TMS 19 / IAS 19 Actuarial Data Management Layer
 
    Amaç:
-   - CSV / JSON personel verisini almak
-   - Alanları normalize etmek
-   - Tarihleri standartlaştırmak
-   - Veri kalite kontrolleri yapmak
+   - CSV / Excel benzeri verileri normalize etmek
+   - Türkçe / İngilizce kolon isimlerini tanımak
+   - Personel verilerini standartlaştırmak
+   - Veri kalitesi kontrollerini yapmak
    - Aktüeryal motor için temiz veri üretmek
-   - Denetim izi / veri kalite özeti oluşturmak
 
-   NOT:
-   Bu dosya aktüeryal hesaplamayı yapmaz.
-   Hesaplama:
-   tms19-actuarial-engine.js
+   Versiyon: 1.0
+============================================================ */
 
-   Portföy analizi:
-   tms19-portfolio-engine.js
-========================================================= */
-
-(function (global) {
-
-    "use strict";
+"use strict";
 
 
-    /* =====================================================
-       YARDIMCI FONKSİYONLAR
-    ===================================================== */
+/* ============================================================
+   GLOBAL NAMESPACE
+============================================================ */
 
-    function temizle(value) {
+window.TMS19Data = window.TMS19Data || {};
 
-        if (
-            value === null ||
-            value === undefined
-        ) {
-            return "";
-        }
 
-        return String(value)
-            .trim();
+/* ============================================================
+   1. KOLON SÖZLÜĞÜ
+============================================================ */
+
+TMS19Data.kolonSozlugu = {
+
+    sicilNo: [
+        "sicil no",
+        "sicil_no",
+        "sicil",
+        "employee id",
+        "employee_id",
+        "employee number",
+        "employee no",
+        "personel no",
+        "personel numarası",
+        "çalışan no",
+        "çalışan numarası",
+        "id"
+    ],
+
+    adSoyad: [
+        "ad soyad",
+        "ad_soyad",
+        "adsoyad",
+        "isim",
+        "isim soyisim",
+        "personel adı",
+        "çalışan adı",
+        "employee name",
+        "employee_name",
+        "name",
+        "full name",
+        "fullname"
+    ],
+
+    doğumTarihi: [
+        "doğum tarihi",
+        "dogum tarihi",
+        "doğum_tarihi",
+        "dogum_tarihi",
+        "birth date",
+        "birth_date",
+        "date of birth",
+        "dob",
+        "birthdate"
+    ],
+
+    işeGirişTarihi: [
+        "işe giriş tarihi",
+        "işe giriş",
+        "işe_giriş_tarihi",
+        "ise giris tarihi",
+        "ise_giris_tarihi",
+        "işe başlama tarihi",
+        "işe başlama",
+        "hire date",
+        "hire_date",
+        "joining date",
+        "join date",
+        "employment start date",
+        "start date"
+    ],
+
+    iştenAyrılmaTarihi: [
+        "işten ayrılma tarihi",
+        "işten ayrılış tarihi",
+        "işten_ayrılma_tarihi",
+        "isten ayrilma tarihi",
+        "termination date",
+        "termination_date",
+        "leaving date",
+        "leave date",
+        "exit date",
+        "end date"
+    ],
+
+    mevcutMaaş: [
+        "maaş",
+        "maas",
+        "brüt maaş",
+        "brut maas",
+        "brüt ücret",
+        "brut ucret",
+        "ücret",
+        "ucret",
+        "aylık ücret",
+        "aylik ucret",
+        "aylık brüt ücret",
+        "monthly salary",
+        "monthly_salary",
+        "gross salary",
+        "gross_salary",
+        "salary",
+        "basic salary",
+        "pay"
+    ],
+
+    cinsiyet: [
+        "cinsiyet",
+        "gender",
+        "sex"
+    ],
+
+    departman: [
+        "departman",
+        "department",
+        "bölüm",
+        "bolum",
+        "birim",
+        "unit",
+        "division"
+    ],
+
+    pozisyon: [
+        "pozisyon",
+        "position",
+        "job title",
+        "job_title",
+        "unvan",
+        "title"
+    ],
+
+    medeniDurum: [
+        "medeni durum",
+        "medeni_durum",
+        "marital status",
+        "marital_status"
+    ],
+
+    çalışanDurumu: [
+        "çalışan durumu",
+        "calisan durumu",
+        "employee status",
+        "employee_status",
+        "status",
+        "durum",
+        "aktif pasif",
+        "active inactive"
+    ]
+
+};
+
+
+/* ============================================================
+   2. STANDARD KOLONLAR
+============================================================ */
+
+TMS19Data.zorunluAlanlar = [
+
+    "sicilNo",
+    "adSoyad",
+    "doğumTarihi",
+    "işeGirişTarihi",
+    "mevcutMaaş"
+
+];
+
+
+TMS19Data.opsiyonelAlanlar = [
+
+    "iştenAyrılmaTarihi",
+    "cinsiyet",
+    "departman",
+    "pozisyon",
+    "medeniDurum",
+    "çalışanDurumu"
+
+];
+
+
+/* ============================================================
+   3. METİN NORMALİZASYONU
+============================================================ */
+
+TMS19Data.normalizeText = function (
+    değer
+) {
+
+    if (
+        değer === null ||
+        değer === undefined
+    ) {
+
+        return "";
 
     }
 
-
-    function sayiyaCevir(value) {
-
-        if (
-            value === null ||
-            value === undefined ||
-            value === ""
-        ) {
-            return 0;
-        }
-
-        if (
-            typeof value === "number"
-        ) {
-            return value;
-        }
-
-        let text =
-            String(value)
-                .trim();
-
-        /*
-         * Türkçe format:
-         * 1.250.000,50
-         */
-
-        if (
-            text.includes(",") &&
-            text.includes(".")
-        ) {
-
-            text =
-                text
-                    .replace(/\./g, "")
-                    .replace(",", ".");
-
-        }
-        else if (
-            text.includes(",")
-        ) {
-
-            text =
-                text.replace(",", ".");
-
-        }
-
-        text =
-            text.replace(
-                /[^0-9.-]/g,
-                ""
-            );
-
-        const number =
-            Number(text);
-
-        return Number.isFinite(number)
-            ? number
-            : 0;
-
-    }
-
-
-    function tarihCevir(value) {
-
-        if (!value) {
-            return null;
-        }
-
-
-        if (
-            value instanceof Date
-        ) {
-
-            return isNaN(
-                value.getTime()
-            )
-                ? null
-                : value;
-
-        }
-
-
-        const text =
-            String(value)
-                .trim();
-
-
-        /*
-         * DD.MM.YYYY
-         */
-
-        const trMatch =
-            text.match(
-                /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/
-            );
-
-
-        if (trMatch) {
-
-            const day =
-                Number(trMatch[1]);
-
-            const month =
-                Number(trMatch[2]) - 1;
-
-            const year =
-                Number(trMatch[3]);
-
-            const date =
-                new Date(
-                    year,
-                    month,
-                    day
-                );
-
-            return isNaN(
-                date.getTime()
-            )
-                ? null
-                : date;
-
-        }
-
-
-        /*
-         * YYYY-MM-DD
-         */
-
-        const isoMatch =
-            text.match(
-                /^(\d{4})-(\d{1,2})-(\d{1,2})$/
-            );
-
-
-        if (isoMatch) {
-
-            const date =
-                new Date(
-                    Number(isoMatch[1]),
-                    Number(isoMatch[2]) - 1,
-                    Number(isoMatch[3])
-                );
-
-            return isNaN(
-                date.getTime()
-            )
-                ? null
-                : date;
-
-        }
-
-
-        const parsed =
-            new Date(text);
-
-
-        return isNaN(
-            parsed.getTime()
+    return String(değer)
+        .trim()
+        .toLowerCase()
+        .replace(
+            /ı/g,
+            "i"
         )
-            ? null
-            : parsed;
+        .replace(
+            /ğ/g,
+            "g"
+        )
+        .replace(
+            /ü/g,
+            "u"
+        )
+        .replace(
+            /ş/g,
+            "s"
+        )
+        .replace(
+            /ö/g,
+            "o"
+        )
+        .replace(
+            /ç/g,
+            "c"
+        )
+        .replace(
+            /[_\-]+/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
 
-    }
-
-
-    function tarihISO(value) {
-
-        const date =
-            tarihCevir(value);
-
-
-        if (!date) {
-            return "";
-        }
-
-
-        const year =
-            date.getFullYear();
-
-
-        const month =
-            String(
-                date.getMonth() + 1
-            )
-                .padStart(2, "0");
-
-
-        const day =
-            String(
-                date.getDate()
-            )
-                .padStart(2, "0");
+};
 
 
-        return (
-            year +
-            "-" +
-            month +
-            "-" +
-            day
+/* ============================================================
+   4. KOLON EŞLEŞTİRME
+============================================================ */
+
+TMS19Data.kolonBul = function (
+    kolonAdi
+) {
+
+    const normalizeEdilmis =
+        TMS19Data.normalizeText(
+            kolonAdi
         );
 
-    }
 
-
-    function yasHesapla(
-        birthDate,
-        valuationDate
+    for (
+        const standartAlan
+        in TMS19Data.kolonSozlugu
     ) {
 
-        const birth =
-            tarihCevir(
-                birthDate
-            );
-
-
-        const valuation =
-            tarihCevir(
-                valuationDate
-            );
-
-
-        if (
-            !birth ||
-            !valuation
-        ) {
-
-            return 0;
-
-        }
-
-
-        let age =
-            valuation.getFullYear() -
-            birth.getFullYear();
-
-
-        const monthDifference =
-            valuation.getMonth() -
-            birth.getMonth();
-
-
-        if (
-            monthDifference < 0 ||
-            (
-                monthDifference === 0 &&
-                valuation.getDate() <
-                birth.getDate()
-            )
-        ) {
-
-            age--;
-
-        }
-
-
-        return age;
-
-    }
-
-
-    function hizmetSuresiHesapla(
-        startDate,
-        valuationDate
-    ) {
-
-        const start =
-            tarihCevir(
-                startDate
-            );
-
-
-        const valuation =
-            tarihCevir(
-                valuationDate
-            );
-
-
-        if (
-            !start ||
-            !valuation
-        ) {
-
-            return 0;
-
-        }
-
-
-        const difference =
-            valuation.getTime() -
-            start.getTime();
-
-
-        const years =
-            difference /
-            (
-                1000 *
-                60 *
-                60 *
-                24 *
-                365.25
-            );
-
-
-        return Math.max(
-            0,
-            years
-        );
-
-    }
-
-
-    function normalizasyonAnahtari(
-        value
-    ) {
-
-        return temizle(value)
-            .toLowerCase()
-            .replace(
-                /ı/g,
-                "i"
-            )
-            .replace(
-                /ğ/g,
-                "g"
-            )
-            .replace(
-                /ü/g,
-                "u"
-            )
-            .replace(
-                /ş/g,
-                "s"
-            )
-            .replace(
-                /ö/g,
-                "o"
-            )
-            .replace(
-                /ç/g,
-                "c"
-            )
-            .replace(
-                /[^a-z0-9]/g,
-                ""
-            );
-
-    }
-
-
-    /* =====================================================
-       ALAN EŞLEŞTİRME
-    ===================================================== */
-
-    const FIELD_ALIASES = {
-
-        employeeId: [
-            "sicilno",
-            "sicil",
-            "employeeid",
-            "employee_id",
-            "id",
-            "personelno",
-            "personelid"
-        ],
-
-        name: [
-            "adsoyad",
-            "adsoyadı",
-            "isim",
-            "name",
-            "fullname",
-            "calisan",
-            "personel"
-        ],
-
-        birthDate: [
-            "dogumtarihi",
-            "doğumtarihi",
-            "birthdate",
-            "birth_date",
-            "dogum"
-        ],
-
-        hireDate: [
-            "isegiristarihi",
-            "işegiriştarihi",
-            "hiredate",
-            "hire_date",
-            "startdate",
-            "employmentdate"
-        ],
-
-        department: [
-            "departman",
-            "department",
-            "bolum",
-            "bölüm",
-            "organizasyon"
-        ],
-
-        gender: [
-            "cinsiyet",
-            "gender",
-            "sex"
-        ],
-
-        salary: [
-            "brutmaas",
-            "brütmaaş",
-            "maas",
-            "maaş",
-            "salary",
-            "grosssalary",
-            "gross_salary"
-        ],
-
-        annualSalary: [
-            "yillikbrutmaas",
-            "yıllıkbrütmaaş",
-            "annualsalary",
-            "annual_salary",
-            "yillikmaas",
-            "yıllıkmaaş"
-        ],
-
-        retirementAge: [
-            "emeklilikyasi",
-            "emeklilikyaşı",
-            "retirementage",
-            "retirement_age"
-        ],
-
-        openingDBO: [
-            "openingdbo",
-            "opening_dbo",
-            "acilisdbo",
-            "açılışdbo",
-            "oncekidbo",
-            "öncekidbo"
-        ],
-
-        openingPlanAsset: [
-            "openingplanasset",
-            "opening_plan_asset",
-            "acilisplanvarligi",
-            "açılışplanvarlığı"
-        ],
-
-        benefitRate: [
-            "faydaorani",
-            "faydaoranı",
-            "benefitrate",
-            "benefit_rate"
-        ],
-
-        serviceYears: [
-            "hizmetsuresi",
-            "hizmetyılı",
-            "hizmetyili",
-            "serviceyears",
-            "service_years"
-        ]
-
-    };
-
-
-    function alanBul(
-        row,
-        aliases
-    ) {
-
-        const keys =
-            Object.keys(row);
+        const alternatifler =
+            TMS19Data.kolonSozlugu[
+                standartAlan
+            ];
 
 
         for (
-            let i = 0;
-            i < aliases.length;
-            i++
+            const alternatif
+            of alternatifler
         ) {
 
-            const alias =
-                normalizasyonAnahtari(
-                    aliases[i]
-                );
-
-
-            for (
-                let j = 0;
-                j < keys.length;
-                j++
+            if (
+                TMS19Data.normalizeText(
+                    alternatif
+                )
+                ===
+                normalizeEdilmis
             ) {
 
-                const normalizedKey =
-                    normalizasyonAnahtari(
-                        keys[j]
-                    );
-
-
-                if (
-                    normalizedKey ===
-                    alias
-                ) {
-
-                    return row[keys[j]];
-
-                }
+                return standartAlan;
 
             }
 
         }
 
+    }
+
+
+    return null;
+
+};
+
+
+/* ============================================================
+   5. OTOMATİK KOLON EŞLEŞTİRME
+============================================================ */
+
+TMS19Data.kolonlariEsle = function (
+    kolonlar
+) {
+
+    const eslesme = {};
+
+    const eslesmeyenler = [];
+
+
+    kolonlar.forEach(
+        kolon => {
+
+            const standartAlan =
+                TMS19Data.kolonBul(
+                    kolon
+                );
+
+
+            if (
+                standartAlan
+            ) {
+
+                eslesme[
+                    kolon
+                ] =
+                    standartAlan;
+
+            } else {
+
+                eslesmeyenler.push(
+                    kolon
+                );
+
+            }
+
+        }
+    );
+
+
+    return {
+
+        eslesme,
+        eslesmeyenler
+
+    };
+
+};
+
+
+/* ============================================================
+   6. SAYI PARSE
+============================================================ */
+
+TMS19Data.parseNumber = function (
+    değer
+) {
+
+    if (
+        değer === null ||
+        değer === undefined ||
+        değer === ""
+    ) {
+
+        return null;
+
+    }
+
+
+    if (
+        typeof değer === "number"
+    ) {
+
+        return isFinite(değer)
+            ? değer
+            : null;
+
+    }
+
+
+    let metin =
+        String(değer)
+            .trim();
+
+
+    metin =
+        metin.replace(
+            /\s/g,
+            ""
+        );
+
+
+    /*
+       Türkçe format:
+
+       125.000,50
+       → 125000.50
+
+       İngilizce format:
+
+       125,000.50
+       → 125000.50
+    */
+
+
+    if (
+        metin.includes(",") &&
+        metin.includes(".")
+    ) {
+
+        const sonVirgul =
+            metin.lastIndexOf(",");
+
+        const sonNokta =
+            metin.lastIndexOf(".");
+
+
+        if (
+            sonVirgul >
+            sonNokta
+        ) {
+
+            metin =
+                metin
+                    .replace(
+                        /\./g,
+                        ""
+                    )
+                    .replace(
+                        ",",
+                        "."
+                    );
+
+        } else {
+
+            metin =
+                metin.replace(
+                    /,/g,
+                    ""
+                );
+
+        }
+
+    } else if (
+        metin.includes(",")
+    ) {
+
+        const parçalar =
+            metin.split(",");
+
+
+        if (
+            parçalar.length === 2 &&
+            parçalar[1].length <= 2
+        ) {
+
+            metin =
+                metin.replace(
+                    ",",
+                    "."
+                );
+
+        } else {
+
+            metin =
+                metin.replace(
+                    /,/g,
+                    ""
+                );
+
+        }
+
+    } else if (
+        metin.includes(".")
+    ) {
+
+        const parçalar =
+            metin.split(".");
+
+
+        if (
+            parçalar.length > 2
+        ) {
+
+            metin =
+                metin.replace(
+                    /\./g,
+                    ""
+                );
+
+        }
+
+    }
+
+
+    const sayı =
+        Number(
+            metin
+                .replace(
+                    /[^0-9.\-]/g,
+                    ""
+                )
+        );
+
+
+    return isFinite(sayı)
+        ? sayı
+        : null;
+
+};
+
+
+/* ============================================================
+   7. TARİH PARSE
+============================================================ */
+
+TMS19Data.parseDate = function (
+    değer
+) {
+
+    if (
+        değer === null ||
+        değer === undefined ||
+        değer === ""
+    ) {
+
+        return null;
+
+    }
+
+
+    if (
+        değer instanceof Date
+    ) {
+
+        return isNaN(
+            değer.getTime()
+        )
+            ? null
+            : değer;
+
+    }
+
+
+    /*
+       Excel serial date
+    */
+
+    if (
+        typeof değer === "number"
+    ) {
+
+        const excelEpoch =
+            new Date(
+                Date.UTC(
+                    1899,
+                    11,
+                    30
+                )
+            );
+
+
+        const tarih =
+            new Date(
+                excelEpoch.getTime()
+                +
+                değer *
+                86400000
+            );
+
+
+        return isNaN(
+            tarih.getTime()
+        )
+            ? null
+            : tarih;
+
+    }
+
+
+    let metin =
+        String(değer)
+            .trim();
+
+
+    /*
+       DD.MM.YYYY
+       DD/MM/YYYY
+       DD-MM-YYYY
+    */
+
+    const türkTarih =
+        metin.match(
+            /^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/
+        );
+
+
+    if (
+        türkTarih
+    ) {
+
+        const gün =
+            Number(
+                türkTarih[1]
+            );
+
+        const ay =
+            Number(
+                türkTarih[2]
+            ) - 1;
+
+        const yıl =
+            Number(
+                türkTarih[3]
+            );
+
+
+        const tarih =
+            new Date(
+                yıl,
+                ay,
+                gün
+            );
+
+
+        if (
+            tarih.getFullYear() === yıl &&
+            tarih.getMonth() === ay &&
+            tarih.getDate() === gün
+        ) {
+
+            return tarih;
+
+        }
+
+    }
+
+
+    const tarih =
+        new Date(
+            metin
+        );
+
+
+    return isNaN(
+        tarih.getTime()
+    )
+        ? null
+        : tarih;
+
+};
+
+
+/* ============================================================
+   8. TARİH FORMAT
+============================================================ */
+
+TMS19Data.formatDate = function (
+    tarih
+) {
+
+    if (
+        !tarih
+    ) {
 
         return "";
 
     }
 
 
-    /* =====================================================
-       TEK PERSONEL NORMALİZASYONU
-    ===================================================== */
+    const d =
+        tarih instanceof Date
+            ? tarih
+            : TMS19Data.parseDate(
+                tarih
+            );
 
-    function personelNormalizeEt(
-        row,
-        options
+
+    if (
+        !d
     ) {
 
-        options =
-            options || {};
-
-
-        const valuationDate =
-            tarihCevir(
-                options.valuationDate
-            ) ||
-            new Date();
-
-
-        const employeeId =
-            temizle(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.employeeId
-                )
-            );
-
-
-        const name =
-            temizle(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.name
-                )
-            );
-
-
-        const birthDate =
-            tarihCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.birthDate
-                )
-            );
-
-
-        const hireDate =
-            tarihCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.hireDate
-                )
-            );
-
-
-        const department =
-            temizle(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.department
-                )
-            ) ||
-            "Belirtilmemiş";
-
-
-        const gender =
-            temizle(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.gender
-                )
-            ) ||
-            "Belirtilmemiş";
-
-
-        let annualSalary =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.annualSalary
-                )
-            );
-
-
-        const monthlySalary =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.salary
-                )
-            );
-
-
-        if (
-            annualSalary <= 0 &&
-            monthlySalary > 0
-        ) {
-
-            annualSalary =
-                monthlySalary * 12;
-
-        }
-
-
-        const retirementAgeRaw =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.retirementAge
-                )
-            );
-
-
-        const retirementAge =
-            retirementAgeRaw > 0
-                ? retirementAgeRaw
-                : (
-                    options.defaultRetirementAge ||
-                    60
-                );
-
-
-        const openingDBO =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.openingDBO
-                )
-            );
-
-
-        const openingPlanAsset =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.openingPlanAsset
-                )
-            );
-
-
-        const benefitRateRaw =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.benefitRate
-                )
-            );
-
-
-        const benefitRate =
-            benefitRateRaw > 1
-                ? benefitRateRaw / 100
-                : benefitRateRaw;
-
-
-        const calculatedAge =
-            yasHesapla(
-                birthDate,
-                valuationDate
-            );
-
-
-        const calculatedService =
-            hizmetSuresiHesapla(
-                hireDate,
-                valuationDate
-            );
-
-
-        const importedService =
-            sayiyaCevir(
-                alanBul(
-                    row,
-                    FIELD_ALIASES.serviceYears
-                )
-            );
-
-
-        const serviceYears =
-            importedService > 0
-                ? importedService
-                : calculatedService;
-
-
-        return {
-
-            employeeId:
-                employeeId ||
-                (
-                    "AUTO-" +
-                    Date.now() +
-                    "-" +
-                    Math.floor(
-                        Math.random() * 100000
-                    )
-                ),
-
-            name:
-                name ||
-                "İsimsiz Personel",
-
-            birthDate:
-                tarihISO(
-                    birthDate
-                ),
-
-            hireDate:
-                tarihISO(
-                    hireDate
-                ),
-
-            department:
-                department,
-
-            gender:
-                gender,
-
-            salary:
-                annualSalary,
-
-            annualSalary:
-                annualSalary,
-
-            monthlySalary:
-                annualSalary / 12,
-
-            age:
-                calculatedAge,
-
-            service:
-                serviceYears,
-
-            serviceYears:
-                serviceYears,
-
-            retirementAge:
-                retirementAge,
-
-            remainingService:
-                Math.max(
-                    0,
-                    retirementAge -
-                    calculatedAge
-                ),
-
-            openingDBO:
-                openingDBO,
-
-            openingPlanAsset:
-                openingPlanAsset,
-
-            benefitRate:
-                benefitRate,
-
-            valuationDate:
-                tarihISO(
-                    valuationDate
-                ),
-
-            /*
-             * Kaynağın orijinal satırını
-             * kaybetmiyoruz.
-             *
-             * Denetim izi açısından önemli.
-             */
-
-            sourceData:
-                Object.assign(
-                    {},
-                    row
-                )
-
-        };
+        return "";
 
     }
 
 
-    /* =====================================================
-       PERSONEL LİSTESİ NORMALİZASYONU
-    ===================================================== */
+    const gün =
+        String(
+            d.getDate()
+        ).padStart(
+            2,
+            "0"
+        );
 
-    function normalizeEmployees(
-        rows,
-        options
+
+    const ay =
+        String(
+            d.getMonth() + 1
+        ).padStart(
+            2,
+            "0"
+        );
+
+
+    const yıl =
+        d.getFullYear();
+
+
+    return (
+        gün
+        +
+        "."
+        +
+        ay
+        +
+        "."
+        +
+        yıl
+    );
+
+};
+
+
+/* ============================================================
+   9. YAŞ HESAPLA
+============================================================ */
+
+TMS19Data.yasHesapla = function (
+    doğumTarihi,
+    değerlemeTarihi
+) {
+
+    const doğum =
+        TMS19Data.parseDate(
+            doğumTarihi
+        );
+
+
+    const değerleme =
+        TMS19Data.parseDate(
+            değerlemeTarihi
+        );
+
+
+    if (
+        !doğum ||
+        !değerleme
     ) {
 
-        if (
-            !Array.isArray(rows)
-        ) {
-
-            throw new Error(
-                "Personel verisi bir dizi olmalıdır."
-            );
-
-        }
-
-
-        const normalized =
-            rows.map(
-                function (
-                    row
-                ) {
-
-                    return personelNormalizeEt(
-                        row,
-                        options
-                    );
-
-                }
-            );
-
-
-        return normalized;
+        return null;
 
     }
 
 
-    /* =====================================================
-       VERİ KALİTESİ
-    ===================================================== */
+    let yaş =
+        değerleme.getFullYear()
+        -
+        doğum.getFullYear();
 
-    function validateEmployees(
-        employees
+
+    const ay =
+        değerleme.getMonth()
+        -
+        doğum.getMonth();
+
+
+    if (
+        ay < 0 ||
+        (
+            ay === 0 &&
+            değerleme.getDate()
+            <
+            doğum.getDate()
+        )
     ) {
 
-        const issues = [];
-
-        let criticalCount = 0;
-
-        let warningCount = 0;
-
-        let validCount = 0;
-
-
-        employees.forEach(
-            function (
-                employee,
-                index
-            ) {
-
-                const rowNumber =
-                    index + 1;
-
-
-                const employeeIssues =
-                    [];
-
-
-                if (
-                    !employee.name ||
-                    employee.name ===
-                    "İsimsiz Personel"
-                ) {
-
-                    employeeIssues.push(
-                        "Ad soyad eksik"
-                    );
-
-                }
-
-
-                if (
-                    !employee.birthDate
-                ) {
-
-                    employeeIssues.push(
-                        "Doğum tarihi eksik"
-                    );
-
-                }
-
-
-                if (
-                    !employee.hireDate
-                ) {
-
-                    employeeIssues.push(
-                        "İşe giriş tarihi eksik"
-                    );
-
-                }
-
-
-                if (
-                    employee.salary <= 0
-                ) {
-
-                    employeeIssues.push(
-                        "Brüt yıllık maaş eksik veya sıfır"
-                    );
-
-                }
-
-
-                if (
-                    employee.age < 16 ||
-                    employee.age > 75
-                ) {
-
-                    employeeIssues.push(
-                        "Yaş olağandışı"
-                    );
-
-                }
-
-
-                if (
-                    employee.serviceYears < 0
-                ) {
-
-                    employeeIssues.push(
-                        "Hizmet süresi negatif"
-                    );
-
-                }
-
-
-                if (
-                    employee.retirementAge <=
-                    employee.age
-                ) {
-
-                    employeeIssues.push(
-                        "Emeklilik yaşı mevcut yaştan küçük veya eşit"
-                    );
-
-                }
-
-
-                if (
-                    employee.openingDBO < 0
-                ) {
-
-                    employeeIssues.push(
-                        "Opening DBO negatif"
-                    );
-
-                }
-
-
-                if (
-                    employeeIssues.length === 0
-                ) {
-
-                    validCount++;
-
-                }
-                else {
-
-                    warningCount++;
-
-                }
-
-
-                employee.validation =
-                    {
-
-                        valid:
-                            employeeIssues.length === 0,
-
-                        issues:
-                            employeeIssues,
-
-                        row:
-                            rowNumber
-
-                    };
-
-            }
-        );
-
-
-        /*
-         * Kritik veri kontrolleri
-         */
-
-        const ids =
-            new Set();
-
-
-        employees.forEach(
-            function (
-                employee
-            ) {
-
-                if (
-                    ids.has(
-                        employee.employeeId
-                    )
-                ) {
-
-                    criticalCount++;
-
-                    employee.validation.valid =
-                        false;
-
-                    employee.validation.issues.push(
-                        "Mükerrer personel sicil numarası"
-                    );
-
-                }
-
-
-                ids.add(
-                    employee.employeeId
-                );
-
-            }
-        );
-
-
-        const total =
-            employees.length;
-
-
-        const completeness =
-            total === 0
-                ? 0
-                : (
-                    validCount /
-                    total
-                ) * 100;
-
-
-        let level =
-            "Kritik";
-
-
-        if (
-            completeness >= 98 &&
-            criticalCount === 0
-        ) {
-
-            level =
-                "Mükemmel";
-
-        }
-        else if (
-            completeness >= 95 &&
-            criticalCount === 0
-        ) {
-
-            level =
-                "Yüksek";
-
-        }
-        else if (
-            completeness >= 85
-        ) {
-
-            level =
-                "Orta";
-
-        }
-        else if (
-            completeness >= 70
-        ) {
-
-            level =
-                "Düşük";
-
-        }
-
-
-        return {
-
-            totalRecords:
-                total,
-
-            validRecords:
-                validCount,
-
-            warningRecords:
-                warningCount,
-
-            criticalRecords:
-                criticalCount,
-
-            completeness:
-                Number(
-                    completeness.toFixed(2)
-                ),
-
-            level:
-                level,
-
-            issues:
-                employees
-                    .filter(
-                        employee =>
-                            !employee.validation.valid
-                    )
-                    .map(
-                        employee => ({
-                            employeeId:
-                                employee.employeeId,
-
-                            name:
-                                employee.name,
-
-                            issues:
-                                employee.validation
-                                    .issues
-                        })
-                    )
-
-        };
+        yaş--;
 
     }
 
 
-    /* =====================================================
-       DUPLICATE KONTROLÜ
-    ===================================================== */
+    return yaş;
 
-    function duplicateKontrolu(
-        employees
+};
+
+
+/* ============================================================
+   10. HİZMET SÜRESİ
+============================================================ */
+
+TMS19Data.hizmetSuresiHesapla = function (
+    işeGirişTarihi,
+    değerlemeTarihi
+) {
+
+    const giriş =
+        TMS19Data.parseDate(
+            işeGirişTarihi
+        );
+
+
+    const değerleme =
+        TMS19Data.parseDate(
+            değerlemeTarihi
+        );
+
+
+    if (
+        !giriş ||
+        !değerleme
     ) {
 
-        const map =
-            new Map();
+        return null;
+
+    }
 
 
-        employees.forEach(
-            function (
-                employee
+    const fark =
+        değerleme.getTime()
+        -
+        giriş.getTime();
+
+
+    return Math.max(
+        0,
+        fark /
+        (
+            365.25 *
+            24 *
+            60 *
+            60 *
+            1000
+        )
+    );
+
+};
+
+
+/* ============================================================
+   11. TEK PERSONEL NORMALİZASYONU
+============================================================ */
+
+TMS19Data.personelNormalizeEt = function (
+    hamVeri,
+    kolonEslesmesi
+) {
+
+    const personel = {};
+
+
+    Object.keys(
+        kolonEslesmesi
+    ).forEach(
+        orijinalKolon => {
+
+            const standartAlan =
+                kolonEslesmesi[
+                    orijinalKolon
+                ];
+
+
+            personel[
+                standartAlan
+            ] =
+            hamVeri[
+                orijinalKolon
+            ];
+
+        }
+    );
+
+
+    personel.sicilNo =
+        personel.sicilNo !== undefined
+            ? String(
+                personel.sicilNo
+            ).trim()
+            : "";
+
+
+    personel.adSoyad =
+        personel.adSoyad !== undefined
+            ? String(
+                personel.adSoyad
+            ).trim()
+            : "";
+
+
+    personel.doğumTarihi =
+        TMS19Data.parseDate(
+            personel.doğumTarihi
+        );
+
+
+    personel.işeGirişTarihi =
+        TMS19Data.parseDate(
+            personel.işeGirişTarihi
+        );
+
+
+    personel.iştenAyrılmaTarihi =
+        TMS19Data.parseDate(
+            personel.iştenAyrılmaTarihi
+        );
+
+
+    personel.mevcutMaaş =
+        TMS19Data.parseNumber(
+            personel.mevcutMaaş
+        );
+
+
+    personel.cinsiyet =
+        personel.cinsiyet !== undefined
+            ? String(
+                personel.cinsiyet
+            ).trim()
+            : "";
+
+
+    personel.departman =
+        personel.departman !== undefined
+            ? String(
+                personel.departman
+            ).trim()
+            : "";
+
+
+    personel.pozisyon =
+        personel.pozisyon !== undefined
+            ? String(
+                personel.pozisyon
+            ).trim()
+            : "";
+
+
+    personel.medeniDurum =
+        personel.medeniDurum !== undefined
+            ? String(
+                personel.medeniDurum
+            ).trim()
+            : "";
+
+
+    personel.çalışanDurumu =
+        personel.çalışanDurumu !== undefined
+            ? String(
+                personel.çalışanDurumu
+            ).trim()
+            : "Aktif";
+
+
+    return personel;
+
+};
+
+
+/* ============================================================
+   12. VERİ SETİ NORMALİZASYONU
+============================================================ */
+
+TMS19Data.veriSetiNormalizeEt = function (
+    hamVeri
+) {
+
+    if (
+        !Array.isArray(
+            hamVeri
+        ) ||
+        hamVeri.length === 0
+    ) {
+
+        throw new Error(
+            "Veri seti boş veya geçersiz."
+        );
+
+    }
+
+
+    const kolonlar =
+        Object.keys(
+            hamVeri[0]
+        );
+
+
+    const eşleştirme =
+        TMS19Data.kolonlariEsle(
+            kolonlar
+        );
+
+
+    const eksikZorunluAlanlar =
+        TMS19Data.zorunluAlanlar
+            .filter(
+                alan =>
+                    !Object.values(
+                        eşleştirme.eslesme
+                    )
+                    .includes(
+                        alan
+                    )
+            );
+
+
+    const normalizeVeri =
+        hamVeri.map(
+            satır =>
+                TMS19Data.personelNormalizeEt(
+                    satır,
+                    eşleştirme.eslesme
+                )
+        );
+
+
+    return {
+
+        veri:
+            normalizeVeri,
+
+        eşleştirme:
+            eşleştirme.eslesme,
+
+        eslesmeyenKolonlar:
+            eşleştirme.eslesmeyenler,
+
+        eksikZorunluAlanlar
+
+    };
+
+};
+
+
+/* ============================================================
+   13. VERİ KALİTESİ — ANA MOTOR
+============================================================ */
+
+TMS19Data.veriKalitesiKontrol = function (
+    personelListesi,
+    varsayımlar
+) {
+
+    const hatalar = [];
+
+    const uyarılar = [];
+
+    const bilgiler = [];
+
+
+    const sicilMap =
+        new Map();
+
+
+    const bugün =
+        TMS19Data.parseDate(
+            varsayımlar &&
+            varsayımlar.değerlemeTarihi
+        )
+        ||
+        new Date();
+
+
+    personelListesi.forEach(
+        (personel, index) => {
+
+            const satır =
+                index + 2;
+
+
+            /* ---------------------------------------------
+               Sicil kontrolü
+            --------------------------------------------- */
+
+            if (
+                !personel.sicilNo
             ) {
 
-                const id =
-                    employee.employeeId;
+                hatalar.push({
 
+                    satır,
+
+                    alan:
+                        "Sicil No",
+
+                    mesaj:
+                        "Sicil numarası boş."
+
+                });
+
+            } else {
 
                 if (
-                    !map.has(id)
+                    sicilMap.has(
+                        personel.sicilNo
+                    )
                 ) {
 
-                    map.set(
-                        id,
-                        []
-                    );
+                    hatalar.push({
+
+                        satır,
+
+                        alan:
+                            "Sicil No",
+
+                        mesaj:
+                            "Tekrarlanan sicil numarası: "
+                            +
+                            personel.sicilNo
+
+                    });
 
                 }
 
 
-                map.get(id).push(
-                    employee
+                sicilMap.set(
+                    personel.sicilNo,
+                    true
                 );
 
             }
-        );
 
 
-        const duplicates = [];
+            /* ---------------------------------------------
+               Ad soyad
+            --------------------------------------------- */
 
-
-        map.forEach(
-            function (
-                records,
-                id
+            if (
+                !personel.adSoyad
             ) {
 
+                uyarılar.push({
+
+                    satır,
+
+                    alan:
+                        "Ad Soyad",
+
+                    mesaj:
+                        "Personel adı boş."
+
+                });
+
+            }
+
+
+            /* ---------------------------------------------
+               Doğum tarihi
+            --------------------------------------------- */
+
+            if (
+                !personel.doğumTarihi
+            ) {
+
+                hatalar.push({
+
+                    satır,
+
+                    alan:
+                        "Doğum Tarihi",
+
+                    mesaj:
+                        "Doğum tarihi bulunamadı."
+
+                });
+
+            } else {
+
                 if (
-                    records.length > 1
+                    personel.doğumTarihi
+                    >
+                    bugün
                 ) {
 
-                    duplicates.push({
+                    hatalar.push({
 
-                        employeeId:
-                            id,
+                        satır,
 
-                        count:
-                            records.length,
+                        alan:
+                            "Doğum Tarihi",
 
-                        names:
-                            records.map(
-                                x =>
-                                    x.name
-                            )
+                        mesaj:
+                            "Doğum tarihi değerleme tarihinden sonra."
 
                     });
 
                 }
 
             }
-        );
 
 
-        return duplicates;
+            /* ---------------------------------------------
+               İşe giriş
+            --------------------------------------------- */
 
-    }
-
-
-    /* =====================================================
-       PORTFÖY ÖZETİ
-    ===================================================== */
-
-    function portfolioSummary(
-        employees
-    ) {
-
-        const totalSalary =
-            employees.reduce(
-                (
-                    sum,
-                    employee
-                ) =>
-                    sum +
-                    employee.annualSalary,
-                0
-            );
-
-
-        const totalDBO =
-            employees.reduce(
-                (
-                    sum,
-                    employee
-                ) =>
-                    sum +
-                    employee.openingDBO,
-                0
-            );
-
-
-        const totalEmployees =
-            employees.length;
-
-
-        const averageAge =
-            totalEmployees === 0
-                ? 0
-                : employees.reduce(
-                    (
-                        sum,
-                        employee
-                    ) =>
-                        sum +
-                        employee.age,
-                    0
-                ) /
-                totalEmployees;
-
-
-        const averageService =
-            totalEmployees === 0
-                ? 0
-                : employees.reduce(
-                    (
-                        sum,
-                        employee
-                    ) =>
-                        sum +
-                        employee.serviceYears,
-                    0
-                ) /
-                totalEmployees;
-
-
-        const departments =
-            {};
-
-
-        employees.forEach(
-            function (
-                employee
+            if (
+                !personel.işeGirişTarihi
             ) {
 
-                const department =
-                    employee.department;
+                hatalar.push({
 
+                    satır,
+
+                    alan:
+                        "İşe Giriş Tarihi",
+
+                    mesaj:
+                        "İşe giriş tarihi bulunamadı."
+
+                });
+
+            } else {
 
                 if (
-                    !departments[
-                        department
-                    ]
+                    personel.işeGirişTarihi
+                    >
+                    bugün
                 ) {
 
-                    departments[
-                        department
-                    ] = {
+                    hatalar.push({
 
-                        employeeCount:
-                            0,
+                        satır,
 
-                        salary:
-                            0,
+                        alan:
+                            "İşe Giriş Tarihi",
 
-                        dbo:
-                            0
+                        mesaj:
+                            "İşe giriş tarihi gelecek tarihli."
 
-                    };
+                    });
 
                 }
 
 
-                departments[
-                    department
-                ].employeeCount++;
+                if (
+                    personel.doğumTarihi &&
+                    personel.işeGirişTarihi
+                    <
+                    personel.doğumTarihi
+                ) {
 
+                    hatalar.push({
 
-                departments[
-                    department
-                ].salary +=
-                    employee.annualSalary;
+                        satır,
 
+                        alan:
+                            "İşe Giriş Tarihi",
 
-                departments[
-                    department
-                ].dbo +=
-                    employee.openingDBO;
+                        mesaj:
+                            "İşe giriş tarihi doğum tarihinden önce."
+
+                    });
+
+                }
 
             }
+
+
+            /* ---------------------------------------------
+               Maaş
+            --------------------------------------------- */
+
+            if (
+                personel.mevcutMaaş === null ||
+                personel.mevcutMaaş === undefined
+            ) {
+
+                hatalar.push({
+
+                    satır,
+
+                    alan:
+                        "Brüt Maaş",
+
+                    mesaj:
+                        "Brüt maaş bilgisi bulunamadı."
+
+                });
+
+            } else if (
+                personel.mevcutMaaş <= 0
+            ) {
+
+                hatalar.push({
+
+                    satır,
+
+                    alan:
+                        "Brüt Maaş",
+
+                    mesaj:
+                        "Brüt maaş sıfır veya negatif."
+
+                });
+
+            } else if (
+                personel.mevcutMaaş < 1000
+            ) {
+
+                uyarılar.push({
+
+                    satır,
+
+                    alan:
+                        "Brüt Maaş",
+
+                    mesaj:
+                        "Brüt maaş olağandışı düşük görünüyor."
+
+                });
+
+            }
+
+
+            /* ---------------------------------------------
+               Yaş
+            --------------------------------------------- */
+
+            const yaş =
+                TMS19Data.yasHesapla(
+                    personel.doğumTarihi,
+                    bugün
+                );
+
+
+            if (
+                yaş !== null
+            ) {
+
+                if (
+                    yaş < 15
+                ) {
+
+                    hatalar.push({
+
+                        satır,
+
+                        alan:
+                            "Yaş",
+
+                        mesaj:
+                            "Personel yaşı 15'in altında."
+
+                    });
+
+                }
+
+
+                if (
+                    yaş > 75
+                ) {
+
+                    uyarılar.push({
+
+                        satır,
+
+                        alan:
+                            "Yaş",
+
+                        mesaj:
+                            "Personel yaşı 75'in üzerinde."
+
+                    });
+
+                }
+
+
+                if (
+                    varsayımlar &&
+                    varsayımlar.emeklilikYaşı &&
+                    yaş >
+                    Number(
+                        varsayımlar.emeklilikYaşı
+                    )
+                ) {
+
+                    uyarılar.push({
+
+                        satır,
+
+                        alan:
+                            "Yaş",
+
+                        mesaj:
+                            "Personel emeklilik yaşını aşmış."
+
+                    });
+
+                }
+
+            }
+
+
+            /* ---------------------------------------------
+               Hizmet süresi
+            --------------------------------------------- */
+
+            const hizmet =
+                TMS19Data.hizmetSuresiHesapla(
+                    personel.işeGirişTarihi,
+                    bugün
+                );
+
+
+            if (
+                hizmet !== null &&
+                hizmet > 50
+            ) {
+
+                uyarılar.push({
+
+                    satır,
+
+                    alan:
+                        "Hizmet Süresi",
+
+                    mesaj:
+                        "Hizmet süresi 50 yılın üzerinde."
+
+                });
+
+            }
+
+
+            /* ---------------------------------------------
+               Cinsiyet
+            --------------------------------------------- */
+
+            if (
+                personel.cinsiyet
+            ) {
+
+                const c =
+                    TMS19Data.normalizeText(
+                        personel.cinsiyet
+                    );
+
+
+                const geçerli = [
+
+                    "e",
+                    "k",
+                    "erkek",
+                    "kadin",
+                    "kadın",
+                    "male",
+                    "female",
+                    "m",
+                    "f"
+
+                ];
+
+
+                if (
+                    !geçerli.includes(
+                        c
+                    )
+                ) {
+
+                    uyarılar.push({
+
+                        satır,
+
+                        alan:
+                            "Cinsiyet",
+
+                        mesaj:
+                            "Cinsiyet değeri standart formatta değil."
+
+                    });
+
+                }
+
+            }
+
+        }
+    );
+
+
+    /* ========================================================
+       GENEL KONTROLLER
+    ======================================================== */
+
+
+    if (
+        personelListesi.length === 0
+    ) {
+
+        hatalar.push({
+
+            satır:
+                0,
+
+            alan:
+                "Veri Seti",
+
+            mesaj:
+                "Personel veri seti boş."
+
+        });
+
+    }
+
+
+    if (
+        personelListesi.length > 0
+    ) {
+
+        bilgiler.push({
+
+            mesaj:
+                personelListesi.length
+                +
+                " personel kaydı kontrol edildi."
+
+        });
+
+    }
+
+
+    const toplamKontrol =
+        personelListesi.length *
+        8;
+
+
+    const toplamProblem =
+        hatalar.length +
+        uyarılar.length;
+
+
+    let kaliteSkoru =
+        100;
+
+
+    if (
+        toplamKontrol > 0
+    ) {
+
+        kaliteSkoru =
+            100
+            -
+            (
+                hatalar.length * 5
+            )
+            -
+            (
+                uyarılar.length * 1.5
+            );
+
+    }
+
+
+    kaliteSkoru =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                kaliteSkoru
+            )
         );
+
+
+    let seviye =
+        "Mükemmel";
+
+
+    if (
+        kaliteSkoru < 95
+    ) {
+
+        seviye =
+            "İyi";
+
+    }
+
+
+    if (
+        kaliteSkoru < 85
+    ) {
+
+        seviye =
+            "İyileştirme Gerekli";
+
+    }
+
+
+    if (
+        kaliteSkoru < 70
+    ) {
+
+        seviye =
+            "Kritik";
+
+    }
+
+
+    return {
+
+        kaliteSkoru:
+            Math.round(
+                kaliteSkoru
+            ),
+
+        seviye,
+
+        hatalar,
+
+        uyarılar,
+
+        bilgiler,
+
+        toplamHata:
+            hatalar.length,
+
+        toplamUyarı:
+            uyarılar.length
+
+    };
+
+};
+
+
+/* ============================================================
+   14. AKTÜERYAL ÖN KONTROL
+============================================================ */
+
+TMS19Data.aktüeryalÖnKontrol = function (
+    personelListesi,
+    varsayımlar
+) {
+
+    const sonuçlar = [];
+
+
+    const iskonto =
+        Number(
+            varsayımlar &&
+            varsayımlar.iskontoOranı
+        );
+
+
+    const maaşArtışı =
+        Number(
+            varsayımlar &&
+            varsayımlar.maaşArtışOranı
+        );
+
+
+    const turnover =
+        Number(
+            varsayımlar &&
+            varsayımlar.personelDevirOranı
+        );
+
+
+    if (
+        !isFinite(
+            iskonto
+        ) ||
+        iskonto <= 0
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Kritik",
+
+            alan:
+                "İskonto Oranı",
+
+            mesaj:
+                "İskonto oranı sıfır veya geçersiz."
+
+        });
+
+    }
+
+
+    if (
+        iskonto > 1
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Uyarı",
+
+            alan:
+                "İskonto Oranı",
+
+            mesaj:
+                "İskonto oranı %100'ün üzerinde."
+
+        });
+
+    }
+
+
+    if (
+        maaşArtışı < 0
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Uyarı",
+
+            alan:
+                "Maaş Artış Oranı",
+
+            mesaj:
+                "Maaş artış oranı negatif."
+
+        });
+
+    }
+
+
+    if (
+        maaşArtışı > 1
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Uyarı",
+
+            alan:
+                "Maaş Artış Oranı",
+
+            mesaj:
+                "Maaş artış oranı %100'ün üzerinde."
+
+        });
+
+    }
+
+
+    if (
+        turnover < 0 ||
+        turnover > 1
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Kritik",
+
+            alan:
+                "Personel Devir Oranı",
+
+            mesaj:
+                "Personel devir oranı %0-%100 aralığında olmalıdır."
+
+        });
+
+    }
+
+
+    if (
+        !varsayımlar.emeklilikYaşı ||
+        Number(
+            varsayımlar.emeklilikYaşı
+        ) < 40 ||
+        Number(
+            varsayımlar.emeklilikYaşı
+        ) > 80
+    ) {
+
+        sonuçlar.push({
+
+            seviye:
+                "Uyarı",
+
+            alan:
+                "Emeklilik Yaşı",
+
+            mesaj:
+                "Emeklilik yaşı olağandışı görünüyor."
+
+        });
+
+    }
+
+
+    return sonuçlar;
+
+};
+
+
+/* ============================================================
+   15. VERİ SETİ ÖZETİ
+============================================================ */
+
+TMS19Data.veriÖzeti = function (
+    personelListesi,
+    değerlemeTarihi
+) {
+
+    const maaşlar =
+        personelListesi
+            .map(
+                p =>
+                    Number(
+                        p.mevcutMaaş
+                    )
+            )
+            .filter(
+                x =>
+                    isFinite(x)
+                    &&
+                    x > 0
+            );
+
+
+    const yaşlar =
+        personelListesi
+            .map(
+                p =>
+                    TMS19Data.yasHesapla(
+                        p.doğumTarihi,
+                        değerlemeTarihi
+                    )
+            )
+            .filter(
+                x =>
+                    x !== null
+            );
+
+
+    const hizmetler =
+        personelListesi
+            .map(
+                p =>
+                    TMS19Data.hizmetSuresiHesapla(
+                        p.işeGirişTarihi,
+                        değerlemeTarihi
+                    )
+            )
+            .filter(
+                x =>
+                    x !== null
+            );
+
+
+    const ortalama = (
+        dizi
+    ) => {
+
+        if (
+            !dizi.length
+        ) {
+
+            return 0;
+
+        }
+
+
+        return dizi.reduce(
+            (
+                toplam,
+                değer
+            ) =>
+                toplam + değer,
+            0
+        ) / dizi.length;
+
+    };
+
+
+    return {
+
+        personelSayısı:
+            personelListesi.length,
+
+        toplamMaaş:
+            maaşlar.reduce(
+                (
+                    a,
+                    b
+                ) =>
+                    a + b,
+                0
+            ),
+
+        ortalamaMaaş:
+            ortalama(
+                maaşlar
+            ),
+
+        minimumMaaş:
+            maaşlar.length
+                ? Math.min(
+                    ...maaşlar
+                )
+                : 0,
+
+        maksimumMaaş:
+            maaşlar.length
+                ? Math.max(
+                    ...maaşlar
+                )
+                : 0,
+
+        ortalamaYaş:
+            ortalama(
+                yaşlar
+            ),
+
+        ortalamaHizmet:
+            ortalama(
+                hizmetler
+            )
+
+    };
+
+};
+
+
+/* ============================================================
+   16. ANA VERİ YÜKLEME PIPELINE
+============================================================ */
+
+TMS19Data.veriYükle = function (
+    hamVeri,
+    varsayımlar
+) {
+
+    try {
+
+        const normalizeSonuç =
+            TMS19Data.veriSetiNormalizeEt(
+                hamVeri
+            );
+
+
+        const kalite =
+            TMS19Data.veriKalitesiKontrol(
+                normalizeSonuç.veri,
+                varsayımlar
+            );
+
+
+        const aktüeryalKontrol =
+            TMS19Data.aktüeryalÖnKontrol(
+                normalizeSonuç.veri,
+                varsayımlar
+            );
+
+
+        const özet =
+            TMS19Data.veriÖzeti(
+                normalizeSonuç.veri,
+                varsayımlar.değerlemeTarihi
+            );
 
 
         return {
 
-            employeeCount:
-                totalEmployees,
+            başarılı:
+                normalizeSonuç
+                    .eksikZorunluAlanlar
+                    .length === 0,
 
-            totalSalary:
-                totalSalary,
+            veri:
+                normalizeSonuç.veri,
 
-            totalOpeningDBO:
-                totalDBO,
+            kolonEşleşmesi:
+                normalizeSonuç.eslesme,
 
-            averageAge:
-                Number(
-                    averageAge.toFixed(2)
-                ),
+            eslesmeyenKolonlar:
+                normalizeSonuç
+                    .eslesmeyenKolonlar,
 
-            averageService:
-                Number(
-                    averageService.toFixed(2)
-                ),
+            eksikZorunluAlanlar:
+                normalizeSonuç
+                    .eksikZorunluAlanlar,
 
-            dboToSalary:
-                totalSalary === 0
-                    ? 0
-                    : Number(
-                        (
-                            totalDBO /
-                            totalSalary
-                        ).toFixed(4)
-                    ),
+            veriKalitesi:
+                kalite,
 
-            departments:
-                departments
+            aktüeryalKontrol,
+
+            özet
+
+        };
+
+    } catch (
+        hata
+    ) {
+
+        return {
+
+            başarılı:
+                false,
+
+            hata:
+                hata.message,
+
+            veri:
+                [],
+
+            veriKalitesi:
+                {
+
+                    kaliteSkoru:
+                        0,
+
+                    seviye:
+                        "Kritik",
+
+                    hatalar:
+                        [
+
+                            {
+
+                                alan:
+                                    "Sistem",
+
+                                mesaj:
+                                    hata.message
+
+                            }
+
+                        ],
+
+                    uyarılar:
+                        [],
+
+                    toplamHata:
+                        1,
+
+                    toplamUyarı:
+                        0
+
+                }
 
         };
 
     }
 
+};
 
-    /* =====================================================
-       CSV PARSER
-    ===================================================== */
 
-    function parseCSV(
-        csvText,
-        delimiter
+/* ============================================================
+   17. CSV PARSER
+============================================================ */
+
+TMS19Data.csvOku = function (
+    csvMetni
+) {
+
+    if (
+        !csvMetni ||
+        !csvMetni.trim()
     ) {
 
-        if (
-            typeof csvText !==
-            "string"
-        ) {
+        throw new Error(
+            "CSV dosyası boş."
+        );
 
-            throw new Error(
-                "CSV içeriği metin formatında olmalıdır."
+    }
+
+
+    const satırlar =
+        csvMetni
+            .replace(
+                /\r\n/g,
+                "\n"
+            )
+            .replace(
+                /\r/g,
+                "\n"
+            )
+            .split(
+                "\n"
+            )
+            .filter(
+                satır =>
+                    satır.trim()
             );
 
-        }
+
+    if (
+        satırlar.length < 2
+    ) {
+
+        throw new Error(
+            "CSV dosyasında veri satırı bulunamadı."
+        );
+
+    }
 
 
-        delimiter =
-            delimiter ||
-            detectDelimiter(
-                csvText
-            );
+    const ayırıcı =
+        satırlar[0].includes(";")
+            ? ";"
+            : ",";
 
 
-        const rows = [];
+    const parseSatır = (
+        satır
+    ) => {
 
-        let current = [];
+        const sonuç = [];
 
-        let value = "";
+        let mevcut =
+            "";
 
-        let insideQuotes =
+        let tırnak =
             false;
 
 
         for (
             let i = 0;
-            i < csvText.length;
+            i < satır.length;
             i++
         ) {
 
-            const char =
-                csvText[i];
-
-
-            const next =
-                csvText[i + 1];
+            const karakter =
+                satır[i];
 
 
             if (
-                char === '"' &&
-                next === '"'
-            ) {
-
-                value += '"';
-
-                i++;
-
-                continue;
-
-            }
-
-
-            if (
-                char === '"'
-            ) {
-
-                insideQuotes =
-                    !insideQuotes;
-
-                continue;
-
-            }
-
-
-            if (
-                char === delimiter &&
-                !insideQuotes
-            ) {
-
-                current.push(
-                    value
-                );
-
-                value = "";
-
-                continue;
-
-            }
-
-
-            if (
-                (
-                    char === "\n" ||
-                    char === "\r"
-                ) &&
-                !insideQuotes
+                karakter === '"'
             ) {
 
                 if (
-                    char === "\r" &&
-                    next === "\n"
+                    tırnak &&
+                    satır[i + 1] === '"'
                 ) {
+
+                    mevcut += '"';
 
                     i++;
 
-                }
+                } else {
 
-
-                current.push(
-                    value
-                );
-
-                value = "";
-
-
-                if (
-                    current.some(
-                        cell =>
-                            String(
-                                cell
-                            ).trim() !== ""
-                    )
-                ) {
-
-                    rows.push(
-                        current
-                    );
+                    tırnak =
+                        !tırnak;
 
                 }
 
-
-                current = [];
-
-                continue;
-
-            }
-
-
-            value += char;
-
-        }
-
-
-        if (
-            value !== "" ||
-            current.length > 0
-        ) {
-
-            current.push(
-                value
-            );
-
-            rows.push(
-                current
-            );
-
-        }
-
-
-        if (
-            rows.length < 2
-        ) {
-
-            return [];
-
-        }
-
-
-        const headers =
-            rows[0].map(
-                header =>
-                    String(
-                        header
-                    ).trim()
-            );
-
-
-        return rows
-            .slice(1)
-            .map(
-                function (
-                    row
-                ) {
-
-                    const object = {};
-
-
-                    headers.forEach(
-                        function (
-                            header,
-                            index
-                        ) {
-
-                            object[
-                                header
-                            ] =
-                                row[index] ??
-                                "";
-
-                        }
-                    );
-
-
-                    return object;
-
-                }
-            );
-
-    }
-
-
-    function detectDelimiter(
-        csvText
-    ) {
-
-        const firstLine =
-            csvText.split(
-                /\r?\n/
-            )[0] ||
-            "";
-
-
-        const candidates = [
-            ";",
-            ",",
-            "\t",
-            "|"
-        ];
-
-
-        let best =
-            ",";
-
-        let max =
-            0;
-
-
-        candidates.forEach(
-            function (
-                delimiter
+            } else if (
+                karakter === ayırıcı &&
+                !tırnak
             ) {
 
-                const count =
-                    firstLine.split(
-                        delimiter
-                    ).length - 1;
+                sonuç.push(
+                    mevcut.trim()
+                );
 
+                mevcut =
+                    "";
 
-                if (
-                    count > max
-                ) {
+            } else {
 
-                    max =
-                        count;
-
-                    best =
-                        delimiter;
-
-                }
+                mevcut +=
+                    karakter;
 
             }
+
+        }
+
+
+        sonuç.push(
+            mevcut.trim()
         );
 
 
-        return best;
-
-    }
-
-
-    /* =====================================================
-       CSV'DEN PERSONEL IMPORT
-    ===================================================== */
-
-    function importCSV(
-        csvText,
-        options
-    ) {
-
-        const rawRows =
-            parseCSV(
-                csvText
-            );
-
-
-        const employees =
-            normalizeEmployees(
-                rawRows,
-                options
-            );
-
-
-        const validation =
-            validateEmployees(
-                employees
-            );
-
-
-        const duplicates =
-            duplicateKontrolu(
-                employees
-            );
-
-
-        return {
-
-            employees:
-                employees,
-
-            validation:
-                validation,
-
-            duplicates:
-                duplicates,
-
-            summary:
-                portfolioSummary(
-                    employees
-                ),
-
-            importedAt:
-                new Date().toISOString(),
-
-            source:
-                "CSV"
-
-        };
-
-    }
-
-
-    /* =====================================================
-       JSON IMPORT
-    ===================================================== */
-
-    function importJSON(
-        json,
-        options
-    ) {
-
-        let rows =
-            json;
-
-
-        if (
-            typeof json ===
-            "string"
-        ) {
-
-            rows =
-                JSON.parse(
-                    json
-                );
-
-        }
-
-
-        if (
-            !Array.isArray(rows)
-        ) {
-
-            if (
-                Array.isArray(
-                    rows.employees
-                )
-            ) {
-
-                rows =
-                    rows.employees;
-
-            }
-            else {
-
-                throw new Error(
-                    "JSON personel listesi bulunamadı."
-                );
-
-            }
-
-        }
-
-
-        const employees =
-            normalizeEmployees(
-                rows,
-                options
-            );
-
-
-        const validation =
-            validateEmployees(
-                employees
-            );
-
-
-        return {
-
-            employees:
-                employees,
-
-            validation:
-                validation,
-
-            duplicates:
-                duplicateKontrolu(
-                    employees
-                ),
-
-            summary:
-                portfolioSummary(
-                    employees
-                ),
-
-            importedAt:
-                new Date().toISOString(),
-
-            source:
-                "JSON"
-
-        };
-
-    }
-
-
-    /* =====================================================
-       DEMO VERİ ÜRETİCİ
-    ===================================================== */
-
-    function generateDemoData(
-        count
-    ) {
-
-        count =
-            Number(count) ||
-            100;
-
-
-        const departments = [
-
-            "Finans",
-
-            "İnsan Kaynakları",
-
-            "Operasyon",
-
-            "Satış",
-
-            "Pazarlama",
-
-            "Bilgi Teknolojileri",
-
-            "Hukuk",
-
-            "Tedarik Zinciri"
-
-        ];
-
-
-        const names = [
-
-            "Ahmet Yılmaz",
-
-            "Ayşe Demir",
-
-            "Mehmet Kaya",
-
-            "Zeynep Şahin",
-
-            "Can Aydın",
-
-            "Elif Arslan",
-
-            "Burak Çelik",
-
-            "Selin Koç",
-
-            "Murat Özkan",
-
-            "Derya Akın"
-
-        ];
-
-
-        const employees = [];
-
-
-        for (
-            let i = 0;
-            i < count;
-            i++
-        ) {
-
-            const age =
-                25 +
-                Math.floor(
-                    Math.random() * 33
-                );
-
-
-            const service =
-                Math.min(
-                    age - 22,
-                    Math.max(
-                        1,
-                        Math.floor(
-                            Math.random() * 15
-                        )
-                    )
-                );
-
-
-            const birthYear =
-                new Date()
-                    .getFullYear() -
-                age;
-
-
-            const hireYear =
-                new Date()
-                    .getFullYear() -
-                Math.floor(
-                    service
-                );
-
-
-            const salary =
-                350000 +
-                Math.floor(
-                    Math.random() *
-                    750000
-                );
-
-
-            const name =
-                names[
-                    i %
-                    names.length
-                ] +
-                " " +
-                (
-                    i + 1
-                );
-
-
-            employees.push({
-
-                SicilNo:
-                    "P" +
-                    String(
-                        i + 1
-                    )
-                    .padStart(
-                        5,
-                        "0"
-                    ),
-
-                AdSoyad:
-                    name,
-
-                DogumTarihi:
-                    `${birthYear}-01-15`,
-
-                IseGirisTarihi:
-                    `${hireYear}-01-01`,
-
-                Departman:
-                    departments[
-                        i %
-                        departments.length
-                    ],
-
-                Cinsiyet:
-                    i % 2 === 0
-                        ? "E"
-                        : "K",
-
-                BrutMaas:
-                    salary,
-
-                EmeklilikYasi:
-                    60,
-
-                OpeningDBO:
-                    Math.round(
-                        salary *
-                        service *
-                        0.035
-                    )
-
-            });
-
-        }
-
-
-        return importJSON(
-            employees
-        );
-
-    }
-
-
-    /* =====================================================
-       EXPORT
-    ===================================================== */
-
-    global.TMS19DataEngine = {
-
-        normalizeEmployees:
-            normalizeEmployees,
-
-        normalizeEmployee:
-            personelNormalizeEt,
-
-        validateEmployees:
-            validateEmployees,
-
-        duplicateCheck:
-            duplicateKontrolu,
-
-        portfolioSummary:
-            portfolioSummary,
-
-        parseCSV:
-            parseCSV,
-
-        importCSV:
-            importCSV,
-
-        importJSON:
-            importJSON,
-
-        generateDemoData:
-            generateDemoData,
-
-        formatNumber:
-            sayiyaCevir,
-
-        parseDate:
-            tarihCevir,
-
-        dateToISO:
-            tarihISO,
-
-        calculateAge:
-            yasHesapla,
-
-        calculateServiceYears:
-            hizmetSuresiHesapla
+        return sonuç;
 
     };
 
 
-    console.log(
-        "TMS 19 Veri Motoru hazır."
-    );
+    const başlıklar =
+        parseSatır(
+            satırlar[0]
+        );
 
 
-})(window);
+    return satırlar
+        .slice(1)
+        .map(
+            satır => {
+
+                const değerler =
+                    parseSatır(
+                        satır
+                    );
+
+
+                const obje = {};
+
+
+                başlıklar.forEach(
+                    (
+                        başlık,
+                        index
+                    ) => {
+
+                        obje[
+                            başlık
+                        ] =
+                            değerler[
+                                index
+                            ] !== undefined
+                                ? değerler[
+                                    index
+                                ]
+                                : "";
+
+                    }
+                );
+
+
+                return obje;
+
+            }
+        );
+
+};
+
+
+/* ============================================================
+   18. GLOBAL KISA YOLLAR
+============================================================ */
+
+window.tms19VeriYükle =
+    TMS19Data.veriYükle;
+
+window.tms19VeriKontrol =
+    TMS19Data.veriKalitesiKontrol;
+
+window.tms19CSVOku =
+    TMS19Data.csvOku;
+
+
+/* ============================================================
+   19. CONSOLE MESAJI
+============================================================ */
+
+console.log(
+    "GK Advisory — TMS 19 Data Engine V1 aktif."
+);
+
+console.log(
+    "Desteklenen işlemler:",
+    [
+        "TMS19Data.veriYükle()",
+        "TMS19Data.veriKalitesiKontrol()",
+        "TMS19Data.csvOku()",
+        "TMS19Data.kolonlariEsle()"
+    ]
+);
