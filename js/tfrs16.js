@@ -2809,187 +2809,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function calculateLease(contract) {
 
-    const payment =
-      Number(contract.monthlyPayment) || 0;
+    /*
+      V16.5 FIX — GK Advisory review, 21.08.2026
+      -------------------------------------------------------
+      This function used to run its own stripped-down annuity
+      calculation (ROU = Liability, no initial direct costs, no
+      prepayments, no lease incentives, no restoration obligation,
+      and no TFRS 16.5-8 short-term/low-value exemption). Because
+      calculateLease() was still the engine behind the initial
+      journal entry, the current/non-current split, the dashboard
+      KPIs, and the contract detail modal, contracts with any of
+      those components — or ones flagged as exempt — produced
+      numbers there that silently disagreed with the "professional"
+      schedule shown elsewhere (calculateLeaseEngine()).
 
-    const annualRate =
-      Number(contract.discountRate) || 0;
-
-    const monthlyRate =
-      annualRate / 100 / 12;
-
-    const months =
-      monthsBetween(
-        contract.startDate,
-        contract.endDate
-      );
-
-    if (
-      payment <= 0 ||
-      months <= 0
-    ) {
-
-      return {
-        months: 0,
-        liability: 0,
-        rouAssets: 0,
-        depreciation: 0,
-        monthlyInterest: 0,
-        schedule: []
-      };
-    }
-
-    let liability = 0;
-
-    if (monthlyRate === 0) {
-
-      liability =
-        payment * months;
-
-    } else {
-
-      liability =
-        payment *
-        (
-          (
-            1 -
-            Math.pow(
-              1 + monthlyRate,
-              -months
-            )
-          ) /
-          monthlyRate
-        );
-    }
-
-    const initialLiability =
-      liability;
-
-    const initialROU =
-      initialLiability;
-
-    const depreciation =
-      initialROU / months;
-
-    const schedule = [];
-
-    let openingLiability =
-      initialLiability;
-
-    let rouOpening =
-      initialROU;
-
-    const contractStart =
-      parseDate(contract.startDate);
-
-    for (
-      let i = 1;
-      i <= months;
-      i++
-    ) {
-
-      const interest =
-        openingLiability *
-        monthlyRate;
-
-      let principal =
-        payment - interest;
-
-      if (principal < 0) {
-        principal = 0;
-      }
-
-      if (
-        principal >
-        openingLiability
-      ) {
-        principal =
-          openingLiability;
-      }
-
-      const closingLiability =
-        Math.max(
-          0,
-          openingLiability - principal
-        );
-
-      const rouDepreciation =
-        Math.min(
-          depreciation,
-          rouOpening
-        );
-
-      const rouClosing =
-        Math.max(
-          0,
-          rouOpening -
-          rouDepreciation
-        );
-
-      const periodDate =
-        new Date(
-          contractStart.getFullYear(),
-          contractStart.getMonth() +
-            i -
-            1,
-          1
-        );
-
-      schedule.push({
-
-        period: i,
-
-        date: periodDate,
-
-        year:
-          periodDate.getFullYear(),
-
-        month:
-          periodDate.getMonth() + 1,
-
-        openingLiability,
-
-        payment,
-
-        interest,
-
-        principal,
-
-        closingLiability,
-
-        rouOpening,
-
-        depreciation:
-          rouDepreciation,
-
-        rouClosing
-
-      });
-
-      openingLiability =
-        closingLiability;
-
-      rouOpening =
-        rouClosing;
-    }
-
-    return {
-
-      months,
-
-      liability:
-        initialLiability,
-
-      rouAssets:
-        initialROU,
-
-      depreciation,
-
-      monthlyInterest:
-        schedule[0]?.interest || 0,
-
-      schedule
-    };
+      Fix: delegate fully to calculateLeaseEngine(), which is a
+      strict superset — for a legacy contract (no IDC/incentives/
+      prepayments/restoration/escalation/exemption fields set) it
+      returns numerically identical months/liability/rouAssets/
+      depreciation/monthlyInterest/schedule values, so every
+      existing call site keeps working unchanged. For contracts
+      that DO use the extended TFRS 16 fields, all downstream
+      consumers of calculateLease() now get the standard-compliant
+      figures instead of a second, wrong set of numbers.
+    */
+    return calculateLeaseEngine(contract);
   }
 
 
@@ -3913,19 +3757,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function calculateNext12Months(
-    contract
+    contract,
+    reportingDate
   ) {
 
-    const engine =
-      calculateLease(contract);
+    /*
+      V16.5 FIX: this used to always take the first 12 schedule
+      periods from contract INCEPTION (engine.schedule.slice(0,12)),
+      regardless of how long the contract had already been running.
+      For any contract not exactly at its commencement date, that is
+      not "next 12 months" — it is "first 12 months", which silently
+      misstates the dashboard KPI. Now defaults to today and reuses
+      the reporting-date-aware split (same logic as the AsOf current/
+      non-current classification) so it reflects the 12 months
+      actually following the reporting date.
+    */
+    const resolvedDate =
+      reportingDate
+        ? parseDate(reportingDate)
+        : new Date();
 
-    return engine.schedule
-      .slice(0, 12)
-      .reduce(
-        (total, item) =>
-          total + item.payment,
-        0
-      );
+    return calculateLiabilitySplitAsOf(
+      contract,
+      resolvedDate
+    ).next12Payments;
   }
 
 
@@ -4844,34 +4699,25 @@ document.addEventListener("DOMContentLoaded", () => {
     reportingDate
   ) {
 
-    let current;
-    let nonCurrent;
+    /*
+      V16.5 FIX: the old "no reportingDate passed" branch fell back
+      to calculateCurrentLiability()/calculateNonCurrentLiability(),
+      which classify current vs. non-current using the first 12
+      schedule periods from contract INCEPTION rather than the 12
+      months following an actual balance sheet date — wrong for any
+      contract not exactly at commencement. There is currently one
+      call site and it always passes a reportingDate, but this
+      fallback is kept correct (defaulting to today) so it can never
+      silently reintroduce that misclassification if called bare.
+    */
+    const split =
+      calculateLiabilitySplitAsOf(
+        contract,
+        reportingDate || new Date()
+      );
 
-    if (reportingDate) {
-
-      // V16.3: reporting-date-aware split (Faz 6)
-      const split =
-        calculateLiabilitySplitAsOf(
-          contract,
-          reportingDate
-        );
-
-      current = split.current;
-      nonCurrent = split.nonCurrent;
-
-    } else {
-
-      // No reportingDate passed: exact V15 behavior, unchanged.
-      current =
-        calculateCurrentLiability(
-          contract
-        );
-
-      nonCurrent =
-        calculateNonCurrentLiability(
-          contract
-        );
-    }
+    const current = split.current;
+    const nonCurrent = split.nonCurrent;
 
     return [
 
