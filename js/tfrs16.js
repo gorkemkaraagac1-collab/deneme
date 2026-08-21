@@ -6798,9 +6798,9 @@ document.addEventListener("DOMContentLoaded", () => {
       )?.value;
 
     const engine =
-      calculateLeaseEngine(
-        contract
-      );
+      typeof cfoBuildSchedule === "function"
+        ? cfoBuildSchedule(contract)
+        : calculateLeaseEngine(contract);
 
     const rows =
       filterSchedule(
@@ -6932,10 +6932,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function exportPaymentSchedule(contract) {
 
-    const engine =
+    const baseEngine =
       calculateLeaseEngine(
         contract
       );
+
+    const engine =
+      typeof cfoBuildSchedule === "function"
+        ? { ...baseEngine, ...cfoBuildSchedule(contract) }
+        : baseEngine;
 
     if (!engine.schedule.length) {
 
@@ -14680,7 +14685,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedContractId) return `<div class="empty-state"><h3>Sözleşme seçilmedi</h3><p>Payment Schedule, Journal ve Audit Trail için önce bir sözleşme detayını açın.</p></div>`;
     const contract = contracts.find(c => c.id === selectedContractId);
     if (!contract) return `<div class="empty-state"><h3>Sözleşme bulunamadı</h3><p>Seçili sözleşme artık portföyde mevcut değil.</p></div>`;
-    const schedule = typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : [];
+    const schedule = typeof cfoBuildSchedule === "function" ? (cfoBuildSchedule(contract)?.schedule || []) : (typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : []);
     const journals = typeof getJournalSummaryReport === "function" ? (getJournalSummaryReport({ contractId: contract.id })?.rows || []) : [];
     const audit = typeof getAuditTrailReport === "function" ? (getAuditTrailReport({ contractId: contract.id }) || []) : [];
     return `<h3>${v191Escape(contract.id)} — Payment Schedule</h3>${v191Table(schedule.slice(0, 24), [
@@ -15386,7 +15391,10 @@ document.addEventListener("DOMContentLoaded", () => {
     normalizedContracts.forEach(contract => {
       let schedule = [];
       try {
-        if (typeof calculateLeaseEngine === "function") {
+        if (typeof cfoBuildSchedule === "function") {
+          const result = cfoBuildSchedule(contract);
+          schedule = v20SafeArray(result?.schedule);
+        } else if (typeof calculateLeaseEngine === "function") {
           const result = calculateLeaseEngine(contract);
           schedule = v20SafeArray(result?.schedule);
         }
@@ -17447,7 +17455,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {}
 
     try {
-      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : {};
+      const engine = typeof cfoBuildSchedule === "function"
+        ? cfoBuildSchedule(contract)
+        : (typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : {});
       const schedule = v22SafeArray(engine?.schedule);
       const rows = schedule.filter(row => !date || !row.date || String(row.date) <= String(date));
       const latest = rows.length ? rows[rows.length - 1] : null;
