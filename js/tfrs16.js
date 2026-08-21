@@ -11349,12 +11349,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const closingRow = rptScheduleAtOrBefore(schedule, end);
         const periodRows = rptRowsBetween(schedule, start, end);
         const openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
-        const closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
+        let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
+        const appliedModifications = (Array.isArray(contract.modifications) ? contract.modifications : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
+        const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.reassessmentDate); return d && d >= start && d <= end; });
+        // The monthly schedule only starts reflecting a modification/reassessment
+        // from its next dated row onward. If the reporting cutoff falls on/after
+        // an applied change's effective date but the picked closing row still
+        // predates it, the raw schedule closing value understates the true
+        // liability as of the cutoff. Pull the revised liability directly from
+        // the latest such change so the roll-forward reconciles correctly.
+        const closingRowDate = closingRow ? parseDate(closingRow.date) : null;
+        const pendingChanges = appliedModifications.concat(appliedReassessments)
+          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDate || d.getTime() > closingRowDate.getTime()); })
+          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+        if (pendingChanges.length) {
+          const latestPending = pendingChanges[pendingChanges.length - 1];
+          if (Number.isFinite(Number(latestPending.revisedLeaseLiability))) {
+            closingLiability = Math.max(0, Number(latestPending.revisedLeaseLiability));
+          }
+        }
         const interest = periodRows.reduce((s, r) => s + rptNumber(r.interest), 0);
         const payments = periodRows.reduce((s, r) => s + rptNumber(r.payment), 0);
         const expected = openingLiability + interest - payments;
-        const appliedModifications = (Array.isArray(contract.modifications) ? contract.modifications : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
-        const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.reassessmentDate); return d && d >= start && d <= end; });
         const modificationAdjustment = appliedModifications.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const unexplainedAdjustment = (closingLiability - expected) - modificationAdjustment - reassessmentAdjustment;
@@ -11382,10 +11398,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
         const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
         const openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
-        const closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
-        const depreciation=periodRows.reduce((s,r)=>s+rptNumber(r.depreciation),0);
+        let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
         const appliedModifications=(Array.isArray(contract.modifications)?contract.modifications:[]).filter(x=>x.status==="APPLIED").filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
         const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[]).filter(x=>x.status==="APPLIED").filter(x=>{const d=rptDate(x.effectiveDate||x.reassessmentDate);return d&&d>=start&&d<=end;});
+        // Same timing gap as the liability roll-forward: pull the post-change ROU
+        // directly from the latest pending modification/reassessment when the
+        // schedule hasn't yet caught up to the reporting cutoff.
+        const closingRowDateRuo = closingRow ? parseDate(closingRow.date) : null;
+        const pendingChangesRuo = appliedModifications.concat(appliedReassessments)
+          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDateRuo || d.getTime() > closingRowDateRuo.getTime()); })
+          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+        if (pendingChangesRuo.length) {
+          const latestPendingRuo = pendingChangesRuo[pendingChangesRuo.length - 1];
+          const oldRou = Number(latestPendingRuo.oldROU);
+          const rouAdj = Number(latestPendingRuo.rouAdjustment);
+          if (Number.isFinite(oldRou) && Number.isFinite(rouAdj)) {
+            closingRuo = Math.max(0, oldRou + rouAdj);
+          }
+        }
+        const depreciation=periodRows.reduce((s,r)=>s+rptNumber(r.depreciation),0);
         const modificationAdjustment=appliedModifications.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const unexplainedAdjustment=(closingRuo-(openingRuo-depreciation))-modificationAdjustment-reassessmentAdjustment;
