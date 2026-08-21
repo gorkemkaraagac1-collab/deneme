@@ -4581,3 +4581,1019 @@ TMS19.pucHealthCheck =
                     .toISOString()
         };
     };
+
+/* ================================================================
+   TMS 19 — PUC ALLOCATION ENGINE
+   ----------------------------------------------------------------
+   Projected Unit Credit Method
+
+   Ana prensip:
+
+   Emeklilikte beklenen toplam fayda
+              ↓
+       Toplam hizmet süresine
+           dağıtılır
+              ↓
+   Değerleme tarihine kadar kazanılmış hizmet
+              ↓
+          DBO / PUC
+================================================================ */
+
+
+/* ================================================================
+   51 — EMEKLİLİKTE BEKLENEN TOPLAM FAYDA
+================================================================ */
+
+TMS19.emeklilikToplamFayda =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        const p =
+            TMS19.personelNormalizeEt(
+                personel
+            );
+
+
+        const degerlemeTarihi =
+            TMS19.tarih(
+                varsayimlar.degerlemeTarihi
+            );
+
+
+        const dogumTarihi =
+            TMS19.tarih(
+                p.dogumTarihi
+            );
+
+
+        const iseGirisTarihi =
+            TMS19.tarih(
+                p.iseGirisTarihi
+            );
+
+
+        const mevcutMaas =
+            TMS19.sayi(
+                p.mevcutMaas
+            );
+
+
+        const yas =
+            TMS19.yasHesapla(
+                dogumTarihi,
+                degerlemeTarihi
+            );
+
+
+        const hizmetSuresi =
+            TMS19.yilFarki(
+                iseGirisTarihi,
+                degerlemeTarihi
+            );
+
+
+        const emeklilikYasi =
+            TMS19.sayi(
+                varsayimlar.emeklilikYasi
+            );
+
+
+        const kalanYil =
+            Math.max(
+                0,
+                emeklilikYasi -
+                yas
+            );
+
+
+        const toplamHizmet =
+            hizmetSuresi +
+            kalanYil;
+
+
+        /*
+         * Emeklilik tarihindeki maaş.
+         */
+
+        const emeklilikMaasi =
+            TMS19.yillikMaasProjeksiyonu(
+                mevcutMaas,
+                kalanYil,
+                varsayimlar.maasArtisOrani
+            );
+
+
+        /*
+         * Emeklilik tarihindeki kıdem tavanı.
+         */
+
+        const emeklilikTavani =
+            TMS19.yillikKidemTavani(
+                varsayimlar.kidemTavani,
+                kalanYil,
+                varsayimlar.kidemTavaniArtisOrani
+            );
+
+
+        /*
+         * Fayda hesabına girecek maaş.
+         */
+
+        const faydaMaasi =
+            Math.min(
+                emeklilikMaasi,
+                emeklilikTavani
+            );
+
+
+        /*
+         * Emeklilikte toplam beklenen fayda.
+         */
+
+        const faydaOrani =
+            TMS19.sayi(
+                varsayimlar.faydaOrani
+            );
+
+
+        const toplamFayda =
+            faydaMaasi *
+            faydaOrani *
+            toplamHizmet;
+
+
+        return {
+
+            mevcutYas:
+                yas,
+
+            mevcutHizmet:
+                hizmetSuresi,
+
+            kalanYil:
+                kalanYil,
+
+            toplamHizmet:
+                toplamHizmet,
+
+            emeklilikMaasi:
+                emeklilikMaasi,
+
+            emeklilikTavani:
+                emeklilikTavani,
+
+            faydaMaasi:
+                faydaMaasi,
+
+            faydaOrani:
+                faydaOrani,
+
+            toplamFayda:
+                toplamFayda
+        };
+    };
+
+
+/* ================================================================
+   52 — PUC HİZMET TAHSİSİ
+================================================================ */
+
+TMS19.pucHizmetTahsisEt =
+    function (
+        toplamFayda,
+        gecmisHizmet,
+        toplamHizmet
+    ) {
+
+        const benefit =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    toplamFayda
+                )
+            );
+
+
+        const pastService =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    gecmisHizmet
+                )
+            );
+
+
+        const totalService =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    toplamHizmet
+                )
+            );
+
+
+        if (
+            totalService <= 0
+        ) {
+
+            return {
+
+                pastServiceBenefit:
+                    0,
+
+                futureServiceBenefit:
+                    benefit,
+
+                allocationRatio:
+                    0
+            };
+        }
+
+
+        const allocationRatio =
+            Math.min(
+                1,
+                pastService /
+                totalService
+            );
+
+
+        const pastServiceBenefit =
+            benefit *
+            allocationRatio;
+
+
+        const futureServiceBenefit =
+            benefit -
+            pastServiceBenefit;
+
+
+        return {
+
+            pastServiceBenefit:
+                pastServiceBenefit,
+
+            futureServiceBenefit:
+                futureServiceBenefit,
+
+            allocationRatio:
+                allocationRatio
+        };
+    };
+
+
+/* ================================================================
+   53 — PUCl BUGÜNKÜ YÜKÜMLÜLÜK
+================================================================ */
+
+TMS19.pucDboHesapla =
+    function (
+        emeklilikFayda,
+        gecmisHizmet,
+        toplamHizmet,
+        kalanYil,
+        varsayimlar = {}
+    ) {
+
+        const allocation =
+            TMS19.pucHizmetTahsisEt(
+                emeklilikFayda,
+                gecmisHizmet,
+                toplamHizmet
+            );
+
+
+        /*
+         * Geçmiş hizmete tahsis edilen fayda.
+         */
+
+        const accruedBenefit =
+            allocation.pastServiceBenefit;
+
+
+        /*
+         * Demografik devam olasılığı.
+         */
+
+        const survivalProbability =
+            TMS19.kumulatifDevamOlasiligi(
+                kalanYil,
+                varsayimlar
+            );
+
+
+        /*
+         * Beklenen değer.
+         */
+
+        const expectedBenefit =
+            accruedBenefit *
+            survivalProbability;
+
+
+        /*
+         * Bugünkü değer.
+         */
+
+        const discountFactor =
+            TMS19.iskontoFaktoru(
+                varsayimlar.iskontoOrani,
+                kalanYil
+            );
+
+
+        const dbo =
+            expectedBenefit *
+            discountFactor;
+
+
+        return {
+
+            accruedBenefit:
+                accruedBenefit,
+
+            futureServiceBenefit:
+                allocation.futureServiceBenefit,
+
+            allocationRatio:
+                allocation.allocationRatio,
+
+            survivalProbability:
+                survivalProbability,
+
+            discountFactor:
+                discountFactor,
+
+            dbo:
+                dbo
+        };
+    };
+
+
+/* ================================================================
+   54 — PERSONEL BAZLI GERÇEK PUC HESABI
+================================================================ */
+
+TMS19.personelPucHesapla =
+    function (
+        personel,
+        varsayimlar = {},
+        index = 0
+    ) {
+
+        const p =
+            TMS19.personelNormalizeEt(
+                personel
+            );
+
+
+        /*
+         * Validation
+         */
+
+        const validation =
+            TMS19.personelValidate(
+                personel
+            );
+
+
+        if (
+            !validation.valid
+        ) {
+
+            throw new Error(
+                validation.errors.join(
+                    " "
+                )
+            );
+        }
+
+
+        /*
+         * Emeklilik faydası.
+         */
+
+        const retirementBenefit =
+            TMS19.emeklilikToplamFayda(
+                personel,
+                varsayimlar
+            );
+
+
+        /*
+         * PUC tahsisi.
+         */
+
+        const puc =
+            TMS19.pucDboHesapla(
+
+                retirementBenefit.toplamFayda,
+
+                retirementBenefit.mevcutHizmet,
+
+                retirementBenefit.toplamHizmet,
+
+                retirementBenefit.kalanYil,
+
+                varsayimlar
+            );
+
+
+        /*
+         * Current Service Cost
+         *
+         * Bir yıllık hizmet biriminin,
+         * gelecekteki ödeme riskleri ve
+         * iskonto dikkate alınarak bugünkü değeri.
+         */
+
+        const annualServiceBenefit =
+            retirementBenefit.toplamHizmet > 0
+                ? retirementBenefit.toplamFayda /
+                  retirementBenefit.toplamHizmet
+                : 0;
+
+
+        const nextYearProbability =
+            TMS19.kumulatifDevamOlasiligi(
+                retirementBenefit.kalanYil > 0
+                    ? retirementBenefit.kalanYil - 1
+                    : 0,
+                varsayimlar
+            );
+
+
+        const nextYearDiscount =
+            TMS19.iskontoFaktoru(
+                varsayimlar.iskontoOrani,
+                retirementBenefit.kalanYil
+            );
+
+
+        const currentServiceCost =
+            annualServiceBenefit *
+            nextYearProbability *
+            nextYearDiscount;
+
+
+        /*
+         * Interest Cost
+         *
+         * Opening DBO × discount rate
+         */
+
+        const openingDBO =
+            TMS19.sayi(
+                personel.openingDBO ??
+                personel.acilisDBO ??
+                0
+            );
+
+
+        const interestCost =
+            openingDBO *
+            TMS19.sayi(
+                varsayimlar.iskontoOrani
+            );
+
+
+        /*
+         * Eğer opening DBO verilmemişse,
+         * mevcut PUC DBO üzerinden alternatif
+         * hesap kullanılabilir.
+         */
+
+        const effectiveInterestCost =
+            openingDBO > 0
+                ? interestCost
+                : puc.dbo *
+                  TMS19.sayi(
+                      varsayimlar.iskontoOrani
+                  );
+
+
+        return {
+
+            index:
+                index,
+
+            personelId:
+                p.personelId,
+
+            yas:
+                retirementBenefit.mevcutYas,
+
+            hizmetSuresi:
+                retirementBenefit.mevcutHizmet,
+
+            kalanYil:
+                retirementBenefit.kalanYil,
+
+            toplamHizmet:
+                retirementBenefit.toplamHizmet,
+
+
+            /*
+             * Projection
+             */
+
+            emeklilik:
+                {
+
+                    emeklilikMaasi:
+                        retirementBenefit.emeklilikMaasi,
+
+                    emeklilikTavani:
+                        retirementBenefit.emeklilikTavani,
+
+                    faydaMaasi:
+                        retirementBenefit.faydaMaasi,
+
+                    toplamFayda:
+                        retirementBenefit.toplamFayda
+                },
+
+
+            /*
+             * PUC
+             */
+
+            puc:
+                {
+
+                    accruedBenefit:
+                        puc.accruedBenefit,
+
+                    futureServiceBenefit:
+                        puc.futureServiceBenefit,
+
+                    allocationRatio:
+                        puc.allocationRatio,
+
+                    survivalProbability:
+                        puc.survivalProbability,
+
+                    discountFactor:
+                        puc.discountFactor,
+
+                    dbo:
+                        puc.dbo
+                },
+
+
+            /*
+             * P&L
+             */
+
+            accounting:
+                {
+
+                    currentServiceCost:
+                        currentServiceCost,
+
+                    interestCost:
+                        effectiveInterestCost,
+
+                    pastServiceCost:
+                        0,
+
+                    profitLoss:
+                        currentServiceCost +
+                        effectiveInterestCost
+                },
+
+
+            /*
+             * Kontrol alanları
+             */
+
+            quality:
+                {
+
+                    dboPositive:
+                        puc.dbo >= 0,
+
+                    serviceAllocationValid:
+                        puc.allocationRatio >= 0 &&
+                        puc.allocationRatio <= 1,
+
+                    probabilityValid:
+                        puc.survivalProbability >= 0 &&
+                        puc.survivalProbability <= 1,
+
+                    discountFactorValid:
+                        puc.discountFactor > 0
+                }
+        };
+    };
+
+
+/* ================================================================
+   55 — PORTFÖY GERÇEK PUC
+================================================================ */
+
+TMS19.portfoyPucHesapla =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            throw new Error(
+                "Personel listesi array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+
+        const errors =
+            [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                try {
+
+                    results.push(
+
+                        TMS19.personelPucHesapla(
+                            personel,
+                            varsayimlar,
+                            index
+                        )
+
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    errors.push({
+
+                        index:
+                            index,
+
+                        personelId:
+                            personel?.personelId ??
+                            personel?.id ??
+                            "",
+
+                        error:
+                            error.message
+                    });
+                }
+            }
+        );
+
+
+        /*
+         * TOPLAMLAR
+         */
+
+        const toplamDBO =
+            results.reduce(
+                (
+                    sum,
+                    r
+                ) => {
+
+                    return (
+                        sum +
+                        TMS19.sayi(
+                            r.puc?.dbo
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        const toplamCariHizmetMaliyeti =
+            results.reduce(
+                (
+                    sum,
+                    r
+                ) => {
+
+                    return (
+                        sum +
+                        TMS19.sayi(
+                            r.accounting
+                                ?.currentServiceCost
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        const toplamFaizMaliyeti =
+            results.reduce(
+                (
+                    sum,
+                    r
+                ) => {
+
+                    return (
+                        sum +
+                        TMS19.sayi(
+                            r.accounting
+                                ?.interestCost
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        const toplamGecmisHizmet =
+            results.reduce(
+                (
+                    sum,
+                    r
+                ) => {
+
+                    return (
+                        sum +
+                        TMS19.sayi(
+                            r.accounting
+                                ?.pastServiceCost
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        /*
+         * YILLIK P&L
+         */
+
+        const toplamKarZarar =
+            toplamCariHizmetMaliyeti +
+            toplamFaizMaliyeti +
+            toplamGecmisHizmet;
+
+
+        /*
+         * PLAN VARLIKLARI
+         */
+
+        const toplamPlanVarligi =
+            personeller.reduce(
+                (
+                    sum,
+                    personel
+                ) => {
+
+                    return (
+                        sum +
+                        Math.max(
+                            0,
+                            TMS19.sayi(
+                                personel.planAssets ??
+                                personel.planVarliklari ??
+                                0
+                            )
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        /*
+         * NET POZİSYON
+         */
+
+        const netDefinedBenefitPosition =
+            toplamDBO -
+            toplamPlanVarligi;
+
+
+        return {
+
+            success:
+                errors.length === 0,
+
+            results:
+                results,
+
+            errors:
+                errors,
+
+            summary:
+                {
+
+                    personelSayisi:
+                        personeller.length,
+
+                    hesaplananPersonel:
+                        results.length,
+
+                    hataliPersonel:
+                        errors.length,
+
+                    toplamDBO:
+                        toplamDBO,
+
+                    toplamPlanVarligi:
+                        toplamPlanVarligi,
+
+                    netDefinedBenefitPosition:
+                        netDefinedBenefitPosition,
+
+                    netDefinedBenefitLiability:
+                        Math.max(
+                            0,
+                            netDefinedBenefitPosition
+                        ),
+
+                    netDefinedBenefitAsset:
+                        Math.max(
+                            0,
+                            -netDefinedBenefitPosition
+                        ),
+
+                    toplamCariHizmetMaliyeti:
+                        toplamCariHizmetMaliyeti,
+
+                    toplamFaizMaliyeti:
+                        toplamFaizMaliyeti,
+
+                    toplamGecmisHizmetMaliyeti:
+                        toplamGecmisHizmet,
+
+                    toplamKarZararEtkisi:
+                        toplamKarZarar
+                }
+        };
+    };
+
+
+/* ================================================================
+   56 — PUC RECONCILIATION
+================================================================ */
+
+TMS19.pucReconciliation =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        const puc =
+            TMS19.portfoyPucHesapla(
+                personeller,
+                varsayimlar
+            );
+
+
+        const oldEngine =
+            TMS19.portfoyDonemHesapla(
+                personeller,
+                varsayimlar
+            );
+
+
+        const pucDBO =
+            TMS19.sayi(
+                puc.summary
+                    .toplamDBO
+            );
+
+
+        const oldDBO =
+            TMS19.sayi(
+                oldEngine.summary
+                    .closingDBO
+            );
+
+
+        const difference =
+            pucDBO -
+            oldDBO;
+
+
+        const percentage =
+            oldDBO !== 0
+                ? difference /
+                  Math.abs(
+                      oldDBO
+                  )
+                : 0;
+
+
+        return {
+
+            pucDBO:
+                pucDBO,
+
+            legacyDBO:
+                oldDBO,
+
+            difference:
+                difference,
+
+            differencePercentage:
+                percentage,
+
+            puc:
+                puc,
+
+            legacy:
+                oldEngine
+        };
+    };
+
+
+/* ================================================================
+   57 — PUC ENGINE HEALTH CHECK
+================================================================ */
+
+TMS19.pucEngineHealthCheck =
+    function () {
+
+        const requiredFunctions =
+            [
+
+                "emeklilikToplamFayda",
+
+                "pucHizmetTahsisEt",
+
+                "pucDboHesapla",
+
+                "personelPucHesapla",
+
+                "portfoyPucHesapla",
+
+                "pucReconciliation"
+            ];
+
+
+        const status =
+            {};
+
+
+        let healthy =
+            true;
+
+
+        requiredFunctions.forEach(
+            name => {
+
+                const exists =
+                    typeof TMS19[name] ===
+                    "function";
+
+
+                status[name] =
+                    exists;
+
+
+                if (
+                    !exists
+                ) {
+
+                    healthy =
+                        false;
+                }
+            }
+        );
+
+
+        return {
+
+            healthy:
+                healthy,
+
+            functions:
+                status,
+
+            timestamp:
+                new Date()
+                    .toISOString()
+        };
+    };
+
+
