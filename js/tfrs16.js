@@ -9497,6 +9497,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <th style="padding:9px;">Şirket</th>
                 <th style="padding:9px;">Tedarikçi</th>
                 <th style="padding:9px;">Aylık Kira</th>
+                <th style="padding:9px;">Varlık Sınıfı</th>
                 <th style="padding:9px;">Kontrol</th>
                 <th style="padding:9px;">Aksiyon</th>
               </tr></thead>
@@ -9514,6 +9515,7 @@ document.addEventListener("DOMContentLoaded", () => {
                       <td style="padding:9px;border-top:1px solid #edf0f4;">${escapeHtml(data.company || "")}</td>
                       <td style="padding:9px;border-top:1px solid #edf0f4;">${escapeHtml(data.supplier || "")}</td>
                       <td style="padding:9px;border-top:1px solid #edf0f4;">${Number.isFinite(Number(data.monthlyPayment)) ? formatCurrency(Number(data.monthlyPayment)) : "-"}</td>
+                      <td style="padding:9px;border-top:1px solid #edf0f4;">${escapeHtml(data.assetClass || "Sınıflandırılmamış")}</td>
                       <td style="padding:9px;border-top:1px solid #edf0f4;font-weight:700;">${label}</td>
                       <td style="padding:9px;border-top:1px solid #edf0f4;">${escapeHtml(action)}</td>
                     </tr>
@@ -9613,7 +9615,10 @@ document.addEventListener("DOMContentLoaded", () => {
           18,
 
         "Yenileme Tarihi":
-          "2030-09-30"
+          "2030-09-30",
+
+        "Varlık Sınıfı":
+          "Makine"
       }
 
     ];
@@ -13467,7 +13472,8 @@ document.addEventListener("DOMContentLoaded", () => {
         discountRate: ["discount rate", "discount", "iskonto oranı", "iskonto orani"],
         renewalDate: ["renewal date", "renewal", "yenileme tarihi", "yenileme"],
         currency: ["currency", "currency code", "para birimi", "döviz", "doviz"],
-        status: ["status", "contract status", "durum"]
+        status: ["status", "contract status", "durum"],
+        assetClass: ["asset class", "asset category", "varlık sınıfı", "varlik sinifi", "varlık sinifi"]
       })
     }),
     SAP: Object.freeze({ id: "SAP", schemaVersion: INTEGRATION_SCHEMA_VERSION, fields: {} }),
@@ -13711,7 +13717,8 @@ document.addEventListener("DOMContentLoaded", () => {
       discountRate: integrationNumber(integrationFindValue(row, fields.discountRate || []), 0),
       renewalDate: dateResultRenewal && typeof dateResultRenewal === "object" ? null : dateResultRenewal,
       currency: normalizeIntegrationCurrency(integrationFindValue(row, fields.currency || [])),
-      status: integrationFindValue(row, fields.status || []) || "active"
+      status: integrationFindValue(row, fields.status || []) || "active",
+      assetClass: String(integrationFindValue(row, fields.assetClass || []) || "").trim()
     };
     const warnings = [];
     [dateResultStart, dateResultEnd, dateResultRenewal].forEach(result => { if (result && typeof result === "object" && result.warning) warnings.push(result.warning); });
@@ -13818,6 +13825,7 @@ document.addEventListener("DOMContentLoaded", () => {
       discountRate: data.discountRate,
       renewalDate: data.renewalDate,
       status: data.status || "active",
+      assetClass: data.assetClass || "",
       modification: false,
       reassessments: []
     };
@@ -13830,6 +13838,12 @@ document.addEventListener("DOMContentLoaded", () => {
     base.discountRate = data.discountRate;
     base.renewalDate = data.renewalDate;
     if (data.status) base.status = data.status;
+    if (data.assetClass) {
+      base.assetClass = data.assetClass;
+      if (typeof saveCustomAssetClass === "function") {
+        try { saveCustomAssetClass(data.assetClass); } catch (error) {}
+      }
+    }
     if (!Array.isArray(base.reassessments)) base.reassessments = [];
     base.integrationMetadata = {
       ...(base.integrationMetadata || {}),
@@ -13849,7 +13863,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function detectIntegrationChanges(oldContract, newData) {
     if (!oldContract) return [];
-    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "status"];
+    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "status", "assetClass"];
     return fields.filter(field => String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
