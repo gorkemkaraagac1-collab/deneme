@@ -5844,6 +5844,14 @@ document.addEventListener("DOMContentLoaded", () => {
           );
       }
 
+      appendFxToReclassification(
+        contract,
+        reportingDate,
+        entries,
+        `${year} Yıl Sonu Current / Non-current Kapanış Fişi`,
+        preview
+      );
+
       const totalDebit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
       const totalCredit = entries.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
       recordAuditEvent({
@@ -6033,6 +6041,74 @@ document.addEventListener("DOMContentLoaded", () => {
           title,
           entries
         );
+    }
+
+    appendFxJournalLines(contract, selected, entries, title, preview);
+  }
+
+  async function appendFxToReclassification(contract, reportingDate, originalEntries, title, preview) {
+    if (!preview || !contractNeedsFxTranslation(contract)) return;
+    try {
+      const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+      const functionalCurrency = resolveContractFunctionalCurrency(contract);
+      const closing = await getFxRateAuto(transactionCurrency, functionalCurrency, reportingDate, V23_RATE_TYPES.CLOSING);
+      if (closing?.error) throw Object.assign(new Error(closing.message || `${transactionCurrency}/${functionalCurrency} kuru bulunamadı.`), { code: closing.error });
+
+      const translatedEntries = originalEntries.map(item => ({
+        account: `${item.account} (${functionalCurrency})`,
+        debit: v23Round((item.debit || 0) * closing.rate, 2),
+        credit: v23Round((item.credit || 0) * closing.rate, 2)
+      }));
+
+      if (preview) {
+        preview.innerHTML =
+          renderJournalEntry(title, translatedEntries) +
+          `<div style="margin-top:10px;font-size:11px;color:#64748b;">
+             Kontrat para birimi ${transactionCurrency}. Yukarıdaki tutarlar, ${v23DateKey(reportingDate)} tarihli TMS 21 kapanış kuruyla (${closing.rate.toFixed(4)}, ${closing.rateDate || v23DateKey(reportingDate)}) ${functionalCurrency}'ye çevrilmiştir. Orijinal para biriminde tutar: Non-current ${formatCurrency(originalEntries[0]?.credit || 0)} ${transactionCurrency}, Current ${formatCurrency(originalEntries[1]?.debit || 0)} ${transactionCurrency}.
+           </div>`;
+      }
+    } catch (error) {
+      if (preview) {
+        preview.insertAdjacentHTML(
+          "beforeend",
+          `<div style="margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">TMS 21 kur çevrimi yapılamadı, tutarlar ${v23CurrencyCode(contract.currency)} cinsinden gösteriliyor: ${escapeHtml(error.message || String(error))}</div>`
+        );
+      }
+    }
+  }
+
+  async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview) {
+    if (!preview || !contractNeedsFxTranslation(contract)) return;
+    try {
+      const engineResult = calculateLeaseEngine(contract);
+      const fx = await buildTms21FxTranslation(contract, engineResult);
+      if (!fx.applicable) return;
+      const selectedDates = new Set(selectedRows.map(r => r.date));
+      const fxRows = fx.schedule.filter(r => selectedDates.has(r.date));
+      if (!fxRows.length) return;
+      const netFx = v23Round(fxRows.reduce((sum, r) => sum + r.fxGainLoss, 0), 2);
+      if (Math.abs(netFx) < 0.01) return;
+      const fxEntries = netFx < 0
+        ? [
+            { account: "656 Kambiyo Zararları (TMS 21 Kur Farkı Gideri)", debit: Math.abs(netFx), credit: 0 },
+            { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: 0, credit: Math.abs(netFx) }
+          ]
+        : [
+            { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: netFx, credit: 0 },
+            { account: "646 Kambiyo Karları (TMS 21 Kur Farkı Geliri)", debit: 0, credit: netFx }
+          ];
+      if (preview) {
+        preview.innerHTML =
+          renderJournalEntry(title, [...baseEntries, ...fxEntries]) +
+          `<div style="margin-top:10px;font-size:11px;color:#64748b;">TMS 21: kira yükümlülüğü ${fx.transactionCurrency} cinsinden, dönem kapanış kuruyla (${fx.functionalCurrency}'ye) yeniden çevrildi; kur farkı yukarıdaki fişe dahil edildi.</div>`;
+      }
+    } catch (error) {
+      if (preview) {
+        preview.insertAdjacentHTML(
+          "beforeend",
+          `<div style="margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">TMS 21 kur farkı hesaplanamadı: ${escapeHtml(error.message || String(error))}</div>`
+        );
+      }
     }
   }
 
@@ -6765,6 +6841,8 @@ document.addEventListener("DOMContentLoaded", () => {
           Seçilen dönem için ödeme planı kaydı bulunmuyor.
         </div>
 
+        <div id="fxTranslationContainer"></div>
+
       </div>
 
     `;
@@ -6843,6 +6921,84 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  async function renderFxTranslationSection(contract) {
+    const container = document.getElementById("fxTranslationContainer");
+    if (!container) return;
+    if (!contractNeedsFxTranslation(contract)) {
+      container.innerHTML = "";
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
+        <p style="margin:6px 0 0;color:#64748b;font-size:11px;">Kur bilgisi alınıyor...</p>
+      </div>
+    `;
+
+    try {
+      const engineResult = calculateLeaseEngine(contract);
+      const fx = await buildTms21FxTranslation(contract, engineResult);
+      if (!fx.applicable) { container.innerHTML = ""; return; }
+
+      const rowsHtml = fx.schedule.map(row => `
+        <tr>
+          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${row.period}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${row.date}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${row.closingRate.toFixed(4)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.openingLiabilityFx)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.interestFx)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.paymentFx)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.closingLiabilityFx)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;color:${row.fxGainLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(row.fxGainLoss)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.rouClosingFx)}</td>
+        </tr>
+      `).join("");
+
+      container.innerHTML = `
+        <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
+          <h3 style="margin:5px 0 0;font-size:16px;">${fx.transactionCurrency} → ${fx.functionalCurrency}</h3>
+          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
+            İşlem (kira) para birimi: <strong>${fx.transactionCurrency}</strong> · Fonksiyonel para birimi: <strong>${fx.functionalCurrency}</strong> ·
+            Başlangıç kuru: <strong>${fx.commencementRate.toFixed(4)}</strong> (${fx.commencementRateDate}) ·
+            Kümülatif kur farkı: <strong style="color:${fx.totals.cumulativeFxGainLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(fx.totals.cumulativeFxGainLoss)} ${fx.functionalCurrency}</strong>
+          </p>
+          <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
+            Kira yükümlülüğü (parasal kalem) her dönem kapanış kuruyla yeniden çevrilir, fark K/Z'ye yazılır. ROU varlığı (parasal olmayan) sadece başlangıç kuruyla çevrilir, yeniden değerlenmez.
+          </p>
+          <div style="overflow:auto;margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;">
+            <table style="width:100%;border-collapse:collapse;min-width:900px;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
+                  <th style="padding:9px;text-align:left;font-size:11px;">Tarih</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Kur</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Açılış Yük. (${fx.functionalCurrency})</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Faiz (${fx.functionalCurrency})</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Ödeme (${fx.functionalCurrency})</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Kapanış Yük. (${fx.functionalCurrency})</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">Kur Farkı</th>
+                  <th style="padding:9px;text-align:right;font-size:11px;">ROU (${fx.functionalCurrency})</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } catch (error) {
+      container.innerHTML = `
+        <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
+          <div style="margin-top:8px;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
+            Kur farkı hesaplanamadı: ${escapeHtml(error.message || String(error))}
+          </div>
+        </div>
+      `;
+    }
+  }
+
   function updateScheduleSubPeriodUI() {
 
     const periodType =
@@ -6885,6 +7041,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateScheduleSubPeriodUI();
     renderPaymentScheduleTable(contract);
+    renderFxTranslationSection(contract);
 
     document
       .getElementById(
@@ -6930,7 +7087,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function exportPaymentSchedule(contract) {
+  async function exportPaymentSchedule(contract) {
 
     const baseEngine =
       calculateLeaseEngine(
@@ -6953,6 +7110,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     auditScheduleEvent(contract, "SCHEDULE_GENERATED", "PAYMENT_SCHEDULE_EXPORT", `V16.7-${engine.schedule.length}`, null, engine.schedule.length);
 
+    let fx = null;
+    let fxError = null;
+    if (contractNeedsFxTranslation(contract)) {
+      try {
+        fx = await buildTms21FxTranslation(contract, engine);
+      } catch (error) {
+        fxError = error;
+      }
+    }
+
     const assumptionRows = [
       { "Alan": "Sözleşme ID", "Değer": contract.id },
       { "Alan": "Şirket", "Değer": contract.company },
@@ -6961,10 +7128,24 @@ document.addEventListener("DOMContentLoaded", () => {
       { "Alan": "Bitiş Tarihi", "Değer": formatDate(contract.endDate) },
       { "Alan": "Aylık Kira", "Değer": contract.monthlyPayment },
       { "Alan": "Yıllık İskonto Oranı (%)", "Değer": contract.discountRate },
+      { "Alan": "Kira Para Birimi", "Değer": v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY) },
       { "Alan": "İlk Kira Yükümlülüğü", "Değer": engine.liability },
       { "Alan": "ROU Varlığı (Başlangıç)", "Değer": engine.rouAssets },
       { "Alan": "Rapor Tarihi", "Değer": formatDate(new Date()) }
     ];
+
+    if (fx?.applicable) {
+      assumptionRows.push(
+        { "Alan": "Fonksiyonel Para Birimi", "Değer": fx.functionalCurrency },
+        { "Alan": "TMS 21 Başlangıç Kuru", "Değer": fx.commencementRate },
+        { "Alan": "TMS 21 Başlangıç Kuru Tarihi", "Değer": fx.commencementRateDate },
+        { "Alan": "TMS 21 Kümülatif Kur Farkı", "Değer": fx.totals.cumulativeFxGainLoss },
+        { "Alan": "TMS 21 Kapanış Kira Yükümlülüğü (Fonksiyonel)", "Değer": fx.totals.closingLiabilityFx },
+        { "Alan": "TMS 21 Kapanış ROU (Fonksiyonel)", "Değer": fx.totals.closingRouFx }
+      );
+    } else if (fxError) {
+      assumptionRows.push({ "Alan": "TMS 21 Kur Çevrimi", "Değer": `Hesaplanamadı: ${fxError.message || fxError}` });
+    }
 
     const scheduleRows =
       engine.schedule.map(
@@ -7010,6 +7191,27 @@ document.addEventListener("DOMContentLoaded", () => {
           scheduleSheet,
           "Odeme Plani"
         );
+
+        if (fx?.applicable) {
+          const fxRows = fx.schedule.map(row => ({
+            "Dönem": row.period,
+            "Tarih": row.date,
+            "Kur (Kapanış)": row.closingRate,
+            "Kur Tarihi": row.rateDate,
+            [`Açılış Yükümlülüğü (${fx.functionalCurrency})`]: row.openingLiabilityFx,
+            [`Faiz (${fx.functionalCurrency})`]: row.interestFx,
+            [`Ödeme (${fx.functionalCurrency})`]: row.paymentFx,
+            [`Kapanış Yükümlülüğü (${fx.functionalCurrency})`]: row.closingLiabilityFx,
+            "Kur Farkı (Dönem)": row.fxGainLoss,
+            "Kur Farkı (Kümülatif)": row.cumulativeFxGainLoss,
+            [`ROU Açılış (${fx.functionalCurrency})`]: row.rouOpeningFx,
+            [`Amortisman (${fx.functionalCurrency})`]: row.depreciationFx,
+            [`ROU Kapanış (${fx.functionalCurrency})`]: row.rouClosingFx
+          }));
+
+          const fxSheet = XLSX.utils.json_to_sheet(fxRows);
+          XLSX.utils.book_append_sheet(workbook, fxSheet, "Kur_Cevrimi_TMS21");
+        }
 
         XLSX.writeFile(
           workbook,
@@ -13547,6 +13749,7 @@ document.addEventListener("DOMContentLoaded", () => {
         discountRate: ["discount rate", "discount", "iskonto oranı", "iskonto orani"],
         renewalDate: ["renewal date", "renewal", "yenileme tarihi", "yenileme"],
         currency: ["currency", "currency code", "para birimi", "döviz", "doviz"],
+        functionalCurrency: ["functional currency", "fonksiyonel para birimi", "fonksiyonel para birimi kodu", "reporting currency"],
         status: ["status", "contract status", "durum"],
         assetClass: ["asset class", "asset category", "varlık sınıfı", "varlik sinifi", "varlık sinifi"],
         prepayments: ["prepayments", "prepayment", "peşin ödemeler", "pesin odemeler", "peşin ödeme", "pesin odeme"],
@@ -13840,6 +14043,7 @@ document.addEventListener("DOMContentLoaded", () => {
       discountRate: integrationNumber(integrationFindValue(row, fields.discountRate || []), 0),
       renewalDate: dateResultRenewal && typeof dateResultRenewal === "object" ? null : dateResultRenewal,
       currency: normalizeIntegrationCurrency(integrationFindValue(row, fields.currency || [])),
+      functionalCurrency: normalizeIntegrationCurrency(integrationFindValue(row, fields.functionalCurrency || [])),
       status: integrationFindValue(row, fields.status || []) || "active",
       assetClass: String(integrationFindValue(row, fields.assetClass || []) || "").trim(),
       prepayments: integrationOptionalNumber(row, fields.prepayments || []),
@@ -13961,6 +14165,7 @@ document.addEventListener("DOMContentLoaded", () => {
       discountRate: data.discountRate,
       renewalDate: data.renewalDate,
       currency: data.currency || "TRY",
+      functionalCurrency: data.functionalCurrency || "TRY",
       status: data.status || "active",
       assetClass: data.assetClass || "",
       prepayments: data.prepayments ?? 0,
@@ -13988,6 +14193,7 @@ document.addEventListener("DOMContentLoaded", () => {
     base.discountRate = data.discountRate;
     base.renewalDate = data.renewalDate;
     if (data.currency) base.currency = data.currency;
+    if (data.functionalCurrency) base.functionalCurrency = data.functionalCurrency;
     if (data.status) base.status = data.status;
     if (data.assetClass) {
       base.assetClass = data.assetClass;
@@ -14027,7 +14233,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function detectIntegrationChanges(oldContract, newData) {
     if (!oldContract) return [];
-    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "currency", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
+    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "currency", "functionalCurrency", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
     return fields.filter(field => newData[field] !== undefined && String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
@@ -18498,6 +18704,213 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  /* ============================================================
+     TMS 21 — YABANCI PARA BİRİMLİ KİRALAMALARIN FONKSİYONEL PARA
+     BİRİMİNE ÇEVRİMİ
+     ------------------------------------------------------------
+     Kapsam: kontrat.currency (işlem/kira para birimi) ile
+     fonksiyonel para birimi (contract.functionalCurrency, yoksa
+     şirketin fonksiyonel parası, o da yoksa DEFAULT_FUNCTIONAL_
+     CURRENCY) farklı olduğunda, calculateLeaseEngine'in ürettiği
+     (orijinal para biriminde hesaplanmış, DOKUNULMAMIŞ) tabloyu
+     girdi olarak alıp TMS 21 kurallarına göre fonksiyonel para
+     birimine çevrilmiş ikinci bir tablo üretir:
+       - Kira yükümlülüğü (PARASAL kalem): her dönem sonu kapanış
+         kuruyla yeniden çevrilir; kur farkı K/Z'ye atılır.
+       - ROU varlığı (PARASAL OLMAYAN kalem): sadece başlangıç
+         (işlem) kuruyla bir kez çevrilir, sonra yeniden
+         değerlenmez — orijinal para birimindeki amortisman
+         paternine (oran olarak) sadık kalınarak fonksiyonel para
+         biriminde itfa edilir.
+     calculateLeaseEngine'in kendisi DEĞİŞTİRİLMEDİ; bu tamamen
+     ek/opsiyonel bir katmandır, mevcut hesaplamaları etkilemez.
+     ============================================================ */
+  const DEFAULT_FUNCTIONAL_CURRENCY = "TRY";
+
+  function resolveContractFunctionalCurrency(contract = {}) {
+    const explicit = v23CurrencyCode(contract.functionalCurrency);
+    if (explicit) return explicit;
+    const companyFx = v23CompanyCurrency(contract.company);
+    if (companyFx) return companyFx;
+    return DEFAULT_FUNCTIONAL_CURRENCY;
+  }
+
+  function contractNeedsFxTranslation(contract = {}) {
+    const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+    const functionalCurrency = resolveContractFunctionalCurrency(contract);
+    return transactionCurrency !== functionalCurrency;
+  }
+
+  // engineResult: calculateLeaseEngine(contract) çıktısı (orijinal
+  // para biriminde, dokunulmamış). Bu fonksiyon TCMB/manuel kur
+  // tablosundan (getFxRateAuto) her dönem için kur çeker; kur
+  // bulunamazsa (missingRatePolicy=BLOCK ise) hata fırlatır —
+  // sessizce yanlış/eksik bir çeviri üretmez.
+  async function buildTms21FxTranslation(contract, engineResult, options = {}) {
+    const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+    const functionalCurrency = resolveContractFunctionalCurrency(contract);
+    if (transactionCurrency === functionalCurrency || !engineResult || engineResult.exempt) {
+      return { applicable: false, transactionCurrency, functionalCurrency };
+    }
+    if (!engineResult.schedule || !engineResult.schedule.length) {
+      return { applicable: false, transactionCurrency, functionalCurrency, reason: "EMPTY_SCHEDULE" };
+    }
+
+    const rateType = options.rateType || V23_RATE_TYPES.CLOSING;
+    const rateCache = new Map();
+    async function rateOn(dateKey) {
+      const key = v23DateKey(dateKey);
+      if (rateCache.has(key)) return rateCache.get(key);
+      const fx = await getFxRateAuto(transactionCurrency, functionalCurrency, key, rateType, { allowMissing: !!options.allowMissingRates, allowLastAvailable: !!options.allowLastAvailable });
+      if (fx?.error) {
+        const err = Object.assign(new Error(`${transactionCurrency}/${functionalCurrency} kuru bulunamadı (${key}). ${fx.message || ""}`), { code: fx.error, rateDate: key });
+        throw err;
+      }
+      rateCache.set(key, fx);
+      return fx;
+    }
+
+    // Başlangıç (işlem) kuru: kira başlangıç tarihindeki kur.
+    // ROU (parasal olmayan kalem) sadece bu kurla bir kez çevrilir.
+    const commencementRate = await rateOn(contract.startDate || engineResult.schedule[0].date);
+    const initialLiabilityFx = v23Round(v23Num(engineResult.liability) * commencementRate.rate, 2);
+    const initialRouFx = v23Round(v23Num(engineResult.rouAssets) * commencementRate.rate, 2);
+    const totalOriginalRou = v23Num(engineResult.rouAssets) || 1;
+
+    let openingLiabilityFx = initialLiabilityFx;
+    let rouOpeningFx = initialRouFx;
+    let cumulativeFxGainLoss = 0;
+    const schedule = [];
+
+    for (const row of engineResult.schedule) {
+      const closing = await rateOn(row.date);
+      const closingRate = closing.rate;
+
+      // Parasal kalem (kira yükümlülüğü): dönem içi hareketler
+      // (faiz tahakkuku, ödeme) o dönemin kuruyla çevrilir;
+      // dönem sonu bakiyesi ise TMS 21.23(a) gereği ORİJİNAL
+      // PARA BİRİMİNDEKİ bakiye × kapanış kuru olarak yeniden
+      // ifade edilir — aradaki fark kur farkı gelir/gider olarak
+      // K/Z'ye yazılır.
+      const interestFx = v23Round(v23Num(row.interest) * closingRate, 2);
+      const paymentFx = v23Round(v23Num(row.payment) * closingRate, 2);
+      const movementBeforeRetranslationFx = v23Round(openingLiabilityFx + interestFx - paymentFx, 2);
+      const closingLiabilityFx = v23Round(v23Num(row.closingLiability) * closingRate, 2);
+      const fxGainLoss = v23Round(closingLiabilityFx - movementBeforeRetranslationFx, 2);
+      cumulativeFxGainLoss = v23Round(cumulativeFxGainLoss + fxGainLoss, 2);
+
+      // Parasal olmayan kalem (ROU): yeniden değerlenmez. Orijinal
+      // para biriminde o dönem ayrılan amortismanın toplam ROU'ya
+      // oranı, başlangıçta sabitlenen fonksiyonel tutara uygulanır.
+      const depreciationRatio = totalOriginalRou > 0 ? (v23Num(row.depreciation) / totalOriginalRou) : 0;
+      const depreciationFx = v23Round(initialRouFx * depreciationRatio, 2);
+      const rouClosingFx = v23Round(Math.max(0, rouOpeningFx - depreciationFx), 2);
+
+      schedule.push({
+        period: row.period,
+        date: row.date,
+        rateDate: closing.rateDate,
+        closingRate,
+        rateSource: closing.source,
+        rateUsedFallback: !!closing.usedFallback,
+        openingLiabilityFx,
+        interestFx,
+        paymentFx,
+        movementBeforeRetranslationFx,
+        closingLiabilityFx,
+        fxGainLoss,
+        cumulativeFxGainLoss,
+        rouOpeningFx,
+        depreciationFx,
+        rouClosingFx
+      });
+
+      openingLiabilityFx = closingLiabilityFx;
+      rouOpeningFx = rouClosingFx;
+    }
+
+    return {
+      applicable: true,
+      transactionCurrency,
+      functionalCurrency,
+      rateType,
+      commencementRate: commencementRate.rate,
+      commencementRateDate: commencementRate.rateDate,
+      initialLiabilityFx,
+      initialRouFx,
+      totals: {
+        closingLiabilityFx: schedule[schedule.length - 1]?.closingLiabilityFx ?? initialLiabilityFx,
+        closingRouFx: schedule[schedule.length - 1]?.rouClosingFx ?? initialRouFx,
+        cumulativeFxGainLoss
+      },
+      schedule
+    };
+  }
+
+  // Tek çağrıda: kontratı bul, orijinal motoru çalıştır, gerekiyorsa
+  // TMS 21 çevrimini uygula. contractOrId bir kontrat objesi ya da
+  // id string'i olabilir.
+  async function getContractFxTranslatedSchedule(contractOrId, options = {}) {
+    const contract = typeof contractOrId === "object" && contractOrId
+      ? contractOrId
+      : (typeof getV23Contracts === "function" ? getV23Contracts().find(c => String(c.id) === String(contractOrId)) : null) ||
+        (typeof getContracts === "function" ? getContracts().find(c => String(c.id) === String(contractOrId)) : null);
+    if (!contract) throw Object.assign(new Error("Kontrat bulunamadı."), { code: "CONTRACT_NOT_FOUND" });
+    const engineResult = calculateLeaseEngine(contract);
+    if (!contractNeedsFxTranslation(contract)) {
+      return { contractId: contract.id, engine: engineResult, fx: { applicable: false, transactionCurrency: v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY), functionalCurrency: resolveContractFunctionalCurrency(contract) } };
+    }
+    const fx = await buildTms21FxTranslation(contract, engineResult, options);
+    return { contractId: contract.id, engine: engineResult, fx };
+  }
+
+  // Bağımsız TMS 21 kur farkı fişi: mevcut senkron journal
+  // zincirine (rptJournalRows/getJournalSummaryReport) MÜDAHALE
+  // ETMEZ — o zincir bilinçli olarak çoklu para birimini
+  // çevirmeden ayrı tutuyor (bkz. getCurrencyExposureReport notu).
+  // Bu fonksiyon, dövizli kontratlar için TMS 21 kur farkı
+  // gelir/gider fişini AYRI ve İSTEĞE BAĞLI olarak üretir; muhasip
+  // bunu mevcut fişlere ek olarak, kontrollü şekilde kaydeder.
+  async function getContractFxTranslationJournal(contractId, periodStart, periodEnd, options = {}) {
+    const result = await getContractFxTranslatedSchedule(contractId, options);
+    if (!result.fx.applicable) {
+      return { contractId, applicable: false, reason: result.fx.reason || "SAME_CURRENCY", lines: [] };
+    }
+    const s = v23Date(periodStart), e = v23Date(periodEnd);
+    const rows = result.fx.schedule.filter(row => {
+      const d = v23Date(row.date);
+      return d && (!s || d >= s) && (!e || d <= e);
+    });
+    const totalFxGainLoss = v23Round(rows.reduce((sum, r) => sum + v23Num(r.fxGainLoss), 0), 2);
+    if (!rows.length) {
+      return { contractId, applicable: true, transactionCurrency: result.fx.transactionCurrency, functionalCurrency: result.fx.functionalCurrency, totalFxGainLoss: 0, lines: [] };
+    }
+    // TMS 21.28: kur farkları oluştuğu dönemde K/Z'ye yazılır.
+    // Kazanç ise 646 Kambiyo Karları alacak, kayıp ise 656 Kambiyo
+    // Zararları borç; karşı taraf 401/301 Kiralama Yükümlülüğü'nün
+    // fonksiyonel para birimindeki çevrim düzeltmesidir.
+    const lines = [];
+    if (totalFxGainLoss > 0) {
+      lines.push({ account: "401 Kiralama Yükümlülüğü (Kur Çevrim Düzeltmesi)", debit: 0, credit: totalFxGainLoss });
+      lines.push({ account: "646 Kambiyo Karları", debit: totalFxGainLoss, credit: 0 });
+    } else if (totalFxGainLoss < 0) {
+      const loss = Math.abs(totalFxGainLoss);
+      lines.push({ account: "656 Kambiyo Zararları", debit: loss, credit: 0 });
+      lines.push({ account: "401 Kiralama Yükümlülüğü (Kur Çevrim Düzeltmesi)", debit: 0, credit: loss });
+    }
+    return {
+      contractId,
+      applicable: true,
+      transactionCurrency: result.fx.transactionCurrency,
+      functionalCurrency: result.fx.functionalCurrency,
+      periodStart: v23DateKey(periodStart),
+      periodEnd: v23DateKey(periodEnd),
+      totalFxGainLoss,
+      lines,
+      detail: rows
+    };
+  }
+
   function v23CompanyCurrency(companyId) {
     try {
       const companies = typeof v22CompanyList === "function" ? v22CompanyList() : (typeof getCompanies === "function" ? getCompanies() : []);
@@ -18821,6 +19234,14 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchTcmbDailyRatesWithFallback,
     syncTcmbRate,
     getFxRateAuto,
+    DEFAULT_FUNCTIONAL_CURRENCY,
+    resolveContractFunctionalCurrency,
+    contractNeedsFxTranslation,
+    buildTms21FxTranslation,
+    getContractFxTranslatedSchedule,
+    appendFxToReclassification,
+    appendFxJournalLines,
+    getContractFxTranslationJournal,
     translateAmount,
     translateCompanyToGroupCurrency,
     getTranslationRateType,
@@ -19527,408 +19948,4 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error("Initial refresh error:", error);
   }
 
-  /* ==========================================================
-V25 TMS 21 FOREIGN CURRENCY LEASE ENGINE
-========================================================== */
-const V25_TMS21_VERSION = "25.0";
-const V25_STORAGE_KEY = "gk_tfrs16_v25_tms21_v1";
-
-function v25Round(value, dp = 2) {
-  const n = Number(value) || 0;
-  const p = Math.pow(10, Math.max(0, dp));
-  return Math.round((n + Number.EPSILON) * p) / p;
-}
-
-function getTms21ContractContext(contract) {
-  const leaseCurrency = v23CurrencyCode(
-    contract.leaseCurrency ||
-    contract.transactionCurrency ||
-    contract.currency || "TRY"
-  );
-  const functionalCurrency = v23CurrencyCode(
-    contract.functionalCurrency ||
-    v23CompanyCurrency(v23CompanyIdOf(contract)) ||
-    "TRY"
-  );
-  const isForeignCurrencyLease = leaseCurrency !== functionalCurrency;
-  return {
-    contractId: contract.id || null,
-    leaseCurrency,
-    functionalCurrency,
-    isForeignCurrencyLease,
-    tms21Applies: isForeignCurrencyLease,
-    rouRateType: V23_RATE_TYPES.HISTORICAL,
-    liabilityRateType: V23_RATE_TYPES.CLOSING,
-    paymentRateType: V23_RATE_TYPES.SPOT
-  };
-}
-
-function generateTms21InitialEntry(contract, options = {}) {
-  const ctx = getTms21ContractContext(contract);
-  const engine = calculateLeaseEngine(contract);
-  if (engine.exempt) return { entries: [], ctx, exempt: true };
-  if (!ctx.tms21Applies) {
-    return { entries: generateInitialEntry(contract), ctx, fxApplied: false };
-  }
-  const commencementDate = normalizeDate(contract.startDate);
-  const spotRate = getFxRate(
-    ctx.leaseCurrency, ctx.functionalCurrency,
-    commencementDate, V23_RATE_TYPES.SPOT, options
-  );
-  const rate = spotRate.rate;
-  const rouFC = engine.rouAssets;
-  const liabilityFC = engine.liability;
-  const rouFunc = v25Round(rouFC * rate);
-  const liabilityFunc = v25Round(liabilityFC * rate);
-  const entries = [
-    {
-      account: "260 Kullanım Hakkı Varlığı",
-      debit: rouFunc, credit: 0,
-      currency: ctx.functionalCurrency,
-      originalCurrency: ctx.leaseCurrency,
-      originalAmount: rouFC, fxRate: rate,
-      source: "TMS21_INITIAL", controlStatus: "VALID"
-    },
-    {
-      account: "401 Kiralama Yükümlülüğü",
-      debit: 0, credit: liabilityFunc,
-      currency: ctx.functionalCurrency,
-      originalCurrency: ctx.leaseCurrency,
-      originalAmount: liabilityFC, fxRate: rate,
-      source: "TMS21_INITIAL", controlStatus: "VALID"
-    }
-  ];
-  v23Audit("TMS21_INITIAL_RECOGNITION", "TMS21", contract.id, {
-    commencementDate, leaseCurrency: ctx.leaseCurrency,
-    functionalCurrency: ctx.functionalCurrency,
-    spotRate: rate, rouFC, liabilityFC, rouFunc, liabilityFunc
-  });
-  return { entries, ctx, fxApplied: true, commencementDate, spotRate: rate };
-}
-
-function getTms21Remeasurement(contract, reportingDate, options = {}) {
-  const ctx = getTms21ContractContext(contract);
-  const reportDate = normalizeDate(reportingDate);
-  if (!ctx.tms21Applies) {
-    return {
-      tms21Applies: false,
-      message: "Fonksiyonel para birimi ile kiralama para birimi aynı. TMS 21 yeniden ölçüm gerekmez.",
-      entries: []
-    };
-  }
-  const engine = calculateLeaseEngine(contract);
-  const schedule = engine.schedule || [];
-  const closedPeriods = schedule.filter(item => {
-    const d = parseDate(item.date);
-    return d && d.getTime() <= parseDate(reportDate).getTime();
-  });
-  const liabilityFC = closedPeriods.length
-    ? Math.max(0, Number(closedPeriods[closedPeriods.length - 1].closingLiability) || 0)
-    : Math.max(0, Number(engine.liability) || 0);
-  const rouFC = closedPeriods.length
-    ? Math.max(0, Number(closedPeriods[closedPeriods.length - 1].rouClosing) || 0)
-    : Math.max(0, Number(engine.rouAssets) || 0);
-  const closingRateObj = getFxRate(
-    ctx.leaseCurrency, ctx.functionalCurrency,
-    reportDate, V23_RATE_TYPES.CLOSING, options
-  );
-  const commencementDate = normalizeDate(contract.startDate);
-  const historicalRateObj = getFxRate(
-    ctx.leaseCurrency, ctx.functionalCurrency,
-    commencementDate, V23_RATE_TYPES.HISTORICAL,
-    { ...options, allowLastAvailable: true }
-  );
-  const closingRate = closingRateObj.rate;
-  const historicalRate = historicalRateObj.rate || closingRate;
-  const liabilityFuncNew = v25Round(liabilityFC * closingRate);
-  const rouFunc = v25Round(rouFC * historicalRate);
-  const prevPeriodEnd = new Date(parseDate(reportDate));
-  prevPeriodEnd.setMonth(prevPeriodEnd.getMonth() - 1);
-  let prevRate;
-  try {
-    prevRate = getFxRate(
-      ctx.leaseCurrency, ctx.functionalCurrency,
-      normalizeDate(prevPeriodEnd), V23_RATE_TYPES.CLOSING,
-      { ...options, allowLastAvailable: true }
-    ).rate;
-  } catch (e) { prevRate = historicalRate; }
-  const prevClosedPeriods = schedule.filter(item => {
-    const d = parseDate(item.date);
-    return d && d.getTime() <= prevPeriodEnd.getTime();
-  });
-  const prevLiabilityFC = prevClosedPeriods.length
-    ? Math.max(0, Number(prevClosedPeriods[prevClosedPeriods.length - 1].closingLiability) || 0)
-    : Math.max(0, Number(engine.liability) || 0);
-  const liabilityFuncOld = v25Round(prevLiabilityFC * prevRate);
-  const fxGainLoss = v25Round(liabilityFuncNew - liabilityFuncOld);
-  const isGain = fxGainLoss <= 0;
-  const entries = [];
-  if (Math.abs(fxGainLoss) > 0.005) {
-    if (fxGainLoss > 0) {
-      entries.push({
-        account: "656 Kambiyo Zararları",
-        debit: Math.abs(fxGainLoss), credit: 0,
-        currency: ctx.functionalCurrency,
-        source: "TMS21_REMEASUREMENT",
-        description: "TMS 21.23(a) kira yükümlülüğü yeniden ölçüm zararı",
-        controlStatus: "VALID"
-      });
-      entries.push({
-        account: "401 Kiralama Yükümlülüğü",
-        debit: 0, credit: Math.abs(fxGainLoss),
-        currency: ctx.functionalCurrency,
-        source: "TMS21_REMEASUREMENT", controlStatus: "VALID"
-      });
-    } else {
-      entries.push({
-        account: "401 Kiralama Yükümlülüğü",
-        debit: Math.abs(fxGainLoss), credit: 0,
-        currency: ctx.functionalCurrency,
-        source: "TMS21_REMEASUREMENT", controlStatus: "VALID"
-      });
-      entries.push({
-        account: "646 Kambiyo Karları",
-        debit: 0, credit: Math.abs(fxGainLoss),
-        currency: ctx.functionalCurrency,
-        source: "TMS21_REMEASUREMENT",
-        description: "TMS 21.23(a) kira yükümlülüğü yeniden ölçüm karı",
-        controlStatus: "VALID"
-      });
-    }
-  }
-  v23Audit("TMS21_REMEASUREMENT", "TMS21", contract.id, {
-    reportingDate: reportDate,
-    leaseCurrency: ctx.leaseCurrency,
-    functionalCurrency: ctx.functionalCurrency,
-    liabilityFC, closingRate, historicalRate,
-    liabilityFuncOld, liabilityFuncNew,
-    rouFC, rouFunc, fxGainLoss, isGain
-  });
-  return {
-    tms21Applies: true, contractId: contract.id,
-    reportingDate: reportDate, ctx,
-    leaseCurrencyAmounts: { liability: liabilityFC, rou: rouFC },
-    rates: { closing: closingRate, historical: historicalRate, previous: prevRate },
-    functionalAmounts: { liabilityNew: liabilityFuncNew, liabilityOld: liabilityFuncOld, rou: rouFunc },
-    fxGainLoss, isGain, entries
-  };
-}
-
-function getTms21PeriodJournal(contract, reportingDate, options = {}) {
-  const ctx = getTms21ContractContext(contract);
-  const reportDate = normalizeDate(reportingDate);
-  const periodDate = parseDate(reportDate);
-  if (!ctx.tms21Applies) {
-    const engine = calculateLeaseEngine(contract);
-    const periodRows = (engine.schedule || []).filter(item => {
-      const d = parseDate(item.date);
-      return d && d.getFullYear() === periodDate.getFullYear() && d.getMonth() === periodDate.getMonth();
-    });
-    return { tms21Applies: false, entries: v25BuildStandardPeriodEntries(periodRows), ctx };
-  }
-  const engine = calculateLeaseEngine(contract);
-  const periodRows = (engine.schedule || []).filter(item => {
-    const d = parseDate(item.date);
-    return d && d.getFullYear() === periodDate.getFullYear() && d.getMonth() === periodDate.getMonth();
-  });
-  if (!periodRows.length) {
-    return { tms21Applies: true, entries: [], ctx, message: "Bu dönem için ödeme planı satırı yok." };
-  }
-  const interestFC = periodRows.reduce((s, r) => s + (Number(r.interest) || 0), 0);
-  const principalFC = periodRows.reduce((s, r) => s + (Number(r.principal) || 0), 0);
-  const paymentFC = periodRows.reduce((s, r) => s + (Number(r.payment) || 0), 0);
-  const depreciationFC = periodRows.reduce((s, r) => s + (Number(r.depreciation) || 0), 0);
-  const avgRateObj = getFxRate(ctx.leaseCurrency, ctx.functionalCurrency, reportDate, V23_RATE_TYPES.AVERAGE, { ...options, allowLastAvailable: true });
-  const closingRateObj = getFxRate(ctx.leaseCurrency, ctx.functionalCurrency, reportDate, V23_RATE_TYPES.CLOSING, options);
-  const commencementDate = normalizeDate(contract.startDate);
-  const historicalRateObj = getFxRate(ctx.leaseCurrency, ctx.functionalCurrency, commencementDate, V23_RATE_TYPES.HISTORICAL, { ...options, allowLastAvailable: true });
-  const avgRate = avgRateObj.rate;
-  const closingRate = closingRateObj.rate;
-  const histRate = historicalRateObj.rate || avgRate;
-  const interestFunc = v25Round(interestFC * avgRate);
-  const depreciationFunc = v25Round(depreciationFC * histRate);
-  const paymentFunc = v25Round(paymentFC * avgRate);
-  const principalFunc = v25Round(principalFC * avgRate);
-  const entries = [
-    { account: "780 Finansman Giderleri", debit: interestFunc, credit: 0, currency: ctx.functionalCurrency, originalCurrency: ctx.leaseCurrency, originalAmount: interestFC, fxRate: avgRate, rateType: "AVERAGE", source: "TMS21_PERIOD", controlStatus: "VALID" },
-    { account: "401 Kiralama Yükümlülüğü", debit: principalFunc, credit: 0, currency: ctx.functionalCurrency, originalCurrency: ctx.leaseCurrency, originalAmount: principalFC, fxRate: avgRate, rateType: "AVERAGE", source: "TMS21_PERIOD", controlStatus: "VALID" },
-    { account: "381 Kira Borçları / Ödeme", debit: 0, credit: paymentFunc, currency: ctx.functionalCurrency, originalCurrency: ctx.leaseCurrency, originalAmount: paymentFC, fxRate: avgRate, rateType: "AVERAGE", source: "TMS21_PERIOD", controlStatus: "VALID" },
-    { account: "770 / 730 Amortisman Giderleri", debit: depreciationFunc, credit: 0, currency: ctx.functionalCurrency, originalCurrency: ctx.leaseCurrency, originalAmount: depreciationFC, fxRate: histRate, rateType: "HISTORICAL", source: "TMS21_PERIOD", controlStatus: "VALID" },
-    { account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciationFunc, currency: ctx.functionalCurrency, originalCurrency: ctx.leaseCurrency, originalAmount: depreciationFC, fxRate: histRate, rateType: "HISTORICAL", source: "TMS21_PERIOD", controlStatus: "VALID" }
-  ];
-  const remeasurement = getTms21Remeasurement(contract, reportingDate, options);
-  if (remeasurement.entries && remeasurement.entries.length) {
-    entries.push(...remeasurement.entries);
-  }
-  const totalDebit = entries.reduce((s, e) => s + (Number(e.debit) || 0), 0);
-  const totalCredit = entries.reduce((s, e) => s + (Number(e.credit) || 0), 0);
-  const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
-  entries.forEach(e => { e.controlStatus = balanced ? "VALID" : "UNBALANCED"; });
-  v23Audit("TMS21_PERIOD_JOURNAL", "TMS21", contract.id, {
-    reportingDate: reportDate, periodRowCount: periodRows.length,
-    interestFC, principalFC, paymentFC, depreciationFC,
-    avgRate, closingRate, histRate,
-    fxGainLoss: remeasurement.fxGainLoss, totalDebit, totalCredit, balanced
-  });
-  return {
-    tms21Applies: true, contractId: contract.id,
-    reportingDate: reportDate, ctx,
-    rates: { average: avgRate, closing: closingRate, historical: histRate },
-    leaseCurrencyAmounts: { interestFC, principalFC, paymentFC, depreciationFC },
-    functionalAmounts: { interestFunc, principalFunc, paymentFunc, depreciationFunc },
-    remeasurement, entries, totalDebit, totalCredit, balanced
-  };
-}
-
-function buildTms21Schedule(contract, options = {}) {
-  const ctx = getTms21ContractContext(contract);
-  const engine = calculateLeaseEngine(contract);
-  const schedule = engine.schedule || [];
-  if (!ctx.tms21Applies || !schedule.length) {
-    return { ctx, schedule, tms21Applied: false };
-  }
-  const commencementDate = normalizeDate(contract.startDate);
-  let historicalRate;
-  try {
-    historicalRate = getFxRate(ctx.leaseCurrency, ctx.functionalCurrency, commencementDate, V23_RATE_TYPES.HISTORICAL, { ...options, allowLastAvailable: true }).rate;
-  } catch (e) { historicalRate = 1; }
-  const enriched = schedule.map(row => {
-    const rowDate = normalizeDate(row.date);
-    let closingRate;
-    try {
-      closingRate = getFxRate(ctx.leaseCurrency, ctx.functionalCurrency, rowDate, V23_RATE_TYPES.CLOSING, { ...options, allowLastAvailable: true }).rate;
-    } catch (e) { closingRate = historicalRate; }
-    return {
-      ...row,
-      paymentFC: row.payment, interestFC: row.interest,
-      principalFC: row.principal, closingLiabilityFC: row.closingLiability,
-      depreciationFC: row.depreciation, rouClosingFC: row.rouClosing,
-      closingRate, historicalRate,
-      closingLiabilityFunc: v25Round(row.closingLiability * closingRate),
-      rouClosingFunc: v25Round(row.rouClosing * historicalRate),
-      interestFunc: v25Round(row.interest * closingRate),
-      paymentFunc: v25Round(row.payment * closingRate)
-    };
-  });
-  return { ctx, schedule: enriched, tms21Applied: true };
-}
-
-function getTms21Disclosure(contract, reportingDate, options = {}) {
-  const ctx = getTms21ContractContext(contract);
-  const remeasurement = getTms21Remeasurement(contract, reportingDate, options);
-  return {
-    version: V25_TMS21_VERSION,
-    contractId: contract.id,
-    reportingDate: normalizeDate(reportingDate),
-    functionalCurrency: ctx.functionalCurrency,
-    leaseCurrency: ctx.leaseCurrency,
-    tms21Applies: ctx.tms21Applies,
-    monetaryItems: {
-      leaseLiabilityFC: remeasurement.leaseCurrencyAmounts?.liability || 0,
-      leaseLiabilityFunc: remeasurement.functionalAmounts?.liabilityNew || 0,
-      closingRate: remeasurement.rates?.closing || null
-    },
-    nonMonetaryItems: {
-      rouFC: remeasurement.leaseCurrencyAmounts?.rou || 0,
-      rouFunc: remeasurement.functionalAmounts?.rou || 0,
-      historicalRate: remeasurement.rates?.historical || null
-    },
-    exchangeDifferences: {
-      periodFxGainLoss: remeasurement.fxGainLoss || 0,
-      isGain: remeasurement.isGain,
-      account: remeasurement.isGain ? "646 Kambiyo Karları" : "656 Kambiyo Zararları"
-    },
-    basis: "TMS 21.23(a): Parasal kalemler kapanış kuru; TMS 21.23(b): Parasal olmayan kalemler tarihi kur; TMS 21.28: Kur farkları kâr/zarara"
-  };
-}
-
-function getTms21PortfolioSummary(reportingDate, options = {}) {
-  const allContracts = Array.isArray(contracts) ? contracts : [];
-  const rows = [];
-  let totalFxGainLoss = 0, totalLiabilityFunc = 0, totalRouFunc = 0;
-  allContracts.forEach(contract => {
-    const ctx = getTms21ContractContext(contract);
-    if (!ctx.tms21Applies) return;
-    try {
-      const rem = getTms21Remeasurement(contract, reportingDate, options);
-      rows.push({
-        contractId: contract.id, company: contract.company || "",
-        leaseCurrency: ctx.leaseCurrency, functionalCurrency: ctx.functionalCurrency,
-        liabilityFC: rem.leaseCurrencyAmounts?.liability || 0,
-        liabilityFunc: rem.functionalAmounts?.liabilityNew || 0,
-        rouFunc: rem.functionalAmounts?.rou || 0,
-        closingRate: rem.rates?.closing || null,
-        fxGainLoss: rem.fxGainLoss || 0, isGain: rem.isGain
-      });
-      totalFxGainLoss += rem.fxGainLoss || 0;
-      totalLiabilityFunc += rem.functionalAmounts?.liabilityNew || 0;
-      totalRouFunc += rem.functionalAmounts?.rou || 0;
-    } catch (e) {
-      rows.push({ contractId: contract.id, company: contract.company || "", error: e.message || String(e) });
-    }
-  });
-  return {
-    version: V25_TMS21_VERSION,
-    reportingDate: normalizeDate(reportingDate),
-    foreignCurrencyLeaseCount: rows.filter(r => !r.error).length,
-    errorCount: rows.filter(r => r.error).length,
-    totalLeaseLiabilityFunc: v25Round(totalLiabilityFunc),
-    totalRouFunc: v25Round(totalRouFunc),
-    totalFxGainLoss: v25Round(totalFxGainLoss),
-    contracts: rows
-  };
-}
-
-function v25BuildStandardPeriodEntries(periodRows) {
-  if (!periodRows || !periodRows.length) return [];
-  const interest = periodRows.reduce((s, r) => s + (Number(r.interest) || 0), 0);
-  const principal = periodRows.reduce((s, r) => s + (Number(r.principal) || 0), 0);
-  const payment = periodRows.reduce((s, r) => s + (Number(r.payment) || 0), 0);
-  const depreciation = periodRows.reduce((s, r) => s + (Number(r.depreciation) || 0), 0);
-  return [
-    { account: "780 Finansman Giderleri", debit: interest, credit: 0, source: "STANDARD" },
-    { account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0, source: "STANDARD" },
-    { account: "381 Kira Borçları / Ödeme", debit: 0, credit: payment, source: "STANDARD" },
-    { account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0, source: "STANDARD" },
-    { account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation, source: "STANDARD" }
-  ];
-}
-
-function runV25Tms21Tests() {
-  const results = [];
-  const pass = (name, ok, detail) => results.push({ name, passed: !!ok, detail: detail || null });
-  try {
-    const tryContract = { id: "TMS21-TEST-TRY", currency: "TRY", functionalCurrency: "TRY", startDate: "2026-01-01", endDate: "2027-12-31", monthlyPayment: 10000, discountRate: 10 };
-    const ctxTry = getTms21ContractContext(tryContract);
-    pass("Same currency no TMS 21", ctxTry.tms21Applies === false);
-    const eurContract = { id: "TMS21-TEST-EUR", currency: "EUR", functionalCurrency: "TRY", startDate: "2026-01-01", endDate: "2027-12-31", monthlyPayment: 1000, discountRate: 5 };
-    const ctxEur = getTms21ContractContext(eurContract);
-    pass("Foreign currency TMS 21 applies", ctxEur.tms21Applies === true);
-    pass("ROU rate type HISTORICAL", ctxEur.rouRateType === "HISTORICAL");
-    pass("Liability rate type CLOSING", ctxEur.liabilityRateType === "CLOSING");
-    let initialOk = false;
-    try {
-      const init = generateTms21InitialEntry(eurContract, { allowMissing: true });
-      initialOk = init.ctx.tms21Applies === true;
-    } catch (e) { initialOk = e.code === "FX_RATE_NOT_FOUND"; }
-    pass("Initial entry FX-aware", initialOk);
-    let remOk = false;
-    try {
-      const rem = getTms21Remeasurement(eurContract, "2026-06-30", { allowMissing: true });
-      remOk = rem.tms21Applies === true;
-    } catch (e) { remOk = e.code === "FX_RATE_NOT_FOUND"; }
-    pass("Re-measurement structure", remOk);
-    const sched = buildTms21Schedule(tryContract);
-    pass("Same-currency schedule unchanged", sched.tms21Applied === false);
-    const portfolio = getTms21PortfolioSummary("2026-06-30", { allowMissing: true });
-    pass("Portfolio summary", Array.isArray(portfolio.contracts));
-    pass("V23 getFxRate exists", typeof getFxRate === "function");
-    pass("V23 convertCurrency exists", typeof convertCurrency === "function");
-    pass("V23 FX_CONFIG exists", typeof FX_CONFIG === "object");
-    pass("calculateLeaseEngine intact", typeof calculateLeaseEngine === "function");
-  } catch (e) {
-    pass("V25 test harness", false, e?.message || String(e));
-  }
-  return { version: V25_TMS21_VERSION, passed: results.every(r => r.passed), results };
-}
 });
