@@ -2209,6 +2209,76 @@
     console.log(
         "TMS19 robust personnel normalization aktif."
     );
+/* ============================================================
+   GLOBAL EXPORT — TMS 19
+============================================================ */
 
+window.TMS19ActuarialEngine = {
+
+    calistir:
+        TMS19.calistir,
+
+    personelNormalizeEt:
+        TMS19.personelNormalizeEt,
+
+    personelleriNormalizeEt:
+        TMS19.personelleriNormalizeEt,
+
+    tarih:
+        TMS19.tarih,
+
+    sayi:
+        TMS19.sayi,
+
+    oran:
+        TMS19.oran,
+
+    varsayimlariNormalizeEt:
+        TMS19.varsayimlariNormalizeEt,
+
+    testPersonel: function () {
+
+        const testData = {
+
+            "Sicil No":
+                "TEST001",
+
+            "Ad Soyad":
+                "Test Personel",
+
+            "Doğum Tarihi":
+                "15.05.1990",
+
+            "İşe Giriş Tarihi":
+                "01.01.2020",
+
+            "Brüt Maaş":
+                "50.000"
+
+        };
+
+        const normalized =
+            TMS19.personelNormalizeEt(
+                testData
+            );
+
+        console.log(
+            "TMS 19 TEST PERSONEL:"
+        );
+
+        console.table(
+            normalized
+        );
+
+        return normalized;
+    }
+
+};
+
+
+/* Eski/internal API için de global erişim */
+
+window.TMS19 =
+    TMS19;
 
 })(window);
