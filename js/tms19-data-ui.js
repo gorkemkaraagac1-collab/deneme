@@ -2752,3 +2752,1497 @@
 })(typeof window !== "undefined"
     ? window
     : globalThis);
+
+/* ================================================================
+   GK TMS 19 — DATA UI / DASHBOARD INTEGRATION
+   ----------------------------------------------------------------
+   Data Engine
+        ↓
+   Actuarial Engine
+        ↓
+   Portfolio Engine
+        ↓
+   UI
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+
+    const TMS19 =
+        global.TMS19;
+
+
+    const DataEngine =
+        global.TMS19DataEngine;
+
+
+    const PortfolioEngine =
+        global.TMS19PortfolioEngine;
+
+
+    if (!TMS19) {
+
+        console.error(
+            "TMS19 core engine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    /* ============================================================
+       FORMATTERS
+    ============================================================ */
+
+    function number(
+        value
+    ) {
+
+        const n =
+            Number(value);
+
+
+        return Number.isFinite(n)
+            ? n
+            : 0;
+    }
+
+
+    function formatNumber(
+        value,
+        decimals = 0
+    ) {
+
+        return number(
+            value
+        ).toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits:
+                    decimals,
+
+                maximumFractionDigits:
+                    decimals
+            }
+        );
+    }
+
+
+    function formatMoney(
+        value,
+        currency = "₺"
+    ) {
+
+        return (
+            currency +
+            " " +
+            formatNumber(
+                value,
+                2
+            )
+        );
+    }
+
+
+    function formatPercent(
+        value,
+        decimals = 1
+    ) {
+
+        return (
+            (
+                number(value) *
+                100
+            ).toLocaleString(
+                "tr-TR",
+                {
+                    minimumFractionDigits:
+                        decimals,
+
+                    maximumFractionDigits:
+                        decimals
+                }
+            ) +
+            "%"
+        );
+    }
+
+
+    function escapeHtml(
+        value
+    ) {
+
+        return String(
+            value ??
+            ""
+        )
+            .replace(
+                /&/g,
+                "&amp;"
+            )
+            .replace(
+                /</g,
+                "&lt;"
+            )
+            .replace(
+                />/g,
+                "&gt;"
+            )
+            .replace(
+                /"/g,
+                "&quot;"
+            )
+            .replace(
+                /'/g,
+                "&#039;"
+            );
+    }
+
+
+    /* ============================================================
+       KPI OBJECT
+    ============================================================ */
+
+    function buildKPIs(
+        portfolio
+    ) {
+
+        const totals =
+            portfolio?.totals ||
+            {};
+
+
+        const risk =
+            portfolio?.risk ||
+            {};
+
+
+        const dataQuality =
+            portfolio
+                ?.dataQuality ||
+            null;
+
+
+        return {
+
+            personelSayisi:
+                number(
+                    totals.personelSayisi
+                ),
+
+
+            dbo:
+                number(
+                    totals.dbo
+                ),
+
+
+            planAssets:
+                number(
+                    totals.planAssets
+                ),
+
+
+            netLiability:
+                number(
+                    totals.netDefinedBenefitLiability
+                ),
+
+
+            netAsset:
+                number(
+                    totals.netDefinedBenefitAsset
+                ),
+
+
+            currentServiceCost:
+                number(
+                    totals.currentServiceCost
+                ),
+
+
+            interestCost:
+                number(
+                    totals.interestCost
+                ),
+
+
+            pastServiceCost:
+                number(
+                    totals.pastServiceCost
+                ),
+
+
+            actuarialGainLoss:
+                number(
+                    totals.actuarialGainLoss
+                ),
+
+
+            totalPL:
+                number(
+                    totals.totalPLImpact
+                ),
+
+
+            totalOCI:
+                number(
+                    totals.totalOCIImpact
+                ),
+
+
+            riskScore:
+                number(
+                    risk.score
+                ),
+
+
+            riskLevel:
+                risk.level ||
+                "LOW",
+
+
+            dboConcentration:
+                number(
+                    risk.dboConcentration
+                ),
+
+
+            retirementWithin5Years:
+                number(
+                    risk.retirementWithin5Years
+                ),
+
+
+            dataQuality:
+                dataQuality
+        };
+    }
+
+
+    /* ============================================================
+       DASHBOARD STATE
+    ============================================================ */
+
+    const state = {
+
+        portfolio:
+            null,
+
+        kpis:
+            null,
+
+        employees:
+            [],
+
+        assumptions:
+            {},
+
+        lastUpdated:
+            null,
+
+        loading:
+            false,
+
+        error:
+            null
+    };
+
+
+    /* ============================================================
+       RUN FULL ANALYSIS
+    ============================================================ */
+
+    function runAnalysis(
+        rawData,
+        assumptions = {}
+    ) {
+
+        state.loading =
+            true;
+
+        state.error =
+            null;
+
+
+        try {
+
+            /*
+             * 1 — DATA ENGINE
+             */
+
+            const prepared =
+                DataEngine
+                    .prepareData(
+                        rawData
+                    );
+
+
+            if (
+                !prepared.success
+            ) {
+
+                state.error = {
+
+                    stage:
+                        "DATA_VALIDATION",
+
+                    message:
+                        "Veri doğrulama başarısız.",
+
+                    details:
+                        prepared.errors
+                };
+
+
+                state.loading =
+                    false;
+
+
+                return {
+
+                    success:
+                        false,
+
+                    error:
+                        state.error
+                };
+            }
+
+
+            /*
+             * 2 — PORTFOLIO / ACTUARIAL
+             */
+
+            const portfolio =
+                PortfolioEngine
+                    .calculatePUC(
+                        prepared.data,
+                        assumptions
+                    );
+
+
+            if (
+                !portfolio
+            ) {
+
+                throw new Error(
+                    "Portfolio Engine sonuç döndürmedi."
+                );
+            }
+
+
+            /*
+             * 3 — DATA QUALITY
+             */
+
+            portfolio.dataQuality =
+                prepared.quality;
+
+
+            /*
+             * 4 — STATE
+             */
+
+            state.portfolio =
+                portfolio;
+
+
+            state.kpis =
+                buildKPIs(
+                    portfolio
+                );
+
+
+            state.employees =
+                prepared.data;
+
+
+            state.assumptions =
+                assumptions;
+
+
+            state.lastUpdated =
+                new Date();
+
+
+            state.loading =
+                false;
+
+
+            /*
+             * 5 — AUTOMATIC RENDER
+             */
+
+            renderDashboard();
+
+
+            return {
+
+                success:
+                    true,
+
+                data:
+                    portfolio
+            };
+
+        }
+
+        catch (
+            error
+        ) {
+
+            state.loading =
+                false;
+
+
+            state.error = {
+
+                stage:
+                    "UI_ANALYSIS",
+
+                message:
+                    error.message,
+
+                error:
+                    error
+            };
+
+
+            console.error(
+                "TMS19 UI Analysis Error:",
+                error
+            );
+
+
+            return {
+
+                success:
+                    false,
+
+                error:
+                    state.error
+            };
+        }
+    }
+
+
+    /* ============================================================
+       KPI CARD
+    ============================================================ */
+
+    function createKPI(
+        title,
+        value,
+        subtitle,
+        className = ""
+    ) {
+
+        return `
+            <div
+                class="tms19-kpi-card ${className}"
+            >
+
+                <div class="tms19-kpi-title">
+                    ${escapeHtml(title)}
+                </div>
+
+                <div class="tms19-kpi-value">
+                    ${value}
+                </div>
+
+                <div class="tms19-kpi-subtitle">
+                    ${escapeHtml(subtitle || "")}
+                </div>
+
+            </div>
+        `;
+    }
+
+
+    /* ============================================================
+       KPI GRID
+    ============================================================ */
+
+    function renderKPIs(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.kpis
+        ) {
+
+            return;
+        }
+
+
+        const k =
+            state.kpis;
+
+
+        container.innerHTML = `
+
+            <div class="tms19-kpi-grid">
+
+                ${createKPI(
+                    "Toplam DBO",
+                    formatMoney(k.dbo),
+                    "Tanımlanmış fayda yükümlülüğü"
+                )}
+
+                ${createKPI(
+                    "Net Yükümlülük",
+                    formatMoney(
+                        k.netLiability
+                    ),
+                    "DBO eksi plan varlıkları"
+                )}
+
+                ${createKPI(
+                    "Cari Hizmet Maliyeti",
+                    formatMoney(
+                        k.currentServiceCost
+                    ),
+                    "Dönem P&L etkisi"
+                )}
+
+                ${createKPI(
+                    "Faiz Maliyeti",
+                    formatMoney(
+                        k.interestCost
+                    ),
+                    "Net faiz etkisi"
+                )}
+
+                ${createKPI(
+                    "Aktüeryal Kazanç / Kayıp",
+                    formatMoney(
+                        k.actuarialGainLoss
+                    ),
+                    "OCI etkisi"
+                )}
+
+                ${createKPI(
+                    "Personel",
+                    formatNumber(
+                        k.personelSayisi
+                    ),
+                    "Değerlemeye dahil personel"
+                )}
+
+            </div>
+        `;
+    }
+
+
+    /* ============================================================
+       RISK CARD
+    ============================================================ */
+
+    function renderRisk(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.kpis
+        ) {
+
+            return;
+        }
+
+
+        const k =
+            state.kpis;
+
+
+        const level =
+            k.riskLevel;
+
+
+        const levelText = {
+
+            LOW:
+                "Düşük",
+
+            MEDIUM:
+                "Orta",
+
+            HIGH:
+                "Yüksek"
+        };
+
+
+        container.innerHTML = `
+
+            <div class="tms19-risk-card">
+
+                <div class="tms19-risk-header">
+
+                    <div>
+                        <div class="tms19-section-label">
+                            AKTÜERYAL RİSK
+                        </div>
+
+                        <div class="tms19-risk-title">
+                            Portföy Risk Seviyesi
+                        </div>
+                    </div>
+
+                    <div
+                        class="tms19-risk-badge
+                        tms19-risk-${level.toLowerCase()}"
+                    >
+                        ${
+                            levelText[level] ||
+                            level
+                        }
+                    </div>
+
+                </div>
+
+
+                <div class="tms19-risk-score">
+
+                    <strong>
+                        ${formatNumber(
+                            k.riskScore
+                        )}
+                    </strong>
+
+                    <span>
+                        / 100
+                    </span>
+
+                </div>
+
+
+                <div class="tms19-risk-metrics">
+
+                    <div>
+                        <span>
+                            İlk %10 DBO yoğunlaşması
+                        </span>
+
+                        <strong>
+                            ${formatPercent(
+                                k.dboConcentration
+                            )}
+                        </strong>
+                    </div>
+
+
+                    <div>
+                        <span>
+                            5 yıl içinde emeklilik
+                        </span>
+
+                        <strong>
+                            ${formatPercent(
+                                k.retirementWithin5Years
+                            )}
+                        </strong>
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    }
+
+
+    /* ============================================================
+       DBO MOVEMENT
+    ============================================================ */
+
+    function renderMovement(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.kpis
+        ) {
+
+            return;
+        }
+
+
+        const k =
+            state.kpis;
+
+
+        container.innerHTML = `
+
+            <div class="tms19-movement-card">
+
+                <div class="tms19-section-title">
+                    DBO Hareket Analizi
+                </div>
+
+
+                <div class="tms19-movement-row">
+
+                    <span>
+                        Cari Hizmet Maliyeti
+                    </span>
+
+                    <strong>
+                        ${formatMoney(
+                            k.currentServiceCost
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div class="tms19-movement-row">
+
+                    <span>
+                        Faiz Maliyeti
+                    </span>
+
+                    <strong>
+                        ${formatMoney(
+                            k.interestCost
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div class="tms19-movement-row">
+
+                    <span>
+                        Geçmiş Hizmet Maliyeti
+                    </span>
+
+                    <strong>
+                        ${formatMoney(
+                            k.pastServiceCost
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div class="tms19-movement-row">
+
+                    <span>
+                        Aktüeryal Kazanç / Kayıp
+                    </span>
+
+                    <strong>
+                        ${formatMoney(
+                            k.actuarialGainLoss
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div class="tms19-movement-divider">
+                </div>
+
+
+                <div class="tms19-movement-row total">
+
+                    <span>
+                        Kapanış DBO
+                    </span>
+
+                    <strong>
+                        ${formatMoney(
+                            k.dbo
+                        )}
+                    </strong>
+
+                </div>
+
+            </div>
+        `;
+    }
+
+
+    /* ============================================================
+       AGE TABLE
+    ============================================================ */
+
+    function renderAgeAnalysis(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.portfolio
+        ) {
+
+            return;
+        }
+
+
+        const rows =
+            state.portfolio.byAge ||
+            [];
+
+
+        container.innerHTML = `
+
+            <table class="tms19-data-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Yaş Grubu
+                        </th>
+
+                        <th>
+                            Personel
+                        </th>
+
+                        <th>
+                            DBO
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    ${
+                        rows.map(
+                            row => `
+
+                                <tr>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            row.bucket
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            row.personelSayisi
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            row.dbo
+                                        )}
+                                    </td>
+
+                                </tr>
+                            `
+                        ).join("")
+                    }
+
+                </tbody>
+
+            </table>
+        `;
+    }
+
+
+    /* ============================================================
+       DEPARTMENT TABLE
+    ============================================================ */
+
+    function renderDepartments(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.portfolio
+        ) {
+
+            return;
+        }
+
+
+        const rows =
+            state.portfolio
+                .byDepartment ||
+            [];
+
+
+        container.innerHTML = `
+
+            <table class="tms19-data-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Departman
+                        </th>
+
+                        <th>
+                            Personel
+                        </th>
+
+                        <th>
+                            DBO
+                        </th>
+
+                        <th>
+                            Cari Hizmet Maliyeti
+                        </th>
+
+                        <th>
+                            Faiz Maliyeti
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    ${
+                        rows.map(
+                            row => `
+
+                                <tr>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            row.departman
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            row.personelSayisi
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            row.dbo
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            row.currentServiceCost
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            row.interestCost
+                                        )}
+                                    </td>
+
+                                </tr>
+
+                            `
+                        ).join("")
+                    }
+
+                </tbody>
+
+            </table>
+        `;
+    }
+
+
+    /* ============================================================
+       TOP DBO TABLE
+    ============================================================ */
+
+    function renderTopDBO(
+        container
+    ) {
+
+        if (
+            !container ||
+            !state.portfolio
+        ) {
+
+            return;
+        }
+
+
+        const employees =
+            state.portfolio
+                .topDBO ||
+            [];
+
+
+        container.innerHTML = `
+
+            <table class="tms19-data-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Personel
+                        </th>
+
+                        <th>
+                            Departman
+                        </th>
+
+                        <th>
+                            Yaş
+                        </th>
+
+                        <th>
+                            Kalan Yıl
+                        </th>
+
+                        <th>
+                            DBO
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    ${
+                        employees.map(
+                            employee => `
+
+                                <tr>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            employee.personelAdi
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            employee.departman
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            employee.yas
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            employee.kalanYil,
+                                            1
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            employee.dbo
+                                        )}
+                                    </td>
+
+                                </tr>
+
+                            `
+                        ).join("")
+                    }
+
+                </tbody>
+
+            </table>
+        `;
+    }
+
+
+    /* ============================================================
+       DATA QUALITY
+    ============================================================ */
+
+    function renderDataQuality(
+        container
+    ) {
+
+        if (
+            !container
+        ) {
+
+            return;
+        }
+
+
+        const quality =
+            state.portfolio
+                ?.dataQuality;
+
+
+        if (
+            !quality
+        ) {
+
+            container.innerHTML =
+                "";
+
+            return;
+        }
+
+
+        container.innerHTML = `
+
+            <div class="tms19-quality-card">
+
+                <div>
+
+                    <div class="tms19-section-label">
+                        DATA GOVERNANCE
+                    </div>
+
+                    <div class="tms19-quality-title">
+                        Veri Kalitesi
+                    </div>
+
+                </div>
+
+
+                <div class="tms19-quality-score">
+
+                    ${formatNumber(
+                        quality.score,
+                        1
+                    )}%
+
+                </div>
+
+
+                <div class="tms19-quality-level">
+
+                    ${escapeHtml(
+                        quality.level
+                    )}
+
+                </div>
+
+            </div>
+        `;
+    }
+
+
+    /* ============================================================
+       FULL DASHBOARD RENDER
+    ============================================================ */
+
+    function renderDashboard() {
+
+        renderKPIs(
+            document.getElementById(
+                "tms19-kpi-container"
+            )
+        );
+
+
+        renderRisk(
+            document.getElementById(
+                "tms19-risk-container"
+            )
+        );
+
+
+        renderMovement(
+            document.getElementById(
+                "tms19-movement-container"
+            )
+        );
+
+
+        renderAgeAnalysis(
+            document.getElementById(
+                "tms19-age-container"
+            )
+        );
+
+
+        renderDepartments(
+            document.getElementById(
+                "tms19-department-container"
+            )
+        );
+
+
+        renderTopDBO(
+            document.getElementById(
+                "tms19-top-dbo-container"
+            )
+        );
+
+
+        renderDataQuality(
+            document.getElementById(
+                "tms19-data-quality-container"
+            )
+        );
+    }
+
+
+    /* ============================================================
+       EMPLOYEE TABLE
+    ============================================================ */
+
+    function renderEmployeeTable(
+        container
+    ) {
+
+        if (
+            !container
+        ) {
+
+            return;
+        }
+
+
+        const employees =
+            state.portfolio
+                ?.results ||
+            [];
+
+
+        container.innerHTML = `
+
+            <table class="tms19-data-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Personel
+                        </th>
+
+                        <th>
+                            Departman
+                        </th>
+
+                        <th>
+                            Yaş
+                        </th>
+
+                        <th>
+                            Hizmet
+                        </th>
+
+                        <th>
+                            Kalan Yıl
+                        </th>
+
+                        <th>
+                            Maaş
+                        </th>
+
+                        <th>
+                            DBO
+                        </th>
+
+                        <th>
+                            Cari Hizmet Maliyeti
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    ${
+                        employees.map(
+                            employee => `
+
+                                <tr>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            employee.personelAdi
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${escapeHtml(
+                                            employee.departman
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            employee.yas,
+                                            1
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            employee.hizmetSuresi,
+                                            1
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatNumber(
+                                            employee.kalanYil,
+                                            1
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            employee.raw
+                                                ?.mevcutMaas ||
+                                            0
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            employee.dbo
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${formatMoney(
+                                            employee.currentServiceCost
+                                        )}
+                                    </td>
+
+                                </tr>
+
+                            `
+                        ).join("")
+                    }
+
+                </tbody>
+
+            </table>
+        `;
+    }
+
+
+    /* ============================================================
+       PUBLIC API
+    ============================================================ */
+
+    global.TMS19DataUI =
+        global.TMS19DataUI ||
+        {};
+
+
+    global.TMS19DataUI
+        .state =
+            state;
+
+
+    global.TMS19DataUI
+        .runAnalysis =
+            runAnalysis;
+
+
+    global.TMS19DataUI
+        .renderDashboard =
+            renderDashboard;
+
+
+    global.TMS19DataUI
+        .renderKPIs =
+            renderKPIs;
+
+
+    global.TMS19DataUI
+        .renderRisk =
+            renderRisk;
+
+
+    global.TMS19DataUI
+        .renderMovement =
+            renderMovement;
+
+
+    global.TMS19DataUI
+        .renderAgeAnalysis =
+            renderAgeAnalysis;
+
+
+    global.TMS19DataUI
+        .renderDepartments =
+            renderDepartments;
+
+
+    global.TMS19DataUI
+        .renderTopDBO =
+            renderTopDBO;
+
+
+    global.TMS19DataUI
+        .renderEmployeeTable =
+            renderEmployeeTable;
+
+
+    global.TMS19DataUI
+        .renderDataQuality =
+            renderDataQuality;
+
+
+    global.TMS19DataUI
+        .formatMoney =
+            formatMoney;
+
+
+    global.TMS19DataUI
+        .formatNumber =
+            formatNumber;
+
+
+    global.TMS19DataUI
+        .formatPercent =
+            formatPercent;
+
+
+    /* ============================================================
+       HEALTH CHECK
+    ============================================================ */
+
+    global.TMS19DataUI
+        .healthCheck =
+            function () {
+
+                return {
+
+                    healthy:
+                        typeof runAnalysis ===
+                            "function" &&
+
+                        typeof renderDashboard ===
+                            "function",
+
+                    engine:
+                        "TMS19 Data UI",
+
+                    version:
+                        "2.0",
+
+                    timestamp:
+                        new Date()
+                            .toISOString()
+                };
+            };
+
+
+})(window);
