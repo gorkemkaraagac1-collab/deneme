@@ -2076,3 +2076,996 @@
 })(typeof window !== "undefined"
     ? window
     : globalThis);
+
+/* ================================================================
+   TMS 19 — DATA ENGINE / PUC INTEGRATION
+   ----------------------------------------------------------------
+   Raw Data
+      ↓
+   Normalize
+      ↓
+   Validate
+      ↓
+   Data Quality
+      ↓
+   Actuarial Engine
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+    const TMS19 =
+        global.TMS19;
+
+
+    if (!TMS19) {
+
+        console.error(
+            "TMS19 core engine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    /* ============================================================
+       SAYI
+    ============================================================ */
+
+    function numberValue(value) {
+
+        if (
+            value === null ||
+            value === undefined ||
+            value === ""
+        ) {
+
+            return 0;
+        }
+
+
+        if (
+            typeof value === "number"
+        ) {
+
+            return Number.isFinite(value)
+                ? value
+                : 0;
+        }
+
+
+        const normalized =
+            String(value)
+                .replace(/\./g, "")
+                .replace(",", ".")
+                .replace(/[^\d.-]/g, "");
+
+
+        const number =
+            Number(
+                normalized
+            );
+
+
+        return Number.isFinite(number)
+            ? number
+            : 0;
+    }
+
+
+    /* ============================================================
+       TARİH
+    ============================================================ */
+
+    function dateValue(value) {
+
+        if (
+            !value
+        ) {
+
+            return null;
+        }
+
+
+        if (
+            value instanceof Date
+        ) {
+
+            return isNaN(
+                value.getTime()
+            )
+                ? null
+                : value;
+        }
+
+
+        const string =
+            String(
+                value
+            ).trim();
+
+
+        /*
+         * YYYY-MM-DD
+         */
+
+        if (
+            /^\d{4}-\d{2}-\d{2}$/
+                .test(string)
+        ) {
+
+            const date =
+                new Date(
+                    string +
+                    "T00:00:00"
+                );
+
+
+            return isNaN(
+                date.getTime()
+            )
+                ? null
+                : date;
+        }
+
+
+        /*
+         * DD.MM.YYYY
+         */
+
+        if (
+            /^\d{2}\.\d{2}\.\d{4}$/
+                .test(string)
+        ) {
+
+            const parts =
+                string.split(".");
+
+
+            const date =
+                new Date(
+                    Number(parts[2]),
+                    Number(parts[1]) - 1,
+                    Number(parts[0])
+                );
+
+
+            return isNaN(
+                date.getTime()
+            )
+                ? null
+                : date;
+        }
+
+
+        /*
+         * DD/MM/YYYY
+         */
+
+        if (
+            /^\d{2}\/\d{2}\/\d{4}$/
+                .test(string)
+        ) {
+
+            const parts =
+                string.split("/");
+
+
+            const date =
+                new Date(
+                    Number(parts[2]),
+                    Number(parts[1]) - 1,
+                    Number(parts[0])
+                );
+
+
+            return isNaN(
+                date.getTime()
+            )
+                ? null
+                : date;
+        }
+
+
+        const parsed =
+            new Date(
+                string
+            );
+
+
+        return isNaN(
+            parsed.getTime()
+        )
+            ? null
+            : parsed;
+    }
+
+
+    /* ============================================================
+       FIELD RESOLVER
+    ============================================================ */
+
+    function firstValue(
+        object,
+        fields
+    ) {
+
+        for (
+            const field of fields
+        ) {
+
+            if (
+                object[field] !==
+                undefined &&
+                object[field] !==
+                null &&
+                object[field] !==
+                ""
+            ) {
+
+                return object[field];
+            }
+        }
+
+
+        return null;
+    }
+
+
+    /* ============================================================
+       PERSONEL NORMALİZASYONU
+    ============================================================ */
+
+    function normalizeEmployee(
+        raw,
+        index
+    ) {
+
+        if (
+            !raw ||
+            typeof raw !== "object"
+        ) {
+
+            throw new Error(
+                "Personel verisi object olmalıdır."
+            );
+        }
+
+
+        const normalized = {
+
+            personelId:
+                firstValue(
+                    raw,
+                    [
+                        "personelId",
+                        "PersonelID",
+                        "personel_id",
+                        "id",
+                        "ID",
+                        "employeeId",
+                        "EmployeeID"
+                    ]
+                ) ??
+                `P-${index + 1}`,
+
+
+            personelAdi:
+                firstValue(
+                    raw,
+                    [
+                        "personelAdi",
+                        "PersonelAdi",
+                        "adSoyad",
+                        "AdSoyad",
+                        "name",
+                        "Name"
+                    ]
+                ) ??
+                "",
+
+
+            departman:
+                firstValue(
+                    raw,
+                    [
+                        "departman",
+                        "Departman",
+                        "department",
+                        "Department"
+                    ]
+                ) ??
+                "Belirtilmemiş",
+
+
+            pozisyon:
+                firstValue(
+                    raw,
+                    [
+                        "pozisyon",
+                        "Pozisyon",
+                        "position",
+                        "Position"
+                    ]
+                ) ??
+                "",
+
+
+            dogumTarihi:
+                dateValue(
+                    firstValue(
+                        raw,
+                        [
+                            "dogumTarihi",
+                            "DogumTarihi",
+                            "birthDate",
+                            "BirthDate"
+                        ]
+                    )
+                ),
+
+
+            iseGirisTarihi:
+                dateValue(
+                    firstValue(
+                        raw,
+                        [
+                            "iseGirisTarihi",
+                            "IseGirisTarihi",
+                            "işeGirişTarihi",
+                            "İşeGirişTarihi",
+                            "hireDate",
+                            "HireDate"
+                        ]
+                    )
+                ),
+
+
+            mevcutMaas:
+                numberValue(
+                    firstValue(
+                        raw,
+                        [
+                            "mevcutMaas",
+                            "MevcutMaas",
+                            "maas",
+                            "Maaş",
+                            "salary",
+                            "Salary"
+                        ]
+                    )
+                ),
+
+
+            planAssets:
+                numberValue(
+                    firstValue(
+                        raw,
+                        [
+                            "planAssets",
+                            "planVarliklari",
+                            "PlanVarliklari",
+                            "planAssetsValue"
+                        ]
+                    )
+                ),
+
+
+            openingDBO:
+                numberValue(
+                    firstValue(
+                        raw,
+                        [
+                            "openingDBO",
+                            "acilisDBO",
+                            "OpeningDBO",
+                            "openingDbo"
+                        ]
+                    )
+                ),
+
+
+            benefitsPaid:
+                numberValue(
+                    firstValue(
+                        raw,
+                        [
+                            "benefitsPaid",
+                            "odenenFayda",
+                            "BenefitsPaid"
+                        ]
+                    )
+                ),
+
+
+            rawData:
+                raw
+        };
+
+
+        return normalized;
+    }
+
+
+    /* ============================================================
+       BATCH NORMALIZATION
+    ============================================================ */
+
+    function normalizeEmployees(
+        data
+    ) {
+
+        if (
+            !Array.isArray(data)
+        ) {
+
+            throw new Error(
+                "Personel datası array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+
+        const errors =
+            [];
+
+
+        data.forEach(
+            (
+                row,
+                index
+            ) => {
+
+                try {
+
+                    results.push(
+                        normalizeEmployee(
+                            row,
+                            index
+                        )
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    errors.push({
+
+                        row:
+                            index + 1,
+
+                        error:
+                            error.message
+                    });
+                }
+            }
+        );
+
+
+        return {
+
+            data:
+                results,
+
+            errors:
+                errors,
+
+            totalRows:
+                data.length,
+
+            validRows:
+                results.length,
+
+            invalidRows:
+                errors.length
+        };
+    }
+
+
+    /* ============================================================
+       PERSONEL VALIDATION
+    ============================================================ */
+
+    function validateEmployee(
+        employee
+    ) {
+
+        const errors =
+            [];
+
+
+        if (
+            !employee.personelId
+        ) {
+
+            errors.push(
+                "Personel ID eksik."
+            );
+        }
+
+
+        if (
+            !employee.dogumTarihi
+        ) {
+
+            errors.push(
+                "Doğum tarihi eksik veya geçersiz."
+            );
+        }
+
+
+        if (
+            !employee.iseGirisTarihi
+        ) {
+
+            errors.push(
+                "İşe giriş tarihi eksik veya geçersiz."
+            );
+        }
+
+
+        if (
+            employee.dogumTarihi &&
+            employee.iseGirisTarihi &&
+            employee.iseGirisTarihi <
+            employee.dogumTarihi
+        ) {
+
+            errors.push(
+                "İşe giriş tarihi doğum tarihinden önce olamaz."
+            );
+        }
+
+
+        if (
+            employee.mevcutMaas < 0
+        ) {
+
+            errors.push(
+                "Mevcut maaş negatif olamaz."
+            );
+        }
+
+
+        return {
+
+            valid:
+                errors.length === 0,
+
+            errors:
+                errors
+        };
+    }
+
+
+    /* ============================================================
+       BATCH VALIDATION
+    ============================================================ */
+
+    function validateEmployees(
+        employees
+    ) {
+
+        const valid =
+            [];
+
+
+        const invalid =
+            [];
+
+
+        employees.forEach(
+            (
+                employee,
+                index
+            ) => {
+
+                const validation =
+                    validateEmployee(
+                        employee
+                    );
+
+
+                if (
+                    validation.valid
+                ) {
+
+                    valid.push(
+                        employee
+                    );
+
+                }
+
+                else {
+
+                    invalid.push({
+
+                        index:
+                            index,
+
+                        personelId:
+                            employee.personelId,
+
+                        errors:
+                            validation.errors,
+
+                        employee:
+                            employee
+                    });
+                }
+            }
+        );
+
+
+        return {
+
+            valid:
+                valid,
+
+            invalid:
+                invalid,
+
+            validCount:
+                valid.length,
+
+            invalidCount:
+                invalid.length,
+
+            success:
+                invalid.length === 0
+        };
+    }
+
+
+    /* ============================================================
+       DATA QUALITY SCORE
+    ============================================================ */
+
+    function calculateQuality(
+        employees,
+        invalid
+    ) {
+
+        const total =
+            employees.length;
+
+
+        if (
+            total === 0
+        ) {
+
+            return {
+
+                score:
+                    0,
+
+                level:
+                    "CRITICAL"
+            };
+        }
+
+
+        const validRatio =
+            (
+                total -
+                invalid.length
+            ) /
+            total;
+
+
+        let score =
+            validRatio *
+            100;
+
+
+        /*
+         * Critical missing data
+         */
+
+        const missingSalary =
+            employees.filter(
+                employee =>
+                    !employee.mevcutMaas ||
+                    employee.mevcutMaas <= 0
+            ).length;
+
+
+        const salaryPenalty =
+            total > 0
+                ? (
+                    missingSalary /
+                    total
+                ) *
+                10
+                : 0;
+
+
+        score -=
+            salaryPenalty;
+
+
+        score =
+            Math.max(
+                0,
+                Math.min(
+                    100,
+                    score
+                )
+            );
+
+
+        let level =
+            "CRITICAL";
+
+
+        if (
+            score >= 95
+        ) {
+
+            level =
+                "EXCELLENT";
+
+        }
+
+        else if (
+            score >= 85
+        ) {
+
+            level =
+                "GOOD";
+
+        }
+
+        else if (
+            score >= 70
+        ) {
+
+            level =
+                "WARNING";
+        }
+
+
+        return {
+
+            score:
+                score,
+
+            level:
+                level,
+
+            validRatio:
+                validRatio,
+
+            missingSalary:
+                missingSalary
+        };
+    }
+
+
+    /* ============================================================
+       COMPLETE DATA PIPELINE
+    ============================================================ */
+
+    function prepareData(
+        rawData
+    ) {
+
+        const normalized =
+            normalizeEmployees(
+                rawData
+            );
+
+
+        const validation =
+            validateEmployees(
+                normalized.data
+            );
+
+
+        const quality =
+            calculateQuality(
+                normalized.data,
+                validation.invalid
+            );
+
+
+        return {
+
+            success:
+                validation.success,
+
+
+            data:
+                validation.valid,
+
+
+            allNormalizedData:
+                normalized.data,
+
+
+            errors:
+                [
+                    ...normalized.errors,
+                    ...validation.invalid
+                ],
+
+
+            quality:
+                quality,
+
+
+            summary:
+                {
+
+                    totalRows:
+                        rawData.length,
+
+                    normalizedRows:
+                        normalized.validRows,
+
+                    validRows:
+                        validation.validCount,
+
+                    invalidRows:
+                        validation.invalidCount,
+
+                    qualityScore:
+                        quality.score,
+
+                    qualityLevel:
+                        quality.level
+                }
+        };
+    }
+
+
+    /* ============================================================
+       DATA → ACTUARIAL ENGINE
+    ============================================================ */
+
+    function prepareAndCalculate(
+        rawData,
+        varsayimlar = {}
+    ) {
+
+        const prepared =
+            prepareData(
+                rawData
+            );
+
+
+        if (
+            !prepared.success
+        ) {
+
+            return {
+
+                success:
+                    false,
+
+                stage:
+                    "DATA_VALIDATION",
+
+                data:
+                    prepared,
+
+                actuarial:
+                    null
+            };
+        }
+
+
+        /*
+         * Actuarial engine
+         */
+
+        const actuarial =
+            TMS19.portfoyPucHesapla(
+                prepared.data,
+                varsayimlar
+            );
+
+
+        return {
+
+            success:
+                actuarial.success,
+
+            stage:
+                actuarial.success
+                    ? "COMPLETED"
+                    : "ACTUARIAL_CALCULATION",
+
+            data:
+                prepared,
+
+            actuarial:
+                actuarial
+        };
+    }
+
+
+    /* ============================================================
+       PUBLIC API
+    ============================================================ */
+
+    global.TMS19DataEngine =
+        global.TMS19DataEngine ||
+        {};
+
+
+    global.TMS19DataEngine
+        .normalizeEmployee =
+            normalizeEmployee;
+
+
+    global.TMS19DataEngine
+        .normalizeEmployees =
+            normalizeEmployees;
+
+
+    global.TMS19DataEngine
+        .validateEmployee =
+            validateEmployee;
+
+
+    global.TMS19DataEngine
+        .validateEmployees =
+            validateEmployees;
+
+
+    global.TMS19DataEngine
+        .calculateQuality =
+            calculateQuality;
+
+
+    global.TMS19DataEngine
+        .prepareData =
+            prepareData;
+
+
+    global.TMS19DataEngine
+        .prepareAndCalculate =
+            prepareAndCalculate;
+
+
+    /* ============================================================
+       HEALTH CHECK
+    ============================================================ */
+
+    global.TMS19DataEngine
+        .healthCheck =
+            function () {
+
+                return {
+
+                    healthy:
+                        typeof normalizeEmployee ===
+                            "function" &&
+
+                        typeof validateEmployee ===
+                            "function" &&
+
+                        typeof prepareAndCalculate ===
+                            "function",
+
+                    engine:
+                        "TMS19 Data Engine",
+
+                    version:
+                        "2.0",
+
+                    timestamp:
+                        new Date()
+                            .toISOString()
+                };
+            };
+
+
+})(window);
