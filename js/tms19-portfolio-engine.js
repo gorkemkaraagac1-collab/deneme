@@ -3216,3 +3216,1049 @@
 
 
 })(window);
+
+/* ================================================================
+   TMS 19 — PORTFOLIO PUC & ACCOUNTING INTEGRATION
+   ----------------------------------------------------------------
+   Actuarial Engine
+          ↓
+   Personel PUC
+          ↓
+   Portfolio Aggregation
+          ↓
+   DBO / P&L / OCI / Net Liability
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+    const TMS19 =
+        global.TMS19;
+
+
+    if (!TMS19) {
+
+        console.error(
+            "TMS19 actuarial engine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    /* ============================================================
+       SAYI HELPER
+    ============================================================ */
+
+    function num(value) {
+
+        const result =
+            Number(value);
+
+        return Number.isFinite(result)
+            ? result
+            : 0;
+    }
+
+
+    /* ============================================================
+       PERSONEL NORMALİZASYONU
+    ============================================================ */
+
+    function normalizeResult(
+        result,
+        personel
+    ) {
+
+        const puc =
+            result.puc ||
+            {};
+
+        const accounting =
+            result.accounting ||
+            {};
+
+        const retirement =
+            result.emeklilik ||
+            {};
+
+
+        return {
+
+            personelId:
+                result.personelId ??
+                personel.personelId ??
+                personel.id ??
+                "",
+
+
+            personelAdi:
+                personel.personelAdi ??
+                personel.adSoyad ??
+                personel.ad ??
+                personel.name ??
+                "",
+
+
+            departman:
+                personel.departman ??
+                personel.department ??
+                "Belirtilmemiş",
+
+
+            pozisyon:
+                personel.pozisyon ??
+                personel.position ??
+                "",
+
+
+            yas:
+                num(
+                    result.yas
+                ),
+
+
+            hizmetSuresi:
+                num(
+                    result.hizmetSuresi
+                ),
+
+
+            kalanYil:
+                num(
+                    result.kalanYil
+                ),
+
+
+            toplamHizmet:
+                num(
+                    result.toplamHizmet
+                ),
+
+
+            emeklilikMaasi:
+                num(
+                    retirement.emeklilikMaasi
+                ),
+
+
+            emeklilikTavani:
+                num(
+                    retirement.emeklilikTavani
+                ),
+
+
+            faydaMaasi:
+                num(
+                    retirement.faydaMaasi
+                ),
+
+
+            toplamFayda:
+                num(
+                    retirement.toplamFayda
+                ),
+
+
+            accruedBenefit:
+                num(
+                    puc.accruedBenefit
+                ),
+
+
+            futureServiceBenefit:
+                num(
+                    puc.futureServiceBenefit
+                ),
+
+
+            allocationRatio:
+                num(
+                    puc.allocationRatio
+                ),
+
+
+            survivalProbability:
+                num(
+                    puc.survivalProbability
+                ),
+
+
+            discountFactor:
+                num(
+                    puc.discountFactor
+                ),
+
+
+            dbo:
+                num(
+                    puc.dbo
+                ),
+
+
+            currentServiceCost:
+                num(
+                    accounting.currentServiceCost
+                ),
+
+
+            interestCost:
+                num(
+                    accounting.interestCost
+                ),
+
+
+            pastServiceCost:
+                num(
+                    accounting.pastServiceCost
+                ),
+
+
+            profitLoss:
+                num(
+                    accounting.profitLoss
+                ),
+
+
+            actuarialGainLoss:
+                num(
+                    accounting.actuarialGainLoss
+                ),
+
+
+            benefitsPaid:
+                num(
+                    personel.benefitsPaid ??
+                    personel.odenenFayda ??
+                    0
+                ),
+
+
+            planAssets:
+                num(
+                    personel.planAssets ??
+                    personel.planVarliklari ??
+                    0
+                ),
+
+
+            raw:
+                result
+        };
+    }
+
+
+    /* ============================================================
+       PERSONEL PUC HESAPLAMA
+    ============================================================ */
+
+    function calculateEmployee(
+        personel,
+        varsayimlar,
+        index
+    ) {
+
+        try {
+
+            const result =
+                TMS19.personelPucHesapla(
+                    personel,
+                    varsayimlar,
+                    index
+                );
+
+
+            return {
+
+                success:
+                    true,
+
+                result:
+                    normalizeResult(
+                        result,
+                        personel
+                    )
+            };
+
+        }
+
+        catch (
+            error
+        ) {
+
+            return {
+
+                success:
+                    false,
+
+                result:
+                    null,
+
+                error:
+                    {
+
+                        index:
+                            index,
+
+                        personelId:
+                            personel.personelId ??
+                            personel.id ??
+                            "",
+
+                        personelAdi:
+                            personel.personelAdi ??
+                            personel.adSoyad ??
+                            "",
+
+                        message:
+                            error.message
+                    }
+            };
+        }
+    }
+
+
+    /* ============================================================
+       PORTFÖY HESAPLAMA
+    ============================================================ */
+
+    function calculatePortfolio(
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            throw new Error(
+                "personeller bir array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+        const errors =
+            [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                const calculated =
+                    calculateEmployee(
+                        personel,
+                        varsayimlar,
+                        index
+                    );
+
+
+                if (
+                    calculated.success
+                ) {
+
+                    results.push(
+                        calculated.result
+                    );
+
+                }
+
+                else {
+
+                    errors.push(
+                        calculated.error
+                    );
+                }
+            }
+        );
+
+
+        /* --------------------------------------------------------
+           TOTALS
+        -------------------------------------------------------- */
+
+        const totals = {
+
+            personelSayisi:
+                personeller.length,
+
+            hesaplananPersonel:
+                results.length,
+
+            hataliPersonel:
+                errors.length,
+
+
+            dbo:
+                sum(
+                    results,
+                    "dbo"
+                ),
+
+
+            accruedBenefit:
+                sum(
+                    results,
+                    "accruedBenefit"
+                ),
+
+
+            futureServiceBenefit:
+                sum(
+                    results,
+                    "futureServiceBenefit"
+                ),
+
+
+            currentServiceCost:
+                sum(
+                    results,
+                    "currentServiceCost"
+                ),
+
+
+            interestCost:
+                sum(
+                    results,
+                    "interestCost"
+                ),
+
+
+            pastServiceCost:
+                sum(
+                    results,
+                    "pastServiceCost"
+                ),
+
+
+            actuarialGainLoss:
+                sum(
+                    results,
+                    "actuarialGainLoss"
+                ),
+
+
+            benefitsPaid:
+                sum(
+                    results,
+                    "benefitsPaid"
+                ),
+
+
+            planAssets:
+                sum(
+                    results,
+                    "planAssets"
+                )
+        };
+
+
+        /* --------------------------------------------------------
+           NET POSITION
+        -------------------------------------------------------- */
+
+        totals.netDefinedBenefitPosition =
+            totals.dbo -
+            totals.planAssets;
+
+
+        totals.netDefinedBenefitLiability =
+            Math.max(
+                0,
+                totals.netDefinedBenefitPosition
+            );
+
+
+        totals.netDefinedBenefitAsset =
+            Math.max(
+                0,
+                -totals.netDefinedBenefitPosition
+            );
+
+
+        /* --------------------------------------------------------
+           P&L
+        -------------------------------------------------------- */
+
+        totals.totalPLImpact =
+            totals.currentServiceCost +
+            totals.interestCost +
+            totals.pastServiceCost;
+
+
+        /* --------------------------------------------------------
+           OCI
+        -------------------------------------------------------- */
+
+        totals.totalOCIImpact =
+            totals.actuarialGainLoss;
+
+
+        /* --------------------------------------------------------
+           RETIREMENT ANALYSIS
+        -------------------------------------------------------- */
+
+        const retirement = {
+
+            within1Year:
+                countWhere(
+                    results,
+                    item =>
+                        item.kalanYil <= 1
+                ),
+
+            within3Years:
+                countWhere(
+                    results,
+                    item =>
+                        item.kalanYil <= 3
+                ),
+
+            within5Years:
+                countWhere(
+                    results,
+                    item =>
+                        item.kalanYil <= 5
+                ),
+
+            within10Years:
+                countWhere(
+                    results,
+                    item =>
+                        item.kalanYil <= 10
+                )
+        };
+
+
+        /* --------------------------------------------------------
+           AGE ANALYSIS
+        -------------------------------------------------------- */
+
+        const ageBuckets = {
+
+            "30 Altı":
+                [],
+
+            "30-39":
+                [],
+
+            "40-49":
+                [],
+
+            "50-59":
+                [],
+
+            "60+":
+                []
+        };
+
+
+        results.forEach(
+            item => {
+
+                if (
+                    item.yas < 30
+                ) {
+
+                    ageBuckets[
+                        "30 Altı"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.yas < 40
+                ) {
+
+                    ageBuckets[
+                        "30-39"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.yas < 50
+                ) {
+
+                    ageBuckets[
+                        "40-49"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.yas < 60
+                ) {
+
+                    ageBuckets[
+                        "50-59"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else {
+
+                    ageBuckets[
+                        "60+"
+                    ].push(
+                        item
+                    );
+                }
+            }
+        );
+
+
+        const byAge =
+            Object.entries(
+                ageBuckets
+            ).map(
+                (
+                    [
+                        bucket,
+                        employees
+                    ]
+                ) => ({
+
+                    bucket:
+
+                        bucket,
+
+                    personelSayisi:
+
+                        employees.length,
+
+                    dbo:
+
+                        employees.reduce(
+                            (
+                                total,
+                                item
+                            ) =>
+                                total +
+                                item.dbo,
+                            0
+                        )
+                })
+            );
+
+
+        /* --------------------------------------------------------
+           TOP DBO PERSONEL
+        -------------------------------------------------------- */
+
+        const topDBO =
+            [...results]
+                .sort(
+                    (
+                        a,
+                        b
+                    ) =>
+                        b.dbo -
+                        a.dbo
+                )
+                .slice(
+                    0,
+                    10
+                );
+
+
+        /* --------------------------------------------------------
+           DEPARTMAN ANALİZİ
+        -------------------------------------------------------- */
+
+        const departmentMap =
+            {};
+
+
+        results.forEach(
+            item => {
+
+                const department =
+                    item.departman ||
+                    "Belirtilmemiş";
+
+
+                if (
+                    !departmentMap[
+                        department
+                    ]
+                ) {
+
+                    departmentMap[
+                        department
+                    ] = {
+
+                        departman:
+                            department,
+
+                        personelSayisi:
+                            0,
+
+                        dbo:
+                            0,
+
+                        currentServiceCost:
+                            0,
+
+                        interestCost:
+                            0
+                    };
+                }
+
+
+                const group =
+                    departmentMap[
+                        department
+                    ];
+
+
+                group.personelSayisi += 1;
+
+
+                group.dbo +=
+                    item.dbo;
+
+
+                group.currentServiceCost +=
+                    item.currentServiceCost;
+
+
+                group.interestCost +=
+                    item.interestCost;
+            }
+        );
+
+
+        const byDepartment =
+            Object.values(
+                departmentMap
+            );
+
+
+        /* --------------------------------------------------------
+           DBO CONCENTRATION
+        -------------------------------------------------------- */
+
+        const sortedDBO =
+            [...results]
+                .sort(
+                    (
+                        a,
+                        b
+                    ) =>
+                        b.dbo -
+                        a.dbo
+                );
+
+
+        const top10DBO =
+            sortedDBO
+                .slice(
+                    0,
+                    Math.max(
+                        1,
+                        Math.ceil(
+                            results.length *
+                            0.10
+                        )
+                    )
+                )
+                .reduce(
+                    (
+                        total,
+                        item
+                    ) =>
+                        total +
+                        item.dbo,
+                    0
+                );
+
+
+        const dboConcentration =
+            totals.dbo > 0
+                ? top10DBO /
+                  totals.dbo
+                : 0;
+
+
+        /* --------------------------------------------------------
+           RISK SCORE
+        -------------------------------------------------------- */
+
+        let riskScore =
+            0;
+
+
+        if (
+            dboConcentration >=
+            0.50
+        ) {
+
+            riskScore +=
+                50;
+
+        }
+
+        else if (
+            dboConcentration >=
+            0.35
+        ) {
+
+            riskScore +=
+                30;
+
+        }
+
+        else if (
+            dboConcentration >=
+            0.20
+        ) {
+
+            riskScore +=
+                15;
+        }
+
+
+        const retirementRatio =
+            results.length > 0
+                ? retirement.within5Years /
+                  results.length
+                : 0;
+
+
+        if (
+            retirementRatio >=
+            0.30
+        ) {
+
+            riskScore +=
+                30;
+
+        }
+
+        else if (
+            retirementRatio >=
+            0.20
+        ) {
+
+            riskScore +=
+                20;
+
+        }
+
+        else if (
+            retirementRatio >=
+            0.10
+        ) {
+
+            riskScore +=
+                10;
+        }
+
+
+        let riskLevel =
+            "LOW";
+
+
+        if (
+            riskScore >= 60
+        ) {
+
+            riskLevel =
+                "HIGH";
+
+        }
+
+        else if (
+            riskScore >= 30
+        ) {
+
+            riskLevel =
+                "MEDIUM";
+        }
+
+
+        return {
+
+            success:
+                errors.length === 0,
+
+
+            results:
+                results,
+
+
+            errors:
+                errors,
+
+
+            totals:
+                totals,
+
+
+            retirement:
+                retirement,
+
+
+            byAge:
+                byAge,
+
+
+            byDepartment:
+                byDepartment,
+
+
+            topDBO:
+                topDBO,
+
+
+            risk:
+                {
+
+                    score:
+                        riskScore,
+
+                    level:
+                        riskLevel,
+
+                    dboConcentration:
+                        dboConcentration,
+
+                    retirementWithin5Years:
+                        retirementRatio
+                }
+        };
+    }
+
+
+    /* ============================================================
+       HELPER — SUM
+    ============================================================ */
+
+    function sum(
+        array,
+        field
+    ) {
+
+        return array.reduce(
+            (
+                total,
+                item
+            ) => {
+
+                return (
+                    total +
+                    num(
+                        item[field]
+                    )
+                );
+
+            },
+            0
+        );
+    }
+
+
+    /* ============================================================
+       HELPER — COUNT
+    ============================================================ */
+
+    function countWhere(
+        array,
+        callback
+    ) {
+
+        return array.filter(
+            callback
+        ).length;
+    }
+
+
+    /* ============================================================
+       PUBLIC API
+    ============================================================ */
+
+    global.TMS19PortfolioEngine =
+        global.TMS19PortfolioEngine ||
+        {};
+
+
+    global.TMS19PortfolioEngine
+        .calculatePUC =
+            calculatePortfolio;
+
+
+    global.TMS19PortfolioEngine
+        .analyzePUC =
+            calculatePortfolio;
+
+
+    /*
+     * Dashboard compatibility.
+     *
+     * Eski dashboard:
+     *
+     * TMS19PortfolioEngine.analyze(...)
+     *
+     * kullanıyorsa artık PUC çalışır.
+     */
+
+    global.TMS19PortfolioEngine
+        .analyze =
+            calculatePortfolio;
+
+
+    global.TMS19PortfolioEngine
+        .calculate =
+            calculatePortfolio;
+
+
+    /* ============================================================
+       HEALTH CHECK
+    ============================================================ */
+
+    global.TMS19PortfolioEngine
+        .healthCheck =
+            function () {
+
+                return {
+
+                    healthy:
+                        typeof TMS19
+                            .personelPucHesapla ===
+                        "function" &&
+
+                        typeof TMS19
+                            .portfoyPucHesapla ===
+                        "function",
+
+                    engine:
+                        "TMS19 PUC Portfolio Engine",
+
+                    version:
+                        "2.0",
+
+                    timestamp:
+                        new Date()
+                            .toISOString()
+                };
+            };
+
+
+})(window);
