@@ -1,434 +1,299 @@
-/* ============================================================
-   GK ADVISORY — TMS 19 DATA ENGINE
-   TMS 19 / IAS 19 Actuarial Data Management Layer
-
-   Amaç:
-   - CSV / Excel benzeri verileri normalize etmek
-   - Türkçe / İngilizce kolon isimlerini tanımak
-   - Personel verilerini standartlaştırmak
-   - Veri kalitesi kontrollerini yapmak
-   - Aktüeryal motor için temiz veri üretmek
-
-   Versiyon: 1.0
-============================================================ */
-
-"use strict";
-
-
-/* ============================================================
-   GLOBAL NAMESPACE
-============================================================ */
-
-window.TMS19Data = window.TMS19Data || {};
-
-
-/* ============================================================
-   1. KOLON SÖZLÜĞÜ
-============================================================ */
-
-TMS19Data.kolonSozlugu = {
-
-    sicilNo: [
-        "sicil no",
-        "sicil_no",
-        "sicil",
-        "employee id",
-        "employee_id",
-        "employee number",
-        "employee no",
-        "personel no",
-        "personel numarası",
-        "çalışan no",
-        "çalışan numarası",
-        "id"
-    ],
-
-    adSoyad: [
-        "ad soyad",
-        "ad_soyad",
-        "adsoyad",
-        "isim",
-        "isim soyisim",
-        "personel adı",
-        "çalışan adı",
-        "employee name",
-        "employee_name",
-        "name",
-        "full name",
-        "fullname"
-    ],
-
-    doğumTarihi: [
-        "doğum tarihi",
-        "dogum tarihi",
-        "doğum_tarihi",
-        "dogum_tarihi",
-        "birth date",
-        "birth_date",
-        "date of birth",
-        "dob",
-        "birthdate"
-    ],
-
-    işeGirişTarihi: [
-        "işe giriş tarihi",
-        "işe giriş",
-        "işe_giriş_tarihi",
-        "ise giris tarihi",
-        "ise_giris_tarihi",
-        "işe başlama tarihi",
-        "işe başlama",
-        "hire date",
-        "hire_date",
-        "joining date",
-        "join date",
-        "employment start date",
-        "start date"
-    ],
-
-    iştenAyrılmaTarihi: [
-        "işten ayrılma tarihi",
-        "işten ayrılış tarihi",
-        "işten_ayrılma_tarihi",
-        "isten ayrilma tarihi",
-        "termination date",
-        "termination_date",
-        "leaving date",
-        "leave date",
-        "exit date",
-        "end date"
-    ],
-
-    mevcutMaaş: [
-        "maaş",
-        "maas",
-        "brüt maaş",
-        "brut maas",
-        "brüt ücret",
-        "brut ucret",
-        "ücret",
-        "ucret",
-        "aylık ücret",
-        "aylik ucret",
-        "aylık brüt ücret",
-        "monthly salary",
-        "monthly_salary",
-        "gross salary",
-        "gross_salary",
-        "salary",
-        "basic salary",
-        "pay"
-    ],
-
-    cinsiyet: [
-        "cinsiyet",
-        "gender",
-        "sex"
-    ],
-
-    departman: [
-        "departman",
-        "department",
-        "bölüm",
-        "bolum",
-        "birim",
-        "unit",
-        "division"
-    ],
-
-    pozisyon: [
-        "pozisyon",
-        "position",
-        "job title",
-        "job_title",
-        "unvan",
-        "title"
-    ],
-
-    medeniDurum: [
-        "medeni durum",
-        "medeni_durum",
-        "marital status",
-        "marital_status"
-    ],
-
-    çalışanDurumu: [
-        "çalışan durumu",
-        "calisan durumu",
-        "employee status",
-        "employee_status",
-        "status",
-        "durum",
-        "aktif pasif",
-        "active inactive"
-    ]
-
-};
-
-
-/* ============================================================
-   2. STANDARD KOLONLAR
-============================================================ */
-
-TMS19Data.zorunluAlanlar = [
-
-    "sicilNo",
-    "adSoyad",
-    "doğumTarihi",
-    "işeGirişTarihi",
-    "mevcutMaaş"
-
-];
-
-
-TMS19Data.opsiyonelAlanlar = [
-
-    "iştenAyrılmaTarihi",
-    "cinsiyet",
-    "departman",
-    "pozisyon",
-    "medeniDurum",
-    "çalışanDurumu"
-
-];
-
-
-/* ============================================================
-   3. METİN NORMALİZASYONU
-============================================================ */
-
-TMS19Data.normalizeText = function (
-    değer
-) {
-
-    if (
-        değer === null ||
-        değer === undefined
-    ) {
-
-        return "";
-
-    }
-
-    return String(değer)
-        .trim()
-        .toLowerCase()
-        .replace(
-            /ı/g,
-            "i"
-        )
-        .replace(
-            /ğ/g,
-            "g"
-        )
-        .replace(
-            /ü/g,
-            "u"
-        )
-        .replace(
-            /ş/g,
-            "s"
-        )
-        .replace(
-            /ö/g,
-            "o"
-        )
-        .replace(
-            /ç/g,
-            "c"
-        )
-        .replace(
-            /[_\-]+/g,
-            " "
-        )
-        .replace(
-            /\s+/g,
-            " "
-        )
-        .trim();
-
-};
-
-
-/* ============================================================
-   4. KOLON EŞLEŞTİRME
-============================================================ */
-
-TMS19Data.kolonBul = function (
-    kolonAdi
-) {
-
-    const normalizeEdilmis =
-        TMS19Data.normalizeText(
-            kolonAdi
-        );
-
-
-    for (
-        const standartAlan
-        in TMS19Data.kolonSozlugu
-    ) {
-
-        const alternatifler =
-            TMS19Data.kolonSozlugu[
-                standartAlan
-            ];
-
-
-        for (
-            const alternatif
-            of alternatifler
-        ) {
-
-            if (
-                TMS19Data.normalizeText(
-                    alternatif
-                )
-                ===
-                normalizeEdilmis
-            ) {
-
-                return standartAlan;
-
-            }
-
-        }
-
-    }
-
-
-    return null;
-
-};
-
-
-/* ============================================================
-   5. OTOMATİK KOLON EŞLEŞTİRME
-============================================================ */
-
-TMS19Data.kolonlariEsle = function (
-    kolonlar
-) {
-
-    const eslesme = {};
-
-    const eslesmeyenler = [];
-
-
-    kolonlar.forEach(
-        kolon => {
-
-            const standartAlan =
-                TMS19Data.kolonBul(
-                    kolon
-                );
-
-
-            if (
-                standartAlan
-            ) {
-
-                eslesme[
-                    kolon
-                ] =
-                    standartAlan;
-
-            } else {
-
-                eslesmeyenler.push(
-                    kolon
-                );
-
-            }
-
-        }
-    );
-
-
-    return {
-
-        eslesme,
-        eslesmeyenler
-
+/* ================================================================
+   GK FINANCIAL DECISION COCKPIT
+   TMS 19 DATA ENGINE
+   ----------------------------------------------------------------
+   Sürüm    : 2.0.0
+   Standart : TMS 19
+
+   SORUMLULUKLAR
+   -------------
+   ✓ CSV okuma
+   ✓ JSON okuma
+   ✓ Array veri okuma
+   ✓ Kolon eşleştirme
+   ✓ Türkçe / İngilizce kolon desteği
+   ✓ Tarih normalizasyonu
+   ✓ Sayı normalizasyonu
+   ✓ Personel standardizasyonu
+   ✓ Veri kalite kontrolü
+   ✓ Duplicate kontrolü
+   ✓ Eksik veri kontrolü
+   ✓ Dashboard'a hazır veri üretimi
+
+   BU DOSYA AKTÜERYAL HESAPLAMA YAPMAZ.
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+
+    /* ============================================================
+       01 — ENGINE
+    ============================================================ */
+
+    const DataEngine = {};
+
+
+    DataEngine.version =
+        "2.0.0";
+
+
+    DataEngine.engineName =
+        "GK TMS 19 Data Engine";
+
+
+    DataEngine.standard =
+        "TMS 19";
+
+
+    /* ============================================================
+       02 — VERİ SÖZLÜĞÜ
+    ============================================================ */
+
+    const FIELD_ALIASES = {
+
+        personelId: [
+            "personelid",
+            "personel_id",
+            "personel no",
+            "personelno",
+            "sicil no",
+            "sicilno",
+            "sicil",
+            "employee id",
+            "employeeid",
+            "employee no",
+            "employeeno",
+            "id"
+        ],
+
+
+        adSoyad: [
+            "adsoyad",
+            "ad soyad",
+            "ad_soyad",
+            "isim",
+            "çalışan",
+            "calisan",
+            "çalışan adı",
+            "calisan adi",
+            "employee name",
+            "employeename",
+            "name",
+            "full name",
+            "fullname"
+        ],
+
+
+        departman: [
+            "departman",
+            "department",
+            "departman adı",
+            "departman adi",
+            "department name",
+            "departmentname",
+            "birim",
+            "organizasyon"
+        ],
+
+
+        pozisyon: [
+            "pozisyon",
+            "position",
+            "görev",
+            "gorev",
+            "ünvan",
+            "unvan",
+            "title",
+            "job title",
+            "jobtitle"
+        ],
+
+
+        dogumTarihi: [
+            "doğum tarihi",
+            "dogum tarihi",
+            "doğumtarihi",
+            "dogumtarihi",
+            "dogum_tarihi",
+            "birth date",
+            "birthdate",
+            "birth_date",
+            "date of birth",
+            "dateofbirth",
+            "dob"
+        ],
+
+
+        iseGirisTarihi: [
+            "işe giriş tarihi",
+            "ise giris tarihi",
+            "işe giriş",
+            "ise giris",
+            "işegiriştarihi",
+            "isegiristarihi",
+            "ise_giris_tarihi",
+            "hire date",
+            "hiredate",
+            "hire_date",
+            "employment date",
+            "employmentdate",
+            "start date",
+            "startdate"
+        ],
+
+
+        mevcutMaas: [
+            "mevcut maaş",
+            "mevcut maas",
+            "mevcutmaaş",
+            "mevcutmaas",
+            "maaş",
+            "maas",
+            "brüt maaş",
+            "brut maas",
+            "brüt ücret",
+            "brut ucret",
+            "salary",
+            "currentsalary",
+            "current salary",
+            "monthly salary",
+            "gross salary"
+        ],
+
+
+        cinsiyet: [
+            "cinsiyet",
+            "gender",
+            "sex"
+        ],
+
+
+        kalanIzin: [
+            "kalan izin",
+            "kalanizin",
+            "izin bakiyesi",
+            "izinbakiyesi",
+            "remaining leave",
+            "remainingleave",
+            "leave balance",
+            "leavebalance"
+        ]
     };
 
-};
 
+    /* ============================================================
+       03 — STRING NORMALİZASYONU
+    ============================================================ */
 
-/* ============================================================
-   6. SAYI PARSE
-============================================================ */
-
-TMS19Data.parseNumber = function (
-    değer
-) {
-
-    if (
-        değer === null ||
-        değer === undefined ||
-        değer === ""
+    function normalizeKey(
+        value
     ) {
 
-        return null;
+        if (
+            value === null ||
+            value === undefined
+        ) {
 
+            return "";
+        }
+
+
+        return String(value)
+            .trim()
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(
+                /[\u0300-\u036f]/g,
+                ""
+            )
+            .replace(
+                /ı/g,
+                "i"
+            )
+            .replace(
+                /[^a-z0-9]/g,
+                ""
+            );
     }
 
 
-    if (
-        typeof değer === "number"
+    function normalizeText(
+        value
     ) {
 
-        return isFinite(değer)
-            ? değer
-            : null;
+        if (
+            value === null ||
+            value === undefined
+        ) {
 
+            return "";
+        }
+
+
+        return String(value)
+            .trim()
+            .replace(
+                /\s+/g,
+                " "
+            );
     }
 
 
-    let metin =
-        String(değer)
-            .trim();
+    /* ============================================================
+       04 — SAYI PARSE
+    ============================================================ */
 
-
-    metin =
-        metin.replace(
-            /\s/g,
-            ""
-        );
-
-
-    /*
-       Türkçe format:
-
-       125.000,50
-       → 125000.50
-
-       İngilizce format:
-
-       125,000.50
-       → 125000.50
-    */
-
-
-    if (
-        metin.includes(",") &&
-        metin.includes(".")
+    function sayi(
+        value,
+        varsayilan = 0
     ) {
 
-        const sonVirgul =
-            metin.lastIndexOf(",");
+        if (
+            value === null ||
+            value === undefined ||
+            value === ""
+        ) {
 
-        const sonNokta =
-            metin.lastIndexOf(".");
+            return varsayilan;
+        }
 
 
         if (
-            sonVirgul >
-            sonNokta
+            typeof value === "number"
         ) {
 
-            metin =
-                metin
+            return Number.isFinite(
+                value
+            )
+                ? value
+                : varsayilan;
+        }
+
+
+        let text =
+            String(value)
+                .trim()
+                .replace(
+                    /\s/g,
+                    ""
+                );
+
+
+        /*
+         * Türkçe:
+         *
+         * 1.234.567,89
+         */
+
+        if (
+            text.includes(".") &&
+            text.includes(",")
+        ) {
+
+            text =
+                text
                     .replace(
                         /\./g,
                         ""
@@ -437,1825 +302,1777 @@ TMS19Data.parseNumber = function (
                         ",",
                         "."
                     );
-
-        } else {
-
-            metin =
-                metin.replace(
-                    /,/g,
-                    ""
-                );
-
         }
 
-    } else if (
-        metin.includes(",")
-    ) {
+        /*
+         * 1.234
+         *
+         * Burada Excel'in binlik ayırıcı
+         * kullanmış olabileceğini varsayıyoruz.
+         */
 
-        const parçalar =
-            metin.split(",");
-
-
-        if (
-            parçalar.length === 2 &&
-            parçalar[1].length <= 2
+        else if (
+            /^\d{1,3}(\.\d{3})+$/.test(
+                text
+            )
         ) {
 
-            metin =
-                metin.replace(
-                    ",",
-                    "."
-                );
-
-        } else {
-
-            metin =
-                metin.replace(
-                    /,/g,
-                    ""
-                );
-
-        }
-
-    } else if (
-        metin.includes(".")
-    ) {
-
-        const parçalar =
-            metin.split(".");
-
-
-        if (
-            parçalar.length > 2
-        ) {
-
-            metin =
-                metin.replace(
+            text =
+                text.replace(
                     /\./g,
                     ""
                 );
-
         }
 
-    }
+        else if (
+            text.includes(",")
+        ) {
+
+            text =
+                text.replace(
+                    ",",
+                    "."
+                );
+        }
 
 
-    const sayı =
-        Number(
-            metin
-                .replace(
-                    /[^0-9.\-]/g,
-                    ""
-                )
-        );
+        const result =
+            Number(text);
 
 
-    return isFinite(sayı)
-        ? sayı
-        : null;
-
-};
-
-
-/* ============================================================
-   7. TARİH PARSE
-============================================================ */
-
-TMS19Data.parseDate = function (
-    değer
-) {
-
-    if (
-        değer === null ||
-        değer === undefined ||
-        değer === ""
-    ) {
-
-        return null;
-
-    }
-
-
-    if (
-        değer instanceof Date
-    ) {
-
-        return isNaN(
-            değer.getTime()
+        return Number.isFinite(
+            result
         )
-            ? null
-            : değer;
-
+            ? result
+            : varsayilan;
     }
 
 
-    /*
-       Excel serial date
-    */
+    /* ============================================================
+       05 — TARİH PARSE
+    ============================================================ */
 
-    if (
-        typeof değer === "number"
+    function tarih(
+        value
     ) {
 
-        const excelEpoch =
-            new Date(
-                Date.UTC(
-                    1899,
-                    11,
-                    30
-                )
-            );
+        if (
+            value instanceof Date
+        ) {
+
+            const copy =
+                new Date(
+                    value.getTime()
+                );
 
 
-        const tarih =
-            new Date(
-                excelEpoch.getTime()
-                +
-                değer *
-                86400000
-            );
-
-
-        return isNaN(
-            tarih.getTime()
-        )
-            ? null
-            : tarih;
-
-    }
-
-
-    let metin =
-        String(değer)
-            .trim();
-
-
-    /*
-       DD.MM.YYYY
-       DD/MM/YYYY
-       DD-MM-YYYY
-    */
-
-    const türkTarih =
-        metin.match(
-            /^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/
-        );
-
-
-    if (
-        türkTarih
-    ) {
-
-        const gün =
-            Number(
-                türkTarih[1]
-            );
-
-        const ay =
-            Number(
-                türkTarih[2]
-            ) - 1;
-
-        const yıl =
-            Number(
-                türkTarih[3]
-            );
-
-
-        const tarih =
-            new Date(
-                yıl,
-                ay,
-                gün
-            );
+            return Number.isNaN(
+                copy.getTime()
+            )
+                ? null
+                : copy;
+        }
 
 
         if (
-            tarih.getFullYear() === yıl &&
-            tarih.getMonth() === ay &&
-            tarih.getDate() === gün
+            value === null ||
+            value === undefined ||
+            value === ""
         ) {
 
-            return tarih;
-
+            return null;
         }
 
-    }
 
+        /*
+         * Excel serial date
+         */
 
-    const tarih =
-        new Date(
-            metin
-        );
-
-
-    return isNaN(
-        tarih.getTime()
-    )
-        ? null
-        : tarih;
-
-};
-
-
-/* ============================================================
-   8. TARİH FORMAT
-============================================================ */
-
-TMS19Data.formatDate = function (
-    tarih
-) {
-
-    if (
-        !tarih
-    ) {
-
-        return "";
-
-    }
-
-
-    const d =
-        tarih instanceof Date
-            ? tarih
-            : TMS19Data.parseDate(
-                tarih
-            );
-
-
-    if (
-        !d
-    ) {
-
-        return "";
-
-    }
-
-
-    const gün =
-        String(
-            d.getDate()
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    const ay =
-        String(
-            d.getMonth() + 1
-        ).padStart(
-            2,
-            "0"
-        );
-
-
-    const yıl =
-        d.getFullYear();
-
-
-    return (
-        gün
-        +
-        "."
-        +
-        ay
-        +
-        "."
-        +
-        yıl
-    );
-
-};
-
-
-/* ============================================================
-   9. YAŞ HESAPLA
-============================================================ */
-
-TMS19Data.yasHesapla = function (
-    doğumTarihi,
-    değerlemeTarihi
-) {
-
-    const doğum =
-        TMS19Data.parseDate(
-            doğumTarihi
-        );
-
-
-    const değerleme =
-        TMS19Data.parseDate(
-            değerlemeTarihi
-        );
-
-
-    if (
-        !doğum ||
-        !değerleme
-    ) {
-
-        return null;
-
-    }
-
-
-    let yaş =
-        değerleme.getFullYear()
-        -
-        doğum.getFullYear();
-
-
-    const ay =
-        değerleme.getMonth()
-        -
-        doğum.getMonth();
-
-
-    if (
-        ay < 0 ||
-        (
-            ay === 0 &&
-            değerleme.getDate()
-            <
-            doğum.getDate()
-        )
-    ) {
-
-        yaş--;
-
-    }
-
-
-    return yaş;
-
-};
-
-
-/* ============================================================
-   10. HİZMET SÜRESİ
-============================================================ */
-
-TMS19Data.hizmetSuresiHesapla = function (
-    işeGirişTarihi,
-    değerlemeTarihi
-) {
-
-    const giriş =
-        TMS19Data.parseDate(
-            işeGirişTarihi
-        );
-
-
-    const değerleme =
-        TMS19Data.parseDate(
-            değerlemeTarihi
-        );
-
-
-    if (
-        !giriş ||
-        !değerleme
-    ) {
-
-        return null;
-
-    }
-
-
-    const fark =
-        değerleme.getTime()
-        -
-        giriş.getTime();
-
-
-    return Math.max(
-        0,
-        fark /
-        (
-            365.25 *
-            24 *
-            60 *
-            60 *
-            1000
-        )
-    );
-
-};
-
-
-/* ============================================================
-   11. TEK PERSONEL NORMALİZASYONU
-============================================================ */
-
-TMS19Data.personelNormalizeEt = function (
-    hamVeri,
-    kolonEslesmesi
-) {
-
-    const personel = {};
-
-
-    Object.keys(
-        kolonEslesmesi
-    ).forEach(
-        orijinalKolon => {
-
-            const standartAlan =
-                kolonEslesmesi[
-                    orijinalKolon
-                ];
-
-
-            personel[
-                standartAlan
-            ] =
-            hamVeri[
-                orijinalKolon
-            ];
-
-        }
-    );
-
-
-    personel.sicilNo =
-        personel.sicilNo !== undefined
-            ? String(
-                personel.sicilNo
-            ).trim()
-            : "";
-
-
-    personel.adSoyad =
-        personel.adSoyad !== undefined
-            ? String(
-                personel.adSoyad
-            ).trim()
-            : "";
-
-
-    personel.doğumTarihi =
-        TMS19Data.parseDate(
-            personel.doğumTarihi
-        );
-
-
-    personel.işeGirişTarihi =
-        TMS19Data.parseDate(
-            personel.işeGirişTarihi
-        );
-
-
-    personel.iştenAyrılmaTarihi =
-        TMS19Data.parseDate(
-            personel.iştenAyrılmaTarihi
-        );
-
-
-    personel.mevcutMaaş =
-        TMS19Data.parseNumber(
-            personel.mevcutMaaş
-        );
-
-
-    personel.cinsiyet =
-        personel.cinsiyet !== undefined
-            ? String(
-                personel.cinsiyet
-            ).trim()
-            : "";
-
-
-    personel.departman =
-        personel.departman !== undefined
-            ? String(
-                personel.departman
-            ).trim()
-            : "";
-
-
-    personel.pozisyon =
-        personel.pozisyon !== undefined
-            ? String(
-                personel.pozisyon
-            ).trim()
-            : "";
-
-
-    personel.medeniDurum =
-        personel.medeniDurum !== undefined
-            ? String(
-                personel.medeniDurum
-            ).trim()
-            : "";
-
-
-    personel.çalışanDurumu =
-        personel.çalışanDurumu !== undefined
-            ? String(
-                personel.çalışanDurumu
-            ).trim()
-            : "Aktif";
-
-
-    return personel;
-
-};
-
-
-/* ============================================================
-   12. VERİ SETİ NORMALİZASYONU
-============================================================ */
-
-TMS19Data.veriSetiNormalizeEt = function (
-    hamVeri
-) {
-
-    if (
-        !Array.isArray(
-            hamVeri
-        ) ||
-        hamVeri.length === 0
-    ) {
-
-        throw new Error(
-            "Veri seti boş veya geçersiz."
-        );
-
-    }
-
-
-    const kolonlar =
-        Object.keys(
-            hamVeri[0]
-        );
-
-
-    const eşleştirme =
-        TMS19Data.kolonlariEsle(
-            kolonlar
-        );
-
-
-    const eksikZorunluAlanlar =
-        TMS19Data.zorunluAlanlar
-            .filter(
-                alan =>
-                    !Object.values(
-                        eşleştirme.eslesme
-                    )
-                    .includes(
-                        alan
-                    )
-            );
-
-
-    const normalizeVeri =
-        hamVeri.map(
-            satır =>
-                TMS19Data.personelNormalizeEt(
-                    satır,
-                    eşleştirme.eslesme
-                )
-        );
-
-
-    return {
-
-        veri:
-            normalizeVeri,
-
-        eşleştirme:
-            eşleştirme.eslesme,
-
-        eslesmeyenKolonlar:
-            eşleştirme.eslesmeyenler,
-
-        eksikZorunluAlanlar
-
-    };
-
-};
-
-
-/* ============================================================
-   13. VERİ KALİTESİ — ANA MOTOR
-============================================================ */
-
-TMS19Data.veriKalitesiKontrol = function (
-    personelListesi,
-    varsayımlar
-) {
-
-    const hatalar = [];
-
-    const uyarılar = [];
-
-    const bilgiler = [];
-
-
-    const sicilMap =
-        new Map();
-
-
-    const bugün =
-        TMS19Data.parseDate(
-            varsayımlar &&
-            varsayımlar.değerlemeTarihi
-        )
-        ||
-        new Date();
-
-
-    personelListesi.forEach(
-        (personel, index) => {
-
-            const satır =
-                index + 2;
-
-
-            /* ---------------------------------------------
-               Sicil kontrolü
-            --------------------------------------------- */
+        if (
+            typeof value === "number"
+        ) {
 
             if (
-                !personel.sicilNo
+                value > 20000 &&
+                value < 60000
             ) {
 
-                hatalar.push({
-
-                    satır,
-
-                    alan:
-                        "Sicil No",
-
-                    mesaj:
-                        "Sicil numarası boş."
-
-                });
-
-            } else {
-
-                if (
-                    sicilMap.has(
-                        personel.sicilNo
-                    )
-                ) {
-
-                    hatalar.push({
-
-                        satır,
-
-                        alan:
-                            "Sicil No",
-
-                        mesaj:
-                            "Tekrarlanan sicil numarası: "
-                            +
-                            personel.sicilNo
-
-                    });
-
-                }
-
-
-                sicilMap.set(
-                    personel.sicilNo,
-                    true
-                );
-
-            }
-
-
-            /* ---------------------------------------------
-               Ad soyad
-            --------------------------------------------- */
-
-            if (
-                !personel.adSoyad
-            ) {
-
-                uyarılar.push({
-
-                    satır,
-
-                    alan:
-                        "Ad Soyad",
-
-                    mesaj:
-                        "Personel adı boş."
-
-                });
-
-            }
-
-
-            /* ---------------------------------------------
-               Doğum tarihi
-            --------------------------------------------- */
-
-            if (
-                !personel.doğumTarihi
-            ) {
-
-                hatalar.push({
-
-                    satır,
-
-                    alan:
-                        "Doğum Tarihi",
-
-                    mesaj:
-                        "Doğum tarihi bulunamadı."
-
-                });
-
-            } else {
-
-                if (
-                    personel.doğumTarihi
-                    >
-                    bugün
-                ) {
-
-                    hatalar.push({
-
-                        satır,
-
-                        alan:
-                            "Doğum Tarihi",
-
-                        mesaj:
-                            "Doğum tarihi değerleme tarihinden sonra."
-
-                    });
-
-                }
-
-            }
-
-
-            /* ---------------------------------------------
-               İşe giriş
-            --------------------------------------------- */
-
-            if (
-                !personel.işeGirişTarihi
-            ) {
-
-                hatalar.push({
-
-                    satır,
-
-                    alan:
-                        "İşe Giriş Tarihi",
-
-                    mesaj:
-                        "İşe giriş tarihi bulunamadı."
-
-                });
-
-            } else {
-
-                if (
-                    personel.işeGirişTarihi
-                    >
-                    bugün
-                ) {
-
-                    hatalar.push({
-
-                        satır,
-
-                        alan:
-                            "İşe Giriş Tarihi",
-
-                        mesaj:
-                            "İşe giriş tarihi gelecek tarihli."
-
-                    });
-
-                }
-
-
-                if (
-                    personel.doğumTarihi &&
-                    personel.işeGirişTarihi
-                    <
-                    personel.doğumTarihi
-                ) {
-
-                    hatalar.push({
-
-                        satır,
-
-                        alan:
-                            "İşe Giriş Tarihi",
-
-                        mesaj:
-                            "İşe giriş tarihi doğum tarihinden önce."
-
-                    });
-
-                }
-
-            }
-
-
-            /* ---------------------------------------------
-               Maaş
-            --------------------------------------------- */
-
-            if (
-                personel.mevcutMaaş === null ||
-                personel.mevcutMaaş === undefined
-            ) {
-
-                hatalar.push({
-
-                    satır,
-
-                    alan:
-                        "Brüt Maaş",
-
-                    mesaj:
-                        "Brüt maaş bilgisi bulunamadı."
-
-                });
-
-            } else if (
-                personel.mevcutMaaş <= 0
-            ) {
-
-                hatalar.push({
-
-                    satır,
-
-                    alan:
-                        "Brüt Maaş",
-
-                    mesaj:
-                        "Brüt maaş sıfır veya negatif."
-
-                });
-
-            } else if (
-                personel.mevcutMaaş < 1000
-            ) {
-
-                uyarılar.push({
-
-                    satır,
-
-                    alan:
-                        "Brüt Maaş",
-
-                    mesaj:
-                        "Brüt maaş olağandışı düşük görünüyor."
-
-                });
-
-            }
-
-
-            /* ---------------------------------------------
-               Yaş
-            --------------------------------------------- */
-
-            const yaş =
-                TMS19Data.yasHesapla(
-                    personel.doğumTarihi,
-                    bugün
-                );
-
-
-            if (
-                yaş !== null
-            ) {
-
-                if (
-                    yaş < 15
-                ) {
-
-                    hatalar.push({
-
-                        satır,
-
-                        alan:
-                            "Yaş",
-
-                        mesaj:
-                            "Personel yaşı 15'in altında."
-
-                    });
-
-                }
-
-
-                if (
-                    yaş > 75
-                ) {
-
-                    uyarılar.push({
-
-                        satır,
-
-                        alan:
-                            "Yaş",
-
-                        mesaj:
-                            "Personel yaşı 75'in üzerinde."
-
-                    });
-
-                }
-
-
-                if (
-                    varsayımlar &&
-                    varsayımlar.emeklilikYaşı &&
-                    yaş >
-                    Number(
-                        varsayımlar.emeklilikYaşı
-                    )
-                ) {
-
-                    uyarılar.push({
-
-                        satır,
-
-                        alan:
-                            "Yaş",
-
-                        mesaj:
-                            "Personel emeklilik yaşını aşmış."
-
-                    });
-
-                }
-
-            }
-
-
-            /* ---------------------------------------------
-               Hizmet süresi
-            --------------------------------------------- */
-
-            const hizmet =
-                TMS19Data.hizmetSuresiHesapla(
-                    personel.işeGirişTarihi,
-                    bugün
-                );
-
-
-            if (
-                hizmet !== null &&
-                hizmet > 50
-            ) {
-
-                uyarılar.push({
-
-                    satır,
-
-                    alan:
-                        "Hizmet Süresi",
-
-                    mesaj:
-                        "Hizmet süresi 50 yılın üzerinde."
-
-                });
-
-            }
-
-
-            /* ---------------------------------------------
-               Cinsiyet
-            --------------------------------------------- */
-
-            if (
-                personel.cinsiyet
-            ) {
-
-                const c =
-                    TMS19Data.normalizeText(
-                        personel.cinsiyet
+                const excelEpoch =
+                    new Date(
+                        Date.UTC(
+                            1899,
+                            11,
+                            30
+                        )
                     );
 
 
-                const geçerli = [
+                const result =
+                    new Date(
+                        excelEpoch.getTime() +
+                        value *
+                        86400000
+                    );
 
-                    "e",
-                    "k",
-                    "erkek",
-                    "kadin",
-                    "kadın",
-                    "male",
-                    "female",
-                    "m",
-                    "f"
 
-                ];
+                return result;
+            }
+        }
+
+
+        const text =
+            String(value)
+                .trim();
+
+
+        /*
+         * DD.MM.YYYY
+         */
+
+        let match =
+            text.match(
+                /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
+            );
+
+
+        if (
+            match
+        ) {
+
+            const day =
+                Number(
+                    match[1]
+                );
+
+
+            const month =
+                Number(
+                    match[2]
+                );
+
+
+            const year =
+                Number(
+                    match[3]
+                );
+
+
+            const result =
+                new Date(
+                    year,
+                    month - 1,
+                    day
+                );
+
+
+            if (
+                result.getFullYear() === year &&
+                result.getMonth() === month - 1 &&
+                result.getDate() === day
+            ) {
+
+                return result;
+            }
+
+
+            return null;
+        }
+
+
+        /*
+         * YYYY-MM-DD
+         */
+
+        match =
+            text.match(
+                /^(\d{4})-(\d{1,2})-(\d{1,2})$/
+            );
+
+
+        if (
+            match
+        ) {
+
+            const year =
+                Number(
+                    match[1]
+                );
+
+
+            const month =
+                Number(
+                    match[2]
+                );
+
+
+            const day =
+                Number(
+                    match[3]
+                );
+
+
+            const result =
+                new Date(
+                    year,
+                    month - 1,
+                    day
+                );
+
+
+            return (
+                result.getFullYear() === year &&
+                result.getMonth() === month - 1 &&
+                result.getDate() === day
+            )
+                ? result
+                : null;
+        }
+
+
+        /*
+         * Native parser
+         */
+
+        const result =
+            new Date(
+                text
+            );
+
+
+        return Number.isNaN(
+            result.getTime()
+        )
+            ? null
+            : result;
+    }
+
+
+    /* ============================================================
+       06 — TARİH FORMAT
+    ============================================================ */
+
+    function tarihFormatla(
+        value
+    ) {
+
+        const date =
+            tarih(
+                value
+            );
+
+
+        if (
+            !date
+        ) {
+
+            return "";
+        }
+
+
+        const day =
+            String(
+                date.getDate()
+            ).padStart(
+                2,
+                "0"
+            );
+
+
+        const month =
+            String(
+                date.getMonth() + 1
+            ).padStart(
+                2,
+                "0"
+            );
+
+
+        const year =
+            date.getFullYear();
+
+
+        return (
+            day +
+            "." +
+            month +
+            "." +
+            year
+        );
+    }
+
+
+    /* ============================================================
+       07 — ALIAS HARİTASI
+    ============================================================ */
+
+    function kolonlariTespitEt(
+        headers
+    ) {
+
+        const mapping = {};
+
+
+        const normalizedHeaders =
+            headers.map(
+                header => ({
+
+                    original:
+                        header,
+
+                    normalized:
+                        normalizeKey(
+                            header
+                        )
+                })
+            );
+
+
+        Object.entries(
+            FIELD_ALIASES
+        ).forEach(
+            (
+                [
+                    field,
+                    aliases
+                ]
+            ) => {
+
+                const normalizedAliases =
+                    aliases.map(
+                        normalizeKey
+                    );
+
+
+                const found =
+                    normalizedHeaders.find(
+                        header =>
+                            normalizedAliases.includes(
+                                header.normalized
+                            )
+                    );
+
+
+                mapping[field] =
+                    found
+                        ? found.original
+                        : null;
+            }
+        );
+
+
+        return mapping;
+    }
+
+
+    /* ============================================================
+       08 — STANDARD PERSONEL OBJECT
+    ============================================================ */
+
+    function personelNormalizeEt(
+        row,
+        mapping = null
+    ) {
+
+        const map =
+            mapping ||
+            kolonlariTespitEt(
+                Object.keys(
+                    row || {}
+                )
+            );
+
+
+        const get =
+            field => {
+
+                const key =
+                    map[field];
+
+
+                return key
+                    ? row[key]
+                    : undefined;
+            };
+
+
+        return {
+
+            personelId:
+                normalizeText(
+                    get(
+                        "personelId"
+                    )
+                ),
+
+
+            adSoyad:
+                normalizeText(
+                    get(
+                        "adSoyad"
+                    )
+                ),
+
+
+            departman:
+                normalizeText(
+                    get(
+                        "departman"
+                    )
+                ),
+
+
+            pozisyon:
+                normalizeText(
+                    get(
+                        "pozisyon"
+                    )
+                ),
+
+
+            dogumTarihi:
+                tarih(
+                    get(
+                        "dogumTarihi"
+                    )
+                ),
+
+
+            iseGirisTarihi:
+                tarih(
+                    get(
+                        "iseGirisTarihi"
+                    )
+                ),
+
+
+            mevcutMaas:
+                sayi(
+                    get(
+                        "mevcutMaas"
+                    )
+                ),
+
+
+            cinsiyet:
+                normalizeText(
+                    get(
+                        "cinsiyet"
+                    )
+                ),
+
+
+            kalanIzin:
+                sayi(
+                    get(
+                        "kalanIzin"
+                    )
+                )
+        };
+    }
+
+
+    /* ============================================================
+       09 — REQUIRED FIELD CHECK
+    ============================================================ */
+
+    function zorunluKolonKontrol(
+        mapping
+    ) {
+
+        const required = [
+
+            "personelId",
+
+            "dogumTarihi",
+
+            "iseGirisTarihi",
+
+            "mevcutMaas"
+        ];
+
+
+        const missing =
+            required.filter(
+                field =>
+                    !mapping[field]
+            );
+
+
+        return {
+
+            valid:
+                missing.length === 0,
+
+            missing:
+                missing
+        };
+    }
+
+
+    /* ============================================================
+       10 — PERSONEL VALIDATION
+    ============================================================ */
+
+    function personelValidate(
+        personel
+    ) {
+
+        const errors = [];
+
+
+        if (
+            !personel.personelId
+        ) {
+
+            errors.push(
+                "Personel ID eksik."
+            );
+        }
+
+
+        if (
+            !personel.dogumTarihi
+        ) {
+
+            errors.push(
+                "Doğum tarihi eksik veya geçersiz."
+            );
+        }
+
+
+        if (
+            !personel.iseGirisTarihi
+        ) {
+
+            errors.push(
+                "İşe giriş tarihi eksik veya geçersiz."
+            );
+        }
+
+
+        if (
+            personel.mevcutMaas < 0
+        ) {
+
+            errors.push(
+                "Mevcut maaş negatif olamaz."
+            );
+        }
+
+
+        if (
+            personel.dogumTarihi &&
+            personel.iseGirisTarihi &&
+            personel.iseGirisTarihi <
+            personel.dogumTarihi
+        ) {
+
+            errors.push(
+                "İşe giriş tarihi doğum tarihinden önce."
+            );
+        }
+
+
+        return {
+
+            valid:
+                errors.length === 0,
+
+            errors:
+                errors
+        };
+    }
+
+
+    /* ============================================================
+       11 — DUPLICATE KONTROL
+    ============================================================ */
+
+    function duplicateKontrol(
+        personeller
+    ) {
+
+        const seen =
+            new Map();
+
+
+        const duplicates = [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                const id =
+                    normalizeText(
+                        personel.personelId
+                    );
 
 
                 if (
-                    !geçerli.includes(
-                        c
+                    !id
+                ) {
+
+                    return;
+                }
+
+
+                if (
+                    seen.has(
+                        id
                     )
                 ) {
 
-                    uyarılar.push({
+                    duplicates.push({
 
-                        satır,
+                        personelId:
+                            id,
 
-                        alan:
-                            "Cinsiyet",
+                        ilkSatir:
+                            seen.get(
+                                id
+                            ),
 
-                        mesaj:
-                            "Cinsiyet değeri standart formatta değil."
-
+                        tekrarSatiri:
+                            index
                     });
 
                 }
 
+                else {
+
+                    seen.set(
+                        id,
+                        index
+                    );
+                }
             }
-
-        }
-    );
-
-
-    /* ========================================================
-       GENEL KONTROLLER
-    ======================================================== */
-
-
-    if (
-        personelListesi.length === 0
-    ) {
-
-        hatalar.push({
-
-            satır:
-                0,
-
-            alan:
-                "Veri Seti",
-
-            mesaj:
-                "Personel veri seti boş."
-
-        });
-
-    }
-
-
-    if (
-        personelListesi.length > 0
-    ) {
-
-        bilgiler.push({
-
-            mesaj:
-                personelListesi.length
-                +
-                " personel kaydı kontrol edildi."
-
-        });
-
-    }
-
-
-    const toplamKontrol =
-        personelListesi.length *
-        8;
-
-
-    const toplamProblem =
-        hatalar.length +
-        uyarılar.length;
-
-
-    let kaliteSkoru =
-        100;
-
-
-    if (
-        toplamKontrol > 0
-    ) {
-
-        kaliteSkoru =
-            100
-            -
-            (
-                hatalar.length * 5
-            )
-            -
-            (
-                uyarılar.length * 1.5
-            );
-
-    }
-
-
-    kaliteSkoru =
-        Math.max(
-            0,
-            Math.min(
-                100,
-                kaliteSkoru
-            )
         );
-
-
-    let seviye =
-        "Mükemmel";
-
-
-    if (
-        kaliteSkoru < 95
-    ) {
-
-        seviye =
-            "İyi";
-
-    }
-
-
-    if (
-        kaliteSkoru < 85
-    ) {
-
-        seviye =
-            "İyileştirme Gerekli";
-
-    }
-
-
-    if (
-        kaliteSkoru < 70
-    ) {
-
-        seviye =
-            "Kritik";
-
-    }
-
-
-    return {
-
-        kaliteSkoru:
-            Math.round(
-                kaliteSkoru
-            ),
-
-        seviye,
-
-        hatalar,
-
-        uyarılar,
-
-        bilgiler,
-
-        toplamHata:
-            hatalar.length,
-
-        toplamUyarı:
-            uyarılar.length
-
-    };
-
-};
-
-
-/* ============================================================
-   14. AKTÜERYAL ÖN KONTROL
-============================================================ */
-
-TMS19Data.aktüeryalÖnKontrol = function (
-    personelListesi,
-    varsayımlar
-) {
-
-    const sonuçlar = [];
-
-
-    const iskonto =
-        Number(
-            varsayımlar &&
-            varsayımlar.iskontoOranı
-        );
-
-
-    const maaşArtışı =
-        Number(
-            varsayımlar &&
-            varsayımlar.maaşArtışOranı
-        );
-
-
-    const turnover =
-        Number(
-            varsayımlar &&
-            varsayımlar.personelDevirOranı
-        );
-
-
-    if (
-        !isFinite(
-            iskonto
-        ) ||
-        iskonto <= 0
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Kritik",
-
-            alan:
-                "İskonto Oranı",
-
-            mesaj:
-                "İskonto oranı sıfır veya geçersiz."
-
-        });
-
-    }
-
-
-    if (
-        iskonto > 1
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Uyarı",
-
-            alan:
-                "İskonto Oranı",
-
-            mesaj:
-                "İskonto oranı %100'ün üzerinde."
-
-        });
-
-    }
-
-
-    if (
-        maaşArtışı < 0
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Uyarı",
-
-            alan:
-                "Maaş Artış Oranı",
-
-            mesaj:
-                "Maaş artış oranı negatif."
-
-        });
-
-    }
-
-
-    if (
-        maaşArtışı > 1
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Uyarı",
-
-            alan:
-                "Maaş Artış Oranı",
-
-            mesaj:
-                "Maaş artış oranı %100'ün üzerinde."
-
-        });
-
-    }
-
-
-    if (
-        turnover < 0 ||
-        turnover > 1
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Kritik",
-
-            alan:
-                "Personel Devir Oranı",
-
-            mesaj:
-                "Personel devir oranı %0-%100 aralığında olmalıdır."
-
-        });
-
-    }
-
-
-    if (
-        !varsayımlar.emeklilikYaşı ||
-        Number(
-            varsayımlar.emeklilikYaşı
-        ) < 40 ||
-        Number(
-            varsayımlar.emeklilikYaşı
-        ) > 80
-    ) {
-
-        sonuçlar.push({
-
-            seviye:
-                "Uyarı",
-
-            alan:
-                "Emeklilik Yaşı",
-
-            mesaj:
-                "Emeklilik yaşı olağandışı görünüyor."
-
-        });
-
-    }
-
-
-    return sonuçlar;
-
-};
-
-
-/* ============================================================
-   15. VERİ SETİ ÖZETİ
-============================================================ */
-
-TMS19Data.veriÖzeti = function (
-    personelListesi,
-    değerlemeTarihi
-) {
-
-    const maaşlar =
-        personelListesi
-            .map(
-                p =>
-                    Number(
-                        p.mevcutMaaş
-                    )
-            )
-            .filter(
-                x =>
-                    isFinite(x)
-                    &&
-                    x > 0
-            );
-
-
-    const yaşlar =
-        personelListesi
-            .map(
-                p =>
-                    TMS19Data.yasHesapla(
-                        p.doğumTarihi,
-                        değerlemeTarihi
-                    )
-            )
-            .filter(
-                x =>
-                    x !== null
-            );
-
-
-    const hizmetler =
-        personelListesi
-            .map(
-                p =>
-                    TMS19Data.hizmetSuresiHesapla(
-                        p.işeGirişTarihi,
-                        değerlemeTarihi
-                    )
-            )
-            .filter(
-                x =>
-                    x !== null
-            );
-
-
-    const ortalama = (
-        dizi
-    ) => {
-
-        if (
-            !dizi.length
-        ) {
-
-            return 0;
-
-        }
-
-
-        return dizi.reduce(
-            (
-                toplam,
-                değer
-            ) =>
-                toplam + değer,
-            0
-        ) / dizi.length;
-
-    };
-
-
-    return {
-
-        personelSayısı:
-            personelListesi.length,
-
-        toplamMaaş:
-            maaşlar.reduce(
-                (
-                    a,
-                    b
-                ) =>
-                    a + b,
-                0
-            ),
-
-        ortalamaMaaş:
-            ortalama(
-                maaşlar
-            ),
-
-        minimumMaaş:
-            maaşlar.length
-                ? Math.min(
-                    ...maaşlar
-                )
-                : 0,
-
-        maksimumMaaş:
-            maaşlar.length
-                ? Math.max(
-                    ...maaşlar
-                )
-                : 0,
-
-        ortalamaYaş:
-            ortalama(
-                yaşlar
-            ),
-
-        ortalamaHizmet:
-            ortalama(
-                hizmetler
-            )
-
-    };
-
-};
-
-
-/* ============================================================
-   16. ANA VERİ YÜKLEME PIPELINE
-============================================================ */
-
-TMS19Data.veriYükle = function (
-    hamVeri,
-    varsayımlar
-) {
-
-    try {
-
-        const normalizeSonuç =
-            TMS19Data.veriSetiNormalizeEt(
-                hamVeri
-            );
-
-
-        const kalite =
-            TMS19Data.veriKalitesiKontrol(
-                normalizeSonuç.veri,
-                varsayımlar
-            );
-
-
-        const aktüeryalKontrol =
-            TMS19Data.aktüeryalÖnKontrol(
-                normalizeSonuç.veri,
-                varsayımlar
-            );
-
-
-        const özet =
-            TMS19Data.veriÖzeti(
-                normalizeSonuç.veri,
-                varsayımlar.değerlemeTarihi
-            );
 
 
         return {
 
-            başarılı:
-                normalizeSonuç
-                    .eksikZorunluAlanlar
-                    .length === 0,
+            valid:
+                duplicates.length === 0,
 
-            veri:
-                normalizeSonuç.veri,
-
-            kolonEşleşmesi:
-                normalizeSonuç.eslesme,
-
-            eslesmeyenKolonlar:
-                normalizeSonuç
-                    .eslesmeyenKolonlar,
-
-            eksikZorunluAlanlar:
-                normalizeSonuç
-                    .eksikZorunluAlanlar,
-
-            veriKalitesi:
-                kalite,
-
-            aktüeryalKontrol,
-
-            özet
-
+            duplicates:
+                duplicates
         };
+    }
 
-    } catch (
-        hata
+
+    /* ============================================================
+       12 — VERİ KALİTESİ ANALİZİ
+    ============================================================ */
+
+    function veriKalitesi(
+        personeller
     ) {
 
-        return {
+        const toplam =
+            personeller.length;
 
-            başarılı:
-                false,
 
-            hata:
-                hata.message,
+        let eksikPersonelId =
+            0;
 
-            veri:
-                [],
 
-            veriKalitesi:
-                {
+        let eksikDogumTarihi =
+            0;
 
-                    kaliteSkoru:
-                        0,
 
-                    seviye:
-                        "Kritik",
+        let eksikIseGirisTarihi =
+            0;
 
-                    hatalar:
-                        [
 
-                            {
+        let gecersizMaas =
+            0;
 
-                                alan:
-                                    "Sistem",
 
-                                mesaj:
-                                    hata.message
+        let eksikDepartman =
+            0;
 
-                            }
 
-                        ],
+        let eksikPozisyon =
+            0;
 
-                    uyarılar:
-                        [],
 
-                    toplamHata:
-                        1,
+        personeller.forEach(
+            personel => {
 
-                    toplamUyarı:
-                        0
+                if (
+                    !personel.personelId
+                ) {
 
+                    eksikPersonelId++;
                 }
 
-        };
 
-    }
+                if (
+                    !personel.dogumTarihi
+                ) {
 
-};
+                    eksikDogumTarihi++;
+                }
 
 
-/* ============================================================
-   17. CSV PARSER
-============================================================ */
+                if (
+                    !personel.iseGirisTarihi
+                ) {
 
-TMS19Data.csvOku = function (
-    csvMetni
-) {
+                    eksikIseGirisTarihi++;
+                }
 
-    if (
-        !csvMetni ||
-        !csvMetni.trim()
-    ) {
 
-        throw new Error(
-            "CSV dosyası boş."
+                if (
+                    !Number.isFinite(
+                        personel.mevcutMaas
+                    ) ||
+                    personel.mevcutMaas < 0
+                ) {
+
+                    gecersizMaas++;
+                }
+
+
+                if (
+                    !personel.departman
+                ) {
+
+                    eksikDepartman++;
+                }
+
+
+                if (
+                    !personel.pozisyon
+                ) {
+
+                    eksikPozisyon++;
+                }
+            }
         );
 
+
+        const validCount =
+            personeller.filter(
+                personel =>
+                    personelValidate(
+                        personel
+                    ).valid
+            ).length;
+
+
+        const kaliteOrani =
+            toplam > 0
+                ? validCount /
+                  toplam
+                : 0;
+
+
+        return {
+
+            toplamKayit:
+                toplam,
+
+            gecersizKayit:
+                toplam -
+                validCount,
+
+            validKayit:
+                validCount,
+
+            kaliteOrani:
+                kaliteOrani,
+
+            kaliteYuzdesi:
+                kaliteOrani * 100,
+
+            eksikPersonelId:
+                eksikPersonelId,
+
+            eksikDogumTarihi:
+                eksikDogumTarihi,
+
+            eksikIseGirisTarihi:
+                eksikIseGirisTarihi,
+
+            gecersizMaas:
+                gecersizMaas,
+
+            eksikDepartman:
+                eksikDepartman,
+
+            eksikPozisyon:
+                eksikPozisyon
+        };
     }
 
 
-    const satırlar =
-        csvMetni
-            .replace(
-                /\r\n/g,
-                "\n"
+    /* ============================================================
+       13 — ARRAY IMPORT
+    ============================================================ */
+
+    function arrayImport(
+        rows,
+        options = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                rows
             )
-            .replace(
-                /\r/g,
-                "\n"
-            )
-            .split(
-                "\n"
-            )
-            .filter(
-                satır =>
-                    satır.trim()
+        ) {
+
+            throw new Error(
+                "Veri bir Array olmalıdır."
+            );
+        }
+
+
+        if (
+            rows.length === 0
+        ) {
+
+            return {
+
+                success:
+                    false,
+
+                personeller:
+                    [],
+
+                hatalar:
+                    [
+                        "İçe aktarılacak veri bulunamadı."
+                    ],
+
+                veriKalitesi:
+                    veriKalitesi(
+                        []
+                    )
+            };
+        }
+
+
+        const headers =
+            Object.keys(
+                rows[0]
             );
 
 
-    if (
-        satırlar.length < 2
-    ) {
+        const mapping =
+            kolonlariTespitEt(
+                headers
+            );
 
-        throw new Error(
-            "CSV dosyasında veri satırı bulunamadı."
+
+        const kolonKontrol =
+            zorunluKolonKontrol(
+                mapping
+            );
+
+
+        if (
+            !kolonKontrol.valid
+        ) {
+
+            return {
+
+                success:
+                    false,
+
+                personeller:
+                    [],
+
+                mapping:
+                    mapping,
+
+                hatalar: [
+                    "Zorunlu kolonlar bulunamadı: " +
+                    kolonKontrol.missing.join(
+                        ", "
+                    )
+                ],
+
+                veriKalitesi:
+                    null
+            };
+        }
+
+
+        const personeller = [];
+
+
+        const hatalar = [];
+
+
+        rows.forEach(
+            (
+                row,
+                index
+            ) => {
+
+                const personel =
+                    personelNormalizeEt(
+                        row,
+                        mapping
+                    );
+
+
+                const validation =
+                    personelValidate(
+                        personel
+                    );
+
+
+                if (
+                    validation.valid ||
+                    options.gecersizleriTut
+                ) {
+
+                    personeller.push(
+                        personel
+                    );
+                }
+
+
+                if (
+                    !validation.valid
+                ) {
+
+                    hatalar.push({
+
+                        satir:
+                            index + 2,
+
+                        personelId:
+                            personel.personelId,
+
+                        errors:
+                            validation.errors
+                    });
+                }
+            }
         );
 
+
+        const duplicate =
+            duplicateKontrol(
+                personeller
+            );
+
+
+        return {
+
+            success:
+                true,
+
+            personeller:
+                personeller,
+
+            mapping:
+                mapping,
+
+            hatalar:
+                hatalar,
+
+            duplicate:
+                duplicate,
+
+            veriKalitesi:
+                veriKalitesi(
+                    personeller
+                ),
+
+            metadata: {
+
+                rowCount:
+                    rows.length,
+
+                importedCount:
+                    personeller.length,
+
+                errorCount:
+                    hatalar.length,
+
+                importDate:
+                    new Date()
+            }
+        };
     }
 
 
-    const ayırıcı =
-        satırlar[0].includes(";")
-            ? ";"
-            : ",";
+    /* ============================================================
+       14 — JSON IMPORT
+    ============================================================ */
+
+    function jsonImport(
+        data,
+        options = {}
+    ) {
+
+        let rows =
+            data;
 
 
-    const parseSatır = (
-        satır
-    ) => {
+        if (
+            typeof data === "string"
+        ) {
 
-        const sonuç = [];
+            try {
 
-        let mevcut =
-            "";
+                rows =
+                    JSON.parse(
+                        data
+                    );
 
-        let tırnak =
+            }
+
+            catch (
+                error
+            ) {
+
+                throw new Error(
+                    "JSON verisi okunamadı."
+                );
+            }
+        }
+
+
+        /*
+         * Bazı JSON dosyaları:
+         *
+         * {
+         *   employees: [...]
+         * }
+         */
+
+        if (
+            !Array.isArray(
+                rows
+            )
+        ) {
+
+            if (
+                Array.isArray(
+                    rows?.employees
+                )
+            ) {
+
+                rows =
+                    rows.employees;
+            }
+
+            else if (
+                Array.isArray(
+                    rows?.personeller
+                )
+            ) {
+
+                rows =
+                    rows.personeller;
+            }
+
+            else {
+
+                throw new Error(
+                    "JSON içinde personel listesi bulunamadı."
+                );
+            }
+        }
+
+
+        return arrayImport(
+            rows,
+            options
+        );
+    }
+
+
+    /* ============================================================
+       15 — CSV PARSER
+       ============================================================ */
+
+    function csvParse(
+        csv
+    ) {
+
+        if (
+            typeof csv !== "string"
+        ) {
+
+            throw new Error(
+                "CSV verisi metin olmalıdır."
+            );
+        }
+
+
+        const rows = [];
+
+
+        let current = "";
+
+
+        let row = [];
+
+
+        let inQuotes =
             false;
 
 
         for (
             let i = 0;
-            i < satır.length;
+            i < csv.length;
             i++
         ) {
 
-            const karakter =
-                satır[i];
+            const char =
+                csv[i];
+
+
+            const next =
+                csv[i + 1];
 
 
             if (
-                karakter === '"'
+                char === '"'
             ) {
 
                 if (
-                    tırnak &&
-                    satır[i + 1] === '"'
+                    inQuotes &&
+                    next === '"'
                 ) {
 
-                    mevcut += '"';
+                    current +=
+                        '"';
 
                     i++;
 
-                } else {
-
-                    tırnak =
-                        !tırnak;
-
                 }
 
-            } else if (
-                karakter === ayırıcı &&
-                !tırnak
-            ) {
+                else {
 
-                sonuç.push(
-                    mevcut.trim()
-                );
+                    inQuotes =
+                        !inQuotes;
+                }
 
-                mevcut =
-                    "";
-
-            } else {
-
-                mevcut +=
-                    karakter;
-
+                continue;
             }
 
+
+            if (
+                char === "," &&
+                !inQuotes
+            ) {
+
+                row.push(
+                    current
+                );
+
+                current =
+                    "";
+
+                continue;
+            }
+
+
+            if (
+                (
+                    char === "\n" ||
+                    char === "\r"
+                ) &&
+                !inQuotes
+            ) {
+
+                if (
+                    char === "\r" &&
+                    next === "\n"
+                ) {
+
+                    i++;
+                }
+
+
+                row.push(
+                    current
+                );
+
+
+                current =
+                    "";
+
+
+                if (
+                    row.some(
+                        value =>
+                            value.trim() !== ""
+                    )
+                ) {
+
+                    rows.push(
+                        row
+                    );
+                }
+
+
+                row = [];
+
+
+                continue;
+            }
+
+
+            current +=
+                char;
         }
 
 
-        sonuç.push(
-            mevcut.trim()
-        );
+        if (
+            current !== "" ||
+            row.length > 0
+        ) {
+
+            row.push(
+                current
+            );
 
 
-        return sonuç;
+            if (
+                row.some(
+                    value =>
+                        value.trim() !== ""
+                )
+            ) {
 
-    };
+                rows.push(
+                    row
+                );
+            }
+        }
 
 
-    const başlıklar =
-        parseSatır(
-            satırlar[0]
-        );
+        if (
+            rows.length === 0
+        ) {
+
+            return [];
+        }
 
 
-    return satırlar
-        .slice(1)
-        .map(
-            satır => {
+        const headers =
+            rows[0].map(
+                header =>
+                    header
+                        .replace(
+                            /^\uFEFF/,
+                            ""
+                        )
+                        .trim()
+            );
 
-                const değerler =
-                    parseSatır(
-                        satır
+
+        return rows
+            .slice(1)
+            .map(
+                values => {
+
+                    const object = {};
+
+
+                    headers.forEach(
+                        (
+                            header,
+                            index
+                        ) => {
+
+                            object[header] =
+                                values[index]
+                                    ??
+                                "";
+                        }
                     );
 
 
-                const obje = {};
+                    return object;
+                }
+            );
+    }
 
 
-                başlıklar.forEach(
-                    (
-                        başlık,
-                        index
-                    ) => {
+    /* ============================================================
+       16 — CSV IMPORT
+    ============================================================ */
 
-                        obje[
-                            başlık
-                        ] =
-                            değerler[
-                                index
-                            ] !== undefined
-                                ? değerler[
-                                    index
-                                ]
-                                : "";
+    function csvImport(
+        csv,
+        options = {}
+    ) {
 
-                    }
+        const rows =
+            csvParse(
+                csv
+            );
+
+
+        return arrayImport(
+            rows,
+            options
+        );
+    }
+
+
+    /* ============================================================
+       17 — VERİ EXPORT
+    ============================================================ */
+
+    function jsonExport(
+        personeller
+    ) {
+
+        return JSON.stringify(
+            personeller,
+            (
+                key,
+                value
+            ) => {
+
+                if (
+                    value instanceof Date
+                ) {
+
+                    return value.toISOString();
+                }
+
+
+                return value;
+            },
+            2
+        );
+    }
+
+
+    /* ============================================================
+       18 — CSV EXPORT
+    ============================================================ */
+
+    function csvExport(
+        personeller
+    ) {
+
+        const headers = [
+
+            "personelId",
+
+            "adSoyad",
+
+            "departman",
+
+            "pozisyon",
+
+            "dogumTarihi",
+
+            "iseGirisTarihi",
+
+            "mevcutMaas",
+
+            "cinsiyet",
+
+            "kalanIzin"
+        ];
+
+
+        const escape =
+            value => {
+
+                if (
+                    value === null ||
+                    value === undefined
+                ) {
+
+                    return "";
+                }
+
+
+                let text =
+                    value;
+
+
+                if (
+                    value instanceof Date
+                ) {
+
+                    text =
+                        tarihFormatla(
+                            value
+                        );
+                }
+
+
+                text =
+                    String(
+                        text
+                    );
+
+
+                if (
+                    text.includes(",") ||
+                    text.includes('"') ||
+                    text.includes("\n")
+                ) {
+
+                    return '"' +
+                        text.replace(
+                            /"/g,
+                            '""'
+                        ) +
+                        '"';
+                }
+
+
+                return text;
+            };
+
+
+        const lines = [];
+
+
+        lines.push(
+            headers.join(
+                ","
+            )
+        );
+
+
+        personeller.forEach(
+            personel => {
+
+                lines.push(
+                    headers
+                        .map(
+                            header =>
+                                escape(
+                                    personel[
+                                        header
+                                    ]
+                                )
+                        )
+                        .join(
+                            ","
+                        )
                 );
-
-
-                return obje;
-
             }
         );
 
-};
+
+        return lines.join(
+            "\n"
+        );
+    }
 
 
-/* ============================================================
-   18. GLOBAL KISA YOLLAR
-============================================================ */
+    /* ============================================================
+       19 — DEMO DATA
+    ============================================================ */
 
-window.tms19VeriYükle =
-    TMS19Data.veriYükle;
+    function demoVeriOlustur(
+        adet = 10
+    ) {
 
-window.tms19VeriKontrol =
-    TMS19Data.veriKalitesiKontrol;
-
-window.tms19CSVOku =
-    TMS19Data.csvOku;
+        const liste = [];
 
 
-/* ============================================================
-   19. CONSOLE MESAJI
-============================================================ */
+        const bugun =
+            new Date();
 
-console.log(
-    "GK Advisory — TMS 19 Data Engine V1 aktif."
-);
 
-console.log(
-    "Desteklenen işlemler:",
-    [
-        "TMS19Data.veriYükle()",
-        "TMS19Data.veriKalitesiKontrol()",
-        "TMS19Data.csvOku()",
-        "TMS19Data.kolonlariEsle()"
-    ]
-);
+        for (
+            let i = 1;
+            i <= adet;
+            i++
+        ) {
+
+            const yas =
+                25 +
+                (
+                    i % 30
+                );
+
+
+            const dogum =
+                new Date(
+                    bugun.getFullYear() -
+                    yas,
+                    bugun.getMonth(),
+                    bugun.getDate()
+                );
+
+
+            const hizmet =
+                1 +
+                (
+                    i % 15
+                );
+
+
+            const iseGiris =
+                new Date(
+                    bugun.getTime() -
+                    hizmet *
+                    365.25 *
+                    24 *
+                    60 *
+                    60 *
+                    1000
+                );
+
+
+            liste.push({
+
+                personelId:
+                    "DEMO-" +
+                    String(i)
+                        .padStart(
+                            4,
+                            "0"
+                        ),
+
+                adSoyad:
+                    "Demo Çalışan " +
+                    i,
+
+                departman:
+                    [
+                        "Finans",
+                        "İnsan Kaynakları",
+                        "Operasyon",
+                        "Satış",
+                        "IT"
+                    ][
+                        i % 5
+                    ],
+
+                pozisyon:
+                    "Uzman",
+
+
+                dogumTarihi:
+                    dogum,
+
+
+                iseGirisTarihi:
+                    iseGiris,
+
+
+                mevcutMaas:
+                    35000 +
+                    i * 2500,
+
+
+                cinsiyet:
+                    i % 2 === 0
+                        ? "Kadın"
+                        : "Erkek",
+
+
+                kalanIzin:
+                    10 +
+                    (
+                        i % 15
+                    )
+            });
+        }
+
+
+        return liste;
+    }
+
+
+    /* ============================================================
+       20 — AKTÜERYAL MOTOR İLE ENTEGRASYON
+       ============================================================ */
+
+    function aktuerHesaplamayaHazirla(
+        personeller
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            return [];
+        }
+
+
+        return personeller.map(
+            personel => ({
+
+                ...personel,
+
+                dogumTarihi:
+                    personel.dogumTarihi
+                        instanceof Date
+                        ? personel.dogumTarihi
+                        : tarih(
+                            personel.dogumTarihi
+                        ),
+
+
+                iseGirisTarihi:
+                    personel.iseGirisTarihi
+                        instanceof Date
+                        ? personel.iseGirisTarihi
+                        : tarih(
+                            personel.iseGirisTarihi
+                        ),
+
+
+                mevcutMaas:
+                    sayi(
+                        personel.mevcutMaas
+                    )
+            })
+        );
+    }
+
+
+    /* ============================================================
+       21 — HEALTH CHECK
+       ============================================================ */
+
+    function healthCheck() {
+
+        return {
+
+            status:
+                "OK",
+
+            engine:
+                DataEngine.engineName,
+
+            version:
+                DataEngine.version,
+
+            standard:
+                DataEngine.standard,
+
+            timestamp:
+                new Date().toISOString()
+        };
+    }
+
+
+    /* ============================================================
+       22 — PUBLIC API
+       ============================================================ */
+
+    DataEngine.sayi =
+        sayi;
+
+
+    DataEngine.tarih =
+        tarih;
+
+
+    DataEngine.tarihFormatla =
+        tarihFormatla;
+
+
+    DataEngine.normalizeKey =
+        normalizeKey;
+
+
+    DataEngine.normalizeText =
+        normalizeText;
+
+
+    DataEngine.kolonlariTespitEt =
+        kolonlariTespitEt;
+
+
+    DataEngine.personelNormalizeEt =
+        personelNormalizeEt;
+
+
+    DataEngine.personelValidate =
+        personelValidate;
+
+
+    DataEngine.zorunluKolonKontrol =
+        zorunluKolonKontrol;
+
+
+    DataEngine.duplicateKontrol =
+        duplicateKontrol;
+
+
+    DataEngine.veriKalitesi =
+        veriKalitesi;
+
+
+    DataEngine.arrayImport =
+        arrayImport;
+
+
+    DataEngine.jsonImport =
+        jsonImport;
+
+
+    DataEngine.csvParse =
+        csvParse;
+
+
+    DataEngine.csvImport =
+        csvImport;
+
+
+    DataEngine.jsonExport =
+        jsonExport;
+
+
+    DataEngine.csvExport =
+        csvExport;
+
+
+    DataEngine.demoVeriOlustur =
+        demoVeriOlustur;
+
+
+    DataEngine.aktuerHesaplamayaHazirla =
+        aktuerHesaplamayaHazirla;
+
+
+    DataEngine.healthCheck =
+        healthCheck;
+
+
+    DataEngine.FIELD_ALIASES =
+        FIELD_ALIASES;
+
+
+    /* ============================================================
+       23 — GLOBAL EXPORT
+       ============================================================ */
+
+    global.TMS19DataEngine =
+        DataEngine;
+
+
+    if (
+        !global.TMS19
+    ) {
+
+        global.TMS19 = {};
+    }
+
+
+    global.TMS19.DataEngine =
+        DataEngine;
+
+
+})(typeof window !== "undefined"
+    ? window
+    : globalThis);
