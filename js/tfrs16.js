@@ -13878,7 +13878,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = mapping.normalizedData;
     const errors = [];
     const warnings = mapping.warnings.slice();
-    const required = ["id", "company", "supplier", "startDate", "endDate"];
+    const required = ["id", "company", "supplier", "startDate", "endDate", "currency"];
     required.forEach(field => {
       if (data[field] === null || data[field] === undefined || data[field] === "") errors.push({ rowNumber, field, value: data[field] ?? null, errorCode: "REQUIRED_FIELD", message: `${field} is required.` });
     });
@@ -13960,6 +13960,7 @@ document.addEventListener("DOMContentLoaded", () => {
       endDate: data.endDate,
       discountRate: data.discountRate,
       renewalDate: data.renewalDate,
+      currency: data.currency || "TRY",
       status: data.status || "active",
       assetClass: data.assetClass || "",
       prepayments: data.prepayments ?? 0,
@@ -13986,6 +13987,7 @@ document.addEventListener("DOMContentLoaded", () => {
     base.endDate = data.endDate;
     base.discountRate = data.discountRate;
     base.renewalDate = data.renewalDate;
+    if (data.currency) base.currency = data.currency;
     if (data.status) base.status = data.status;
     if (data.assetClass) {
       base.assetClass = data.assetClass;
@@ -14025,7 +14027,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function detectIntegrationChanges(oldContract, newData) {
     if (!oldContract) return [];
-    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
+    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "currency", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
     return fields.filter(field => newData[field] !== undefined && String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
@@ -18346,6 +18348,156 @@ document.addEventListener("DOMContentLoaded", () => {
     return convertCurrency(amount,fromCurrency,toCurrency,fx.rate,{...options,audit:options.audit,rateDate:date,rateType,entityId:options.entityId});
   }
 
+  /* ============================================================
+     TCMB (T.C. Merkez Bankası) DÖVİZ KURU ENTEGRASYONU
+     ------------------------------------------------------------
+     TCMB günlük kur XML servisini çeker, V23 FX rate tablosuna
+     source: CENTRAL_BANK olarak yazar. TCMB endpoint'i CORS
+     header'ı DÖNMEZ, yani doğrudan tarayıcıdan (GitHub Pages /
+     statik client) çağrıldığında büyük ihtimalle engellenir.
+     Bu yüzden fetch, önce TCMB_CONFIG.proxyBaseUrl (kendi
+     backend'inizde tanımlayacağınız bir proxy endpoint) varsa onu
+     kullanır; yoksa doğrudan TCMB'ye dener (localde / CORS'a izin
+     veren bir ortamda çalışabilir), o da başarısız olursa hatayı
+     açıkça döner — sessizce yanlış bir kur üretmez.
+     ============================================================ */
+  const TCMB_CONFIG = Object.freeze({
+    directBaseUrl: "https://www.tcmb.gov.tr/kurlar",
+    // Kendi backend'inizde /api/fx/tcmb?date=YYYY-MM-DD gibi bir
+    // proxy route yazıp burada set edin (server-to-server çağrı
+    // CORS'tan etkilenmez). Boş bırakılırsa doğrudan TCMB denenir.
+    proxyBaseUrl: null,
+    // TMS 21 / muhasebe pratiğinde kayıtlarda genelde TCMB
+    // "döviz alış" kuru kullanılır; ihtiyaca göre ForexSelling'e
+    // çevrilebilir.
+    rateField: "ForexBuying",
+    maxLookbackDays: 10
+  });
+
+  function tcmbDateToPath(dateKey) {
+    const d = v23Date(dateKey);
+    if (!d) return null;
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const yyyy = d.getUTCFullYear();
+    return { folder: `${yyyy}${mm}`, file: `${dd}${mm}${yyyy}.xml` };
+  }
+
+  function tcmbBuildUrl(dateKey) {
+    const path = tcmbDateToPath(dateKey);
+    if (!path) return null;
+    if (TCMB_CONFIG.proxyBaseUrl) {
+      return `${TCMB_CONFIG.proxyBaseUrl}?date=${dateKey}`;
+    }
+    return `${TCMB_CONFIG.directBaseUrl}/${path.folder}/${path.file}`;
+  }
+
+  function parseTcmbXml(xmlText, rateField = TCMB_CONFIG.rateField) {
+    if (typeof DOMParser === "undefined") throw new Error("XML parser bu ortamda kullanılamıyor.");
+    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    if (doc.querySelector("parsererror")) throw new Error("TCMB XML ayrıştırılamadı.");
+    const root = doc.querySelector("Tarih_Date");
+    const rateDateAttr = root?.getAttribute("Tarih") || null; // DD.MM.YYYY
+    const rateDate = rateDateAttr
+      ? `${rateDateAttr.slice(6, 10)}-${rateDateAttr.slice(3, 5)}-${rateDateAttr.slice(0, 2)}`
+      : null;
+    const nodes = Array.from(doc.querySelectorAll("Currency"));
+    const rates = {};
+    nodes.forEach(node => {
+      const code = node.getAttribute("Kod") || node.getAttribute("CurrencyCode");
+      if (!code) return;
+      const unit = Number(node.querySelector("Unit")?.textContent) || 1;
+      const rawValue = node.querySelector(rateField)?.textContent
+        || node.querySelector("ForexBuying")?.textContent;
+      const value = Number(String(rawValue || "").replace(",", "."));
+      if (!Number.isFinite(value) || value <= 0) return;
+      rates[code] = value / unit; // 1 birim döviz = X TRY
+    });
+    return { rateDate, rates };
+  }
+
+  async function fetchTcmbDailyRates(dateKey, options = {}) {
+    const url = tcmbBuildUrl(dateKey);
+    if (!url) throw Object.assign(new Error("Geçersiz tarih."), { code: "INVALID_DATE" });
+    let response;
+    try {
+      response = await fetch(url, { cache: "no-store" });
+    } catch (networkError) {
+      throw Object.assign(
+        new Error("TCMB kur servisine erişilemedi (muhtemelen CORS). Kendi backend'inizde bir proxy endpoint tanımlayıp TCMB_CONFIG.proxyBaseUrl'e yazın."),
+        { code: "TCMB_FETCH_BLOCKED", cause: networkError }
+      );
+    }
+    if (!response.ok) {
+      throw Object.assign(new Error(`TCMB kuru bulunamadı (${response.status}). Hafta sonu/resmi tatil olabilir.`), { code: "TCMB_NOT_FOUND", status: response.status });
+    }
+    const xmlText = await response.text();
+    return parseTcmbXml(xmlText, options.rateField);
+  }
+
+  // Hafta sonu/tatil günlerinde TCMB o günkü kuru yayınlamaz;
+  // bulunana kadar (maxLookbackDays sınırına kadar) geriye doğru dener.
+  async function fetchTcmbDailyRatesWithFallback(dateKey, options = {}) {
+    const maxDays = options.maxLookbackDays ?? TCMB_CONFIG.maxLookbackDays;
+    let cursor = v23Date(dateKey);
+    if (!cursor) throw Object.assign(new Error("Geçersiz tarih."), { code: "INVALID_DATE" });
+    let lastError = null;
+    for (let i = 0; i <= maxDays; i++) {
+      const key = cursor.toISOString().slice(0, 10);
+      try {
+        const result = await fetchTcmbDailyRates(key, options);
+        return { ...result, requestedDate: dateKey, usedFallback: i > 0 };
+      } catch (error) {
+        lastError = error;
+        if (error.code === "TCMB_FETCH_BLOCKED") throw error; // CORS engeli: geriye gitmenin faydası yok
+        cursor = new Date(cursor.getTime() - 86400000);
+      }
+    }
+    throw lastError || Object.assign(new Error("TCMB kuru bulunamadı."), { code: "TCMB_NOT_FOUND" });
+  }
+
+  // TCMB'den çekilen kuru V23 FX rate tablosuna CENTRAL_BANK
+  // kaynağıyla yazar (createFxRate). Zaten o tarih için kayıt
+  // varsa tekrar yazmaz, mevcut kaydı döner.
+  async function syncTcmbRate(currencyCode, dateKey, options = {}) {
+    const code = v23CurrencyCode(currencyCode);
+    if (code === "TRY") return { rate: 1, fromCurrency: "TRY", toCurrency: "TRY", rateDate: v23DateKey(dateKey), source: V23_RATE_SOURCES.SYSTEM };
+    const existing = getFxRates({ fromCurrency: code, toCurrency: "TRY", rateDate: dateKey, rateType: options.rateType || FX_CONFIG.defaultRateType });
+    if (existing.length && !options.forceRefresh) return existing[0];
+    const fetched = await fetchTcmbDailyRatesWithFallback(dateKey, options);
+    const rate = fetched.rates?.[code];
+    if (!Number.isFinite(rate)) {
+      throw Object.assign(new Error(`TCMB kur listesinde ${code} bulunamadı.`), { code: "TCMB_CURRENCY_NOT_FOUND", currency: code });
+    }
+    return createFxRate({
+      fromCurrency: code,
+      toCurrency: "TRY",
+      rate,
+      rateDate: fetched.rateDate || dateKey,
+      rateType: options.rateType || FX_CONFIG.defaultRateType,
+      source: V23_RATE_SOURCES.CENTRAL_BANK,
+      reason: fetched.usedFallback ? `TCMB otomatik (${fetched.rateDate}, önceki iş günü kuru kullanıldı)` : "TCMB otomatik"
+    }, options);
+  }
+
+  // getFxRate ile aynı imza; kayıtlı kur yoksa önce TCMB'den
+  // çekmeyi dener, o da başarısız olursa normal missingRatePolicy
+  // davranışına (BLOCK/WARNING/manuel giriş) düşer.
+  async function getFxRateAuto(fromCurrency, toCurrency, date, rateType = FX_CONFIG.defaultRateType, options = {}) {
+    try {
+      return getFxRate(fromCurrency, toCurrency, date, rateType, { ...options, allowMissing: true, allowLastAvailable: false }).error
+        ? await (async () => {
+            if (v23CurrencyCode(toCurrency) !== "TRY") throw Object.assign(new Error("Otomatik TCMB çekimi şu an sadece XXX/TRY için destekleniyor."), { code: "TCMB_UNSUPPORTED_PAIR" });
+            await syncTcmbRate(fromCurrency, date, { rateType, ...options });
+            return getFxRate(fromCurrency, toCurrency, date, rateType, options);
+          })()
+        : getFxRate(fromCurrency, toCurrency, date, rateType, options);
+    } catch (error) {
+      if (options.allowMissing) return { error: error.code || "FX_RATE_NOT_FOUND", rate: null, fromCurrency: v23CurrencyCode(fromCurrency), toCurrency: v23CurrencyCode(toCurrency), rateDate: v23DateKey(date), rateType, message: error.message };
+      throw error;
+    }
+  }
+
   function v23CompanyCurrency(companyId) {
     try {
       const companies = typeof v22CompanyList === "function" ? v22CompanyList() : (typeof getCompanies === "function" ? getCompanies() : []);
@@ -18664,6 +18816,11 @@ document.addEventListener("DOMContentLoaded", () => {
     getFxRate,
     convertCurrency,
     convertCurrencyOnDate,
+    TCMB_CONFIG,
+    fetchTcmbDailyRates,
+    fetchTcmbDailyRatesWithFallback,
+    syncTcmbRate,
+    getFxRateAuto,
     translateAmount,
     translateCompanyToGroupCurrency,
     getTranslationRateType,
