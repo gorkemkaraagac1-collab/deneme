@@ -2773,6 +2773,43 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  function getCheckbox(id) {
+
+    return (
+      document.getElementById(id)?.checked === true
+    );
+  }
+
+
+  function setCheckbox(id, value) {
+
+    const input =
+      document.getElementById(id);
+
+    if (input) {
+      input.checked = value === true;
+    }
+  }
+
+
+  // Maps the contractForm's <select id="paymentFrequency"> values
+  // ("1"/"3"/"12", i.e. months per payment) to the word-based
+  // vocabulary the control engine validates against
+  // (controlPayment() only accepts "monthly"/"quarterly"/"annual" —
+  // see line ~9829). Kept in one place so the two never drift apart.
+  const PAYMENT_FREQUENCY_CODE_TO_WORD = {
+    "1": "monthly",
+    "3": "quarterly",
+    "12": "annual"
+  };
+
+  const PAYMENT_FREQUENCY_WORD_TO_CODE = {
+    monthly: "1",
+    quarterly: "3",
+    annual: "12"
+  };
+
+
   /* ==========================================================
      DATE / PERIOD ENGINE
   ========================================================== */
@@ -4318,6 +4355,103 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.renewalDate || ""
     );
 
+    // V16.7 ADDITION: pre-fill (or reset to defaults) the fields
+    // added to the form in this release. form.reset() above already
+    // clears text/number inputs and unchecks checkboxes for a new
+    // contract, but selects need their default explicitly and edits
+    // need the stored contract value restored.
+    setInput(
+      "currency",
+      contract?.currency || "TRY"
+    );
+
+    setInput(
+      "paymentFrequency",
+      PAYMENT_FREQUENCY_WORD_TO_CODE[
+        contract?.paymentFrequency
+      ] || "1"
+    );
+
+    setInput(
+      "paymentTiming",
+      contract?.paymentTiming || "arrears"
+    );
+
+    setInput(
+      "initialDirectCost",
+      contract?.initialDirectCosts || 0
+    );
+
+    setInput(
+      "restorationCost",
+      contract?.restorationObligation || 0
+    );
+
+    setInput(
+      "prepayments",
+      contract?.prepayments || 0
+    );
+
+    setInput(
+      "leaseIncentives",
+      contract?.leaseIncentives || 0
+    );
+
+    setInput(
+      "leaseIncreaseType",
+      contract?.leaseIncreaseType || "none"
+    );
+
+    setInput(
+      "leaseIncreaseRate",
+      contract?.leaseIncreaseRate || 0
+    );
+
+    setInput(
+      "fixedIncrease",
+      contract?.fixedIncrease || 0
+    );
+
+    setInput(
+      "variablePayment",
+      contract?.variablePayment || 0
+    );
+
+    setInput(
+      "usefulLifeMonths",
+      contract?.usefulLifeMonths ?? ""
+    );
+
+    setCheckbox(
+      "renewalOption",
+      contract?.renewalOption === true
+    );
+
+    setCheckbox(
+      "terminationOption",
+      contract?.terminationOption === true
+    );
+
+    setCheckbox(
+      "purchaseOption",
+      contract?.purchaseOption === true
+    );
+
+    setCheckbox(
+      "ownershipTransfer",
+      contract?.ownershipTransfer === true
+    );
+
+    setCheckbox(
+      "shortTermLease",
+      contract?.shortTermLease === true
+    );
+
+    setCheckbox(
+      "lowValueAsset",
+      contract?.lowValueAsset === true
+    );
+
     injectAssetClassField(contract);
 
     const title =
@@ -4497,6 +4631,38 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
+    // TFRS 16 Appendix A: a short-term lease is, at the
+    // commencement date, a lease with a term of 12 months or less
+    // AND that does not contain a purchase option. Enforced here so
+    // the exemption checkbox can't silently produce a non-compliant
+    // (unaudited) classification.
+    if (
+      contract.shortTermLease &&
+      start &&
+      end
+    ) {
+      const termMonths =
+        monthsBetween(
+          contract.startDate,
+          contract.endDate
+        );
+
+      if (termMonths > 12) {
+        errors.push(
+          "Kısa vadeli kiralama istisnası (TFRS 16.5) yalnızca 12 ay veya daha kısa süreli sözleşmelerde uygulanabilir."
+        );
+      }
+    }
+
+    if (
+      contract.shortTermLease &&
+      contract.purchaseOption
+    ) {
+      errors.push(
+        "Satın alma opsiyonu makul ölçüde kesin olan bir sözleşme, TFRS 16 Ek A uyarınca kısa vadeli kiralama istisnasından yararlanamaz."
+      );
+    }
+
     return {
       valid:
         errors.length === 0,
@@ -4577,6 +4743,99 @@ document.addEventListener("DOMContentLoaded", () => {
                 "renewalDate"
               )
             ),
+
+          currency:
+            getInput("currency") ||
+            "TRY",
+
+          // V16.7 FIX — GK Advisory review: paymentFrequency and
+          // paymentTiming were present as <select> fields in the
+          // form but were never read by this handler, so every
+          // manually created contract silently fell back to the
+          // engine defaults ("monthly"/"arrears") regardless of
+          // what the user picked. The frequency select stores
+          // "1"/"3"/"12" (months per payment); the control engine
+          // (controlPayment(), ~line 9829) only accepts the word
+          // forms "monthly"/"quarterly"/"annual", so it is mapped
+          // here rather than stored raw.
+          paymentFrequency:
+            PAYMENT_FREQUENCY_CODE_TO_WORD[
+              getInput("paymentFrequency")
+            ] || "monthly",
+
+          paymentTiming:
+            getInput("paymentTiming") ||
+            "arrears",
+
+          // initialDirectCost/restorationCost were also present in
+          // the form but never read; renamed on the contract object
+          // to the keys calculateLeaseEngine() actually expects
+          // (initialDirectCosts / restorationObligation).
+          initialDirectCosts:
+            Number(
+              getInput("initialDirectCost")
+            ) || 0,
+
+          restorationObligation:
+            Number(
+              getInput("restorationCost")
+            ) || 0,
+
+          // V16.7 ADDITION — the extended TFRS 16 parameters the
+          // calculation engine (calculateLeaseEngine) already
+          // supported but that had no corresponding form field at
+          // all, so they could only ever be set via bulk import.
+          prepayments:
+            Number(
+              getInput("prepayments")
+            ) || 0,
+
+          leaseIncentives:
+            Number(
+              getInput("leaseIncentives")
+            ) || 0,
+
+          leaseIncreaseType:
+            getInput("leaseIncreaseType") ||
+            "none",
+
+          leaseIncreaseRate:
+            Number(
+              getInput("leaseIncreaseRate")
+            ) || 0,
+
+          fixedIncrease:
+            Number(
+              getInput("fixedIncrease")
+            ) || 0,
+
+          variablePayment:
+            Number(
+              getInput("variablePayment")
+            ) || 0,
+
+          usefulLifeMonths:
+            getInput("usefulLifeMonths") !== ""
+              ? Number(getInput("usefulLifeMonths"))
+              : null,
+
+          renewalOption:
+            getCheckbox("renewalOption"),
+
+          terminationOption:
+            getCheckbox("terminationOption"),
+
+          purchaseOption:
+            getCheckbox("purchaseOption"),
+
+          ownershipTransfer:
+            getCheckbox("ownershipTransfer"),
+
+          shortTermLease:
+            getCheckbox("shortTermLease"),
+
+          lowValueAsset:
+            getCheckbox("lowValueAsset"),
 
           assetClass:
             resolveAssetClassFromForm() ||
