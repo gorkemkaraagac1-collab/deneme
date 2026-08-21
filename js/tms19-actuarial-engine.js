@@ -2,33 +2,45 @@
    GK FINANCIAL DECISION COCKPIT
    TMS 19 ACTUARIAL ENGINE
    ----------------------------------------------------------------
-   Standard      : TMS 19 Employee Benefits
-   Method        : Projected Unit Credit
-   Engine        : GK Actuarial Engine
-   Version       : 3.0.0
-   Language      : Turkish
+   Standart      : TMS 19 Çalışanlara Sağlanan Faydalar
+   Yöntem        : Projected Unit Credit (PUC)
+   Motor         : GK Actuarial Engine
+   Versiyon      : 4.0.0
+   Dil           : Türkçe
 ================================================================ */
 
 (function (global) {
 
     "use strict";
 
+
     /* ============================================================
-       NAMESPACE
+       00 — NAMESPACE
     ============================================================ */
 
     const TMS19 = {};
 
-    TMS19.motorAdi = "GK TMS 19 Actuarial Engine";
-    TMS19.versiyon = "3.0.0";
-    TMS19.yontem = "Projected Unit Credit";
+    TMS19.motorAdi =
+        "GK TMS 19 Aktüeryal Hesaplama Motoru";
+
+    TMS19.versiyon =
+        "4.0.0";
+
+    TMS19.yontem =
+        "Projected Unit Credit";
+
+    TMS19.standart =
+        "TMS 19";
 
 
     /* ============================================================
        01 — GENEL YARDIMCILAR
     ============================================================ */
 
-    TMS19.sayi = function (deger, varsayilan = 0) {
+    TMS19.sayi = function (
+        deger,
+        varsayilan = 0
+    ) {
 
         if (
             deger === null ||
@@ -39,28 +51,38 @@
         }
 
         if (typeof deger === "number") {
+
             return isFinite(deger)
                 ? deger
                 : varsayilan;
         }
 
-        let temiz = String(deger)
-            .trim()
-            .replace(/\s/g, "");
+        let temiz =
+            String(deger)
+                .trim()
+                .replace(/\s/g, "");
 
         if (
             temiz.includes(".") &&
             temiz.includes(",")
         ) {
-            temiz = temiz
-                .replace(/\./g, "")
-                .replace(",", ".");
-        }
-        else if (temiz.includes(",")) {
-            temiz = temiz.replace(",", ".");
+
+            temiz =
+                temiz
+                    .replace(/\./g, "")
+                    .replace(",", ".");
         }
 
-        const sonuc = Number(temiz);
+        else if (
+            temiz.includes(",")
+        ) {
+
+            temiz =
+                temiz.replace(",", ".");
+        }
+
+        const sonuc =
+            Number(temiz);
 
         return isFinite(sonuc)
             ? sonuc
@@ -68,7 +90,11 @@
     };
 
 
-    TMS19.sinirla = function (deger, min, max) {
+    TMS19.sinirla = function (
+        deger,
+        min,
+        max
+    ) {
 
         return Math.min(
             Math.max(
@@ -80,20 +106,27 @@
     };
 
 
-    TMS19.yuvarla = function (deger, basamak = 2) {
+    TMS19.yuvarla = function (
+        deger,
+        basamak = 2
+    ) {
 
-        const katsayi = Math.pow(
-            10,
-            basamak
-        );
+        const katsayi =
+            Math.pow(
+                10,
+                basamak
+            );
 
         return Math.round(
-            TMS19.sayi(deger) * katsayi
+            TMS19.sayi(deger) *
+            katsayi
         ) / katsayi;
     };
 
 
-    TMS19.mutlak = function (deger) {
+    TMS19.mutlak = function (
+        deger
+    ) {
 
         return Math.abs(
             TMS19.sayi(deger)
@@ -101,9 +134,24 @@
     };
 
 
-    TMS19.oran = function (deger) {
+    TMS19.sifiraBolme = function (
+        pay,
+        payda,
+        varsayilan = 0
+    ) {
 
-        return TMS19.sayi(deger);
+        const p =
+            TMS19.sayi(pay);
+
+        const d =
+            TMS19.sayi(payda);
+
+        if (d === 0) {
+
+            return varsayilan;
+        }
+
+        return p / d;
     };
 
 
@@ -111,21 +159,31 @@
        02 — TARİH MOTORU
     ============================================================ */
 
-    TMS19.tarih = function (deger) {
+    TMS19.tarih = function (
+        deger
+    ) {
 
         if (deger instanceof Date) {
+
             return new Date(
                 deger.getTime()
             );
         }
 
         if (!deger) {
+
             return null;
         }
 
-        const sonuc = new Date(deger);
+        const sonuc =
+            new Date(deger);
 
-        if (isNaN(sonuc.getTime())) {
+        if (
+            isNaN(
+                sonuc.getTime()
+            )
+        ) {
+
             return null;
         }
 
@@ -138,10 +196,21 @@
         bitis
     ) {
 
-        const bas = TMS19.tarih(baslangic);
-        const bit = TMS19.tarih(bitis);
+        const bas =
+            TMS19.tarih(
+                baslangic
+            );
 
-        if (!bas || !bit) {
+        const bit =
+            TMS19.tarih(
+                bitis
+            );
+
+        if (
+            !bas ||
+            !bit
+        ) {
+
             return 0;
         }
 
@@ -168,10 +237,12 @@
         bitis
     ) {
 
-        return TMS19.yilFarki(
-            baslangic,
-            bitis
-        ) * 12;
+        return (
+            TMS19.yilFarki(
+                baslangic,
+                bitis
+            ) * 12
+        );
     };
 
 
@@ -181,12 +252,20 @@
     ) {
 
         const dogum =
-            TMS19.tarih(dogumTarihi);
+            TMS19.tarih(
+                dogumTarihi
+            );
 
         const degerleme =
-            TMS19.tarih(degerlemeTarihi);
+            TMS19.tarih(
+                degerlemeTarihi
+            );
 
-        if (!dogum || !degerleme) {
+        if (
+            !dogum ||
+            !degerleme
+        ) {
+
             return 0;
         }
 
@@ -206,6 +285,7 @@
                 dogum.getDate()
             )
         ) {
+
             yas--;
         }
 
@@ -222,9 +302,12 @@
     ) {
 
         const sonuc =
-            TMS19.tarih(tarih);
+            TMS19.tarih(
+                tarih
+            );
 
         if (!sonuc) {
+
             return null;
         }
 
@@ -247,7 +330,8 @@
         personel
     ) {
 
-        const p = personel || {};
+        const p =
+            personel || {};
 
         return {
 
@@ -325,54 +409,48 @@
                 personel
             );
 
-        if (
-            !p.dogumTarihi ||
-            !TMS19.tarih(
+        const dogum =
+            TMS19.tarih(
                 p.dogumTarihi
-            )
-        ) {
+            );
+
+        const giris =
+            TMS19.tarih(
+                p.iseGirisTarihi
+            );
+
+        if (!dogum) {
+
             errors.push(
                 "Doğum tarihi geçerli değil."
             );
         }
 
-        if (
-            !p.iseGirisTarihi ||
-            !TMS19.tarih(
-                p.iseGirisTarihi
-            )
-        ) {
+        if (!giris) {
+
             errors.push(
                 "İşe giriş tarihi geçerli değil."
             );
         }
 
-        if (p.mevcutMaas < 0) {
+        if (
+            p.mevcutMaas < 0
+        ) {
+
             errors.push(
                 "Mevcut maaş negatif olamaz."
             );
         }
 
         if (
-            p.dogumTarihi &&
-            p.iseGirisTarihi
+            dogum &&
+            giris &&
+            giris < dogum
         ) {
 
-            const dogum =
-                TMS19.tarih(
-                    p.dogumTarihi
-                );
-
-            const giris =
-                TMS19.tarih(
-                    p.iseGirisTarihi
-                );
-
-            if (giris < dogum) {
-                errors.push(
-                    "İşe giriş tarihi doğum tarihinden önce olamaz."
-                );
-            }
+            errors.push(
+                "İşe giriş tarihi doğum tarihinden önce olamaz."
+            );
         }
 
         return {
@@ -447,7 +525,11 @@
             enflasyonOrani:
                 TMS19.sayi(
                     v.enflasyonOrani
-                )
+                ),
+
+            paraBirimi:
+                v.paraBirimi ||
+                "TRY"
         };
     };
 
@@ -456,70 +538,92 @@
        06 — VARSAYIM VALIDATION
     ============================================================ */
 
-    TMS19.varsayimlariValidateEt = function (
-        varsayimlar
-    ) {
-
-        const v =
-            TMS19.varsayimNormalizeEt(
-                varsayimlar
-            );
-
-        const errors = [];
-
-        if (v.emeklilikYasi <= 0) {
-            errors.push(
-                "Emeklilik yaşı geçerli değil."
-            );
-        }
-
-        if (v.iskontoOrani <= -1) {
-            errors.push(
-                "İskonto oranı -100%'den küçük veya eşit olamaz."
-            );
-        }
-
-        if (
-            v.maasArtisOrani <= -1
+    TMS19.varsayimlariValidateEt =
+        function (
+            varsayimlar
         ) {
-            errors.push(
-                "Maaş artış oranı -100%'den küçük veya eşit olamaz."
-            );
-        }
 
-        if (
-            v.personelDevirOrani < 0 ||
-            v.personelDevirOrani > 1
-        ) {
-            errors.push(
-                "Personel devir oranı 0-1 arasında olmalıdır."
-            );
-        }
+            const v =
+                TMS19.varsayimNormalizeEt(
+                    varsayimlar
+                );
 
-        if (
-            v.olumOrani < 0 ||
-            v.olumOrani > 1
-        ) {
-            errors.push(
-                "Ölüm oranı 0-1 arasında olmalıdır."
-            );
-        }
+            const errors = [];
 
-        if (v.faydaOrani < 0) {
-            errors.push(
-                "Fayda oranı negatif olamaz."
-            );
-        }
+            if (
+                v.emeklilikYasi <= 0
+            ) {
 
-        return {
+                errors.push(
+                    "Emeklilik yaşı geçerli değil."
+                );
+            }
 
-            valid:
-                errors.length === 0,
+            if (
+                v.iskontoOrani <= -1
+            ) {
 
-            errors:
-                errors
+                errors.push(
+                    "İskonto oranı -100%'den küçük veya eşit olamaz."
+                );
+            }
+
+            if (
+                v.maasArtisOrani <= -1
+            ) {
+
+                errors.push(
+                    "Maaş artış oranı -100%'den küçük veya eşit olamaz."
+                );
+            }
+
+            if (
+                v.kidemTavaniArtisOrani <= -1
+            ) {
+
+                errors.push(
+                    "Kıdem tavanı artış oranı -100%'den küçük veya eşit olamaz."
+                );
+            }
+
+            if (
+                v.personelDevirOrani < 0 ||
+                v.personelDevirOrani > 1
+            ) {
+
+                errors.push(
+                    "Personel devir oranı 0-1 arasında olmalıdır."
+                );
+            }
+
+            if (
+                v.olumOrani < 0 ||
+                v.olumOrani > 1
+            ) {
+
+                errors.push(
+                    "Ölüm oranı 0-1 arasında olmalıdır."
+                );
+            }
+
+            if (
+                v.faydaOrani < 0
+            ) {
+
+                errors.push(
+                    "Fayda oranı negatif olamaz."
+                );
+            }
+
+            return {
+
+                valid:
+                    errors.length === 0,
+
+                errors:
+                    errors
+            };
         };
-    };
 
 
     /* ============================================================
@@ -597,9 +701,19 @@
                     varsayimlar.maasArtisOrani
                 );
 
+            const toplamYil =
+                Math.max(
+                    0,
+                    Math.floor(
+                        TMS19.sayi(
+                            yilSayisi
+                        )
+                    )
+                );
+
             for (
                 let yil = 0;
-                yil <= yilSayisi;
+                yil <= toplamYil;
                 yil++
             ) {
 
@@ -631,151 +745,151 @@
        09 — KIDEM TAVANI
     ============================================================ */
 
-    TMS19.kidemTavaniHesapla = function (
-        emeklilikMaasi,
-        kalanYil,
-        varsayimlar
-    ) {
-
-        const maas =
-            TMS19.sayi(
-                emeklilikMaasi
-            );
-
-        const yil =
-            Math.max(
-                0,
-                TMS19.sayi(
-                    kalanYil
-                )
-            );
-
-        const mevcutTavan =
-            TMS19.sayi(
-                varsayimlar.kidemTavani
-            );
-
-        const artis =
-            TMS19.sayi(
-                varsayimlar.kidemTavaniArtisOrani
-            );
-
-        if (
-            mevcutTavan <= 0
+    TMS19.kidemTavaniHesapla =
+        function (
+            emeklilikMaasi,
+            kalanYil,
+            varsayimlar
         ) {
+
+            const maas =
+                TMS19.sayi(
+                    emeklilikMaasi
+                );
+
+            const yil =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        kalanYil
+                    )
+                );
+
+            const mevcutTavan =
+                TMS19.sayi(
+                    varsayimlar.kidemTavani
+                );
+
+            const artis =
+                TMS19.sayi(
+                    varsayimlar.kidemTavaniArtisOrani
+                );
+
+            if (
+                mevcutTavan <= 0
+            ) {
+
+                return {
+
+                    uygulandi:
+                        false,
+
+                    mevcutTavan:
+                        mevcutTavan,
+
+                    projekteTavan:
+                        Infinity,
+
+                    hesaplamaMaasi:
+                        maas,
+
+                    tavanFarki:
+                        0
+                };
+            }
+
+            const projekteTavan =
+                mevcutTavan *
+                Math.pow(
+                    1 + artis,
+                    yil
+                );
+
+            const uygulandi =
+                maas >
+                projekteTavan;
+
+            const hesaplamaMaasi =
+                uygulandi
+                    ? projekteTavan
+                    : maas;
 
             return {
 
                 uygulandi:
-                    false,
+                    uygulandi,
 
                 mevcutTavan:
                     mevcutTavan,
 
                 projekteTavan:
-                    Infinity,
+                    projekteTavan,
 
                 hesaplamaMaasi:
-                    maas
+                    hesaplamaMaasi,
+
+                tavanFarki:
+                    Math.max(
+                        0,
+                        maas -
+                        projekteTavan
+                    )
             };
-        }
-
-        const projekteTavan =
-            mevcutTavan *
-            Math.pow(
-                1 + artis,
-                yil
-            );
-
-        const uygulandi =
-            maas >
-            projekteTavan;
-
-        return {
-
-            uygulandi:
-                uygulandi,
-
-            mevcutTavan:
-                mevcutTavan,
-
-            tavanArtisOrani:
-                artis,
-
-            projekteTavan:
-                projekteTavan,
-
-            hesaplamaMaasi:
-                uygulandi
-                    ? projekteTavan
-                    : maas,
-
-            tavanEtkiTutari:
-                Math.max(
-                    0,
-                    maas -
-                    projekteTavan
-                )
         };
-    };
 
 
     /* ============================================================
-       10 — DEMOGRAFİK OLASILIKLAR
+       10 — DEMOGRAFİK OLASILIK
     ============================================================ */
 
-    TMS19.devirOlasiligi = function (
-        kalanYil,
-        varsayimlar
-    ) {
+    TMS19.devamOlasiligi =
+        function (
+            kalanYil,
+            varsayimlar
+        ) {
 
-        const yil =
-            Math.max(
-                0,
-                TMS19.sayi(
-                    kalanYil
-                )
+            const yil =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        kalanYil
+                    )
+                );
+
+            const devir =
+                TMS19.sinirla(
+                    varsayimlar.personelDevirOrani,
+                    0,
+                    1
+                );
+
+            const olum =
+                TMS19.sinirla(
+                    varsayimlar.olumOrani,
+                    0,
+                    1
+                );
+
+            /*
+             * Her yıl çalışanın sistemde kalma
+             * olasılığı:
+             *
+             * (1 - devir) x (1 - ölüm)
+             */
+
+            const yillikDevam =
+                (
+                    1 - devir
+                ) *
+                (
+                    1 - olum
+                );
+
+            return Math.pow(
+                yillikDevam,
+                yil
             );
-
-        const turnover =
-            TMS19.sinirla(
-                varsayimlar.personelDevirOrani,
-                0,
-                1
-            );
-
-        return Math.pow(
-            1 - turnover,
-            yil
-        );
-    };
-
-
-    TMS19.olumOlasiligi = function (
-        kalanYil,
-        varsayimlar
-    ) {
-
-        const yil =
-            Math.max(
-                0,
-                TMS19.sayi(
-                    kalanYil
-                )
-            );
-
-        const mortality =
-            TMS19.sinirla(
-                varsayimlar.olumOrani,
-                0,
-                1
-            );
-
-        return Math.pow(
-            1 - mortality,
-            yil
-        );
-    };
+        };
 
 
     TMS19.yillikDevamOlasiligi =
@@ -783,14 +897,14 @@
             varsayimlar
         ) {
 
-            const turnover =
+            const devir =
                 TMS19.sinirla(
                     varsayimlar.personelDevirOrani,
                     0,
                     1
                 );
 
-            const mortality =
+            const olum =
                 TMS19.sinirla(
                     varsayimlar.olumOrani,
                     0,
@@ -798,547 +912,104 @@
                 );
 
             return (
-                1 - turnover
+                1 - devir
             ) *
             (
-                1 - mortality
+                1 - olum
             );
         };
 
 
-    TMS19.devamOlasiligi = function (
-        kalanYil,
-        varsayimlar
-    ) {
-
-        if (
-            TMS19.sayi(kalanYil) <= 0
-        ) {
-            return 1;
-        }
-
-        return Math.pow(
-            TMS19.yillikDevamOlasiligi(
-                varsayimlar
-            ),
-            Math.max(
-                0,
-                TMS19.sayi(
-                    kalanYil
-                )
-            )
-        );
-    };
-
-
     /* ============================================================
-       11 — İSKONTO
+       11 — İSKONTO FAKTÖRÜ
     ============================================================ */
 
-    TMS19.iskontoFaktoru = function (
-        iskontoOrani,
-        yil
-    ) {
+    TMS19.iskontoFaktoru =
+        function (
+            iskontoOrani,
+            kalanYil
+        ) {
 
-        const oran =
-            TMS19.sayi(
-                iskontoOrani
-            );
-
-        const sure =
-            Math.max(
-                0,
+            const oran =
                 TMS19.sayi(
+                    iskontoOrani
+                );
+
+            const yil =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        kalanYil
+                    )
+                );
+
+            return (
+                1 /
+                Math.pow(
+                    1 + oran,
                     yil
                 )
             );
-
-        if (sure <= 0) {
-            return 1;
-        }
-
-        return 1 /
-            Math.pow(
-                1 + oran,
-                sure
-            );
-    };
-
-
-    TMS19.bugunkuDeger = function (
-        tutar,
-        iskontoOrani,
-        yil
-    ) {
-
-        return (
-            TMS19.sayi(tutar) *
-            TMS19.iskontoFaktoru(
-                iskontoOrani,
-                yil
-            )
-        );
-    };
-
-
-    /* ============================================================
-       12 — TEK PERSONEL PUC HESAPLAMA
-    ============================================================ */
-
-    TMS19.pucHesapla = function (
-        personel,
-        varsayimlar,
-        index = 0
-    ) {
-
-        const p =
-            TMS19.personelNormalizeEt(
-                personel
-            );
-
-        const v =
-            TMS19.varsayimNormalizeEt(
-                varsayimlar
-            );
-
-
-        /* --------------------------------------------------------
-           VALIDATION
-        -------------------------------------------------------- */
-
-        const personelValidation =
-            TMS19.personelValidate(
-                personel
-            );
-
-        if (
-            !personelValidation.valid
-        ) {
-
-            throw new Error(
-                personelValidation.errors.join(" ")
-            );
-        }
-
-
-        const varsayimValidation =
-            TMS19.varsayimlariValidateEt(
-                v
-            );
-
-        if (
-            !varsayimValidation.valid
-        ) {
-
-            throw new Error(
-                varsayimValidation.errors.join(" ")
-            );
-        }
-
-
-        /* --------------------------------------------------------
-           TARİHLER
-        -------------------------------------------------------- */
-
-        const degerlemeTarihi =
-            v.degerlemeTarihi;
-
-        const dogumTarihi =
-            TMS19.tarih(
-                p.dogumTarihi
-            );
-
-        const iseGirisTarihi =
-            TMS19.tarih(
-                p.iseGirisTarihi
-            );
-
-
-        /* --------------------------------------------------------
-           YAŞ / HİZMET
-        -------------------------------------------------------- */
-
-        const yas =
-            TMS19.yasHesapla(
-                dogumTarihi,
-                degerlemeTarihi
-            );
-
-        const hizmetSuresi =
-            TMS19.yilFarki(
-                iseGirisTarihi,
-                degerlemeTarihi
-            );
-
-        const emekliligeKalanYil =
-            Math.max(
-                0,
-                v.emeklilikYasi -
-                yas
-            );
-
-        const toplamHizmet =
-            hizmetSuresi +
-            emekliligeKalanYil;
-
-
-        /* --------------------------------------------------------
-           MAAŞ
-        -------------------------------------------------------- */
-
-        const maas =
-            TMS19.maasProjeksiyonu(
-                p.mevcutMaas,
-                emekliligeKalanYil,
-                v
-            );
-
-
-        /* --------------------------------------------------------
-           KIDEM TAVANI
-        -------------------------------------------------------- */
-
-        const tavan =
-            TMS19.kidemTavaniHesapla(
-                maas.emeklilikMaasi,
-                emekliligeKalanYil,
-                v
-            );
-
-        const faydaHesaplamaMaasi =
-            tavan.hesaplamaMaasi;
-
-
-        /* --------------------------------------------------------
-           FAYDA
-        -------------------------------------------------------- */
-
-        const yillikFayda =
-            faydaHesaplamaMaasi *
-            v.faydaOrani;
-
-        const toplamFayda =
-            yillikFayda *
-            toplamHizmet;
-
-
-        /* --------------------------------------------------------
-           HİZMET TAHSİSİ
-        -------------------------------------------------------- */
-
-        const gecmisHizmetOrani =
-            toplamHizmet > 0
-                ? Math.min(
-                    1,
-                    hizmetSuresi /
-                    toplamHizmet
-                )
-                : 0;
-
-        const gelecekHizmetOrani =
-            toplamHizmet > 0
-                ? Math.min(
-                    1,
-                    emekliligeKalanYil /
-                    toplamHizmet
-                )
-                : 0;
-
-
-        const kazanilmisFayda =
-            toplamFayda *
-            gecmisHizmetOrani;
-
-
-        /* --------------------------------------------------------
-           DEMOGRAFİK
-        -------------------------------------------------------- */
-
-        const devirOlasiligi =
-            TMS19.devirOlasiligi(
-                emekliligeKalanYil,
-                v
-            );
-
-        const olumOlasiligi =
-            TMS19.olumOlasiligi(
-                emekliligeKalanYil,
-                v
-            );
-
-        const devamOlasiligi =
-            TMS19.devamOlasiligi(
-                emekliligeKalanYil,
-                v
-            );
-
-
-        /* --------------------------------------------------------
-           BEKLENEN FAYDA
-        -------------------------------------------------------- */
-
-        const beklenenFayda =
-            kazanilmisFayda *
-            devamOlasiligi;
-
-
-        /* --------------------------------------------------------
-           İSKONTO
-        -------------------------------------------------------- */
-
-        const iskontoFaktoru =
-            TMS19.iskontoFaktoru(
-                v.iskontoOrani,
-                emekliligeKalanYil
-            );
-
-
-        /* --------------------------------------------------------
-           DBO
-        -------------------------------------------------------- */
-
-        const dbo =
-            beklenenFayda *
-            iskontoFaktoru;
-
-
-        /* --------------------------------------------------------
-           CURRENT SERVICE COST
-        -------------------------------------------------------- */
-
-        const birYillikFayda =
-            toplamHizmet > 0
-                ? toplamFayda /
-                toplamHizmet
-                : 0;
-
-
-        const gelecekYilBeklenenFayda =
-            birYillikFayda *
-            devamOlasiligi;
-
-
-        const cariHizmetMaliyeti =
-            gelecekYilBeklenenFayda *
-            iskontoFaktoru;
-
-
-        /* --------------------------------------------------------
-           INTEREST COST
-        -------------------------------------------------------- */
-
-        const faizMaliyeti =
-            dbo *
-            v.iskontoOrani;
-
-
-        /* --------------------------------------------------------
-           TOTAL SERVICE / FINANCE COST
-        -------------------------------------------------------- */
-
-        const toplamDonemMaliyeti =
-            cariHizmetMaliyeti +
-            faizMaliyeti;
-
-
-        /* --------------------------------------------------------
-           KONTROLLER
-        -------------------------------------------------------- */
-
-        const hizmetKontrol =
-            gecmisHizmetOrani +
-            gelecekHizmetOrani;
-
-        const hizmetKontrolFarki =
-            hizmetKontrol - 1;
-
-
-        const faydaKontrol =
-            (
-                kazanilmisFayda
-            ) +
-            (
-                toplamFayda -
-                kazanilmisFayda
-            );
-
-
-        /* --------------------------------------------------------
-           SONUÇ
-        -------------------------------------------------------- */
-
-        return {
-
-            index:
-                index,
-
-            personelId:
-                p.personelId,
-
-            adSoyad:
-                p.adSoyad,
-
-            departman:
-                p.departman,
-
-            pozisyon:
-                p.pozisyon,
-
-
-            dogumTarihi:
-                p.dogumTarihi,
-
-            iseGirisTarihi:
-                p.iseGirisTarihi,
-
-            degerlemeTarihi:
-                v.degerlemeTarihi,
-
-
-            yas:
-                yas,
-
-            hizmetSuresi:
-                hizmetSuresi,
-
-            emeklilikYasi:
-                v.emeklilikYasi,
-
-            emekliligeKalanYil:
-                emekliligeKalanYil,
-
-            toplamHizmet:
-                toplamHizmet,
-
-
-            mevcutMaas:
-                p.mevcutMaas,
-
-            maasArtisOrani:
-                v.maasArtisOrani,
-
-            emeklilikMaasi:
-                maas.emeklilikMaasi,
-
-            faydaHesaplamaMaasi:
-                faydaHesaplamaMaasi,
-
-
-            kidemTavani:
-                v.kidemTavani,
-
-            projectedCeiling:
-                tavan.projekteTavan,
-
-            tavanUygulandi:
-                tavan.uygulandi,
-
-            tavanEtkiTutari:
-                tavan.tavanEtkiTutari,
-
-
-            faydaOrani:
-                v.faydaOrani,
-
-            yillikFayda:
-                yillikFayda,
-
-            toplamFayda:
-                toplamFayda,
-
-            gecmisHizmetOrani:
-                gecmisHizmetOrani,
-
-            gelecekHizmetOrani:
-                gelecekHizmetOrani,
-
-            kazanilmisFayda:
-                kazanilmisFayda,
-
-
-            personelDevirOrani:
-                v.personelDevirOrani,
-
-            olumOrani:
-                v.olumOrani,
-
-            devirOlasiligi:
-                devirOlasiligi,
-
-            olumOlasiligi:
-                olumOlasiligi,
-
-            devamOlasiligi:
-                devamOlasiligi,
-
-
-            beklenenFayda:
-                beklenenFayda,
-
-
-            iskontoOrani:
-                v.iskontoOrani,
-
-            iskontoFaktoru:
-                iskontoFaktoru,
-
-
-            dbo:
-                dbo,
-
-
-            birYillikFayda:
-                birYillikFayda,
-
-            gelecekYilBeklenenFayda:
-                gelecekYilBeklenenFayda,
-
-            cariHizmetMaliyeti:
-                cariHizmetMaliyeti,
-
-            faizMaliyeti:
-                faizMaliyeti,
-
-            toplamDonemMaliyeti:
-                toplamDonemMaliyeti,
-
-
-            kontrolHizmetOrani:
-                hizmetKontrol,
-
-            kontrolHizmetFarki:
-                hizmetKontrolFarki,
-
-            kontrolToplamFayda:
-                faydaKontrol,
-
-            hesaplamaDurumu:
-                "BAŞARILI",
-
-            hesaplamaYontemi:
-                "Projected Unit Credit",
-
-            hata:
-                null
         };
-    };
 
 
     /* ============================================================
-       13 — YILLIK PERSONEL PROJEKSİYONU
+       12 — TOPLAM HİZMET
     ============================================================ */
 
-    TMS19.personelProjeksiyonu =
+    TMS19.hizmetAnalizi =
+        function (
+            iseGirisTarihi,
+            degerlemeTarihi,
+            emekliligeKalanYil
+        ) {
+
+            const mevcutHizmet =
+                TMS19.yilFarki(
+                    iseGirisTarihi,
+                    degerlemeTarihi
+                );
+
+            const gelecekHizmet =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        emekliligeKalanYil
+                    )
+                );
+
+            const toplamHizmet =
+                mevcutHizmet +
+                gelecekHizmet;
+
+            return {
+
+                mevcutHizmet:
+                    mevcutHizmet,
+
+                gelecekHizmet:
+                    gelecekHizmet,
+
+                toplamHizmet:
+                    toplamHizmet
+            };
+        };
+
+
+    /* ============================================================
+       13 — TEK PERSONEL AKTÜERYAL HESAPLAMA
+    ============================================================ */
+
+    TMS19.personelHesapla =
         function (
             personel,
-            varsayimlar
+            varsayimlar,
+            index = 0
         ) {
 
-            const baz =
-                TMS19.pucHesapla(
-                    personel,
-                    varsayimlar,
-                    0
+            const p =
+                TMS19.personelNormalizeEt(
+                    personel
                 );
 
             const v =
@@ -1346,132 +1017,600 @@
                     varsayimlar
                 );
 
-            const yillar = [];
+            /*
+             * Validation
+             */
 
-            const maxYil =
-                Math.max(
-                    0,
-                    Math.ceil(
-                        baz.emekliligeKalanYil
+            const personelValidation =
+                TMS19.personelValidate(
+                    personel
+                );
+
+            if (
+                !personelValidation.valid
+            ) {
+
+                throw new Error(
+                    personelValidation.errors.join(
+                        " "
                     )
+                );
+            }
+
+            const varsayimValidation =
+                TMS19.varsayimlariValidateEt(
+                    varsayimlar
+                );
+
+            if (
+                !varsayimValidation.valid
+            ) {
+
+                throw new Error(
+                    varsayimValidation.errors.join(
+                        " "
+                    )
+                );
+            }
+
+
+            /* ----------------------------------------------------
+               TARİHLER
+            ---------------------------------------------------- */
+
+            const degerlemeTarihi =
+                TMS19.tarih(
+                    v.degerlemeTarihi
+                );
+
+            const dogumTarihi =
+                TMS19.tarih(
+                    p.dogumTarihi
+                );
+
+            const iseGirisTarihi =
+                TMS19.tarih(
+                    p.iseGirisTarihi
                 );
 
 
+            /* ----------------------------------------------------
+               TEMEL DEĞİŞKENLER
+            ---------------------------------------------------- */
+
+            const mevcutMaas =
+                TMS19.sayi(
+                    p.mevcutMaas
+                );
+
+            const yas =
+                TMS19.yasHesapla(
+                    dogumTarihi,
+                    degerlemeTarihi
+                );
+
+            const hizmetSuresi =
+                TMS19.yilFarki(
+                    iseGirisTarihi,
+                    degerlemeTarihi
+                );
+
+            const emekliligeKalanYil =
+                Math.max(
+                    0,
+                    v.emeklilikYasi -
+                    yas
+                );
+
+
+            /* ----------------------------------------------------
+               HİZMET ANALİZİ
+            ---------------------------------------------------- */
+
+            const hizmet =
+                TMS19.hizmetAnalizi(
+                    iseGirisTarihi,
+                    degerlemeTarihi,
+                    emekliligeKalanYil
+                );
+
+            const toplamHizmet =
+                hizmet.toplamHizmet;
+
+
+            /* ----------------------------------------------------
+               MAAŞ PROJEKSİYONU
+            ---------------------------------------------------- */
+
+            const maas =
+                TMS19.maasProjeksiyonu(
+                    mevcutMaas,
+                    emekliligeKalanYil,
+                    v
+                );
+
+            const emeklilikMaasi =
+                maas.emeklilikMaasi;
+
+
+            /* ----------------------------------------------------
+               KIDEM TAVANI
+            ---------------------------------------------------- */
+
+            const tavan =
+                TMS19.kidemTavaniHesapla(
+                    emeklilikMaasi,
+                    emekliligeKalanYil,
+                    v
+                );
+
+            const faydaHesaplamaMaasi =
+                tavan.hesaplamaMaasi;
+
+
+            /* ----------------------------------------------------
+               YILLIK FAYDA
+            ---------------------------------------------------- */
+
+            const yillikFayda =
+                faydaHesaplamaMaasi *
+                v.faydaOrani;
+
+
+            /* ----------------------------------------------------
+               TOPLAM BEKLENEN FAYDA
+            ---------------------------------------------------- */
+
+            const toplamFayda =
+                yillikFayda *
+                toplamHizmet;
+
+
+            /* ----------------------------------------------------
+               GEÇMİŞ HİZMET ORANI
+            ---------------------------------------------------- */
+
+            const gecmisHizmetOrani =
+                toplamHizmet > 0
+                    ? Math.min(
+                        1,
+                        hizmetSuresi /
+                        toplamHizmet
+                    )
+                    : 0;
+
+
+            /* ----------------------------------------------------
+               KAZANILMIŞ FAYDA
+            ---------------------------------------------------- */
+
+            const kazanilmisFayda =
+                toplamFayda *
+                gecmisHizmetOrani;
+
+
+            /* ----------------------------------------------------
+               DEMOGRAFİK OLASILIK
+            ---------------------------------------------------- */
+
+            const devamOlasiligi =
+                TMS19.devamOlasiligi(
+                    emekliligeKalanYil,
+                    v
+                );
+
+
+            /* ----------------------------------------------------
+               BEKLENEN FAYDA
+            ---------------------------------------------------- */
+
+            const beklenenFayda =
+                kazanilmisFayda *
+                devamOlasiligi;
+
+
+            /* ----------------------------------------------------
+               İSKONTO
+            ---------------------------------------------------- */
+
+            const iskontoFaktoru =
+                TMS19.iskontoFaktoru(
+                    v.iskontoOrani,
+                    emekliligeKalanYil
+                );
+
+
+            /* ----------------------------------------------------
+               DBO
+            ---------------------------------------------------- */
+
+            const dbo =
+                beklenenFayda *
+                iskontoFaktoru;
+
+
+            /* ----------------------------------------------------
+               CARİ HİZMET MALİYETİ
+            ---------------------------------------------------- */
+
+            const birYillikFayda =
+                toplamHizmet > 0
+                    ? toplamFayda /
+                      toplamHizmet
+                    : 0;
+
+            const cariHizmetMaliyeti =
+                birYillikFayda *
+                devamOlasiligi *
+                iskontoFaktoru;
+
+
+            /* ----------------------------------------------------
+               FAİZ MALİYETİ
+            ---------------------------------------------------- */
+
+            const faizMaliyeti =
+                dbo *
+                v.iskontoOrani;
+
+
+            /* ----------------------------------------------------
+               NET HESAPLAMA
+            ---------------------------------------------------- */
+
+            const gelecektekiFayda =
+                toplamFayda -
+                kazanilmisFayda;
+
+            const iskontoTutari =
+                beklenenFayda -
+                dbo;
+
+
+            /* ----------------------------------------------------
+               SONUÇ
+            ---------------------------------------------------- */
+
+            return {
+
+                index:
+                    index,
+
+                personelId:
+                    p.personelId,
+
+                adSoyad:
+                    p.adSoyad,
+
+                departman:
+                    p.departman,
+
+                pozisyon:
+                    p.pozisyon,
+
+                cinsiyet:
+                    p.cinsiyet,
+
+
+                /*
+                 * Tarihler
+                 */
+
+                dogumTarihi:
+                    dogumTarihi,
+
+                iseGirisTarihi:
+                    iseGirisTarihi,
+
+                degerlemeTarihi:
+                    degerlemeTarihi,
+
+
+                /*
+                 * Demografik bilgiler
+                 */
+
+                yas:
+                    yas,
+
+                emeklilikYasi:
+                    v.emeklilikYasi,
+
+                emekliligeKalanYil:
+                    emekliligeKalanYil,
+
+
+                /*
+                 * Hizmet
+                 */
+
+                hizmetSuresi:
+                    hizmetSuresi,
+
+                gelecekHizmet:
+                    hizmet.gelecekHizmet,
+
+                toplamHizmet:
+                    toplamHizmet,
+
+                gecmisHizmetOrani:
+                    gecmisHizmetOrani,
+
+
+                /*
+                 * Maaş
+                 */
+
+                mevcutMaas:
+                    mevcutMaas,
+
+                emeklilikMaasi:
+                    emeklilikMaasi,
+
+                faydaHesaplamaMaasi:
+                    faydaHesaplamaMaasi,
+
+                maasArtisOrani:
+                    v.maasArtisOrani,
+
+
+                /*
+                 * Kıdem tavanı
+                 */
+
+                kidemTavani:
+                    tavan.mevcutTavan,
+
+                projekteKidemTavani:
+                    tavan.projekteTavan,
+
+                tavanUygulandi:
+                    tavan.uygulandi,
+
+                tavanFarki:
+                    tavan.tavanFarki,
+
+
+                /*
+                 * Fayda
+                 */
+
+                faydaOrani:
+                    v.faydaOrani,
+
+                yillikFayda:
+                    yillikFayda,
+
+                toplamFayda:
+                    toplamFayda,
+
+                kazanilmisFayda:
+                    kazanilmisFayda,
+
+                gelecektekiFayda:
+                    gelecektekiFayda,
+
+
+                /*
+                 * Demografi
+                 */
+
+                personelDevirOrani:
+                    v.personelDevirOrani,
+
+                olumOrani:
+                    v.olumOrani,
+
+                devamOlasiligi:
+                    devamOlasiligi,
+
+                beklenenFayda:
+                    beklenenFayda,
+
+
+                /*
+                 * İskonto
+                 */
+
+                iskontoOrani:
+                    v.iskontoOrani,
+
+                iskontoFaktoru:
+                    iskontoFaktoru,
+
+                iskontoTutari:
+                    iskontoTutari,
+
+
+                /*
+                 * Muhasebe
+                 */
+
+                dbo:
+                    dbo,
+
+                cariHizmetMaliyeti:
+                    cariHizmetMaliyeti,
+
+                faizMaliyeti:
+                    faizMaliyeti,
+
+
+                /*
+                 * Meta
+                 */
+
+                paraBirimi:
+                    v.paraBirimi,
+
+                hesaplamaTarihi:
+                    new Date()
+            };
+        };
+
+
+    /* ============================================================
+       14 — YILLIK PROJEKSİYON
+    ============================================================ */
+
+    TMS19.personelYillikProjeksiyon =
+        function (
+            personel,
+            varsayimlar
+        ) {
+
+            const p =
+                TMS19.personelNormalizeEt(
+                    personel
+                );
+
+            const v =
+                TMS19.varsayimNormalizeEt(
+                    varsayimlar
+                );
+
+            const temel =
+                TMS19.personelHesapla(
+                    p,
+                    v
+                );
+
+            const liste = [];
+
+            const toplamYil =
+                Math.ceil(
+                    temel.emekliligeKalanYil
+                );
+
             for (
                 let yil = 0;
-                yil <= maxYil;
+                yil <= toplamYil;
                 yil++
             ) {
 
-                const kalan =
+                const gelecekTarih =
+                    TMS19.tarihEkleYil(
+                        v.degerlemeTarihi,
+                        yil
+                    );
+
+                const gelecekYas =
+                    temel.yas +
+                    yil;
+
+                const kalanYil =
                     Math.max(
                         0,
-                        baz.emekliligeKalanYil -
+                        temel.emekliligeKalanYil -
                         yil
                     );
 
-                const projekteMaas =
-                    baz.mevcutMaas *
+                const maas =
+                    temel.mevcutMaas *
                     Math.pow(
-                        1 +
-                        v.maasArtisOrani,
+                        1 + v.maasArtisOrani,
                         yil
                     );
 
-                const tavan =
-                    TMS19.kidemTavaniHesapla(
-                        projekteMaas,
-                        kalan,
-                        v
-                    );
+                const projekteTavan =
+                    v.kidemTavani > 0
+                        ? v.kidemTavani *
+                          Math.pow(
+                              1 +
+                              v.kidemTavaniArtisOrani,
+                              kalanYil
+                          )
+                        : Infinity;
 
                 const hesaplamaMaasi =
-                    tavan.hesaplamaMaasi;
-
-                const gelecekHizmet =
-                    Math.max(
-                        0,
-                        baz.toplamHizmet -
-                        yil
-                    );
-
-                const gecmisHizmet =
                     Math.min(
-                        baz.toplamHizmet,
-                        baz.hizmetSuresi +
-                        yil
+                        maas,
+                        projekteTavan
                     );
+
+                const hizmet =
+                    temel.hizmetSuresi +
+                    yil;
+
+                const toplamHizmet =
+                    hizmet +
+                    kalanYil;
+
+                const yillikFayda =
+                    hesaplamaMaasi *
+                    v.faydaOrani;
 
                 const toplamFayda =
-                    hesaplamaMaasi *
-                    v.faydaOrani *
-                    Math.max(
-                        0,
-                        baz.toplamHizmet
-                    );
+                    yillikFayda *
+                    toplamHizmet;
 
-                const hizmetOrani =
-                    baz.toplamHizmet > 0
-                        ? Math.min(
-                            1,
-                            gecmisHizmet /
-                            baz.toplamHizmet
-                        )
+                const kazanilmisFayda =
+                    toplamHizmet > 0
+                        ? toplamFayda *
+                          Math.min(
+                              1,
+                              hizmet /
+                              toplamHizmet
+                          )
                         : 0;
-
-                const kazanilmis =
-                    toplamFayda *
-                    hizmetOrani;
 
                 const devam =
                     TMS19.devamOlasiligi(
-                        kalan,
+                        kalanYil,
                         v
                     );
 
                 const beklenen =
-                    kazanilmis *
+                    kazanilmisFayda *
                     devam;
 
                 const iskonto =
                     TMS19.iskontoFaktoru(
                         v.iskontoOrani,
-                        kalan
+                        kalanYil
                     );
 
                 const dbo =
                     beklenen *
                     iskonto;
 
-
-                yillar.push({
+                liste.push({
 
                     yil:
                         yil,
 
-                    kalanYil:
-                        kalan,
+                    tarih:
+                        gelecekTarih,
 
                     yas:
-                        baz.yas + yil,
+                        gelecekYas,
 
-                    hizmetSuresi:
-                        baz.hizmetSuresi + yil,
+                    kalanYil:
+                        kalanYil,
 
                     maas:
-                        projekteMaas,
+                        maas,
 
-                    tavan:
-                        tavan.projekteTavan,
+                    projekteTavan:
+                        projekteTavan,
 
                     hesaplamaMaasi:
                         hesaplamaMaasi,
+
+                    hizmetSuresi:
+                        hizmet,
+
+                    toplamHizmet:
+                        toplamHizmet,
+
+                    yillikFayda:
+                        yillikFayda,
 
                     toplamFayda:
                         toplamFayda,
 
                     kazanilmisFayda:
-                        kazanilmis,
+                        kazanilmisFayda,
 
                     devamOlasiligi:
                         devam,
@@ -1487,35 +1626,32 @@
                 });
             }
 
-
-            return yillar;
+            return liste;
         };
 
 
     /* ============================================================
-       14 — TOPLU HESAPLAMA
+       15 — TOPLU PERSONEL HESAPLAMA
     ============================================================ */
 
-    TMS19.topluHesapla =
+    TMS19.portfoyHesapla =
         function (
             personeller,
             varsayimlar
         ) {
 
-            if (
-                !Array.isArray(
+            const liste = [];
+
+            const hatalar = [];
+
+            const personelListesi =
+                Array.isArray(
                     personeller
                 )
-            ) {
+                    ? personeller
+                    : [];
 
-                throw new Error(
-                    "Personel listesi dizi formatında olmalıdır."
-                );
-            }
-
-            const sonuclar = [];
-
-            personeller.forEach(
+            personelListesi.forEach(
                 function (
                     personel,
                     index
@@ -1523,35 +1659,34 @@
 
                     try {
 
-                        sonuclar.push(
-                            TMS19.pucHesapla(
+                        const sonuc =
+                            TMS19.personelHesapla(
                                 personel,
                                 varsayimlar,
                                 index
-                            )
+                            );
+
+                        liste.push(
+                            sonuc
                         );
 
                     }
+
                     catch (error) {
 
-                        const p =
-                            TMS19.personelNormalizeEt(
-                                personel
-                            );
-
-                        sonuclar.push({
+                        hatalar.push({
 
                             index:
                                 index,
 
                             personelId:
-                                p.personelId,
+                                personel?.personelId ??
+                                personel?.id ??
+                                "",
 
                             adSoyad:
-                                p.adSoyad,
-
-                            hesaplamaDurumu:
-                                "HATA",
+                                personel?.adSoyad ??
+                                "",
 
                             hata:
                                 error.message
@@ -1560,1384 +1695,192 @@
                 }
             );
 
-            return sonuclar;
-        };
 
-
-    /* ============================================================
-       15 — PORTFÖY ÖZETİ
-    ============================================================ */
-
-    TMS19.ozetHesapla =
-        function (
-            sonuclar
-        ) {
-
-            const liste =
-                Array.isArray(
-                    sonuclar
-                )
-                    ? sonuclar
-                    : [];
-
-            const basarili =
-                liste.filter(
-                    function (x) {
-
-                        return (
-                            x &&
-                            x.hesaplamaDurumu ===
-                            "BAŞARILI"
-                        );
-                    }
-                );
-
-            const hatali =
-                liste.filter(
-                    function (x) {
-
-                        return (
-                            x &&
-                            x.hesaplamaDurumu ===
-                            "HATA"
-                        );
-                    }
-                );
-
-
-            const toplam =
-                function (alan) {
-
-                    return basarili.reduce(
-                        function (
-                            toplamDeger,
-                            kayit
-                        ) {
-
-                            return (
-                                toplamDeger +
-                                TMS19.sayi(
-                                    kayit[alan]
-                                )
-                            );
-
-                        },
-                        0
-                    );
-                };
-
+            /* ----------------------------------------------------
+               TOPLAM KPI
+            ---------------------------------------------------- */
 
             const toplamDBO =
-                toplam("dbo");
-
-
-            const toplamCariHizmet =
-                toplam(
-                    "cariHizmetMaliyeti"
-                );
-
-
-            const toplamFaiz =
-                toplam(
-                    "faizMaliyeti"
-                );
-
-
-            return {
-
-                personelSayisi:
-                    liste.length,
-
-                basariliPersonelSayisi:
-                    basarili.length,
-
-                hataliPersonelSayisi:
-                    hatali.length,
-
-
-                toplamMevcutMaas:
-                    toplam(
-                        "mevcutMaas"
-                    ),
-
-                toplamEmeklilikMaasi:
-                    toplam(
-                        "emeklilikMaasi"
-                    ),
-
-                toplamFayda:
-                    toplam(
-                        "toplamFayda"
-                    ),
-
-                toplamKazanilmisFayda:
-                    toplam(
-                        "kazanilmisFayda"
-                    ),
-
-                toplamBeklenenFayda:
-                    toplam(
-                        "beklenenFayda"
-                    ),
-
-                toplamDBO:
-                    toplamDBO,
-
-                toplamCariHizmetMaliyeti:
-                    toplamCariHizmet,
-
-                toplamFaizMaliyeti:
-                    toplamFaiz,
-
-                toplamDonemMaliyeti:
-                    toplamCariHizmet +
-                    toplamFaiz,
-
-                ortalamaDBOPersonel:
-                    basarili.length > 0
-                        ? toplamDBO /
-                        basarili.length
-                        : 0,
-
-                hataOrani:
-                    liste.length > 0
-                        ? hatali.length /
-                        liste.length
-                        : 0,
-
-                hesaplamaDurumu:
-                    hatali.length === 0
-                        ? "BAŞARILI"
-                        : "KONTROL GEREKLİ"
-            };
-        };
-
-
-    /* ============================================================
-       16 — DBO ROLL-FORWARD
-    ============================================================ */
-
-    TMS19.rollForward =
-        function (
-            openingDBO,
-            currentServiceCost,
-            interestCost,
-            benefitPayments,
-            actuarialGainLoss = 0,
-            pastServiceCost = 0
-        ) {
-
-            const acilis =
-                TMS19.sayi(
-                    openingDBO
-                );
-
-            const cari =
-                TMS19.sayi(
-                    currentServiceCost
-                );
-
-            const faiz =
-                TMS19.sayi(
-                    interestCost
-                );
-
-            const odeme =
-                TMS19.sayi(
-                    benefitPayments
-                );
-
-            const aktueriyel =
-                TMS19.sayi(
-                    actuarialGainLoss
-                );
-
-            const gecmis =
-                TMS19.sayi(
-                    pastServiceCost
-                );
-
-            const kapanis =
-                acilis +
-                cari +
-                faiz +
-                gecmis +
-                aktueriyel -
-                odeme;
-
-
-            return {
-
-                openingDBO:
-                    acilis,
-
-                currentServiceCost:
-                    cari,
-
-                interestCost:
-                    faiz,
-
-                pastServiceCost:
-                    gecmis,
-
-                actuarialGainLoss:
-                    aktueriyel,
-
-                benefitPayments:
-                    odeme,
-
-                closingDBO:
-                    kapanis,
-
-                reconciliationCheck:
-                    kapanis -
-                    (
-                        acilis +
-                        cari +
-                        faiz +
-                        gecmis +
-                        aktueriyel -
-                        odeme
-                    )
-            };
-        };
-
-
-    /* ============================================================
-       17 — AKTÜERYAL KAZANÇ / ZARAR
-    ============================================================ */
-
-    TMS19.aktueriyelKazancZarar =
-        function (
-            beklenenDBO,
-            gerceklesenDBO
-        ) {
-
-            const beklenen =
-                TMS19.sayi(
-                    beklenenDBO
-                );
-
-            const gerceklesen =
-                TMS19.sayi(
-                    gerceklesenDBO
-                );
-
-            const fark =
-                gerceklesen -
-                beklenen;
-
-
-            return {
-
-                beklenenDBO:
-                    beklenen,
-
-                gerceklesenDBO:
-                    gerceklesen,
-
-                fark:
-                    fark,
-
-                aktueriyelKazanc:
-                    Math.max(
-                        0,
-                        -fark
-                    ),
-
-                aktueriyelZarar:
-                    Math.max(
-                        0,
-                        fark
-                    ),
-
-                oci:
-                    fark
-            };
-        };
-
-
-    /* ============================================================
-       18 — NET FAİZ
-    ============================================================ */
-
-    TMS19.netFaizHesapla =
-        function (
-            openingNetLiability,
-            iskontoOrani
-        ) {
-
-            const acilis =
-                TMS19.sayi(
-                    openingNetLiability
-                );
-
-            const oran =
-                TMS19.sayi(
-                    iskontoOrani
-                );
-
-            return {
-
-                openingNetLiability:
-                    acilis,
-
-                iskontoOrani:
-                    oran,
-
-                netFaiz:
-                    acilis *
-                    oran
-            };
-        };
-
-
-    /* ============================================================
-       19 — P&L
-    ============================================================ */
-
-    TMS19.pnlHesapla =
-        function (
-            currentServiceCost,
-            pastServiceCost,
-            netInterest
-        ) {
-
-            const cari =
-                TMS19.sayi(
-                    currentServiceCost
-                );
-
-            const gecmis =
-                TMS19.sayi(
-                    pastServiceCost
-                );
-
-            const faiz =
-                TMS19.sayi(
-                    netInterest
-                );
-
-            return {
-
-                cariHizmetMaliyeti:
-                    cari,
-
-                gecmisHizmetMaliyeti:
-                    gecmis,
-
-                netFaiz:
-                    faiz,
-
-                toplamPnlGideri:
-                    cari +
-                    gecmis +
-                    faiz
-            };
-        };
-
-
-    /* ============================================================
-       20 — OCI
-    ============================================================ */
-
-    TMS19.ociHesapla =
-        function (
-            actuarialGainLoss
-        ) {
-
-            const tutar =
-                TMS19.sayi(
-                    actuarialGainLoss
-                );
-
-            return {
-
-                aktueriyelKazancZarar:
-                    tutar,
-
-                oci:
-                    tutar
-            };
-        };
-
-
-    /* ============================================================
-       21 — NET DEFINED BENEFIT LIABILITY
-    ============================================================ */
-
-    TMS19.netYukumlulukHesapla =
-        function (
-            dbo,
-            planAssets
-        ) {
-
-            const yukumluluk =
-                TMS19.sayi(
-                    dbo
-                );
-
-            const varlik =
-                TMS19.sayi(
-                    planAssets
-                );
-
-            return {
-
-                dbo:
-                    yukumluluk,
-
-                planAssets:
-                    varlik,
-
-                netDefinedBenefitLiability:
-                    yukumluluk -
-                    varlik
-            };
-        };
-
-
-    /* ============================================================
-       22 — TAM DÖNEM TMS 19 HESAPLAMASI
-    ============================================================ */
-
-    TMS19.donemHesapla =
-        function (
-            openingDBO,
-            openingPlanAssets,
-            varsayimlar,
-            currentServiceCost,
-            benefitPayments = 0,
-            employerContributions = 0,
-            actuarialGainLoss = 0,
-            pastServiceCost = 0
-        ) {
-
-            const v =
-                TMS19.varsayimNormalizeEt(
-                    varsayimlar
-                );
-
-
-            const openingNet =
-                TMS19.netYukumlulukHesapla(
-                    openingDBO,
-                    openingPlanAssets
-                );
-
-
-            const netFaiz =
-                TMS19.netFaizHesapla(
-                    openingNet.netDefinedBenefitLiability,
-                    v.iskontoOrani
-                );
-
-
-            const dboRollForward =
-                TMS19.rollForward(
-                    openingDBO,
-                    currentServiceCost,
-                    netFaiz.netFaiz,
-                    benefitPayments,
-                    actuarialGainLoss,
-                    pastServiceCost
-                );
-
-
-            const pnl =
-                TMS19.pnlHesapla(
-                    currentServiceCost,
-                    pastServiceCost,
-                    netFaiz.netFaiz
-                );
-
-
-            const oci =
-                TMS19.ociHesapla(
-                    actuarialGainLoss
-                );
-
-
-            const closingPlanAssets =
-                TMS19.sayi(
-                    openingPlanAssets
-                ) +
-                TMS19.sayi(
-                    employerContributions
-                );
-
-
-            const closingNet =
-                TMS19.netYukumlulukHesapla(
-                    dboRollForward.closingDBO,
-                    closingPlanAssets
-                );
-
-
-            return {
-
-                opening:
-
-                    {
-
-                        dbo:
-                            TMS19.sayi(
-                                openingDBO
-                            ),
-
-                        planAssets:
-                            TMS19.sayi(
-                                openingPlanAssets
-                            ),
-
-                        netLiability:
-                            openingNet.netDefinedBenefitLiability
-                    },
-
-
-                movement:
-
-                    {
-
-                        currentServiceCost:
-                            currentServiceCost,
-
-                        netInterest:
-                            netFaiz.netFaiz,
-
-                        pastServiceCost:
-                            pastServiceCost,
-
-                        actuarialGainLoss:
-                            actuarialGainLoss,
-
-                        benefitPayments:
-                            benefitPayments,
-
-                        employerContributions:
-                            employerContributions
-                    },
-
-
-                closing:
-
-                    {
-
-                        dbo:
-                            dboRollForward.closingDBO,
-
-                        planAssets:
-                            closingPlanAssets,
-
-                        netLiability:
-                            closingNet.netDefinedBenefitLiability
-                    },
-
-
-                pnl:
-                    pnl,
-
-                oci:
-                    oci,
-
-                kontrol:
-                    {
-
-                        dboRollForward:
-                            dboRollForward.reconciliationCheck
-                    }
-            };
-        };
-
-
-    /* ============================================================
-       23 — DUYARLILIK
-    ============================================================ */
-
-    TMS19.duyarlilik =
-        function (
-            personel,
-            varsayimlar,
-            parametre,
-            degisim
-        ) {
-
-            const baz =
-                TMS19.pucHesapla(
-                    personel,
-                    varsayimlar
-                );
-
-
-            const alternatif =
-                Object.assign(
-                    {},
-                    varsayimlar
-                );
-
-
-            alternatif[parametre] =
-                TMS19.sayi(
-                    varsayimlar[parametre]
-                ) +
-                TMS19.sayi(
-                    degisim
-                );
-
-
-            const senaryo =
-                TMS19.pucHesapla(
-                    personel,
-                    alternatif
-                );
-
-
-            const fark =
-                senaryo.dbo -
-                baz.dbo;
-
-
-            return {
-
-                parametre:
-                    parametre,
-
-                degisim:
-                    degisim,
-
-                bazDBO:
-                    baz.dbo,
-
-                senaryoDBO:
-                    senaryo.dbo,
-
-                fark:
-                    fark,
-
-                farkYuzde:
-                    baz.dbo !== 0
-                        ? fark /
-                        baz.dbo
-                        : 0
-            };
-        };
-
-
-    /* ============================================================
-       24 — PORTFÖY DUYARLILIK
-    ============================================================ */
-
-    TMS19.portfoyDuyarlilik =
-        function (
-            personeller,
-            varsayimlar,
-            parametre,
-            degisim
-        ) {
-
-            const baz =
-                TMS19.ozetHesapla(
-                    TMS19.topluHesapla(
-                        personeller,
-                        varsayimlar
-                    )
-                );
-
-
-            const alternatif =
-                Object.assign(
-                    {},
-                    varsayimlar
-                );
-
-
-            alternatif[parametre] =
-                TMS19.sayi(
-                    varsayimlar[parametre]
-                ) +
-                TMS19.sayi(
-                    degisim
-                );
-
-
-            const senaryo =
-                TMS19.ozetHesapla(
-                    TMS19.topluHesapla(
-                        personeller,
-                        alternatif
-                    )
-                );
-
-
-            const fark =
-                senaryo.toplamDBO -
-                baz.toplamDBO;
-
-
-            return {
-
-                parametre:
-                    parametre,
-
-                degisim:
-                    degisim,
-
-                bazDBO:
-                    baz.toplamDBO,
-
-                senaryoDBO:
-                    senaryo.toplamDBO,
-
-                fark:
-                    fark,
-
-                farkYuzde:
-                    baz.toplamDBO !== 0
-                        ? fark /
-                        baz.toplamDBO
-                        : 0
-            };
-        };
-
-
-    /* ============================================================
-       25 — SENARYO MATRİSİ
-    ============================================================ */
-
-    TMS19.senaryoMatrisi =
-        function (
-            personeller,
-            varsayimlar
-        ) {
-
-            const senaryolar = [
-
-                {
-                    ad:
-                        "Baz Senaryo",
-
-                    parametre:
-                        null,
-
-                    degisim:
-                        0
-                },
-
-                {
-                    ad:
-                        "İskonto +%1",
-
-                    parametre:
-                        "iskontoOrani",
-
-                    degisim:
-                        0.01
-                },
-
-                {
-                    ad:
-                        "İskonto -%1",
-
-                    parametre:
-                        "iskontoOrani",
-
-                    degisim:
-                        -0.01
-                },
-
-                {
-                    ad:
-                        "Maaş Artışı +%1",
-
-                    parametre:
-                        "maasArtisOrani",
-
-                    degisim:
-                        0.01
-                },
-
-                {
-                    ad:
-                        "Maaş Artışı -%1",
-
-                    parametre:
-                        "maasArtisOrani",
-
-                    degisim:
-                        -0.01
-                },
-
-                {
-                    ad:
-                        "Devir +%1",
-
-                    parametre:
-                        "personelDevirOrani",
-
-                    degisim:
-                        0.01
-                },
-
-                {
-                    ad:
-                        "Devir -%1",
-
-                    parametre:
-                        "personelDevirOrani",
-
-                    degisim:
-                        -0.01
-                }
-            ];
-
-
-            return senaryolar.map(
-                function (
-                    senaryo
-                ) {
-
-                    if (
-                        !senaryo.parametre
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
                     ) {
 
-                        const ozet =
-                            TMS19.ozetHesapla(
-                                TMS19.topluHesapla(
-                                    personeller,
-                                    varsayimlar
-                                )
+                        return toplam +
+                            TMS19.sayi(
+                                item.dbo
                             );
+                    },
+                    0
+                );
 
 
-                        return {
+            const toplamCariHizmetMaliyeti =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
 
-                            ad:
-                                senaryo.ad,
-
-                            dbo:
-                                ozet.toplamDBO,
-
-                            fark:
-                                0,
-
-                            farkYuzde:
-                                0
-                        };
-                    }
+                        return toplam +
+                            TMS19.sayi(
+                                item.cariHizmetMaliyeti
+                            );
+                    },
+                    0
+                );
 
 
-                    const sonuc =
-                        TMS19.portfoyDuyarlilik(
-                            personeller,
-                            varsayimlar,
-                            senaryo.parametre,
-                            senaryo.degisim
+            const toplamFaizMaliyeti =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.faizMaliyeti
+                            );
+                    },
+                    0
+                );
+
+
+            const toplamMevcutMaas =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.mevcutMaas
+                            );
+                    },
+                    0
+                );
+
+
+            const toplamEmeklilikMaasi =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.emeklilikMaasi
+                            );
+                    },
+                    0
+                );
+
+
+            const toplamKazanilmisFayda =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.kazanilmisFayda
+                            );
+                    },
+                    0
+                );
+
+
+            const toplamBeklenenFayda =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.beklenenFayda
+                            );
+                    },
+                    0
+                );
+
+
+            const toplamTavanFarki =
+                liste.reduce(
+                    function (
+                        toplam,
+                        item
+                    ) {
+
+                        return toplam +
+                            TMS19.sayi(
+                                item.tavanFarki
+                            );
+                    },
+                    0
+                );
+
+
+            const tavanUygulananPersonel =
+                liste.filter(
+                    function (item) {
+
+                        return (
+                            item.tavanUygulandi === true
                         );
-
-
-                    return {
-
-                        ad:
-                            senaryo.ad,
-
-                        dbo:
-                            sonuc.senaryoDBO,
-
-                        fark:
-                            sonuc.fark,
-
-                        farkYuzde:
-                            sonuc.farkYuzde
-                    };
-                }
-            );
-        };
-
-
-    /* ============================================================
-       26 — AUDIT TRAIL
-    ============================================================ */
-
-    TMS19.auditTrail =
-        function (
-            personel,
-            varsayimlar
-        ) {
-
-            const sonuc =
-                TMS19.pucHesapla(
-                    personel,
-                    varsayimlar
-                );
-
-
-            return [
-
-                {
-                    adim: 1,
-                    alan: "Mevcut Maaş",
-                    deger: sonuc.mevcutMaas,
-                    aciklama:
-                        "Değerleme tarihindeki mevcut maaş."
-                },
-
-                {
-                    adim: 2,
-                    alan: "Yaş",
-                    deger: sonuc.yas,
-                    aciklama:
-                        "Değerleme tarihi itibarıyla yaş."
-                },
-
-                {
-                    adim: 3,
-                    alan: "Hizmet Süresi",
-                    deger: sonuc.hizmetSuresi,
-                    aciklama:
-                        "Mevcut hizmet süresi."
-                },
-
-                {
-                    adim: 4,
-                    alan: "Emekliliğe Kalan Yıl",
-                    deger: sonuc.emekliligeKalanYil,
-                    aciklama:
-                        "Emeklilik yaşına kalan süre."
-                },
-
-                {
-                    adim: 5,
-                    alan: "Toplam Hizmet",
-                    deger: sonuc.toplamHizmet,
-                    aciklama:
-                        "Mevcut ve gelecekteki toplam hizmet."
-                },
-
-                {
-                    adim: 6,
-                    alan: "Emeklilik Maaşı",
-                    deger: sonuc.emeklilikMaasi,
-                    aciklama:
-                        "Maaş artış varsayımı ile projekte edilen maaş."
-                },
-
-                {
-                    adim: 7,
-                    alan: "Projeksiyon Kıdem Tavanı",
-                    deger: sonuc.projectedCeiling,
-                    aciklama:
-                        "Emeklilik tarihine projekte edilen kıdem tavanı."
-                },
-
-                {
-                    adim: 8,
-                    alan: "Fayda Hesaplama Maaşı",
-                    deger: sonuc.faydaHesaplamaMaasi,
-                    aciklama:
-                        "Kıdem tavanı uygulandıktan sonra kullanılan maaş."
-                },
-
-                {
-                    adim: 9,
-                    alan: "Toplam Fayda",
-                    deger: sonuc.toplamFayda,
-                    aciklama:
-                        "Toplam hizmet dönemi için hesaplanan fayda."
-                },
-
-                {
-                    adim: 10,
-                    alan: "Kazanılmış Fayda",
-                    deger: sonuc.kazanilmisFayda,
-                    aciklama:
-                        "Geçmiş hizmet dönemine tahsis edilen fayda."
-                },
-
-                {
-                    adim: 11,
-                    alan: "Devam Olasılığı",
-                    deger: sonuc.devamOlasiligi,
-                    aciklama:
-                        "Turnover ve mortality varsayımları sonrası devam olasılığı."
-                },
-
-                {
-                    adim: 12,
-                    alan: "Beklenen Fayda",
-                    deger: sonuc.beklenenFayda,
-                    aciklama:
-                        "Demografik olasılıklar uygulanmış fayda."
-                },
-
-                {
-                    adim: 13,
-                    alan: "İskonto Faktörü",
-                    deger: sonuc.iskontoFaktoru,
-                    aciklama:
-                        "Bugünkü değer faktörü."
-                },
-
-                {
-                    adim: 14,
-                    alan: "DBO",
-                    deger: sonuc.dbo,
-                    aciklama:
-                        "Defined Benefit Obligation."
-                },
-
-                {
-                    adim: 15,
-                    alan: "Cari Hizmet Maliyeti",
-                    deger: sonuc.cariHizmetMaliyeti,
-                    aciklama:
-                        "Cari dönemde kazanılan hizmet maliyeti."
-                },
-
-                {
-                    adim: 16,
-                    alan: "Faiz Maliyeti",
-                    deger: sonuc.faizMaliyeti,
-                    aciklama:
-                        "DBO üzerinden hesaplanan faiz maliyeti."
-                },
-
-                {
-                    adim: 17,
-                    alan: "Toplam Dönem Maliyeti",
-                    deger: sonuc.toplamDonemMaliyeti,
-                    aciklama:
-                        "Cari hizmet maliyeti ve faiz maliyetinin toplamı."
-                }
-            ];
-        };
-
-
-    /* ============================================================
-       27 — RİSK ANALİZİ
-    ============================================================ */
-
-    TMS19.riskAnalizi =
-        function (
-            sonuc
-        ) {
-
-            const riskler = [];
-
-
-            if (
-                sonuc.tavanUygulandi
-            ) {
-
-                riskler.push({
-
-                    kod:
-                        "KIDEM_TAVANI",
-
-                    seviye:
-                        "ORTA",
-
-                    mesaj:
-                        "Kıdem tavanı fayda hesaplama maaşını sınırlandırmaktadır."
-                });
-            }
-
-
-            if (
-                sonuc.devamOlasiligi < 0.50
-            ) {
-
-                riskler.push({
-
-                    kod:
-                        "DEMOGRAFİK_RİSK",
-
-                    seviye:
-                        "YÜKSEK",
-
-                    mesaj:
-                        "Devam olasılığı %50'nin altındadır."
-                });
-            }
-
-
-            if (
-                sonuc.emekliligeKalanYil <= 3
-            ) {
-
-                riskler.push({
-
-                    kod:
-                        "EMEKLİLİK_RİSKİ",
-
-                    seviye:
-                        "YÜKSEK",
-
-                    mesaj:
-                        "Personelin emekliliğine üç yıl veya daha az kalmıştır."
-                });
-            }
-
-
-            if (
-                sonuc.dbo >
-                sonuc.mevcutMaas * 5
-            ) {
-
-                riskler.push({
-
-                    kod:
-                        "DBO_RİSKİ",
-
-                    seviye:
-                        "YÜKSEK",
-
-                    mesaj:
-                        "DBO mevcut maaş seviyesine göre yüksektir."
-                });
-            }
-
-
-            let genelRisk = "DÜŞÜK";
-
-
-            if (
-                riskler.some(
-                    function (x) {
-                        return x.seviye === "YÜKSEK";
                     }
-                )
-            ) {
-
-                genelRisk = "YÜKSEK";
-
-            }
-            else if (
-                riskler.some(
-                    function (x) {
-                        return x.seviye === "ORTA";
-                    }
-                )
-            ) {
-
-                genelRisk = "ORTA";
-            }
+                ).length;
 
 
-            return {
+            const ortalamaYas =
+                liste.length > 0
+                    ? liste.reduce(
+                        function (
+                            toplam,
+                            item
+                        ) {
 
-                genelRisk:
-                    genelRisk,
-
-                riskSayisi:
-                    riskler.length,
-
-                riskler:
-                    riskler
-            };
-        };
-
-
-    /* ============================================================
-       28 — EXPORT SATIRI
-    ============================================================ */
-
-    TMS19.exportSatiri =
-        function (
-            sonuc
-        ) {
-
-            return {
-
-                "Personel ID":
-                    sonuc.personelId,
-
-                "Ad Soyad":
-                    sonuc.adSoyad,
-
-                "Departman":
-                    sonuc.departman,
-
-                "Pozisyon":
-                    sonuc.pozisyon,
-
-                "Yaş":
-                    TMS19.yuvarla(
-                        sonuc.yas,
-                        2
-                    ),
-
-                "Hizmet Süresi":
-                    TMS19.yuvarla(
-                        sonuc.hizmetSuresi,
-                        2
-                    ),
-
-                "Emekliliğe Kalan Yıl":
-                    TMS19.yuvarla(
-                        sonuc.emekliligeKalanYil,
-                        2
-                    ),
-
-                "Mevcut Maaş":
-                    sonuc.mevcutMaas,
-
-                "Emeklilik Maaşı":
-                    sonuc.emeklilikMaasi,
-
-                "Kıdem Tavanı":
-                    sonuc.kidemTavani,
-
-                "Projeksiyon Tavanı":
-                    sonuc.projectedCeiling,
-
-                "Tavan Uygulandı":
-                    sonuc.tavanUygulandi
-                        ? "Evet"
-                        : "Hayır",
-
-                "Yıllık Fayda":
-                    sonuc.yillikFayda,
-
-                "Toplam Fayda":
-                    sonuc.toplamFayda,
-
-                "Kazanılmış Fayda":
-                    sonuc.kazanilmisFayda,
-
-                "Devam Olasılığı":
-                    sonuc.devamOlasiligi,
-
-                "Beklenen Fayda":
-                    sonuc.beklenenFayda,
-
-                "İskonto Oranı":
-                    sonuc.iskontoOrani,
-
-                "İskonto Faktörü":
-                    sonuc.iskontoFaktoru,
-
-                "DBO":
-                    sonuc.dbo,
-
-                "Cari Hizmet Maliyeti":
-                    sonuc.cariHizmetMaliyeti,
-
-                "Faiz Maliyeti":
-                    sonuc.faizMaliyeti,
-
-                "Toplam Dönem Maliyeti":
-                    sonuc.toplamDonemMaliyeti,
-
-                "Durum":
-                    sonuc.hesaplamaDurumu
-            };
-        };
+                            return toplam +
+                                item.yas;
+                        },
+                        0
+                    ) / liste.length
+                    : 0;
 
 
-    /* ============================================================
-       29 — PERSONEL RAPORU
-    ============================================================ */
+            const ortalamaHizmet =
+                liste.length > 0
+                    ? liste.reduce(
+                        function (
+                            toplam,
+                            item
+                        ) {
 
-    TMS19.personelRaporu =
-        function (
-            personel,
-            varsayimlar
-        ) {
-
-            const sonuc =
-                TMS19.pucHesapla(
-                    personel,
-                    varsayimlar
-                );
-
-            return {
-
-                sonuc:
-                    sonuc,
-
-                projeksiyon:
-                    TMS19.personelProjeksiyonu(
-                        personel,
-                        varsayimlar
-                    ),
-
-                auditTrail:
-                    TMS19.auditTrail(
-                        personel,
-                        varsayimlar
-                    ),
-
-                risk:
-                    TMS19.riskAnalizi(
-                        sonuc
-                    )
-            };
-        };
+                            return toplam +
+                                item.hizmetSuresi;
+                        },
+                        0
+                    ) / liste.length
+                    : 0;
 
 
-    /* ============================================================
-       30 — PORTFÖY RAPORU
-    ============================================================ */
-
-    TMS19.portfoyRaporu =
-        function (
-            personeller,
-            varsayimlar
-        ) {
-
-            const sonuclar =
-                TMS19.topluHesapla(
-                    personeller,
-                    varsayimlar
-                );
-
-            const ozet =
-                TMS19.ozetHesapla(
-                    sonuclar
-                );
-
-            const senaryolar =
-                TMS19.senaryoMatrisi(
-                    personeller,
-                    varsayimlar
-                );
-
-
-            const riskler =
-                sonuclar
-                    .filter(
-                        function (x) {
-
-                            return (
-                                x &&
-                                x.hesaplamaDurumu ===
-                                "BAŞARILI"
-                            );
-                        }
-                    )
-                    .map(
-                        function (x) {
-
-                            return {
-
-                                personelId:
-                                    x.personelId,
-
-                                adSoyad:
-                                    x.adSoyad,
-
-                                risk:
-                                    TMS19.riskAnalizi(
-                                        x
-                                    )
-                            };
-                        }
-                    );
+            const ortalamaDBO =
+                liste.length > 0
+                    ? toplamDBO /
+                      liste.length
+                    : 0;
 
 
             return {
 
-                metadata: {
+                meta: {
 
                     motor:
                         TMS19.motorAdi,
@@ -2945,189 +1888,646 @@
                     versiyon:
                         TMS19.versiyon,
 
+                    standart:
+                        TMS19.standart,
+
                     yontem:
                         TMS19.yontem,
 
-                    degerlemeTarihi:
-                        varsayimlar.degerlemeTarihi,
+                    hesaplamaTarihi:
+                        new Date(),
 
-                    olusturmaZamani:
-                        new Date().toISOString()
+                    personelSayisi:
+                        personelListesi.length,
+
+                    basariliPersonel:
+                        liste.length,
+
+                    hataliPersonel:
+                        hatalar.length
                 },
 
-                varsayimlar:
-                    TMS19.varsayimNormalizeEt(
-                        varsayimlar
-                    ),
+                kpi: {
 
-                sonuclar:
-                    sonuclar,
+                    toplamDBO:
+                        toplamDBO,
 
-                ozet:
-                    ozet,
+                    toplamCariHizmetMaliyeti:
+                        toplamCariHizmetMaliyeti,
 
-                senaryolar:
-                    senaryolar,
+                    toplamFaizMaliyeti:
+                        toplamFaizMaliyeti,
 
-                riskler:
-                    riskler
+                    toplamMevcutMaas:
+                        toplamMevcutMaas,
+
+                    toplamEmeklilikMaasi:
+                        toplamEmeklilikMaasi,
+
+                    toplamKazanilmisFayda:
+                        toplamKazanilmisFayda,
+
+                    toplamBeklenenFayda:
+                        toplamBeklenenFayda,
+
+                    toplamTavanFarki:
+                        toplamTavanFarki,
+
+                    ortalamaYas:
+                        ortalamaYas,
+
+                    ortalamaHizmet:
+                        ortalamaHizmet,
+
+                    ortalamaDBO:
+                        ortalamaDBO,
+
+                    tavanUygulananPersonel:
+                        tavanUygulananPersonel
+                },
+
+                personeller:
+                    liste,
+
+                hatalar:
+                    hatalar
             };
         };
 
 
     /* ============================================================
-       31 — FULL EXPORT DATASET
+       16 — DEPARTMAN BAZLI ANALİZ
     ============================================================ */
 
-    TMS19.exportDataset =
+    TMS19.departmanAnalizi =
         function (
-            personeller,
-            varsayimlar
+            hesaplamaSonucu
         ) {
 
-            const sonuclar =
-                TMS19.topluHesapla(
-                    personeller,
-                    varsayimlar
-                );
+            const personeller =
+                hesaplamaSonucu?.personeller ||
+                [];
 
+            const gruplar = {};
 
-            return sonuclar
-                .filter(
-                    function (x) {
+            personeller.forEach(
+                function (
+                    personel
+                ) {
 
-                        return (
-                            x &&
-                            x.hesaplamaDurumu ===
-                            "BAŞARILI"
-                        );
+                    const departman =
+                        personel.departman ||
+                        "Tanımsız";
+
+                    if (
+                        !gruplar[departman]
+                    ) {
+
+                        gruplar[departman] = {
+
+                            departman:
+                                departman,
+
+                            personelSayisi:
+                                0,
+
+                            toplamDBO:
+                                0,
+
+                            toplamCariHizmetMaliyeti:
+                                0,
+
+                            toplamFaizMaliyeti:
+                                0,
+
+                            toplamMaas:
+                                0,
+
+                            toplamKazanilmisFayda:
+                                0
+                        };
                     }
-                )
-                .map(
-                    function (x) {
 
-                        return TMS19.exportSatiri(
-                            x
+                    const grup =
+                        gruplar[departman];
+
+                    grup.personelSayisi++;
+
+                    grup.toplamDBO +=
+                        TMS19.sayi(
+                            personel.dbo
                         );
-                    }
-                );
+
+                    grup.toplamCariHizmetMaliyeti +=
+                        TMS19.sayi(
+                            personel.cariHizmetMaliyeti
+                        );
+
+                    grup.toplamFaizMaliyeti +=
+                        TMS19.sayi(
+                            personel.faizMaliyeti
+                        );
+
+                    grup.toplamMaas +=
+                        TMS19.sayi(
+                            personel.mevcutMaas
+                        );
+
+                    grup.toplamKazanilmisFayda +=
+                        TMS19.sayi(
+                            personel.kazanilmisFayda
+                        );
+                }
+            );
+
+            return Object.values(
+                gruplar
+            );
         };
 
 
     /* ============================================================
-       32 — KONTROL MOTORU
+       17 — YAŞ GRUBU ANALİZİ
     ============================================================ */
 
-    TMS19.kontrolMotoru =
+    TMS19.yasGrubuAnalizi =
         function (
-            sonuclar
+            hesaplamaSonucu
         ) {
 
-            const kontroller = [];
+            const personeller =
+                hesaplamaSonucu?.personeller ||
+                [];
+
+            const gruplar = {
+
+                "30 Yaş Altı": [],
+                "30-39": [],
+                "40-49": [],
+                "50-59": [],
+                "60 Yaş ve Üzeri": []
+            };
 
 
-            sonuclar.forEach(
+            personeller.forEach(
                 function (
-                    sonuc
+                    personel
                 ) {
 
+                    const yas =
+                        TMS19.sayi(
+                            personel.yas
+                        );
+
                     if (
-                        sonuc.hesaplamaDurumu !==
-                        "BAŞARILI"
+                        yas < 30
                     ) {
 
-                        kontroller.push({
-
-                            personelId:
-                                sonuc.personelId,
-
-                            kontrol:
-                                "Hesaplama",
-
-                            durum:
-                                "HATA",
-
-                            mesaj:
-                                sonuc.hata
-                        });
-
-                        return;
+                        gruplar[
+                            "30 Yaş Altı"
+                        ].push(
+                            personel
+                        );
                     }
 
-
-                    if (
-                        Math.abs(
-                            sonuc.kontrolHizmetFarki
-                        ) > 0.000001
+                    else if (
+                        yas < 40
                     ) {
 
-                        kontroller.push({
-
-                            personelId:
-                                sonuc.personelId,
-
-                            kontrol:
-                                "Hizmet Tahsisi",
-
-                            durum:
-                                "KONTROL",
-
-                            mesaj:
-                                "Geçmiş ve gelecek hizmet oranları toplamı 1 değil."
-                        });
+                        gruplar[
+                            "30-39"
+                        ].push(
+                            personel
+                        );
                     }
 
-
-                    if (
-                        sonuc.dbo < 0
+                    else if (
+                        yas < 50
                     ) {
 
-                        kontroller.push({
+                        gruplar[
+                            "40-49"
+                        ].push(
+                            personel
+                        );
+                    }
 
-                            personelId:
-                                sonuc.personelId,
+                    else if (
+                        yas < 60
+                    ) {
 
-                            kontrol:
-                                "DBO",
+                        gruplar[
+                            "50-59"
+                        ].push(
+                            personel
+                        );
+                    }
 
-                            durum:
-                                "KONTROL",
+                    else {
 
-                            mesaj:
-                                "DBO negatif hesaplandı."
-                        });
+                        gruplar[
+                            "60 Yaş ve Üzeri"
+                        ].push(
+                            personel
+                        );
                     }
                 }
             );
 
 
+            return Object.keys(
+                gruplar
+            ).map(
+                function (
+                    grup
+                ) {
+
+                    const liste =
+                        gruplar[grup];
+
+                    const dbo =
+                        liste.reduce(
+                            function (
+                                toplam,
+                                item
+                            ) {
+
+                                return toplam +
+                                    TMS19.sayi(
+                                        item.dbo
+                                    );
+                            },
+                            0
+                        );
+
+                    return {
+
+                        yasGrubu:
+                            grup,
+
+                        personelSayisi:
+                            liste.length,
+
+                        toplamDBO:
+                            dbo
+                    };
+                }
+            );
+        };
+
+
+    /* ============================================================
+       18 — DUYARLILIK ANALİZİ
+    ============================================================ */
+
+    TMS19.duyarlilikAnalizi =
+        function (
+            personeller,
+            varsayimlar,
+            senaryolar
+        ) {
+
+            const temelVarsayim =
+                TMS19.varsayimNormalizeEt(
+                    varsayimlar
+                );
+
+            const senaryoListesi =
+                Array.isArray(
+                    senaryolar
+                )
+                    ? senaryolar
+                    : [];
+
+
+            return senaryoListesi.map(
+                function (
+                    senaryo
+                ) {
+
+                    const v = {
+
+                        ...temelVarsayim,
+
+                        ...senaryo
+                    };
+
+                    const sonuc =
+                        TMS19.portfoyHesapla(
+                            personeller,
+                            v
+                        );
+
+                    return {
+
+                        senaryo:
+                            senaryo.ad ||
+                            "Senaryo",
+
+                        varsayimlar:
+                            v,
+
+                        toplamDBO:
+                            sonuc.kpi.toplamDBO,
+
+                        toplamCariHizmetMaliyeti:
+                            sonuc.kpi.toplamCariHizmetMaliyeti,
+
+                        toplamFaizMaliyeti:
+                            sonuc.kpi.toplamFaizMaliyeti
+                    };
+                }
+            );
+        };
+
+
+    /* ============================================================
+       19 — STANDART DUYARLILIK SENARYOLARI
+    ============================================================ */
+
+    TMS19.standartDuyarlilik =
+        function (
+            personeller,
+            varsayimlar
+        ) {
+
+            const v =
+                TMS19.varsayimNormalizeEt(
+                    varsayimlar
+                );
+
+            const iskonto =
+                v.iskontoOrani;
+
+            const maasArtisi =
+                v.maasArtisOrani;
+
+
+            const senaryolar = [
+
+                {
+                    ad:
+                        "Temel Senaryo"
+                },
+
+                {
+                    ad:
+                        "İskonto +100 bp",
+
+                    iskontoOrani:
+                        iskonto + 0.01
+                },
+
+                {
+                    ad:
+                        "İskonto -100 bp",
+
+                    iskontoOrani:
+                        Math.max(
+                            -0.99,
+                            iskonto - 0.01
+                        )
+                },
+
+                {
+                    ad:
+                        "Maaş Artışı +100 bp",
+
+                    maasArtisOrani:
+                        maasArtisi + 0.01
+                },
+
+                {
+                    ad:
+                        "Maaş Artışı -100 bp",
+
+                    maasArtisOrani:
+                        Math.max(
+                            -0.99,
+                            maasArtisi - 0.01
+                        )
+                }
+            ];
+
+            return TMS19.duyarlilikAnalizi(
+                personeller,
+                v,
+                senaryolar
+            );
+        };
+
+
+    /* ============================================================
+       20 — SONUÇ ÖZETİ
+    ============================================================ */
+
+    TMS19.ozetOlustur =
+        function (
+            hesaplamaSonucu
+        ) {
+
+            if (
+                !hesaplamaSonucu
+            ) {
+
+                return null;
+            }
+
+            const kpi =
+                hesaplamaSonucu.kpi ||
+                {};
+
             return {
 
-                toplamKontrol:
-                    kontroller.length,
+                toplamPersonel:
+                    hesaplamaSonucu.meta?.personelSayisi ||
+                    0,
 
-                durum:
-                    kontroller.length === 0
-                        ? "TEMİZ"
-                        : "KONTROL GEREKLİ",
+                hesaplananPersonel:
+                    hesaplamaSonucu.meta?.basariliPersonel ||
+                    0,
 
-                kontroller:
-                    kontroller
+                hataliPersonel:
+                    hesaplamaSonucu.meta?.hataliPersonel ||
+                    0,
+
+                toplamDBO:
+                    TMS19.yuvarla(
+                        kpi.toplamDBO
+                    ),
+
+                cariHizmetMaliyeti:
+                    TMS19.yuvarla(
+                        kpi.toplamCariHizmetMaliyeti
+                    ),
+
+                faizMaliyeti:
+                    TMS19.yuvarla(
+                        kpi.toplamFaizMaliyeti
+                    ),
+
+                ortalamaYas:
+                    TMS19.yuvarla(
+                        kpi.ortalamaYas
+                    ),
+
+                ortalamaHizmet:
+                    TMS19.yuvarla(
+                        kpi.ortalamaHizmet
+                    ),
+
+                tavanUygulananPersonel:
+                    kpi.tavanUygulananPersonel ||
+                    0
             };
         };
 
 
     /* ============================================================
-       33 — HEALTH CHECK
+       21 — JSON EXPORT
     ============================================================ */
 
-    TMS19.healthCheck =
+    TMS19.jsonOlustur =
+        function (
+            hesaplamaSonucu
+        ) {
+
+            return JSON.stringify(
+                hesaplamaSonucu,
+                function (
+                    key,
+                    value
+                ) {
+
+                    if (
+                        value instanceof Date
+                    ) {
+
+                        return value.toISOString();
+                    }
+
+                    if (
+                        value === Infinity
+                    ) {
+
+                        return null;
+                    }
+
+                    return value;
+                },
+                2
+            );
+        };
+
+
+    /* ============================================================
+       22 — CSV EXPORT
+    ============================================================ */
+
+    TMS19.csvOlustur =
+        function (
+            personeller
+        ) {
+
+            const liste =
+                Array.isArray(
+                    personeller
+                )
+                    ? personeller
+                    : [];
+
+            const kolonlar = [
+
+                "personelId",
+                "adSoyad",
+                "departman",
+                "pozisyon",
+                "yas",
+                "hizmetSuresi",
+                "emekliligeKalanYil",
+                "mevcutMaas",
+                "emeklilikMaasi",
+                "faydaHesaplamaMaasi",
+                "kidemTavani",
+                "projeteKidemTavani",
+                "tavanUygulandi",
+                "yillikFayda",
+                "toplamFayda",
+                "kazanilmisFayda",
+                "devamOlasiligi",
+                "beklenenFayda",
+                "iskontoFaktoru",
+                "dbo",
+                "cariHizmetMaliyeti",
+                "faizMaliyeti"
+            ];
+
+
+            const satirlar = [
+
+                kolonlar.join(";")
+            ];
+
+
+            liste.forEach(
+                function (
+                    item
+                ) {
+
+                    const satir =
+                        kolonlar.map(
+                            function (
+                                kolon
+                            ) {
+
+                                let deger =
+                                    item[kolon];
+
+                                if (
+                                    deger === null ||
+                                    deger === undefined
+                                ) {
+
+                                    deger = "";
+                                }
+
+                                return String(
+                                    deger
+                                )
+                                    .replace(
+                                        /;/g,
+                                        ","
+                                    )
+                                    .replace(
+                                        /\r?\n/g,
+                                        " "
+                                    );
+                            }
+                        ).join(";");
+
+                    satirlar.push(
+                        satir
+                    );
+                }
+            );
+
+            return satirlar.join(
+                "\n"
+            );
+        };
+
+
+    /* ============================================================
+       23 — MOTOR SAĞLIK KONTROLÜ
+    ============================================================ */
+
+    TMS19.motorKontrol =
         function () {
 
             return {
 
-                durum:
-                    "AKTİF",
+                aktif:
+                    true,
 
                 motor:
                     TMS19.motorAdi,
@@ -3135,30 +2535,55 @@
                 versiyon:
                     TMS19.versiyon,
 
+                standart:
+                    TMS19.standart,
+
                 yontem:
                     TMS19.yontem,
 
                 zaman:
-                    new Date().toISOString(),
+                    new Date(),
 
-                fonksiyonSayisi:
-                    Object.keys(
-                        TMS19
-                    ).length,
+                fonksiyonlar: [
 
-                fonksiyonlar:
-                    Object.keys(
-                        TMS19
-                    )
+                    "sayi",
+                    "sinirla",
+                    "yuvarla",
+                    "tarih",
+                    "yilFarki",
+                    "yasHesapla",
+                    "personelNormalizeEt",
+                    "personelValidate",
+                    "varsayimNormalizeEt",
+                    "varsayimlariValidateEt",
+                    "maasProjeksiyonu",
+                    "yillikMaasProjeksi",
+                    "kidemTavaniHesapla",
+                    "devamOlasiligi",
+                    "iskontoFaktoru",
+                    "personelHesapla",
+                    "personelYillikProjeksiyon",
+                    "portfoyHesapla",
+                    "departmanAnalizi",
+                    "yasGrubuAnalizi",
+                    "duyarlilikAnalizi",
+                    "standartDuyarlilik",
+                    "ozetOlustur",
+                    "jsonOlustur",
+                    "csvOlustur"
+                ]
             };
         };
 
 
     /* ============================================================
-       34 — GLOBAL EXPORT
+       24 — GLOBAL EXPORT
     ============================================================ */
 
-    global.TMS19 = TMS19;
+    global.TMS19 =
+        TMS19;
 
 
-})(window);
+})(typeof window !== "undefined"
+    ? window
+    : globalThis);
