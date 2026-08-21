@@ -1550,3 +1550,1276 @@
 })(typeof window !== "undefined"
     ? window
     : globalThis);
+
+/* ================================================================
+   TMS 19 — PERIODIC ACTUARIAL ENGINE
+   ----------------------------------------------------------------
+   Opening DBO
+   + Current Service Cost
+   + Interest Cost
+   + Past Service Cost
+   + Actuarial Gain / Loss
+   - Benefits Paid
+   = Closing DBO
+
+   GK Financial Decision Cockpit
+================================================================ */
+
+
+/* ================================================================
+   17 — AÇILIŞ DBO
+================================================================ */
+
+TMS19.acilisDBOHesapla =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        const openingDBO =
+            TMS19.sayi(
+                personel?.openingDBO ??
+                personel?.acilisDBO ??
+                varsayimlar?.openingDBO
+            );
+
+
+        return Math.max(
+            0,
+            openingDBO
+        );
+    };
+
+
+/* ================================================================
+   18 — CARİ HİZMET MALİYETİ
+================================================================ */
+
+TMS19.cariHizmetMaliyetiHesapla =
+    function (
+        hesap
+    ) {
+
+        if (
+            !hesap
+        ) {
+
+            return 0;
+        }
+
+
+        return Math.max(
+            0,
+            TMS19.sayi(
+                hesap.cariHizmetMaliyeti
+            )
+        );
+    };
+
+
+/* ================================================================
+   19 — FAİZ MALİYETİ
+================================================================ */
+
+TMS19.faizMaliyetiHesapla =
+    function (
+        openingDBO,
+        iskontoOrani
+    ) {
+
+        const dbo =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    openingDBO
+                )
+            );
+
+
+        const rate =
+            TMS19.sayi(
+                iskontoOrani
+            );
+
+
+        return dbo * rate;
+    };
+
+
+/* ================================================================
+   20 — PAST SERVICE COST
+================================================================ */
+
+TMS19.gecmisHizmetMaliyetiHesapla =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        /*
+         * Varsayılan olarak geçmiş hizmet maliyeti yoktur.
+         *
+         * Ancak sistemde manuel olarak girilebilmesi gerekir.
+         */
+
+        const value =
+            personel?.pastServiceCost ??
+            personel?.gecmisHizmetMaliyeti ??
+            varsayimlar?.pastServiceCost ??
+            0;
+
+
+        return TMS19.sayi(
+            value
+        );
+    };
+
+
+/* ================================================================
+   21 — ÖDENEN FAYDALAR
+================================================================ */
+
+TMS19.odenenFaydaHesapla =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        const value =
+            personel?.benefitsPaid ??
+            personel?.odenenFayda ??
+            varsayimlar?.benefitsPaid ??
+            0;
+
+
+        return Math.max(
+            0,
+            TMS19.sayi(
+                value
+            )
+        );
+    };
+
+
+/* ================================================================
+   22 — AKTÜERYAL KAZANÇ / KAYIP
+================================================================ */
+
+TMS19.aktueryalKazancKayipHesapla =
+    function (
+        openingDBO,
+        currentServiceCost,
+        interestCost,
+        pastServiceCost,
+        benefitsPaid,
+        closingDBO
+    ) {
+
+        /*
+         * DBO reconciliation:
+         *
+         * Opening DBO
+         * + Current Service Cost
+         * + Interest Cost
+         * + Past Service Cost
+         * + Actuarial Gain/Loss
+         * - Benefits Paid
+         * = Closing DBO
+         *
+         * Dolayısıyla:
+         *
+         * Actuarial Gain/Loss =
+         * Closing DBO
+         * - Opening DBO
+         * - CSC
+         * - Interest
+         * - PSC
+         * + Benefits Paid
+         */
+
+
+        const opening =
+            TMS19.sayi(
+                openingDBO
+            );
+
+
+        const csc =
+            TMS19.sayi(
+                currentServiceCost
+            );
+
+
+        const interest =
+            TMS19.sayi(
+                interestCost
+            );
+
+
+        const psc =
+            TMS19.sayi(
+                pastServiceCost
+            );
+
+
+        const benefits =
+            TMS19.sayi(
+                benefitsPaid
+            );
+
+
+        const closing =
+            TMS19.sayi(
+                closingDBO
+            );
+
+
+        return (
+            closing -
+            opening -
+            csc -
+            interest -
+            psc +
+            benefits
+        );
+    };
+
+
+/* ================================================================
+   23 — KAPANIŞ DBO
+================================================================ */
+
+TMS19.kapanisDBOHesapla =
+    function (
+        openingDBO,
+        currentServiceCost,
+        interestCost,
+        pastServiceCost,
+        actuarialGainLoss,
+        benefitsPaid
+    ) {
+
+        const opening =
+            TMS19.sayi(
+                openingDBO
+            );
+
+
+        const csc =
+            TMS19.sayi(
+                currentServiceCost
+            );
+
+
+        const interest =
+            TMS19.sayi(
+                interestCost
+            );
+
+
+        const psc =
+            TMS19.sayi(
+                pastServiceCost
+            );
+
+
+        const actuarial =
+            TMS19.sayi(
+                actuarialGainLoss
+            );
+
+
+        const benefits =
+            TMS19.sayi(
+                benefitsPaid
+            );
+
+
+        return Math.max(
+            0,
+            opening +
+            csc +
+            interest +
+            psc +
+            actuarial -
+            benefits
+        );
+    };
+
+
+/* ================================================================
+   24 — DBO RECONCILIATION
+================================================================ */
+
+TMS19.dboReconciliation =
+    function (
+        input = {}
+    ) {
+
+        const openingDBO =
+            TMS19.sayi(
+                input.openingDBO
+            );
+
+
+        const currentServiceCost =
+            TMS19.sayi(
+                input.currentServiceCost
+            );
+
+
+        const interestCost =
+            TMS19.sayi(
+                input.interestCost
+            );
+
+
+        const pastServiceCost =
+            TMS19.sayi(
+                input.pastServiceCost
+            );
+
+
+        const actuarialGainLoss =
+            TMS19.sayi(
+                input.actuarialGainLoss
+            );
+
+
+        const benefitsPaid =
+            TMS19.sayi(
+                input.benefitsPaid
+            );
+
+
+        const closingDBO =
+            TMS19.kapanisDBOHesapla(
+                openingDBO,
+                currentServiceCost,
+                interestCost,
+                pastServiceCost,
+                actuarialGainLoss,
+                benefitsPaid
+            );
+
+
+        return {
+
+            openingDBO:
+                openingDBO,
+
+            currentServiceCost:
+                currentServiceCost,
+
+            interestCost:
+                interestCost,
+
+            pastServiceCost:
+                pastServiceCost,
+
+            actuarialGainLoss:
+                actuarialGainLoss,
+
+            benefitsPaid:
+                benefitsPaid,
+
+            closingDBO:
+                closingDBO,
+
+
+            /*
+             * Kontrol:
+             *
+             * Eğer sistem dışından closing DBO
+             * girildiyse farkı hesapla.
+             */
+
+            externalClosingDBO:
+                input.externalClosingDBO !==
+                undefined
+                    ? TMS19.sayi(
+                        input.externalClosingDBO
+                    )
+                    : null,
+
+
+            reconciliationDifference:
+                input.externalClosingDBO !==
+                undefined
+                    ? closingDBO -
+                      TMS19.sayi(
+                          input.externalClosingDBO
+                      )
+                    : 0,
+
+
+            balanced:
+                input.externalClosingDBO !==
+                undefined
+                    ? Math.abs(
+                        closingDBO -
+                        TMS19.sayi(
+                            input.externalClosingDBO
+                        )
+                      ) < 0.01
+                    : true
+        };
+    };
+
+
+/* ================================================================
+   25 — PERSONEL DÖNEMSEL AKTÜERYAL HESABI
+================================================================ */
+
+TMS19.personelDonemHesapla =
+    function (
+        personel,
+        varsayimlar = {},
+        index = 0
+    ) {
+
+        /*
+         * Önce temel aktüeryal hesap.
+         */
+
+        const valuation =
+            TMS19.personelHesapla(
+                personel,
+                varsayimlar,
+                index
+            );
+
+
+        /*
+         * Opening DBO
+         */
+
+        const openingDBO =
+            TMS19.acilisDBOHesapla(
+                personel,
+                varsayimlar
+            );
+
+
+        /*
+         * Current Service Cost
+         */
+
+        const currentServiceCost =
+            TMS19.cariHizmetMaliyetiHesapla(
+                valuation
+            );
+
+
+        /*
+         * Interest Cost
+         */
+
+        const interestCost =
+            TMS19.faizMaliyetiHesapla(
+                openingDBO,
+                varsayimlar.iskontoOrani
+            );
+
+
+        /*
+         * Past Service Cost
+         */
+
+        const pastServiceCost =
+            TMS19.gecmisHizmetMaliyetiHesapla(
+                personel,
+                varsayimlar
+            );
+
+
+        /*
+         * Benefits Paid
+         */
+
+        const benefitsPaid =
+            TMS19.odenenFaydaHesapla(
+                personel,
+                varsayimlar
+            );
+
+
+        /*
+         * Eğer closing DBO dışarıdan verilmişse
+         * actuarial gain/loss residual olarak hesaplanır.
+         */
+
+        const externalClosingDBO =
+            personel?.closingDBO ??
+            personel?.kapanisDBO ??
+            null;
+
+
+        let actuarialGainLoss =
+            TMS19.sayi(
+                personel?.actuarialGainLoss ??
+                personel?.aktueryalKazancKayip ??
+                0
+            );
+
+
+        if (
+            externalClosingDBO !==
+            null &&
+            externalClosingDBO !==
+            undefined
+        ) {
+
+            actuarialGainLoss =
+                TMS19.aktueryalKazancKayipHesapla(
+                    openingDBO,
+                    currentServiceCost,
+                    interestCost,
+                    pastServiceCost,
+                    benefitsPaid,
+                    externalClosingDBO
+                );
+        }
+
+
+        /*
+         * Closing DBO
+         */
+
+        const reconciliation =
+            TMS19.dboReconciliation({
+
+                openingDBO:
+                    openingDBO,
+
+                currentServiceCost:
+                    currentServiceCost,
+
+                interestCost:
+                    interestCost,
+
+                pastServiceCost:
+                    pastServiceCost,
+
+                actuarialGainLoss:
+                    actuarialGainLoss,
+
+                benefitsPaid:
+                    benefitsPaid,
+
+                externalClosingDBO:
+                    externalClosingDBO
+            });
+
+
+        return {
+
+            ...valuation,
+
+
+            period:
+                {
+
+                    openingDBO:
+                        openingDBO,
+
+                    currentServiceCost:
+                        currentServiceCost,
+
+                    interestCost:
+                        interestCost,
+
+                    pastServiceCost:
+                        pastServiceCost,
+
+                    actuarialGainLoss:
+                        actuarialGainLoss,
+
+                    benefitsPaid:
+                        benefitsPaid,
+
+                    closingDBO:
+                        reconciliation
+                            .closingDBO
+                },
+
+
+            reconciliation:
+                reconciliation
+        };
+    };
+
+
+/* ================================================================
+   26 — PORTFÖY DÖNEMSEL HESAPLAMA
+================================================================ */
+
+TMS19.portfoyDonemHesapla =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            throw new Error(
+                "Personel listesi array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+
+        const errors =
+            [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                try {
+
+                    const result =
+                        TMS19.personelDonemHesapla(
+                            personel,
+                            varsayimlar,
+                            index
+                        );
+
+
+                    results.push(
+                        result
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    errors.push({
+
+                        index:
+                            index,
+
+                        personelId:
+                            personel?.personelId ??
+                            personel?.id ??
+                            "",
+
+                        error:
+                            error.message
+                    });
+                }
+            }
+        );
+
+
+        /*
+         * Portfolio totals
+         */
+
+        let openingDBO =
+            0;
+
+
+        let currentServiceCost =
+            0;
+
+
+        let interestCost =
+            0;
+
+
+        let pastServiceCost =
+            0;
+
+
+        let actuarialGainLoss =
+            0;
+
+
+        let benefitsPaid =
+            0;
+
+
+        let closingDBO =
+            0;
+
+
+        results.forEach(
+            result => {
+
+                openingDBO +=
+                    TMS19.sayi(
+                        result.period
+                            ?.openingDBO
+                    );
+
+
+                currentServiceCost +=
+                    TMS19.sayi(
+                        result.period
+                            ?.currentServiceCost
+                    );
+
+
+                interestCost +=
+                    TMS19.sayi(
+                        result.period
+                            ?.interestCost
+                    );
+
+
+                pastServiceCost +=
+                    TMS19.sayi(
+                        result.period
+                            ?.pastServiceCost
+                    );
+
+
+                actuarialGainLoss +=
+                    TMS19.sayi(
+                        result.period
+                            ?.actuarialGainLoss
+                    );
+
+
+                benefitsPaid +=
+                    TMS19.sayi(
+                        result.period
+                            ?.benefitsPaid
+                    );
+
+
+                closingDBO +=
+                    TMS19.sayi(
+                        result.period
+                            ?.closingDBO
+                    );
+            }
+        );
+
+
+        /*
+         * Portfolio reconciliation
+         */
+
+        const expectedClosing =
+            openingDBO +
+            currentServiceCost +
+            interestCost +
+            pastServiceCost +
+            actuarialGainLoss -
+            benefitsPaid;
+
+
+        const difference =
+            closingDBO -
+            expectedClosing;
+
+
+        return {
+
+            results:
+                results,
+
+            errors:
+                errors,
+
+
+            summary:
+                {
+
+                    personelSayisi:
+                        personeller.length,
+
+                    hesaplananPersonel:
+                        results.length,
+
+                    hataliPersonel:
+                        errors.length,
+
+                    openingDBO:
+                        openingDBO,
+
+                    currentServiceCost:
+                        currentServiceCost,
+
+                    interestCost:
+                        interestCost,
+
+                    pastServiceCost:
+                        pastServiceCost,
+
+                    actuarialGainLoss:
+                        actuarialGainLoss,
+
+                    benefitsPaid:
+                        benefitsPaid,
+
+                    closingDBO:
+                        closingDBO,
+
+                    expectedClosingDBO:
+                        expectedClosing,
+
+                    reconciliationDifference:
+                        difference,
+
+                    balanced:
+                        Math.abs(
+                            difference
+                        ) < 0.01
+                },
+
+
+            success:
+                errors.length === 0
+        };
+    };
+
+
+/* ================================================================
+   27 — P&L / OCI AYRIŞTIRMASI
+================================================================ */
+
+TMS19.muhasebeEtkiHesapla =
+    function (
+        period = {}
+    ) {
+
+        const currentServiceCost =
+            TMS19.sayi(
+                period.currentServiceCost
+            );
+
+
+        const pastServiceCost =
+            TMS19.sayi(
+                period.pastServiceCost
+            );
+
+
+        const interestCost =
+            TMS19.sayi(
+                period.interestCost
+            );
+
+
+        const actuarialGainLoss =
+            TMS19.sayi(
+                period.actuarialGainLoss
+            );
+
+
+        /*
+         * IAS 19 mantığında:
+         *
+         * P&L:
+         * Current service cost
+         * Past service cost
+         * Net interest
+         *
+         * OCI:
+         * Remeasurement
+         *
+         * Burada remeasurement'ın ana bileşeni
+         * aktüeryal kazanç/kayıptır.
+         */
+
+        const profitLoss =
+            currentServiceCost +
+            pastServiceCost +
+            interestCost;
+
+
+        const oci =
+            actuarialGainLoss;
+
+
+        const totalDefinedBenefitCost =
+            profitLoss +
+            oci;
+
+
+        return {
+
+            karZarar:
+                {
+
+                    cariHizmetMaliyeti:
+                        currentServiceCost,
+
+                    gecmisHizmetMaliyeti:
+                        pastServiceCost,
+
+                    netFaizMaliyeti:
+                        interestCost,
+
+                    toplam:
+                        profitLoss
+                },
+
+
+            digerKapsamliGelir:
+                {
+
+                    aktueryalKazancKayip:
+                        oci,
+
+                    toplam:
+                        oci
+                },
+
+
+            toplamAktueryalEtki:
+                totalDefinedBenefitCost
+        };
+    };
+
+
+/* ================================================================
+   28 — SENSITIVITY ANALYSIS
+================================================================ */
+
+TMS19.senaryoHesapla =
+    function (
+        personeller,
+        varsayimlar,
+        degisiklikler = {}
+    ) {
+
+        const baseAssumptions =
+            {
+                ...varsayimlar
+            };
+
+
+        const scenarioAssumptions =
+            {
+                ...varsayimlar,
+                ...degisiklikler
+            };
+
+
+        const base =
+            TMS19.portfoyDonemHesapla(
+                personeller,
+                baseAssumptions
+            );
+
+
+        const scenario =
+            TMS19.portfoyDonemHesapla(
+                personeller,
+                scenarioAssumptions
+            );
+
+
+        const baseDBO =
+            TMS19.sayi(
+                base.summary
+                    .closingDBO
+            );
+
+
+        const scenarioDBO =
+            TMS19.sayi(
+                scenario.summary
+                    .closingDBO
+            );
+
+
+        const difference =
+            scenarioDBO -
+            baseDBO;
+
+
+        const percentage =
+            baseDBO !== 0
+                ? difference /
+                  Math.abs(
+                      baseDBO
+                  )
+                : 0;
+
+
+        return {
+
+            base:
+                base,
+
+            scenario:
+                scenario,
+
+            impact:
+                {
+
+                    dboDifference:
+                        difference,
+
+                    dboPercentage:
+                        percentage
+                }
+        };
+    };
+
+
+/* ================================================================
+   29 — İSKONTO SENSİTİVİTESİ
+================================================================ */
+
+TMS19.iskontoSensitivitesi =
+    function (
+        personeller,
+        varsayimlar,
+        basisPoints = 100
+    ) {
+
+        const rate =
+            TMS19.sayi(
+                varsayimlar
+                    .iskontoOrani
+            );
+
+
+        const change =
+            TMS19.sayi(
+                basisPoints
+            ) / 10000;
+
+
+        const lowerRate =
+            rate -
+            change;
+
+
+        const upperRate =
+            rate +
+            change;
+
+
+        const lower =
+            TMS19.senaryoHesapla(
+                personeller,
+                varsayimlar,
+                {
+                    iskontoOrani:
+                        lowerRate
+                }
+            );
+
+
+        const upper =
+            TMS19.senaryoHesapla(
+                personeller,
+                varsayimlar,
+                {
+                    iskontoOrani:
+                        upperRate
+                }
+            );
+
+
+        return {
+
+            baseRate:
+                rate,
+
+            lowerRate:
+                lowerRate,
+
+            upperRate:
+                upperRate,
+
+            lower:
+                lower,
+
+            upper:
+                upper
+        };
+    };
+
+
+/* ================================================================
+   30 — MAAŞ SENSİTİVİTESİ
+================================================================ */
+
+TMS19.maasArtisSensitivitesi =
+    function (
+        personeller,
+        varsayimlar,
+        basisPoints = 100
+    ) {
+
+        const rate =
+            TMS19.sayi(
+                varsayimlar
+                    .maasArtisOrani
+            );
+
+
+        const change =
+            TMS19.sayi(
+                basisPoints
+            ) / 10000;
+
+
+        const lowerRate =
+            Math.max(
+                0,
+                rate -
+                change
+            );
+
+
+        const upperRate =
+            rate +
+            change;
+
+
+        const lower =
+            TMS19.senaryoHesapla(
+                personeller,
+                varsayimlar,
+                {
+                    maasArtisOrani:
+                        lowerRate
+                }
+            );
+
+
+        const upper =
+            TMS19.senaryoHesapla(
+                personeller,
+                varsayimlar,
+                {
+                    maasArtisOrani:
+                        upperRate
+                }
+            );
+
+
+        return {
+
+            baseRate:
+                rate,
+
+            lowerRate:
+                lowerRate,
+
+            upperRate:
+                upperRate,
+
+            lower:
+                lower,
+
+            upper:
+                upper
+        };
+    };
+
+
+/* ================================================================
+   31 — AKTÜERYAL ENGINE HEALTH CHECK
+================================================================ */
+
+TMS19.periodicEngineHealthCheck =
+    function () {
+
+        const requiredFunctions =
+            [
+
+                "personelHesapla",
+
+                "acilisDBOHesapla",
+
+                "cariHizmetMaliyetiHesapla",
+
+                "faizMaliyetiHesapla",
+
+                "gecmisHizmetMaliyetiHesapla",
+
+                "odenenFaydaHesapla",
+
+                "aktueryalKazancKayipHesapla",
+
+                "kapanisDBOHesapla",
+
+                "dboReconciliation",
+
+                "personelDonemHesapla",
+
+                "portfoyDonemHesapla",
+
+                "muhasebeEtkiHesapla",
+
+                "senaryoHesapla",
+
+                "iskontoSensitivitesi",
+
+                "maasArtisSensitivitesi"
+            ];
+
+
+        const status =
+            {};
+
+
+        let healthy =
+            true;
+
+
+        requiredFunctions.forEach(
+            functionName => {
+
+                const exists =
+                    typeof TMS19[
+                        functionName
+                    ] ===
+                    "function";
+
+
+                status[
+                    functionName
+                ] =
+                    exists;
+
+
+                if (
+                    !exists
+                ) {
+
+                    healthy =
+                        false;
+                }
+            }
+        );
+
+
+        return {
+
+            healthy:
+                healthy,
+
+            engine:
+                "TMS19 Periodic Actuarial Engine",
+
+            functions:
+                status,
+
+            timestamp:
+                new Date()
+                    .toISOString()
+        };
+    };
