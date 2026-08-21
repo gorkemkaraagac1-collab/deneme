@@ -3677,3 +3677,907 @@ TMS19.portfoyMuhasebeHesapla =
                 errors.length === 0
         };
     };
+
+/* ================================================================
+   TMS 19 — PROJECTED UNIT CREDIT ENGINE
+   ----------------------------------------------------------------
+   Year-by-Year Actuarial Projection
+
+   Amaç:
+   Her personel için değerleme tarihinden emeklilik tarihine kadar
+   gelecek yılların beklenen faydalarını hesaplamak.
+
+   Ana akış:
+
+   Değerleme Tarihi
+        ↓
+   Gelecek Yıllar
+        ↓
+   Maaş Projeksiyonu
+        ↓
+   Kıdem Tavanı
+        ↓
+   Fayda
+        ↓
+   Hizmet Birikimi
+        ↓
+   Demografik Olasılık
+        ↓
+   İskonto
+        ↓
+   Present Value
+================================================================ */
+
+
+/* ================================================================
+   42 — YILLIK MAAŞ PROJEKSİYONU
+================================================================ */
+
+TMS19.yillikMaasProjeksiyonu =
+    function (
+        mevcutMaas,
+        yil,
+        maasArtisOrani
+    ) {
+
+        const salary =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    mevcutMaas
+                )
+            );
+
+
+        const increase =
+            TMS19.sayi(
+                maasArtisOrani
+            );
+
+
+        return (
+            salary *
+            Math.pow(
+                1 + increase,
+                Math.max(
+                    0,
+                    yil
+                )
+            )
+        );
+    };
+
+
+/* ================================================================
+   43 — YILLIK KIDEM TAVANI
+================================================================ */
+
+TMS19.yillikKidemTavani =
+    function (
+        mevcutTavan,
+        yil,
+        artisOrani
+    ) {
+
+        const ceiling =
+            TMS19.sayi(
+                mevcutTavan
+            );
+
+
+        if (
+            ceiling <= 0
+        ) {
+
+            return Infinity;
+        }
+
+
+        const increase =
+            TMS19.sayi(
+                artisOrani
+            );
+
+
+        return (
+            ceiling *
+            Math.pow(
+                1 + increase,
+                Math.max(
+                    0,
+                    yil
+                )
+            )
+        );
+    };
+
+
+/* ================================================================
+   44 — YILLIK DEVAM OLASILIĞI
+================================================================ */
+
+TMS19.yillikDevamOlasiligi =
+    function (
+        varsayimlar = {}
+    ) {
+
+        const turnover =
+            Math.min(
+                1,
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        varsayimlar
+                            .personelDevirOrani
+                    )
+                )
+            );
+
+
+        const mortality =
+            Math.min(
+                1,
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        varsayimlar
+                            .olumOrani
+                    )
+                )
+            );
+
+
+        return (
+            1 -
+            turnover
+        ) *
+        (
+            1 -
+            mortality
+        );
+    };
+
+
+/* ================================================================
+   45 — KÜMÜLATİF DEVAM OLASILIĞI
+================================================================ */
+
+TMS19.kumulatifDevamOlasiligi =
+    function (
+        yil,
+        varsayimlar = {}
+    ) {
+
+        if (
+            yil <= 0
+        ) {
+
+            return 1;
+        }
+
+
+        const annual =
+            TMS19.yillikDevamOlasiligi(
+                varsayimlar
+            );
+
+
+        return Math.pow(
+            annual,
+            yil
+        );
+    };
+
+
+/* ================================================================
+   46 — YILLIK HİZMET BİRİMİ
+================================================================ */
+
+TMS19.yillikHizmetBirimi =
+    function (
+        faydaHesaplamaMaasi,
+        faydaOrani
+    ) {
+
+        return (
+            Math.max(
+                0,
+                TMS19.sayi(
+                    faydaHesaplamaMaasi
+                )
+            ) *
+            Math.max(
+                0,
+                TMS19.sayi(
+                    faydaOrani
+                )
+            )
+        );
+    };
+
+
+/* ================================================================
+   47 — PUCl YILLIK PROJECTION
+================================================================ */
+
+TMS19.pucProjection =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        const p =
+            TMS19.personelNormalizeEt(
+                personel
+            );
+
+
+        const degerlemeTarihi =
+            TMS19.tarih(
+                varsayimlar
+                    .degerlemeTarihi
+            );
+
+
+        const dogumTarihi =
+            TMS19.tarih(
+                p.dogumTarihi
+            );
+
+
+        const iseGirisTarihi =
+            TMS19.tarih(
+                p.iseGirisTarihi
+            );
+
+
+        const mevcutMaas =
+            TMS19.sayi(
+                p.mevcutMaas
+            );
+
+
+        if (
+            !degerlemeTarihi ||
+            !dogumTarihi ||
+            !iseGirisTarihi
+        ) {
+
+            throw new Error(
+                "PUC projection için tarih bilgileri eksik."
+            );
+        }
+
+
+        const currentAge =
+            TMS19.yasHesapla(
+                dogumTarihi,
+                degerlemeTarihi
+            );
+
+
+        const currentService =
+            TMS19.yilFarki(
+                iseGirisTarihi,
+                degerlemeTarihi
+            );
+
+
+        const retirementAge =
+            TMS19.sayi(
+                varsayimlar
+                    .emeklilikYasi
+            );
+
+
+        const remainingYears =
+            Math.max(
+                0,
+                retirementAge -
+                currentAge
+            );
+
+
+        const totalServiceAtRetirement =
+            currentService +
+            remainingYears;
+
+
+        const salaryGrowth =
+            TMS19.sayi(
+                varsayimlar
+                    .maasArtisOrani
+            );
+
+
+        const discountRate =
+            TMS19.sayi(
+                varsayimlar
+                    .iskontoOrani
+            );
+
+
+        const benefitRate =
+            TMS19.sayi(
+                varsayimlar
+                    .faydaOrani
+            );
+
+
+        const ceiling =
+            TMS19.sayi(
+                varsayimlar
+                    .kidemTavani
+            );
+
+
+        const ceilingGrowth =
+            TMS19.sayi(
+                varsayimlar
+                    .kidemTavaniArtisOrani
+            );
+
+
+        const projection =
+            [];
+
+
+        let cumulativeProbability =
+            1;
+
+
+        let totalPresentValue =
+            0;
+
+
+        let totalExpectedBenefit =
+            0;
+
+
+        /*
+         * Değerleme tarihinden emekliliğe kadar
+         * her yıl için hesaplama.
+         */
+
+        for (
+            let year = 1;
+            year <= remainingYears;
+            year++
+        ) {
+
+            const projectedAge =
+                currentAge +
+                year;
+
+
+            const projectedService =
+                currentService +
+                year;
+
+
+            /*
+             * Maaş
+             */
+
+            const projectedSalary =
+                TMS19.yillikMaasProjeksiyonu(
+                    mevcutMaas,
+                    year,
+                    salaryGrowth
+                );
+
+
+            /*
+             * Kıdem tavanı
+             */
+
+            const projectedCeiling =
+                TMS19.yillikKidemTavani(
+                    ceiling,
+                    year,
+                    ceilingGrowth
+                );
+
+
+            /*
+             * Fayda hesabında kullanılacak maaş.
+             */
+
+            const benefitSalary =
+                Math.min(
+                    projectedSalary,
+                    projectedCeiling
+                );
+
+
+            /*
+             * Yıllık fayda.
+             */
+
+            const annualBenefit =
+                TMS19.yillikHizmetBirimi(
+                    benefitSalary,
+                    benefitRate
+                );
+
+
+            /*
+             * Emeklilikte toplam beklenen fayda.
+             *
+             * Burada geçmiş + gelecek hizmet
+             * dikkate alınır.
+             */
+
+            const accruedBenefitAtRetirement =
+                annualBenefit *
+                totalServiceAtRetirement;
+
+
+            /*
+             * Yıllık devam olasılığı.
+             */
+
+            const annualProbability =
+                TMS19.yillikDevamOlasiligi(
+                    varsayimlar
+                );
+
+
+            cumulativeProbability *=
+                annualProbability;
+
+
+            /*
+             * Beklenen fayda.
+             */
+
+            const expectedBenefit =
+                accruedBenefitAtRetirement *
+                cumulativeProbability;
+
+
+            /*
+             * Gelecekteki faydanın bugünkü değeri.
+             */
+
+            const discountFactor =
+                TMS19.iskontoFaktoru(
+                    discountRate,
+                    year
+                );
+
+
+            const presentValue =
+                expectedBenefit *
+                discountFactor;
+
+
+            totalExpectedBenefit +=
+                expectedBenefit;
+
+
+            totalPresentValue +=
+                presentValue;
+
+
+            projection.push({
+
+                year:
+                    year,
+
+                age:
+                    projectedAge,
+
+                service:
+                    projectedService,
+
+                yearsToRetirement:
+                    remainingYears -
+                    year,
+
+
+                projectedSalary:
+                    projectedSalary,
+
+                projectedCeiling:
+                    projectedCeiling,
+
+                benefitSalary:
+                    benefitSalary,
+
+                annualBenefit:
+                    annualBenefit,
+
+                accruedBenefit:
+                    accruedBenefitAtRetirement,
+
+                annualProbability:
+                    annualProbability,
+
+                cumulativeProbability:
+                    cumulativeProbability,
+
+                expectedBenefit:
+                    expectedBenefit,
+
+                discountRate:
+                    discountRate,
+
+                discountFactor:
+                    discountFactor,
+
+                presentValue:
+                    presentValue
+            });
+        }
+
+
+        /*
+         * Eğer kişi emeklilik yaşındaysa
+         * doğrudan mevcut hizmet üzerinden
+         * fayda hesapla.
+         */
+
+        if (
+            remainingYears === 0
+        ) {
+
+            const benefitSalary =
+                Math.min(
+                    mevcutMaas,
+                    ceiling > 0
+                        ? ceiling
+                        : Infinity
+                );
+
+
+            const accruedBenefit =
+                benefitSalary *
+                benefitRate *
+                currentService;
+
+
+            totalExpectedBenefit =
+                accruedBenefit;
+
+
+            totalPresentValue =
+                accruedBenefit;
+        }
+
+
+        return {
+
+            personelId:
+                p.personelId,
+
+            currentAge:
+                currentAge,
+
+            currentService:
+                currentService,
+
+            retirementAge:
+                retirementAge,
+
+            remainingYears:
+                remainingYears,
+
+            totalServiceAtRetirement:
+                totalServiceAtRetirement,
+
+            projection:
+                projection,
+
+            totalExpectedBenefit:
+                totalExpectedBenefit,
+
+            projectedDBO:
+                totalPresentValue
+        };
+    };
+
+
+/* ================================================================
+   48 — PORTFÖY PUC PROJECTION
+================================================================ */
+
+TMS19.portfoyPucProjection =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            throw new Error(
+                "Personel listesi array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+
+        const errors =
+            [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                try {
+
+                    const result =
+                        TMS19.pucProjection(
+                            personel,
+                            varsayimlar
+                        );
+
+
+                    result.index =
+                        index;
+
+
+                    results.push(
+                        result
+                    );
+
+                }
+
+                catch (
+                    error
+                ) {
+
+                    errors.push({
+
+                        index:
+                            index,
+
+                        personelId:
+                            personel?.personelId ??
+                            personel?.id ??
+                            "",
+
+                        error:
+                            error.message
+                    });
+                }
+            }
+        );
+
+
+        const totalDBO =
+            results.reduce(
+                (
+                    total,
+                    item
+                ) => {
+
+                    return (
+                        total +
+                        TMS19.sayi(
+                            item.projectedDBO
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        const totalExpectedBenefit =
+            results.reduce(
+                (
+                    total,
+                    item
+                ) => {
+
+                    return (
+                        total +
+                        TMS19.sayi(
+                            item.totalExpectedBenefit
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        return {
+
+            results:
+                results,
+
+            errors:
+                errors,
+
+            summary:
+                {
+
+                    personelSayisi:
+                        personeller.length,
+
+                    hesaplananPersonel:
+                        results.length,
+
+                    hataliPersonel:
+                        errors.length,
+
+                    toplamDBO:
+                        totalDBO,
+
+                    toplamBeklenenFayda:
+                        totalExpectedBenefit
+                },
+
+            success:
+                errors.length === 0
+        };
+    };
+
+
+/* ================================================================
+   49 — PUC VS MEVCUT DBO KARŞILAŞTIRMASI
+================================================================ */
+
+TMS19.pucKarsilastirma =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        const puc =
+            TMS19.portfoyPucProjection(
+                personeller,
+                varsayimlar
+            );
+
+
+        const mevcut =
+            TMS19.portfoyDonemHesapla(
+                personeller,
+                varsayimlar
+            );
+
+
+        const pucDBO =
+            TMS19.sayi(
+                puc.summary
+                    .toplamDBO
+            );
+
+
+        const currentDBO =
+            TMS19.sayi(
+                mevcut.summary
+                    .closingDBO
+            );
+
+
+        const difference =
+            pucDBO -
+            currentDBO;
+
+
+        const percentage =
+            currentDBO !== 0
+                ? difference /
+                  Math.abs(
+                      currentDBO
+                  )
+                : 0;
+
+
+        return {
+
+            puc:
+                puc,
+
+            current:
+                mevcut,
+
+            comparison:
+                {
+
+                    pucDBO:
+                        pucDBO,
+
+                    currentDBO:
+                        currentDBO,
+
+                    difference:
+                        difference,
+
+                    percentage:
+                        percentage
+                }
+        };
+    };
+
+
+/* ================================================================
+   50 — PUC HEALTH CHECK
+================================================================ */
+
+TMS19.pucHealthCheck =
+    function () {
+
+        const functions =
+            [
+
+                "yillikMaasProjeksiyonu",
+
+                "yillikKidemTavani",
+
+                "yillikDevamOlasiligi",
+
+                "kumulatifDevamOlasiligi",
+
+                "yillikHizmetBirimi",
+
+                "pucProjection",
+
+                "portfoyPucProjection",
+
+                "pucKarsilastirma"
+            ];
+
+
+        const status =
+            {};
+
+
+        let healthy =
+            true;
+
+
+        functions.forEach(
+            functionName => {
+
+                const exists =
+                    typeof TMS19[
+                        functionName
+                    ] ===
+                    "function";
+
+
+                status[
+                    functionName
+                ] =
+                    exists;
+
+
+                if (
+                    !exists
+                ) {
+
+                    healthy =
+                        false;
+                }
+            }
+        );
+
+
+        return {
+
+            healthy:
+                healthy,
+
+            functions:
+                status,
+
+            timestamp:
+                new Date()
+                    .toISOString()
+        };
+    };
