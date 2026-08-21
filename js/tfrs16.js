@@ -9618,7 +9618,46 @@ document.addEventListener("DOMContentLoaded", () => {
           "2030-09-30",
 
         "Varlık Sınıfı":
-          "Makine"
+          "Makine",
+
+        "Peşin Ödemeler":
+          0,
+
+        "Kiralayan Teşvikleri":
+          0,
+
+        "Kira Artış Tipi":
+          "Artış Yok",
+
+        "Yıllık Artış Oranı":
+          0,
+
+        "Sabit Artış Tutarı":
+          0,
+
+        "Değişken Ödeme":
+          0,
+
+        "Varlığın Faydalı Ömrü":
+          "",
+
+        "Yenileme Opsiyonu":
+          "Hayır",
+
+        "Fesih Opsiyonu":
+          "Hayır",
+
+        "Satın Alma Opsiyonu":
+          "Hayır",
+
+        "Mülkiyet Devri":
+          "Hayır",
+
+        "Kısa Vadeli Kiralama İstisnası":
+          "Hayır",
+
+        "Düşük Değerli Varlık İstisnası":
+          "Hayır"
       }
 
     ];
@@ -13473,7 +13512,20 @@ document.addEventListener("DOMContentLoaded", () => {
         renewalDate: ["renewal date", "renewal", "yenileme tarihi", "yenileme"],
         currency: ["currency", "currency code", "para birimi", "döviz", "doviz"],
         status: ["status", "contract status", "durum"],
-        assetClass: ["asset class", "asset category", "varlık sınıfı", "varlik sinifi", "varlık sinifi"]
+        assetClass: ["asset class", "asset category", "varlık sınıfı", "varlik sinifi", "varlık sinifi"],
+        prepayments: ["prepayments", "prepayment", "peşin ödemeler", "pesin odemeler", "peşin ödeme", "pesin odeme"],
+        leaseIncentives: ["lease incentives", "incentives", "kiralayan teşvikleri", "kiralayan tesvikleri", "teşvikler", "tesvikler"],
+        leaseIncreaseType: ["escalation type", "lease increase type", "increase type", "kira artış tipi", "kira artis tipi"],
+        leaseIncreaseRate: ["escalation rate", "annual increase rate", "increase rate", "yıllık artış oranı", "yillik artis orani"],
+        fixedIncrease: ["fixed increase", "fixed escalation amount", "sabit artış tutarı", "sabit artis tutari"],
+        variablePayment: ["variable payment", "değişken ödeme", "degisken odeme"],
+        usefulLifeMonths: ["useful life months", "useful life", "faydalı ömür", "faydali omur", "varlığın faydalı ömrü", "varligin faydali omru"],
+        renewalOption: ["renewal option", "yenileme opsiyonu", "yenileme opsiyonu makul ölçüde kesin", "yenileme opsiyonu makul olcude kesin"],
+        terminationOption: ["termination option", "fesih opsiyonu", "fesih opsiyonu makul ölçüde kesin değil", "fesih opsiyonu makul olcude kesin degil"],
+        purchaseOption: ["purchase option", "satın alma opsiyonu", "satin alma opsiyonu", "satın alma opsiyonu makul ölçüde kesin", "satin alma opsiyonu makul olcude kesin"],
+        ownershipTransfer: ["ownership transfer", "mülkiyet devri", "mulkiyet devri", "kira sonunda mülkiyet devri var", "kira sonunda mulkiyet devri var"],
+        shortTermLease: ["short term lease", "short term exemption", "kısa vadeli kiralama istisnası", "kisa vadeli kiralama istisnasi"],
+        lowValueAsset: ["low value asset", "low value exemption", "düşük değerli varlık istisnası", "dusuk degerli varlik istisnasi"]
       })
     }),
     SAP: Object.freeze({ id: "SAP", schemaVersion: INTEGRATION_SCHEMA_VERSION, fields: {} }),
@@ -13574,6 +13626,41 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Object.prototype.hasOwnProperty.call(normalized, key)) return normalized[key];
     }
     return undefined;
+  }
+
+  function integrationBoolean(value) {
+    if (value === true || value === false) return value;
+    const raw = integrationNormalizeHeader(value);
+    if (!raw) return false;
+    return ["evet", "e", "var", "true", "yes", "y", "1", "x", "doğru", "dogru"].includes(raw);
+  }
+
+  function integrationEscalationType(value) {
+    const raw = integrationNormalizeHeader(value);
+    if (!raw) return "none";
+    if (["fixedrate", "sabit oran", "sabit oranli", "oran"].some(v => raw.includes(integrationNormalizeHeader(v)))) return "fixedRate";
+    if (["fixedamount", "sabit tutar", "sabit artis tutari", "tutar"].some(v => raw.includes(integrationNormalizeHeader(v)))) return "fixedAmount";
+    if (["index", "endeks"].some(v => raw.includes(v))) return "index";
+    if (["none", "artis yok", "yok"].some(v => raw.includes(v))) return "none";
+    return "none";
+  }
+
+  function integrationOptionalNumber(row, aliases) {
+    const value = integrationFindValue(row, aliases);
+    if (value === undefined || value === null || value === "") return undefined;
+    return integrationNumber(value, 0);
+  }
+
+  function integrationOptionalBoolean(row, aliases) {
+    const value = integrationFindValue(row, aliases);
+    if (value === undefined || value === null || value === "") return undefined;
+    return integrationBoolean(value);
+  }
+
+  function integrationOptionalEscalationType(row, aliases) {
+    const value = integrationFindValue(row, aliases);
+    if (value === undefined || value === null || value === "") return undefined;
+    return integrationEscalationType(value);
   }
 
   function getIntegrationStorage() {
@@ -13718,7 +13805,20 @@ document.addEventListener("DOMContentLoaded", () => {
       renewalDate: dateResultRenewal && typeof dateResultRenewal === "object" ? null : dateResultRenewal,
       currency: normalizeIntegrationCurrency(integrationFindValue(row, fields.currency || [])),
       status: integrationFindValue(row, fields.status || []) || "active",
-      assetClass: String(integrationFindValue(row, fields.assetClass || []) || "").trim()
+      assetClass: String(integrationFindValue(row, fields.assetClass || []) || "").trim(),
+      prepayments: integrationOptionalNumber(row, fields.prepayments || []),
+      leaseIncentives: integrationOptionalNumber(row, fields.leaseIncentives || []),
+      leaseIncreaseType: integrationOptionalEscalationType(row, fields.leaseIncreaseType || []),
+      leaseIncreaseRate: integrationOptionalNumber(row, fields.leaseIncreaseRate || []),
+      fixedIncrease: integrationOptionalNumber(row, fields.fixedIncrease || []),
+      variablePayment: integrationOptionalNumber(row, fields.variablePayment || []),
+      usefulLifeMonths: integrationOptionalNumber(row, fields.usefulLifeMonths || []),
+      renewalOption: integrationOptionalBoolean(row, fields.renewalOption || []),
+      terminationOption: integrationOptionalBoolean(row, fields.terminationOption || []),
+      purchaseOption: integrationOptionalBoolean(row, fields.purchaseOption || []),
+      ownershipTransfer: integrationOptionalBoolean(row, fields.ownershipTransfer || []),
+      shortTermLease: integrationOptionalBoolean(row, fields.shortTermLease || []),
+      lowValueAsset: integrationOptionalBoolean(row, fields.lowValueAsset || [])
     };
     const warnings = [];
     [dateResultStart, dateResultEnd, dateResultRenewal].forEach(result => { if (result && typeof result === "object" && result.warning) warnings.push(result.warning); });
@@ -13826,6 +13926,19 @@ document.addEventListener("DOMContentLoaded", () => {
       renewalDate: data.renewalDate,
       status: data.status || "active",
       assetClass: data.assetClass || "",
+      prepayments: data.prepayments ?? 0,
+      leaseIncentives: data.leaseIncentives ?? 0,
+      leaseIncreaseType: data.leaseIncreaseType ?? "none",
+      leaseIncreaseRate: data.leaseIncreaseRate ?? 0,
+      fixedIncrease: data.fixedIncrease ?? 0,
+      variablePayment: data.variablePayment ?? 0,
+      usefulLifeMonths: data.usefulLifeMonths ?? null,
+      renewalOption: data.renewalOption === true,
+      terminationOption: data.terminationOption === true,
+      purchaseOption: data.purchaseOption === true,
+      ownershipTransfer: data.ownershipTransfer === true,
+      shortTermLease: data.shortTermLease === true,
+      lowValueAsset: data.lowValueAsset === true,
       modification: false,
       reassessments: []
     };
@@ -13844,6 +13957,19 @@ document.addEventListener("DOMContentLoaded", () => {
         try { saveCustomAssetClass(data.assetClass); } catch (error) {}
       }
     }
+    if (data.prepayments !== undefined) base.prepayments = data.prepayments;
+    if (data.leaseIncentives !== undefined) base.leaseIncentives = data.leaseIncentives;
+    if (data.leaseIncreaseType !== undefined) base.leaseIncreaseType = data.leaseIncreaseType;
+    if (data.leaseIncreaseRate !== undefined) base.leaseIncreaseRate = data.leaseIncreaseRate;
+    if (data.fixedIncrease !== undefined) base.fixedIncrease = data.fixedIncrease;
+    if (data.variablePayment !== undefined) base.variablePayment = data.variablePayment;
+    if (data.usefulLifeMonths !== undefined) base.usefulLifeMonths = data.usefulLifeMonths;
+    if (data.renewalOption !== undefined) base.renewalOption = data.renewalOption === true;
+    if (data.terminationOption !== undefined) base.terminationOption = data.terminationOption === true;
+    if (data.purchaseOption !== undefined) base.purchaseOption = data.purchaseOption === true;
+    if (data.ownershipTransfer !== undefined) base.ownershipTransfer = data.ownershipTransfer === true;
+    if (data.shortTermLease !== undefined) base.shortTermLease = data.shortTermLease === true;
+    if (data.lowValueAsset !== undefined) base.lowValueAsset = data.lowValueAsset === true;
     if (!Array.isArray(base.reassessments)) base.reassessments = [];
     base.integrationMetadata = {
       ...(base.integrationMetadata || {}),
@@ -13863,8 +13989,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function detectIntegrationChanges(oldContract, newData) {
     if (!oldContract) return [];
-    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "status", "assetClass"];
-    return fields.filter(field => String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
+    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
+    return fields.filter(field => newData[field] !== undefined && String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
   function commitImport(jobId, rows, options = {}) {
