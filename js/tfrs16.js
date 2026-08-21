@@ -2959,7 +2959,28 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.shortTermLease === true,
 
       lowValueAsset:
-        contract.lowValueAsset === true
+        contract.lowValueAsset === true,
+
+      // TFRS 16.32: ROU is depreciated over the shorter of lease
+      // term and useful life UNLESS ownership transfers at the end
+      // of the lease term, or the lease liability reflects a
+      // purchase option reasonably certain to be exercised — in
+      // either of those cases it is depreciated over the useful
+      // life of the underlying asset instead. usefulLifeMonths is
+      // an optional field (not present on any legacy contract), so
+      // when it is absent behavior is unchanged: full lease term.
+      ownershipTransfer:
+        contract.ownershipTransfer === true,
+
+      purchaseOption:
+        contract.purchaseOption === true,
+
+      usefulLifeMonths:
+        contract.usefulLifeMonths !== undefined &&
+        contract.usefulLifeMonths !== null &&
+        contract.usefulLifeMonths !== ""
+          ? Number(contract.usefulLifeMonths)
+          : null
     };
 
 
@@ -3165,8 +3186,30 @@ document.addEventListener("DOMContentLoaded", () => {
       assumptions.leaseIncentives +
       assumptions.restorationObligation;
 
+    // TFRS 16.32: depreciate over useful life instead of lease term
+    // when ownership transfers, or a purchase option is reasonably
+    // certain to be exercised — but only once a useful life has
+    // actually been provided (usefulLifeMonths). Without it, this
+    // falls back to the lease term exactly as before, so contracts
+    // that don't set the new field are unaffected. Depreciation
+    // never uses a period SHORTER than the lease term here, since
+    // useful life is by definition expected to be >= lease term in
+    // the ownership-transfer/purchase-option case.
+    const usesUsefulLife =
+      (
+        assumptions.ownershipTransfer ||
+        assumptions.purchaseOption
+      ) &&
+      assumptions.usefulLifeMonths &&
+      assumptions.usefulLifeMonths > months;
+
+    const depreciationMonths =
+      usesUsefulLife
+        ? assumptions.usefulLifeMonths
+        : months;
+
     const depreciation =
-      initialROU / months;
+      initialROU / depreciationMonths;
 
     const schedule = [];
 
@@ -3249,7 +3292,16 @@ document.addEventListener("DOMContentLoaded", () => {
         closingLiability,
         rouOpening,
         depreciation: rouDepreciation,
-        rouClosing
+        rouClosing,
+        // TFRS 16.28 / 53(e): payments that vary with something
+        // other than an index or a rate (e.g. % of sales, usage)
+        // are NOT part of the lease liability/ROU — they are
+        // expensed as incurred and disclosed separately. Previously
+        // assumptions.variablePayment was captured but never used
+        // anywhere, so this amount was silently dropped from both
+        // the schedule and any expense/disclosure total.
+        variableExpense:
+          assumptions.variablePayment
       });
 
       openingLiability =
@@ -3264,8 +3316,15 @@ document.addEventListener("DOMContentLoaded", () => {
       liability: initialLiability,
       rouAssets: initialROU,
       depreciation,
+      depreciationMonths,
+      usesUsefulLifeDepreciation: usesUsefulLife,
       monthlyInterest:
         schedule[0]?.interest || 0,
+      // TFRS 16.53(e) disclosure input: total expense over the
+      // schedule relating to variable lease payments not included
+      // in the measurement of the lease liability.
+      totalVariableExpense:
+        assumptions.variablePayment * months,
       schedule,
       assumptions,
       exempt: false
@@ -4667,6 +4726,22 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateLease(
         contract
       );
+
+    /*
+      V16.6 FIX — GK Advisory review
+      -------------------------------------------------------
+      Previously this always produced a 260/401 capitalization
+      entry, even for contracts flagged shortTermLease/lowValueAsset.
+      Under TFRS 16.5-8 those leases are NOT capitalized at all —
+      no ROU asset, no lease liability — the payment is recognized
+      as an expense (generally straight-line) as it is incurred.
+      Returning an empty array here means no (wrong) initial
+      recognition entry is generated; the detail screen shows an
+      explanatory note instead (see openDetail()).
+    */
+    if (engine.exempt) {
+      return [];
+    }
 
     return [
 
@@ -6908,7 +6983,17 @@ document.addEventListener("DOMContentLoaded", () => {
         )}
 
 
-        ${renderJournalEntry(
+        ${engine.exempt ? `
+          <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px 16px;">
+            <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
+            <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
+              Bu sözleşme kısa vadeli ve/veya düşük değerli varlık istisnası kapsamında işaretlenmiştir.
+              Kullanım hakkı varlığı ve kiralama yükümlülüğü tanınmaz; ödemeler kira süresi boyunca
+              genellikle doğrusal (straight-line) esasa göre gider olarak muhasebeleştirilir. Bu nedenle
+              bir "ilk muhasebeleştirme fişi" üretilmez.
+            </p>
+          </div>
+        ` : renderJournalEntry(
           "İlk Muhasebeleştirme Fişi",
           generateInitialEntry(
             contract
@@ -10544,6 +10629,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const d = cfoResolveReportingDate(reportingDate);
     return { reportingDate:cfoIsoDate(d), total:getTotalLeaseLiability(d), current:getCurrentLeaseLiability(d), nonCurrent:getNonCurrentLeaseLiability(d) };
   }
+
+  // TFRS 16.53(i): "the weighted average incremental borrowing rate
+  // applied to lease liabilities recognized in the statement of
+  // financial position" — this disclosure did not exist anywhere in
+  // the module. Weighted by each contract's outstanding lease
+  // liability as of the reporting date (exempt/zero-liability
+  // contracts naturally get zero weight, so they don't distort the
+  // rate even though they were entered with a discount rate field).
+  function getWeightedAverageDiscountRate(reportingDate) {
+    const d = cfoResolveReportingDate(reportingDate);
+    let weightedSum = 0;
+    let totalWeight = 0;
+    cfoGetContracts().forEach(contract => {
+      if (!cfoIsActive(contract, d)) return;
+      let metrics;
+      try { metrics = cfoGetContractMetricsInternal(contract, d); }
+      catch (error) { return; }
+      const weight = cfoNumber(metrics?.leaseLiability);
+      const rate = cfoNumber(contract.discountRate);
+      if (weight <= 0) return;
+      weightedSum += weight * rate;
+      totalWeight += weight;
+    });
+    return {
+      reportingDate: cfoIsoDate(d),
+      weightedAverageDiscountRate: totalWeight > 0 ? cfoRound(weightedSum / totalWeight) : 0,
+      totalWeightedLiability: cfoRound(totalWeight),
+      basis: "Contract discount rates weighted by outstanding lease liability as of the reporting date (TFRS 16.53(i))."
+    };
+  }
   function getLeaseCashFlowMetrics(reportingDate) {
     const d = cfoResolveReportingDate(reportingDate);
     const end = cfoAddMonths(d,12);
@@ -10664,7 +10779,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const liabilityReconciliation=cfoRound(totals.leaseLiability-(totals.currentLiability+totals.nonCurrentLiability));
     const cashReconciliation=cfoRound(cash.next12MonthsPayments-(cash.next12MonthsPrincipal+cash.next12MonthsInterest));
     const dataErrors=rows.filter(r=>r.calculationValid===false||r.calculationError).length;
-    return { reportingDate:cfoIsoDate(d), contracts, liabilities:{total:totals.leaseLiability,current:totals.currentLiability,nonCurrent:totals.nonCurrentLiability}, rouAssets:{total:totals.rouAsset}, pnl:{interestExpense:totals.monthlyInterest,depreciationExpense:totals.monthlyDepreciation,leaseExpense:totals.monthlyLeaseExpense}, cashFlow:{next12MonthsPayments:cash.next12MonthsPayments,next12MonthsPrincipal:cash.next12MonthsPrincipal,next12MonthsInterest:cash.next12MonthsInterest,reconciliationDifference:cashReconciliation}, renewals, expiry:{within12Months:getContractsExpiringWithin12Months(d).length}, modifications, reassessments, risk, controls:getLeaseControlMetrics(d), companies:getCfoMetricsByCompany(d), currencies:getCfoCurrencyMetrics(d), journal:getCfoJournalMetrics(), audit:getCfoAuditMetrics(d), liabilityRollForward:getLeaseLiabilityRollForward(d), rouRollForward:getLeaseRouRollForward(d), reconciliation:{liability:{difference:liabilityReconciliation,passed:Math.abs(liabilityReconciliation)<=CFO_TOLERANCE},cashFlow:{difference:cashReconciliation,passed:Math.abs(cashReconciliation)<=CFO_TOLERANCE}}, dataQuality:{status:dataErrors?"ERROR":(risk.openExceptions?"WARNING":"COMPLETE"),errors:dataErrors,warnings:risk.openExceptions}, sourceMetadata:{liabilities:"REPORTING_DATE_ENGINE",rouAssets:"LEASE_SCHEDULE",pnl:"LEASE_SCHEDULE",cashFlow:"LEASE_SCHEDULE",risk:"CONTROL_ENGINE",audit:"AUDIT_TRAIL_ENGINE"} };
+    return { reportingDate:cfoIsoDate(d), contracts, liabilities:{total:totals.leaseLiability,current:totals.currentLiability,nonCurrent:totals.nonCurrentLiability}, rouAssets:{total:totals.rouAsset}, pnl:{interestExpense:totals.monthlyInterest,depreciationExpense:totals.monthlyDepreciation,leaseExpense:totals.monthlyLeaseExpense}, cashFlow:{next12MonthsPayments:cash.next12MonthsPayments,next12MonthsPrincipal:cash.next12MonthsPrincipal,next12MonthsInterest:cash.next12MonthsInterest,reconciliationDifference:cashReconciliation}, renewals, expiry:{within12Months:getContractsExpiringWithin12Months(d).length}, modifications, reassessments, risk, controls:getLeaseControlMetrics(d), companies:getCfoMetricsByCompany(d), currencies:getCfoCurrencyMetrics(d), journal:getCfoJournalMetrics(), audit:getCfoAuditMetrics(d), liabilityRollForward:getLeaseLiabilityRollForward(d), rouRollForward:getLeaseRouRollForward(d), disclosures:{weightedAverageDiscountRate:getWeightedAverageDiscountRate(d)}, reconciliation:{liability:{difference:liabilityReconciliation,passed:Math.abs(liabilityReconciliation)<=CFO_TOLERANCE},cashFlow:{difference:cashReconciliation,passed:Math.abs(cashReconciliation)<=CFO_TOLERANCE}}, dataQuality:{status:dataErrors?"ERROR":(risk.openExceptions?"WARNING":"COMPLETE"),errors:dataErrors,warnings:risk.openExceptions}, sourceMetadata:{liabilities:"REPORTING_DATE_ENGINE",rouAssets:"LEASE_SCHEDULE",pnl:"LEASE_SCHEDULE",cashFlow:"LEASE_SCHEDULE",risk:"CONTROL_ENGINE",audit:"AUDIT_TRAIL_ENGINE"} };
   }
 
   function getTfrs16CfoSnapshot(reportingDate) {
