@@ -2,38 +2,30 @@
    GK FINANCIAL DECISION COCKPIT
    TMS 19 ACTUARIAL ENGINE
    ----------------------------------------------------------------
-   Standart : TMS 19
-   Yöntem   : Projected Unit Credit (PUC)
-   Sürüm    : 2.0.0
-   Amaç     : TEK PERSONEL aktüeryal hesaplama motoru
+   TMS 19 Employee Benefit Obligation Calculation Engine
 
-   BU DOSYANIN SORUMLULUKLARI
-   --------------------------
-   ✓ Personel hesaplama
-   ✓ Yaş / hizmet süresi
-   ✓ Emekliliğe kalan süre
-   ✓ Maaş projeksiyonu
-   ✓ Kıdem tavanı
-   ✓ Fayda projeksiyonu
-   ✓ Geçmiş hizmet oranı
-   ✓ Turnover / mortality
-   ✓ Beklenen fayda
-   ✓ İskonto
-   ✓ DBO
-   ✓ Cari hizmet maliyeti
-   ✓ Faiz maliyeti
-   ✓ Personel bazlı yıllık projeksiyon
+   ANA SORUMLULUKLAR
+   -----------------
+   1. Personel normalizasyonu
+   2. Personel validation
+   3. Yaş hesaplama
+   4. Hizmet süresi hesaplama
+   5. Maaş projeksiyonu
+   6. Kıdem tavanı projeksiyonu
+   7. Demografik olasılık
+   8. İskonto
+   9. DBO
+   10. Cari hizmet maliyeti
+   11. Faiz maliyeti
+   12. Aktüeryal sonuç üretimi
 
-   BU DOSYANIN SORUMLULUKLARI DEĞİL
-   --------------------------------
-   ✗ CSV / Excel import
-   ✗ Data mapping
-   ✗ UI
-   ✗ Dashboard
-   ✗ Portföy toplamları
-   ✗ Departman analizi
-   ✗ Yaş grubu analizi
-   ✗ Sensitivity dashboard
+   NOT
+   ---
+   Bu dosya UI içermez.
+   Bu dosya tablo çizmez.
+   Bu dosya Excel / CSV okumaz.
+
+   Sadece aktüeryal hesaplama yapar.
 ================================================================ */
 
 (function (global) {
@@ -42,1592 +34,895 @@
 
 
     /* ============================================================
-       01 — NAMESPACE
+       01 — TMS19 NAMESPACE
     ============================================================ */
 
-    const TMS19ActuarialEngine = {};
+    const TMS19 =
+        global.TMS19 ||
+        {};
 
 
-    TMS19ActuarialEngine.version =
-        "2.0.0";
+    /* ============================================================
+       02 — ENGINE BİLGİSİ
+    ============================================================ */
 
+    TMS19.engineVersion =
+        "3.0.0";
 
-    TMS19ActuarialEngine.engineName =
+    TMS19.engineName =
         "GK TMS 19 Actuarial Engine";
 
 
-    TMS19ActuarialEngine.standard =
-        "TMS 19";
-
-
-    TMS19ActuarialEngine.method =
-        "Projected Unit Credit";
-
-
     /* ============================================================
-       02 — GENEL YARDIMCILAR
+       03 — SAYI NORMALİZASYONU
     ============================================================ */
 
-    function sayi(
-        deger,
-        varsayilan = 0
-    ) {
-
-        if (
-            deger === null ||
-            deger === undefined ||
-            deger === ""
-        ) {
-
-            return varsayilan;
-        }
-
-
-        if (
-            typeof deger === "number"
-        ) {
-
-            return Number.isFinite(deger)
-                ? deger
-                : varsayilan;
-        }
-
-
-        let metin =
-            String(deger)
-                .trim()
-                .replace(/\s/g, "");
-
-
-        /*
-         * Türkçe / Avrupa sayı formatı:
-         *
-         * 1.234.567,89
-         * 1234,89
-         */
-
-        if (
-            metin.includes(".") &&
-            metin.includes(",")
-        ) {
-
-            metin =
-                metin
-                    .replace(/\./g, "")
-                    .replace(",", ".");
-        }
-
-        else if (
-            metin.includes(",")
-        ) {
-
-            metin =
-                metin.replace(",", ".");
-        }
-
-
-        const sonuc =
-            Number(metin);
-
-
-        return Number.isFinite(
-            sonuc
-        )
-            ? sonuc
-            : varsayilan;
-    }
-
-
-    function sinirla(
-        deger,
-        minimum,
-        maksimum
-    ) {
-
-        return Math.min(
-            Math.max(
-                sayi(deger),
-                minimum
-            ),
-            maksimum
-        );
-    }
-
-
-    function tarih(
-        deger
-    ) {
-
-        if (
-            deger instanceof Date
-        ) {
-
-            const sonuc =
-                new Date(
-                    deger.getTime()
-                );
-
-
-            return Number.isNaN(
-                sonuc.getTime()
-            )
-                ? null
-                : sonuc;
-        }
-
-
-        if (
-            !deger
-        ) {
-
-            return null;
-        }
-
-
-        const sonuc =
-            new Date(
-                deger
-            );
-
-
-        return Number.isNaN(
-            sonuc.getTime()
-        )
-            ? null
-            : sonuc;
-    }
-
-
-    function yuvarla(
-        deger,
-        basamak = 2
-    ) {
-
-        const katsayi =
-            Math.pow(
-                10,
-                basamak
-            );
-
-
-        return Math.round(
-            sayi(deger) *
-            katsayi
-        ) / katsayi;
-    }
-
-
-    /* ============================================================
-       03 — TARİH HESAPLAMALARI
-    ============================================================ */
-
-    function yilFarki(
-        baslangic,
-        bitis
-    ) {
-
-        const bas =
-            tarih(
-                baslangic
-            );
-
-
-        const bit =
-            tarih(
-                bitis
-            );
-
-
-        if (
-            !bas ||
-            !bit
-        ) {
-
-            return 0;
-        }
-
-
-        const fark =
-            bit.getTime() -
-            bas.getTime();
-
-
-        return Math.max(
-            0,
-            fark /
-            (
-                365.25 *
-                24 *
-                60 *
-                60 *
-                1000
-            )
-        );
-    }
-
-
-    function yasHesapla(
-        dogumTarihi,
-        degerlemeTarihi
-    ) {
-
-        const dogum =
-            tarih(
-                dogumTarihi
-            );
-
-
-        const degerleme =
-            tarih(
-                degerlemeTarihi
-            );
-
-
-        if (
-            !dogum ||
-            !degerleme
-        ) {
-
-            return 0;
-        }
-
-
-        let yas =
-            degerleme.getFullYear() -
-            dogum.getFullYear();
-
-
-        const ayFarki =
-            degerleme.getMonth() -
-            dogum.getMonth();
-
-
-        if (
-            ayFarki < 0 ||
-            (
-                ayFarki === 0 &&
-                degerleme.getDate() <
-                dogum.getDate()
-            )
-        ) {
-
-            yas--;
-        }
-
-
-        return Math.max(
-            0,
-            yas
-        );
-    }
-
-
-    function tarihEkleYil(
-        baslangicTarihi,
-        yil
-    ) {
-
-        const sonuc =
-            tarih(
-                baslangicTarihi
-            );
-
-
-        if (
-            !sonuc
-        ) {
-
-            return null;
-        }
-
-
-        /*
-         * Ondalıklı yıl kullanılıyorsa yaklaşık
-         * gün bazlı hesaplama yapılır.
-         */
-
-        const tamYil =
-            Math.floor(
-                sayi(yil)
-            );
-
-
-        const kalan =
-            sayi(yil) -
-            tamYil;
-
-
-        sonuc.setFullYear(
-            sonuc.getFullYear() +
-            tamYil
-        );
-
-
-        if (
-            kalan > 0
-        ) {
-
-            sonuc.setDate(
-                sonuc.getDate() +
-                Math.round(
-                    kalan * 365.25
-                )
-            );
-        }
-
-
-        return sonuc;
-    }
-
-
-    /* ============================================================
-       04 — PERSONEL NORMALİZASYONU
-    ============================================================ */
-
-    function personelNormalizeEt(
-        personel
-    ) {
-
-        const p =
-            personel || {};
-
-
-        return {
-
-            personelId:
-                p.personelId ??
-                p.personelID ??
-                p.id ??
-                p.sicilNo ??
-                p.employeeId ??
-                "",
-
-
-            adSoyad:
-                p.adSoyad ??
-                p.ad_soyad ??
-                p.adSoyadUnvan ??
-                p.name ??
-                p.fullName ??
-                "",
-
-
-            departman:
-                p.departman ??
-                p.department ??
-                "",
-
-
-            pozisyon:
-                p.pozisyon ??
-                p.position ??
-                "",
-
-
-            dogumTarihi:
-                p.dogumTarihi ??
-                p.dogum_tarihi ??
-                p.birthDate ??
-                "",
-
-
-            iseGirisTarihi:
-                p.iseGirisTarihi ??
-                p.ise_giris_tarihi ??
-                p.hireDate ??
-                "",
-
-
-            mevcutMaas:
-                sayi(
-                    p.mevcutMaas ??
-                    p.mevcut_maas ??
-                    p.maas ??
-                    p.salary ??
-                    p.currentSalary
-                ),
-
-
-            cinsiyet:
-                p.cinsiyet ??
-                p.gender ??
-                "",
-
-
-            kalanIzin:
-                sayi(
-                    p.kalanIzin ??
-                    p.remainingLeave
-                )
-        };
-    }
-
-
-    /* ============================================================
-       05 — VARSAYIM NORMALİZASYONU
-    ============================================================ */
-
-    function varsayimNormalizeEt(
-        varsayimlar
-    ) {
-
-        const v =
-            varsayimlar || {};
-
-
-        return {
-
-            degerlemeTarihi:
-                v.degerlemeTarihi ??
-                v.valuationDate ??
-                new Date(),
-
-
-            emeklilikYasi:
-                sayi(
-                    v.emeklilikYasi ??
-                    v.retirementAge,
-                    60
-                ),
-
-
-            maasArtisOrani:
-                sayi(
-                    v.maasArtisOrani ??
-                    v.salaryGrowthRate
-                ),
-
-
-            kidemTavani:
-                sayi(
-                    v.kidemTavani ??
-                    v.kidemTavanı
-                ),
-
-
-            kidemTavaniArtisOrani:
-                sayi(
-                    v.kidemTavaniArtisOrani ??
-                    v.kidemTavanArtisOrani ??
-                    v.ceilingGrowthRate
-                ),
-
-
-            faydaOrani:
-                sayi(
-                    v.faydaOrani ??
-                    v.benefitRate
-                ),
-
-
-            iskontoOrani:
-                sayi(
-                    v.iskontoOrani ??
-                    v.discountRate
-                ),
-
-
-            personelDevirOrani:
-                sayi(
-                    v.personelDevirOrani ??
-                    v.turnoverRate
-                ),
-
-
-            olumOrani:
-                sayi(
-                    v.olumOrani ??
-                    v.mortalityRate
-                ),
-
-
-            paraBirimi:
-                v.paraBirimi ??
-                v.currency ??
-                "TRY"
-        };
-    }
-
-
-    /* ============================================================
-       06 — PERSONEL VALIDATION
-    ============================================================ */
-
-    function personelValidate(
-        personel
-    ) {
-
-        const p =
-            personelNormalizeEt(
-                personel
-            );
-
-
-        const hatalar = [];
-
-
-        const dogum =
-            tarih(
-                p.dogumTarihi
-            );
-
-
-        const giris =
-            tarih(
-                p.iseGirisTarihi
-            );
-
-
-        if (
-            !dogum
-        ) {
-
-            hatalar.push(
-                "Doğum tarihi geçerli değil."
-            );
-        }
-
-
-        if (
-            !giris
-        ) {
-
-            hatalar.push(
-                "İşe giriş tarihi geçerli değil."
-            );
-        }
-
-
-        if (
-            p.mevcutMaas < 0
-        ) {
-
-            hatalar.push(
-                "Mevcut maaş negatif olamaz."
-            );
-        }
-
-
-        if (
-            dogum &&
-            giris &&
-            giris < dogum
-        ) {
-
-            hatalar.push(
-                "İşe giriş tarihi doğum tarihinden önce olamaz."
-            );
-        }
-
-
-        return {
-
-            valid:
-                hatalar.length === 0,
-
-            errors:
-                hatalar
-        };
-    }
-
-
-    /* ============================================================
-       07 — VARSAYIM VALIDATION
-    ============================================================ */
-
-    function varsayimValidate(
-        varsayimlar
-    ) {
-
-        const v =
-            varsayimNormalizeEt(
-                varsayimlar
-            );
-
-
-        const hatalar = [];
-
-
-        if (
-            v.emeklilikYasi <= 0
-        ) {
-
-            hatalar.push(
-                "Emeklilik yaşı geçerli değil."
-            );
-        }
-
-
-        if (
-            v.maasArtisOrani <= -1
-        ) {
-
-            hatalar.push(
-                "Maaş artış oranı -100%'den küçük veya eşit olamaz."
-            );
-        }
-
-
-        if (
-            v.kidemTavaniArtisOrani <= -1
-        ) {
-
-            hatalar.push(
-                "Kıdem tavanı artış oranı -100%'den küçük veya eşit olamaz."
-            );
-        }
-
-
-        if (
-            v.iskontoOrani <= -1
-        ) {
-
-            hatalar.push(
-                "İskonto oranı -100%'den küçük veya eşit olamaz."
-            );
-        }
-
-
-        if (
-            v.faydaOrani < 0
-        ) {
-
-            hatalar.push(
-                "Fayda oranı negatif olamaz."
-            );
-        }
-
-
-        if (
-            v.personelDevirOrani < 0 ||
-            v.personelDevirOrani > 1
-        ) {
-
-            hatalar.push(
-                "Personel devir oranı 0 ile 1 arasında olmalıdır."
-            );
-        }
-
-
-        if (
-            v.olumOrani < 0 ||
-            v.olumOrani > 1
-        ) {
-
-            hatalar.push(
-                "Ölüm oranı 0 ile 1 arasında olmalıdır."
-            );
-        }
-
-
-        return {
-
-            valid:
-                hatalar.length === 0,
-
-            errors:
-                hatalar
-        };
-    }
-
-
-    /* ============================================================
-       08 — HİZMET ANALİZİ
-    ============================================================ */
-
-    function hizmetAnalizi(
-        iseGirisTarihi,
-        degerlemeTarihi,
-        emekliligeKalanYil
-    ) {
-
-        const mevcutHizmet =
-            yilFarki(
-                iseGirisTarihi,
-                degerlemeTarihi
-            );
-
-
-        const gelecekHizmet =
-            Math.max(
-                0,
-                sayi(
-                    emekliligeKalanYil
-                )
-            );
-
-
-        const toplamHizmet =
-            mevcutHizmet +
-            gelecekHizmet;
-
-
-        const gecmisHizmetOrani =
-            toplamHizmet > 0
-                ? Math.min(
-                    1,
-                    mevcutHizmet /
-                    toplamHizmet
-                )
-                : 0;
-
-
-        const gelecekHizmetOrani =
-            toplamHizmet > 0
-                ? Math.max(
-                    0,
-                    gelecekHizmet /
-                    toplamHizmet
-                )
-                : 0;
-
-
-        return {
-
-            mevcutHizmet:
-                mevcutHizmet,
-
-            gelecekHizmet:
-                gelecekHizmet,
-
-            toplamHizmet:
-                toplamHizmet,
-
-            gecmisHizmetOrani:
-                gecmisHizmetOrani,
-
-            gelecekHizmetOrani:
-                gelecekHizmetOrani
-        };
-    }
-
-
-    /* ============================================================
-       09 — MAAŞ PROJEKSİYONU
-    ============================================================ */
-
-    function maasProjeksiyonu(
-        mevcutMaas,
-        kalanYil,
-        varsayimlar
-    ) {
-
-        const baslangicMaasi =
-            sayi(
-                mevcutMaas
-            );
-
-
-        const yil =
-            Math.max(
-                0,
-                sayi(
-                    kalanYil
-                )
-            );
-
-
-        const artisOrani =
-            sayi(
-                varsayimlar.maasArtisOrani
-            );
-
-
-        const emeklilikMaasi =
-            baslangicMaasi *
-            Math.pow(
-                1 + artisOrani,
-                yil
-            );
-
-
-        return {
-
-            mevcutMaas:
-                baslangicMaasi,
-
-            kalanYil:
-                yil,
-
-            artisOrani:
-                artisOrani,
-
-            emeklilikMaasi:
-                emeklilikMaasi
-        };
-    }
-
-
-    /* ============================================================
-       10 — KIDEM TAVANI
-    ============================================================ */
-
-    function kidemTavaniHesapla(
-        emeklilikMaasi,
-        kalanYil,
-        varsayimlar
-    ) {
-
-        const maas =
-            sayi(
-                emeklilikMaasi
-            );
-
-
-        const yil =
-            Math.max(
-                0,
-                sayi(
-                    kalanYil
-                )
-            );
-
-
-        const mevcutTavan =
-            sayi(
-                varsayimlar.kidemTavani
-            );
-
-
-        const artis =
-            sayi(
-                varsayimlar.kidemTavaniArtisOrani
-            );
-
-
-        /*
-         * Kıdem tavanı girilmemişse
-         * herhangi bir tavan uygulanmaz.
-         */
-
-        if (
-            mevcutTavan <= 0
-        ) {
-
-            return {
-
-                uygulandi:
-                    false,
-
-                mevcutTavan:
-                    null,
-
-                projekteTavan:
-                    null,
-
-                hesaplamaMaasi:
-                    maas,
-
-                tavanFarki:
-                    0
-            };
-        }
-
-
-        const projekteTavan =
-            mevcutTavan *
-            Math.pow(
-                1 + artis,
-                yil
-            );
-
-
-        const uygulandi =
-            maas >
-            projekteTavan;
-
-
-        const hesaplamaMaasi =
-            uygulandi
-                ? projekteTavan
-                : maas;
-
-
-        return {
-
-            uygulandi:
-                uygulandi,
-
-            mevcutTavan:
-                mevcutTavan,
-
-            projekteTavan:
-                projekteTavan,
-
-            hesaplamaMaasi:
-                hesaplamaMaasi,
-
-            tavanFarki:
-                Math.max(
-                    0,
-                    maas -
-                    projekteTavan
-                )
-        };
-    }
-
-
-    /* ============================================================
-       11 — DEMOGRAFİK OLASILIK
-    ============================================================ */
-
-    function devamOlasiligi(
-        kalanYil,
-        varsayimlar
-    ) {
-
-        const yil =
-            Math.max(
-                0,
-                sayi(
-                    kalanYil
-                )
-            );
-
-
-        const devir =
-            sinirla(
-                varsayimlar.personelDevirOrani,
-                0,
-                1
-            );
-
-
-        const olum =
-            sinirla(
-                varsayimlar.olumOrani,
-                0,
-                1
-            );
-
-
-        const yillikDevam =
-            (
-                1 - devir
-            ) *
-            (
-                1 - olum
-            );
-
-
-        return Math.pow(
-            yillikDevam,
-            yil
-        );
-    }
-
-
-    function yillikDevamOlasiligi(
-        varsayimlar
-    ) {
-
-        const devir =
-            sinirla(
-                varsayimlar.personelDevirOrani,
-                0,
-                1
-            );
-
-
-        const olum =
-            sinirla(
-                varsayimlar.olumOrani,
-                0,
-                1
-            );
-
-
-        return (
-            1 - devir
-        ) *
-        (
-            1 - olum
-        );
-    }
-
-
-    /* ============================================================
-       12 — İSKONTO FAKTÖRÜ
-    ============================================================ */
-
-    function iskontoFaktoru(
-        iskontoOrani,
-        kalanYil
-    ) {
-
-        const oran =
-            sayi(
-                iskontoOrani
-            );
-
-
-        const yil =
-            Math.max(
-                0,
-                sayi(
-                    kalanYil
-                )
-            );
-
-
-        return (
-            1 /
-            Math.pow(
-                1 + oran,
-                yil
-            )
-        );
-    }
-
-
-    /* ============================================================
-       13 — TEK PERSONEL ANA HESAPLAMA
-    ============================================================ */
-
-    function hesapla(
-        personel,
-        varsayimlar,
-        options = {}
-    ) {
-
-        const p =
-            personelNormalizeEt(
-                personel
-            );
-
-
-        const v =
-            varsayimNormalizeEt(
-                varsayimlar
-            );
-
-
-        /*
-         * Validation
-         */
-
-        const personelValidation =
-            personelValidate(
-                personel
-            );
-
-
-        if (
-            !personelValidation.valid
-        ) {
-
-            throw new Error(
-                personelValidation.errors.join(
-                    " "
-                )
-            );
-        }
-
-
-        const varsayimValidation =
-            varsayimValidate(
-                varsayimlar
-            );
-
-
-        if (
-            !varsayimValidation.valid
-        ) {
-
-            throw new Error(
-                varsayimValidation.errors.join(
-                    " "
-                )
-            );
-        }
-
-
-        /* --------------------------------------------------------
-           TARİHLER
-        -------------------------------------------------------- */
-
-        const degerlemeTarihi =
-            tarih(
-                v.degerlemeTarihi
-            );
-
-
-        const dogumTarihi =
-            tarih(
-                p.dogumTarihi
-            );
-
-
-        const iseGirisTarihi =
-            tarih(
-                p.iseGirisTarihi
-            );
-
-
-        /* --------------------------------------------------------
-           YAŞ
-        -------------------------------------------------------- */
-
-        const yas =
-            yasHesapla(
-                dogumTarihi,
-                degerlemeTarihi
-            );
-
-
-        /* --------------------------------------------------------
-           EMEKLİLİK
-        -------------------------------------------------------- */
-
-        const emekliligeKalanYil =
-            Math.max(
-                0,
-                v.emeklilikYasi -
-                yas
-            );
-
-
-        /* --------------------------------------------------------
-           HİZMET
-        -------------------------------------------------------- */
-
-        const hizmet =
-            hizmetAnalizi(
-                iseGirisTarihi,
-                degerlemeTarihi,
-                emekliligeKalanYil
-            );
-
-
-        /* --------------------------------------------------------
-           MAAŞ
-        -------------------------------------------------------- */
-
-        const maas =
-            maasProjeksiyonu(
-                p.mevcutMaas,
-                emekliligeKalanYil,
-                v
-            );
-
-
-        /* --------------------------------------------------------
-           KIDEM TAVANI
-        -------------------------------------------------------- */
-
-        const tavan =
-            kidemTavaniHesapla(
-                maas.emeklilikMaasi,
-                emekliligeKalanYil,
-                v
-            );
-
-
-        const faydaHesaplamaMaasi =
-            tavan.hesaplamaMaasi;
-
-
-        /* --------------------------------------------------------
-           YILLIK FAYDA
-        -------------------------------------------------------- */
-
-        const yillikFayda =
-            faydaHesaplamaMaasi *
-            v.faydaOrani;
-
-
-        /* --------------------------------------------------------
-           TOPLAM FAYDA
-        -------------------------------------------------------- */
-
-        const toplamFayda =
-            yillikFayda *
-            hizmet.toplamHizmet;
-
-
-        /* --------------------------------------------------------
-           GEÇMİŞ HİZMET
-        -------------------------------------------------------- */
-
-        const kazanilmisFayda =
-            toplamFayda *
-            hizmet.gecmisHizmetOrani;
-
-
-        /* --------------------------------------------------------
-           DEMOGRAFİK OLASILIK
-        -------------------------------------------------------- */
-
-        const devam =
-            devamOlasiligi(
-                emekliligeKalanYil,
-                v
-            );
-
-
-        /* --------------------------------------------------------
-           BEKLENEN FAYDA
-        -------------------------------------------------------- */
-
-        const beklenenFayda =
-            kazanilmisFayda *
-            devam;
-
-
-        /* --------------------------------------------------------
-           İSKONTO
-        -------------------------------------------------------- */
-
-        const iskonto =
-            iskontoFaktoru(
-                v.iskontoOrani,
-                emekliligeKalanYil
-            );
-
-
-        /* --------------------------------------------------------
-           DBO
-        -------------------------------------------------------- */
-
-        const dbo =
-            beklenenFayda *
-            iskonto;
-
-
-        /* --------------------------------------------------------
-           CARİ HİZMET MALİYETİ
-        -------------------------------------------------------- */
-
-        const birimFayda =
-            hizmet.toplamHizmet > 0
-                ? toplamFayda /
-                  hizmet.toplamHizmet
-                : 0;
-
-
-        const cariHizmetMaliyeti =
-            birimFayda *
-            devam *
-            iskonto;
-
-
-        /* --------------------------------------------------------
-           FAİZ MALİYETİ
-        -------------------------------------------------------- */
-
-        const faizMaliyeti =
-            dbo *
-            v.iskontoOrani;
-
-
-        /* --------------------------------------------------------
-           SONUÇ
-        -------------------------------------------------------- */
-
-        return {
-
-            engine: {
-
-                name:
-                    TMS19ActuarialEngine.engineName,
-
-                version:
-                    TMS19ActuarialEngine.version,
-
-                standard:
-                    TMS19ActuarialEngine.standard,
-
-                method:
-                    TMS19ActuarialEngine.method
-            },
-
-
-            personel: {
-
-                personelId:
-                    p.personelId,
-
-                adSoyad:
-                    p.adSoyad,
-
-                departman:
-                    p.departman,
-
-                pozisyon:
-                    p.pozisyon,
-
-                cinsiyet:
-                    p.cinsiyet
-            },
-
-
-            tarihler: {
-
-                dogumTarihi:
-                    dogumTarihi,
-
-                iseGirisTarihi:
-                    iseGirisTarihi,
-
-                degerlemeTarihi:
-                    degerlemeTarihi
-            },
-
-
-            demografi: {
-
-                yas:
-                    yas,
-
-                emeklilikYasi:
-                    v.emeklilikYasi,
-
-                emekliligeKalanYil:
-                    emekliligeKalanYil,
-
-                personelDevirOrani:
-                    v.personelDevirOrani,
-
-                olumOrani:
-                    v.olumOrani,
-
-                devamOlasiligi:
-                    devam
-            },
-
-
-            hizmet: {
-
-                mevcutHizmet:
-                    hizmet.mevcutHizmet,
-
-                gelecekHizmet:
-                    hizmet.gelecekHizmet,
-
-                toplamHizmet:
-                    hizmet.toplamHizmet,
-
-                gecmisHizmetOrani:
-                    hizmet.gecmisHizmetOrani,
-
-                gelecekHizmetOrani:
-                    hizmet.gelecekHizmetOrani
-            },
-
-
-            maas: {
-
-                mevcutMaas:
-                    maas.mevcutMaas,
-
-                maasArtisOrani:
-                    maas.artisOrani,
-
-                emeklilikMaasi:
-                    maas.emeklilikMaasi,
-
-                fark:
-                    maas.emeklilikMaasi -
-                    maas.mevcutMaas
-            },
-
-
-            kidemTavani: {
-
-                uygulandi:
-                    tavan.uygulandi,
-
-                mevcutTavan:
-                    tavan.mevcutTavan,
-
-                projekteTavan:
-                    tavan.projekteTavan,
-
-                hesaplamaMaasi:
-                    tavan.hesaplamaMaasi,
-
-                tavanFarki:
-                    tavan.tavanFarki
-            },
-
-
-            fayda: {
-
-                faydaOrani:
-                    v.faydaOrani,
-
-                yillikFayda:
-                    yillikFayda,
-
-                toplamFayda:
-                    toplamFayda,
-
-                kazanilmisFayda:
-                    kazanilmisFayda,
-
-                gelecekFayda:
-                    toplamFayda -
-                    kazanilmisFayda,
-
-                beklenenFayda:
-                    beklenenFayda
-            },
-
-
-            iskonto: {
-
-                iskontoOrani:
-                    v.iskontoOrani,
-
-                iskontoFaktoru:
-                    iskonto,
-
-                iskontoTutari:
-                    beklenenFayda -
-                    dbo
-            },
-
-
-            muhasebe: {
-
-                dbo:
-                    dbo,
-
-                cariHizmetMaliyeti:
-                    cariHizmetMaliyeti,
-
-                faizMaliyeti:
-                    faizMaliyeti
-            },
-
-
-            meta: {
-
-                paraBirimi:
-                    v.paraBirimi,
-
-                hesaplamaTarihi:
-                    new Date(),
-
-                yuvarlamaBasamagi:
-                    options.yuvarlamaBasamagi ??
-                    2
+    TMS19.sayi =
+        function (value) {
+
+            if (
+                value === null ||
+                value === undefined ||
+                value === ""
+            ) {
+
+                return 0;
             }
-        };
-    }
 
 
-    /* ============================================================
-       14 — YILLIK PROJEKSİYON
-    ============================================================ */
+            if (
+                typeof value === "number"
+            ) {
 
-    function yillikProjeksiyon(
-        personel,
-        varsayimlar
-    ) {
-
-        const temel =
-            hesapla(
-                personel,
-                varsayimlar
-            );
+                return isFinite(value)
+                    ? value
+                    : 0;
+            }
 
 
-        const v =
-            varsayimNormalizeEt(
-                varsayimlar
-            );
-
-
-        const liste = [];
-
-
-        const toplamYil =
-            Math.ceil(
-                temel.demografi.emekliligeKalanYil
-            );
-
-
-        for (
-            let yil = 0;
-            yil <= toplamYil;
-            yil++
-        ) {
-
-            const tarih =
-                tarihEkleYil(
-                    v.degerlemeTarihi,
-                    yil
-                );
-
-
-            const yas =
-                temel.demografi.yas +
-                yil;
-
-
-            const kalanYil =
-                Math.max(
-                    0,
-                    temel.demografi.emekliligeKalanYil -
-                    yil
-                );
-
-
-            const maas =
-                temel.maas.mevcutMaas *
-                Math.pow(
-                    1 +
-                    v.maasArtisOrani,
-                    yil
-                );
-
-
-            const projekteTavan =
-                v.kidemTavani > 0
-                    ? v.kidemTavani *
-                      Math.pow(
-                          1 +
-                          v.kidemTavaniArtisOrani,
-                          kalanYil
-                      )
-                    : null;
-
-
-            const hesaplamaMaasi =
-                projekteTavan === null
-                    ? maas
-                    : Math.min(
-                        maas,
-                        projekteTavan
-                    );
+            let text =
+                String(value)
+                    .trim();
 
 
             /*
-             * Bu modelde hizmet süresi,
-             * değerleme tarihinden itibaren
-             * ileriye doğru artırılır.
+             * Türkçe sayı formatı:
+             *
+             * 1.234.567,89
+             *
+             * İngilizce:
+             *
+             * 1234567.89
              */
 
+            if (
+                text.includes(",") &&
+                text.includes(".")
+            ) {
+
+                text =
+                    text
+                        .replace(
+                            /\./g,
+                            ""
+                        )
+                        .replace(
+                            ",",
+                            "."
+                        );
+
+            }
+
+            else if (
+                text.includes(",")
+            ) {
+
+                text =
+                    text.replace(
+                        ",",
+                        "."
+                    );
+            }
+
+
+            const number =
+                Number(
+                    text
+                );
+
+
+            return isFinite(number)
+                ? number
+                : 0;
+        };
+
+
+    /* ============================================================
+       04 — TARİH NORMALİZASYONU
+    ============================================================ */
+
+    TMS19.tarih =
+        function (value) {
+
+            if (
+                value instanceof Date
+            ) {
+
+                return new Date(
+                    value.getTime()
+                );
+            }
+
+
+            if (
+                !value
+            ) {
+
+                return null;
+            }
+
+
+            if (
+                typeof value === "number"
+            ) {
+
+                const excelEpoch =
+                    new Date(
+                        Date.UTC(
+                            1899,
+                            11,
+                            30
+                        )
+                    );
+
+
+                const result =
+                    new Date(
+                        excelEpoch.getTime() +
+                        value *
+                        86400000
+                    );
+
+
+                return isNaN(
+                    result.getTime()
+                )
+                    ? null
+                    : result;
+            }
+
+
+            const text =
+                String(value)
+                    .trim();
+
+
+            /*
+             * DD.MM.YYYY
+             */
+
+            const turkishDate =
+                text.match(
+                    /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
+                );
+
+
+            if (
+                turkishDate
+            ) {
+
+                const day =
+                    Number(
+                        turkishDate[1]
+                    );
+
+
+                const month =
+                    Number(
+                        turkishDate[2]
+                    ) - 1;
+
+
+                const year =
+                    Number(
+                        turkishDate[3]
+                    );
+
+
+                const result =
+                    new Date(
+                        year,
+                        month,
+                        day
+                    );
+
+
+                return isNaN(
+                    result.getTime()
+                )
+                    ? null
+                    : result;
+            }
+
+
+            const result =
+                new Date(
+                    text
+                );
+
+
+            return isNaN(
+                result.getTime()
+            )
+                ? null
+                : result;
+        };
+
+
+    /* ============================================================
+       05 — TARİH FARKI
+    ============================================================ */
+
+    TMS19.yilFarki =
+        function (
+            startDate,
+            endDate
+        ) {
+
+            if (
+                !startDate ||
+                !endDate
+            ) {
+
+                return 0;
+            }
+
+
+            const start =
+                TMS19.tarih(
+                    startDate
+                );
+
+
+            const end =
+                TMS19.tarih(
+                    endDate
+                );
+
+
+            if (
+                !start ||
+                !end
+            ) {
+
+                return 0;
+            }
+
+
+            const fark =
+                end.getTime() -
+                start.getTime();
+
+
+            return Math.max(
+                0,
+                fark /
+                (
+                    365.25 *
+                    24 *
+                    60 *
+                    60 *
+                    1000
+                )
+            );
+        };
+
+
+    /* ============================================================
+       06 — YAŞ HESAPLA
+    ============================================================ */
+
+    TMS19.yasHesapla =
+        function (
+            dogumTarihi,
+            degerlemeTarihi
+        ) {
+
+            const birth =
+                TMS19.tarih(
+                    dogumTarihi
+                );
+
+
+            const valuation =
+                TMS19.tarih(
+                    degerlemeTarihi
+                );
+
+
+            if (
+                !birth ||
+                !valuation
+            ) {
+
+                return 0;
+            }
+
+
+            let age =
+                valuation.getFullYear() -
+                birth.getFullYear();
+
+
+            const monthDifference =
+                valuation.getMonth() -
+                birth.getMonth();
+
+
+            if (
+                monthDifference < 0 ||
+                (
+                    monthDifference === 0 &&
+                    valuation.getDate() <
+                    birth.getDate()
+                )
+            ) {
+
+                age--;
+            }
+
+
+            return Math.max(
+                0,
+                age
+            );
+        };
+
+
+    /* ============================================================
+       07 — PERSONEL NORMALİZASYONU
+    ============================================================ */
+
+    TMS19.personelNormalizeEt =
+        function (
+            personel
+        ) {
+
+            const p =
+                personel ||
+                {};
+
+
+            return {
+
+                personelId:
+                    p.personelId ??
+                    p.id ??
+                    p.PersonelID ??
+                    "",
+
+
+                adSoyad:
+                    p.adSoyad ??
+                    p.ad ??
+                    p.AdSoyad ??
+                    p.name ??
+                    "",
+
+
+                dogumTarihi:
+                    p.dogumTarihi ??
+                    p.dogumTarihi ??
+                    p.DogumTarihi ??
+                    p.birthDate ??
+                    null,
+
+
+                iseGirisTarihi:
+                    p.iseGirisTarihi ??
+                    p.IseGirisTarihi ??
+                    p.hireDate ??
+                    null,
+
+
+                mevcutMaas:
+                    TMS19.sayi(
+                        p.mevcutMaas ??
+                        p.MevcutMaas ??
+                        p.maas ??
+                        p.salary
+                    ),
+
+
+                departman:
+                    p.departman ??
+                    p.Departman ??
+                    "",
+
+
+                pozisyon:
+                    p.pozisyon ??
+                    p.Pozisyon ??
+                    "",
+
+
+                cinsiyet:
+                    p.cinsiyet ??
+                    p.Cinsiyet ??
+                    p.gender ??
+                    "",
+
+
+                raw:
+                    p
+            };
+        };
+
+
+    /* ============================================================
+       08 — PERSONEL VALIDATION
+    ============================================================ */
+
+    TMS19.personelValidate =
+        function (
+            personel
+        ) {
+
+            const p =
+                TMS19.personelNormalizeEt(
+                    personel
+                );
+
+
+            const errors =
+                [];
+
+
+            if (
+                !p.personelId
+            ) {
+
+                errors.push(
+                    "Personel ID eksik."
+                );
+            }
+
+
+            if (
+                !p.dogumTarihi
+            ) {
+
+                errors.push(
+                    "Doğum tarihi eksik."
+                );
+            }
+
+
+            if (
+                !p.iseGirisTarihi
+            ) {
+
+                errors.push(
+                    "İşe giriş tarihi eksik."
+                );
+            }
+
+
+            if (
+                p.mevcutMaas <= 0
+            ) {
+
+                errors.push(
+                    "Mevcut maaş sıfır veya negatif."
+                );
+            }
+
+
+            const birth =
+                TMS19.tarih(
+                    p.dogumTarihi
+                );
+
+
+            const hire =
+                TMS19.tarih(
+                    p.iseGirisTarihi
+                );
+
+
+            if (
+                !birth
+            ) {
+
+                errors.push(
+                    "Doğum tarihi geçersiz."
+                );
+            }
+
+
+            if (
+                !hire
+            ) {
+
+                errors.push(
+                    "İşe giriş tarihi geçersiz."
+                );
+            }
+
+
+            return {
+
+                valid:
+                    errors.length === 0,
+
+                errors:
+                    errors
+            };
+        };
+
+
+    /* ============================================================
+       09 — DEVAM OLASILIĞI
+    ============================================================ */
+
+    TMS19.devamOlasiligi =
+        function (
+            kalanYil,
+            varsayimlar
+        ) {
+
+            if (
+                kalanYil <= 0
+            ) {
+
+                return 1;
+            }
+
+
+            const turnover =
+                Math.min(
+                    Math.max(
+                        TMS19.sayi(
+                            varsayimlar
+                                ?.personelDevirOrani
+                        ),
+                        0
+                    ),
+                    1
+                );
+
+
+            const mortality =
+                Math.min(
+                    Math.max(
+                        TMS19.sayi(
+                            varsayimlar
+                                ?.olumOrani
+                        ),
+                        0
+                    ),
+                    1
+                );
+
+
+            const annualSurvival =
+                (
+                    1 -
+                    turnover
+                ) *
+                (
+                    1 -
+                    mortality
+                );
+
+
+            return Math.pow(
+                annualSurvival,
+                kalanYil
+            );
+        };
+
+
+    /* ============================================================
+       10 — MAAŞ PROJEKSİYONU
+    ============================================================ */
+
+    TMS19.maasProjeksiyonu =
+        function (
+            mevcutMaas,
+            kalanYil,
+            varsayimlar
+        ) {
+
+            const salary =
+                TMS19.sayi(
+                    mevcutMaas
+                );
+
+
+            const salaryIncrease =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        varsayimlar
+                            ?.maasArtisOrani
+                    )
+                );
+
+
+            const projected =
+                salary *
+                Math.pow(
+                    1 +
+                    salaryIncrease,
+                    Math.max(
+                        0,
+                        kalanYil
+                    )
+                );
+
+
+            return {
+
+                mevcutMaas:
+                    salary,
+
+                emeklilikMaasi:
+                    projected,
+
+                artisOrani:
+                    salaryIncrease,
+
+                kalanYil:
+                    Math.max(
+                        0,
+                        kalanYil
+                    )
+            };
+        };
+
+
+    /* ============================================================
+       11 — İSKONTO FAKTÖRÜ
+    ============================================================ */
+
+    TMS19.iskontoFaktoru =
+        function (
+            iskontoOrani,
+            yil
+        ) {
+
+            const rate =
+                TMS19.sayi(
+                    iskontoOrani
+                );
+
+
+            const years =
+                Math.max(
+                    0,
+                    TMS19.sayi(
+                        yil
+                    )
+                );
+
+
+            if (
+                rate <= -1
+            ) {
+
+                return 1;
+            }
+
+
+            return 1 /
+                Math.pow(
+                    1 +
+                    rate,
+                    years
+                );
+        };
+
+
+    /* ============================================================
+       12 — TEK PERSONEL AKTÜERYAL HESAPLAMA
+    ============================================================ */
+
+    TMS19.personelHesapla =
+        function (
+            personel,
+            varsayimlar = {},
+            index = 0
+        ) {
+
+            const p =
+                TMS19.personelNormalizeEt(
+                    personel
+                );
+
+
+            const validation =
+                TMS19.personelValidate(
+                    personel
+                );
+
+
+            if (
+                !validation.valid
+            ) {
+
+                throw new Error(
+                    validation.errors.join(
+                        " "
+                    )
+                );
+            }
+
+
+            const degerlemeTarihi =
+                TMS19.tarih(
+                    varsayimlar
+                        .degerlemeTarihi
+                );
+
+
+            const dogumTarihi =
+                TMS19.tarih(
+                    p.dogumTarihi
+                );
+
+
+            const iseGirisTarihi =
+                TMS19.tarih(
+                    p.iseGirisTarihi
+                );
+
+
+            const mevcutMaas =
+                TMS19.sayi(
+                    p.mevcutMaas
+                );
+
+
+            /* ----------------------------------------------------
+               DEMOGRAFİ
+            ---------------------------------------------------- */
+
+            const yas =
+                TMS19.yasHesapla(
+                    dogumTarihi,
+                    degerlemeTarihi
+                );
+
+
             const hizmetSuresi =
-                temel.hizmet.mevcutHizmet +
-                yil;
+                TMS19.yilFarki(
+                    iseGirisTarihi,
+                    degerlemeTarihi
+                );
+
+
+            const emeklilikYasi =
+                TMS19.sayi(
+                    varsayimlar
+                        .emeklilikYasi
+                );
+
+
+            const emekliligeKalanYil =
+                Math.max(
+                    0,
+                    emeklilikYasi -
+                    yas
+                );
 
 
             const toplamHizmet =
                 hizmetSuresi +
-                kalanYil;
+                emekliligeKalanYil;
+
+
+            /* ----------------------------------------------------
+               MAAŞ
+            ---------------------------------------------------- */
+
+            const maas =
+                TMS19.maasProjeksiyonu(
+                    mevcutMaas,
+                    emekliligeKalanYil,
+                    varsayimlar
+                );
+
+
+            const emeklilikMaasi =
+                maas.emeklilikMaasi;
+
+
+            /* ----------------------------------------------------
+               KIDEM TAVANI
+            ---------------------------------------------------- */
+
+            let faydaHesaplamaMaasi =
+                emeklilikMaasi;
+
+
+            let tavanUygulandi =
+                false;
+
+
+            let projectedCeiling =
+                Infinity;
+
+
+            const mevcutKidemTavani =
+                TMS19.sayi(
+                    varsayimlar
+                        .kidemTavani
+                );
+
+
+            const kidemTavaniArtisOrani =
+                TMS19.sayi(
+                    varsayimlar
+                        .kidemTavaniArtisOrani
+                );
+
+
+            if (
+                isFinite(
+                    mevcutKidemTavani
+                ) &&
+                mevcutKidemTavani > 0
+            ) {
+
+                projectedCeiling =
+                    mevcutKidemTavani *
+                    Math.pow(
+                        1 +
+                        kidemTavaniArtisOrani,
+                        emekliligeKalanYil
+                    );
+
+
+                if (
+                    faydaHesaplamaMaasi >
+                    projectedCeiling
+                ) {
+
+                    faydaHesaplamaMaasi =
+                        projectedCeiling;
+
+
+                    tavanUygulandi =
+                        true;
+                }
+            }
+
+
+            /* ----------------------------------------------------
+               FAYDA
+            ---------------------------------------------------- */
+
+            const faydaOrani =
+                TMS19.sayi(
+                    varsayimlar
+                        .faydaOrani
+                );
 
 
             const yillikFayda =
-                hesaplamaMaasi *
-                v.faydaOrani;
+                faydaHesaplamaMaasi *
+                faydaOrani;
 
 
             const toplamFayda =
                 yillikFayda *
                 toplamHizmet;
 
+
+            /* ----------------------------------------------------
+               GEÇMİŞ HİZMET
+            ---------------------------------------------------- */
 
             const gecmisHizmetOrani =
                 toplamHizmet > 0
@@ -1644,339 +939,612 @@
                 gecmisHizmetOrani;
 
 
-            const devam =
-                devamOlasiligi(
-                    kalanYil,
-                    v
+            /* ----------------------------------------------------
+               DEMOGRAFİK OLASILIK
+            ---------------------------------------------------- */
+
+            const devamOlasiligi =
+                TMS19.devamOlasiligi(
+                    emekliligeKalanYil,
+                    varsayimlar
                 );
 
 
             const beklenenFayda =
                 kazanilmisFayda *
-                devam;
+                devamOlasiligi;
 
 
-            const iskonto =
-                iskontoFaktoru(
-                    v.iskontoOrani,
-                    kalanYil
+            /* ----------------------------------------------------
+               İSKONTO
+            ---------------------------------------------------- */
+
+            const iskontoOrani =
+                TMS19.sayi(
+                    varsayimlar
+                        .iskontoOrani
                 );
 
 
+            const iskontoFaktoru =
+                TMS19.iskontoFaktoru(
+                    iskontoOrani,
+                    emekliligeKalanYil
+                );
+
+
+            /* ----------------------------------------------------
+               DBO
+            ---------------------------------------------------- */
+
             const dbo =
                 beklenenFayda *
-                iskonto;
+                iskontoFaktoru;
 
 
-            liste.push({
+            /* ----------------------------------------------------
+               CARİ HİZMET MALİYETİ
+            ---------------------------------------------------- */
 
-                yil:
-                    yil,
+            const birYillikFayda =
+                toplamHizmet > 0
+                    ? toplamFayda /
+                    toplamHizmet
+                    : 0;
 
-                tarih:
-                    tarih,
 
-                yas:
-                    yas,
+            const cariHizmetMaliyeti =
+                birYillikFayda *
+                devamOlasiligi *
+                iskontoFaktoru;
 
-                kalanYil:
-                    kalanYil,
+
+            /* ----------------------------------------------------
+               FAİZ MALİYETİ
+
+               Basitleştirilmiş:
+               Opening DBO × iskonto oranı
+
+               İlk dönem hesaplamasında opening DBO
+               verilmemişse 0 döndürülür.
+            ---------------------------------------------------- */
+
+            const openingDBO =
+                TMS19.sayi(
+                    varsayimlar
+                        .openingDBO
+                );
+
+
+            const faizMaliyeti =
+                openingDBO *
+                iskontoOrani;
+
+
+            /* ----------------------------------------------------
+               AKTÜERYAL SONUÇ
+            ---------------------------------------------------- */
+
+            return {
+
+                index:
+                    index,
+
+                personel:
+                    {
+
+                        personelId:
+                            p.personelId,
+
+                        adSoyad:
+                            p.adSoyad,
+
+                        departman:
+                            p.departman,
+
+                        pozisyon:
+                            p.pozisyon,
+
+                        dogumTarihi:
+                            p.dogumTarihi,
+
+                        iseGirisTarihi:
+                            p.iseGirisTarihi,
+
+                        mevcutMaas:
+                            mevcutMaas
+                    },
+
+
+                demografi:
+                    {
+
+                        yas:
+                            yas,
+
+                        hizmetSuresi:
+                            hizmetSuresi,
+
+                        emeklilikYasi:
+                            emeklilikYasi,
+
+                        emekliligeKalanYil:
+                            emekliligeKalanYil,
+
+                        toplamHizmet:
+                            toplamHizmet,
+
+                        devamOlasiligi:
+                            devamOlasiligi
+                    },
+
 
                 maas:
-                    maas,
+                    {
 
-                projekteTavan:
-                    projekteTavan,
+                        mevcutMaas:
+                            mevcutMaas,
 
-                hesaplamaMaasi:
-                    hesaplamaMaasi,
+                        emeklilikMaasi:
+                            emeklilikMaasi,
 
-                hizmetSuresi:
-                    hizmetSuresi,
+                        faydaHesaplamaMaasi:
+                            faydaHesaplamaMaasi,
 
-                toplamHizmet:
-                    toplamHizmet,
+                        maasArtisOrani:
+                            maas.artisOrani
+                    },
 
-                gecmisHizmetOrani:
-                    gecmisHizmetOrani,
 
-                yillikFayda:
-                    yillikFayda,
+                kidemTavani:
+                    {
 
-                toplamFayda:
-                    toplamFayda,
+                        mevcutTavan:
+                            mevcutKidemTavani,
 
-                kazanilmisFayda:
-                    kazanilmisFayda,
+                        projectedCeiling:
+                            projectedCeiling,
 
-                devamOlasiligi:
-                    devam,
+                        uygulandi:
+                            tavanUygulandi,
 
-                beklenenFayda:
-                    beklenenFayda,
+                        tavanArtisOrani:
+                            kidemTavaniArtisOrani
+                    },
 
-                iskontoFaktoru:
-                    iskonto,
+
+                hizmet:
+                    {
+
+                        gecmisHizmetOrani:
+                            gecmisHizmetOrani,
+
+                        kazanilmisFayda:
+                            kazanilmisFayda,
+
+                        toplamFayda:
+                            toplamFayda,
+
+                        yillikFayda:
+                            yillikFayda
+                    },
+
+
+                demografik:
+                    {
+
+                        devamOlasiligi:
+                            devamOlasiligi,
+
+                        beklenenFayda:
+                            beklenenFayda
+                    },
+
+
+                iskonto:
+                    {
+
+                        oran:
+                            iskontoOrani,
+
+                        yil:
+                            emekliligeKalanYil,
+
+                        faktor:
+                            iskontoFaktoru
+                    },
+
+
+                muhasebe:
+                    {
+
+                        dbo:
+                            dbo,
+
+                        cariHizmetMaliyeti:
+                            cariHizmetMaliyeti,
+
+                        faizMaliyeti:
+                            faizMaliyeti
+                    },
+
+
+                /*
+                 * Portfolio Engine için
+                 * hızlı erişim alanları
+                 */
 
                 dbo:
-                    dbo
-            });
-        }
+                    dbo,
+
+                cariHizmetMaliyeti:
+                    cariHizmetMaliyeti,
+
+                faizMaliyeti:
+                    faizMaliyeti,
 
 
-        return liste;
-    }
+                validation:
+                    validation,
 
 
-    /* ============================================================
-       15 — HIZLI DBO FONKSİYONU
-       ------------------------------------------------------------
-       Portfolio engine için kullanılabilecek sade interface.
-    ============================================================ */
+                metadata:
+                    {
 
-    function dboHesapla(
-        personel,
-        varsayimlar
-    ) {
+                        engine:
+                            TMS19.engineName,
 
-        const sonuc =
-            hesapla(
-                personel,
-                varsayimlar
-            );
+                        version:
+                            TMS19.engineVersion,
 
-
-        return sonuc.muhasebe.dbo;
-    }
-
-
-    /* ============================================================
-       16 — DBO / P&L HESAPLARI İÇİN SADE INTERFACE
-    ============================================================ */
-
-    function muhasebeHesapla(
-        personel,
-        varsayimlar
-    ) {
-
-        const sonuc =
-            hesapla(
-                personel,
-                varsayimlar
-            );
-
-
-        return {
-
-            dbo:
-                sonuc.muhasebe.dbo,
-
-            cariHizmetMaliyeti:
-                sonuc.muhasebe.cariHizmetMaliyeti,
-
-            faizMaliyeti:
-                sonuc.muhasebe.faizMaliyeti
-        };
-    }
-
-
-    /* ============================================================
-       17 — SENARYO HESAPLAMA
-       ------------------------------------------------------------
-       Portfolio engine / sensitivity katmanı için kullanılabilir.
-       Ancak portföy toplamı burada yapılmaz.
-    ============================================================ */
-
-    function senaryoHesapla(
-        personel,
-        temelVarsayimlar,
-        senaryoVarsayimlari
-    ) {
-
-        const temel =
-            varsayimNormalizeEt(
-                temelVarsayimlar
-            );
-
-
-        const senaryo =
-            {
-                ...temel,
-                ...(senaryoVarsayimlari || {})
+                        calculationDate:
+                            new Date()
+                                .toISOString()
+                    }
             };
+        };
 
 
-        const sonuc =
-            hesapla(
-                personel,
-                senaryo
+    /* ============================================================
+       13 — TOPLU HESAPLAMA
+    ============================================================ */
+
+    TMS19.topluHesapla =
+        function (
+            personeller,
+            varsayimlar = {}
+        ) {
+
+            if (
+                !Array.isArray(
+                    personeller
+                )
+            ) {
+
+                throw new Error(
+                    "Personel listesi array olmalıdır."
+                );
+            }
+
+
+            const results =
+                [];
+
+
+            const errors =
+                [];
+
+
+            personeller.forEach(
+                (
+                    personel,
+                    index
+                ) => {
+
+                    try {
+
+                        const result =
+                            TMS19.personelHesapla(
+                                personel,
+                                varsayimlar,
+                                index
+                            );
+
+
+                        results.push(
+                            result
+                        );
+
+                    }
+
+                    catch (
+                        error
+                    ) {
+
+                        errors.push({
+
+                            index:
+                                index,
+
+                            personelId:
+                                personel
+                                    ?.personelId ??
+                                "",
+
+                            error:
+                                error.message
+                        });
+                    }
+                }
             );
 
 
-        return {
+            return {
 
-            varsayimlar:
-                senaryo,
+                results:
+                    results,
 
-            sonuc:
-                sonuc
+                errors:
+                    errors,
+
+                success:
+                    errors.length === 0,
+
+                total:
+                    personeller.length,
+
+                calculated:
+                    results.length,
+
+                failed:
+                    errors.length
+            };
         };
-    }
 
 
     /* ============================================================
-       18 — ENGINE HEALTH CHECK
+       14 — ÖZET
     ============================================================ */
 
-    function healthCheck() {
+    TMS19.ozetOlustur =
+        function (
+            results
+        ) {
 
-        return {
+            if (
+                !Array.isArray(
+                    results
+                ) ||
+                results.length === 0
+            ) {
 
-            status:
-                "OK",
+                return {
 
-            engine:
-                TMS19ActuarialEngine.engineName,
+                    personelSayisi:
+                        0,
 
-            version:
-                TMS19ActuarialEngine.version,
+                    toplamDBO:
+                        0,
 
-            standard:
-                TMS19ActuarialEngine.standard,
+                    toplamCariHizmetMaliyeti:
+                        0,
 
-            method:
-                TMS19ActuarialEngine.method,
+                    toplamFaizMaliyeti:
+                        0,
 
-            timestamp:
-                new Date().toISOString()
+                    toplamFayda:
+                        0,
+
+                    ortalamaYas:
+                        0,
+
+                    ortalamaHizmet:
+                        0,
+
+                    tavanUygulananPersonel:
+                        0
+                };
+            }
+
+
+            let dbo =
+                0;
+
+
+            let csc =
+                0;
+
+
+            let interest =
+                0;
+
+
+            let benefit =
+                0;
+
+
+            let age =
+                0;
+
+
+            let service =
+                0;
+
+
+            let ceilingCount =
+                0;
+
+
+            results.forEach(
+                result => {
+
+                    dbo +=
+                        TMS19.sayi(
+                            result.dbo
+                        );
+
+
+                    csc +=
+                        TMS19.sayi(
+                            result.cariHizmetMaliyeti
+                        );
+
+
+                    interest +=
+                        TMS19.sayi(
+                            result.faizMaliyeti
+                        );
+
+
+                    benefit +=
+                        TMS19.sayi(
+                            result.hizmet
+                                ?.toplamFayda
+                        );
+
+
+                    age +=
+                        TMS19.sayi(
+                            result.demografi
+                                ?.yas
+                        );
+
+
+                    service +=
+                        TMS19.sayi(
+                            result.demografi
+                                ?.hizmetSuresi
+                        );
+
+
+                    if (
+                        result.kidemTavani
+                            ?.uygulandi
+                    ) {
+
+                        ceilingCount++;
+                    }
+                }
+            );
+
+
+            return {
+
+                personelSayisi:
+                    results.length,
+
+                toplamDBO:
+                    dbo,
+
+                toplamCariHizmetMaliyeti:
+                    csc,
+
+                toplamFaizMaliyeti:
+                    interest,
+
+                toplamFayda:
+                    benefit,
+
+                ortalamaYas:
+                    age /
+                    results.length,
+
+                ortalamaHizmet:
+                    service /
+                    results.length,
+
+                tavanUygulananPersonel:
+                    ceilingCount,
+
+                dboMaasOrani:
+                    0
+            };
         };
-    }
 
 
     /* ============================================================
-       19 — PUBLIC API
+       15 — HEALTH CHECK
     ============================================================ */
 
-    TMS19ActuarialEngine.sayi =
-        sayi;
+    TMS19.actuarialHealthCheck =
+        function () {
 
+            return {
 
-    TMS19ActuarialEngine.sinirla =
-        sinirla;
+                status:
+                    "OK",
 
+                engine:
+                    TMS19.engineName,
 
-    TMS19ActuarialEngine.tarih =
-        tarih;
+                version:
+                    TMS19.engineVersion,
 
+                functions:
+                    {
 
-    TMS19ActuarialEngine.yuvarla =
-        yuvarla;
+                        sayi:
+                            typeof TMS19.sayi ===
+                            "function",
 
+                        tarih:
+                            typeof TMS19.tarih ===
+                            "function",
 
-    TMS19ActuarialEngine.yilFarki =
-        yilFarki;
+                        yasHesapla:
+                            typeof TMS19.yasHesapla ===
+                            "function",
 
+                        personelNormalizeEt:
+                            typeof TMS19.personelNormalizeEt ===
+                            "function",
 
-    TMS19ActuarialEngine.yasHesapla =
-        yasHesapla;
+                        personelValidate:
+                            typeof TMS19.personelValidate ===
+                            "function",
 
+                        maasProjeksiyonu:
+                            typeof TMS19.maasProjeksiyonu ===
+                            "function",
 
-    TMS19ActuarialEngine.tarihEkleYil =
-        tarihEkleYil;
+                        devamOlasiligi:
+                            typeof TMS19.devamOlasiligi ===
+                            "function",
 
+                        iskontoFaktoru:
+                            typeof TMS19.iskontoFaktoru ===
+                            "function",
 
-    TMS19ActuarialEngine.personelNormalizeEt =
-        personelNormalizeEt;
+                        personelHesapla:
+                            typeof TMS19.personelHesapla ===
+                            "function",
 
+                        topluHesapla:
+                            typeof TMS19.topluHesapla ===
+                            "function"
+                    },
 
-    TMS19ActuarialEngine.varsayimNormalizeEt =
-        varsayimNormalizeEt;
-
-
-    TMS19ActuarialEngine.personelValidate =
-        personelValidate;
-
-
-    TMS19ActuarialEngine.varsayimValidate =
-        varsayimValidate;
-
-
-    TMS19ActuarialEngine.hizmetAnalizi =
-        hizmetAnalizi;
-
-
-    TMS19ActuarialEngine.maasProjeksiyonu =
-        maasProjeksiyonu;
-
-
-    TMS19ActuarialEngine.kidemTavaniHesapla =
-        kidemTavaniHesapla;
-
-
-    TMS19ActuarialEngine.devamOlasiligi =
-        devamOlasiligi;
-
-
-    TMS19ActuarialEngine.yillikDevamOlasiligi =
-        yillikDevamOlasiligi;
-
-
-    TMS19ActuarialEngine.iskontoFaktoru =
-        iskontoFaktoru;
-
-
-    TMS19ActuarialEngine.hesapla =
-        hesapla;
-
-
-    TMS19ActuarialEngine.dboHesapla =
-        dboHesapla;
-
-
-    TMS19ActuarialEngine.muhasebeHesapla =
-        muhasebeHesapla;
-
-
-    TMS19ActuarialEngine.yillikProjeksiyon =
-        yillikProjeksiyon;
-
-
-    TMS19ActuarialEngine.senaryoHesapla =
-        senaryoHesapla;
-
-
-    TMS19ActuarialEngine.healthCheck =
-        healthCheck;
+                timestamp:
+                    new Date()
+                        .toISOString()
+            };
+        };
 
 
     /* ============================================================
-       20 — GLOBAL EXPORT
+       16 — GLOBAL EXPORT
     ============================================================ */
 
-    global.TMS19ActuarialEngine =
-        TMS19ActuarialEngine;
+    global.TMS19 =
+        TMS19;
 
 
     /*
-     * Geriye dönük uyumluluk:
-     *
-     * Eğer mevcut dashboard'un bazı bölümleri
-     * window.TMS19 üzerinden erişiyorsa,
-     * minimal bir alias bırakıyoruz.
-     *
-     * Portföy fonksiyonları burada oluşturulmuyor.
+     * Backward compatibility
      */
 
-    if (
-        !global.TMS19
-    ) {
-
-        global.TMS19 = {};
-    }
-
-
-    global.TMS19.ActuarialEngine =
-        TMS19ActuarialEngine;
+    global.TMS19ActuarialEngine =
+        TMS19;
 
 
 })(typeof window !== "undefined"
