@@ -147,6 +147,47 @@ document.addEventListener("DOMContentLoaded", () => {
   */
 
   const STORAGE_KEY = "gk_tfrs16_contracts_v7";
+  const ASSET_CLASS_STORAGE_KEY = "gk_tfrs16_asset_classes_v1";
+  const ASSET_CLASS_PREDEFINED = ["Arsa", "Makine", "Taşıt", "Diğer"];
+  const ASSET_CLASS_UNCLASSIFIED = "Sınıflandırılmamış";
+  const ASSET_CLASS_CUSTOM_OPTION = "__CUSTOM__";
+
+  function loadCustomAssetClasses() {
+    try {
+      const raw = localStorage.getItem(ASSET_CLASS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(x => typeof x === "string" && x.trim()) : [];
+    } catch (error) {
+      console.error("Varlık sınıfı listesi okunamadı:", error);
+      return [];
+    }
+  }
+
+  function saveCustomAssetClass(name) {
+    const clean = String(name || "").trim();
+    if (!clean) return false;
+    if (ASSET_CLASS_PREDEFINED.includes(clean)) return true;
+    try {
+      const existing = loadCustomAssetClasses();
+      if (existing.includes(clean)) return true;
+      existing.push(clean);
+      localStorage.setItem(ASSET_CLASS_STORAGE_KEY, JSON.stringify(existing));
+      return true;
+    } catch (error) {
+      console.error("Varlık sınıfı kaydedilemedi:", error);
+      return false;
+    }
+  }
+
+  function getAssetClassOptions() {
+    const custom = loadCustomAssetClasses();
+    return [...ASSET_CLASS_PREDEFINED, ...custom.filter(c => !ASSET_CLASS_PREDEFINED.includes(c))];
+  }
+
+  function getContractAssetClass(contract) {
+    const value = String(contract?.assetClass || "").trim();
+    return value || ASSET_CLASS_UNCLASSIFIED;
+  }
 
   let contracts = loadContracts();
 
@@ -4363,6 +4404,8 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.renewalDate || ""
     );
 
+    injectAssetClassField(contract);
+
     const title =
       document.getElementById(
         "modalTitle"
@@ -4391,6 +4434,67 @@ document.addEventListener("DOMContentLoaded", () => {
       ?.classList.add(
         "hidden"
       );
+  }
+
+
+  function injectAssetClassField(contract) {
+    const form = document.getElementById("contractForm");
+    if (!form) return;
+    const grid = form.querySelector(".form-grid") || form;
+
+    let select = document.getElementById("assetClass");
+    let customInput = document.getElementById("assetClassCustom");
+
+    if (!select) {
+      const group = document.createElement("div");
+      group.className = "form-group";
+      group.innerHTML = `
+        <label>Varlık Sınıfı</label>
+        <select id="assetClass"></select>
+        <input id="assetClassCustom" type="text" placeholder="Yeni varlık sınıfı adı" style="margin-top:6px;display:none;width:100%;">
+      `;
+      grid.appendChild(group);
+      select = document.getElementById("assetClass");
+      customInput = document.getElementById("assetClassCustom");
+
+      select.addEventListener("change", () => {
+        if (select.value === ASSET_CLASS_CUSTOM_OPTION) {
+          customInput.style.display = "block";
+          customInput.value = "";
+          customInput.focus();
+        } else {
+          customInput.style.display = "none";
+          customInput.value = "";
+        }
+      });
+    }
+
+    const currentValue = contract?.assetClass || "";
+    const options = getAssetClassOptions();
+    if (currentValue && !options.includes(currentValue)) options.push(currentValue);
+
+    select.innerHTML =
+      `<option value="">— Seçiniz —</option>` +
+      options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join("") +
+      `<option value="${ASSET_CLASS_CUSTOM_OPTION}">+ Yeni sınıf ekle...</option>`;
+
+    select.value = currentValue || "";
+    if (customInput) {
+      customInput.style.display = "none";
+      customInput.value = "";
+    }
+  }
+
+  function resolveAssetClassFromForm() {
+    const select = document.getElementById("assetClass");
+    if (!select) return "";
+    if (select.value === ASSET_CLASS_CUSTOM_OPTION) {
+      const custom = String(document.getElementById("assetClassCustom")?.value || "").trim();
+      if (!custom) return "";
+      saveCustomAssetClass(custom);
+      return custom;
+    }
+    return select.value || "";
   }
 
 
@@ -4559,6 +4663,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 "renewalDate"
               )
             ),
+
+          assetClass:
+            resolveAssetClassFromForm() ||
+            existing?.assetClass ||
+            "",
 
           status:
             existing?.status ||
@@ -11013,7 +11122,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const unexplainedAdjustment=(closingRuo-(openingRuo-depreciation))-modificationAdjustment-reassessmentAdjustment;
         const adjustments=modificationAdjustment+reassessmentAdjustment+unexplainedAdjustment;
         const diff=openingRuo-depreciation+adjustments-closingRuo;
-        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:Math.abs(diff)<=REPORTING_TOLERANCE?"READY":"WARNING",source:built.source});
+        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:Math.abs(diff)<=REPORTING_TOLERANCE?"READY":"WARNING",source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
     });
     report.rows=rows;
@@ -11029,6 +11138,163 @@ document.addEventListener("DOMContentLoaded", () => {
     if (endDate !== undefined) return getRuoAssetRollForwardReport(reportingDate,endDate);
     const end=rptResolveDate(reportingDate), start=new Date(end.getFullYear(),end.getMonth(),1);
     return getRuoAssetRollForwardReport(start,end);
+  }
+
+  /* ==========================================================
+     TFRS 16 DIPNOT (FINANCIAL STATEMENT NOTE) EXPORTS
+     ----------------------------------------------------------
+     Additive export helpers for the two mandatory TFRS 16 notes:
+     - Right-of-use asset movement note (kullanım hakkı varlığı
+       hareket tablosu)
+     - Lease liability movement note (kira yükümlülüğü hareket
+       tablosu)
+     Reuses the existing getRuoAssetRollForwardReport /
+     getLeaseLiabilityRollForwardReport engines as the single
+     source of truth; no new calculation logic is introduced here.
+  ========================================================== */
+
+  function exportRouAssetMovementNote(startDate, endDate) {
+    const report = getRuoAssetRollForwardReport(startDate, endDate);
+    const dataRows = Array.isArray(report.rows) ? report.rows.filter(r => r.status !== "ERROR") : [];
+    if (!dataRows.length) return false;
+    const totals = report.totals || {};
+    const rows = dataRows.map(r => ({
+      "Sözleşme": r.contractId,
+      "Şirket": r.company,
+      "Tedarikçi": r.supplier,
+      "Para Birimi": r.currency,
+      "Varlık Sınıfı": r.assetClass,
+      "Açılış Bakiyesi": r.openingRuo,
+      "Amortisman (-)": -Math.abs(r.depreciation),
+      "Modifikasyon Etkisi": r.modificationAdjustment,
+      "Reassessment Etkisi": r.reassessmentAdjustment,
+      "Diğer Düzeltme": r.otherAdjustment,
+      "Kapanış Bakiyesi": r.closingRuo,
+      "Durum": r.status
+    }));
+    rows.push({
+      "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "", "Varlık Sınıfı": "",
+      "Açılış Bakiyesi": totals.openingRuo, "Amortisman (-)": -Math.abs(totals.depreciation || 0),
+      "Modifikasyon Etkisi": totals.modificationAdjustment, "Reassessment Etkisi": totals.reassessmentAdjustment,
+      "Diğer Düzeltme": totals.otherAdjustment, "Kapanış Bakiyesi": totals.closingRuo,
+      "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
+    });
+    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
+      "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
+      "Açılış Bakiyesi": g.openingRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
+      "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
+    }));
+    const assetClassSummary = v191GroupRollForwardByAssetClass(dataRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
+      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
+      "Açılış Bakiyesi": g.openingRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
+      "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
+    }));
+    return v191ExportSheetsToFile([
+      { rows, sheetName: "ROU Hareket" },
+      { rows: assetClassSummary, sheetName: "Varlık Sınıfı Özeti" },
+      { rows: currencySummary, sheetName: "Para Birimi Özeti" }
+    ], "Kullanim_Hakki_Varligi_Hareket_Tablosu");
+  }
+
+  function exportLeaseLiabilityMovementNote(startDate, endDate) {
+    const report = getLeaseLiabilityRollForwardReport(startDate, endDate);
+    const dataRows = Array.isArray(report.rows) ? report.rows.filter(r => r.status !== "ERROR") : [];
+    if (!dataRows.length) return false;
+    const totals = report.totals || {};
+    const rows = dataRows.map(r => ({
+      "Sözleşme": r.contractId,
+      "Şirket": r.company,
+      "Tedarikçi": r.supplier,
+      "Para Birimi": r.currency,
+      "Açılış Bakiyesi": r.openingLiability,
+      "Faiz Gideri (+)": r.interest,
+      "Ödemeler (-)": -Math.abs(r.payments),
+      "Modifikasyon Etkisi": r.modificationAdjustment,
+      "Reassessment Etkisi": r.reassessmentAdjustment,
+      "Diğer Düzeltme": r.otherAdjustment,
+      "Kapanış Bakiyesi": r.closingLiability,
+      "Durum": r.status
+    }));
+    rows.push({
+      "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "",
+      "Açılış Bakiyesi": totals.openingLiability, "Faiz Gideri (+)": totals.interest,
+      "Ödemeler (-)": -Math.abs(totals.payments || 0), "Modifikasyon Etkisi": totals.modificationAdjustment,
+      "Reassessment Etkisi": totals.reassessmentAdjustment, "Diğer Düzeltme": totals.otherAdjustment,
+      "Kapanış Bakiyesi": totals.closingLiability,
+      "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
+    });
+    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]).map(g => ({
+      "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
+      "Açılış Bakiyesi": g.openingLiability, "Faiz Gideri (+)": g.interest, "Ödemeler (-)": -Math.abs(g.payments),
+      "Modifikasyon Etkisi": g.modificationAdjustment, "Reassessment Etkisi": g.reassessmentAdjustment,
+      "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingLiability
+    }));
+    return v191ExportSheetsToFile([
+      { rows, sheetName: "Yükümlülük Hareket" },
+      { rows: currencySummary, sheetName: "Para Birimi Özeti" }
+    ], "Kira_Yukumlulugu_Hareket_Tablosu");
+  }
+
+  function v191ExportRowsToFile(rows, fileBaseName, sheetName) {
+    if (!rows.length) return false;
+    return v191ExportSheetsToFile([{ rows, sheetName }], fileBaseName);
+  }
+
+  function v191ExportSheetsToFile(sheets, fileBaseName) {
+    const validSheets = (sheets || []).filter(s => Array.isArray(s.rows) && s.rows.length);
+    if (!validSheets.length) return false;
+    try {
+      if (typeof XLSX !== "undefined") {
+        const workbook = XLSX.utils.book_new();
+        validSheets.forEach(s => {
+          const worksheet = XLSX.utils.json_to_sheet(s.rows);
+          XLSX.utils.book_append_sheet(workbook, worksheet, (s.sheetName || "Rapor").slice(0, 31));
+        });
+        XLSX.writeFile(workbook, `TFRS16_${fileBaseName}_${Date.now()}.xlsx`);
+        return true;
+      }
+      // CSV fallback does not support multiple sheets — export the first (primary detail) sheet only.
+      const rows = validSheets[0].rows;
+      const headers = Object.keys(rows[0]);
+      const csv = [headers.join(";"), ...rows.map(row => headers.map(h => String(row[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `TFRS16_${fileBaseName}_${Date.now()}.csv`;
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      return true;
+    } catch (error) {
+      console.error("Dipnot export error:", error);
+      return false;
+    }
+  }
+
+  function v191GroupRollForwardByCurrency(rows, sumKeys) {
+    return v191GroupRollForwardByDimension(rows, "currency", "currency", "UNSPECIFIED", sumKeys);
+  }
+
+  function v191GroupRollForwardByAssetClass(rows, sumKeys) {
+    return v191GroupRollForwardByDimension(rows, "assetClass", "assetClass", ASSET_CLASS_UNCLASSIFIED, sumKeys);
+  }
+
+  function v191GroupRollForwardByDimension(rows, sourceKey, outKey, fallbackValue, sumKeys) {
+    const groups = {};
+    (rows || []).forEach(row => {
+      const dimValue = row[sourceKey] || fallbackValue;
+      if (!groups[dimValue]) {
+        groups[dimValue] = { [outKey]: dimValue };
+        sumKeys.forEach(key => { groups[dimValue][key] = 0; });
+        groups[dimValue].contractCount = 0;
+      }
+      sumKeys.forEach(key => { groups[dimValue][key] += rptNumber(row[key]); });
+      groups[dimValue].contractCount += 1;
+    });
+    return Object.values(groups).map(g => {
+      const out = { ...g };
+      sumKeys.forEach(key => { out[key] = rptRound(out[key]); });
+      return out;
+    });
   }
 
   function rptPeriodRows(startDate,endDate,dimension="month") {
@@ -13844,6 +14110,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = getTfrs16FinancialReportingSnapshot(date) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
+
+    const periodStart = new Date(date.getFullYear(), 0, 1);
+    const rouReport = getRuoAssetRollForwardReport(periodStart, date) || {};
+    const liabReport = getLeaseLiabilityRollForwardReport(periodStart, date) || {};
+    const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${date.toLocaleDateString("tr-TR")}`;
+
+    const rouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
+    const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
+    const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+    const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+
+    const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
+    const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
+    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+
     return v191Kpis([
       { label: "Lease Liability", value: v191Value(bs.leaseLiability), description: "Financial reporting balance sheet" },
       { label: "Current Liability", value: v191Value(bs.currentLiability), description: "Reporting-date classification" },
@@ -13857,7 +14138,88 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "currentLiability", label: "Current" },
       { key: "nonCurrentLiability", label: "Non-current" },
       { key: "rouAssets", label: "ROU" }
-    ])}`;
+    ])}
+
+    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="margin:0;">Dipnot: Kullanım Hakkı Varlığı Hareket Tablosu</h3>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.53(a) — Varlık sınıfı ve para birimi kırılımı aşağıda verilmiştir.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportRouAssetMovementNote(new Date(${periodStart.getFullYear()},0,1), new Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet</h4>
+      ${v191Table(rouByAssetClass, [
+        { key: "assetClass", label: "Varlık Sınıfı" },
+        { key: "contractCount", label: "Sözleşme Sayısı" },
+        { key: "openingRuo", label: "Açılış" },
+        { key: "depreciation", label: "Amortisman" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingRuo", label: "Kapanış" }
+      ])}
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet</h4>
+      ${v191Table(rouByCurrency, [
+        { key: "currency", label: "Para Birimi" },
+        { key: "contractCount", label: "Sözleşme Sayısı" },
+        { key: "openingRuo", label: "Açılış" },
+        { key: "depreciation", label: "Amortisman" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingRuo", label: "Kapanış" }
+      ])}
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Sözleşme Bazında Detay</h4>
+      ${v191Table([...rouRows, ...rouTotalsRow], [
+        { key: "contractId", label: "Sözleşme" },
+        { key: "company", label: "Şirket" },
+        { key: "openingRuo", label: "Açılış" },
+        { key: "depreciation", label: "Amortisman" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingRuo", label: "Kapanış" },
+        { key: "status", label: "Durum" }
+      ])}
+      ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
+    </div>
+
+    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="margin:0;">Dipnot: Kira Yükümlülüğü Hareket Tablosu</h3>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Vade analizi ayrı bir dipnot olarak Contract Financial Tools üzerinden alınabilir.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},0,1), new Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet</h4>
+      ${v191Table(liabByCurrency, [
+        { key: "currency", label: "Para Birimi" },
+        { key: "contractCount", label: "Sözleşme Sayısı" },
+        { key: "openingLiability", label: "Açılış" },
+        { key: "interest", label: "Faiz" },
+        { key: "payments", label: "Ödemeler" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingLiability", label: "Kapanış" }
+      ])}
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Sözleşme Bazında Detay</h4>
+      ${v191Table([...liabRows, ...liabTotalsRow], [
+        { key: "contractId", label: "Sözleşme" },
+        { key: "company", label: "Şirket" },
+        { key: "openingLiability", label: "Açılış" },
+        { key: "interest", label: "Faiz" },
+        { key: "payments", label: "Ödemeler" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingLiability", label: "Kapanış" },
+        { key: "status", label: "Durum" }
+      ])}
+      ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
+    </div>`;
   }
 
   function v191RenderRiskControls(date) {
@@ -17812,6 +18174,8 @@ document.addEventListener("DOMContentLoaded", () => {
   window.GK_TFRS16 = window.GK_TFRS16 || {};
   Object.assign(window.GK_TFRS16, {
     calculateNonCurrentLiabilityAsOf,
+    exportRouAssetMovementNote,
+    exportLeaseLiabilityMovementNote,
     V24_SCHEMA_VERSION,
     V24_PLANNING_ENGINE_VERSION,
     V24_STORAGE_KEYS,
