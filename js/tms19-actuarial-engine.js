@@ -2823,3 +2823,857 @@ TMS19.periodicEngineHealthCheck =
                     .toISOString()
         };
     };
+
+/* ================================================================
+   TMS 19 — ACCOUNTING ENGINE
+   ----------------------------------------------------------------
+   DBO
+   PLAN ASSETS
+   NET DEFINED BENEFIT LIABILITY / ASSET
+   P&L
+   OCI
+   EQUITY
+   ROLL-FORWARD
+================================================================ */
+
+
+/* ================================================================
+   32 — PLAN ASSET HESAPLA
+================================================================ */
+
+TMS19.planVarlikHesapla =
+    function (
+        personel,
+        varsayimlar = {}
+    ) {
+
+        const value =
+            personel?.planAssets ??
+            personel?.planVarliklari ??
+            varsayimlar?.planAssets ??
+            varsayimlar?.planVarliklari ??
+            0;
+
+
+        return Math.max(
+            0,
+            TMS19.sayi(
+                value
+            )
+        );
+    };
+
+
+/* ================================================================
+   33 — NET TANIMLI FAYDA YÜKÜMLÜLÜĞÜ
+================================================================ */
+
+TMS19.netDefinedBenefitHesapla =
+    function (
+        dbo,
+        planAssets
+    ) {
+
+        const definedBenefitObligation =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    dbo
+                )
+            );
+
+
+        const assets =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    planAssets
+                )
+            );
+
+
+        const netPosition =
+            definedBenefitObligation -
+            assets;
+
+
+        return {
+
+            dbo:
+                definedBenefitObligation,
+
+            planAssets:
+                assets,
+
+            netPosition:
+                netPosition,
+
+            /*
+             * Pozitif:
+             * Net Defined Benefit Liability
+             *
+             * Negatif:
+             * Net Defined Benefit Asset
+             */
+
+            liability:
+                Math.max(
+                    0,
+                    netPosition
+                ),
+
+            asset:
+                Math.max(
+                    0,
+                    -netPosition
+                ),
+
+            position:
+                netPosition >= 0
+                    ? "LIABILITY"
+                    : "ASSET"
+        };
+    };
+
+
+/* ================================================================
+   34 — PLAN VARLIKLARI HAREKETİ
+================================================================ */
+
+TMS19.planVarlikRollForward =
+    function (
+        input = {}
+    ) {
+
+        const openingAssets =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    input.openingPlanAssets
+                )
+            );
+
+
+        const expectedReturn =
+            TMS19.sayi(
+                input.expectedReturn
+            );
+
+
+        const employerContributions =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    input.employerContributions
+                )
+            );
+
+
+        const employeeContributions =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    input.employeeContributions
+                )
+            );
+
+
+        const benefitsPaid =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    input.benefitsPaid
+                )
+            );
+
+
+        const actuarialGainLoss =
+            TMS19.sayi(
+                input.actuarialGainLoss
+            );
+
+
+        const closingAssets =
+            Math.max(
+                0,
+                openingAssets +
+                expectedReturn +
+                employerContributions +
+                employeeContributions -
+                benefitsPaid +
+                actuarialGainLoss
+            );
+
+
+        return {
+
+            openingPlanAssets:
+                openingAssets,
+
+            expectedReturn:
+                expectedReturn,
+
+            employerContributions:
+                employerContributions,
+
+            employeeContributions:
+                employeeContributions,
+
+            benefitsPaid:
+                benefitsPaid,
+
+            actuarialGainLoss:
+                actuarialGainLoss,
+
+            closingPlanAssets:
+                closingAssets
+        };
+    };
+
+
+/* ================================================================
+   35 — NET FAİZ MALİYETİ
+================================================================ */
+
+TMS19.netFaizMaliyetiHesapla =
+    function (
+        openingDBO,
+        openingPlanAssets,
+        discountRate
+    ) {
+
+        const dbo =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    openingDBO
+                )
+            );
+
+
+        const assets =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    openingPlanAssets
+                )
+            );
+
+
+        const rate =
+            TMS19.sayi(
+                discountRate
+            );
+
+
+        /*
+         * Net defined benefit liability /
+         * asset × discount rate
+         */
+
+        return (
+            dbo -
+            assets
+        ) * rate;
+    };
+
+
+/* ================================================================
+   36 — P&L HESAPLA
+================================================================ */
+
+TMS19.karZararHesapla =
+    function (
+        input = {}
+    ) {
+
+        const currentServiceCost =
+            TMS19.sayi(
+                input.currentServiceCost
+            );
+
+
+        const pastServiceCost =
+            TMS19.sayi(
+                input.pastServiceCost
+            );
+
+
+        const netInterestCost =
+            TMS19.sayi(
+                input.netInterestCost
+            );
+
+
+        /*
+         * TMS 19 P&L:
+         *
+         * Current Service Cost
+         * + Past Service Cost
+         * + Net Interest
+         */
+
+        const total =
+            currentServiceCost +
+            pastServiceCost +
+            netInterestCost;
+
+
+        return {
+
+            currentServiceCost:
+                currentServiceCost,
+
+            pastServiceCost:
+                pastServiceCost,
+
+            netInterestCost:
+                netInterestCost,
+
+            total:
+                total
+        };
+    };
+
+
+/* ================================================================
+   37 — OCI / REMEASUREMENT
+================================================================ */
+
+TMS19.ociHesapla =
+    function (
+        input = {}
+    ) {
+
+        const actuarialGainLossDBO =
+            TMS19.sayi(
+                input.actuarialGainLossDBO
+            );
+
+
+        const actuarialGainLossPlanAssets =
+            TMS19.sayi(
+                input.actuarialGainLossPlanAssets
+            );
+
+
+        /*
+         * Remeasurement:
+         *
+         * DBO actuarial gain/loss
+         * +
+         * Plan asset return
+         * excluding net interest
+         */
+
+        const remeasurement =
+            actuarialGainLossDBO +
+            actuarialGainLossPlanAssets;
+
+
+        return {
+
+            actuarialGainLossDBO:
+                actuarialGainLossDBO,
+
+            actuarialGainLossPlanAssets:
+                actuarialGainLossPlanAssets,
+
+            remeasurement:
+                remeasurement
+        };
+    };
+
+
+/* ================================================================
+   38 — TAM MUHASEBE ETKİSİ
+================================================================ */
+
+TMS19.tamMuhasebeEtkiHesapla =
+    function (
+        input = {}
+    ) {
+
+        const profitLoss =
+            TMS19.karZararHesapla({
+
+                currentServiceCost:
+                    input.currentServiceCost,
+
+                pastServiceCost:
+                    input.pastServiceCost,
+
+                netInterestCost:
+                    input.netInterestCost
+            });
+
+
+        const oci =
+            TMS19.ociHesapla({
+
+                actuarialGainLossDBO:
+                    input.actuarialGainLossDBO,
+
+                actuarialGainLossPlanAssets:
+                    input.actuarialGainLossPlanAssets
+            });
+
+
+        const totalExpense =
+            profitLoss.total +
+            oci.remeasurement;
+
+
+        return {
+
+            profitLoss:
+                profitLoss,
+
+            oci:
+                oci,
+
+            totalDefinedBenefitEffect:
+                totalExpense
+        };
+    };
+
+
+/* ================================================================
+   39 — NET DEFINED BENEFIT ROLL-FORWARD
+================================================================ */
+
+TMS19.netDefinedBenefitRollForward =
+    function (
+        input = {}
+    ) {
+
+        const openingDBO =
+            TMS19.sayi(
+                input.openingDBO
+            );
+
+
+        const openingPlanAssets =
+            TMS19.sayi(
+                input.openingPlanAssets
+            );
+
+
+        const closingDBO =
+            TMS19.sayi(
+                input.closingDBO
+            );
+
+
+        const closingPlanAssets =
+            TMS19.sayi(
+                input.closingPlanAssets
+            );
+
+
+        const openingNet =
+            openingDBO -
+            openingPlanAssets;
+
+
+        const closingNet =
+            closingDBO -
+            closingPlanAssets;
+
+
+        const movement =
+            closingNet -
+            openingNet;
+
+
+        return {
+
+            openingDBO:
+                openingDBO,
+
+            openingPlanAssets:
+                openingPlanAssets,
+
+            openingNetDefinedBenefitPosition:
+                openingNet,
+
+            closingDBO:
+                closingDBO,
+
+            closingPlanAssets:
+                closingPlanAssets,
+
+            closingNetDefinedBenefitPosition:
+                closingNet,
+
+            netMovement:
+                movement,
+
+            closingLiability:
+                Math.max(
+                    0,
+                    closingNet
+                ),
+
+            closingAsset:
+                Math.max(
+                    0,
+                    -closingNet
+                ),
+
+            position:
+                closingNet >= 0
+                    ? "LIABILITY"
+                    : "ASSET"
+        };
+    };
+
+
+/* ================================================================
+   40 — PERSONEL MUHASEBE HESABI
+================================================================ */
+
+TMS19.personelMuhasebeHesapla =
+    function (
+        personel,
+        varsayimlar = {},
+        index = 0
+    ) {
+
+        const actuarial =
+            TMS19.personelDonemHesapla(
+                personel,
+                varsayimlar,
+                index
+            );
+
+
+        const period =
+            actuarial.period ||
+            {};
+
+
+        const openingPlanAssets =
+            TMS19.sayi(
+                personel?.openingPlanAssets ??
+                personel?.acilisPlanVarliklari ??
+                varsayimlar?.openingPlanAssets ??
+                0
+            );
+
+
+        const planAssets =
+            TMS19.planVarlikHesapla(
+                personel,
+                varsayimlar
+            );
+
+
+        const netInterestCost =
+            TMS19.netFaizMaliyetiHesapla(
+                period.openingDBO,
+                openingPlanAssets,
+                varsayimlar.iskontoOrani
+            );
+
+
+        const profitLoss =
+            TMS19.karZararHesapla({
+
+                currentServiceCost:
+                    period.currentServiceCost,
+
+                pastServiceCost:
+                    period.pastServiceCost,
+
+                netInterestCost:
+                    netInterestCost
+            });
+
+
+        const oci =
+            TMS19.ociHesapla({
+
+                actuarialGainLossDBO:
+                    period.actuarialGainLoss,
+
+                actuarialGainLossPlanAssets:
+                    0
+            });
+
+
+        const netPosition =
+            TMS19.netDefinedBenefitHesapla(
+                period.closingDBO,
+                planAssets
+            );
+
+
+        const rollForward =
+            TMS19.netDefinedBenefitRollForward({
+
+                openingDBO:
+                    period.openingDBO,
+
+                openingPlanAssets:
+                    openingPlanAssets,
+
+                closingDBO:
+                    period.closingDBO,
+
+                closingPlanAssets:
+                    planAssets
+            });
+
+
+        return {
+
+            ...actuarial,
+
+
+            accounting:
+                {
+
+                    planAssets:
+                        planAssets,
+
+                    netInterestCost:
+                        netInterestCost,
+
+                    netDefinedBenefit:
+                        netPosition,
+
+                    profitLoss:
+                        profitLoss,
+
+                    oci:
+                        oci,
+
+                    rollForward:
+                        rollForward
+                }
+        };
+    };
+
+
+/* ================================================================
+   41 — PORTFÖY MUHASEBE HESABI
+================================================================ */
+
+TMS19.portfoyMuhasebeHesapla =
+    function (
+        personeller,
+        varsayimlar = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                personeller
+            )
+        ) {
+
+            throw new Error(
+                "Personel listesi array olmalıdır."
+            );
+        }
+
+
+        const results =
+            [];
+
+
+        const errors =
+            [];
+
+
+        personeller.forEach(
+            (
+                personel,
+                index
+            ) => {
+
+                try {
+
+                    results.push(
+                        TMS19.personelMuhasebeHesapla(
+                            personel,
+                            varsayimlar,
+                            index
+                        )
+                    );
+
+                }
+                catch (
+                    error
+                ) {
+
+                    errors.push({
+
+                        index:
+                            index,
+
+                        personelId:
+                            personel?.personelId ??
+                            personel?.id ??
+                            "",
+
+                        error:
+                            error.message
+                    });
+                }
+            }
+        );
+
+
+        let dbo =
+            0;
+
+
+        let planAssets =
+            0;
+
+
+        let netPosition =
+            0;
+
+
+        let currentServiceCost =
+            0;
+
+
+        let pastServiceCost =
+            0;
+
+
+        let netInterestCost =
+            0;
+
+
+        let oci =
+            0;
+
+
+        results.forEach(
+            result => {
+
+                dbo +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.netDefinedBenefit
+                            ?.dbo
+                    );
+
+
+                planAssets +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.netDefinedBenefit
+                            ?.planAssets
+                    );
+
+
+                netPosition +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.netDefinedBenefit
+                            ?.netPosition
+                    );
+
+
+                currentServiceCost +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.profitLoss
+                            ?.currentServiceCost
+                    );
+
+
+                pastServiceCost +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.profitLoss
+                            ?.pastServiceCost
+                    );
+
+
+                netInterestCost +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.profitLoss
+                            ?.netInterestCost
+                    );
+
+
+                oci +=
+                    TMS19.sayi(
+                        result.accounting
+                            ?.oci
+                            ?.remeasurement
+                    );
+            }
+        );
+
+
+        return {
+
+            results:
+                results,
+
+            errors:
+                errors,
+
+            summary:
+                {
+
+                    personelSayisi:
+                        personeller.length,
+
+                    hesaplananPersonel:
+                        results.length,
+
+                    hataliPersonel:
+                        errors.length,
+
+                    toplamDBO:
+                        dbo,
+
+                    toplamPlanVarligi:
+                        planAssets,
+
+                    netDefinedBenefitPosition:
+                        netPosition,
+
+                    netDefinedBenefitLiability:
+                        Math.max(
+                            0,
+                            netPosition
+                        ),
+
+                    netDefinedBenefitAsset:
+                        Math.max(
+                            0,
+                            -netPosition
+                        ),
+
+                    cariHizmetMaliyeti:
+                        currentServiceCost,
+
+                    gecmisHizmetMaliyeti:
+                        pastServiceCost,
+
+                    netFaizMaliyeti:
+                        netInterestCost,
+
+                    oci:
+                        oci,
+
+                    toplamKarZararEtkisi:
+                        currentServiceCost +
+                        pastServiceCost +
+                        netInterestCost
+                },
+
+            success:
+                errors.length === 0
+        };
+    };
