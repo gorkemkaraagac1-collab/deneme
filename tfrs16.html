@@ -162,6 +162,56 @@
           <label for="restorationCost">Sökme / Restorasyon Karşılığı (₺)</label>
           <input id="restorationCost" name="restorationCost" type="number" min="0" step="0.01" value="0" placeholder="0.00">
         </div>
+
+        <div class="form-group" style="grid-column: span 2; margin-top:8px; padding-top:14px; border-top:1px solid #e5e7eb;">
+          <label style="font-size:11px;font-weight:800;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;">İleri TFRS 16 Parametreleri (opsiyonel)</label>
+        </div>
+        <div class="form-group">
+          <label for="prepayments">Peşin Ödemeler (₺)</label>
+          <input id="prepayments" name="prepayments" type="number" min="0" step="0.01" value="0" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="leaseIncentives">Kiralayan Teşvikleri (₺)</label>
+          <input id="leaseIncentives" name="leaseIncentives" type="number" min="0" step="0.01" value="0" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label for="leaseIncreaseType">Kira Artış Tipi</label>
+          <select id="leaseIncreaseType" name="leaseIncreaseType">
+            <option value="none" selected>Artış Yok</option>
+            <option value="fixedRate">Sabit Oran (%)</option>
+            <option value="fixedAmount">Sabit Tutar (₺)</option>
+            <option value="index">Endekse Bağlı (TÜFE vb.)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="leaseIncreaseRate">Yıllık Artış Oranı (%)</label>
+          <input id="leaseIncreaseRate" name="leaseIncreaseRate" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Oran' seçiliyse">
+        </div>
+        <div class="form-group">
+          <label for="fixedIncrease">Sabit Artış Tutarı (₺/yıl)</label>
+          <input id="fixedIncrease" name="fixedIncrease" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Tutar' seçiliyse">
+        </div>
+        <div class="form-group">
+          <label for="variablePayment">Değişken Ödeme (₺/ay)</label>
+          <input id="variablePayment" name="variablePayment" type="number" min="0" step="0.01" value="0" placeholder="Yükümlülüğe dahil edilmez">
+        </div>
+        <div class="form-group">
+          <label for="usefulLifeMonths">Varlığın Faydalı Ömrü (Ay)</label>
+          <input id="usefulLifeMonths" name="usefulLifeMonths" type="number" min="0" step="1" placeholder="Mülkiyet devri / kesin satın alma opsiyonunda">
+        </div>
+        <div class="form-group" style="grid-column: span 2;">
+          <label style="display:block;margin-bottom:6px;">Opsiyonlar &amp; İstisnalar</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="renewalOption" name="renewalOption" type="checkbox"> Yenileme opsiyonu makul ölçüde kesin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="terminationOption" name="terminationOption" type="checkbox"> Fesih opsiyonu makul ölçüde kesin değil</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="purchaseOption" name="purchaseOption" type="checkbox"> Satın alma opsiyonu makul ölçüde kesin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="ownershipTransfer" name="ownershipTransfer" type="checkbox"> Kira sonunda mülkiyet devri var</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="shortTermLease" name="shortTermLease" type="checkbox"> Kısa vadeli kiralama istisnası (≤12 ay)</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="lowValueAsset" name="lowValueAsset" type="checkbox"> Düşük değerli varlık istisnası</label>
+          </div>
+          <p style="margin:8px 0 0;font-size:10px;color:#64748b;line-height:1.5;">Kısa vadeli veya düşük değerli olarak işaretlenen sözleşmeler TFRS 16.5-8 uyarınca aktifleştirilmez; kira gideri olarak (genellikle doğrusal esasa göre) muhasebeleştirilir.</p>
+        </div>
+
         <div class="form-group" style="grid-column: span 2;">
           <label for="renewalDate">Yenileme / Opsiyon Tarihi</label>
           <input id="renewalDate" name="renewalDate" type="date">
@@ -200,7 +250,7 @@
     <div id="detailContent" class="detail-content"></div>
     
     <!-- Dinamik İtfa Tablosu Alanı -->
-    <div id="scheduleTableContainer" class="table-wrapper style="margin-top:20px; max-height: 350px; overflow-y: auto;">
+    <div id="scheduleTableContainer" class="table-wrapper" style="margin-top:20px; max-height: 350px; overflow-y: auto;">
       <!-- tfrs16.js tarafından doldurulacak -->
     </div>
 
