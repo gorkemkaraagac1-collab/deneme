@@ -5597,3 +5597,312 @@ TMS19.pucEngineHealthCheck =
     };
 
 
+/* ================================================================
+   TMS 19 — ACTUARIAL MOVEMENT ENGINE
+   ----------------------------------------------------------------
+   Opening DBO → Closing DBO reconciliation
+================================================================ */
+
+TMS19.dboMovementHesapla =
+    function (
+        openingDBO,
+        currentServiceCost,
+        interestCost,
+        pastServiceCost,
+        actuarialGainLoss,
+        benefitsPaid
+    ) {
+
+        const opening =
+            TMS19.sayi(
+                openingDBO
+            );
+
+        const currentService =
+            TMS19.sayi(
+                currentServiceCost
+            );
+
+        const interest =
+            TMS19.sayi(
+                interestCost
+            );
+
+        const pastService =
+            TMS19.sayi(
+                pastServiceCost
+            );
+
+        const actuarial =
+            TMS19.sayi(
+                actuarialGainLoss
+            );
+
+        const benefits =
+            TMS19.sayi(
+                benefitsPaid
+            );
+
+
+        /*
+         * TMS 19 DBO reconciliation
+         *
+         * Opening DBO
+         * + Current Service Cost
+         * + Interest Cost
+         * + Past Service Cost
+         * +/- Actuarial Gain/Loss
+         * - Benefits Paid
+         * = Closing DBO
+         */
+
+        const closingDBO =
+            opening +
+            currentService +
+            interest +
+            pastService +
+            actuarial -
+            benefits;
+
+
+        return {
+
+            openingDBO:
+                opening,
+
+            currentServiceCost:
+                currentService,
+
+            interestCost:
+                interest,
+
+            pastServiceCost:
+                pastService,
+
+            actuarialGainLoss:
+                actuarial,
+
+            benefitsPaid:
+                benefits,
+
+            closingDBO:
+                closingDBO
+        };
+    };
+
+
+/* ================================================================
+   DBO MOVEMENT VALIDATION
+================================================================ */
+
+TMS19.dboMovementValidate =
+    function (
+        movement
+    ) {
+
+        if (
+            !movement
+        ) {
+
+            return {
+
+                valid:
+                    false,
+
+                errors:
+                    [
+                        "DBO movement bulunamadı."
+                    ]
+            };
+        }
+
+
+        const calculated =
+            TMS19.sayi(
+                movement.openingDBO
+            ) +
+
+            TMS19.sayi(
+                movement.currentServiceCost
+            ) +
+
+            TMS19.sayi(
+                movement.interestCost
+            ) +
+
+            TMS19.sayi(
+                movement.pastServiceCost
+            ) +
+
+            TMS19.sayi(
+                movement.actuarialGainLoss
+            ) -
+
+            TMS19.sayi(
+                movement.benefitsPaid
+            );
+
+
+        const reported =
+            TMS19.sayi(
+                movement.closingDBO
+            );
+
+
+        const difference =
+            calculated -
+            reported;
+
+
+        const tolerance =
+            0.01;
+
+
+        return {
+
+            valid:
+                Math.abs(
+                    difference
+                ) <= tolerance,
+
+            calculatedClosingDBO:
+                calculated,
+
+            reportedClosingDBO:
+                reported,
+
+            difference:
+                difference
+        };
+    };
+
+
+/* ================================================================
+   P&L COMPONENTS
+================================================================ */
+
+TMS19.plHesapla =
+    function (
+        currentServiceCost,
+        interestCost,
+        pastServiceCost
+    ) {
+
+        const currentService =
+            TMS19.sayi(
+                currentServiceCost
+            );
+
+        const interest =
+            TMS19.sayi(
+                interestCost
+            );
+
+        const pastService =
+            TMS19.sayi(
+                pastServiceCost
+            );
+
+
+        return {
+
+            currentServiceCost:
+                currentService,
+
+            netInterestCost:
+                interest,
+
+            pastServiceCost:
+                pastService,
+
+            totalPLImpact:
+                currentService +
+                interest +
+                pastService
+        };
+    };
+
+
+/* ================================================================
+   OCI — ACTUARIAL GAIN / LOSS
+================================================================ */
+
+TMS19.ociHesapla =
+    function (
+        actuarialGainLoss
+    ) {
+
+        const amount =
+            TMS19.sayi(
+                actuarialGainLoss
+            );
+
+
+        return {
+
+            actuarialGainLoss:
+                amount,
+
+            ociImpact:
+                amount
+        };
+    };
+
+
+/* ================================================================
+   NET DEFINED BENEFIT POSITION
+================================================================ */
+
+TMS19.netYukumlulukHesapla =
+    function (
+        closingDBO,
+        planAssets
+    ) {
+
+        const dbo =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    closingDBO
+                )
+            );
+
+
+        const assets =
+            Math.max(
+                0,
+                TMS19.sayi(
+                    planAssets
+                )
+            );
+
+
+        const netPosition =
+            dbo -
+            assets;
+
+
+        return {
+
+            closingDBO:
+                dbo,
+
+            planAssets:
+                assets,
+
+            netDefinedBenefitPosition:
+                netPosition,
+
+            netDefinedBenefitLiability:
+                Math.max(
+                    0,
+                    netPosition
+                ),
+
+            netDefinedBenefitAsset:
+                Math.max(
+                    0,
+                    -netPosition
+                )
+        };
+    };
