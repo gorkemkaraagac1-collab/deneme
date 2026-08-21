@@ -2200,3 +2200,1019 @@
 
 
 })(window);
+
+/* ================================================================
+   GK TMS 19 — PUC PORTFOLIO INTEGRATION
+   ----------------------------------------------------------------
+   Portfolio Engine artık ana DBO kaynağı olarak:
+
+       TMS19.portfoyPucHesapla()
+
+   kullanır.
+
+   Eski dashboard contract'ı korunur.
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+
+    if (
+        !global.TMS19
+    ) {
+
+        console.error(
+            "TMS19 actuarial engine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    if (
+        !global.TMS19PortfolioEngine
+    ) {
+
+        console.error(
+            "TMS19PortfolioEngine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    /* ============================================================
+       PERSONEL RESULT ADAPTER
+    ============================================================ */
+
+    function personelAdapter(
+        result
+    ) {
+
+        const puc =
+            result.puc ||
+            {};
+
+
+        const accounting =
+            result.accounting ||
+            {};
+
+
+        const projection =
+            result.emeklilik ||
+            {};
+
+
+        return {
+
+            /*
+             * Identity
+             */
+
+            personelId:
+                result.personelId ||
+                "",
+
+
+            /*
+             * Demographic
+             */
+
+            age:
+                Number(
+                    result.yas ??
+                    0
+                ),
+
+
+            serviceYears:
+                Number(
+                    result.hizmetSuresi ??
+                    0
+                ),
+
+
+            yearsToRetirement:
+                Number(
+                    result.kalanYil ??
+                    0
+                ),
+
+
+            totalService:
+                Number(
+                    result.toplamHizmet ??
+                    0
+                ),
+
+
+            /*
+             * Valuation
+             */
+
+            dbo:
+                Number(
+                    puc.dbo ??
+                    0
+                ),
+
+
+            accruedBenefit:
+                Number(
+                    puc.accruedBenefit ??
+                    0
+                ),
+
+
+            futureServiceBenefit:
+                Number(
+                    puc.futureServiceBenefit ??
+                    0
+                ),
+
+
+            allocationRatio:
+                Number(
+                    puc.allocationRatio ??
+                    0
+                ),
+
+
+            survivalProbability:
+                Number(
+                    puc.survivalProbability ??
+                    0
+                ),
+
+
+            discountFactor:
+                Number(
+                    puc.discountFactor ??
+                    0
+                ),
+
+
+            /*
+             * Projection
+             */
+
+            retirementSalary:
+                Number(
+                    projection.emeklilikMaasi ??
+                    0
+                ),
+
+
+            retirementCeiling:
+                Number(
+                    projection.emeklilikTavani ??
+                    0
+                ),
+
+
+            benefitSalary:
+                Number(
+                    projection.faydaMaasi ??
+                    0
+                ),
+
+
+            totalProjectedBenefit:
+                Number(
+                    projection.toplamFayda ??
+                    0
+                ),
+
+
+            /*
+             * P&L
+             */
+
+            currentServiceCost:
+                Number(
+                    accounting.currentServiceCost ??
+                    0
+                ),
+
+
+            interestCost:
+                Number(
+                    accounting.interestCost ??
+                    0
+                ),
+
+
+            pastServiceCost:
+                Number(
+                    accounting.pastServiceCost ??
+                    0
+                ),
+
+
+            profitLoss:
+                Number(
+                    accounting.profitLoss ??
+                    0
+                ),
+
+
+            /*
+             * Original actuarial result
+             */
+
+            actuarialResult:
+                result
+        };
+    }
+
+
+    /* ============================================================
+       DEPARTMENT AGGREGATION
+    ============================================================ */
+
+    function aggregateByField(
+        results,
+        field
+    ) {
+
+        const groups =
+            {};
+
+
+        results.forEach(
+            result => {
+
+                const key =
+                    result[field] ||
+                    "Belirtilmemiş";
+
+
+                if (
+                    !groups[key]
+                ) {
+
+                    groups[key] = {
+
+                        name:
+                            key,
+
+                        employeeCount:
+                            0,
+
+                        dbo:
+                            0,
+
+                        currentServiceCost:
+                            0,
+
+                        interestCost:
+                            0,
+
+                        profitLoss:
+                            0
+                    };
+                }
+
+
+                groups[key]
+                    .employeeCount++;
+
+
+                groups[key]
+                    .dbo +=
+                    result.dbo;
+
+
+                groups[key]
+                    .currentServiceCost +=
+                    result.currentServiceCost;
+
+
+                groups[key]
+                    .interestCost +=
+                    result.interestCost;
+
+
+                groups[key]
+                    .profitLoss +=
+                    result.profitLoss;
+            }
+        );
+
+
+        return Object.values(
+            groups
+        );
+    }
+
+
+    /* ============================================================
+       RISK ANALYSIS
+    ============================================================ */
+
+    function calculateRisk(
+        results,
+        totals
+    ) {
+
+        const employeeCount =
+            results.length;
+
+
+        if (
+            employeeCount === 0
+        ) {
+
+            return {
+
+                level:
+                    "LOW",
+
+                score:
+                    0,
+
+                concentration:
+                    0
+            };
+        }
+
+
+        /*
+         * DBO concentration
+         */
+
+        const sorted =
+            [...results]
+                .sort(
+                    (
+                        a,
+                        b
+                    ) =>
+                        b.dbo -
+                        a.dbo
+                );
+
+
+        const top10Count =
+            Math.max(
+                1,
+                Math.ceil(
+                    employeeCount *
+                    0.10
+                )
+            );
+
+
+        const top10DBO =
+            sorted
+                .slice(
+                    0,
+                    top10Count
+                )
+                .reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.dbo,
+                    0
+                );
+
+
+        const concentration =
+            totals.dbo > 0
+                ? top10DBO /
+                  totals.dbo
+                : 0;
+
+
+        let score =
+            0;
+
+
+        if (
+            concentration >=
+            0.50
+        ) {
+
+            score +=
+                50;
+
+        }
+
+        else if (
+            concentration >=
+            0.35
+        ) {
+
+            score +=
+                30;
+
+        }
+
+        else if (
+            concentration >=
+            0.20
+        ) {
+
+            score +=
+                15;
+        }
+
+
+        /*
+         * Retirement concentration
+         */
+
+        const retirementNear =
+            results.filter(
+                item =>
+                    item.yearsToRetirement <=
+                    5
+            ).length;
+
+
+        const retirementRatio =
+            retirementNear /
+            employeeCount;
+
+
+        if (
+            retirementRatio >=
+            0.30
+        ) {
+
+            score +=
+                30;
+
+        }
+
+        else if (
+            retirementRatio >=
+            0.20
+        ) {
+
+            score +=
+                20;
+
+        }
+
+        else if (
+            retirementRatio >=
+            0.10
+        ) {
+
+            score +=
+                10;
+        }
+
+
+        /*
+         * Long service concentration
+         */
+
+        const longService =
+            results.filter(
+                item =>
+                    item.serviceYears >=
+                    20
+            ).length;
+
+
+        const longServiceRatio =
+            longService /
+            employeeCount;
+
+
+        if (
+            longServiceRatio >=
+            0.30
+        ) {
+
+            score +=
+                20;
+
+        }
+
+        else if (
+            longServiceRatio >=
+            0.20
+        ) {
+
+            score +=
+                10;
+        }
+
+
+        let level =
+            "LOW";
+
+
+        if (
+            score >=
+            60
+        ) {
+
+            level =
+                "HIGH";
+
+        }
+
+        else if (
+            score >=
+            30
+        ) {
+
+            level =
+                "MEDIUM";
+        }
+
+
+        return {
+
+            level:
+                level,
+
+            score:
+                score,
+
+            concentration:
+                concentration,
+
+            retirementWithin5Years:
+                retirementRatio,
+
+            longServiceRatio:
+                longServiceRatio
+        };
+    }
+
+
+    /* ============================================================
+       MAIN PUC ANALYSIS
+    ============================================================ */
+
+    function analyzePUC(
+        employees,
+        assumptions = {}
+    ) {
+
+        if (
+            !Array.isArray(
+                employees
+            )
+        ) {
+
+            throw new Error(
+                "employees array olmalıdır."
+            );
+        }
+
+
+        /*
+         * ANA MOTOR
+         */
+
+        const puc =
+            global.TMS19
+                .portfoyPucHesapla(
+                    employees,
+                    assumptions
+                );
+
+
+        const results =
+            puc.results.map(
+                personelAdapter
+            );
+
+
+        const totals = {
+
+            employeeCount:
+                results.length,
+
+
+            dbo:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.dbo,
+                    0
+                ),
+
+
+            accruedBenefit:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.accruedBenefit,
+                    0
+                ),
+
+
+            futureServiceBenefit:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.futureServiceBenefit,
+                    0
+                ),
+
+
+            currentServiceCost:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.currentServiceCost,
+                    0
+                ),
+
+
+            interestCost:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.interestCost,
+                    0
+                ),
+
+
+            pastServiceCost:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.pastServiceCost,
+                    0
+                ),
+
+
+            profitLoss:
+                results.reduce(
+                    (
+                        sum,
+                        item
+                    ) =>
+                        sum +
+                        item.profitLoss,
+                    0
+                )
+        };
+
+
+        /*
+         * PLAN ASSETS
+         */
+
+        const planAssets =
+            employees.reduce(
+                (
+                    sum,
+                    employee
+                ) => {
+
+                    return (
+                        sum +
+                        Math.max(
+                            0,
+                            Number(
+                                employee.planAssets ??
+                                employee.planVarliklari ??
+                                0
+                            )
+                        )
+                    );
+
+                },
+                0
+            );
+
+
+        totals.planAssets =
+            planAssets;
+
+
+        /*
+         * NET POSITION
+         */
+
+        totals.netDefinedBenefitPosition =
+            totals.dbo -
+            totals.planAssets;
+
+
+        totals.netDefinedBenefitLiability =
+            Math.max(
+                0,
+                totals.netDefinedBenefitPosition
+            );
+
+
+        totals.netDefinedBenefitAsset =
+            Math.max(
+                0,
+                -totals.netDefinedBenefitPosition
+            );
+
+
+        /*
+         * RISK
+         */
+
+        const risk =
+            calculateRisk(
+                results,
+                totals
+            );
+
+
+        /*
+         * DEPARTMENT
+         */
+
+        const byDepartment =
+            aggregateByField(
+                results,
+                "department"
+            );
+
+
+        /*
+         * AGE BUCKET
+         */
+
+        const ageBuckets =
+            {
+
+                "30 Altı": [],
+                "30-39": [],
+                "40-49": [],
+                "50-59": [],
+                "60+": []
+            };
+
+
+        results.forEach(
+            item => {
+
+                if (
+                    item.age < 30
+                ) {
+
+                    ageBuckets[
+                        "30 Altı"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.age < 40
+                ) {
+
+                    ageBuckets[
+                        "30-39"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.age < 50
+                ) {
+
+                    ageBuckets[
+                        "40-49"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else if (
+                    item.age < 60
+                ) {
+
+                    ageBuckets[
+                        "50-59"
+                    ].push(
+                        item
+                    );
+
+                }
+
+                else {
+
+                    ageBuckets[
+                        "60+"
+                    ].push(
+                        item
+                    );
+                }
+            }
+        );
+
+
+        const byAge =
+            Object.keys(
+                ageBuckets
+            ).map(
+                bucket => {
+
+                    const group =
+                        ageBuckets[
+                            bucket
+                        ];
+
+
+                    return {
+
+                        bucket:
+                            bucket,
+
+                        employeeCount:
+                            group.length,
+
+                        dbo:
+                            group.reduce(
+                                (
+                                    sum,
+                                    item
+                                ) =>
+                                    sum +
+                                    item.dbo,
+                                0
+                            )
+                    };
+                }
+            );
+
+
+        /*
+         * RETIREMENT ANALYSIS
+         */
+
+        const retirement =
+            {
+
+                within1Year:
+                    results.filter(
+                        item =>
+                            item.yearsToRetirement <=
+                            1
+                    ).length,
+
+                within3Years:
+                    results.filter(
+                        item =>
+                            item.yearsToRetirement <=
+                            3
+                    ).length,
+
+                within5Years:
+                    results.filter(
+                        item =>
+                            item.yearsToRetirement <=
+                            5
+                    ).length,
+
+                within10Years:
+                    results.filter(
+                        item =>
+                            item.yearsToRetirement <=
+                            10
+                    ).length
+            };
+
+
+        /*
+         * TOP DBO
+         */
+
+        const topEmployees =
+            [...results]
+                .sort(
+                    (
+                        a,
+                        b
+                    ) =>
+                        b.dbo -
+                        a.dbo
+                )
+                .slice(
+                    0,
+                    10
+                );
+
+
+        return {
+
+            success:
+                puc.success,
+
+
+            results:
+                results,
+
+
+            errors:
+                puc.errors || [],
+
+
+            totals:
+                totals,
+
+
+            risk:
+                risk,
+
+
+            byDepartment:
+                byDepartment,
+
+
+            byAge:
+                byAge,
+
+
+            retirement:
+                retirement,
+
+
+            topEmployees:
+                topEmployees,
+
+
+            actuarialEngineResult:
+                puc
+        };
+    }
+
+
+    /* ============================================================
+       PUBLIC API
+    ============================================================ */
+
+    global.TMS19PortfolioEngine =
+        {
+
+            /*
+             * Yeni ana motor
+             */
+
+            analyzePUC:
+
+
+                analyzePUC,
+
+
+            /*
+             * Dashboard compatibility
+             */
+
+            analyze:
+
+
+                analyzePUC,
+
+
+            calculate:
+
+
+                analyzePUC,
+
+
+            healthCheck:
+                function () {
+
+                    return global.TMS19
+                        .pucEngineHealthCheck();
+
+                }
+        };
+
+
+})(window);
