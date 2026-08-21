@@ -1772,3 +1772,431 @@
 })(typeof window !== "undefined"
     ? window
     : globalThis);
+
+/* ================================================================
+   GK TMS 19
+   ACTUARIAL ENGINE COMPATIBILITY BRIDGE
+   ----------------------------------------------------------------
+   Eski Portfolio Engine:
+       TMS19ActuarialEngine.calculate()
+
+   Yeni Actuarial Engine:
+       TMS19.portfoyDonemHesapla()
+
+   Amaç:
+   Eski dashboard contract'ını bozmadan yeni aktüeryal
+   hesaplama motoruna geçiş yapmak.
+================================================================ */
+
+(function (global) {
+
+    "use strict";
+
+
+    if (
+        !global.TMS19PortfolioEngine
+    ) {
+
+        console.error(
+            "TMS19PortfolioEngine bulunamadı."
+        );
+
+        return;
+    }
+
+
+    /*
+     * Yeni TMS19 namespace'i var mı?
+     */
+
+    if (
+        !global.TMS19
+    ) {
+
+        console.warn(
+            "TMS19 actuarial namespace henüz yüklenmemiş."
+        );
+
+        return;
+    }
+
+
+    /* ============================================================
+       ACTUARIAL RESULT ADAPTER
+    ============================================================ */
+
+    function adaptPersonelResult(
+        result
+    ) {
+
+        const period =
+            result.period ||
+            {};
+
+
+        const muhasebe =
+            result.muhasebe ||
+            {};
+
+
+        return {
+
+            /*
+             * Eski portfolio engine'in beklediği
+             * düz alanlar
+             */
+
+            dbo:
+                Number(
+                    result.dbo ??
+                    muhasebe.dbo ??
+                    0
+                ),
+
+
+            currentServiceCost:
+                Number(
+                    result.cariHizmetMaliyeti ??
+                    muhasebe.cariHizmetMaliyeti ??
+                    period.currentServiceCost ??
+                    0
+                ),
+
+
+            interestCost:
+                Number(
+                    result.faizMaliyeti ??
+                    muhasebe.faizMaliyeti ??
+                    period.interestCost ??
+                    0
+                ),
+
+
+            actuarialGainLoss:
+                Number(
+                    period.actuarialGainLoss ??
+                    0
+                ),
+
+
+            benefitPayments:
+                Number(
+                    period.benefitsPaid ??
+                    0
+                ),
+
+
+            pastServiceCost:
+                Number(
+                    period.pastServiceCost ??
+                    0
+                ),
+
+
+            openingDBO:
+                Number(
+                    period.openingDBO ??
+                    0
+                ),
+
+
+            closingDBO:
+                Number(
+                    period.closingDBO ??
+                    result.dbo ??
+                    0
+                ),
+
+
+            /*
+             * Yeni detaylı sonuç da kaybolmasın.
+             */
+
+            actuarialDetail:
+                result
+        };
+    }
+
+
+    /* ============================================================
+       PORTFÖY ADAPTER
+    ============================================================ */
+
+    function calculate(
+        employees,
+        assumptions = {}
+    ) {
+
+        /*
+         * Yeni motoru kullan.
+         */
+
+        const result =
+            global.TMS19
+                .portfoyDonemHesapla(
+                    employees,
+                    assumptions
+                );
+
+
+        const employeeResults =
+            result.results
+                .map(
+                    adaptPersonelResult
+                );
+
+
+        const summary =
+            result.summary ||
+            {};
+
+
+        /*
+         * Portfolio Engine'in eski contract'ı.
+         */
+
+        const totals = {
+
+            employees:
+                employees.length,
+
+
+            dbo:
+                Number(
+                    summary.closingDBO ??
+                    0
+                ),
+
+
+            currentServiceCost:
+                Number(
+                    summary.currentServiceCost ??
+                    0
+                ),
+
+
+            interestCost:
+                Number(
+                    summary.interestCost ??
+                    0
+                ),
+
+
+            pastServiceCost:
+                Number(
+                    summary.pastServiceCost ??
+                    0
+                ),
+
+
+            actuarialGainLoss:
+                Number(
+                    summary.actuarialGainLoss ??
+                    0
+                ),
+
+
+            benefitPayments:
+                Number(
+                    summary.benefitsPaid ??
+                    0
+                ),
+
+
+            openingDBO:
+                Number(
+                    summary.openingDBO ??
+                    0
+                ),
+
+
+            closingDBO:
+                Number(
+                    summary.closingDBO ??
+                    0
+                )
+        };
+
+
+        /*
+         * P&L
+         */
+
+        const profitLossEffect =
+            totals.currentServiceCost +
+            totals.interestCost +
+            totals.pastServiceCost;
+
+
+        /*
+         * OCI
+         */
+
+        const ociEffect =
+            totals.actuarialGainLoss;
+
+
+        /*
+         * Toplam defined benefit cost
+         */
+
+        const netDefinedBenefitCost =
+            profitLossEffect +
+            ociEffect;
+
+
+        /*
+         * Roll-forward
+         */
+
+        const rollForward = {
+
+            openingDBO:
+                totals.openingDBO,
+
+            currentServiceCost:
+                totals.currentServiceCost,
+
+            interestCost:
+                totals.interestCost,
+
+            pastServiceCost:
+                totals.pastServiceCost,
+
+            actuarialGainLoss:
+                totals.actuarialGainLoss,
+
+            benefitPayments:
+                totals.benefitPayments,
+
+            closingDBO:
+                totals.closingDBO,
+
+
+            /*
+             * Matematiksel kontrol
+             */
+
+            expectedClosingDBO:
+
+                totals.openingDBO +
+
+                totals.currentServiceCost +
+
+                totals.interestCost +
+
+                totals.pastServiceCost +
+
+                totals.actuarialGainLoss -
+
+                totals.benefitPayments,
+
+
+            reconciliationDifference:
+
+                totals.closingDBO -
+
+                (
+                    totals.openingDBO +
+
+                    totals.currentServiceCost +
+
+                    totals.interestCost +
+
+                    totals.pastServiceCost +
+
+                    totals.actuarialGainLoss -
+
+                    totals.benefitPayments
+                )
+        };
+
+
+        return {
+
+            success:
+                result.success,
+
+
+            employeeResults:
+                employeeResults,
+
+
+            errors:
+                result.errors || [],
+
+
+            totals:
+                totals,
+
+
+            profitLossEffect:
+                profitLossEffect,
+
+
+            ociEffect:
+                ociEffect,
+
+
+            netDefinedBenefitCost:
+                netDefinedBenefitCost,
+
+
+            rollForward:
+                rollForward,
+
+
+            /*
+             * Yeni engine'in detaylı çıktısı.
+             */
+
+            actuarialEngineResult:
+                result
+        };
+    }
+
+
+    /* ============================================================
+       GLOBAL COMPATIBILITY
+    ============================================================ */
+
+    global.TMS19ActuarialEngine = {
+
+        calculate,
+
+        calculatePortfolio:
+            calculate,
+
+
+        calculateEmployee:
+            function (
+                employee,
+                assumptions = {},
+                index = 0
+            ) {
+
+                const result =
+                    global.TMS19
+                        .personelDonemHesapla(
+                            employee,
+                            assumptions,
+                            index
+                        );
+
+
+                return adaptPersonelResult(
+                    result
+                );
+            },
+
+
+        healthCheck:
+            function () {
+
+                return global.TMS19
+                    .periodicEngineHealthCheck();
+            }
+    };
+
+
+})(window);
