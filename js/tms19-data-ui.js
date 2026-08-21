@@ -1,1209 +1,931 @@
-/* =========================================================
-   GK ADVISORY
-   TMS 19 — VERİ YÜKLEME & VERİ KALİTESİ ARAYÜZÜ
-   tms19-data-ui.js
-========================================================= */
+/* ================================================================
+   GK FINANCIAL DECISION COCKPIT
+   TMS 19 DATA UI ENGINE
+   ----------------------------------------------------------------
+   Sürüm    : 2.0.0
+   Standart : TMS 19
 
-(function (window) {
+   SORUMLULUKLAR
+   -------------
+   ✓ Excel / CSV dosyası seçimi
+   ✓ JSON import
+   ✓ Data Engine entegrasyonu
+   ✓ Aktüeryal Engine entegrasyonu
+   ✓ Portfolio Engine entegrasyonu
+   ✓ Personel tablosu
+   ✓ Veri kalite göstergeleri
+   ✓ KPI güncelleme
+   ✓ Hata yönetimi
+   ✓ Dashboard event yönetimi
+   ✓ Filtreleme
+   ✓ Export
+================================================================ */
+
+(function (global) {
 
     "use strict";
 
-    const Engine = window.TMS19DataEngine;
 
-    if (!Engine) {
+    /* ============================================================
+       01 — UI ENGINE
+    ============================================================ */
 
-        console.error(
-            "TMS19DataEngine bulunamadı."
-        );
+    const DataUI = {};
 
-        return;
 
+    DataUI.version =
+        "2.0.0";
+
+
+    DataUI.engineName =
+        "GK TMS 19 Data UI";
+
+
+    /* ============================================================
+       02 — STATE
+    ============================================================ */
+
+    const state = {
+
+        personeller: [],
+
+        sonuc: null,
+
+        varsayimlar: {},
+
+        filtre: {
+
+            arama: "",
+
+            departman: "",
+
+            pozisyon: ""
+        },
+
+        selectedPersonelId:
+            null,
+
+        initialized:
+            false
+    };
+
+
+    /* ============================================================
+       03 — ENGINE AL
+    ============================================================ */
+
+    function dataEngine() {
+
+        if (
+            !global.TMS19DataEngine
+        ) {
+
+            throw new Error(
+                "TMS19DataEngine bulunamadı."
+            );
+        }
+
+
+        return global.TMS19DataEngine;
     }
 
 
-    /* =====================================================
-       DURUM
-    ===================================================== */
+    function portfolioEngine() {
 
-    let mevcutVeri = [];
+        if (
+            !global.TMS19PortfolioEngine
+        ) {
 
-    let sonImport = null;
-
-
-    /* =====================================================
-       HTML
-    ===================================================== */
-
-    function veriMerkeziOlustur() {
-
-        const existing =
-            document.getElementById(
-                "tms19-veri-merkezi"
+            throw new Error(
+                "TMS19PortfolioEngine bulunamadı."
             );
+        }
 
-        if (existing) {
+
+        return global.TMS19PortfolioEngine;
+    }
+
+
+    /* ============================================================
+       04 — DOM HELPER
+    ============================================================ */
+
+    function el(
+        id
+    ) {
+
+        return document.getElementById(
+            id
+        );
+    }
+
+
+    function query(
+        selector
+    ) {
+
+        return document.querySelector(
+            selector
+        );
+    }
+
+
+    function queryAll(
+        selector
+    ) {
+
+        return [
+            ...document.querySelectorAll(
+                selector
+            )
+        ];
+    }
+
+
+    /* ============================================================
+       05 — EVENT HELPER
+    ============================================================ */
+
+    function on(
+        element,
+        event,
+        callback
+    ) {
+
+        if (
+            !element
+        ) {
+
             return;
         }
 
 
-        const container =
-            document.createElement(
-                "section"
-            );
+        element.addEventListener(
+            event,
+            callback
+        );
+    }
 
-        container.id =
-            "tms19-veri-merkezi";
 
-        container.innerHTML = `
+    /* ============================================================
+       06 — FORMAT
+    ============================================================ */
 
-            <div class="tms19-data-header">
+    function para(
+        value
+    ) {
 
-                <div>
+        const number =
+            Number(value) || 0;
 
-                    <div class="tms19-eyebrow">
-                        TMS 19 • VERİ YÖNETİMİ
-                    </div>
 
-                    <h2>
-                        Personel Veri Merkezi
-                    </h2>
+        return new Intl.NumberFormat(
+            "tr-TR",
+            {
 
-                    <p>
-                        Aktüeryal hesaplama öncesinde
-                        personel verilerinin yüklenmesi,
-                        standardize edilmesi ve kalite
-                        kontrollerinden geçirilmesi.
-                    </p>
+                minimumFractionDigits:
+                    0,
 
-                </div>
+                maximumFractionDigits:
+                    0
+            }
+        ).format(
+            number
+        );
+    }
 
-                <div class="tms19-data-actions">
 
-                    <label
-                        class="tms19-upload-button"
-                        for="tms19-personel-file"
-                    >
+    function oran(
+        value
+    ) {
 
-                        📂 Personel Dosyası Yükle
+        const number =
+            Number(value) || 0;
 
-                    </label>
 
-                    <input
-                        type="file"
-                        id="tms19-personel-file"
-                        accept=".csv,.json"
-                        hidden
-                    >
+        return new Intl.NumberFormat(
+            "tr-TR",
+            {
 
-                    <button
-                        type="button"
-                        id="tms19-demo-data"
-                        class="tms19-secondary-button"
-                    >
-                        Demo Veri Oluştur
-                    </button>
+                style:
+                    "percent",
 
-                </div>
+                minimumFractionDigits:
+                    1,
 
-            </div>
+                maximumFractionDigits:
+                    2
+            }
+        ).format(
+            number
+        );
+    }
 
 
-            <div
-                id="tms19-data-message"
-                class="tms19-data-message"
-            ></div>
+    function tarih(
+        value
+    ) {
 
+        if (
+            !value
+        ) {
 
-            <div class="tms19-data-kpis">
-
-                <div class="tms19-data-card">
-
-                    <span>
-                        Toplam Personel
-                    </span>
-
-                    <strong id="tms19-kpi-personel">
-                        0
-                    </strong>
-
-                </div>
-
-
-                <div class="tms19-data-card">
-
-                    <span>
-                        Veri Kalitesi
-                    </span>
-
-                    <strong id="tms19-kpi-kalite">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="tms19-data-card">
-
-                    <span>
-                        Toplam Yıllık Brüt Maaş
-                    </span>
-
-                    <strong id="tms19-kpi-maas">
-                        0
-                    </strong>
-
-                </div>
-
-
-                <div class="tms19-data-card">
-
-                    <span>
-                        Opening DBO
-                    </span>
-
-                    <strong id="tms19-kpi-dbo">
-                        0
-                    </strong>
-
-                </div>
-
-            </div>
-
-
-            <div class="tms19-quality-panel">
-
-                <div class="tms19-quality-title">
-
-                    <div>
-
-                        <span>
-                            Veri Kalite Skoru
-                        </span>
-
-                        <strong id="tms19-quality-score">
-                            —
-                        </strong>
-
-                    </div>
-
-                    <div
-                        id="tms19-quality-status"
-                        class="tms19-quality-status"
-                    >
-                        Veri bekleniyor
-                    </div>
-
-                </div>
-
-
-                <div class="tms19-progress">
-
-                    <div
-                        id="tms19-progress-bar"
-                    ></div>
-
-                </div>
-
-
-                <div class="tms19-quality-summary">
-
-                    <div>
-                        <small>
-                            Geçerli kayıt
-                        </small>
-
-                        <strong id="tms19-valid-count">
-                            0
-                        </strong>
-                    </div>
-
-
-                    <div>
-                        <small>
-                            Uyarı
-                        </small>
-
-                        <strong id="tms19-warning-count">
-                            0
-                        </strong>
-                    </div>
-
-
-                    <div>
-                        <small>
-                            Kritik
-                        </small>
-
-                        <strong id="tms19-critical-count">
-                            0
-                        </strong>
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="tms19-validation-panel">
-
-                <div class="tms19-section-title">
-
-                    <div>
-
-                        <span>
-                            Veri Kalite Kontrolleri
-                        </span>
-
-                        <p>
-                            Aktüeryal hesaplamaya girmeden
-                            önce tespit edilen veri problemleri.
-                        </p>
-
-                    </div>
-
-                </div>
-
-
-                <div id="tms19-validation-list">
-
-                    <div class="tms19-empty-state">
-
-                        Henüz personel verisi yüklenmedi.
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="tms19-personel-panel">
-
-                <div class="tms19-section-title">
-
-                    <div>
-
-                        <span>
-                            Personel Portföyü
-                        </span>
-
-                        <p>
-                            Normalize edilmiş aktüeryal veri seti.
-                        </p>
-
-                    </div>
-
-                    <div>
-
-                        <button
-                            id="tms19-calculate-button"
-                            class="tms19-primary-button"
-                            type="button"
-                            disabled
-                        >
-                            Aktüeryal Hesaplamayı Başlat →
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                <div class="tms19-table-wrapper">
-
-                    <table
-                        class="tms19-personel-table"
-                    >
-
-                        <thead>
-
-                            <tr>
-
-                                <th>
-                                    Sicil No
-                                </th>
-
-                                <th>
-                                    Personel
-                                </th>
-
-                                <th>
-                                    Departman
-                                </th>
-
-                                <th>
-                                    Yaş
-                                </th>
-
-                                <th>
-                                    Kıdem
-                                </th>
-
-                                <th>
-                                    Yıllık Brüt Maaş
-                                </th>
-
-                                <th>
-                                    Emeklilik Yaşı
-                                </th>
-
-                                <th>
-                                    Opening DBO
-                                </th>
-
-                            </tr>
-
-                        </thead>
-
-                        <tbody
-                            id="tms19-personel-table-body"
-                        >
-
-                            <tr>
-
-                                <td
-                                    colspan="8"
-                                    class="tms19-empty-cell"
-                                >
-                                    Veri bekleniyor.
-                                </td>
-
-                            </tr>
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            </div>
-
-        `;
-
-
-        /*
-         * Dashboard içine yerleştir
-         */
-
-        const main =
-            document.querySelector(
-                "main"
-            );
-
-
-        if (main) {
-
-            main.appendChild(
-                container
-            );
-
+            return "-";
         }
-        else {
+
+
+        const date =
+            value instanceof Date
+                ? value
+                : new Date(
+                    value
+                );
+
+
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
+
+            return "-";
+        }
+
+
+        return new Intl.DateTimeFormat(
+            "tr-TR"
+        ).format(
+            date
+        );
+    }
+
+
+    /* ============================================================
+       07 — TOAST
+    ============================================================ */
+
+    function toast(
+        message,
+        type = "info"
+    ) {
+
+        let container =
+            el(
+                "tms19-toast-container"
+            );
+
+
+        if (
+            !container
+        ) {
+
+            container =
+                document.createElement(
+                    "div"
+                );
+
+
+            container.id =
+                "tms19-toast-container";
+
+
+            container.style.position =
+                "fixed";
+
+
+            container.style.right =
+                "24px";
+
+
+            container.style.bottom =
+                "24px";
+
+
+            container.style.zIndex =
+                "99999";
+
+
+            container.style.display =
+                "flex";
+
+
+            container.style.flexDirection =
+                "column";
+
+
+            container.style.gap =
+                "10px";
+
 
             document.body.appendChild(
                 container
             );
-
         }
 
 
-        eventleriBagla();
+        const item =
+            document.createElement(
+                "div"
+            );
 
+
+        item.textContent =
+            message;
+
+
+        item.className =
+            "tms19-toast " +
+            "tms19-toast-" +
+            type;
+
+
+        item.style.padding =
+            "12px 16px";
+
+
+        item.style.borderRadius =
+            "10px";
+
+
+        item.style.background =
+            "#111827";
+
+
+        item.style.color =
+            "#ffffff";
+
+
+        item.style.fontSize =
+            "13px";
+
+
+        item.style.boxShadow =
+            "0 10px 30px rgba(0,0,0,.15)";
+
+
+        container.appendChild(
+            item
+        );
+
+
+        setTimeout(
+            () => {
+
+                item.remove();
+
+            },
+            3500
+        );
     }
 
 
-    /* =====================================================
-       EVENTLER
-    ===================================================== */
+    /* ============================================================
+       08 — DURUM GÖSTER
+    ============================================================ */
 
-    function eventleriBagla() {
+    function durumGoster(
+        message,
+        type = "info"
+    ) {
 
-        const fileInput =
-            document.getElementById(
-                "tms19-personel-file"
-            );
+        const candidates = [
 
+            "tms19-data-status",
 
-        const demoButton =
-            document.getElementById(
-                "tms19-demo-data"
-            );
+            "data-status",
 
+            "import-status",
 
-        const calculateButton =
-            document.getElementById(
-                "tms19-calculate-button"
-            );
+            "status-message"
+        ];
 
 
-        if (fileInput) {
+        let target =
+            null;
 
-            fileInput.addEventListener(
-                "change",
-                dosyaYukle
-            );
 
+        for (
+            const id of candidates
+        ) {
+
+            target =
+                el(id);
+
+
+            if (
+                target
+            ) {
+
+                break;
+            }
         }
 
 
-        if (demoButton) {
+        if (
+            !target
+        ) {
 
-            demoButton.addEventListener(
-                "click",
-                demoVeriYukle
+            toast(
+                message,
+                type
             );
 
-        }
-
-
-        if (calculateButton) {
-
-            calculateButton.addEventListener(
-                "click",
-                aktuerHesaplamayiBaslat
-            );
-
-        }
-
-    }
-
-
-    /* =====================================================
-       DOSYA YÜKLEME
-    ===================================================== */
-
-    function dosyaYukle(event) {
-
-        const file =
-            event.target.files[0];
-
-
-        if (!file) {
             return;
         }
 
 
-        mesajGoster(
-            "Dosya okunuyor...",
-            "info"
-        );
+        target.textContent =
+            message;
 
 
-        const reader =
-            new FileReader();
-
-
-        reader.onload =
-            function (e) {
-
-                try {
-
-                    const content =
-                        e.target.result;
-
-
-                    let result;
-
-
-                    if (
-                        file.name
-                            .toLowerCase()
-                            .endsWith(
-                                ".json"
-                            )
-                    ) {
-
-                        result =
-                            Engine.importJSON(
-                                content,
-                                {
-                                    valuationDate:
-                                        new Date()
-                                }
-                            );
-
-                    }
-                    else {
-
-                        result =
-                            Engine.importCSV(
-                                content,
-                                {
-                                    valuationDate:
-                                        new Date()
-                                }
-                            );
-
-                    }
-
-
-                    veriIslendi(
-                        result
-                    );
-
-
-                    mesajGoster(
-                        "Personel dosyası başarıyla yüklendi.",
-                        "success"
-                    );
-
-                }
-                catch (error) {
-
-                    console.error(
-                        error
-                    );
-
-
-                    mesajGoster(
-                        "Dosya işlenirken hata oluştu: " +
-                        error.message,
-                        "error"
-                    );
-
-                }
-
-            };
-
-
-        reader.onerror =
-            function () {
-
-                mesajGoster(
-                    "Dosya okunamadı.",
-                    "error"
-                );
-
-            };
-
-
-        reader.readAsText(
-            file,
-            "UTF-8"
-        );
-
+        target.dataset.status =
+            type;
     }
 
 
-    /* =====================================================
-       DEMO VERİ
-    ===================================================== */
+    /* ============================================================
+       09 — VARSAYIMLAR AL
+       ============================================================ */
 
-    function demoVeriYukle() {
+    function varsayimlariAl() {
 
-        mesajGoster(
-            "Aktüeryal demo portföyü hazırlanıyor...",
-            "info"
+        /*
+         * Öncelik:
+         *
+         * 1. TMS19 global
+         * 2. window.tms19Varsayimlar
+         * 3. boş object
+         */
+
+        if (
+            global.TMS19 &&
+            global.TMS19.varsayimlar
+        ) {
+
+            return {
+                ...global.TMS19.varsayimlar
+            };
+        }
+
+
+        if (
+            global.tms19Varsayimlar
+        ) {
+
+            return {
+                ...global.tms19Varsayimlar
+            };
+        }
+
+
+        return {};
+    }
+
+
+    /* ============================================================
+       10 — GLOBAL PERSONEL STATE
+    ============================================================ */
+
+    function globalPersonelStateGuncelle() {
+
+        global.TMS19CurrentEmployees =
+            state.personeller;
+
+
+        global.TMS19.currentEmployees =
+            state.personeller;
+
+
+        global.TMS19Personeller =
+            state.personeller;
+    }
+
+
+    /* ============================================================
+       11 — DATA IMPORT SONUCU
+    ============================================================ */
+
+    function importSonucunuIsle(
+        result
+    ) {
+
+        if (
+            !result
+        ) {
+
+            throw new Error(
+                "Import sonucu alınamadı."
+            );
+        }
+
+
+        if (
+            !result.success
+        ) {
+
+            const message =
+                result.hatalar?.join(
+                    " "
+                ) ||
+                "Veri içe aktarılamadı.";
+
+
+            throw new Error(
+                message
+            );
+        }
+
+
+        state.personeller =
+            result.personeller ||
+            [];
+
+
+        globalPersonelStateGuncelle();
+
+
+        state.sonuc =
+            null;
+
+
+        veriKalitesiRender(
+            result.veriKalitesi
         );
+
+
+        hatalarRender(
+            result.hatalar
+        );
+
+
+        duplicateRender(
+            result.duplicate
+        );
+
+
+        filtreleriDoldur();
+
+
+        tabloRender();
+
+
+        durumGoster(
+            state.personeller.length +
+            " personel başarıyla yüklendi.",
+            "success"
+        );
+
+
+        toast(
+            state.personeller.length +
+            " personel yüklendi.",
+            "success"
+        );
+
+
+        return result;
+    }
+
+
+    /* ============================================================
+       12 — CSV DOSYASI OKU
+    ============================================================ */
+
+    async function csvDosyasiOku(
+        file
+    ) {
+
+        if (
+            !file
+        ) {
+
+            return;
+        }
+
+
+        const text =
+            await file.text();
+
+
+        const result =
+            dataEngine().csvImport(
+                text
+            );
+
+
+        return importSonucunuIsle(
+            result
+        );
+    }
+
+
+    /* ============================================================
+       13 — JSON DOSYASI OKU
+    ============================================================ */
+
+    async function jsonDosyasiOku(
+        file
+    ) {
+
+        if (
+            !file
+        ) {
+
+            return;
+        }
+
+
+        const text =
+            await file.text();
+
+
+        const result =
+            dataEngine().jsonImport(
+                text
+            );
+
+
+        return importSonucunuIsle(
+            result
+        );
+    }
+
+
+    /* ============================================================
+       14 — DOSYA INPUT
+    ============================================================ */
+
+    function dosyaInputBagla() {
+
+        const inputs =
+            queryAll(
+                'input[type="file"]'
+            );
+
+
+        inputs.forEach(
+            input => {
+
+                on(
+                    input,
+                    "change",
+                    async event => {
+
+                        const file =
+                            event.target
+                                .files?.[0];
+
+
+                        if (
+                            !file
+                        ) {
+
+                            return;
+                        }
+
+
+                        try {
+
+                            const name =
+                                file.name
+                                    .toLowerCase();
+
+
+                            durumGoster(
+                                "Dosya okunuyor...",
+                                "loading"
+                            );
+
+
+                            if (
+                                name.endsWith(
+                                    ".csv"
+                                )
+                            ) {
+
+                                await csvDosyasiOku(
+                                    file
+                                );
+                            }
+
+                            else if (
+                                name.endsWith(
+                                    ".json"
+                                )
+                            ) {
+
+                                await jsonDosyasiOku(
+                                    file
+                                );
+                            }
+
+                            else if (
+                                name.endsWith(
+                                    ".xlsx"
+                                ) ||
+                                name.endsWith(
+                                    ".xls"
+                                )
+                            ) {
+
+                                toast(
+                                    "Excel desteği için XLSX kütüphanesini bağlamamız gerekiyor.",
+                                    "info"
+                                );
+
+
+                                durumGoster(
+                                    "Excel dosyası seçildi. XLSX parser bekleniyor.",
+                                    "warning"
+                                );
+
+                            }
+
+                            else {
+
+                                throw new Error(
+                                    "Desteklenmeyen dosya formatı."
+                                );
+                            }
+
+                        }
+
+                        catch (
+                            error
+                        ) {
+
+                            console.error(
+                                error
+                            );
+
+
+                            durumGoster(
+                                error.message,
+                                "error"
+                            );
+
+
+                            toast(
+                                error.message,
+                                "error"
+                            );
+                        }
+                    }
+                );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       15 — DEMO VERİ
+    ============================================================ */
+
+    function demoVeriYukle(
+        adet = 20
+    ) {
+
+        const personeller =
+            dataEngine()
+                .demoVeriOlustur(
+                    adet
+                );
+
+
+        state.personeller =
+            personeller;
+
+
+        globalPersonelStateGuncelle();
+
+
+        state.sonuc =
+            null;
+
+
+        filtreleriDoldur();
+
+
+        tabloRender();
+
+
+        durumGoster(
+            adet +
+            " adet demo personel yüklendi.",
+            "success"
+        );
+
+
+        toast(
+            "Demo veri yüklendi.",
+            "success"
+        );
+
+
+        return personeller;
+    }
+
+
+    /* ============================================================
+       16 — PORTFÖY HESAPLA
+    ============================================================ */
+
+    function hesapla() {
+
+        if (
+            state.personeller.length === 0
+        ) {
+
+            toast(
+                "Önce personel verisi yüklemelisiniz.",
+                "warning"
+            );
+
+
+            return null;
+        }
+
+
+        state.varsayimlar =
+            varsayimlariAl();
 
 
         try {
 
+            durumGoster(
+                "Aktüeryal hesaplama yapılıyor...",
+                "loading"
+            );
+
+
             const result =
-                Engine.generateDemoData(
-                    100
-                );
+                portfolioEngine()
+                    .tamAnaliz(
+                        state.personeller,
+                        state.varsayimlar
+                    );
 
 
-            veriIslendi(
+            state.sonuc =
+                result;
+
+
+            global.TMS19CurrentResult =
+                result;
+
+
+            global.TMS19PortfolioResult =
+                result;
+
+
+            kpiRender(
                 result
             );
 
 
-            mesajGoster(
-                "100 kişilik demo portföy oluşturuldu.",
+            tabloRender();
+
+
+            departmanRender(
+                result.departman
+            );
+
+
+            yasGrubuRender(
+                result.yasGruplari
+            );
+
+
+            riskRender(
+                result.risk
+            );
+
+
+            yogunlasmaRender(
+                result.yogunlasma
+            );
+
+
+            yonetimRender(
+                result.yonetim
+            );
+
+
+            durumGoster(
+                "Aktüeryal hesaplama tamamlandı.",
                 "success"
             );
 
-        }
-        catch (error) {
 
-            console.error(
-                error
+            toast(
+                "TMS 19 hesaplaması tamamlandı.",
+                "success"
             );
 
 
-            mesajGoster(
-                "Demo veri oluşturulamadı.",
-                "error"
-            );
-
-        }
-
-    }
-
-
-    /* =====================================================
-       VERİ İŞLE
-    ===================================================== */
-
-    function veriIslendi(
-        result
-    ) {
-
-        sonImport =
-            result;
-
-
-        mevcutVeri =
-            result.employees || [];
-
-
-        window.TMS19CurrentEmployees =
-            mevcutVeri;
-
-
-        window.TMS19CurrentImport =
-            result;
-
-
-        kpiGuncelle(
-            result
-        );
-
-
-        kaliteGuncelle(
-            result
-        );
-
-
-        sorunlariGoster(
-            result
-        );
-
-
-        tabloGuncelle(
-            mevcutVeri
-        );
-
-
-        const button =
-            document.getElementById(
-                "tms19-calculate-button"
-            );
-
-
-        if (button) {
-
-            button.disabled =
-                mevcutVeri.length === 0;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       KPI
-    ===================================================== */
-
-    function kpiGuncelle(
-        result
-    ) {
-
-        const summary =
-            result.summary;
-
-
-        setText(
-            "tms19-kpi-personel",
-            formatNumber(
-                summary.employeeCount
-            )
-        );
-
-
-        setText(
-            "tms19-kpi-maas",
-            formatMoney(
-                summary.totalSalary
-            )
-        );
-
-
-        setText(
-            "tms19-kpi-dbo",
-            formatMoney(
-                summary.totalOpeningDBO
-            )
-        );
-
-
-        setText(
-            "tms19-kpi-kalite",
-            "%" +
-            (
-                result.validation
-                    ?.completeness ||
-                0
-            ).toFixed(1)
-        );
-
-    }
-
-
-    /* =====================================================
-       KALİTE
-    ===================================================== */
-
-    function kaliteGuncelle(
-        result
-    ) {
-
-        const validation =
-            result.validation;
-
-
-        const score =
-            validation.completeness ||
-            0;
-
-
-        setText(
-            "tms19-quality-score",
-            "%" +
-            score.toFixed(1)
-        );
-
-
-        setText(
-            "tms19-valid-count",
-            validation.validRecords
-        );
-
-
-        setText(
-            "tms19-warning-count",
-            validation.warningRecords
-        );
-
-
-        setText(
-            "tms19-critical-count",
-            validation.criticalRecords
-        );
-
-
-        const progress =
-            document.getElementById(
-                "tms19-progress-bar"
-            );
-
-
-        if (progress) {
-
-            progress.style.width =
-                Math.min(
-                    100,
-                    Math.max(
-                        0,
-                        score
-                    )
-                ) +
-                "%";
-
-        }
-
-
-        const status =
-            document.getElementById(
-                "tms19-quality-status"
-            );
-
-
-        if (!status) {
-            return;
-        }
-
-
-        status.className =
-            "tms19-quality-status";
-
-
-        if (
-            score >= 98 &&
-            validation.criticalRecords === 0
-        ) {
-
-            status.textContent =
-                "Mükemmel";
-
-
-            status.classList.add(
-                "excellent"
-            );
-
-        }
-        else if (
-            score >= 95
-        ) {
-
-            status.textContent =
-                "Yüksek";
-
-
-            status.classList.add(
-                "high"
-            );
-
-        }
-        else if (
-            score >= 85
-        ) {
-
-            status.textContent =
-                "Orta";
-
-
-            status.classList.add(
-                "medium"
-            );
-
-        }
-        else {
-
-            status.textContent =
-                "Kontrol Gerekli";
-
-
-            status.classList.add(
-                "critical"
-            );
-
-        }
-
-    }
-
-
-    /* =====================================================
-       SORUNLAR
-    ===================================================== */
-
-    function sorunlariGoster(
-        result
-    ) {
-
-        const container =
-            document.getElementById(
-                "tms19-validation-list"
-            );
-
-
-        if (!container) {
-            return;
-        }
-
-
-        const issues =
-            result.validation.issues ||
-            [];
-
-
-        if (
-            issues.length === 0
-        ) {
-
-            container.innerHTML = `
-
-                <div class="tms19-success-box">
-
-                    ✓ Veri kalite kontrolünde
-                    önemli bir problem tespit edilmedi.
-
-                </div>
-
-            `;
-
-            return;
-
-        }
-
-
-        let html = "";
-
-
-        issues
-            .slice(
-                0,
-                30
-            )
-            .forEach(
-                function (
-                    issue
-                ) {
-
-                    html += `
-
-                        <div
-                            class="tms19-validation-row"
-                        >
-
-                            <div>
-
-                                <strong>
-                                    ${escapeHTML(
-                                        issue.name
-                                    )}
-                                </strong>
-
-                                <small>
-                                    Sicil:
-                                    ${escapeHTML(
-                                        issue.employeeId
-                                    )}
-                                </small>
-
-                            </div>
-
-                            <div>
-
-                                ${
-                                    issue.issues
-                                        .map(
-                                            x =>
-                                                `
-                                                <span
-                                                    class="tms19-issue"
-                                                >
-                                                    ${escapeHTML(x)}
-                                                </span>
-                                                `
-                                        )
-                                        .join("")
-                                }
-
-                            </div>
-
-                        </div>
-
-                    `;
-
-                }
-            );
-
-
-        container.innerHTML =
-            html;
-
-    }
-
-
-    /* =====================================================
-       PERSONEL TABLOSU
-    ===================================================== */
-
-    function tabloGuncelle(
-        employees
-    ) {
-
-        const tbody =
-            document.getElementById(
-                "tms19-personel-table-body"
-            );
-
-
-        if (!tbody) {
-            return;
-        }
-
-
-        if (
-            employees.length === 0
-        ) {
-
-            tbody.innerHTML = `
-
-                <tr>
-
-                    <td
-                        colspan="8"
-                        class="tms19-empty-cell"
-                    >
-                        Veri bulunamadı.
-                    </td>
-
-                </tr>
-
-            `;
-
-            return;
-
-        }
-
-
-        tbody.innerHTML =
-            employees
-                .slice(
-                    0,
-                    100
-                )
-                .map(
-                    function (
-                        employee
-                    ) {
-
-                        return `
-
-                            <tr>
-
-                                <td>
-                                    ${escapeHTML(
-                                        employee.employeeId
-                                    )}
-                                </td>
-
-                                <td>
-                                    <strong>
-                                        ${escapeHTML(
-                                            employee.name
-                                        )}
-                                    </strong>
-                                </td>
-
-                                <td>
-                                    ${escapeHTML(
-                                        employee.department
-                                    )}
-                                </td>
-
-                                <td>
-                                    ${employee.age}
-                                </td>
-
-                                <td>
-                                    ${employee.serviceYears.toFixed(1)}
-                                </td>
-
-                                <td>
-                                    ${formatMoney(
-                                        employee.annualSalary
-                                    )}
-                                </td>
-
-                                <td>
-                                    ${employee.retirementAge}
-                                </td>
-
-                                <td>
-                                    ${formatMoney(
-                                        employee.openingDBO
-                                    )}
-                                </td>
-
-                            </tr>
-
-                        `;
-
-                    }
-                )
-                .join("");
-
-    }
-
-
-    /* =====================================================
-       AKTÜERYAL HESAPLAMAYI BAŞLAT
-    ===================================================== */
-
-    function aktuerHesaplamayiBaslat() {
-
-        if (
-            mevcutVeri.length === 0
-        ) {
-
-            mesajGoster(
-                "Önce personel verisi yüklemelisiniz.",
-                "error"
-            );
-
-            return;
-
-        }
-
-
-        /*
-         * Aktüeryal motoru kontrol ediyoruz.
-         */
-
-        const actuarial =
-            window.TMS19ActuarialEngine;
-
-
-        if (!actuarial) {
-
-            mesajGoster(
-                "Aktüeryal motor henüz yüklenmemiş. " +
-                "tms19-actuarial-engine.js kontrol edilmeli.",
-                "error"
-            );
-
-            console.warn(
-                "TMS19ActuarialEngine bulunamadı."
-            );
-
-            return;
-
-        }
-
-
-        try {
-
-            let result;
-
-
-            /*
-             * Motorun mevcut API'sine
-             * mümkün olduğunca esnek bağlanıyoruz.
-             */
-
-            if (
-                typeof actuarial
-                    .calculatePortfolio ===
-                "function"
-            ) {
-
-                result =
-                    actuarial.calculatePortfolio(
-                        mevcutVeri
-                    );
-
-            }
-            else if (
-                typeof actuarial
-                    .calculate ===
-                "function"
-            ) {
-
-                result =
-                    actuarial.calculate(
-                        mevcutVeri
-                    );
-
-            }
-            else {
-
-                mesajGoster(
-                    "Aktüeryal motor bulundu ancak hesaplama fonksiyonu tanımlı değil.",
-                    "error"
-                );
-
-                return;
-
-            }
-
-
-            window.TMS19CurrentActuarialResult =
-                result;
-
-
-            /*
-             * Dashboard'daki event sistemi
-             * varsa tetikle.
-             */
-
-            window.dispatchEvent(
+            document.dispatchEvent(
                 new CustomEvent(
-                    "tms19:calculation-complete",
+                    "tms19:calculated",
                     {
                         detail:
                             result
@@ -1212,166 +934,1606 @@
             );
 
 
-            mesajGoster(
-                "Aktüeryal hesaplama tamamlandı.",
-                "success"
-            );
-
-
-            /*
-             * Dashboard'a dön
-             */
-
-            const dashboard =
-                document.getElementById(
-                    "tms19-dashboard"
-                );
-
-
-            if (dashboard) {
-
-                dashboard.scrollIntoView({
-                    behavior:
-                        "smooth"
-                });
-
-            }
+            return result;
 
         }
-        catch (error) {
+
+        catch (
+            error
+        ) {
 
             console.error(
                 error
             );
 
 
-            mesajGoster(
-                "Aktüeryal hesaplama sırasında hata oluştu: " +
+            durumGoster(
                 error.message,
                 "error"
             );
 
-        }
 
-    }
-
-
-    /* =====================================================
-       MESAJ
-    ===================================================== */
-
-    function mesajGoster(
-        message,
-        type
-    ) {
-
-        const element =
-            document.getElementById(
-                "tms19-data-message"
+            toast(
+                "Hesaplama hatası: " +
+                error.message,
+                "error"
             );
 
 
-        if (!element) {
+            return null;
+        }
+    }
+
+
+    /* ============================================================
+       17 — KPI RENDER
+    ============================================================ */
+
+    function kpiRender(
+        result
+    ) {
+
+        if (
+            !result
+        ) {
+
             return;
         }
 
 
-        element.textContent =
-            message;
+        const ozet =
+            result.ozet;
 
 
-        element.className =
-            "tms19-data-message " +
+        const mapping = {
+
+            "tms19-total-dbo":
+                ozet.toplamDBO,
+
+            "total-dbo":
+                ozet.toplamDBO,
+
+            "tms19-csc":
+                ozet.toplamCariHizmetMaliyeti,
+
+            "total-csc":
+                ozet.toplamCariHizmetMaliyeti,
+
+            "tms19-interest":
+                ozet.toplamFaizMaliyeti,
+
+            "total-interest":
+                ozet.toplamFaizMaliyeti,
+
+            "tms19-employees":
+                ozet.personelSayisi,
+
+            "total-employees":
+                ozet.personelSayisi,
+
+            "tms19-average-age":
+                ozet.ortalamaYas,
+
+            "average-age":
+                ozet.ortalamaYas,
+
+            "tms19-average-service":
+                ozet.ortalamaHizmet,
+
+            "average-service":
+                ozet.ortalamaHizmet,
+
+            "tms19-dbo-salary-ratio":
+                ozet.dboMaasOrani,
+
+            "dbo-salary-ratio":
+                ozet.dboMaasOrani
+        };
+
+
+        Object.entries(
+            mapping
+        ).forEach(
             (
-                type ||
-                "info"
-            );
+                [
+                    id,
+                    value
+                ]
+            ) => {
+
+                const target =
+                    el(id);
 
 
-        clearTimeout(
-            element._timer
+                if (
+                    !target
+                ) {
+
+                    return;
+                }
+
+
+                if (
+                    id.includes(
+                        "ratio"
+                    )
+                ) {
+
+                    target.textContent =
+                        oran(
+                            value
+                        );
+
+                }
+
+                else if (
+                    id.includes(
+                        "age"
+                    ) ||
+                    id.includes(
+                        "service"
+                    )
+                ) {
+
+                    target.textContent =
+                        Number(
+                            value
+                        ).toFixed(
+                            1
+                        );
+
+                }
+
+                else {
+
+                    target.textContent =
+                        para(
+                            value
+                        );
+                }
+            }
         );
-
-
-        element._timer =
-            setTimeout(
-                function () {
-
-                    element.className =
-                        "tms19-data-message";
-
-                    element.textContent =
-                        "";
-
-                },
-                5000
-            );
-
     }
 
 
-    /* =====================================================
-       YARDIMCI
-    ===================================================== */
+    /* ============================================================
+       18 — TABLO FİLTRE
+    ============================================================ */
 
-    function setText(
-        id,
-        value
+    function filtreUygula(
+        personeller
     ) {
 
-        const element =
-            document.getElementById(
-                id
+        const arama =
+            state.filtre.arama
+                .toLowerCase()
+                .trim();
+
+
+        const departman =
+            state.filtre.departman;
+
+
+        const pozisyon =
+            state.filtre.pozisyon;
+
+
+        return personeller.filter(
+            personel => {
+
+                const matchesSearch =
+                    !arama ||
+                    String(
+                        personel.personelId
+                    )
+                        .toLowerCase()
+                        .includes(
+                            arama
+                        ) ||
+                    String(
+                        personel.adSoyad
+                    )
+                        .toLowerCase()
+                        .includes(
+                            arama
+                        );
+
+
+                const matchesDepartment =
+                    !departman ||
+                    personel.departman ===
+                    departman;
+
+
+                const matchesPosition =
+                    !pozisyon ||
+                    personel.pozisyon ===
+                    pozisyon;
+
+
+                return (
+                    matchesSearch &&
+                    matchesDepartment &&
+                    matchesPosition
+                );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       19 — TABLO RENDER
+    ============================================================ */
+
+    function tabloRender() {
+
+        const tbody =
+            query(
+                "#tms19-personel-table tbody"
+            ) ||
+            query(
+                "#tms19-personel-body"
+            ) ||
+            query(
+                "#personel-table-body"
             );
 
 
-        if (element) {
+        if (
+            !tbody
+        ) {
 
-            element.textContent =
-                value;
-
+            return;
         }
 
-    }
+
+        const filtered =
+            filtreUygula(
+                state.personeller
+            );
 
 
-    function formatNumber(
-        value
-    ) {
+        tbody.innerHTML =
+            "";
 
-        return new Intl.NumberFormat(
-            "tr-TR"
-        ).format(
-            Number(value) || 0
+
+        filtered.forEach(
+            personel => {
+
+                const sonuc =
+                    state.sonuc
+                        ?.personeller
+                        ?.find(
+                            item =>
+                                item.personel
+                                    ?.personelId ===
+                                personel.personelId
+                        );
+
+
+                const tr =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                tr.dataset.personelId =
+                    personel.personelId;
+
+
+                tr.innerHTML = `
+
+                    <td>
+                        ${escapeHtml(
+                            personel.personelId
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            personel.adSoyad
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            personel.departman ||
+                            "-"
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            personel.pozisyon ||
+                            "-"
+                        )}
+                    </td>
+
+                    <td>
+                        ${tarih(
+                            personel.dogumTarihi
+                        )}
+                    </td>
+
+                    <td>
+                        ${tarih(
+                            personel.iseGirisTarihi
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            personel.mevcutMaas
+                        )}
+                    </td>
+
+                    <td>
+                        ${
+                            sonuc
+                                ? para(
+                                    sonuc.muhasebe
+                                        ?.dbo
+                                )
+                                : "-"
+                        }
+                    </td>
+
+                    <td>
+                        ${
+                            sonuc
+                                ? para(
+                                    sonuc.muhasebe
+                                        ?.cariHizmetMaliyeti
+                                )
+                                : "-"
+                        }
+                    </td>
+
+                `;
+
+
+                on(
+                    tr,
+                    "click",
+                    () => {
+
+                        personelSec(
+                            personel.personelId
+                        );
+                    }
+                );
+
+
+                tbody.appendChild(
+                    tr
+                );
+            }
         );
 
+
+        tabloSayacGuncelle(
+            filtered.length
+        );
     }
 
 
-    function formatMoney(
-        value
+    /* ============================================================
+       20 — TABLO SAYACI
+    ============================================================ */
+
+    function tabloSayacGuncelle(
+        count
     ) {
 
-        return new Intl.NumberFormat(
-            "tr-TR",
-            {
-                maximumFractionDigits:
-                    0
-            }
-        ).format(
-            Number(value) || 0
-        ) +
-        " TL";
+        const ids = [
 
+            "tms19-table-count",
+
+            "personel-count",
+
+            "filtered-personel-count"
+        ];
+
+
+        ids.forEach(
+            id => {
+
+                const target =
+                    el(id);
+
+
+                if (
+                    target
+                ) {
+
+                    target.textContent =
+                        count;
+                }
+            }
+        );
     }
 
 
-    function escapeHTML(
+    /* ============================================================
+       21 — PERSONEL SEÇ
+    ============================================================ */
+
+    function personelSec(
+        personelId
+    ) {
+
+        state.selectedPersonelId =
+            personelId;
+
+
+        const personel =
+            state.personeller.find(
+                item =>
+                    item.personelId ===
+                    personelId
+            );
+
+
+        if (
+            !personel
+        ) {
+
+            return null;
+        }
+
+
+        const sonuc =
+            state.sonuc
+                ?.personeller
+                ?.find(
+                    item =>
+                        item.personel
+                            ?.personelId ===
+                        personelId
+                );
+
+
+        global.TMS19SelectedEmployee =
+            personel;
+
+
+        global.TMS19SelectedResult =
+            sonuc ||
+            null;
+
+
+        document.dispatchEvent(
+            new CustomEvent(
+                "tms19:employee-selected",
+                {
+
+                    detail: {
+
+                        personel:
+                            personel,
+
+                        sonuc:
+                            sonuc
+                    }
+                }
+            )
+        );
+
+
+        return {
+
+            personel:
+                personel,
+
+            sonuc:
+                sonuc
+        };
+    }
+
+
+    /* ============================================================
+       22 — FİLTRELER
+    ============================================================ */
+
+    function filtreleriDoldur() {
+
+        const departments =
+            [
+                ...new Set(
+                    state.personeller
+                        .map(
+                            item =>
+                                item.departman
+                        )
+                        .filter(
+                            Boolean
+                        )
+                )
+            ]
+            .sort();
+
+
+        const positions =
+            [
+                ...new Set(
+                    state.personeller
+                        .map(
+                            item =>
+                                item.pozisyon
+                        )
+                        .filter(
+                            Boolean
+                        )
+                )
+            ]
+            .sort();
+
+
+        selectDoldur(
+            [
+                "#tms19-department-filter",
+                "#department-filter",
+                "#departman-filter"
+            ],
+            departments,
+            "Tüm Departmanlar"
+        );
+
+
+        selectDoldur(
+            [
+                "#tms19-position-filter",
+                "#position-filter",
+                "#pozisyon-filter"
+            ],
+            positions,
+            "Tüm Pozisyonlar"
+        );
+    }
+
+
+    function selectDoldur(
+        selectors,
+        values,
+        placeholder
+    ) {
+
+        let select =
+            null;
+
+
+        for (
+            const selector of selectors
+        ) {
+
+            select =
+                query(
+                    selector
+                );
+
+
+            if (
+                select
+            ) {
+
+                break;
+            }
+        }
+
+
+        if (
+            !select
+        ) {
+
+            return;
+        }
+
+
+        const oldValue =
+            select.value;
+
+
+        select.innerHTML =
+            "";
+
+
+        const option =
+            document.createElement(
+                "option"
+            );
+
+
+        option.value =
+            "";
+
+
+        option.textContent =
+            placeholder;
+
+
+        select.appendChild(
+            option
+        );
+
+
+        values.forEach(
+            value => {
+
+                const item =
+                    document.createElement(
+                        "option"
+                    );
+
+
+                item.value =
+                    value;
+
+
+                item.textContent =
+                    value;
+
+
+                select.appendChild(
+                    item
+                );
+            }
+        );
+
+
+        if (
+            values.includes(
+                oldValue
+            )
+        ) {
+
+            select.value =
+                oldValue;
+        }
+    }
+
+
+    /* ============================================================
+       23 — FİLTRE EVENTLERİ
+    ============================================================ */
+
+    function filtreEventleriBagla() {
+
+        const search =
+            query(
+                "#tms19-search"
+            ) ||
+            query(
+                "#personel-search"
+            ) ||
+            query(
+                "#employee-search"
+            );
+
+
+        on(
+            search,
+            "input",
+            event => {
+
+                state.filtre.arama =
+                    event.target.value;
+
+
+                tabloRender();
+            }
+        );
+
+
+        const department =
+            query(
+                "#tms19-department-filter"
+            ) ||
+            query(
+                "#department-filter"
+            ) ||
+            query(
+                "#departman-filter"
+            );
+
+
+        on(
+            department,
+            "change",
+            event => {
+
+                state.filtre.departman =
+                    event.target.value;
+
+
+                tabloRender();
+            }
+        );
+
+
+        const position =
+            query(
+                "#tms19-position-filter"
+            ) ||
+            query(
+                "#position-filter"
+            ) ||
+            query(
+                "#pozisyon-filter"
+            );
+
+
+        on(
+            position,
+            "change",
+            event => {
+
+                state.filtre.pozisyon =
+                    event.target.value;
+
+
+                tabloRender();
+            }
+        );
+    }
+
+
+    /* ============================================================
+       24 — VERİ KALİTESİ RENDER
+    ============================================================ */
+
+    function veriKalitesiRender(
+        quality
+    ) {
+
+        if (
+            !quality
+        ) {
+
+            return;
+        }
+
+
+        const mapping = {
+
+            "tms19-data-quality":
+                quality.kaliteYuzdesi,
+
+            "data-quality":
+                quality.kaliteYuzdesi,
+
+            "valid-record-count":
+                quality.validKayit,
+
+            "invalid-record-count":
+                quality.gecersizKayit,
+
+            "missing-birth-date":
+                quality.eksikDogumTarihi,
+
+            "missing-hire-date":
+                quality.eksikIseGirisTarihi,
+
+            "invalid-salary":
+                quality.gecersizMaas
+        };
+
+
+        Object.entries(
+            mapping
+        ).forEach(
+            (
+                [
+                    id,
+                    value
+                ]
+            ) => {
+
+                const target =
+                    el(id);
+
+
+                if (
+                    !target
+                ) {
+
+                    return;
+                }
+
+
+                target.textContent =
+                    id ===
+                    "tms19-data-quality" ||
+                    id ===
+                    "data-quality"
+                        ? Number(
+                            value
+                        ).toFixed(
+                            1
+                        ) + "%"
+                        : para(
+                            value
+                        );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       25 — HATALAR RENDER
+    ============================================================ */
+
+    function hatalarRender(
+        errors
+    ) {
+
+        const target =
+            el(
+                "tms19-data-errors"
+            ) ||
+            el(
+                "data-errors"
+            );
+
+
+        if (
+            !target
+        ) {
+
+            return;
+        }
+
+
+        target.innerHTML =
+            "";
+
+
+        if (
+            !errors ||
+            errors.length === 0
+        ) {
+
+            target.textContent =
+                "Veri hatası bulunamadı.";
+
+            return;
+        }
+
+
+        const ul =
+            document.createElement(
+                "ul"
+            );
+
+
+        errors.forEach(
+            error => {
+
+                const li =
+                    document.createElement(
+                        "li"
+                    );
+
+
+                li.textContent =
+                    "Satır " +
+                    error.satir +
+                    ": " +
+                    error.errors.join(
+                        " "
+                    );
+
+
+                ul.appendChild(
+                    li
+                );
+            }
+        );
+
+
+        target.appendChild(
+            ul
+        );
+    }
+
+
+    /* ============================================================
+       26 — DUPLICATE RENDER
+    ============================================================ */
+
+    function duplicateRender(
+        result
+    ) {
+
+        const target =
+            el(
+                "tms19-duplicate-count"
+            );
+
+
+        if (
+            !target
+        ) {
+
+            return;
+        }
+
+
+        target.textContent =
+            result?.duplicates?.length ||
+            0;
+    }
+
+
+    /* ============================================================
+       27 — DEPARTMAN RENDER
+    ============================================================ */
+
+    function departmanRender(
+        departments
+    ) {
+
+        const tbody =
+            query(
+                "#tms19-department-table tbody"
+            ) ||
+            el(
+                "tms19-department-body"
+            );
+
+
+        if (
+            !tbody
+        ) {
+
+            return;
+        }
+
+
+        tbody.innerHTML =
+            "";
+
+
+        (
+            departments ||
+            []
+        ).forEach(
+            department => {
+
+                const tr =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                tr.innerHTML = `
+
+                    <td>
+                        ${escapeHtml(
+                            department.departman
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            department.personelSayisi
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            department.dbo
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            department.cariHizmetMaliyeti
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            department.faizMaliyeti
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            department.toplamMaas
+                        )}
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(
+                    tr
+                );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       28 — YAŞ GRUBU RENDER
+    ============================================================ */
+
+    function yasGrubuRender(
+        groups
+    ) {
+
+        const tbody =
+            query(
+                "#tms19-age-table tbody"
+            ) ||
+            el(
+                "tms19-age-body"
+            );
+
+
+        if (
+            !tbody
+        ) {
+
+            return;
+        }
+
+
+        tbody.innerHTML =
+            "";
+
+
+        (
+            groups ||
+            []
+        ).forEach(
+            group => {
+
+                const tr =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                tr.innerHTML = `
+
+                    <td>
+                        ${escapeHtml(
+                            group.yasGrubu
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            group.personelSayisi
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            group.dbo
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            group.cariHizmetMaliyeti
+                        )}
+                    </td>
+
+                    <td>
+                        ${para(
+                            group.toplamMaas
+                        )}
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(
+                    tr
+                );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       29 — RİSK RENDER
+    ============================================================ */
+
+    function riskRender(
+        risks
+    ) {
+
+        const tbody =
+            query(
+                "#tms19-risk-table tbody"
+            ) ||
+            el(
+                "tms19-risk-body"
+            );
+
+
+        if (
+            !tbody
+        ) {
+
+            return;
+        }
+
+
+        tbody.innerHTML =
+            "";
+
+
+        (
+            risks ||
+            []
+        )
+            .slice(
+                0,
+                50
+            )
+            .forEach(
+                risk => {
+
+                    const tr =
+                        document.createElement(
+                            "tr"
+                        );
+
+
+                    tr.innerHTML = `
+
+                        <td>
+                            ${escapeHtml(
+                                risk.adSoyad ||
+                                "-"
+                            )}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                                risk.departman ||
+                                "-"
+                            )}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                risk.yas
+                            ).toFixed(
+                                1
+                            )}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                risk.kalanYil
+                            ).toFixed(
+                                1
+                            )}
+                        </td>
+
+                        <td>
+                            ${para(
+                                risk.dbo
+                            )}
+                        </td>
+
+                        <td>
+                            ${risk.skor}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                                risk.seviye
+                            )}
+                        </td>
+
+                    `;
+
+
+                    tbody.appendChild(
+                        tr
+                    );
+                }
+            );
+    }
+
+
+    /* ============================================================
+       30 — YOĞUNLAŞMA RENDER
+    ============================================================ */
+
+    function yogunlasmaRender(
+        result
+    ) {
+
+        if (
+            !result
+        ) {
+
+            return;
+        }
+
+
+        const mapping = {
+
+            "tms19-top5-dbo":
+                result.top5DBOPayi,
+
+            "tms19-top10-dbo":
+                result.top10DBOPayi
+        };
+
+
+        Object.entries(
+            mapping
+        ).forEach(
+            (
+                [
+                    id,
+                    value
+                ]
+            ) => {
+
+                const target =
+                    el(id);
+
+
+                if (
+                    target
+                ) {
+
+                    target.textContent =
+                        oran(
+                            value
+                        );
+                }
+            }
+        );
+    }
+
+
+    /* ============================================================
+       31 — YÖNETİM ÖZETİ RENDER
+    ============================================================ */
+
+    function yonetimRender(
+        result
+    ) {
+
+        if (
+            !result
+        ) {
+
+            return;
+        }
+
+
+        const mapping = {
+
+            "tms19-critical-risk":
+                result.kritikRiskSayisi,
+
+            "tms19-high-risk":
+                result.yuksekRiskSayisi,
+
+            "tms19-total-pnl":
+                result.toplamPnlMaliyeti,
+
+            "tms19-ceiling-count":
+                result.tavanUygulananPersonel
+        };
+
+
+        Object.entries(
+            mapping
+        ).forEach(
+            (
+                [
+                    id,
+                    value
+                ]
+            ) => {
+
+                const target =
+                    el(id);
+
+
+                if (
+                    !target
+                ) {
+
+                    return;
+                }
+
+
+                target.textContent =
+                    id ===
+                    "tms19-total-pnl"
+                        ? para(
+                            value
+                        )
+                        : para(
+                            value
+                        );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       32 — EXPORT JSON
+    ============================================================ */
+
+    function exportJSON() {
+
+        if (
+            state.personeller.length === 0
+        ) {
+
+            toast(
+                "Export edilecek veri yok.",
+                "warning"
+            );
+
+
+            return;
+        }
+
+
+        const json =
+            dataEngine().jsonExport(
+                state.personeller
+            );
+
+
+        download(
+            json,
+            "TMS19_personel_verisi.json",
+            "application/json"
+        );
+    }
+
+
+    /* ============================================================
+       33 — EXPORT CSV
+    ============================================================ */
+
+    function exportCSV() {
+
+        if (
+            state.personeller.length === 0
+        ) {
+
+            toast(
+                "Export edilecek veri yok.",
+                "warning"
+            );
+
+
+            return;
+        }
+
+
+        const csv =
+            dataEngine().csvExport(
+                state.personeller
+            );
+
+
+        download(
+            csv,
+            "TMS19_personel_verisi.csv",
+            "text/csv;charset=utf-8"
+        );
+    }
+
+
+    /* ============================================================
+       34 — DOWNLOAD
+    ============================================================ */
+
+    function download(
+        content,
+        filename,
+        type
+    ) {
+
+        const blob =
+            new Blob(
+                [
+                    content
+                ],
+                {
+                    type:
+                        type
+                }
+            );
+
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+
+        const a =
+            document.createElement(
+                "a"
+            );
+
+
+        a.href =
+            url;
+
+
+        a.download =
+            filename;
+
+
+        document.body.appendChild(
+            a
+        );
+
+
+        a.click();
+
+
+        a.remove();
+
+
+        URL.revokeObjectURL(
+            url
+        );
+
+
+        toast(
+            filename +
+            " oluşturuldu.",
+            "success"
+        );
+    }
+
+
+    /* ============================================================
+       35 — BUTTON EVENTLERİ
+    ============================================================ */
+
+    function butonlariBagla() {
+
+        const calculateButtons = [
+
+            "#tms19-calculate",
+
+            "#calculate-tms19",
+
+            "#btn-tms19-calculate",
+
+            "[data-action='calculate-tms19']"
+        ];
+
+
+        calculateButtons.forEach(
+            selector => {
+
+                queryAll(
+                    selector
+                ).forEach(
+                    button => {
+
+                        on(
+                            button,
+                            "click",
+                            hesapla
+                        );
+                    }
+                );
+            }
+        );
+
+
+        const demoButtons = [
+
+            "#tms19-demo",
+
+            "#load-demo-data",
+
+            "[data-action='load-demo']"
+        ];
+
+
+        demoButtons.forEach(
+            selector => {
+
+                queryAll(
+                    selector
+                ).forEach(
+                    button => {
+
+                        on(
+                            button,
+                            "click",
+                            () =>
+                                demoVeriYukle(
+                                    25
+                                )
+                        );
+                    }
+                );
+            }
+        );
+
+
+        const jsonButtons = [
+
+            "#tms19-export-json",
+
+            "#export-json"
+        ];
+
+
+        jsonButtons.forEach(
+            selector => {
+
+                queryAll(
+                    selector
+                ).forEach(
+                    button => {
+
+                        on(
+                            button,
+                            "click",
+                            exportJSON
+                        );
+                    }
+                );
+            }
+        );
+
+
+        const csvButtons = [
+
+            "#tms19-export-csv",
+
+            "#export-csv"
+        ];
+
+
+        csvButtons.forEach(
+            selector => {
+
+                queryAll(
+                    selector
+                ).forEach(
+                    button => {
+
+                        on(
+                            button,
+                            "click",
+                            exportCSV
+                        );
+                    }
+                );
+            }
+        );
+    }
+
+
+    /* ============================================================
+       36 — ESCAPE HTML
+    ============================================================ */
+
+    function escapeHtml(
         value
     ) {
 
         return String(
-            value ?? ""
+            value ??
+            ""
         )
             .replace(
                 /&/g,
@@ -1393,891 +2555,177 @@
                 /'/g,
                 "&#039;"
             );
-
     }
 
 
-    /* =====================================================
-       CSS
-    ===================================================== */
+    /* ============================================================
+       37 — INIT
+    ============================================================ */
 
-    function stilEkle() {
+    function init(
+        options = {}
+    ) {
 
         if (
-            document.getElementById(
-                "tms19-data-ui-style"
-            )
+            state.initialized
         ) {
 
             return;
-
         }
 
 
-        const style =
-            document.createElement(
-                "style"
-            );
+        state.varsayimlar =
+            options.varsayimlar ||
+            varsayimlariAl();
 
 
-        style.id =
-            "tms19-data-ui-style";
+        dosyaInputBagla();
 
 
-        style.textContent = `
+        filtreEventleriBagla();
 
-            #tms19-veri-merkezi {
 
-                margin-top: 32px;
+        butonlariBagla();
 
-                padding: 28px;
 
-                border-radius: 20px;
+        globalPersonelStateGuncelle();
 
-                background:
-                    rgba(255,255,255,.96);
 
-                border:
-                    1px solid #e5e7eb;
+        state.initialized =
+            true;
 
-                box-shadow:
-                    0 15px 40px
-                    rgba(15,23,42,.06);
 
-            }
+        document.dispatchEvent(
+            new CustomEvent(
+                "tms19:data-ui-ready",
+                {
 
-
-            .tms19-data-header {
-
-                display:
-                    flex;
-
-                justify-content:
-                    space-between;
-
-                align-items:
-                    flex-start;
-
-                gap:
-                    24px;
-
-                margin-bottom:
-                    24px;
-
-            }
-
-
-            .tms19-eyebrow {
-
-                font-size:
-                    11px;
-
-                font-weight:
-                    700;
-
-                letter-spacing:
-                    .12em;
-
-                text-transform:
-                    uppercase;
-
-                color:
-                    #64748b;
-
-                margin-bottom:
-                    8px;
-
-            }
-
-
-            .tms19-data-header h2 {
-
-                margin:
-                    0 0 8px;
-
-                font-size:
-                    25px;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-data-header p {
-
-                margin:
-                    0;
-
-                max-width:
-                    700px;
-
-                color:
-                    #64748b;
-
-                line-height:
-                    1.6;
-
-            }
-
-
-            .tms19-data-actions {
-
-                display:
-                    flex;
-
-                gap:
-                    10px;
-
-                flex-wrap:
-                    wrap;
-
-            }
-
-
-            .tms19-upload-button,
-            .tms19-primary-button,
-            .tms19-secondary-button {
-
-                border:
-                    0;
-
-                border-radius:
-                    10px;
-
-                padding:
-                    12px 16px;
-
-                font-weight:
-                    700;
-
-                cursor:
-                    pointer;
-
-                transition:
-                    .2s;
-
-            }
-
-
-            .tms19-upload-button,
-            .tms19-primary-button {
-
-                background:
-                    #0f172a;
-
-                color:
-                    white;
-
-            }
-
-
-            .tms19-secondary-button {
-
-                background:
-                    #f1f5f9;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-upload-button:hover,
-            .tms19-primary-button:hover,
-            .tms19-secondary-button:hover {
-
-                transform:
-                    translateY(-1px);
-
-            }
-
-
-            .tms19-primary-button:disabled {
-
-                opacity:
-                    .45;
-
-                cursor:
-                    not-allowed;
-
-                transform:
-                    none;
-
-            }
-
-
-            .tms19-data-message {
-
-                min-height:
-                    0;
-
-                margin-bottom:
-                    12px;
-
-                font-size:
-                    13px;
-
-            }
-
-
-            .tms19-data-message.success {
-
-                padding:
-                    11px 14px;
-
-                border-radius:
-                    10px;
-
-                background:
-                    #ecfdf5;
-
-                color:
-                    #047857;
-
-            }
-
-
-            .tms19-data-message.error {
-
-                padding:
-                    11px 14px;
-
-                border-radius:
-                    10px;
-
-                background:
-                    #fef2f2;
-
-                color:
-                    #b91c1c;
-
-            }
-
-
-            .tms19-data-message.info {
-
-                padding:
-                    11px 14px;
-
-                border-radius:
-                    10px;
-
-                background:
-                    #eff6ff;
-
-                color:
-                    #1d4ed8;
-
-            }
-
-
-            .tms19-data-kpis {
-
-                display:
-                    grid;
-
-                grid-template-columns:
-                    repeat(4, 1fr);
-
-                gap:
-                    14px;
-
-                margin-bottom:
-                    20px;
-
-            }
-
-
-            .tms19-data-card {
-
-                padding:
-                    18px;
-
-                border:
-                    1px solid #e5e7eb;
-
-                border-radius:
-                    14px;
-
-                background:
-                    #f8fafc;
-
-            }
-
-
-            .tms19-data-card span {
-
-                display:
-                    block;
-
-                font-size:
-                    12px;
-
-                color:
-                    #64748b;
-
-                margin-bottom:
-                    8px;
-
-            }
-
-
-            .tms19-data-card strong {
-
-                font-size:
-                    21px;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-quality-panel {
-
-                padding:
-                    20px;
-
-                border:
-                    1px solid #e5e7eb;
-
-                border-radius:
-                    14px;
-
-                margin-bottom:
-                    20px;
-
-            }
-
-
-            .tms19-quality-title {
-
-                display:
-                    flex;
-
-                justify-content:
-                    space-between;
-
-                align-items:
-                    center;
-
-                margin-bottom:
-                    14px;
-
-            }
-
-
-            .tms19-quality-title span {
-
-                display:
-                    block;
-
-                font-size:
-                    12px;
-
-                color:
-                    #64748b;
-
-            }
-
-
-            .tms19-quality-title strong {
-
-                display:
-                    block;
-
-                margin-top:
-                    3px;
-
-                font-size:
-                    25px;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-quality-status {
-
-                padding:
-                    7px 11px;
-
-                border-radius:
-                    999px;
-
-                background:
-                    #f1f5f9;
-
-                color:
-                    #475569;
-
-                font-size:
-                    12px;
-
-                font-weight:
-                    700;
-
-            }
-
-
-            .tms19-quality-status.excellent,
-            .tms19-quality-status.high {
-
-                background:
-                    #ecfdf5;
-
-                color:
-                    #047857;
-
-            }
-
-
-            .tms19-quality-status.medium {
-
-                background:
-                    #fffbeb;
-
-                color:
-                    #b45309;
-
-            }
-
-
-            .tms19-quality-status.critical {
-
-                background:
-                    #fef2f2;
-
-                color:
-                    #b91c1c;
-
-            }
-
-
-            .tms19-progress {
-
-                width:
-                    100%;
-
-                height:
-                    8px;
-
-                overflow:
-                    hidden;
-
-                border-radius:
-                    999px;
-
-                background:
-                    #e2e8f0;
-
-            }
-
-
-            #tms19-progress-bar {
-
-                width:
-                    0%;
-
-                height:
-                    100%;
-
-                background:
-                    #0f172a;
-
-                transition:
-                    width .5s ease;
-
-            }
-
-
-            .tms19-quality-summary {
-
-                display:
-                    flex;
-
-                gap:
-                    30px;
-
-                margin-top:
-                    16px;
-
-            }
-
-
-            .tms19-quality-summary small {
-
-                display:
-                    block;
-
-                color:
-                    #64748b;
-
-                font-size:
-                    11px;
-
-            }
-
-
-            .tms19-quality-summary strong {
-
-                display:
-                    block;
-
-                margin-top:
-                    4px;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-validation-panel,
-            .tms19-personel-panel {
-
-                margin-top:
-                    20px;
-
-                padding:
-                    20px;
-
-                border:
-                    1px solid #e5e7eb;
-
-                border-radius:
-                    14px;
-
-            }
-
-
-            .tms19-section-title {
-
-                display:
-                    flex;
-
-                justify-content:
-                    space-between;
-
-                align-items:
-                    center;
-
-                gap:
-                    15px;
-
-                margin-bottom:
-                    16px;
-
-            }
-
-
-            .tms19-section-title span {
-
-                font-weight:
-                    800;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-section-title p {
-
-                margin:
-                    5px 0 0;
-
-                font-size:
-                    12px;
-
-                color:
-                    #64748b;
-
-            }
-
-
-            .tms19-success-box {
-
-                padding:
-                    14px;
-
-                border-radius:
-                    10px;
-
-                background:
-                    #ecfdf5;
-
-                color:
-                    #047857;
-
-                font-size:
-                    13px;
-
-            }
-
-
-            .tms19-validation-row {
-
-                display:
-                    flex;
-
-                justify-content:
-                    space-between;
-
-                gap:
-                    20px;
-
-                padding:
-                    13px 0;
-
-                border-bottom:
-                    1px solid #f1f5f9;
-
-            }
-
-
-            .tms19-validation-row strong {
-
-                display:
-                    block;
-
-                color:
-                    #0f172a;
-
-            }
-
-
-            .tms19-validation-row small {
-
-                display:
-                    block;
-
-                margin-top:
-                    4px;
-
-                color:
-                    #94a3b8;
-
-            }
-
-
-            .tms19-issue {
-
-                display:
-                    inline-block;
-
-                margin:
-                    3px;
-
-                padding:
-                    5px 8px;
-
-                border-radius:
-                    7px;
-
-                background:
-                    #fef2f2;
-
-                color:
-                    #b91c1c;
-
-                font-size:
-                    11px;
-
-            }
-
-
-            .tms19-table-wrapper {
-
-                overflow-x:
-                    auto;
-
-            }
-
-
-            .tms19-personel-table {
-
-                width:
-                    100%;
-
-                border-collapse:
-                    collapse;
-
-                min-width:
-                    900px;
-
-            }
-
-
-            .tms19-personel-table th {
-
-                padding:
-                    11px;
-
-                text-align:
-                    left;
-
-                background:
-                    #f8fafc;
-
-                color:
-                    #64748b;
-
-                font-size:
-                    11px;
-
-                font-weight:
-                    700;
-
-                white-space:
-                    nowrap;
-
-            }
-
-
-            .tms19-personel-table td {
-
-                padding:
-                    12px 11px;
-
-                border-top:
-                    1px solid #f1f5f9;
-
-                color:
-                    #334155;
-
-                font-size:
-                    12px;
-
-                white-space:
-                    nowrap;
-
-            }
-
-
-            .tms19-empty-cell {
-
-                text-align:
-                    center !important;
-
-                color:
-                    #94a3b8 !important;
-
-                padding:
-                    30px !important;
-
-            }
-
-
-            @media (
-                max-width: 900px
-            ) {
-
-                .tms19-data-header {
-
-                    flex-direction:
-                        column;
-
+                    detail:
+                        {
+                            version:
+                                DataUI.version
+                        }
                 }
-
-
-                .tms19-data-kpis {
-
-                    grid-template-columns:
-                        repeat(2, 1fr);
-
-                }
-
-            }
-
-
-            @media (
-                max-width: 600px
-            ) {
-
-                #tms19-veri-merkezi {
-
-                    padding:
-                        16px;
-
-                    border-radius:
-                        14px;
-
-                }
-
-
-                .tms19-data-kpis {
-
-                    grid-template-columns:
-                        1fr;
-
-                }
-
-
-                .tms19-quality-title {
-
-                    align-items:
-                        flex-start;
-
-                    gap:
-                        12px;
-
-                }
-
-
-                .tms19-validation-row {
-
-                    flex-direction:
-                        column;
-
-                }
-
-
-                .tms19-data-actions {
-
-                    width:
-                        100%;
-
-                }
-
-
-                .tms19-upload-button,
-                .tms19-secondary-button {
-
-                    flex:
-                        1;
-
-                    text-align:
-                        center;
-
-                }
-
-            }
-
-        `;
-
-
-        document.head.appendChild(
-            style
+            )
         );
-
     }
 
 
-    /* =====================================================
-       BAŞLAT
-    ===================================================== */
+    /* ============================================================
+       38 — STATE GET
+    ============================================================ */
 
-    function baslat() {
+    function getState() {
 
-        stilEkle();
+        return {
 
-        veriMerkeziOlustur();
+            ...state,
 
+            personeller:
+                [
+                    ...state.personeller
+                ]
+        };
     }
 
+
+    /* ============================================================
+       39 — PUBLIC API
+    ============================================================ */
+
+    DataUI.init =
+        init;
+
+
+    DataUI.hesapla =
+        hesapla;
+
+
+    DataUI.demoVeriYukle =
+        demoVeriYukle;
+
+
+    DataUI.csvDosyasiOku =
+        csvDosyasiOku;
+
+
+    DataUI.jsonDosyasiOku =
+        jsonDosyasiOku;
+
+
+    DataUI.exportJSON =
+        exportJSON;
+
+
+    DataUI.exportCSV =
+        exportCSV;
+
+
+    DataUI.personelSec =
+        personelSec;
+
+
+    DataUI.tabloRender =
+        tabloRender;
+
+
+    DataUI.kpiRender =
+        kpiRender;
+
+
+    DataUI.getState =
+        getState;
+
+
+    DataUI.healthCheck =
+        function () {
+
+            return {
+
+                status:
+                    "OK",
+
+                engine:
+                    DataUI.engineName,
+
+                version:
+                    DataUI.version,
+
+                dataEngine:
+                    !!global.TMS19DataEngine,
+
+                portfolioEngine:
+                    !!global.TMS19PortfolioEngine,
+
+                timestamp:
+                    new Date().toISOString()
+            };
+        };
+
+
+    /* ============================================================
+       40 — GLOBAL EXPORT
+    ============================================================ */
+
+    global.TMS19DataUI =
+        DataUI;
+
+
+    if (
+        !global.TMS19
+    ) {
+
+        global.TMS19 = {};
+    }
+
+
+    global.TMS19.DataUI =
+        DataUI;
+
+
+    /* ============================================================
+       41 — DOM READY
+    ============================================================ */
 
     if (
         document.readyState ===
@@ -2286,37 +2734,21 @@
 
         document.addEventListener(
             "DOMContentLoaded",
-            baslat
+            () => {
+
+                init();
+
+            }
         );
 
     }
+
     else {
 
-        baslat();
-
+        init();
     }
 
 
-    /* =====================================================
-       GLOBAL API
-    ===================================================== */
-
-    window.TMS19DataUI = {
-
-        getEmployees:
-            function () {
-                return mevcutVeri;
-            },
-
-        getImportResult:
-            function () {
-                return sonImport;
-            },
-
-        reload:
-            baslat
-
-    };
-
-
-})(window);
+})(typeof window !== "undefined"
+    ? window
+    : globalThis);
