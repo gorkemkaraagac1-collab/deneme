@@ -5408,7 +5408,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       {
         account:
-          "381 Kira Borçları / Ödeme",
+          "301 Kiralama Yükümlülüğü - Current",
 
         debit: 0,
 
@@ -6216,7 +6216,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       {
         account:
-          "381 Kira Borçları / Ödeme",
+          "301 Kiralama Yükümlülüğü - Current",
 
         debit: 0,
 
@@ -9000,7 +9000,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           {
             account:
-              "381 Kira Borçları / Ödeme",
+              "301 Kiralama Yükümlülüğü - Current",
 
             debit: 0,
 
