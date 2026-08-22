@@ -5318,6 +5318,8 @@ function dosyaOku(
                                         parseNumber(
                                             obj.mevcutmaas ||
                                             obj.maas ||
+                                            obj.brutmaas ||
+                                            obj.brutucret ||
                                             obj.salary
                                         )
                                 };
@@ -5464,7 +5466,18 @@ function normalizeHeader(
         value || ""
     )
         .trim()
+        .replace(
+            /İ/g,
+            "i"
+        )
         .toLowerCase()
+        .normalize(
+            "NFD"
+        )
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
         .replace(
             /ç/g,
             "c"
