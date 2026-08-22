@@ -1655,6 +1655,162 @@
 
 
     /* ============================================================
+       14c — SENARYO MATRİSİ (DUYARLILIK ANALİZİ)
+    ============================================================ */
+
+    TMS19.senaryoMatrisi =
+        function (
+            personeller,
+            varsayimlar = {}
+        ) {
+
+            function dboHesapla(
+                v
+            ) {
+
+                const toplu =
+                    TMS19.topluHesapla(
+                        personeller,
+                        v
+                    );
+
+                const ozet =
+                    TMS19.ozetOlustur(
+                        toplu.results
+                    );
+
+                return ozet.toplamDBO;
+            }
+
+
+            const baseDBO =
+                dboHesapla(
+                    varsayimlar
+                );
+
+
+            const iskontoOrani =
+                TMS19.sayi(
+                    varsayimlar
+                        .iskontoOrani
+                );
+
+
+            const maasArtisOrani =
+                TMS19.sayi(
+                    varsayimlar
+                        .maasArtisOrani
+                );
+
+
+            const senaryolar =
+                [
+
+                    {
+                        ad:
+                            "Baz Senaryo",
+
+                        dbo:
+                            baseDBO
+                    },
+
+                    {
+                        ad:
+                            "İskonto Oranı +%1",
+
+                        dbo:
+                            dboHesapla(
+                                Object.assign(
+                                    {},
+                                    varsayimlar,
+                                    {
+                                        iskontoOrani:
+                                            iskontoOrani +
+                                            0.01
+                                    }
+                                )
+                            )
+                    },
+
+                    {
+                        ad:
+                            "İskonto Oranı -%1",
+
+                        dbo:
+                            dboHesapla(
+                                Object.assign(
+                                    {},
+                                    varsayimlar,
+                                    {
+                                        iskontoOrani:
+                                            iskontoOrani -
+                                            0.01
+                                    }
+                                )
+                            )
+                    },
+
+                    {
+                        ad:
+                            "Maaş Artış Oranı +%1",
+
+                        dbo:
+                            dboHesapla(
+                                Object.assign(
+                                    {},
+                                    varsayimlar,
+                                    {
+                                        maasArtisOrani:
+                                            maasArtisOrani +
+                                            0.01
+                                    }
+                                )
+                            )
+                    },
+
+                    {
+                        ad:
+                            "Maaş Artış Oranı -%1",
+
+                        dbo:
+                            dboHesapla(
+                                Object.assign(
+                                    {},
+                                    varsayimlar,
+                                    {
+                                        maasArtisOrani:
+                                            maasArtisOrani -
+                                            0.01
+                                    }
+                                )
+                            )
+                    }
+                ];
+
+
+            senaryolar.forEach(
+                function (
+                    s
+                ) {
+
+                    s.fark =
+                        s.dbo -
+                        baseDBO;
+
+                    s.farkYuzde =
+                        baseDBO !== 0
+                            ? s.fark /
+                              baseDBO
+                            : 0;
+                }
+            );
+
+
+            return senaryolar;
+        };
+
+
+    /* ============================================================
        15 — HEALTH CHECK
     ============================================================ */
 
