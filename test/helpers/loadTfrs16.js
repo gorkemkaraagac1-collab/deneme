@@ -24,7 +24,8 @@ function loadTfrs16() {
   // Her testte temiz bir global durum için window.__TFRS16_TEST__'i sıfırla.
   delete window.__TFRS16_TEST__;
 
-  require("../../tfrs16.js");
+  require("../../js/tfrs16.js");
+
 
   document.dispatchEvent(
     new window.Event("DOMContentLoaded", { bubbles: true, cancelable: true })
