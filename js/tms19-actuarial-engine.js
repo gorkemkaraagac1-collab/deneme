@@ -380,6 +380,603 @@
 
 
     /* ============================================================
+       06B — SGK KADEMELİ EMEKLİLİK + EYT MOTORU
+       ------------------------------------------------------------
+       Kaynaklar:
+         - 506 sayılı Kanun (08.09.1999 öncesi girişliler) + 4759
+           sayılı Kanun kademeli geçiş tablosu (23.05.2002 bazlı)
+         - 4447 sayılı Kanun (09.09.1999–30.04.2008 girişliler)
+         - 5510 sayılı Kanun md. 28 + Geçici md. 81 (01.05.2008
+           sonrası girişliler, 2036-2048 arası kademeli yaş)
+         - 7438 sayılı Kanun (03.03.2023, EYT): 08.09.1999 öncesi
+           girişliler için yaş şartını kaldırır; sadece
+           sigortalılık süresi + prim gün sayısı şartı aranır.
+
+       NOT: Bu motor "sigortalılık başlangıç tarihi" ve kesintisiz
+       prim ödendiği varsayımı ile prim gün sayısını hizmet
+       süresinden (yıl × 360 gün) türetir. Gerçek prim hizmet
+       dökümü (eksik gün, borçlanma, hizmet birleştirme vb.)
+       mevcutsa, p.primGunSayisi alanı ile bu varsayımın üzerine
+       yazılabilir. Bu motor gerçek SGK tahsis hesaplamasının
+       yerine geçmez; TMS 19 aktüeryal projeksiyonu için makul bir
+       kademeli emeklilik tarihi yaklaşımı üretir.
+    ============================================================ */
+
+    const SGK_GUN_YIL =
+        360;
+
+    const SGK_EYT_KESIM_TARIHI =
+        new Date(
+            1999,
+            8,
+            8
+        );
+
+    const SGK_4447_BASLANGIC =
+        new Date(
+            1999,
+            8,
+            9
+        );
+
+    const SGK_5510_KESIM_TARIHI =
+        new Date(
+            2008,
+            3,
+            30
+        );
+
+    const SGK_5510_BASLANGIC =
+        new Date(
+            2008,
+            4,
+            1
+        );
+
+
+    /*
+     * 08.09.1999 öncesi girişliler için, sigortalılık başlangıç
+     * tarihine göre kademeli PRİM GÜN SAYISI tablosu (5000-5975 gün).
+     * "son" alanı, o kademenin geçerli olduğu son sigorta başlangıç
+     * tarihidir (dahil).
+     */
+
+    const SGK_EYT_GUN_TABLO_KADIN =
+        [
+            { son: new Date(1981, 8, 8), gun: 5000 },
+            { son: new Date(1984, 4, 23), gun: 5000 },
+            { son: new Date(1985, 4, 23), gun: 5000 },
+            { son: new Date(1986, 4, 23), gun: 5075 },
+            { son: new Date(1987, 4, 23), gun: 5150 },
+            { son: new Date(1988, 4, 23), gun: 5225 },
+            { son: new Date(1989, 4, 23), gun: 5300 },
+            { son: new Date(1990, 4, 23), gun: 5375 },
+            { son: new Date(1991, 4, 23), gun: 5450 },
+            { son: new Date(1992, 4, 23), gun: 5525 },
+            { son: new Date(1993, 4, 23), gun: 5600 },
+            { son: new Date(1994, 4, 23), gun: 5675 },
+            { son: new Date(1995, 4, 23), gun: 5750 },
+            { son: new Date(1996, 4, 23), gun: 5825 },
+            { son: new Date(1997, 4, 23), gun: 5900 },
+            { son: new Date(1998, 4, 23), gun: 5975 },
+            { son: new Date(1999, 4, 23), gun: 5975 },
+            { son: SGK_EYT_KESIM_TARIHI, gun: 5975 }
+        ];
+
+    const SGK_EYT_GUN_TABLO_ERKEK =
+        [
+            { son: new Date(1976, 8, 8), gun: 5000 },
+            { son: new Date(1979, 4, 23), gun: 5000 },
+            { son: new Date(1980, 10, 23), gun: 5000 },
+            { son: new Date(1982, 4, 23), gun: 5075 },
+            { son: new Date(1983, 10, 23), gun: 5150 },
+            { son: new Date(1985, 4, 23), gun: 5225 },
+            { son: new Date(1986, 10, 23), gun: 5300 },
+            { son: new Date(1988, 4, 23), gun: 5375 },
+            { son: new Date(1989, 10, 23), gun: 5450 },
+            { son: new Date(1991, 4, 23), gun: 5525 },
+            { son: new Date(1992, 10, 23), gun: 5600 },
+            { son: new Date(1994, 4, 23), gun: 5675 },
+            { son: new Date(1995, 10, 23), gun: 5750 },
+            { son: new Date(1997, 4, 23), gun: 5825 },
+            { son: new Date(1998, 10, 23), gun: 5900 },
+            { son: SGK_EYT_KESIM_TARIHI, gun: 5975 }
+        ];
+
+
+    /*
+     * 01.05.2008 sonrası girişliler için, 7200 prim gün koşulunun
+     * TAMAMLANDIĞI tarihe göre kademeli YAŞ tablosu
+     * (5510 sayılı Kanun, Geçici md. 81).
+     */
+
+    const SGK_5510_YAS_TABLO =
+        [
+            { son: new Date(2035, 11, 31), kadin: 58, erkek: 60 },
+            { son: new Date(2037, 11, 31), kadin: 59, erkek: 61 },
+            { son: new Date(2039, 11, 31), kadin: 60, erkek: 62 },
+            { son: new Date(2041, 11, 31), kadin: 61, erkek: 63 },
+            { son: new Date(2043, 11, 31), kadin: 62, erkek: 64 },
+            { son: new Date(2045, 11, 31), kadin: 63, erkek: 65 },
+            { son: new Date(2047, 11, 31), kadin: 64, erkek: 65 },
+            { son: null, kadin: 65, erkek: 65 }
+        ];
+
+
+    TMS19.sgkTarihKarsilastir =
+        function (a, b) {
+
+            return a.getTime() - b.getTime();
+        };
+
+
+    TMS19.sgkGunTablosundanBul =
+        function (tablo, sigortaBaslangicTarihi) {
+
+            for (let i = 0; i < tablo.length; i++) {
+
+                if (
+                    TMS19.sgkTarihKarsilastir(
+                        sigortaBaslangicTarihi,
+                        tablo[i].son
+                    ) <= 0
+                ) {
+
+                    return tablo[i].gun;
+                }
+            }
+
+            return tablo[tablo.length - 1].gun;
+        };
+
+
+    TMS19.sgkYasTablosundanBul =
+        function (tamamlanmaTarihi, cinsiyet) {
+
+            for (let i = 0; i < SGK_5510_YAS_TABLO.length; i++) {
+
+                const satir =
+                    SGK_5510_YAS_TABLO[i];
+
+                if (
+                    satir.son === null ||
+                    TMS19.sgkTarihKarsilastir(
+                        tamamlanmaTarihi,
+                        satir.son
+                    ) <= 0
+                ) {
+
+                    return cinsiyet === "K"
+                        ? satir.kadin
+                        : satir.erkek;
+                }
+            }
+
+            return 65;
+        };
+
+
+    TMS19.sgkCinsiyetNormalizeEt =
+        function (deger, varsayilan) {
+
+            const text =
+                String(
+                    deger ?? ""
+                )
+                    .trim()
+                    .toUpperCase();
+
+            if (
+                text === "K" ||
+                text === "KADIN" ||
+                text === "KADın" ||
+                text === "F" ||
+                text === "FEMALE" ||
+                text === "WOMAN"
+            ) {
+
+                return "K";
+            }
+
+            if (
+                text === "E" ||
+                text === "ERKEK" ||
+                text === "M" ||
+                text === "MALE" ||
+                text === "MAN"
+            ) {
+
+                return "E";
+            }
+
+            return varsayilan === "K"
+                ? "K"
+                : "E";
+        };
+
+
+    /*
+     * Bir tarihe (ondalıklı) yıl ekler. Tam yıl kısmı takvim yılı
+     * olarak, küsurat kısmı gün bazlı (365.25) olarak eklenir.
+     */
+
+    TMS19.sgkTarihYilEkle =
+        function (baseDate, yil) {
+
+            if (
+                !baseDate ||
+                !isFinite(yil)
+            ) {
+
+                return null;
+            }
+
+            const tamYil =
+                Math.floor(
+                    Math.max(
+                        0,
+                        yil
+                    )
+                );
+
+            const kesirYil =
+                Math.max(
+                    0,
+                    yil
+                ) - tamYil;
+
+            const sonuc =
+                new Date(
+                    baseDate.getTime()
+                );
+
+            sonuc.setFullYear(
+                sonuc.getFullYear() +
+                tamYil
+            );
+
+            if (
+                kesirYil > 0
+            ) {
+
+                sonuc.setTime(
+                    sonuc.getTime() +
+                    kesirYil *
+                    365.25 *
+                    24 *
+                    60 *
+                    60 *
+                    1000
+                );
+            }
+
+            return sonuc;
+        };
+
+
+    /*
+     * SGK 4/a (hizmet akdi/SSK) kademeli emeklilik + EYT motoru.
+     *
+     * Personelin sigorta başlangıç tarihine göre üç rejimden
+     * birine tabi tutulur:
+     *
+     *   A) <= 08.09.1999  → EYT (7438 sayılı Kanun): yaş şartı YOK,
+     *      sadece sigortalılık süresi (K:20/E:25 yıl) + kademeli
+     *      prim gün sayısı (5000-5975) şartı aranır.
+     *
+     *   B) 09.09.1999 - 30.04.2008 → yaş şartı sabit (K:58/E:60) +
+     *      7000 prim günü.
+     *
+     *   C) >= 01.05.2008 → 7200 prim günü + bu günün TAMAMLANDIĞI
+     *      tarihe göre kademeli yaş (K/E 58/60'tan başlayıp 2048'de
+     *      65'te sabitlenir).
+     *
+     * SGK verisi (doğum tarihi / sigorta başlangıç tarihi /
+     * cinsiyet) eksikse, geriye dönük uyumluluk için
+     * varsayimlar.emeklilikYasi düz varsayımına düşer.
+     */
+
+    TMS19.sgkEmeklilikBilgisiHesapla =
+        function (personel, varsayimlar, degerlemeTarihi) {
+
+            const p =
+                personel &&
+                personel.personelId !== undefined
+                    ? personel
+                    : TMS19.personelNormalizeEt(
+                        personel
+                    );
+
+            const dogumTarihi =
+                TMS19.tarih(
+                    p.dogumTarihi
+                );
+
+            const sigortaBaslangicTarihi =
+                TMS19.tarih(
+                    p.sigortaBaslangicTarihi ??
+                    p.iseGirisTarihi
+                );
+
+            const valuationDate =
+                TMS19.tarih(
+                    degerlemeTarihi
+                );
+
+            const legacyEmeklilikYasi =
+                TMS19.sayi(
+                    varsayimlar?.emeklilikYasi
+                ) ||
+                65;
+
+            if (
+                !dogumTarihi ||
+                !sigortaBaslangicTarihi
+            ) {
+
+                return {
+                    emeklilikYasi: legacyEmeklilikYasi,
+                    emeklilikTarihi: null,
+                    kural: "VARSAYIM (SGK verisi eksik — sabit emeklilikYasi kullanıldı)",
+                    grup: null,
+                    eytUygulandi: false,
+                    gerekliYas: legacyEmeklilikYasi,
+                    gerekliPrimGunu: null,
+                    gerekliSigortalilikYili: null
+                };
+            }
+
+            const cinsiyet =
+                TMS19.sgkCinsiyetNormalizeEt(
+                    p.cinsiyet,
+                    varsayimlar?.varsayilanCinsiyet
+                );
+
+            const manuelPrimGunu =
+                p.primGunSayisi !== undefined &&
+                p.primGunSayisi !== null &&
+                p.primGunSayisi !== ""
+                    ? TMS19.sayi(p.primGunSayisi)
+                    : null;
+
+            let grup =
+                null;
+
+            let gerekliYas =
+                null;
+
+            let gerekliPrimGunu =
+                null;
+
+            let gerekliSigortalilikYili =
+                null;
+
+            let eytUygulandi =
+                false;
+
+            /* ---- GRUP A: EYT (<= 08.09.1999) ---- */
+
+            if (
+                TMS19.sgkTarihKarsilastir(
+                    sigortaBaslangicTarihi,
+                    SGK_EYT_KESIM_TARIHI
+                ) <= 0
+            ) {
+
+                grup =
+                    "A_EYT";
+
+                eytUygulandi =
+                    true;
+
+                gerekliYas =
+                    null;
+
+                gerekliSigortalilikYili =
+                    cinsiyet === "K"
+                        ? 20
+                        : 25;
+
+                gerekliPrimGunu =
+                    TMS19.sgkGunTablosundanBul(
+                        cinsiyet === "K"
+                            ? SGK_EYT_GUN_TABLO_KADIN
+                            : SGK_EYT_GUN_TABLO_ERKEK,
+                        sigortaBaslangicTarihi
+                    );
+            }
+
+            /* ---- GRUP B: 09.09.1999 - 30.04.2008 ---- */
+
+            else if (
+                TMS19.sgkTarihKarsilastir(
+                    sigortaBaslangicTarihi,
+                    SGK_5510_KESIM_TARIHI
+                ) <= 0
+            ) {
+
+                grup =
+                    "B_KADEMELI_1999_2008";
+
+                gerekliYas =
+                    cinsiyet === "K"
+                        ? 58
+                        : 60;
+
+                gerekliPrimGunu =
+                    7000;
+
+                gerekliSigortalilikYili =
+                    null;
+            }
+
+            /* ---- GRUP C: >= 01.05.2008 (5510 sayılı Kanun) ---- */
+
+            else {
+
+                grup =
+                    "C_5510_KADEMELI";
+
+                gerekliPrimGunu =
+                    7200;
+
+                gerekliSigortalilikYili =
+                    null;
+
+                /*
+                 * Yaş tablosu, 7200 günün TAMAMLANDIĞI tarihe göre
+                 * kademelidir. Bu tarih, sigorta başlangıcı üzerine
+                 * gerekli gün sayısının (yıla çevrilerek) eklenmesiyle
+                 * bulunur; manuel prim gün sayısı verilmişse eksik
+                 * gün üzerinden tamamlanma tarihi buna göre kayar.
+                 */
+
+                const primYiliBazli =
+                    manuelPrimGunu !== null
+                        ? Math.max(
+                            0,
+                            (gerekliPrimGunu - manuelPrimGunu) /
+                            SGK_GUN_YIL
+                        )
+                        : gerekliPrimGunu /
+                        SGK_GUN_YIL;
+
+                const tahminiTamamlanmaTarihi =
+                    manuelPrimGunu !== null
+                        ? TMS19.sgkTarihYilEkle(
+                            valuationDate ||
+                            sigortaBaslangicTarihi,
+                            primYiliBazli
+                        )
+                        : TMS19.sgkTarihYilEkle(
+                            sigortaBaslangicTarihi,
+                            primYiliBazli
+                        );
+
+                gerekliYas =
+                    TMS19.sgkYasTablosundanBul(
+                        tahminiTamamlanmaTarihi,
+                        cinsiyet
+                    );
+            }
+
+            /* ----------------------------------------------------
+               HİZMET/PRİM ŞARTININ TAMAMLANMA TARİHİ
+            ---------------------------------------------------- */
+
+            let sureTamamlanmaTarihi;
+
+            if (
+                manuelPrimGunu !== null
+            ) {
+
+                const eksikGun =
+                    Math.max(
+                        0,
+                        gerekliPrimGunu -
+                        manuelPrimGunu
+                    );
+
+                sureTamamlanmaTarihi =
+                    TMS19.sgkTarihYilEkle(
+                        valuationDate ||
+                        sigortaBaslangicTarihi,
+                        eksikGun /
+                        SGK_GUN_YIL
+                    );
+            }
+
+            else if (
+                gerekliSigortalilikYili !== null
+            ) {
+
+                const gunKarsiligiYil =
+                    gerekliPrimGunu /
+                    SGK_GUN_YIL;
+
+                sureTamamlanmaTarihi =
+                    TMS19.sgkTarihYilEkle(
+                        sigortaBaslangicTarihi,
+                        Math.max(
+                            gerekliSigortalilikYili,
+                            gunKarsiligiYil
+                        )
+                    );
+            }
+
+            else {
+
+                sureTamamlanmaTarihi =
+                    TMS19.sgkTarihYilEkle(
+                        sigortaBaslangicTarihi,
+                        gerekliPrimGunu /
+                        SGK_GUN_YIL
+                    );
+            }
+
+            /* ----------------------------------------------------
+               YAŞ ŞARTININ TAMAMLANMA TARİHİ
+            ---------------------------------------------------- */
+
+            const yasTamamlanmaTarihi =
+                eytUygulandi
+                    ? null
+                    : TMS19.sgkTarihYilEkle(
+                        dogumTarihi,
+                        gerekliYas
+                    );
+
+            const emeklilikTarihi =
+                yasTamamlanmaTarihi &&
+                TMS19.sgkTarihKarsilastir(
+                    yasTamamlanmaTarihi,
+                    sureTamamlanmaTarihi
+                ) > 0
+                    ? yasTamamlanmaTarihi
+                    : sureTamamlanmaTarihi;
+
+            const efektifEmeklilikYasi =
+                TMS19.yasHesapla(
+                    dogumTarihi,
+                    emeklilikTarihi
+                );
+
+            return {
+
+                emeklilikYasi:
+                    efektifEmeklilikYasi,
+
+                emeklilikTarihi:
+                    emeklilikTarihi,
+
+                kural:
+                    grup,
+
+                grup:
+                    grup,
+
+                eytUygulandi:
+                    eytUygulandi,
+
+                cinsiyet:
+                    cinsiyet,
+
+                sigortaBaslangicTarihi:
+                    sigortaBaslangicTarihi,
+
+                gerekliYas:
+                    gerekliYas,
+
+                gerekliPrimGunu:
+                    gerekliPrimGunu,
+
+                gerekliSigortalilikYili:
+                    gerekliSigortalilikYili
+            };
+        };
+
+
+    /* ============================================================
        07 — PERSONEL NORMALİZASYONU
     ============================================================ */
 
@@ -419,6 +1016,17 @@
 
 
                 iseGirisTarihi:
+                    p.iseGirisTarihi ??
+                    p.IseGirisTarihi ??
+                    p.hireDate ??
+                    null,
+
+
+                sigortaBaslangicTarihi:
+                    p.sigortaBaslangicTarihi ??
+                    p.SigortaBaslangicTarihi ??
+                    p.sskGirisTarihi ??
+                    p.ilkSigortaTarihi ??
                     p.iseGirisTarihi ??
                     p.IseGirisTarihi ??
                     p.hireDate ??
@@ -802,19 +1410,32 @@
                 );
 
 
-            const emeklilikYasi =
-                TMS19.sayi(
-                    varsayimlar
-                        .emeklilikYasi
+            const sgkEmeklilik =
+                TMS19.sgkEmeklilikBilgisiHesapla(
+                    p,
+                    varsayimlar,
+                    degerlemeTarihi
                 );
+
+
+            const emeklilikYasi =
+                sgkEmeklilik.emeklilikYasi;
 
 
             const emekliligeKalanYil =
-                Math.max(
-                    0,
-                    emeklilikYasi -
-                    yas
-                );
+                sgkEmeklilik.emeklilikTarihi
+                    ? Math.max(
+                        0,
+                        TMS19.yilFarki(
+                            degerlemeTarihi,
+                            sgkEmeklilik.emeklilikTarihi
+                        )
+                    )
+                    : Math.max(
+                        0,
+                        emeklilikYasi -
+                        yas
+                    );
 
 
             const toplamHizmet =
@@ -4726,19 +5347,32 @@ TMS19.pucProjection =
             );
 
 
-        const retirementAge =
-            TMS19.sayi(
-                varsayimlar
-                    .emeklilikYasi
+        const sgkEmeklilikPuc =
+            TMS19.sgkEmeklilikBilgisiHesapla(
+                p,
+                varsayimlar,
+                degerlemeTarihi
             );
+
+
+        const retirementAge =
+            sgkEmeklilikPuc.emeklilikYasi;
 
 
         const remainingYears =
-            Math.max(
-                0,
-                retirementAge -
-                currentAge
-            );
+            sgkEmeklilikPuc.emeklilikTarihi
+                ? Math.max(
+                    0,
+                    TMS19.yilFarki(
+                        degerlemeTarihi,
+                        sgkEmeklilikPuc.emeklilikTarihi
+                    )
+                )
+                : Math.max(
+                    0,
+                    retirementAge -
+                    currentAge
+                );
 
 
         const totalServiceAtRetirement =
@@ -5417,18 +6051,32 @@ TMS19.emeklilikToplamFayda =
             );
 
 
-        const emeklilikYasi =
-            TMS19.sayi(
-                varsayimlar.emeklilikYasi
+        const sgkEmeklilikToplam =
+            TMS19.sgkEmeklilikBilgisiHesapla(
+                p,
+                varsayimlar,
+                degerlemeTarihi
             );
+
+
+        const emeklilikYasi =
+            sgkEmeklilikToplam.emeklilikYasi;
 
 
         const kalanYil =
-            Math.max(
-                0,
-                emeklilikYasi -
-                yas
-            );
+            sgkEmeklilikToplam.emeklilikTarihi
+                ? Math.max(
+                    0,
+                    TMS19.yilFarki(
+                        degerlemeTarihi,
+                        sgkEmeklilikToplam.emeklilikTarihi
+                    )
+                )
+                : Math.max(
+                    0,
+                    emeklilikYasi -
+                    yas
+                );
 
 
         const toplamHizmet =
