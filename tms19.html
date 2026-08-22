@@ -4250,7 +4250,8 @@ function personelDetay(
 
                     <td class="number">
                         ${formatValue(
-                            row.deger
+                            row.deger,
+                            row.birim
                         )}
                     </td>
 
@@ -5808,8 +5809,70 @@ function yuzde(
 
 
 function formatValue(
-    value
+    value,
+    birim
 ) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+
+        return "-";
+    }
+
+
+    if (
+        birim === "boolean"
+    ) {
+
+        return value
+            ? "Evet"
+            : "Hayır";
+    }
+
+
+    if (
+        birim === "yuzde"
+    ) {
+
+        return yuzde(
+            Number(value) || 0
+        );
+    }
+
+
+    if (
+        birim === "oran"
+    ) {
+
+        return (
+            Number(value) || 0
+        ).toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 4,
+                maximumFractionDigits: 6
+            }
+        );
+    }
+
+
+    if (
+        birim === "yil"
+    ) {
+
+        return (
+            Number(value) || 0
+        ).toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            }
+        ) + " yıl";
+    }
+
 
     if (
         typeof value ===
@@ -5819,15 +5882,6 @@ function formatValue(
         return para(
             value
         );
-    }
-
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
-
-        return "-";
     }
 
 
