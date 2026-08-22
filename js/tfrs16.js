@@ -770,15 +770,43 @@ document.addEventListener("DOMContentLoaded", () => {
       return { liability: 0, monthlyRate, payments: [], schedule: [] };
     }
 
+    const stepMonths =
+      resolveFrequencyStepMonths(
+        newTerms.paymentFrequency ||
+        contract.paymentFrequency ||
+        "monthly"
+      );
+
+    const advance =
+      isAdvancePaymentTiming(
+        newTerms.paymentTiming ||
+        contract.paymentTiming ||
+        "arrears"
+      );
+
+    const periodRate =
+      stepMonths === 1
+        ? monthlyRate
+        : (monthlyRate === 0
+            ? 0
+            : Math.pow(1 + monthlyRate, stepMonths) - 1);
+
     let liability = 0;
 
-    payments.forEach(item => {
+    payments.forEach((item, index) => {
+      let exponentMonths;
+      if (advance) {
+        exponentMonths = index * stepMonths;
+      } else {
+        exponentMonths = (index + 1) * stepMonths;
+      }
+
       if (monthlyRate === 0) {
         liability += item.payment;
       } else {
         liability +=
           item.payment /
-          Math.pow(1 + monthlyRate, Math.max(1, item.period));
+          Math.pow(1 + monthlyRate, Math.max(0, exponentMonths));
       }
     });
 
@@ -788,7 +816,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const schedule = [];
 
     payments.forEach(item => {
-      const interest = Math.max(0, opening * monthlyRate);
+      const interest = Math.max(0, opening * periodRate);
       const principal = Math.min(
         opening,
         Math.max(0, item.payment - interest)
@@ -806,7 +834,7 @@ document.addEventListener("DOMContentLoaded", () => {
       opening = closing;
     });
 
-    return { liability, monthlyRate, payments, schedule };
+    return { liability, monthlyRate, periodRate, payments, schedule };
   }
 
 
@@ -1568,12 +1596,57 @@ document.addEventListener("DOMContentLoaded", () => {
     const basePayment =
       Number(newTerms.payment) || 0;
 
+    const stepMonths =
+      resolveFrequencyStepMonths(
+        newTerms.paymentFrequency ||
+        contract.paymentFrequency ||
+        "monthly"
+      );
+
+    const advance =
+      isAdvancePaymentTiming(
+        newTerms.paymentTiming ||
+        contract.paymentTiming ||
+        "arrears"
+      );
+
+    const periodsPerYear =
+      stepMonths === 1 ? 12 :
+      stepMonths === 3 ? 4 : 1;
+
     const result = [];
-    const cursor = new Date(
-      effective.getFullYear(),
-      effective.getMonth() + 1,
-      1
-    );
+
+    // Start generating from the first payment date AFTER effectiveDate
+    // (remeasurement uses remaining payments only).
+    let cursor;
+    if (advance) {
+      // Next advance payment on or after the day following effective
+      cursor = new Date(
+        effective.getFullYear(),
+        effective.getMonth(),
+        effective.getDate() + 1
+      );
+      // Align to step grid from contract start when possible
+      const contractStart = parseDate(contract.startDate) || effective;
+      const monthsFromStart =
+        (cursor.getFullYear() - contractStart.getFullYear()) * 12 +
+        (cursor.getMonth() - contractStart.getMonth());
+      const offset = ((monthsFromStart % stepMonths) + stepMonths) % stepMonths;
+      if (offset !== 0) {
+        cursor = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth() + (stepMonths - offset),
+          contractStart.getDate()
+        );
+      }
+    } else {
+      // Arrears: first remaining payment at end of next period
+      cursor = new Date(
+        effective.getFullYear(),
+        effective.getMonth() + stepMonths,
+        effective.getDate()
+      );
+    }
 
     let period = 1;
 
@@ -1582,7 +1655,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const contractStart =
         parseDate(contract.startDate) || effective;
 
-      const globalPeriod =
+      const globalMonthIndex =
         Math.max(
           1,
           (
@@ -1592,13 +1665,20 @@ document.addEventListener("DOMContentLoaded", () => {
           )
         );
 
+      // Map calendar month index into payment-ordinal year buckets
+      const escalationPeriodIndex =
+        stepMonths === 1
+          ? globalMonthIndex
+          : Math.floor((globalMonthIndex - 1) / stepMonths) + 1;
+
       const payment =
         computeEscalatedPayment(
           basePayment,
-          globalPeriod,
+          escalationPeriodIndex,
           contract.leaseIncreaseType || "none",
           Number(contract.leaseIncreaseRate) || 0,
-          Number(contract.fixedIncrease) || 0
+          Number(contract.fixedIncrease) || 0,
+          periodsPerYear
         );
 
       result.push({
@@ -1607,10 +1687,15 @@ document.addEventListener("DOMContentLoaded", () => {
         year: cursor.getFullYear(),
         month: cursor.getMonth() + 1,
         payment: Math.max(0, Number(payment) || 0),
-        globalPeriod
+        globalPeriod: globalMonthIndex,
+        stepMonths
       });
 
-      cursor.setMonth(cursor.getMonth() + 1);
+      cursor = new Date(
+        cursor.getFullYear(),
+        cursor.getMonth() + stepMonths,
+        cursor.getDate()
+      );
       period++;
     }
 
@@ -1647,10 +1732,40 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
 
+    const stepMonths =
+      resolveFrequencyStepMonths(
+        newTerms.paymentFrequency ||
+        contract.paymentFrequency ||
+        "monthly"
+      );
+
+    const advance =
+      isAdvancePaymentTiming(
+        newTerms.paymentTiming ||
+        contract.paymentTiming ||
+        "arrears"
+      );
+
+    // Interest between payment events (compound for multi-month steps)
+    const periodRate =
+      stepMonths === 1
+        ? monthlyRate
+        : (monthlyRate === 0
+            ? 0
+            : Math.pow(1 + monthlyRate, stepMonths) - 1);
+
     let liability = 0;
 
-    payments.forEach(item => {
-      const exponent = Math.max(1, item.period);
+    payments.forEach((item, index) => {
+      // Discount in months from effective date:
+      // advance remaining: 0, step, 2*step... (first remaining may be imminent)
+      // arrears remaining: step, 2*step, ...
+      let exponentMonths;
+      if (advance) {
+        exponentMonths = index * stepMonths;
+      } else {
+        exponentMonths = (index + 1) * stepMonths;
+      }
 
       if (monthlyRate === 0) {
         liability += item.payment;
@@ -1659,7 +1774,7 @@ document.addEventListener("DOMContentLoaded", () => {
           item.payment /
           Math.pow(
             1 + monthlyRate,
-            exponent
+            Math.max(0, exponentMonths)
           );
       }
     });
@@ -1671,7 +1786,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     payments.forEach(item => {
       const interest =
-        Math.max(0, opening * monthlyRate);
+        Math.max(0, opening * periodRate);
 
       const principal =
         Math.min(
@@ -1696,6 +1811,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       liability,
       monthlyRate,
+      periodRate,
       payments,
       schedule
     };
@@ -2841,6 +2957,75 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   /* ==========================================================
+     PAYMENT FREQUENCY / TIMING HELPERS (V16.3 fix)
+     ----------------------------------------------------------
+     paymentFrequency: monthly | quarterly | annual (also 1/3/12)
+     paymentTiming: arrears | advance
+     Legacy monthly+arrears path produces identical numbers.
+  ========================================================== */
+
+  function resolveFrequencyStepMonths(frequency) {
+    const f = String(frequency || "monthly").trim().toLowerCase();
+    if (f === "3" || f === "quarterly" || f === "quarter") return 3;
+    if (f === "12" || f === "annual" || f === "annually" || f === "yearly") return 12;
+    return 1; // monthly / "1" / unknown
+  }
+
+
+  function isAdvancePaymentTiming(timing) {
+    return String(timing || "arrears").trim().toLowerCase() === "advance";
+  }
+
+
+  function buildLeasePaymentDates(startDate, endDate, stepMonths, advance) {
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    if (!start || !end || end < start || stepMonths < 1) return [];
+
+    const termMonths = monthsBetween(startDate, endDate);
+    const dates = [];
+
+    if (advance) {
+      // Payment at commencement, then every stepMonths while the
+      // payment date still falls inside the lease term.
+      let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      while (cursor.getTime() <= end.getTime()) {
+        dates.push(new Date(cursor));
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + stepMonths, cursor.getDate());
+      }
+    } else {
+      // Arrears — align with the legacy monthly convention:
+      // schedule row date = period START; PV exponent = months to
+      // period END. Number of payments = floor(termMonths / step).
+      // Example: 24-month quarterly → 8 rows dated at months
+      // 0,3,6,...,21 from commencement (Jan, Apr, ..., Oct).
+      const paymentCount = Math.max(1, Math.floor(termMonths / stepMonths));
+      for (let i = 0; i < paymentCount; i++) {
+        dates.push(
+          new Date(
+            start.getFullYear(),
+            start.getMonth() + i * stepMonths,
+            start.getDate()
+          )
+        );
+      }
+    }
+    return dates;
+  }
+
+
+  function monthsFromCommencement(startDate, paymentDate) {
+    const start = parseDate(startDate);
+    const pay = parseDate(paymentDate);
+    if (!start || !pay) return 0;
+    return (
+      (pay.getFullYear() - start.getFullYear()) * 12 +
+      (pay.getMonth() - start.getMonth())
+    );
+  }
+
+
+  /* ==========================================================
      TFRS 16 CALCULATION ENGINE
   ========================================================== */
 
@@ -2894,19 +3079,18 @@ document.addEventListener("DOMContentLoaded", () => {
      startDate, endDate) it produces numerically identical results
      to calculateLease().
 
-     NOT yet implemented (reserved for later approved phases, do
-     NOT assume these are active):
-       - Payment frequency other than monthly — accepted but the
-         schedule is still computed monthly
-       - Modification / reassessment recalculation — Faz 5/6
-       - Index-based escalation ("index" type) — structure ready,
-         math deferred; behaves as flat payment until implemented
-     These fields are captured in the "assumptions" object of the
-     result so the data model is ready, without silently producing
-     wrong numbers for math that hasn't been built yet.
+     Implemented payment conventions:
+       - Payment frequency: monthly / quarterly / annual
+         (also accepts codes 1 / 3 / 12). Schedule and PV use the
+         real payment step; legacy monthly+arrears is unchanged.
+       - Payment timing: arrears (default) / advance
+         (advance discounts the first payment at t=0).
+       - Escalation: none / fixedRate / fixedAmount / index
+         (index uses leaseIncreaseRate as expected index growth;
+         actual index resets continue to go through reassessment).
 
      V16.2 UPDATE: lease escalation (fixedRate / fixedAmount) is
-     now implemented via computeEscalatedPayment() below. When
+     implemented via computeEscalatedPayment() below. When
      leaseIncreaseType is "none"/undefined (every legacy contract),
      the ORIGINAL closed-form annuity path executes UNCHANGED —
      same code, same numbers as V16.1. Escalation only activates
@@ -2918,37 +3102,51 @@ document.addEventListener("DOMContentLoaded", () => {
     periodIndex,
     escalationType,
     escalationRate,
-    fixedIncrease
+    fixedIncrease,
+    periodsPerYear
   ) {
 
-    // Escalation steps up once per contract year (every 12
-    // periods from commencement), not on calendar year boundary.
+    // Escalation steps up once per contract year from commencement.
+    // periodIndex is 1-based payment ordinal when called from the
+    // legacy monthly path; for non-monthly schedules the caller
+    // should pass months-from-commencement-based year index via
+    // periodsPerYear (default 12 = monthly periods per year).
+    const ppy =
+      Number(periodsPerYear) > 0
+        ? Number(periodsPerYear)
+        : 12;
+
     const contractYearIndex =
       Math.floor(
-        (periodIndex - 1) / 12
+        (Math.max(1, periodIndex) - 1) / ppy
       );
 
-    if (escalationType === "fixedRate") {
+    const type =
+      String(escalationType || "none").toLowerCase();
 
+    if (type === "fixedrate" || type === "index") {
+      // index: expected/known index growth rate applied the same
+      // way as a fixed percentage escalation for projection and
+      // initial measurement. Subsequent actual index resets are
+      // handled via the reassessment engine.
       return (
         basePayment *
         Math.pow(
-          1 + (escalationRate / 100),
+          1 + (Number(escalationRate) || 0) / 100,
           contractYearIndex
         )
       );
     }
 
-    if (escalationType === "fixedAmount") {
+    if (type === "fixedamount") {
 
       return (
         basePayment +
-        (fixedIncrease * contractYearIndex)
+        ((Number(fixedIncrease) || 0) * contractYearIndex)
       );
     }
 
-    // "none", "index" (not yet computed), or anything else:
-    // flat payment, unchanged.
+    // "none" or anything else: flat payment.
     return basePayment;
   }
 
@@ -3114,6 +3312,16 @@ document.addEventListener("DOMContentLoaded", () => {
         contract.endDate
       );
 
+    const stepMonths =
+      resolveFrequencyStepMonths(
+        assumptions.paymentFrequency
+      );
+
+    const advance =
+      isAdvancePaymentTiming(
+        assumptions.paymentTiming
+      );
+
     if (
       payment <= 0 ||
       months <= 0
@@ -3131,69 +3339,85 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
 
-    let liability = 0;
+    // Payment dates honour frequency (monthly/quarterly/annual)
+    // and timing (advance/arrears). Legacy monthly+arrears keeps
+    // the same date grid as before (payment at month-start labels
+    // with PV exponent = period index).
+    let paymentDates;
 
-    // V16.2: escalating leases need a per-period payment array,
-    // since the closed-form flat annuity formula no longer holds
-    // once payments vary. Liability becomes the PV of the actual
-    // (escalated) payment stream — TFRS 16.26/BC166 principle.
-    const hasEscalation =
-      assumptions.leaseIncreaseType === "fixedRate" ||
-      assumptions.leaseIncreaseType === "fixedAmount";
-
-    let paymentSchedule = null;
-
-    if (hasEscalation) {
-
-      paymentSchedule = [];
-
-      for (
-        let i = 1;
-        i <= months;
-        i++
-      ) {
-
-        paymentSchedule.push(
-          computeEscalatedPayment(
-            payment,
-            i,
-            assumptions.leaseIncreaseType,
-            assumptions.leaseIncreaseRate,
-            assumptions.fixedIncrease
+    if (stepMonths === 1 && !advance) {
+      // Legacy monthly arrears path: one row per calendar month
+      // from commencement, matching the historical schedule shape
+      // used by current/non-current and modification engines.
+      paymentDates = [];
+      const contractStart = parseDate(contract.startDate);
+      for (let i = 1; i <= months; i++) {
+        paymentDates.push(
+          new Date(
+            contractStart.getFullYear(),
+            contractStart.getMonth() + i - 1,
+            1
           )
         );
       }
-
-      if (monthlyRate === 0) {
-
-        liability =
-          paymentSchedule.reduce(
-            (total, p) => total + p,
-            0
-          );
-
-      } else {
-
-        liability =
-          paymentSchedule.reduce(
-            (total, p, index) =>
-              total +
-              p /
-                Math.pow(
-                  1 + monthlyRate,
-                  index + 1
-                ),
-            0
-          );
-      }
-
-    } else if (monthlyRate === 0) {
-
-      liability =
-        payment * months;
-
     } else {
+      paymentDates = buildLeasePaymentDates(
+        contract.startDate,
+        contract.endDate,
+        stepMonths,
+        advance
+      );
+    }
 
+    if (!paymentDates.length) {
+      return {
+        months,
+        liability: 0,
+        rouAssets: 0,
+        depreciation: 0,
+        monthlyInterest: 0,
+        schedule: [],
+        assumptions,
+        exempt: false
+      };
+    }
+
+    const hasEscalation =
+      assumptions.leaseIncreaseType === "fixedRate" ||
+      assumptions.leaseIncreaseType === "fixedAmount" ||
+      assumptions.leaseIncreaseType === "index";
+
+    // periodsPerYear for escalation year buckets:
+    // monthly → 12, quarterly → 4, annual → 1
+    const periodsPerYear =
+      stepMonths === 1 ? 12 :
+      stepMonths === 3 ? 4 : 1;
+
+    // Build per-payment amounts (with escalation when requested)
+    const paymentAmounts = paymentDates.map((date, index) => {
+      if (!hasEscalation) return payment;
+      // Use payment ordinal (1-based) so quarterly/annual still
+      // step once per contract year via periodsPerYear.
+      return computeEscalatedPayment(
+        payment,
+        index + 1,
+        assumptions.leaseIncreaseType,
+        assumptions.leaseIncreaseRate,
+        assumptions.fixedIncrease,
+        periodsPerYear
+      );
+    });
+
+    // Discount exponents in MONTHS from commencement:
+    // - arrears legacy monthly: period i → exponent i (unchanged)
+    // - arrears non-monthly: payment at start+k*step → exponent k*step
+    // - advance: first payment at t=0 → exponent 0, then step, 2*step...
+    let liability = 0;
+
+    if (monthlyRate === 0) {
+      liability = paymentAmounts.reduce((t, p) => t + p, 0);
+    } else if (stepMonths === 1 && !advance && !hasEscalation) {
+      // Closed-form ordinary annuity — identical to pre-fix path
       liability =
         payment *
         (
@@ -3206,7 +3430,24 @@ document.addEventListener("DOMContentLoaded", () => {
           ) /
           monthlyRate
         );
+    } else {
+      paymentDates.forEach((date, index) => {
+        let exponent;
+        if (stepMonths === 1 && !advance) {
+          // Legacy monthly arrears: 1..n
+          exponent = index + 1;
+        } else if (advance) {
+          exponent = index * stepMonths; // 0, step, 2*step, ...
+        } else {
+          exponent = (index + 1) * stepMonths;
+        }
+        liability +=
+          paymentAmounts[index] /
+          Math.pow(1 + monthlyRate, Math.max(0, exponent));
+      });
     }
+
+    liability = Math.max(0, liability);
 
     const initialLiability =
       liability;
@@ -3256,23 +3497,31 @@ document.addEventListener("DOMContentLoaded", () => {
     let rouOpening =
       initialROU;
 
-    const contractStart =
-      parseDate(contract.startDate);
+    // Period rate for interest between payment events.
+    // Monthly legacy: monthlyRate. Quarterly/annual: compound.
+    const periodRate =
+      stepMonths === 1
+        ? monthlyRate
+        : (monthlyRate === 0
+            ? 0
+            : Math.pow(1 + monthlyRate, stepMonths) - 1);
+
+    // ROU is still depreciated over calendar months (lease term),
+    // but schedule rows exist only on payment dates. Allocate
+    // depreciation for the months covered by each payment interval.
+    const nPayments = paymentDates.length;
 
     for (
-      let i = 1;
-      i <= months;
+      let i = 0;
+      i < nPayments;
       i++
     ) {
 
       const periodPayment =
-        paymentSchedule
-          ? paymentSchedule[i - 1]
-          : payment;
+        paymentAmounts[i];
 
       const interest =
-        openingLiability *
-        monthlyRate;
+        openingLiability * periodRate;
 
       let principal =
         periodPayment - interest;
@@ -3295,9 +3544,21 @@ document.addEventListener("DOMContentLoaded", () => {
           openingLiability - principal
         );
 
+      // Months covered by this schedule row for ROU depreciation
+      let monthsCovered;
+      if (stepMonths === 1 && !advance) {
+        monthsCovered = 1;
+      } else if (i === nPayments - 1) {
+        // Last row: remaining months so total dep matches term
+        const used = schedule.reduce((s, r) => s + (r.monthsCovered || stepMonths), 0);
+        monthsCovered = Math.max(1, months - used);
+      } else {
+        monthsCovered = stepMonths;
+      }
+
       const rouDepreciation =
         Math.min(
-          depreciation,
+          depreciation * monthsCovered,
           rouOpening
         );
 
@@ -3309,16 +3570,10 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
       const periodDate =
-        new Date(
-          contractStart.getFullYear(),
-          contractStart.getMonth() +
-            i -
-            1,
-          1
-        );
+        paymentDates[i];
 
       schedule.push({
-        period: i,
+        period: i + 1,
         date: periodDate,
         year: periodDate.getFullYear(),
         month: periodDate.getMonth() + 1,
@@ -3330,15 +3585,13 @@ document.addEventListener("DOMContentLoaded", () => {
         rouOpening,
         depreciation: rouDepreciation,
         rouClosing,
+        monthsCovered,
         // TFRS 16.28 / 53(e): payments that vary with something
         // other than an index or a rate (e.g. % of sales, usage)
         // are NOT part of the lease liability/ROU — they are
-        // expensed as incurred and disclosed separately. Previously
-        // assumptions.variablePayment was captured but never used
-        // anywhere, so this amount was silently dropped from both
-        // the schedule and any expense/disclosure total.
+        // expensed as incurred and disclosed separately.
         variableExpense:
-          assumptions.variablePayment
+          assumptions.variablePayment * (stepMonths === 1 ? 1 : monthsCovered)
       });
 
       openingLiability =
@@ -3357,6 +3610,9 @@ document.addEventListener("DOMContentLoaded", () => {
       usesUsefulLifeDepreciation: usesUsefulLife,
       monthlyInterest:
         schedule[0]?.interest || 0,
+      paymentFrequency: assumptions.paymentFrequency,
+      paymentTiming: assumptions.paymentTiming,
+      stepMonths,
       // TFRS 16.53(e) disclosure input: total expense over the
       // schedule relating to variable lease payments not included
       // in the measurement of the lease liability.
