@@ -3588,17 +3588,25 @@ function hesapla() {
             varsayimlariAl();
 
 
-        hesaplamaSonuclari =
+        const topluSonuc =
             TMS19.topluHesapla(
                 personeller,
                 varsayimlar
             );
 
+        hesaplamaSonuclari =
+            topluSonuc.results;
 
         portfoyOzeti =
-            TMS19.ozetHesapla(
+            TMS19.ozetOlustur(
                 hesaplamaSonuclari
             );
+
+        portfoyOzeti.basariliPersonelSayisi =
+            topluSonuc.calculated;
+
+        portfoyOzeti.hataliPersonelSayisi =
+            topluSonuc.failed;
 
 
         dashboardGuncelle();
