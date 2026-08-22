@@ -1,0 +1,37 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-console": ["warn", { "allow": ["warn", "error", "info", "time", "timeEnd"] }],
+    "no-undef": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "all"],
+    "no-var": "warn",
+    "prefer-const": "warn"
+  },
+  "globals": {
+    "contracts": "readonly",
+    "selectedContractId": "writable",
+    "bulkJournalData": "writable",
+    "XLSX": "readonly",
+    "localStorage": "readonly",
+    "document": "readonly",
+    "window": "readonly",
+    "console": "readonly",
+    "alert": "readonly",
+    "confirm": "readonly",
+    "fetch": "readonly",
+    "DOMParser": "readonly",
+    "Blob": "readonly",
+    "URL": "readonly"
+  }
+}
