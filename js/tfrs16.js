@@ -22905,6 +22905,365 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /* ==========================================================
+     V25.1 — ÇOKLU KULLANICI / MULTI-TENANT VERİ İZOLASYONU (ADDITIVE)
+     ----------------------------------------------------------
+     Mevcut hiçbir fonksiyon silinmedi. refresh(), showLoading() ve
+     hideLoading() burada SARILIYOR (wrap) — orijinal fonksiyon
+     gövdeleri değişmedi, hâlâ __gkOriginal* referanslarından
+     çağrılıyor. Bu, "genişletme" (extension) ile "değiştirme"
+     arasındaki additive-only sözleşmeye uygundur.
+     ========================================================== */
+
+  /**
+   * Bir kullanıcının erişebileceği kontratları döndürür.
+   * @param {string} userId
+   * @returns {Array<Object>}
+   */
+  function getTenantContracts(userId) {
+    const user = getV21User(userId);
+    if (!user) return [];
+    const companyIds = v20SafeArray(user.companyIds).map(String);
+    if (companyIds.length === 0) return [];
+    return contracts.filter(contract => companyIds.includes(String(contract.companyId)));
+  }
+
+  /**
+   * Bir kullanıcının kendi tenant'ına ait kontratlarını kaydeder.
+   * ÖNEMLİ: saveContracts(data) TÜM depoyu (tüm şirketlerin
+   * kontratlarını) tek seferde yazdığı için, burada data'yı doğrudan
+   * kaydetmek diğer tenant'ların kayıtlarını SİLER. Bu yüzden önce
+   * mevcut depodaki "bu kullanıcıya ait OLMAYAN" kontratlar okunur,
+   * data içindeki (yalnızca bu kullanıcıya ait olması gereken)
+   * kontratlarla birleştirilip öyle kaydedilir.
+   * @param {string} userId
+   * @param {Array<Object>} data
+   */
+  function saveTenantContracts(userId, data) {
+    const user = getV21User(userId);
+    if (!user) throw new Error("User not found");
+    const companyIds = v20SafeArray(user.companyIds).map(String);
+
+    const ownRecords = v20SafeArray(data).filter(
+      contract => companyIds.includes(String(contract.companyId))
+    );
+
+    const existingAll = __gkOriginalLoadContractsV251();
+    const othersRecords = v20SafeArray(existingAll).filter(
+      contract => !companyIds.includes(String(contract.companyId))
+    );
+
+    saveContracts([...othersRecords, ...ownRecords]);
+  }
+
+  // Mevcut refresh() fonksiyonunu genişlet: oturum açık bir kullanıcı
+  // varsa, in-memory `contracts` dizisini o kullanıcının tenant'ına
+  // ait kontratlarla sınırlar.
+  const __gkOriginalRefreshV251 = refresh;
+  refresh = function gkRefreshWithMultiTenant(...args) {
+    try {
+      const user = getCurrentUser();
+      if (user && v20SafeArray(user.companyIds).length > 0) {
+        contracts = getTenantContracts(user.id);
+      }
+    } catch (error) {
+      console.error("Multi-tenant refresh filtreleme hatası:", error);
+    }
+    return __gkOriginalRefreshV251.apply(this, args);
+  };
+
+  // saveTenantContracts() içinde "diğer tenant'lara ait kayıtları"
+  // okumak için orijinal (tenant'a göre filtrelenmemiş) loadContracts
+  // referansı saklanıyor. saveTenantContracts, saveContracts()'ı
+  // (aşağıdaki V25.1 şifreleme sarmalayıcısı dahil, hangisi tanımlıysa
+  // onu) kullanır; bu yüzden bu blok saveContracts/loadContracts
+  // sarmalayıcılarından ÖNCE tanımlanmalı ki en güncel (varsa şifreli)
+  // sürümü çağırsın. loadContracts henüz sarmalanmadığı için burada
+  // orijinal davranışı yakalıyoruz.
+  const __gkOriginalLoadContractsV251 = loadContracts;
+
+  // showLoading/hideLoading sırasında butonları disable/enable et.
+  const __gkOriginalShowLoadingV251 = showLoading;
+  showLoading = function gkEnhancedShowLoading(message = "İşleniyor...", progress = null) {
+    __gkOriginalShowLoadingV251(message, progress);
+    try {
+      document.querySelectorAll("button:not([data-no-disable])").forEach(btn => {
+        if (!btn.dataset.loading) {
+          btn.dataset.loading = "true";
+          btn.disabled = true;
+        }
+      });
+    } catch (error) {
+      console.error("showLoading buton disable hatası:", error);
+    }
+  };
+
+  const __gkOriginalHideLoadingV251 = hideLoading;
+  hideLoading = function gkEnhancedHideLoading(...args) {
+    try {
+      document.querySelectorAll('button[data-loading="true"]').forEach(btn => {
+        btn.disabled = false;
+        delete btn.dataset.loading;
+      });
+    } catch (error) {
+      console.error("hideLoading buton enable hatası:", error);
+    }
+    return __gkOriginalHideLoadingV251.apply(this, args);
+  };
+
+  /* ==========================================================
+     V25.1 — PERFORMANS: SANAL KAYDIRMA (VIRTUAL SCROLL) (ADDITIVE)
+     ----------------------------------------------------------
+     Mevcut renderTable()/pagination (TABLE_PAGE_SIZE) hiç
+     değiştirilmedi. Bu, ayrı bir opt-in fonksiyondur — çağıran kod
+     (varsa bir V26 UI parçası) pagination yerine bunu tercih
+     edebilir.
+     ========================================================== */
+
+  /**
+   * Bir container içinde yalnızca görünen satırları render eden
+   * basit bir sanal kaydırma (virtual scroll) uygular.
+   * @param {HTMLElement} container
+   * @param {Array<Object>} data
+   * @param {Object} [options]
+   * @param {number} [options.rowHeight=48]
+   * @param {number} [options.bufferRows=5]
+   * @param {number} [options.containerHeight=600]
+   * @param {(item:Object, index:number)=>string} [options.renderRow] - satır HTML'i üretir; verilmezse contract.id gösterilir.
+   * @returns {{update: Function, destroy: Function}}
+   */
+  function renderVirtualTable(container, data, options = {}) {
+    if (!container) return null;
+
+    const rowHeight = options.rowHeight || 48;
+    const bufferRows = options.bufferRows || 5;
+    const containerHeight = options.containerHeight || 600;
+    const renderRow = typeof options.renderRow === "function"
+      ? options.renderRow
+      : (item, index) => escapeHtml(String(item?.id ?? `Row ${index}`));
+
+    container.style.position = "relative";
+    container.style.overflow = "auto";
+    container.style.height = `${containerHeight}px`;
+
+    const totalHeight = data.length * rowHeight;
+    const spacer = document.createElement("div");
+    spacer.style.height = `${totalHeight}px`;
+    spacer.style.position = "relative";
+    container.innerHTML = "";
+    container.appendChild(spacer);
+
+    const updateVisibleRows = () => {
+      const scrollTop = container.scrollTop;
+      const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - bufferRows);
+      const endIndex = Math.min(data.length, Math.ceil((scrollTop + containerHeight) / rowHeight) + bufferRows);
+
+      spacer.querySelectorAll(".virtual-row").forEach(row => row.remove());
+
+      const fragment = document.createDocumentFragment();
+      for (let i = startIndex; i < endIndex; i++) {
+        const row = document.createElement("div");
+        row.className = "virtual-row";
+        row.style.position = "absolute";
+        row.style.top = `${i * rowHeight}px`;
+        row.style.left = "0";
+        row.style.right = "0";
+        row.style.height = `${rowHeight}px`;
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.padding = "0 12px";
+        row.style.borderBottom = "1px solid #edf0f4";
+        row.innerHTML = renderRow(data[i], i);
+        fragment.appendChild(row);
+      }
+      spacer.appendChild(fragment);
+    };
+
+    container.addEventListener("scroll", updateVisibleRows);
+    updateVisibleRows();
+
+    return {
+      update: updateVisibleRows,
+      destroy: () => container.removeEventListener("scroll", updateVisibleRows)
+    };
+  }
+
+  /* ==========================================================
+     V25.1 — GÜVENLİK: localStorage ŞİFRELEME (ADDITIVE, OPSİYONEL)
+     ----------------------------------------------------------
+     Varsayılan olarak KAPALI. Yalnızca window.GK_TFRS16_CONFIG
+     .enableEncryption === true ise ve CryptoJS yüklenmişse devreye
+     girer; aksi halde saveContracts/loadContracts eskisi gibi
+     çalışmaya devam eder (fallback).
+     ========================================================== */
+
+  function loadCryptoJS() {
+    return new Promise((resolve, reject) => {
+      if (typeof CryptoJS !== "undefined") {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("CryptoJS yüklenemedi"));
+      document.head.appendChild(script);
+    });
+  }
+
+  function getEncryptionKey() {
+    const user = getCurrentUser();
+    const key = user?.id || "default-key";
+    return CryptoJS.SHA256(key).toString();
+  }
+
+  function encryptData(data, key) {
+    try {
+      const json = JSON.stringify(data);
+      return CryptoJS.AES.encrypt(json, key).toString();
+    } catch (error) {
+      console.error("Şifreleme hatası:", error);
+      return null;
+    }
+  }
+
+  function decryptData(encrypted, key) {
+    try {
+      const bytes = CryptoJS.AES.decrypt(encrypted, key);
+      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+      return JSON.parse(decrypted);
+    } catch (error) {
+      console.error("Şifre çözme hatası:", error);
+      return null;
+    }
+  }
+
+  function isEncryptionEnabled() {
+    return window.GK_TFRS16_CONFIG?.enableEncryption === true &&
+      typeof CryptoJS !== "undefined";
+  }
+
+  const __gkOriginalSaveContractsV251 = saveContracts;
+  saveContracts = function gkEncryptedSaveContracts(data) {
+    if (isEncryptionEnabled()) {
+      try {
+        const user = getCurrentUser();
+        if (user) {
+          const key = getEncryptionKey();
+          const encrypted = encryptData(data, key);
+          if (encrypted) {
+            localStorage.setItem(STORAGE_KEY + "_encrypted", encrypted);
+          }
+        }
+      } catch (error) {
+        console.error("Şifreli kayıt hatası:", error);
+      }
+    }
+    // Düz metin kopya HER ZAMAN da yazılır (geriye dönük uyumluluk +
+    // şifreleme kapatılırsa veri kaybı olmaması için).
+    return __gkOriginalSaveContractsV251(data);
+  };
+
+  const __gkOriginalLoadContractsV251b = loadContracts;
+  loadContracts = function gkEncryptedLoadContracts(...args) {
+    if (isEncryptionEnabled()) {
+      try {
+        const user = getCurrentUser();
+        if (user) {
+          const key = getEncryptionKey();
+          const encrypted = localStorage.getItem(STORAGE_KEY + "_encrypted");
+          if (encrypted) {
+            const decrypted = decryptData(encrypted, key);
+            if (decrypted && Array.isArray(decrypted)) {
+              return decrypted;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Şifreli yükleme hatası:", error);
+      }
+    }
+    return __gkOriginalLoadContractsV251b.apply(this, args);
+  };
+
+  /* ==========================================================
+     V25.1 — LOGGING & İZLEME (Sentry) (ADDITIVE, OPSİYONEL)
+     ----------------------------------------------------------
+     DSN boş bırakılmıştır; kullanıcı kendi DSN'ini
+     initSentry(dsn) ile girmeden Sentry hiçbir şey göndermez.
+     ========================================================== */
+
+  let sentryInitializedV251 = false;
+
+  function loadSentry() {
+    return new Promise((resolve, reject) => {
+      if (typeof Sentry !== "undefined") {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://browser.sentry-cdn.com/8.0.0/bundle.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Sentry yüklenemedi"));
+      document.head.appendChild(script);
+    });
+  }
+
+  function initSentry(dsn, options = {}) {
+    if (!dsn) {
+      console.warn("initSentry: DSN boş, Sentry başlatılmadı.");
+      return;
+    }
+    if (typeof Sentry === "undefined") {
+      console.warn("Sentry kütüphanesi yüklenemedi (önce loadSentry() çağırın).");
+      return;
+    }
+    Sentry.init({
+      dsn,
+      environment: options.environment || "development",
+      release: options.release || "v25.1",
+      beforeSend(event) {
+        if (event.request) {
+          delete event.request.headers;
+        }
+        return event;
+      }
+    });
+    sentryInitializedV251 = true;
+    console.log("✅ Sentry initialized");
+  }
+
+  function captureError(error, context = "") {
+    if (!sentryInitializedV251 || typeof Sentry === "undefined") {
+      return;
+    }
+    Sentry.captureException(error, {
+      extra: { context, timestamp: new Date().toISOString() }
+    });
+  }
+
+  const __gkOriginalShowErrorV251 = showError;
+  showError = function gkEnhancedShowErrorWithSentry(error, context = "") {
+    __gkOriginalShowErrorV251(error, context);
+    if (error?.critical || error?.code === "CRITICAL_ERROR") {
+      captureError(error, context);
+    }
+  };
+
+  /* Yeni V25.1 fonksiyonlarını window.GK_TFRS16 üzerinden dışa aç. */
+  Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
+    getTenantContracts,
+    saveTenantContracts,
+    renderVirtualTable,
+    loadCryptoJS,
+    encryptData,
+    decryptData,
+    isEncryptionEnabled,
+    loadSentry,
+    initSentry,
+    captureError
+  });
+
+  /* ==========================================================
      INITIALIZATION
   ========================================================== */
 
@@ -22917,6 +23276,31 @@ document.addEventListener("DOMContentLoaded", () => {
     refresh();
   } catch (error) {
     console.error("Initial refresh error:", error);
+  }
+
+  /* ==========================================================
+     TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
+     ----------------------------------------------------------
+     Mevcut hiçbir fonksiyon değiştirilmedi veya taşınmadı. Bu
+     blok, closure içinde zaten tanımlı olan fonksiyon referanslarını
+     yalnızca Node/Jest test ortamının erişebilmesi için
+     window.__TFRS16_TEST__ üzerinden açığa çıkarır.
+     Tarayıcıda normal kullanıcı akışına hiçbir etkisi yoktur —
+     sadece mevcut referansları bir nesneye kopyalar.
+     ========================================================== */
+  try {
+    window.__TFRS16_TEST__ = {
+      formatCurrency,
+      parseDate,
+      calculateLeaseEngine,
+      validateContract,
+      calculateVariance,
+      calculateVariancePercent,
+      checkIndexReassessment,
+      applyEarlyPayment
+    };
+  } catch (error) {
+    console.error("Test export shim error:", error);
   }
 
 });
