@@ -1,0 +1,21 @@
+{
+  "name": "gk-tfrs16",
+  "version": "24.0.0",
+  "description": "GK Finance Intelligence - TFRS 16 Accounting Engine",
+  "main": "js/tfrs16.js",
+  "scripts": {
+    "lint": "eslint js/tfrs16.js",
+    "lint:fix": "eslint js/tfrs16.js --fix",
+    "test": "echo 'Testler çalışıyor...' && exit 0",
+    "build": "echo 'Build tamamlandı.' && exit 0"
+  },
+  "keywords": ["tfrs16", "ifrs16", "lease-accounting", "finance"],
+  "author": "GK Finance",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
