@@ -6849,6 +6849,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div id="fxTranslationContainer"></div>
 
+        <div id="slbSectionContainer"></div>
+
+        <div id="subleaseSectionContainer"></div>
+
       </div>
 
     `;
@@ -7005,6 +7009,300 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function renderSlbSection(contract) {
+    const container = document.getElementById("slbSectionContainer");
+    if (!container) return;
+
+    const saved = contract.saleAndLeaseback || null;
+
+    const formHtml = `
+      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TFRS 16.98-103 — SATIŞ VE GERİ KİRALAMA (SLB)</div>
+        <p style="margin:6px 0 10px;color:#64748b;font-size:11px;">
+          Bu kontrat bir satış-ve-geri-kiralama işleminin geri kiralama bacağıysa, aşağıdaki bilgileri girin.
+          Kontratın kendi ödeme/iskonto oranı bilgileri (aylık kira, süre, iskonto oranı) geri kiralamanın şartları olarak kullanılır.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:520px;">
+          <label style="font-size:11px;color:#475569;">
+            Önceki Net Defter Değeri
+            <input id="slbCarryingAmount" type="number" step="0.01" value="${saved?.previousCarryingAmount ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            Gerçeğe Uygun Değer
+            <input id="slbFairValue" type="number" step="0.01" value="${saved?.fairValueOfAsset ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            Satış Bedeli (Tahsil Edilen)
+            <input id="slbSaleProceeds" type="number" step="0.01" value="${saved?.saleProceeds ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;display:flex;align-items:center;gap:6px;margin-top:16px;">
+            <input id="slbQualifiesAsSale" type="checkbox" ${saved?.qualifiesAsSale ? "checked" : ""} />
+            Devir TFRS 15 anlamında bir satış sayılıyor
+          </label>
+        </div>
+        <label style="font-size:11px;color:#475569;display:block;margin-top:10px;max-width:520px;">
+          Mesleki Muhakeme Notu (gerekçe)
+          <textarea id="slbNote" rows="2" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea>
+        </label>
+        <button id="slbCalculateButton" style="margin-top:10px;padding:8px 16px;background:#0f172a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+          Hesapla ve Kaydet
+        </button>
+        <div id="slbResultContainer" style="margin-top:16px;"></div>
+      </div>
+    `;
+
+    container.innerHTML = formHtml;
+
+    function runAndRenderSlb(persist) {
+      const resultBox = document.getElementById("slbResultContainer");
+      const input = {
+        previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
+        fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
+        saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
+        qualifiesAsSale: !!document.getElementById("slbQualifiesAsSale")?.checked,
+        professionalJudgmentNote: document.getElementById("slbNote")?.value || "",
+        leasebackContract: contract
+      };
+
+      if (persist) {
+        contract.saleAndLeaseback = {
+          previousCarryingAmount: input.previousCarryingAmount,
+          fairValueOfAsset: input.fairValueOfAsset,
+          saleProceeds: input.saleProceeds,
+          qualifiesAsSale: input.qualifiesAsSale,
+          professionalJudgmentNote: input.professionalJudgmentNote,
+          savedAt: new Date().toISOString()
+        };
+        const idx = contracts.findIndex(c => c.id === contract.id);
+        if (idx >= 0) contracts[idx] = contract;
+        saveContracts(contracts);
+      }
+
+      if (!resultBox) return;
+      try {
+        const result = calculateSaleAndLeaseback(input);
+        resultBox.innerHTML = renderSlbResultHtml(result);
+      } catch (error) {
+        resultBox.innerHTML = `
+          <div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
+            Hesaplanamadı: ${escapeHtml(error.message || String(error))}
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById("slbCalculateButton")?.addEventListener("click", () => runAndRenderSlb(true));
+
+    if (saved) runAndRenderSlb(false);
+  }
+
+  function renderSlbResultHtml(result) {
+    if (!result.qualifiesAsSale) {
+      const rows = result.schedule.map(row => `
+        <tr>
+          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.period}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.date}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.openingBalance)}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.interest)}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.payment)}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.closingBalance)}</td>
+        </tr>
+      `).join("");
+      return `
+        <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <strong style="font-size:12px;">TFRS 16.103 — Finansman Düzenlemesi</strong>
+          <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
+          ${result.residualBalanceWarning ? `<div style="margin:8px 0;padding:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:11px;">${escapeHtml(result.residualBalanceWarning)}</div>` : ""}
+          <div style="margin-top:10px;overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;min-width:560px;">
+              <thead><tr style="background:#f1f5f9;">
+                <th style="padding:6px;text-align:left;font-size:10px;">Dönem</th><th style="padding:6px;text-align:left;font-size:10px;">Tarih</th>
+                <th style="padding:6px;text-align:right;font-size:10px;">Açılış</th><th style="padding:6px;text-align:right;font-size:10px;">Faiz</th>
+                <th style="padding:6px;text-align:right;font-size:10px;">Ödeme</th><th style="padding:6px;text-align:right;font-size:10px;">Kapanış</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          ${renderSlbJournalHtml(result.inceptionJournal)}
+        </div>
+      `;
+    }
+
+    return `
+      <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+        <strong style="font-size:12px;">TFRS 16.100-102 — Satış ve Geri Kiralama</strong>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;font-size:11px;">
+          <div>Toplam Kâr/Zarar<br><strong>${formatCurrency(result.totalGainLoss)}</strong></div>
+          <div>Tanınan Kâr/Zarar<br><strong style="color:${result.gainLossRecognized < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(result.gainLossRecognized)}</strong></div>
+          <div>ROU'ya Gömülü (Tanınmayan)<br><strong>${formatCurrency(result.gainLossOnRightsRetained)}</strong></div>
+          <div>Düzeltilmiş Kira Yükümlülüğü<br><strong>${formatCurrency(result.adjustedLeaseLiability)}</strong></div>
+          <div>Elde Tutulan ROU<br><strong>${formatCurrency(result.rouRetained)}</strong></div>
+          <div>${result.excessFinancing > 0 ? "İlave Finansman" : result.prepayment > 0 ? "Peşin Ödeme" : "Off-market Fark"}<br><strong>${formatCurrency(result.excessFinancing || result.prepayment || 0)}</strong></div>
+        </div>
+        ${renderSlbJournalHtml(result.inceptionJournal)}
+      </div>
+    `;
+  }
+
+  function renderSlbJournalHtml(entries) {
+    const rows = entries.map(e => `
+      <tr>
+        <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${escapeHtml(e.account)}</td>
+        <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${e.debit ? formatCurrency(e.debit) : ""}</td>
+        <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${e.credit ? formatCurrency(e.credit) : ""}</td>
+      </tr>
+    `).join("");
+    return `
+      <div style="margin-top:12px;">
+        <div style="font-size:10px;color:#64748b;font-weight:700;">BAŞLANGIÇ FİŞİ</div>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+          <thead><tr style="background:#f1f5f9;"><th style="padding:6px;text-align:left;font-size:10px;">Hesap</th><th style="padding:6px;text-align:right;font-size:10px;">Borç</th><th style="padding:6px;text-align:right;font-size:10px;">Alacak</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderSubleaseSection(contract) {
+    const container = document.getElementById("subleaseSectionContainer");
+    if (!container) return;
+
+    const saved = contract.sublease || null;
+
+    const formHtml = `
+      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TFRS 16.B58 — ALT KİRALAMA (SUBLEASE)</div>
+        <p style="margin:6px 0 10px;color:#64748b;font-size:11px;">
+          Bu kontratı (ana kira) kısmen veya tamamen üçüncü bir tarafa devrediyorsanız, alt kiralamanın kendi şartlarını girin.
+          Sınıflandırma (finance/operating) ana kiradan doğan ROU'ya göre yapılır — altta yatan varlığa göre değil.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:560px;">
+          <label style="font-size:11px;color:#475569;">
+            Alt Kiralama Aylık Bedeli
+            <input id="subleaseMonthlyPayment" type="number" step="0.01" value="${saved?.monthlyPayment ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            İskonto Oranı (Yıllık %)
+            <input id="subleaseDiscountRate" type="number" step="0.01" value="${saved?.discountRate ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            Başlangıç Tarihi
+            <input id="subleaseStartDate" type="date" value="${saved?.startDate ? String(saved.startDate).slice(0,10) : ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            Bitiş Tarihi
+            <input id="subleaseEndDate" type="date" value="${saved?.endDate ? String(saved.endDate).slice(0,10) : ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            ROU Tahsis Oranı (0-1, örn. yarısı = 0.5)
+            <input id="subleaseRouRatio" type="number" step="0.01" min="0.01" max="1" value="${saved?.rouAllocationRatio ?? 1}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
+          </label>
+          <label style="font-size:11px;color:#475569;">
+            Sınıflandırma
+            <select id="subleaseClassification" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;">
+              <option value="OPERATING" ${saved?.classification !== "FINANCE" ? "selected" : ""}>Operating</option>
+              <option value="FINANCE" ${saved?.classification === "FINANCE" ? "selected" : ""}>Finance</option>
+            </select>
+          </label>
+        </div>
+        <label style="font-size:11px;color:#475569;display:block;margin-top:10px;max-width:560px;">
+          Mesleki Muhakeme Notu (sınıflandırma gerekçesi)
+          <textarea id="subleaseNote" rows="2" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea>
+        </label>
+        <button id="subleaseCalculateButton" style="margin-top:10px;padding:8px 16px;background:#0f172a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+          Hesapla ve Kaydet
+        </button>
+        <div id="subleaseResultContainer" style="margin-top:16px;"></div>
+      </div>
+    `;
+
+    container.innerHTML = formHtml;
+
+    function runAndRenderSublease(persist) {
+      const resultBox = document.getElementById("subleaseResultContainer");
+      const subleaseContract = {
+        monthlyPayment: Number(document.getElementById("subleaseMonthlyPayment")?.value),
+        discountRate: Number(document.getElementById("subleaseDiscountRate")?.value),
+        startDate: document.getElementById("subleaseStartDate")?.value,
+        endDate: document.getElementById("subleaseEndDate")?.value,
+        currency: contract.currency || "TRY"
+      };
+      const classification = document.getElementById("subleaseClassification")?.value === "FINANCE" ? "FINANCE" : "OPERATING";
+      const rouAllocationRatio = Number(document.getElementById("subleaseRouRatio")?.value) || 1;
+      const professionalJudgmentNote = document.getElementById("subleaseNote")?.value || "";
+
+      if (persist) {
+        contract.sublease = { ...subleaseContract, classification, rouAllocationRatio, professionalJudgmentNote, savedAt: new Date().toISOString() };
+        const idx = contracts.findIndex(c => c.id === contract.id);
+        if (idx >= 0) contracts[idx] = contract;
+        saveContracts(contracts);
+      }
+
+      if (!resultBox) return;
+      try {
+        const result = calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        resultBox.innerHTML = renderSubleaseResultHtml(result);
+      } catch (error) {
+        resultBox.innerHTML = `
+          <div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
+            Hesaplanamadı: ${escapeHtml(error.message || String(error))}
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById("subleaseCalculateButton")?.addEventListener("click", () => runAndRenderSublease(true));
+
+    if (saved) runAndRenderSublease(false);
+  }
+
+  function renderSubleaseResultHtml(result) {
+    if (result.classification === "OPERATING") {
+      const rows = result.schedule.slice(0, 12).map(row => `
+        <tr>
+          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.period}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.cashReceived)}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.incomeRecognized)}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.deferredIncomeBalance)}</td>
+        </tr>
+      `).join("");
+      return `
+        <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <strong style="font-size:12px;">TFRS 16.B58 — Operating Alt Kiralama</strong>
+          <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
+            <div>Toplam Sözleşme Geliri<br><strong>${formatCurrency(result.totalContractualIncome)}</strong></div>
+            <div>Doğrusal Aylık Gelir<br><strong>${formatCurrency(result.straightLineMonthlyIncome)}</strong></div>
+          </div>
+          <div style="margin-top:10px;overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;min-width:420px;">
+              <thead><tr style="background:#f1f5f9;">
+                <th style="padding:6px;text-align:left;font-size:10px;">Dönem</th><th style="padding:6px;text-align:right;font-size:10px;">Tahsilat</th>
+                <th style="padding:6px;text-align:right;font-size:10px;">Tanınan Gelir</th><th style="padding:6px;text-align:right;font-size:10px;">Ertelenmiş Gelir Bakiyesi</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p style="margin-top:8px;color:#94a3b8;font-size:10px;">${result.periodicJournalNote}</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+        <strong style="font-size:12px;">TFRS 16.B58 — Finance Alt Kiralama</strong>
+        <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
+          <div>Ana Kira ROU (Tahsis Öncesi)<br><strong>${formatCurrency(result.headLeaseRouCarryingAmount)}</strong></div>
+          <div>Devredilen ROU (Tahsis: %${(result.rouAllocationRatio*100).toFixed(0)})<br><strong>${formatCurrency(result.allocatedRouCarryingAmount)}</strong></div>
+          <div>Net Yatırım (Alt Kiralama PV)<br><strong>${formatCurrency(result.netInvestment)}</strong></div>
+          <div>Satış Kâr/Zararı<br><strong style="color:${result.sellingProfitLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(result.sellingProfitLoss)}</strong></div>
+        </div>
+        ${renderSlbJournalHtml(result.inceptionJournal)}
+      </div>
+    `;
+  }
+
   function updateScheduleSubPeriodUI() {
 
     const periodType =
@@ -7048,6 +7346,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateScheduleSubPeriodUI();
     renderPaymentScheduleTable(contract);
     renderFxTranslationSection(contract);
+    renderSlbSection(contract);
+    renderSubleaseSection(contract);
 
     document
       .getElementById(
@@ -19121,6 +19421,160 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  /* ============================================================
+     TFRS 16 (B58, Ek B) — ALT KİRALAMA (SUBLEASE)
+     ------------------------------------------------------------
+     Bir işletme (ARA KİRACI/intermediate lessor) elinde tuttuğu
+     bir kirayı (ana kira/head lease) kısmen veya tamamen üçüncü
+     bir tarafa devrederse, ana kira ve alt kiralama İKİ AYRI
+     SÖZLEŞME olarak muhasebeleştirilir:
+       - Ana kira: ara kiracı için normal bir TFRS 16 kiracı
+         muhasebesi olarak DEĞİŞMEDEN devam eder (bu modülün
+         standart motoru zaten bunu yapıyor — sublease bunu
+         ETKİLEMEZ, sadece referans alır).
+       - Alt kiralama: ara kiracı artık bu sözleşmede KİRAYA VEREN
+         konumundadır. Sınıflandırma (finance/operating), ana
+         kiradan doğan ROU varlığına göre yapılır (TFRS 16.B58) —
+         altta yatan varlığa göre DEĞİL. Bu sınıflandırma mesleki
+         muhakeme gerektirir; modül OTOMATİK KARAR VERMEZ,
+         assessSubleaseClassification() bir gösterge listesi sunar.
+     FİNANCE alt kiralama: ROU'nun devredilen kısmı defterden
+     çıkarılır, yerine "alt kiralamada net yatırım" (kira
+     alacağı) tanınır; aradaki fark satış kâr/zararı olarak
+     tanınır; faiz geliri tahakkuk eder.
+     OPERATING alt kiralama: ROU defterde kalır (ana kira ROU'su
+     hiç dokunulmaz, kendi itfa planına devam eder), kira geliri
+     doğrusal (straight-line) esasla tanınır.
+     ============================================================ */
+  const SUBLEASE_CLASSIFICATION_INDICATORS = Object.freeze([
+    "Alt kiralama süresi, ana kiradan doğan ROU varlığının kalan faydalı ömrünün ÖNEMLİ BİR KISMINI kapsıyor mu?",
+    "Alt kiralama ödemelerinin bugünkü değeri, ana kiradan doğan ROU varlığının o tarihteki gerçeğe uygun değerinin ESASEN TAMAMINA ulaşıyor mu?",
+    "Alt kiralama sonunda mülkiyet/ROU'nun tamamı alt kiracıya geçiyor mu veya buna yönelik kesin/pazarlıklı bir satın alma opsiyonu var mı?",
+    "Kiralanan varlık öylesine özel nitelikte mi ki, önemli bir modifikasyon olmadan yalnızca alt kiracı tarafından kullanılabilir durumda mı?",
+    "Ana kira, kiracı (ara kiracı) tarafından kısa süreli kira muafiyeti kapsamında mı muhasebeleştiriliyor? (Öyleyse TFRS 16.B58(a) gereği alt kiralama DOĞRUDAN OPERATING sınıflandırılır, başka gösterge aranmaz.)"
+  ]);
+
+  function assessSubleaseClassification(input = {}) {
+    return {
+      indicators: SUBLEASE_CLASSIFICATION_INDICATORS,
+      responses: input.responses || {},
+      classification: input.classification === "FINANCE" ? "FINANCE" : "OPERATING",
+      professionalJudgmentNote: String(input.note || "").trim(),
+      assessedAt: new Date().toISOString(),
+      assessedBy: v23CurrentUser()?.name || v23CurrentUser()?.id || null
+    };
+  }
+
+  // Ana kiradan doğan ROU'nun, alt kiralama başlangıç tarihindeki
+  // (henüz o dönemin amortismanı düşülmeden ÖNCEKİ, yani o dönemin
+  // açılış) defter değerini, modifikasyon/reassessment zincirini de
+  // hesaba katan cfoBuildSchedule üzerinden bulur.
+  function findHeadLeaseRouAtDate(headLeaseContract, dateKey) {
+    const cfo = cfoBuildSchedule(headLeaseContract);
+    const targetKey = v23DateKey(dateKey);
+    const rows = cfo.schedule || [];
+    let match = rows.find(row => v23DateKey(row.date) === targetKey);
+    if (!match) {
+      // Tam tarih eşleşmesi yoksa, o tarihten önceki en yakın (veya
+      // sonraki en yakın, sözleşme başlangıcından önceyse) satırı al.
+      const sorted = rows.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+      match = sorted.filter(row => new Date(row.date) <= new Date(dateKey)).slice(-1)[0] || sorted[0];
+    }
+    if (!match) throw Object.assign(new Error("Ana kira için ilgili tarihte ödeme planı satırı bulunamadı."), { code: "SUBLEASE_HEAD_LEASE_ROW_NOT_FOUND" });
+    return { rouCarryingAmount: v23Num(match.rouOpening), scheduleRow: match, source: cfo.source };
+  }
+
+  // input: {
+  //   headLeaseContract: ara kiracının kendi (mevcut) TFRS16 kontratı,
+  //   subleaseContract: alt kiralamanın kendi şartları (monthlyPayment,
+  //     startDate, endDate, discountRate, currency...) — normal bir
+  //     TFRS16 kontratıyla AYNI ŞEKİLDE tanımlanır,
+  //   classification: "FINANCE" | "OPERATING",
+  //   rouAllocationRatio: ana kira ROU'sunun ne kadarının alt kiralamaya
+  //     konu olduğu (0-1 arası; örn. binanın yarısı devrediliyorsa 0.5;
+  //     varsayılan 1 = ROU'nun tamamı)
+  // }
+  function calculateSublease(input = {}) {
+    const headLeaseContract = input.headLeaseContract;
+    const subleaseContract = input.subleaseContract;
+    const classification = input.classification === "FINANCE" ? "FINANCE" : "OPERATING";
+    const rouAllocationRatio = Number.isFinite(v23Num(input.rouAllocationRatio)) && v23Num(input.rouAllocationRatio) > 0
+      ? Math.min(1, v23Num(input.rouAllocationRatio))
+      : 1;
+
+    if (!headLeaseContract) throw Object.assign(new Error("Ana kira kontratı belirtilmedi."), { code: "SUBLEASE_MISSING_HEAD_LEASE" });
+    if (!subleaseContract) throw Object.assign(new Error("Alt kiralama şartları belirtilmedi."), { code: "SUBLEASE_MISSING_SUBLEASE_TERMS" });
+
+    const headLeaseRou = findHeadLeaseRouAtDate(headLeaseContract, subleaseContract.startDate);
+    const allocatedRouCarryingAmount = v23Round(headLeaseRou.rouCarryingAmount * rouAllocationRatio, 2);
+
+    // --- OPERATING alt kiralama (TFRS 16.B58) ---
+    if (classification === "OPERATING") {
+      const subEngine = calculateLeaseEngine(subleaseContract);
+      const n = subEngine.schedule.length;
+      const totalContractualIncome = v23Round(subEngine.schedule.reduce((s, r) => s + v23Num(r.payment), 0), 2);
+      const straightLineIncome = n > 0 ? v23Round(totalContractualIncome / n, 2) : 0;
+
+      let cumulativeCash = 0;
+      let cumulativeIncome = 0;
+      const schedule = subEngine.schedule.map(row => {
+        cumulativeCash = v23Round(cumulativeCash + v23Num(row.payment), 2);
+        cumulativeIncome = v23Round(cumulativeIncome + straightLineIncome, 2);
+        // Pozitif: tahsil edilen nakit > tanınan gelir (ertelenmiş gelir / deferred income yükümlülüğü birikiyor)
+        // Negatif: tanınan gelir > tahsil edilen nakit (tahakkuk etmiş alacak birikiyor)
+        const deferredIncomeBalance = v23Round(cumulativeCash - cumulativeIncome, 2);
+        return { period: row.period, date: row.date, cashReceived: row.payment, incomeRecognized: straightLineIncome, deferredIncomeBalance };
+      });
+
+      return {
+        classification: "OPERATING",
+        headLeaseRouCarryingAmount: headLeaseRou.rouCarryingAmount,
+        rouAllocationRatio,
+        note: "TFRS 16.B58: Alt kiralama OPERATING sınıflandırıldığından ana kiradan doğan ROU defterden çıkarılmaz; ROU kendi itfa planına göre (bu modülün ana kira motorunda, DEĞİŞTİRİLMEDEN) itfa edilmeye devam eder. Alt kiralama geliri doğrusal (straight-line) esasla tanınır.",
+        totalContractualIncome,
+        straightLineMonthlyIncome: straightLineIncome,
+        schedule,
+        periodicJournalNote: "Her dönem: Dr 102 Banka (tahsilat) / Cr 649 Diğer Olağan Gelir (Alt Kiralama Geliri, doğrusal) — nakit ile doğrusal gelir farkı '380 Ertelenmiş Gelir' veya '181 Gelir Tahakkukları' hesabında izlenir."
+      };
+    }
+
+    // --- FINANCE alt kiralama (TFRS 16.B58, 100-103'e paralel mantık) ---
+    const subEngine = calculateLeaseEngine(subleaseContract);
+    const netInvestment = subEngine.liability; // alt kiralama ödemelerinin bugünkü değeri = net yatırım
+    const sellingProfitLoss = v23Round(netInvestment - allocatedRouCarryingAmount, 2);
+    const monthlyRate = (v23Num(subleaseContract.discountRate) || 0) / 100 / 12;
+
+    const schedule = [];
+    let opening = netInvestment;
+    for (const row of subEngine.schedule) {
+      const interestIncome = v23Round(opening * monthlyRate, 2);
+      const cashReceived = row.payment;
+      const principalReduction = v23Round(cashReceived - interestIncome, 2);
+      const closing = v23Round(Math.max(0, opening - principalReduction), 2);
+      schedule.push({ period: row.period, date: row.date, openingNetInvestment: opening, interestIncome, cashReceived, principalReduction, closingNetInvestment: closing });
+      opening = closing;
+    }
+
+    const inceptionJournal = [
+      { account: "Alt Kiralamada Net Yatırım (Kira Alacağı)", debit: netInvestment, credit: 0 }
+    ];
+    if (sellingProfitLoss < 0) inceptionJournal.push({ account: "689 Diğer Olağandışı Gider (Alt Kiralama Satış Zararı)", debit: Math.abs(sellingProfitLoss), credit: 0 });
+    inceptionJournal.push({ account: "ROU - Kullanım Hakkı Varlığı (Devredilen Kısım)", debit: 0, credit: allocatedRouCarryingAmount });
+    if (sellingProfitLoss > 0) inceptionJournal.push({ account: "679 Diğer Olağandışı Gelir (Alt Kiralama Satış Karı)", debit: 0, credit: sellingProfitLoss });
+
+    return {
+      classification: "FINANCE",
+      headLeaseRouCarryingAmount: headLeaseRou.rouCarryingAmount,
+      rouAllocationRatio,
+      allocatedRouCarryingAmount,
+      netInvestment,
+      sellingProfitLoss,
+      note: "TFRS 16.B58: Alt kiralama FINANCE sınıflandırıldığından ana kiradan doğan ROU'nun devredilen kısmı defterden çıkarılır; yerine alt kiralamada net yatırım (kira alacağı) tanınır. Ana kira yükümlülüğü/ROU'su (kalan kısmı varsa) bu işlemden ETKİLENMEZ, ara kiracı için normal kiracı muhasebesiyle değişmeden devam eder.",
+      schedule,
+      inceptionJournal
+    };
+  }
+
   // Bağımsız TMS 21 kur farkı fişi: mevcut senkron journal
   // zincirine (rptJournalRows/getJournalSummaryReport) MÜDAHALE
   // ETMEZ — o zincir bilinçli olarak çoklu para birimini
@@ -19505,6 +19959,14 @@ document.addEventListener("DOMContentLoaded", () => {
     SLB_ASSESSMENT_INDICATORS,
     assessSaleAndLeaseback,
     calculateSaleAndLeaseback,
+    renderSlbSection,
+    renderSlbResultHtml,
+    SUBLEASE_CLASSIFICATION_INDICATORS,
+    assessSubleaseClassification,
+    findHeadLeaseRouAtDate,
+    calculateSublease,
+    renderSubleaseSection,
+    renderSubleaseResultHtml,
     appendFxToReclassification,
     appendFxJournalLines,
     getContractFxTranslationJournal,
