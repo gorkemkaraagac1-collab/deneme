@@ -1463,6 +1463,198 @@
 
 
     /* ============================================================
+       14b — KONTROL MOTORU
+    ============================================================ */
+
+    TMS19.kontrolMotoru =
+        function (
+            results
+        ) {
+
+            if (
+                !Array.isArray(
+                    results
+                ) ||
+                results.length === 0
+            ) {
+
+                return {
+
+                    durum:
+                        "TEMİZ",
+
+                    toplamKontrol:
+                        0,
+
+                    kontroller:
+                        []
+                };
+            }
+
+
+            const kontroller =
+                [];
+
+
+            results.forEach(
+                function (
+                    r
+                ) {
+
+                    const personelId =
+                        r
+                            ?.personel
+                            ?.personelId ??
+                        "";
+
+
+                    if (
+                        r
+                            ?.kidemTavani
+                            ?.uygulandi
+                    ) {
+
+                        kontroller.push({
+
+                            personelId:
+                                personelId,
+
+                            kontrol:
+                                "Kıdem Tavanı",
+
+                            durum:
+                                "Bilgi",
+
+                            mesaj:
+                                "Fayda hesaplama maaşı kıdem tavanı ile sınırlandırıldı."
+                        });
+                    }
+
+
+                    if (
+                        TMS19.sayi(
+                            r
+                                ?.muhasebe
+                                ?.dbo
+                        ) < 0
+                    ) {
+
+                        kontroller.push({
+
+                            personelId:
+                                personelId,
+
+                            kontrol:
+                                "DBO",
+
+                            durum:
+                                "Uyarı",
+
+                            mesaj:
+                                "Hesaplanan DBO negatif çıktı."
+                        });
+                    }
+
+
+                    if (
+                        TMS19.sayi(
+                            r
+                                ?.personel
+                                ?.mevcutMaas
+                        ) <= 0
+                    ) {
+
+                        kontroller.push({
+
+                            personelId:
+                                personelId,
+
+                            kontrol:
+                                "Maaş",
+
+                            durum:
+                                "Hata",
+
+                            mesaj:
+                                "Mevcut maaş sıfır veya negatif."
+                        });
+                    }
+
+
+                    if (
+                        TMS19.sayi(
+                            r
+                                ?.demografi
+                                ?.hizmetSuresi
+                        ) < 0
+                    ) {
+
+                        kontroller.push({
+
+                            personelId:
+                                personelId,
+
+                            kontrol:
+                                "Hizmet Süresi",
+
+                            durum:
+                                "Hata",
+
+                            mesaj:
+                                "İşe giriş tarihi değerleme tarihinden sonra."
+                        });
+                    }
+
+
+                    if (
+                        TMS19.sayi(
+                            r
+                                ?.demografi
+                                ?.yas
+                        ) >=
+                        TMS19.sayi(
+                            r
+                                ?.demografi
+                                ?.emeklilikYasi
+                        )
+                    ) {
+
+                        kontroller.push({
+
+                            personelId:
+                                personelId,
+
+                            kontrol:
+                                "Emeklilik Yaşı",
+
+                            durum:
+                                "Uyarı",
+
+                            mesaj:
+                                "Personel emeklilik yaşına ulaşmış veya geçmiş."
+                        });
+                    }
+                }
+            );
+
+
+            return {
+
+                durum:
+                    kontroller.length === 0
+                        ? "TEMİZ"
+                        : "İNCELENMELİ",
+
+                toplamKontrol:
+                    kontroller.length,
+
+                kontroller:
+                    kontroller
+            };
+        };
+
+
+    /* ============================================================
        15 — HEALTH CHECK
     ============================================================ */
 
