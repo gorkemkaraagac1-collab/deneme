@@ -5183,6 +5183,26 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.usefulLifeMonths ?? ""
     );
 
+    setInput(
+      "indexBaseRate",
+      contract?.indexBaseRate ?? ""
+    );
+
+    setInput(
+      "indexCurrentRate",
+      contract?.indexCurrentRate ?? ""
+    );
+
+    setInput(
+      "indexReviewMonth",
+      Number.isFinite(contract?.indexReviewMonth) ? contract.indexReviewMonth + 1 : ""
+    );
+
+    setInput(
+      "indexReviewDay",
+      contract?.indexReviewDay ?? ""
+    );
+
     setCheckbox(
       "renewalOption",
       contract?.renewalOption === true
@@ -5597,6 +5617,33 @@ document.addEventListener("DOMContentLoaded", () => {
               ? Number(getInput("usefulLifeMonths"))
               : null,
 
+          // V25 ADDITION — index-linked lease increase tracking
+          // fields (checkIndexReassessment). Preserve any prior
+          // auto-check bookkeeping on the existing contract
+          // (baseRate gets updated by checkIndexReassessment itself
+          // after an auto-reassessment, so we don't blindly overwrite
+          // it with the raw form value if the form field was left
+          // untouched/empty).
+          indexBaseRate:
+            getInput("indexBaseRate") !== ""
+              ? Number(getInput("indexBaseRate"))
+              : (existing?.indexBaseRate ?? null),
+
+          indexCurrentRate:
+            getInput("indexCurrentRate") !== ""
+              ? Number(getInput("indexCurrentRate"))
+              : (existing?.indexCurrentRate ?? null),
+
+          indexReviewMonth:
+            getInput("indexReviewMonth") !== ""
+              ? Number(getInput("indexReviewMonth")) - 1
+              : (existing?.indexReviewMonth ?? null),
+
+          indexReviewDay:
+            getInput("indexReviewDay") !== ""
+              ? Number(getInput("indexReviewDay"))
+              : (existing?.indexReviewDay ?? null),
+
           renewalOption:
             getCheckbox("renewalOption"),
 
@@ -5645,7 +5692,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
           originalContractSnapshot:
             existing?.originalContractSnapshot ||
-            undefined
+            undefined,
+
+          // V25 ADDITION — preserve runtime bookkeeping written by
+          // the new functional add-ons (checkIndexReassessment,
+          // checkLeaseTermWarning, applyEarlyPayment,
+          // scheduleFutureLease) across form edits, since this
+          // object is rebuilt field-by-field on every save rather
+          // than spread from `existing`.
+          indexLastCheckedDate:
+            existing?.indexLastCheckedDate ?? null,
+
+          leaseTermWarnings:
+            existing?.leaseTermWarnings ||
+            {},
+
+          earlyPayments:
+            Array.isArray(existing?.earlyPayments)
+              ? existing.earlyPayments
+              : [],
+
+          earlyPaymentSchedule:
+            Array.isArray(existing?.earlyPaymentSchedule)
+              ? existing.earlyPaymentSchedule
+              : undefined,
+
+          earlyPaymentScheduleAsOf:
+            existing?.earlyPaymentScheduleAsOf ??
+            undefined,
+
+          pendingActivationDate:
+            existing?.pendingActivationDate ??
+            null
         };
 
 
@@ -21522,6 +21600,631 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (error) {
     console.error("V23 FX data migration error:", error);
   }
+
+  /* ==========================================================
+     V25 FONKSİYONEL EKLENTİLER (Additive-only)
+     ----------------------------------------------------------
+     1) Endeks bazlı otomatik reassessment
+     2) Kira dönemi (180/90/30 gün) erken uyarı
+     3) Kısmi / erken ödeme desteği
+     4) Gelecek başlangıç tarihli kiralamalar
+     5) PDF / HTML rapor dışa aktarma
+     Hiçbir V15-V24 fonksiyonu değiştirilmedi. calculateLeaseEngine,
+     createReassessment, recordAuditEvent, showToast, formatCurrency,
+     parseDate, saveContracts mevcut haliyle kullanılmıştır.
+     ========================================================== */
+
+  /* ---------- 1) ENDEKS BAZLI OTOMATİK REASSESSMENT ---------- */
+
+  /**
+   * Bir sözleşmenin endeks bazlı kira artışını kontrol eder. Sözleşmenin
+   * yıllık endeks güncelleme tarihine ulaşıldıysa ve manuel girilen
+   * `indexCurrentRate`, `indexBaseRate`'e göre %5'ten fazla değiştiyse
+   * otomatik olarak PENDING durumda bir reassessment oluşturur
+   * (finansal etkisi olduğu için otomatik APPLY edilmez — kullanıcı
+   * mevcut reassessment onay ekranından uygular).
+   *
+   * Sözleşmede beklenen alanlar (manuel girilir):
+   *  - leaseIncreaseType: "index"
+   *  - indexBaseRate: number (son uygulanan endeks değeri)
+   *  - indexCurrentRate: number (güncel endeks değeri)
+   *  - indexReviewMonth / indexReviewDay: opsiyonel, verilmezse
+   *    sözleşme başlangıç tarihinin ay/günü kullanılır.
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @returns {Object} result - { applicable, changePercent, thresholdExceeded, reassessmentCreated, ... }
+   */
+  function checkIndexReassessment(contract) {
+    try {
+      if (!contract || contract.leaseIncreaseType !== "index") {
+        return { applicable: false, reason: "Endeks bazlı artış tipi tanımlı değil." };
+      }
+
+      const start = parseDate(contract.startDate);
+      if (!start) return { applicable: false, reason: "Başlangıç tarihi geçersiz." };
+
+      const today = new Date();
+      const reviewMonth = Number.isFinite(contract.indexReviewMonth) ? contract.indexReviewMonth : start.getMonth();
+      const reviewDay = Number.isFinite(contract.indexReviewDay) ? contract.indexReviewDay : start.getDate();
+
+      let reviewDate = new Date(today.getFullYear(), reviewMonth, reviewDay);
+      if (reviewDate.getTime() > today.getTime()) {
+        reviewDate = new Date(today.getFullYear() - 1, reviewMonth, reviewDay);
+      }
+      if (reviewDate.getTime() < start.getTime()) {
+        return { applicable: false, reason: "Henüz ilk endeks güncelleme tarihine ulaşılmadı." };
+      }
+
+      const lastChecked = parseDate(contract.indexLastCheckedDate);
+      if (lastChecked && lastChecked.getTime() >= reviewDate.getTime()) {
+        return { applicable: false, reason: "Bu dönem için endeks kontrolü zaten yapılmış." };
+      }
+
+      const baseRate = Number(contract.indexBaseRate);
+      const currentRate = Number(contract.indexCurrentRate);
+
+      if (!Number.isFinite(baseRate) || !Number.isFinite(currentRate) || baseRate === 0) {
+        return { applicable: false, reason: "Endeks oranları (baz/güncel) eksik veya geçersiz." };
+      }
+
+      const changePercent = ((currentRate - baseRate) / Math.abs(baseRate)) * 100;
+      const result = {
+        applicable: true,
+        reviewDate: reviewDate.toISOString().slice(0, 10),
+        baseRate,
+        currentRate,
+        changePercent,
+        thresholdExceeded: Math.abs(changePercent) > 5,
+        reassessmentCreated: false,
+        reassessment: null
+      };
+
+      contract.indexLastCheckedDate = today.toISOString().slice(0, 10);
+
+      if (result.thresholdExceeded) {
+        const newPayment = Math.round((Number(contract.monthlyPayment) || 0) * (1 + changePercent / 100) * 100) / 100;
+
+        const created = createReassessment(contract, {
+          reassessmentDate: today.toISOString().slice(0, 10),
+          effectiveDate: reviewDate.toISOString().slice(0, 10),
+          type: "INDEX_RATE_CHANGE",
+          newPayment,
+          reason: `Otomatik endeks bazlı reassessment: endeks değişimi %${changePercent.toFixed(2)} (eşik %5).`
+        });
+
+        if (created.valid) {
+          contract.indexBaseRate = currentRate;
+          result.reassessmentCreated = true;
+          result.reassessment = created.reassessment;
+
+          recordAuditEvent({
+            action: "INDEX_REASSESSMENT_AUTO_CREATED",
+            entityType: "CONTRACT",
+            entityId: contract.id,
+            contractId: contract.id,
+            reassessmentId: created.reassessment.id,
+            reason: "Endeks bazlı otomatik reassessment (%5 eşik aşıldı)",
+            metadata: { baseRate, currentRate, changePercent }
+          });
+
+          showToast(`${contract.id}: Endeks değişimi %${changePercent.toFixed(1)} — otomatik reassessment oluşturuldu (onay bekliyor).`, "warning");
+        } else {
+          result.errors = created.errors;
+          showToast(`${contract.id}: Endeks reassessment oluşturulamadı — ${(created.errors || []).join(", ")}`, "error");
+        }
+      }
+
+      saveContracts(contracts);
+      return result;
+    } catch (error) {
+      showError(error, "checkIndexReassessment");
+      return { applicable: false, reason: String(error?.message || error) };
+    }
+  }
+
+  /**
+   * Tüm sözleşmeler için checkIndexReassessment() çalıştırır.
+   * @returns {Array<Object>} Her sözleşme için sonuç listesi
+   */
+  function checkAllIndexReassessments() {
+    return safeArray(contracts).map(contract => ({
+      contractId: contract.id,
+      ...checkIndexReassessment(contract)
+    }));
+  }
+
+
+  /* ---------- 2) KİRA DÖNEMİ ERKEN UYARI (180/90/30 gün) ---------- */
+
+  /**
+   * Bir sözleşmenin bitiş tarihine 180/90/30 gün kala uyarı üretir.
+   * Aynı bant için tekrar tekrar toast göstermemek adına her bant
+   * yalnızca bir kez tetiklenir (contract.leaseTermWarnings üzerinde
+   * işaretlenir).
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @returns {Object} result - { applicable, daysRemaining, band, warned }
+   */
+  function checkLeaseTermWarning(contract) {
+    try {
+      const end = parseDate(contract?.endDate);
+      if (!end) return { applicable: false, reason: "Bitiş tarihi geçersiz." };
+
+      const today = new Date();
+      const daysRemaining = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+
+      const bands = [180, 90, 30];
+      let activeBand = null;
+      for (const band of bands) {
+        if (daysRemaining <= band && daysRemaining >= 0) {
+          activeBand = band;
+          break;
+        }
+      }
+
+      const result = { applicable: activeBand !== null, daysRemaining, band: activeBand, warned: false };
+      if (!activeBand) return result;
+
+      contract.leaseTermWarnings = safeObject(contract.leaseTermWarnings);
+      if (contract.leaseTermWarnings[activeBand]) {
+        return result;
+      }
+
+      const message = `${contract.company || contract.id}: Kiralama bitişine ${daysRemaining} gün kaldı (${activeBand} gün eşiği). Yenileme/değerlendirme aksiyonu gerekli.`;
+      showToast(message, activeBand <= 30 ? "error" : activeBand <= 90 ? "warning" : "info");
+
+      contract.leaseTermWarnings[activeBand] = today.toISOString().slice(0, 10);
+      result.warned = true;
+
+      recordAuditEvent({
+        action: "LEASE_TERM_WARNING",
+        entityType: "CONTRACT",
+        entityId: contract.id,
+        contractId: contract.id,
+        reason: `Kiralama bitişine ${daysRemaining} gün (${activeBand} gün eşiği)`,
+        metadata: { daysRemaining, band: activeBand }
+      });
+
+      saveContracts(contracts);
+      return result;
+    } catch (error) {
+      showError(error, "checkLeaseTermWarning");
+      return { applicable: false };
+    }
+  }
+
+  /**
+   * Tüm sözleşmeler için checkLeaseTermWarning() çalıştırır.
+   * @returns {Array<Object>} Uygulanabilir olan (applicable=true) sonuçlar
+   */
+  function checkAllLeaseTermWarnings() {
+    return safeArray(contracts)
+      .map(contract => ({ contractId: contract.id, ...checkLeaseTermWarning(contract) }))
+      .filter(item => item.applicable);
+  }
+
+
+  /* ---------- 3) KISMİ / ERKEN ÖDEME DESTEĞİ ---------- */
+
+  /**
+   * Bir sözleşme için erken/kısmi ödeme uygular. Ödeme tarihindeki
+   * kalan kira yükümlülüğü bakiyesinden düşülür ve kalan dönemler için
+   * (mevcut periyodik faiz oranı korunarak, sözleşmedeki periyodik
+   * ödeme tutarı sabit kalarak) yeni bir amortisman tablosu kurulur.
+   * ROU varlığı ve amortismanı bu işlemden etkilenmez (TFRS 16 gönüllü
+   * erken ödemeler için ROU yeniden ölçümü öngörmez).
+   *
+   * @param {string} contractId - Sözleşme ID
+   * @param {number} amount - Erken ödeme tutarı
+   * @param {string|Date} date - Ödeme tarihi
+   * @returns {Object} result - { valid, liabilityBefore, liabilityAfter, schedule, payoffPeriod }
+   */
+  function applyEarlyPayment(contractId, amount, date) {
+    try {
+      const contract = contracts.find(c => c.id === contractId);
+      if (!contract) return { valid: false, errors: ["Sözleşme bulunamadı."] };
+
+      const paymentAmount = Number(amount);
+      if (!isPositiveNumber(paymentAmount)) {
+        return { valid: false, errors: ["Erken ödeme tutarı geçersiz."] };
+      }
+
+      const paymentDate = parseDate(date) || new Date();
+      const asOf = getScheduleAsOfReportingDate(contract, paymentDate);
+
+      if (!asOf.valid) {
+        return { valid: false, errors: ["Ödeme tarihi için mevcut ödeme planı hesaplanamadı."] };
+      }
+
+      const futurePeriods = asOf.futurePeriods;
+      if (!futurePeriods.length) {
+        return { valid: false, errors: ["Bu tarihten sonra kalan dönem bulunmuyor."] };
+      }
+
+      const liabilityBefore = asOf.outstandingLiability;
+      const openingBalance = Math.max(0, liabilityBefore - paymentAmount);
+
+      const referencePeriod = futurePeriods[0];
+      const periodicRate = referencePeriod.openingLiability > 0
+        ? referencePeriod.interest / referencePeriod.openingLiability
+        : 0;
+
+      let opening = openingBalance;
+      const revisedSchedule = [];
+      let payoffPeriod = null;
+
+      for (const period of futurePeriods) {
+        if (opening <= 0.005) {
+          payoffPeriod = period.period - 1;
+          break;
+        }
+
+        const interest = Math.round(opening * periodicRate * 100) / 100;
+        const scheduledPayment = Number(period.payment) || 0;
+        let principal = scheduledPayment - interest;
+        let closing = opening - principal;
+
+        if (closing < 0) {
+          principal = opening;
+          closing = 0;
+        }
+
+        revisedSchedule.push({
+          ...period,
+          openingLiability: Math.round(opening * 100) / 100,
+          interest,
+          principal: Math.round(principal * 100) / 100,
+          closingLiability: Math.round(closing * 100) / 100,
+          earlyPaymentAdjusted: true
+        });
+
+        opening = closing;
+      }
+
+      contract.earlyPayments = safeArray(contract.earlyPayments);
+      const eventId = `EP-${contract.id}-${Date.now()}`;
+      const isoPaymentDate = paymentDate.toISOString().slice(0, 10);
+
+      contract.earlyPayments.push({
+        id: eventId,
+        date: isoPaymentDate,
+        amount: paymentAmount,
+        liabilityBefore,
+        liabilityAfter: openingBalance,
+        appliedAt: new Date().toISOString()
+      });
+
+      contract.earlyPaymentSchedule = revisedSchedule;
+      contract.earlyPaymentScheduleAsOf = isoPaymentDate;
+
+      recordAuditEvent({
+        action: "EARLY_PAYMENT_APPLIED",
+        entityType: "CONTRACT",
+        entityId: contract.id,
+        contractId: contract.id,
+        reason: `Erken ödeme: ${formatCurrency(paymentAmount)}`,
+        metadata: { eventId, paymentDate: isoPaymentDate, liabilityBefore, liabilityAfter: openingBalance, payoffPeriod }
+      });
+
+      saveContracts(contracts);
+      clearCalculationCache(contract.id);
+
+      if (typeof auditScheduleEvent === "function") {
+        auditScheduleEvent(contract, "SCHEDULE_UPDATED", "EARLY_PAYMENT", eventId, isoPaymentDate, revisedSchedule.length);
+      }
+
+      showToast(`${contract.id}: ${formatCurrency(paymentAmount)} erken ödeme uygulandı. Kalan bakiye: ${formatCurrency(openingBalance)}.`, "success");
+
+      return {
+        valid: true,
+        contractId: contract.id,
+        liabilityBefore,
+        liabilityAfter: openingBalance,
+        schedule: revisedSchedule,
+        payoffPeriod
+      };
+    } catch (error) {
+      showError(error, "applyEarlyPayment");
+      return { valid: false, errors: [String(error?.message || error)] };
+    }
+  }
+
+  /**
+   * Erken ödeme uygulanmış bir sözleşme için etkin (effective) ödeme
+   * planını döndürür: erken ödeme tarihine kadarki orijinal dönemler +
+   * o tarihten sonraki revize edilmiş dönemler. Erken ödeme yoksa
+   * normal calculateLeaseEngine() planını döndürür.
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @returns {Array<Object>} Etkin ödeme planı
+   */
+  function getEffectiveSchedule(contract) {
+    if (contract?.earlyPaymentSchedule?.length) {
+      const engine = calculateLeaseEngine(contract);
+      const cutoff = parseDate(contract.earlyPaymentScheduleAsOf);
+      const closedPeriods = cutoff
+        ? engine.schedule.filter(period => {
+            const periodDate = parseDate(period.date);
+            return periodDate ? periodDate.getTime() <= cutoff.getTime() : false;
+          })
+        : [];
+      return [...closedPeriods, ...contract.earlyPaymentSchedule];
+    }
+    return calculateLeaseEngine(contract).schedule;
+  }
+
+
+  /* ---------- 4) GELECEK BAŞLANGIÇ TARİHLİ KİRALAMALAR ---------- */
+
+  /**
+   * Başlangıç tarihi bugünden ileride olan bir sözleşmeyi "pending"
+   * (beklemede) statüsüne alır. Başlangıç tarihi geldiğinde
+   * activateDueFutureLeases() tarafından otomatik "active" yapılır.
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @returns {Object} result - { valid, activationDate }
+   */
+  function scheduleFutureLease(contract) {
+    try {
+      const start = parseDate(contract?.startDate);
+      if (!start) return { valid: false, errors: ["Başlangıç tarihi geçersiz."] };
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (start.getTime() <= today.getTime()) {
+        return { valid: false, errors: ["Başlangıç tarihi bugün veya geçmişte; bu sözleşme zaten aktif olmalı."] };
+      }
+
+      const previousStatus = contract.status;
+      contract.status = "pending";
+      contract.pendingActivationDate = contract.startDate;
+
+      recordAuditEvent({
+        action: "FUTURE_LEASE_SCHEDULED",
+        entityType: "CONTRACT",
+        entityId: contract.id,
+        contractId: contract.id,
+        oldValue: { status: previousStatus },
+        newValue: { status: "pending", activationDate: contract.startDate },
+        reason: "Gelecek başlangıç tarihli kiralama beklemeye alındı."
+      });
+
+      saveContracts(contracts);
+      showToast(`${contract.id}: Kiralama ${contract.startDate} tarihinde başlayacak şekilde beklemeye alındı.`, "info");
+
+      return { valid: true, contractId: contract.id, activationDate: contract.startDate };
+    } catch (error) {
+      showError(error, "scheduleFutureLease");
+      return { valid: false, errors: [String(error?.message || error)] };
+    }
+  }
+
+  /**
+   * status="pending" olan ve başlangıç tarihine ulaşılmış/geçilmiş
+   * tüm sözleşmeleri otomatik olarak "active" statüsüne geçirir.
+   * refresh() döngüsünden otomatik çağrılır (bkz. dosya sonu).
+   *
+   * @returns {string[]} Aktifleştirilen sözleşme ID'leri
+   */
+  function activateDueFutureLeases() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activated = [];
+
+    safeArray(contracts).forEach(contract => {
+      if (contract.status !== "pending") return;
+      const start = parseDate(contract.startDate);
+      if (!start || start.getTime() > today.getTime()) return;
+
+      const previousStatus = contract.status;
+      contract.status = "active";
+      contract.pendingActivationDate = null;
+
+      recordAuditEvent({
+        action: "FUTURE_LEASE_ACTIVATED",
+        entityType: "CONTRACT",
+        entityId: contract.id,
+        contractId: contract.id,
+        oldValue: { status: previousStatus },
+        newValue: { status: "active" },
+        reason: "Başlangıç tarihi geldi; sözleşme otomatik aktifleştirildi."
+      });
+
+      activated.push(contract.id);
+    });
+
+    if (activated.length) {
+      saveContracts(contracts);
+      showToast(`${activated.length} sözleşme başlangıç tarihine ulaştığı için aktifleştirildi.`, "success");
+    }
+
+    return activated;
+  }
+
+  /**
+   * "Gelecek Kiralamalar" KPI verisini hesaplar.
+   * @returns {Object} { count, contracts, totalMonthlyCommitment }
+   */
+  function getFutureLeasesKPI() {
+    const pending = safeArray(contracts).filter(c => c.status === "pending");
+    const totalMonthlyCommitment = pending.reduce((sum, c) => sum + (Number(c.monthlyPayment) || 0), 0);
+    return {
+      count: pending.length,
+      contracts: pending.map(c => ({ id: c.id, company: c.company, startDate: c.startDate })),
+      totalMonthlyCommitment
+    };
+  }
+
+  /**
+   * "Gelecek Kiralamalar" KPI'ını DOM'a yazar (futureLeasesCount /
+   * futureLeasesCommitment elementleri varsa). Elementler HTML'de
+   * yoksa sessizce atlar.
+   * @returns {void}
+   */
+  function updateFutureLeaseKPI() {
+    try {
+      const kpi = getFutureLeasesKPI();
+      setText("futureLeasesCount", kpi.count);
+      setText("futureLeasesCommitment", formatCurrency(kpi.totalMonthlyCommitment));
+    } catch (error) {
+      console.error("updateFutureLeaseKPI error:", error);
+    }
+  }
+
+
+  /* ---------- 5) RAPORLAMA FORMATLARI (PDF / HTML) ---------- */
+
+  /**
+   * Bir external script'i (CDN) sayfaya bir kez yükler.
+   * @param {string} src - Script URL'i
+   * @returns {Promise<void>}
+   */
+  function loadExternalScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Script yüklenemedi: ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Bir sözleşme için basit, yazdırılabilir bir rapor HTML'i üretir.
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @param {Object} engine - calculateLeaseEngine(contract) sonucu
+   * @returns {string} HTML string
+   */
+  function buildReportHtml(contract, engine) {
+    const rows = (engine.schedule || []).map(period => `
+      <tr>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${period.period}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(period.date instanceof Date ? period.date.toLocaleDateString("tr-TR") : String(period.date))}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.openingLiability)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.payment)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.interest)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.principal)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.closingLiability)}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <div style="font-family:Arial,sans-serif;padding:24px;color:#1e293b;">
+        <h2 style="margin:0 0 4px;">TFRS 16 Kiralama Raporu</h2>
+        <p style="margin:0 0 16px;color:#64748b;font-size:12px;">${escapeHtml(contract.company || "")} · ${escapeHtml(contract.supplier || "")} · Sözleşme: ${escapeHtml(contract.id)}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:#f1f5f9;text-align:left;">
+              <th style="padding:6px;border:1px solid #e2e8f0;">Dönem</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Tarih</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Açılış</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Ödeme</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Faiz</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Anapara</th>
+              <th style="padding:6px;border:1px solid #e2e8f0;">Kapanış</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
+   * Bir sözleşme için PDF veya HTML rapor dışa aktarır.
+   * PDF için html2pdf.js CDN'den lazy-load edilir.
+   *
+   * @param {string} contractId - Sözleşme ID
+   * @param {"pdf"|"html"} format - Çıktı formatı
+   * @param {Object} [options] - Şu an kullanılmıyor, ileriye dönük
+   * @returns {Promise<Object>} result - { valid }
+   */
+  async function exportReport(contractId, format, options = {}) {
+    try {
+      const contract = contracts.find(c => c.id === contractId);
+      if (!contract) {
+        showToast("Sözleşme bulunamadı.", "error");
+        return { valid: false };
+      }
+
+      const engine = calculateLeaseEngine(contract);
+      const html = buildReportHtml(contract, engine);
+
+      if (format === "html") {
+        const win = window.open("", "_blank");
+        if (!win) {
+          showToast("Yeni pencere açılamadı (popup engelleyici).", "error");
+          return { valid: false };
+        }
+        win.document.write(`<html><head><title>TFRS16 Rapor - ${escapeHtml(contract.id)}</title></head><body>${html}</body></html>`);
+        win.document.close();
+      } else if (format === "pdf") {
+        await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
+        const container = document.createElement("div");
+        container.innerHTML = html;
+        document.body.appendChild(container);
+        await window.html2pdf().from(container).set({
+          filename: `TFRS16_Rapor_${contract.id}.pdf`,
+          margin: 10,
+          jsPDF: { format: "a4", orientation: "landscape" }
+        }).save();
+        document.body.removeChild(container);
+      } else {
+        showToast("Desteklenmeyen rapor formatı.", "error");
+        return { valid: false };
+      }
+
+      recordAuditEvent({
+        action: "REPORT_EXPORTED",
+        entityType: "CONTRACT",
+        entityId: contract.id,
+        contractId: contract.id,
+        reason: `Rapor dışa aktarıldı (${String(format).toUpperCase()})`,
+        metadata: { format }
+      });
+
+      showToast(`${contract.id}: ${String(format).toUpperCase()} rapor oluşturuldu.`, "success");
+      return { valid: true };
+    } catch (error) {
+      showError(error, "exportReport");
+      return { valid: false, errors: [String(error?.message || error)] };
+    }
+  }
+
+
+  /* ---------- V25 REFRESH ENTEGRASYONU (monkey-patch, additive) ---------- */
+
+  const __gkOriginalRefreshV25 = refresh;
+  refresh = function gkRefreshWithV25Extensions() {
+    try { activateDueFutureLeases(); } catch (error) { console.error("activateDueFutureLeases error:", error); }
+    __gkOriginalRefreshV25();
+    try { updateFutureLeaseKPI(); } catch (error) { console.error("updateFutureLeaseKPI error:", error); }
+    try { checkAllLeaseTermWarnings(); } catch (error) { console.error("checkAllLeaseTermWarnings error:", error); }
+    try { checkAllIndexReassessments(); } catch (error) { console.error("checkAllIndexReassessments error:", error); }
+  };
+
+
+  /* ---------- V25 GLOBAL EXPOSURE (window.GK_TFRS16) ---------- */
+
+  window.GK_TFRS16 = window.GK_TFRS16 || {};
+  Object.assign(window.GK_TFRS16, {
+    checkIndexReassessment,
+    checkAllIndexReassessments,
+    checkLeaseTermWarning,
+    checkAllLeaseTermWarnings,
+    applyEarlyPayment,
+    getEffectiveSchedule,
+    scheduleFutureLease,
+    activateDueFutureLeases,
+    getFutureLeasesKPI,
+    exportReport
+  });
+
 
   /* ==========================================================
      INITIALIZATION
