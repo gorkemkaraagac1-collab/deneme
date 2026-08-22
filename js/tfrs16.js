@@ -6080,22 +6080,28 @@ document.addEventListener("DOMContentLoaded", () => {
   async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview) {
     if (!preview || !contractNeedsFxTranslation(contract)) return;
     try {
-      const engineResult = calculateLeaseEngine(contract);
+      const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) return;
-      const selectedDates = new Set(selectedRows.map(r => r.date));
-      const fxRows = fx.schedule.filter(r => selectedDates.has(r.date));
+      const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
+      const fxRows = fx.schedule.filter(r => selectedDates.has(v23DateKey(r.date)));
       if (!fxRows.length) return;
       const netFx = v23Round(fxRows.reduce((sum, r) => sum + r.fxGainLoss, 0), 2);
       if (Math.abs(netFx) < 0.01) return;
-      const fxEntries = netFx < 0
+      // fxGainLoss = (orijinal para birimindeki kapanış bakiyesi × kapanış kuru)
+      // − (dönem hareketleriyle üstü örtülen tutar). Pozitifse kur yükselmiş
+      // ve yükümlülüğün TL karşılığı beklenenden fazla büyümüş demektir →
+      // bu bir KUR FARKI GİDERİ/ZARARIDIR (656). Negatifse yükümlülük TL
+      // karşılığı beklenenden az büyümüş/azalmış demektir → KUR FARKI
+      // GELİRİ/KARIDIR (646).
+      const fxEntries = netFx > 0
         ? [
             { account: "656 Kambiyo Zararları (TMS 21 Kur Farkı Gideri)", debit: Math.abs(netFx), credit: 0 },
             { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: 0, credit: Math.abs(netFx) }
           ]
         : [
-            { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: netFx, credit: 0 },
-            { account: "646 Kambiyo Karları (TMS 21 Kur Farkı Geliri)", debit: 0, credit: netFx }
+            { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: Math.abs(netFx), credit: 0 },
+            { account: "646 Kambiyo Karları (TMS 21 Kur Farkı Geliri)", debit: 0, credit: Math.abs(netFx) }
           ];
       if (preview) {
         preview.innerHTML =
@@ -6937,7 +6943,7 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     try {
-      const engineResult = calculateLeaseEngine(contract);
+      const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) { container.innerHTML = ""; return; }
 
@@ -6950,7 +6956,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.interestFx)}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.paymentFx)}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.closingLiabilityFx)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;color:${row.fxGainLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(row.fxGainLoss)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;color:${row.fxGainLoss > 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(row.fxGainLoss)}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.rouClosingFx)}</td>
         </tr>
       `).join("");
@@ -6962,7 +6968,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
             İşlem (kira) para birimi: <strong>${fx.transactionCurrency}</strong> · Fonksiyonel para birimi: <strong>${fx.functionalCurrency}</strong> ·
             Başlangıç kuru: <strong>${fx.commencementRate.toFixed(4)}</strong> (${fx.commencementRateDate}) ·
-            Kümülatif kur farkı: <strong style="color:${fx.totals.cumulativeFxGainLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(fx.totals.cumulativeFxGainLoss)} ${fx.functionalCurrency}</strong>
+            Kümülatif kur farkı: <strong style="color:${fx.totals.cumulativeFxGainLoss > 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(fx.totals.cumulativeFxGainLoss)} ${fx.functionalCurrency}</strong>
           </p>
           <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
             Kira yükümlülüğü (parasal kalem) her dönem kapanış kuruyla yeniden çevrilir, fark K/Z'ye yazılır. ROU varlığı (parasal olmayan) sadece başlangıç kuruyla çevrilir, yeniden değerlenmez.
@@ -18434,11 +18440,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function v23HasPermission(permission, user=v23CurrentUser()) {
     if (!user) return true;
     try {
-      if (typeof hasPermission === "function") return hasPermission(user, permission);
-      if (typeof v21HasPermission === "function") return v21HasPermission(permission, user);
+      // BUG FIX: V23 FX izinleri ("fx.view", "fx.manage" vb.) V21 uygulama
+      // izin kataloğunda hiç tanımlı değil (ayrı bir isim uzayı). Önceki
+      // sürüm doğrudan genel hasPermission()'a devrediyordu; o da bu
+      // fx.* string'lerini hiçbir rolde bulamadığı için ADMIN dahil HERKES
+      // reddediliyordu. Önce kendi V23_ROLE_PERMISSIONS tablosuna bakıyoruz;
+      // orada yoksa (ileride biri gerçekten entegre ederse diye) genel
+      // fonksiyona düşüyoruz.
       const roles=v23Array(user.roleIds || user.roles).map(x=>String(x).toUpperCase());
       if (roles.includes("ADMIN")) return true;
-      return roles.some(role=>v23Array(window.GK_TFRS16?.V23_ROLE_PERMISSIONS?.[role]).includes(permission));
+      if (roles.some(role=>v23Array(V23_ROLE_PERMISSIONS[role]).includes(permission))) return true;
+      if (typeof hasPermission === "function") return hasPermission(user, permission);
+      if (typeof v21HasPermission === "function") return v21HasPermission(permission, user);
+      return false;
     } catch(e) { return false; }
   }
   function v23Authorize(permission, options={}) {
@@ -18711,19 +18725,37 @@ document.addEventListener("DOMContentLoaded", () => {
      Kapsam: kontrat.currency (işlem/kira para birimi) ile
      fonksiyonel para birimi (contract.functionalCurrency, yoksa
      şirketin fonksiyonel parası, o da yoksa DEFAULT_FUNCTIONAL_
-     CURRENCY) farklı olduğunda, calculateLeaseEngine'in ürettiği
-     (orijinal para biriminde hesaplanmış, DOKUNULMAMIŞ) tabloyu
+     CURRENCY) farklı olduğunda, cfoBuildSchedule'ın ürettiği
+     (modifikasyon/reassessment zincirini ZATEN doğru şekilde
+     hesaba katan, orijinal para biriminde, DOKUNULMAMIŞ) tabloyu
      girdi olarak alıp TMS 21 kurallarına göre fonksiyonel para
      birimine çevrilmiş ikinci bir tablo üretir:
        - Kira yükümlülüğü (PARASAL kalem): her dönem sonu kapanış
-         kuruyla yeniden çevrilir; kur farkı K/Z'ye atılır.
-       - ROU varlığı (PARASAL OLMAYAN kalem): sadece başlangıç
-         (işlem) kuruyla bir kez çevrilir, sonra yeniden
-         değerlenmez — orijinal para birimindeki amortisman
-         paternine (oran olarak) sadık kalınarak fonksiyonel para
-         biriminde itfa edilir.
-     calculateLeaseEngine'in kendisi DEĞİŞTİRİLMEDİ; bu tamamen
-     ek/opsiyonel bir katmandır, mevcut hesaplamaları etkilemez.
+         kuruyla yeniden çevrilir; kur farkı K/Z'ye atılır. Bu
+         mantık modifikasyon/reassessment'tan bağımsız olarak
+         doğrudur, çünkü her zaman o dönemin orijinal para
+         birimindeki GERÇEK kapanış bakiyesini (row.closingLiability
+         — ki bu zaten modifikasyon sonrası doğru rakamdır) baz alır.
+       - ROU varlığı (PARASAL OLMAYAN kalem): KATMANLI çevrilir.
+         İlk katman kira başlangıcındaki (commencement) kurla
+         sabitlenir. Modifikasyon/reassessment ile ROU'da bir artış
+         tespit edilirse (schedule'da row.rouOpening, bir önceki
+         satırın row.rouClosing'inden büyükse), bu artış için YENİ
+         bir katman açılır ve o katman o günün (işlem tarihi) kuruyla
+         sabitlenir — TMS 21.23(b) gereği her işlem kendi tarihindeki
+         kurla kaydedilir. Azalış (kısmi sonlandırma/scope decrease)
+         durumunda mevcut katmanlar orantılı olarak küçültülür. Her
+         dönemin amortismanı, katmanlar arası o dönemki orijinal
+         para birimi bakiyelerine ORANTILI paylaştırılır ve her
+         katman KENDİ sabit kuruyla fonksiyonel paraya çevrilir.
+     Not: modifikasyon/reassessment'ın kendi (orijinal para
+     biriminde oluşan) kâr/zarar tutarının o işlem tarihindeki
+     kurla ayrıca bir "kur çevrim farkı" satırına dönüştürülmesi
+     kapsam dışıdır — bu katman sadece dönemsel ROU/yükümlülük
+     çevrimini kapsar; asıl modifikasyon kâr/zararı ayrı, mevcut
+     mekanizmayla (orijinal para biriminde) kaydedilmeye devam eder.
+     cfoBuildSchedule/calculateLeaseEngine'in kendisi
+     DEĞİŞTİRİLMEDİ; bu tamamen ek/opsiyonel bir katmandır.
      ============================================================ */
   const DEFAULT_FUNCTIONAL_CURRENCY = "TRY";
 
@@ -18741,19 +18773,22 @@ document.addEventListener("DOMContentLoaded", () => {
     return transactionCurrency !== functionalCurrency;
   }
 
-  // engineResult: calculateLeaseEngine(contract) çıktısı (orijinal
-  // para biriminde, dokunulmamış). Bu fonksiyon TCMB/manuel kur
-  // tablosundan (getFxRateAuto) her dönem için kur çeker; kur
-  // bulunamazsa (missingRatePolicy=BLOCK ise) hata fırlatır —
-  // sessizce yanlış/eksik bir çeviri üretmez.
-  async function buildTms21FxTranslation(contract, engineResult, options = {}) {
+  // scheduleSource: cfoBuildSchedule(contract)'ın döndürdüğü
+  // {schedule, engine, source} objesi, YA DA doğrudan bir schedule
+  // dizisi (geriye dönük uyumluluk için). ARTIK calculateLeaseEngine
+  // çıktısı DEĞİL cfoBuildSchedule çıktısı verilmeli — aksi halde
+  // modifikasyon/reassessment geçirmiş kontratlarda tüm dönemler
+  // yanlışlıkla en güncel şartlarla baştan hesaplanmış gibi çevrilir.
+  async function buildTms21FxTranslation(contract, scheduleSource, options = {}) {
     const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
     const functionalCurrency = resolveContractFunctionalCurrency(contract);
-    if (transactionCurrency === functionalCurrency || !engineResult || engineResult.exempt) {
+    if (transactionCurrency === functionalCurrency) {
       return { applicable: false, transactionCurrency, functionalCurrency };
     }
-    if (!engineResult.schedule || !engineResult.schedule.length) {
-      return { applicable: false, transactionCurrency, functionalCurrency, reason: "EMPTY_SCHEDULE" };
+    const schedule = Array.isArray(scheduleSource) ? scheduleSource : scheduleSource?.schedule;
+    const exempt = !Array.isArray(scheduleSource) && scheduleSource?.exempt;
+    if (exempt || !schedule || !schedule.length) {
+      return { applicable: false, transactionCurrency, functionalCurrency, reason: exempt ? "EXEMPT" : "EMPTY_SCHEDULE" };
     }
 
     const rateType = options.rateType || V23_RATE_TYPES.CLOSING;
@@ -18771,27 +18806,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Başlangıç (işlem) kuru: kira başlangıç tarihindeki kur.
-    // ROU (parasal olmayan kalem) sadece bu kurla bir kez çevrilir.
-    const commencementRate = await rateOn(contract.startDate || engineResult.schedule[0].date);
-    const initialLiabilityFx = v23Round(v23Num(engineResult.liability) * commencementRate.rate, 2);
-    const initialRouFx = v23Round(v23Num(engineResult.rouAssets) * commencementRate.rate, 2);
-    const totalOriginalRou = v23Num(engineResult.rouAssets) || 1;
+    // Liability'nin çevrim başlangıcı ve ROU'nun İLK katmanı bu
+    // kurla sabitlenir. schedule[0].openingLiability/rouOpening
+    // KASITLI OLARAK kullanılıyor (engineResult.liability DEĞİL) —
+    // modifikasyonlu kontratlarda ilk dönem hâlâ orijinal şartlarla
+    // hesaplanmış olduğundan bu değer her zaman doğru başlangıç
+    // bazını verir.
+    const commencementRate = await rateOn(contract.startDate || schedule[0].date);
 
-    let openingLiabilityFx = initialLiabilityFx;
-    let rouOpeningFx = initialRouFx;
+    let openingLiabilityFx = v23Round(v23Num(schedule[0].openingLiability) * commencementRate.rate, 2);
+    const initialLiabilityFx = openingLiabilityFx;
+    const initialRouFx = v23Round(v23Num(schedule[0].rouOpening) * commencementRate.rate, 2);
+
+    // ROU katman defteri: her katman kendi sabit (tarihindeki) kuruyla taşınır.
+    let rouLayers = [{ rate: commencementRate.rate, rateDate: commencementRate.rateDate, remainingOriginal: v23Num(schedule[0].rouOpening) }];
+
     let cumulativeFxGainLoss = 0;
-    const schedule = [];
+    let prevRouClosingOriginal = null;
+    const outSchedule = [];
 
-    for (const row of engineResult.schedule) {
+    for (const row of schedule) {
       const closing = await rateOn(row.date);
       const closingRate = closing.rate;
 
-      // Parasal kalem (kira yükümlülüğü): dönem içi hareketler
-      // (faiz tahakkuku, ödeme) o dönemin kuruyla çevrilir;
-      // dönem sonu bakiyesi ise TMS 21.23(a) gereği ORİJİNAL
-      // PARA BİRİMİNDEKİ bakiye × kapanış kuru olarak yeniden
-      // ifade edilir — aradaki fark kur farkı gelir/gider olarak
-      // K/Z'ye yazılır.
+      // --- Kira yükümlülüğü (PARASAL) ---
       const interestFx = v23Round(v23Num(row.interest) * closingRate, 2);
       const paymentFx = v23Round(v23Num(row.payment) * closingRate, 2);
       const movementBeforeRetranslationFx = v23Round(openingLiabilityFx + interestFx - paymentFx, 2);
@@ -18799,14 +18837,38 @@ document.addEventListener("DOMContentLoaded", () => {
       const fxGainLoss = v23Round(closingLiabilityFx - movementBeforeRetranslationFx, 2);
       cumulativeFxGainLoss = v23Round(cumulativeFxGainLoss + fxGainLoss, 2);
 
-      // Parasal olmayan kalem (ROU): yeniden değerlenmez. Orijinal
-      // para biriminde o dönem ayrılan amortismanın toplam ROU'ya
-      // oranı, başlangıçta sabitlenen fonksiyonel tutara uygulanır.
-      const depreciationRatio = totalOriginalRou > 0 ? (v23Num(row.depreciation) / totalOriginalRou) : 0;
-      const depreciationFx = v23Round(initialRouFx * depreciationRatio, 2);
-      const rouClosingFx = v23Round(Math.max(0, rouOpeningFx - depreciationFx), 2);
+      // --- ROU (PARASAL OLMAYAN, katmanlı) ---
+      const rouOpeningOriginal = v23Num(row.rouOpening);
+      if (prevRouClosingOriginal !== null) {
+        const delta = v23Round(rouOpeningOriginal - prevRouClosingOriginal, 2);
+        if (delta > 0.01) {
+          // Yeniden ölçüm/modifikasyon artışı: yeni katman, BU
+          // dönemin (işlem tarihi) kuruyla sabitlenir.
+          rouLayers.push({ rate: closingRate, rateDate: closing.rateDate, remainingOriginal: delta });
+        } else if (delta < -0.01) {
+          // Azalış (kısmi sonlandırma/scope decrease): mevcut
+          // katmanları orijinal para birimi bakiyelerine orantılı küçült.
+          const totalRemaining = rouLayers.reduce((s, l) => s + l.remainingOriginal, 0) || 1;
+          const shrinkRatio = Math.max(0, (totalRemaining + delta) / totalRemaining);
+          rouLayers.forEach(l => { l.remainingOriginal = v23Round(l.remainingOriginal * shrinkRatio, 2); });
+        }
+      }
 
-      schedule.push({
+      const rouOpeningFx = v23Round(rouLayers.reduce((s, l) => s + l.remainingOriginal * l.rate, 0), 2);
+
+      const totalRemainingBeforeDep = rouLayers.reduce((s, l) => s + l.remainingOriginal, 0) || 1;
+      let depreciationFx = 0;
+      rouLayers.forEach(l => {
+        const share = l.remainingOriginal / totalRemainingBeforeDep;
+        const depOriginalForLayer = v23Num(row.depreciation) * share;
+        depreciationFx = v23Round(depreciationFx + depOriginalForLayer * l.rate, 2);
+        l.remainingOriginal = v23Round(Math.max(0, l.remainingOriginal - depOriginalForLayer), 2);
+      });
+
+      const rouClosingFx = v23Round(rouLayers.reduce((s, l) => s + l.remainingOriginal * l.rate, 0), 2);
+      prevRouClosingOriginal = v23Num(row.rouClosing);
+
+      outSchedule.push({
         period: row.period,
         date: row.date,
         rateDate: closing.rateDate,
@@ -18822,11 +18884,11 @@ document.addEventListener("DOMContentLoaded", () => {
         cumulativeFxGainLoss,
         rouOpeningFx,
         depreciationFx,
-        rouClosingFx
+        rouClosingFx,
+        rouLayerCount: rouLayers.length
       });
 
       openingLiabilityFx = closingLiabilityFx;
-      rouOpeningFx = rouClosingFx;
     }
 
     return {
@@ -18839,11 +18901,11 @@ document.addEventListener("DOMContentLoaded", () => {
       initialLiabilityFx,
       initialRouFx,
       totals: {
-        closingLiabilityFx: schedule[schedule.length - 1]?.closingLiabilityFx ?? initialLiabilityFx,
-        closingRouFx: schedule[schedule.length - 1]?.rouClosingFx ?? initialRouFx,
+        closingLiabilityFx: outSchedule[outSchedule.length - 1]?.closingLiabilityFx ?? initialLiabilityFx,
+        closingRouFx: outSchedule[outSchedule.length - 1]?.rouClosingFx ?? initialRouFx,
         cumulativeFxGainLoss
       },
-      schedule
+      schedule: outSchedule
     };
   }
 
@@ -18856,12 +18918,207 @@ document.addEventListener("DOMContentLoaded", () => {
       : (typeof getV23Contracts === "function" ? getV23Contracts().find(c => String(c.id) === String(contractOrId)) : null) ||
         (typeof getContracts === "function" ? getContracts().find(c => String(c.id) === String(contractOrId)) : null);
     if (!contract) throw Object.assign(new Error("Kontrat bulunamadı."), { code: "CONTRACT_NOT_FOUND" });
-    const engineResult = calculateLeaseEngine(contract);
+    const engineResult = cfoBuildSchedule(contract);
     if (!contractNeedsFxTranslation(contract)) {
       return { contractId: contract.id, engine: engineResult, fx: { applicable: false, transactionCurrency: v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY), functionalCurrency: resolveContractFunctionalCurrency(contract) } };
     }
     const fx = await buildTms21FxTranslation(contract, engineResult, options);
     return { contractId: contract.id, engine: engineResult, fx };
+  }
+
+  /* ============================================================
+     TFRS 16 (98-103) — SATIŞ VE GERİ KİRALAMA (SALE AND LEASEBACK)
+     ------------------------------------------------------------
+     Bu bölüm İKİ ayrı soruyu ele alır:
+     1) Devir, TFRS 15 anlamında bir "satış" sayılır mı? — Bu,
+        mesleki muhakeme gerektiren bir tespittir; modül bunu
+        OTOMATİK OLARAK KARAR VERMEZ. assessSaleAndLeaseback()
+        sadece TFRS 15 kontrol devri göstergelerini bir kontrol
+        listesi olarak sunar ve kullanıcının kararını + gerekçesini
+        kayıt altına alır (denetim izi için).
+     2) Kullanıcının verdiği qualifiesAsSale kararına göre:
+        a) HAYIR (TFRS 16.103): Varlık defterden çıkarılmaz; alınan
+           bedel bir FİNANSAL BORÇ (kredi) olarak muhasebeleştirilir.
+        b) EVET (TFRS 16.100-102): Varlık defterden çıkarılır;
+           satıcı-kiracı yalnızca ALICIYA DEVREDİLEN HAKLARLA
+           İLGİLİ kâr/zararı tanır; elde tutulan kullanım hakkı
+           kadar ROU muhasebeleştirilir. Satış bedeli piyasa
+           değerinden farklıysa (off-market), fazlası "ilave
+           finansman", eksiği "kira ödemesi peşinatı" olarak kira
+           yükümlülüğünü düzeltir (TFRS 16.101-102).
+     ============================================================ */
+  const SLB_ASSESSMENT_INDICATORS = Object.freeze([
+    "Alıcı, varlığın kullanımını yönlendirme ve ondan elde edilecek faydaların tamamına yakınını elde etme hakkını (kontrolü) fiilen devralıyor mu?",
+    "Satış bedeli kesin ve koşulsuz olarak tahsil edildi/edilecek mi (iptal/iade riski yok mu)?",
+    "Satıcının varlığı önceden belirlenmiş bir fiyattan geri satın alma ZORUNLULUĞU ya da piyasa fiyatının belirgin altında bir geri satın alma OPSİYONU var mı? (Varsa genellikle kontrol devredilmemiş sayılır ve işlem bir finansman düzenlemesidir.)",
+    "Mülkiyete bağlı önemli risk ve getiriler fiilen alıcıya geçti mi?",
+    "İşlemin ticari özü gerçek bir satıştan çok teminatlı bir borçlanmaya mı benziyor (örn. bedel, varlığın gerçeğe uygun değerinden ziyade satıcının finansman ihtiyacına göre belirlenmiş)?"
+  ]);
+
+  function assessSaleAndLeaseback(input = {}) {
+    return {
+      indicators: SLB_ASSESSMENT_INDICATORS,
+      responses: input.responses || {},
+      qualifiesAsSale: !!input.qualifiesAsSale,
+      professionalJudgmentNote: String(input.note || "").trim(),
+      assessedAt: new Date().toISOString(),
+      assessedBy: v23CurrentUser()?.name || v23CurrentUser()?.id || null
+    };
+  }
+
+  function slbAnnuityPayment(pv, monthlyRate, periods) {
+    if (!(periods > 0)) return 0;
+    if (Math.abs(monthlyRate) < 1e-9) return v23Round(pv / periods, 2);
+    return v23Round(pv * monthlyRate / (1 - Math.pow(1 + monthlyRate, -periods)), 2);
+  }
+
+  // input: {
+  //   previousCarryingAmount: varlığın satış öncesi net defter değeri,
+  //   fairValueOfAsset: işlem tarihindeki gerçeğe uygun değeri,
+  //   saleProceeds: fiilen tahsil edilen satış bedeli,
+  //   leasebackContract: geri kiralamanın kendi kontrat objesi
+  //     (monthlyPayment, startDate, endDate, discountRate, currency...
+  //     — normal bir TFRS16 kontratıyla AYNI ŞEKİLDE tanımlanır),
+  //   qualifiesAsSale: boolean (bkz. assessSaleAndLeaseback)
+  // }
+  function calculateSaleAndLeaseback(input = {}) {
+    const previousCarryingAmount = v23Num(input.previousCarryingAmount);
+    const fairValueOfAsset = v23Num(input.fairValueOfAsset);
+    const saleProceeds = v23Num(input.saleProceeds);
+    const leasebackContract = input.leasebackContract;
+
+    if (!(previousCarryingAmount >= 0)) throw Object.assign(new Error("Önceki defter değeri geçersiz."), { code: "SLB_INVALID_CARRYING_AMOUNT" });
+    if (!(fairValueOfAsset > 0)) throw Object.assign(new Error("Gerçeğe uygun değer geçersiz."), { code: "SLB_INVALID_FAIR_VALUE" });
+    if (!(saleProceeds >= 0)) throw Object.assign(new Error("Satış bedeli geçersiz."), { code: "SLB_INVALID_PROCEEDS" });
+    if (!leasebackContract) throw Object.assign(new Error("Geri kiralama kontratı belirtilmedi."), { code: "SLB_MISSING_LEASEBACK_CONTRACT" });
+
+    const leasebackEngine = calculateLeaseEngine(leasebackContract);
+    if (!leasebackEngine.schedule || !leasebackEngine.schedule.length) {
+      throw Object.assign(new Error("Geri kiralama için ödeme planı hesaplanamadı."), { code: "SLB_EMPTY_LEASEBACK_SCHEDULE" });
+    }
+    const statedLeasebackPV = leasebackEngine.liability;
+    const n = leasebackEngine.schedule.length;
+    const monthlyRate = (v23Num(leasebackContract.discountRate) || 0) / 100 / 12;
+
+    // --- Durum A: Devir bir SATIŞ SAYILMIYOR (TFRS 16.103) ---
+    if (!input.qualifiesAsSale) {
+      const schedule = [];
+      let opening = saleProceeds;
+      for (let i = 0; i < n; i++) {
+        const row = leasebackEngine.schedule[i];
+        const interest = v23Round(opening * monthlyRate, 2);
+        const payment = row.payment;
+        const principal = v23Round(payment - interest, 2);
+        const closing = v23Round(Math.max(0, opening - principal), 2);
+        schedule.push({ period: row.period, date: row.date, openingBalance: opening, interest, payment, principal, closingBalance: closing });
+        opening = closing;
+      }
+      const finalBalance = schedule[schedule.length - 1]?.closingBalance ?? opening;
+      const residualBalanceWarning = Math.abs(finalBalance) > Math.max(1, saleProceeds * 0.001)
+        ? `Uyarı: geri kiralama ödemeleri (${leasebackContract.monthlyPayment}/dönem, %${leasebackContract.discountRate} oranla), alınan bedeli (${saleProceeds}) dönem sonuna kadar tam olarak itfa etmiyor — ${finalBalance.toFixed(2)} tutarında bakiye kalıyor. Bu, ödeme planının bir kredi olarak kurgulanmadığının (bilinçli veya bilinçsiz) göstergesi olabilir; gerçek finansman anlaşmasının ödeme şartlarını ayrıca teyit edin.`
+        : null;
+      return {
+        qualifiesAsSale: false,
+        accountingTreatment: "FINANCING_ARRANGEMENT",
+        note: "TFRS 16.103: Devir bir satış sayılmadığından varlık satıcının defterinden çıkarılmaz; alınan bedel finansal borç (kredi) olarak muhasebeleştirilir. Varlık kendi mevcut amortisman planına göre itfa edilmeye devam eder — bu modülün ROU/amortisman motoru bu durumda ÇALIŞMAZ, ilgili duran varlık kaydı ayrı izlenmelidir.",
+        financialLiability: saleProceeds,
+        residualBalanceWarning,
+        schedule,
+        inceptionJournal: [
+          { account: "102 Banka / 100 Kasa (Alınan Bedel)", debit: saleProceeds, credit: 0 },
+          { account: "3XX/4XX Finansal Borç (Satış ve Geri Kiralama - Finansman)", debit: 0, credit: saleProceeds }
+        ]
+      };
+    }
+
+    // --- Durum B: Devir bir SATIŞ SAYILIYOR (TFRS 16.100-102) ---
+    const totalGainLoss = v23Round(fairValueOfAsset - previousCarryingAmount, 2);
+    const excessFinancing = v23Round(Math.max(0, saleProceeds - fairValueOfAsset), 2);
+    const prepayment = v23Round(Math.max(0, fairValueOfAsset - saleProceeds), 2);
+
+    // TFRS 16.101-102: satış bedeli piyasa değerinden farklıysa (off-market),
+    // gerçek kira yükümlülüğü, BEYAN EDİLEN ödeme akışının PV'sinden değil,
+    // PİYASA seviyesindeki (finansman/peşinat bileşeni ayrıştırılmış) ödeme
+    // akışının PV'sinden hesaplanır.
+    const adjustedLeaseLiability = v23Round(statedLeasebackPV - excessFinancing + prepayment, 2);
+    const rouRetained = v23Round(previousCarryingAmount * (adjustedLeaseLiability / fairValueOfAsset), 2);
+    const gainLossRecognized = v23Round(totalGainLoss * (fairValueOfAsset - adjustedLeaseLiability) / fairValueOfAsset, 2);
+    const gainLossOnRightsRetained = v23Round(totalGainLoss - gainLossRecognized, 2); // ROU'ya gömülü, ayrıca tanınmaz
+
+    let financingComponent = null;
+    let marketPaymentByPeriod = leasebackEngine.schedule.map(r => r.payment);
+
+    if (excessFinancing > 0.01) {
+      // Fazla bedel = alıcının satıcıya sağladığı ilave finansman (gömülü kredi).
+      // Bu kredinin kendi anüite ödemesi, beyan edilen kira ödemesinden
+      // düşülerek "piyasa seviyesi" kira ödemesine ulaşılır.
+      const financingPayment = slbAnnuityPayment(excessFinancing, monthlyRate, n);
+      const finSchedule = [];
+      let opening = excessFinancing;
+      for (let i = 0; i < n; i++) {
+        const interest = v23Round(opening * monthlyRate, 2);
+        const principal = v23Round(financingPayment - interest, 2);
+        const closing = v23Round(Math.max(0, opening - principal), 2);
+        finSchedule.push({ period: i + 1, date: leasebackEngine.schedule[i].date, openingBalance: opening, interest, payment: financingPayment, principal, closingBalance: closing });
+        opening = closing;
+      }
+      financingComponent = { type: "EXCESS_FINANCING", principal: excessFinancing, periodicPayment: financingPayment, schedule: finSchedule };
+      marketPaymentByPeriod = leasebackEngine.schedule.map(r => v23Round(r.payment - financingPayment, 2));
+    } else if (prepayment > 0.01) {
+      // Eksik bedel = satıcının geri kiralama için yaptığı örtülü peşin
+      // ödeme. Beyan edilen kira ödemesine bu tutarın anüite eşdeğeri
+      // eklenerek "piyasa seviyesi" kira ödemesine ulaşılır; nakden
+      // tahsil edilmeyen bu fark, başlangıçta ayrılan "peşin ödenmiş
+      // kira" varlığından düşülerek (drawdown) kapatılır.
+      const prepaymentDrawdown = slbAnnuityPayment(prepayment, monthlyRate, n);
+      marketPaymentByPeriod = leasebackEngine.schedule.map(r => v23Round(r.payment + prepaymentDrawdown, 2));
+      financingComponent = { type: "PREPAYMENT", prepaidLeaseAsset: prepayment, periodicDrawdown: prepaymentDrawdown };
+    }
+
+    const totalOriginalRouForRatio = leasebackEngine.rouAssets || rouRetained || 1;
+    const schedule = [];
+    let openingLiab = adjustedLeaseLiability;
+    let openingRou = rouRetained;
+    for (let i = 0; i < n; i++) {
+      const row = leasebackEngine.schedule[i];
+      const marketPayment = marketPaymentByPeriod[i];
+      const interest = v23Round(openingLiab * monthlyRate, 2);
+      const principal = v23Round(marketPayment - interest, 2);
+      const closingLiab = v23Round(Math.max(0, openingLiab - principal), 2);
+      const depreciationRatio = totalOriginalRouForRatio > 0 ? (v23Num(row.depreciation) / totalOriginalRouForRatio) : 0;
+      const depreciation = v23Round(rouRetained * depreciationRatio, 2);
+      const closingRou = v23Round(Math.max(0, openingRou - depreciation), 2);
+      schedule.push({
+        period: row.period, date: row.date,
+        openingLiability: openingLiab, interest, payment: marketPayment, principal, closingLiability: closingLiab,
+        rouOpening: openingRou, depreciation, rouClosing: closingRou
+      });
+      openingLiab = closingLiab;
+      openingRou = closingRou;
+    }
+
+    const inceptionJournal = [
+      { account: "102 Banka / 100 Kasa (Satış Bedeli)", debit: saleProceeds, credit: 0 }
+    ];
+    if (prepayment > 0.01) inceptionJournal.push({ account: "180 Peşin Ödenmiş Kira Giderleri", debit: prepayment, credit: 0 });
+    inceptionJournal.push({ account: "ROU - Kullanım Hakkı Varlığı (Elde Tutulan Hak)", debit: rouRetained, credit: 0 });
+    if (gainLossRecognized < 0) inceptionJournal.push({ account: "689 Diğer Olağandışı Gider (Satış ve Geri Kiralama Zararı)", debit: Math.abs(gainLossRecognized), credit: 0 });
+    inceptionJournal.push({ account: "25X Maddi Duran Varlıklar (Önceki Net Defter Değeri)", debit: 0, credit: previousCarryingAmount });
+    inceptionJournal.push({ account: "401 Kiralama Yükümlülüğü (Geri Kiralama)", debit: 0, credit: adjustedLeaseLiability });
+    if (excessFinancing > 0.01) inceptionJournal.push({ account: "3XX/4XX Finansal Borç (İlave Finansman)", debit: 0, credit: excessFinancing });
+    if (gainLossRecognized > 0) inceptionJournal.push({ account: "679 Diğer Olağandışı Gelir (Satış ve Geri Kiralama Karı)", debit: 0, credit: gainLossRecognized });
+
+    return {
+      qualifiesAsSale: true,
+      accountingTreatment: "SALE_AND_LEASEBACK",
+      fairValueOfAsset, previousCarryingAmount, saleProceeds,
+      totalGainLoss, excessFinancing, prepayment,
+      adjustedLeaseLiability, rouRetained,
+      gainLossRecognized, gainLossOnRightsRetained,
+      financingComponent,
+      schedule,
+      inceptionJournal
+    };
   }
 
   // Bağımsız TMS 21 kur farkı fişi: mevcut senkron journal
@@ -19235,10 +19492,19 @@ document.addEventListener("DOMContentLoaded", () => {
     syncTcmbRate,
     getFxRateAuto,
     DEFAULT_FUNCTIONAL_CURRENCY,
+    calculateLeaseEngine,
+    calculateModification,
+    applyModification,
+    calculateReassessment,
+    applyReassessment,
+    cfoBuildSchedule,
     resolveContractFunctionalCurrency,
     contractNeedsFxTranslation,
     buildTms21FxTranslation,
     getContractFxTranslatedSchedule,
+    SLB_ASSESSMENT_INDICATORS,
+    assessSaleAndLeaseback,
+    calculateSaleAndLeaseback,
     appendFxToReclassification,
     appendFxJournalLines,
     getContractFxTranslationJournal,
