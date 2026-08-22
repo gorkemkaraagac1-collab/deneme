@@ -49,6 +49,7 @@
       <div class="kpi-card"><div class="kpi-label">Önümüzdeki 12 Ay</div><div id="next12Months" class="kpi-value">₺0</div><div class="kpi-description">Beklenen kira ödemeleri</div></div>
       <div class="kpi-card warning-card"><div class="kpi-label">Yenileme &lt;90 Gün</div><div id="renewals90Days" class="kpi-value warning-text">0</div><div class="kpi-description">Yönetim aksiyonu gerekenler</div></div>
       <div class="kpi-card warning-card"><div class="kpi-label">Modification</div><div id="modifications" class="kpi-value warning-text">0</div><div class="kpi-description">İnceleme bekleyenler</div></div>
+      <div class="kpi-card"><div class="kpi-label">Gelecek Kiralamalar</div><div id="futureLeasesCount" class="kpi-value">0</div><div id="futureLeasesCommitment" class="kpi-description">₺0</div></div>
     </section>
 
     <!-- Filtre Toolbar -->
@@ -199,6 +200,22 @@
           <label for="usefulLifeMonths">Varlığın Faydalı Ömrü (Ay)</label>
           <input id="usefulLifeMonths" name="usefulLifeMonths" type="number" min="0" step="1" placeholder="Mülkiyet devri / kesin satın alma opsiyonunda">
         </div>
+        <div class="form-group">
+          <label for="indexBaseRate">Baz Endeks Oranı</label>
+          <input id="indexBaseRate" name="indexBaseRate" type="number" step="0.01" placeholder="Sadece 'Endekse Bağlı' seçiliyse">
+        </div>
+        <div class="form-group">
+          <label for="indexCurrentRate">Güncel Endeks Oranı</label>
+          <input id="indexCurrentRate" name="indexCurrentRate" type="number" step="0.01" placeholder="Manuel güncellenir">
+        </div>
+        <div class="form-group">
+          <label for="indexReviewMonth">Endeks Güncelleme Ayı</label>
+          <input id="indexReviewMonth" name="indexReviewMonth" type="number" min="1" max="12" placeholder="Boş=başlangıç ayı">
+        </div>
+        <div class="form-group">
+          <label for="indexReviewDay">Endeks Güncelleme Günü</label>
+          <input id="indexReviewDay" name="indexReviewDay" type="number" min="1" max="31" placeholder="Boş=başlangıç günü">
+        </div>
         <div class="form-group" style="grid-column: span 2;">
           <label style="display:block;margin-bottom:6px;">Opsiyonlar &amp; İstisnalar</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;">
@@ -255,6 +272,9 @@
     </div>
 
     <div class="detail-actions" style="margin-top: 20px;">
+      <button id="applyEarlyPaymentButton" class="secondary-button" type="button" onclick="const amt=prompt('Erken ödeme tutarı:'); if(amt===null)return; const dt=prompt('Ödeme tarihi (YYYY-MM-DD):', new Date().toISOString().slice(0,10)); if(dt===null)return; window.GK_TFRS16.applyEarlyPayment(selectedContractId, amt, dt);">⏱ Erken Ödeme Uygula</button>
+      <button id="exportReportPdfButton" class="secondary-button" type="button" onclick="window.GK_TFRS16.exportReport(selectedContractId, 'pdf');">↓ Raporu PDF İndir</button>
+      <button id="exportReportHtmlButton" class="secondary-button" type="button" onclick="window.GK_TFRS16.exportReport(selectedContractId, 'html');">↗ Raporu HTML Aç</button>
       <button id="deleteContract" class="danger-button" type="button">Sözleşmeyi Sil</button>
       <button id="detailCloseButton" class="secondary-button" type="button">Kapat</button>
     </div>
