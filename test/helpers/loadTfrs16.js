@@ -26,7 +26,6 @@ function loadTfrs16() {
 
   require("../../js/tfrs16.js");
 
-
   document.dispatchEvent(
     new window.Event("DOMContentLoaded", { bubbles: true, cancelable: true })
   );
