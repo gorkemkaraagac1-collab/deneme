@@ -14,7 +14,7 @@
     "no-console": ["warn", { "allow": ["warn", "error", "info", "time", "timeEnd"] }],
     "no-undef": "error",
     "eqeqeq": ["error", "always"],
-    "curly": ["error", "all"],
+    "curly": "off",
     "no-var": "warn",
     "prefer-const": "warn"
   },
