@@ -676,6 +676,51 @@
      * varsayimlar.emeklilikYasi düz varsayımına düşer.
      */
 
+    /*
+     * Grup kodunu UI'da gösterilecek kısa etikete çevirir
+     * (örn. tablo sütunu, badge).
+     */
+
+    TMS19.sgkGrupEtiketi =
+        function (grup) {
+
+            switch (grup) {
+
+                case "A_EYT":
+                    return "EYT";
+
+                case "B_KADEMELI_1999_2008":
+                    return "Kademeli (1999–2008)";
+
+                case "C_5510_KADEMELI":
+                    return "Kademeli (5510)";
+
+                default:
+                    return "Belirsiz";
+            }
+        };
+
+
+    TMS19.sgkGrupAciklamasi =
+        function (grup) {
+
+            switch (grup) {
+
+                case "A_EYT":
+                    return "7438 sayılı Kanun (EYT) — 08.09.1999 öncesi sigorta girişi, yaş şartı aranmaz.";
+
+                case "B_KADEMELI_1999_2008":
+                    return "4447 sayılı Kanun — 09.09.1999-30.04.2008 arası sigorta girişi, sabit yaş şartı.";
+
+                case "C_5510_KADEMELI":
+                    return "5510 sayılı Kanun — 01.05.2008 sonrası sigorta girişi, kademeli yaş tablosu.";
+
+                default:
+                    return "Sigorta başlangıç tarihi/doğum tarihi eksik olduğu için sabit varsayım kullanıldı.";
+            }
+        };
+
+
     TMS19.sgkEmeklilikBilgisiHesapla =
         function (personel, varsayimlar, degerlemeTarihi) {
 
@@ -1696,7 +1741,38 @@
                             toplamHizmet,
 
                         devamOlasiligi:
-                            devamOlasiligi
+                            devamOlasiligi,
+
+                        sgkGrup:
+                            sgkEmeklilik.grup,
+
+                        sgkRejimEtiketi:
+                            TMS19.sgkGrupEtiketi(
+                                sgkEmeklilik.grup
+                            ),
+
+                        sgkRejimAciklamasi:
+                            TMS19.sgkGrupAciklamasi(
+                                sgkEmeklilik.grup
+                            ),
+
+                        eytUygulandi:
+                            sgkEmeklilik.eytUygulandi,
+
+                        sigortaBaslangicTarihi:
+                            sgkEmeklilik.sigortaBaslangicTarihi,
+
+                        gerekliYas:
+                            sgkEmeklilik.gerekliYas,
+
+                        gerekliPrimGunu:
+                            sgkEmeklilik.gerekliPrimGunu,
+
+                        gerekliSigortalilikYili:
+                            sgkEmeklilik.gerekliSigortalilikYili,
+
+                        emeklilikTarihi:
+                            sgkEmeklilik.emeklilikTarihi
                     },
 
 
@@ -1851,6 +1927,19 @@
 
                 devamOlasiligi:
                     devamOlasiligi,
+
+                sgkRejimEtiketi:
+                    TMS19.sgkGrupEtiketi(
+                        sgkEmeklilik.grup
+                    ),
+
+                sgkRejimAciklamasi:
+                    TMS19.sgkGrupAciklamasi(
+                        sgkEmeklilik.grup
+                    ),
+
+                eytUygulandi:
+                    sgkEmeklilik.eytUygulandi,
 
 
                 metadata:
