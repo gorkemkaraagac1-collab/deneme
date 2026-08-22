@@ -2773,6 +2773,9 @@
                     deger:
                         sonuc.demografi.yas,
 
+                    birim:
+                        "yil",
+
                     aciklama:
                         "Değerleme tarihi itibarıyla personel yaşı."
                 },
@@ -2787,6 +2790,9 @@
                     deger:
                         sonuc.demografi
                             .hizmetSuresi,
+
+                    birim:
+                        "yil",
 
                     aciklama:
                         "İşe giriş tarihinden değerleme tarihine kadar geçen süre."
@@ -2803,6 +2809,9 @@
                         sonuc.demografi
                             .emekliligeKalanYil,
 
+                    birim:
+                        "yil",
+
                     aciklama:
                         "Emeklilik yaşına kalan süre."
                 },
@@ -2817,6 +2826,9 @@
                     deger:
                         sonuc.maas
                             .emeklilikMaasi,
+
+                    birim:
+                        "para",
 
                     aciklama:
                         "Maaş artış oranı ile emeklilik tarihine taşınan maaş."
@@ -2834,6 +2846,9 @@
                             .uygulandi
                             ? 1
                             : 0,
+
+                    birim:
+                        "boolean",
 
                     aciklama:
                         sonuc.kidemTavani
@@ -2853,6 +2868,9 @@
                         sonuc.demografik
                             .devamOlasiligi,
 
+                    birim:
+                        "yuzde",
+
                     aciklama:
                         "Personel devir ve ölüm oranına göre hesaplanan devam olasılığı."
                 },
@@ -2867,6 +2885,9 @@
                     deger:
                         sonuc.hizmet
                             .kazanilmisFayda,
+
+                    birim:
+                        "para",
 
                     aciklama:
                         "Hizmet oranına göre kazanılmış kıdem tazminatı tutarı."
@@ -2883,6 +2904,9 @@
                         sonuc.iskonto
                             .faktor,
 
+                    birim:
+                        "oran",
+
                     aciklama:
                         "İskonto oranı ile bugüne indirgeme faktörü."
                 },
@@ -2897,6 +2921,9 @@
                     deger:
                         sonuc.muhasebe
                             .dbo,
+
+                    birim:
+                        "para",
 
                     aciklama:
                         "Tanımlanmış Fayda Yükümlülüğü (bugünkü değer)."
@@ -2913,6 +2940,9 @@
                         sonuc.muhasebe
                             .cariHizmetMaliyeti,
 
+                    birim:
+                        "para",
+
                     aciklama:
                         "Cari döneme ait hizmet maliyeti."
                 },
@@ -2927,6 +2957,9 @@
                     deger:
                         sonuc.muhasebe
                             .faizMaliyeti,
+
+                    birim:
+                        "para",
 
                     aciklama:
                         "Açılış DBO üzerinden hesaplanan faiz maliyeti."
