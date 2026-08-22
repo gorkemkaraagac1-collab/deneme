@@ -1368,6 +1368,16 @@
         }
 
 
+        .badge-blue {
+
+            background:
+                var(--blue-soft);
+
+            color:
+                var(--blue);
+        }
+
+
         /* ======================================================
            CHART
         ====================================================== */
@@ -3788,6 +3798,10 @@ function renderPersonelTablosu(
                     </th>
 
                     <th>
+                        Kapsam
+                    </th>
+
+                    <th>
                         Mevcut Maaş
                     </th>
 
@@ -3882,6 +3896,33 @@ function renderPersonelTablosu(
                             sonuc.emekliligeKalanYil !== undefined
                                 ? sonuc.emekliligeKalanYil.toFixed(1)
                                 : "-"
+                        }
+                    </td>
+
+                    <td>
+                        ${
+                            (function () {
+
+                                const etiket =
+                                    sonuc.sgkRejimEtiketi ||
+                                    "Belirsiz";
+
+                                const aciklama =
+                                    esc(
+                                        sonuc.sgkRejimAciklamasi || ""
+                                    );
+
+                                const renk =
+                                    sonuc.eytUygulandi
+                                        ? "badge-green"
+                                        : etiket === "Kademeli (5510)"
+                                            ? "badge-blue"
+                                            : etiket === "Kademeli (1999–2008)"
+                                                ? "badge-amber"
+                                                : "badge-red";
+
+                                return `<span class="badge ${renk}" title="${aciklama}">${esc(etiket)}</span>`;
+                            })()
                         }
                     </td>
 
