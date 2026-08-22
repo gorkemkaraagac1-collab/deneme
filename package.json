@@ -1,21 +1,17 @@
 {
-  "name": "gk-tfrs16",
-  "version": "24.0.0",
-  "description": "GK Finance Intelligence - TFRS 16 Accounting Engine",
-  "main": "js/tfrs16.js",
+  "name": "tfrs16-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TFRS 16 kiralama muhasebesi için Express.js + PostgreSQL backend iskeleti (boilerplate). Frontend hâlâ localStorage kullanmaya devam eder; bu backend, gelecekteki geçiş için hazırlıktır.",
+  "main": "app.js",
   "scripts": {
-    "lint": "eslint js/tfrs16.js",
-    "lint:fix": "eslint js/tfrs16.js --fix",
-    "test": "echo 'Testler çalışıyor...' && exit 0",
-    "build": "echo 'Build tamamlandı.' && exit 0"
+    "start": "node app.js",
+    "dev": "node --watch app.js"
   },
-  "keywords": ["tfrs16", "ifrs16", "lease-accounting", "finance"],
-  "author": "GK Finance",
-  "license": "MIT",
-  "devDependencies": {
-    "eslint": "^8.57.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "pg": "^8.12.0",
+    "dotenv": "^16.4.5"
   }
 }
