@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (error) {
         console.error("GK TFRS16 UI Bridge V2 error:", error);
-        alert(`İşlem başlatılamadı: ${error?.message || String(error)}`);
+        showAlert(`İşlem başlatılamadı: ${error?.message || String(error)}`);
       }
     }, true);
 
@@ -189,7 +189,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return value || ASSET_CLASS_UNCLASSIFIED;
   }
 
+  // ÖNBELLEK DEĞİŞKENLERİ — loadContracts() (aşağıda) ilk çalıştığında
+  // veri yoksa saveContracts() → clearCalculationCache() çağrılır; bu
+  // yüzden CALCULATION_CACHE burada, loadContracts()'tan ÖNCE
+  // initialize edilmek zorunda (const/let hoisting'i function
+  // declaration'lar gibi çalışmaz — TDZ hatası verir).
+  const CALCULATION_CACHE = new Map();
+  const CALCULATION_CACHE_MAX_SIZE = 200;
+
   let contracts = loadContracts();
+
+  // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
+  // kontrol/entegrasyon kayıtlarını arka planda temizle (UI'ı bloklamaz).
+  setTimeout(runDataCleanup, 5000);
+
+  document.getElementById("cleanupButton")?.addEventListener("click", () => {
+    if (confirm("Eski veriler (audit trail, kontrol snapshotları, entegrasyon logları) temizlenecek. Devam etmek istiyor musunuz?")) {
+      runDataCleanup();
+      showAlert("✅ Veri temizliği tamamlandı!");
+    }
+  });
 
   contracts = contracts.map(
     contract => ensureReassessmentState(
@@ -284,6 +303,193 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /* ==========================================================
+     PERFORMANS ÖNBELLEĞİ (CALCULATION CACHE)
+     ----------------------------------------------------------
+     calculateLeaseEngine() aynı kontrat için tekrar tekrar
+     çağrıldığında (dashboard KPI, detay ekranı, kontrol motoru,
+     raporlama vs.) tüm amortisman tablosunu baştan hesaplıyordu.
+     Bu önbellek, kontratın kimliğine ve içeriğinin bir imzasına
+     göre anahtarlanmış sonucu saklar; kontrat değişmediği sürece
+     hesaplama tekrar çalışmaz. (CALCULATION_CACHE / _MAX_SIZE
+     yukarıda, loadContracts()'tan önce initialize edildi.)
+  ========================================================== */
+
+  function getCalculationCacheKey(contract) {
+    const id = contract?.id || "unknown";
+    const stamp =
+      contract?.updatedAt ||
+      contract?.modifiedAt ||
+      contract?.createdAt ||
+      "";
+    // updatedAt her zaman güncellenmiyor olabileceğinden, kontratın
+    // hesaplamayı etkileyen alanlarından ucuz bir imza da üretilir;
+    // böylece eski/yanlış bir sonuç asla döndürülmez.
+    let signature = "";
+    try {
+      signature =
+        `${contract?.monthlyPayment || ""}|${contract?.discountRate || ""}|` +
+        `${contract?.startDate || ""}|${contract?.endDate || ""}|` +
+        `${contract?.paymentFrequency || ""}|${contract?.leaseIncreaseType || ""}|` +
+        `${contract?.leaseIncreaseRate || ""}|${contract?.fixedIncrease || ""}|` +
+        `${JSON.stringify(contract?.modifications || "")}|` +
+        `${JSON.stringify(contract?.reassessments || "")}`;
+    } catch (error) {
+      signature = "";
+    }
+    const hash = signature.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 1000000007, 7);
+    return `${id}-${stamp}-${signature.length}-${hash}`;
+  }
+
+  function clearCalculationCache(contractId) {
+    if (contractId) {
+      for (const key of CALCULATION_CACHE.keys()) {
+        if (key.startsWith(`${contractId}-`)) {
+          CALCULATION_CACHE.delete(key);
+        }
+      }
+    } else {
+      CALCULATION_CACHE.clear();
+    }
+  }
+
+  function getCachedCalculation(contract) {
+    const key = getCalculationCacheKey(contract);
+    return CALCULATION_CACHE.has(key) ? CALCULATION_CACHE.get(key) : null;
+  }
+
+  function setCachedCalculation(contract, result) {
+    const key = getCalculationCacheKey(contract);
+
+    if (CALCULATION_CACHE.size >= CALCULATION_CACHE_MAX_SIZE) {
+      const firstKey = CALCULATION_CACHE.keys().next().value;
+      CALCULATION_CACHE.delete(firstKey);
+    }
+
+    CALCULATION_CACHE.set(key, result);
+  }
+
+
+  /* ==========================================================
+     VERİ TEMİZLEME (DATA RETENTION)
+     ----------------------------------------------------------
+     Audit trail, kontrol snapshot'ları ve entegrasyon (import/
+     export) geçmişi localStorage'da sınırsız büyüyordu. Bu katman
+     eski kayıtları periyodik olarak temizler; aktif kontrat
+     verisine dokunmaz.
+  ========================================================== */
+
+  const DATA_RETENTION_CONFIG = {
+    auditTrailDays: 365,
+    controlSnapshotsDays: 90,
+    integrationLogsDays: 180,
+    maxAuditEvents: 10000
+  };
+
+  function cleanOldAuditTrail() {
+    try {
+      if (typeof loadAuditEvents !== "function" || typeof saveAuditEvents !== "function") return;
+      const events = loadAuditEvents();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - DATA_RETENTION_CONFIG.auditTrailDays);
+      const cutoffTime = cutoff.getTime();
+
+      const filtered = events.filter(event => {
+        const timestamp = new Date(event.timestamp).getTime();
+        return !Number.isFinite(timestamp) || timestamp > cutoffTime;
+      });
+
+      const final = filtered.slice(-DATA_RETENTION_CONFIG.maxAuditEvents);
+
+      if (final.length < events.length) {
+        saveAuditEvents(final);
+        console.log(`🧹 Audit trail temizlendi: ${events.length - final.length} kayıt silindi`);
+      }
+    } catch (error) {
+      console.error("Audit trail temizleme hatası:", error);
+    }
+  }
+
+  function cleanOldControlSnapshots() {
+    try {
+      if (typeof loadControlSnapshots !== "function" || typeof saveControlSnapshots !== "function") return;
+      const snapshots = loadControlSnapshots();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - DATA_RETENTION_CONFIG.controlSnapshotsDays);
+      const cutoffTime = cutoff.getTime();
+
+      let cleaned = 0;
+      for (const [key, snapshot] of Object.entries(snapshots || {})) {
+        const testedAt = new Date(snapshot?.testedAt).getTime();
+        if (Number.isFinite(testedAt) && testedAt < cutoffTime) {
+          delete snapshots[key];
+          cleaned++;
+        }
+      }
+
+      if (cleaned > 0) {
+        saveControlSnapshots(snapshots);
+        console.log(`🧹 Kontrol snapshotları temizlendi: ${cleaned} kayıt silindi`);
+      }
+    } catch (error) {
+      console.error("Control snapshot temizleme hatası:", error);
+    }
+  }
+
+  function cleanOldIntegrationLogs() {
+    try {
+      if (typeof getIntegrationStorage !== "function" || typeof saveIntegrationStorage !== "function") return;
+      const state = getIntegrationStorage();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - DATA_RETENTION_CONFIG.integrationLogsDays);
+      const cutoffTime = cutoff.getTime();
+
+      let cleaned = 0;
+
+      if (Array.isArray(state.jobs)) {
+        const before = state.jobs.length;
+        state.jobs = state.jobs.filter(job => {
+          const date = new Date(job.startedAt || job.createdAt).getTime();
+          return !Number.isFinite(date) || date > cutoffTime;
+        });
+        cleaned += before - state.jobs.length;
+      }
+
+      if (Array.isArray(state.exports)) {
+        const before = state.exports.length;
+        state.exports = state.exports.filter(exp => {
+          const date = new Date(exp.createdAt).getTime();
+          return !Number.isFinite(date) || date > cutoffTime;
+        });
+        cleaned += before - state.exports.length;
+      }
+
+      if (cleaned > 0) {
+        saveIntegrationStorage(state);
+        console.log(`🧹 Integration logları temizlendi: ${cleaned} kayıt silindi`);
+      }
+    } catch (error) {
+      console.error("Integration log temizleme hatası:", error);
+    }
+  }
+
+  function runDataCleanup() {
+    console.log("🧹 Veri temizliği başlıyor...");
+    cleanOldAuditTrail();
+    cleanOldControlSnapshots();
+    cleanOldIntegrationLogs();
+    console.log("✅ Veri temizliği tamamlandı.");
+  }
+
+
+  /**
+   * Sözleşme dizisini localStorage'a (veya varsa V20 storage adapter'ına)
+   * kaydeder ve hesaplama önbelleğini geçersiz kılar.
+   *
+   * @param {Array<Object>} data - Kaydedilecek sözleşme dizisi
+   * @throws {Error} localStorage/adapter yazma işlemi başarısız olursa
+   * @returns {void}
+   */
   function saveContracts(data) {
     try {
       const adapter =
@@ -294,13 +500,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (adapter) {
         adapter.save(data);
-        return;
+      } else {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(data)
+        );
       }
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(data)
-      );
+      // Kontrat verisi değişti; önbellekteki eski hesaplama
+      // sonuçları artık güvenilir değil.
+      clearCalculationCache();
     } catch (error) {
       console.error("TFRS 16 storage error:", error);
       throw error;
@@ -2756,6 +2965,187 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /* ==========================================================
+     DRY YARDIMCI FONKSİYONLAR (Code Quality Pass)
+     ----------------------------------------------------------
+     Kod tekrarını azaltmak için eklenen genel amaçlı guard/kontrol
+     fonksiyonları. Mevcut hiçbir fonksiyon değiştirilmedi; bu blok
+     tamamen eklemeli (additive-only) niteliktedir.
+     ========================================================== */
+
+  /**
+   * Bir değerin boş olup olmadığını kontrol eder (null/undefined/"").
+   * @param {*} value - Kontrol edilecek değer
+   * @returns {boolean}
+   */
+  function isEmpty(value) {
+    return value === null || value === undefined || value === "";
+  }
+
+  /**
+   * Bir değerin pozitif ve sonlu bir sayı olup olmadığını kontrol eder.
+   * @param {*} value - Kontrol edilecek değer
+   * @returns {boolean}
+   */
+  function isPositiveNumber(value) {
+    return Number.isFinite(value) && value > 0;
+  }
+
+  /**
+   * Bir değerin geçerli bir tarihe dönüştürülüp dönüştürülemeyeceğini kontrol eder.
+   * Mevcut parseDate() fonksiyonunu kullanır.
+   * @param {*} value - Kontrol edilecek değer
+   * @returns {boolean}
+   */
+  function isDate(value) {
+    const d = parseDate(value);
+    return d !== null && !isNaN(d.getTime());
+  }
+
+  /**
+   * Bir değeri güvenli şekilde diziye çevirir; dizi değilse fallback döner.
+   * @param {*} value - Kontrol edilecek değer
+   * @param {Array} [fallback=[]] - Dizi değilse dönecek varsayılan değer
+   * @returns {Array}
+   */
+  function safeArray(value, fallback = []) {
+    return Array.isArray(value) ? value : fallback;
+  }
+
+  /**
+   * Bir değeri güvenli şekilde nesneye çevirir; nesne değilse fallback döner.
+   * @param {*} value - Kontrol edilecek değer
+   * @param {Object} [fallback={}] - Nesne değilse dönecek varsayılan değer
+   * @returns {Object}
+   */
+  function safeObject(value, fallback = {}) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+  }
+
+  /**
+   * Bir değeri koşula göre döndürür, aksi halde varsayılan değeri döndürür.
+   * @param {*} value - Kontrol edilecek değer
+   * @param {*} defaultValue - Koşul sağlanmazsa dönecek değer
+   * @param {function(*):boolean} [predicate] - Değeri test eden fonksiyon (verilmezse her zaman geçerli sayılır)
+   * @returns {*}
+   */
+  function getOrDefault(value, defaultValue, predicate) {
+    const check = typeof predicate === "function" ? predicate(value) : true;
+    return check ? value : defaultValue;
+  }
+
+
+  /* ==========================================================
+     KULLANICI GERİ BİLDİRİMİ (Toast Bildirimleri)
+     ----------------------------------------------------------
+     Engelleyici (blocking) alert() diyaloglarının yerini alacak,
+     kullanıcı dostu, engellemeyen bildirim sistemi. Var olan
+     Var olan alert() çağrıları bu bloktan sonra showAlert() üzerinden bu
+     sisteme yönlendirilir (bkz. showAlert tanımı aşağıda).
+     ========================================================== */
+
+  let __gkToastStyleInjected = false;
+
+  function injectToastStyles() {
+    if (__gkToastStyleInjected) return;
+    __gkToastStyleInjected = true;
+
+    const style = document.createElement("style");
+    style.textContent = `
+      .gk-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-family: inherit;
+        z-index: 99999;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: gkToastSlideIn 0.3s ease;
+        line-height: 1.4;
+        white-space: pre-line;
+      }
+      .gk-toast-success { background: #15803d; color: #fff; }
+      .gk-toast-error { background: #b91c1c; color: #fff; }
+      .gk-toast-warning { background: #b45309; color: #fff; }
+      .gk-toast-info { background: #1e293b; color: #fff; }
+      @keyframes gkToastSlideIn {
+        from { transform: translateX(120%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes gkToastSlideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(120%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
+   * Ekranın altında geçici, engellemeyen bir bildirim (toast) gösterir.
+   * @param {string} message - Gösterilecek mesaj
+   * @param {"success"|"error"|"warning"|"info"} [type="info"] - Bildirim tipi
+   * @param {number} [duration=5000] - Bildirimin ekranda kalma süresi (ms)
+   * @returns {void}
+   */
+  function showToast(message, type = "info", duration = 5000) {
+    try {
+      injectToastStyles();
+
+      const toast = document.createElement("div");
+      toast.className = `gk-toast gk-toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = "gkToastSlideOut 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    } catch (toastError) {
+      // Toast gösterimi başarısız olursa sessizce konsola düş —
+      // kullanıcı akışını kesintiye uğratma.
+      console.error("Toast gösterilemedi:", toastError);
+    }
+  }
+
+  /**
+   * Bir hatayı hem konsola hem de kullanıcıya (toast ile) bildirir.
+   * @param {Error|*} error - Yakalanan hata nesnesi ya da mesajı
+   * @param {string} [context=""] - Hatanın oluştuğu bağlamı açıklayan kısa metin
+   * @returns {void}
+   */
+  function showError(error, context = "") {
+    const message = error?.message || String(error);
+    console.error(context ? `❌ ${context}:` : "❌", error);
+    showToast(`❌ ${message}`, "error");
+    if (error?.stack) {
+      console.error("Stack:", error.stack);
+    }
+  }
+
+  /**
+   * Eski window.alert() çağrılarının yerine geçen, geriye dönük uyumlu
+   * bildirim fonksiyonu. Tek parametreyle çağrıldığında davranışı
+   * showAlert()'e benzer (kullanıcı akışını engellemeden bilgi verir).
+   * @param {string} message - Gösterilecek mesaj
+   * @param {"success"|"error"|"warning"|"info"} [type="info"] - Bildirim tipi
+   * @returns {void}
+   */
+  function showAlert(message, type = "info") {
+    if (type === "error") {
+      showToast(`❌ ${message}`, "error");
+    } else if (type === "warning") {
+      showToast(`⚠️ ${message}`, "warning");
+    } else if (type === "success") {
+      showToast(`✅ ${message}`, "success");
+    } else {
+      showToast(message, "info");
+    }
+  }
+
+
   function parseDate(value) {
 
     if (!value) return null;
@@ -3150,7 +3540,55 @@ document.addEventListener("DOMContentLoaded", () => {
     return basePayment;
   }
 
+  /**
+   * TFRS 16 kiralama hesaplama motoru (önbellekli sarmalayıcı).
+   * Sözleşme değişmediyse önceki hesaplama sonucunu önbellekten döndürür;
+   * aksi halde calculateLeaseEngineImpl() ile yeniden hesaplar.
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @param {string} contract.id - Sözleşme ID
+   * @param {number} contract.monthlyPayment - Dönemsel kira tutarı
+   * @param {string} contract.startDate - Başlangıç tarihi (YYYY-MM-DD)
+   * @param {string} contract.endDate - Bitiş tarihi (YYYY-MM-DD)
+   * @param {number} contract.discountRate - Yıllık iskonto oranı (%)
+   * @param {string} [contract.paymentFrequency="monthly"] - Ödeme frekansı
+   * @param {string} [contract.paymentTiming="arrears"] - Ödeme zamanı (advance/arrears)
+   * @returns {Object} Hesaplama sonucu (bkz. calculateLeaseEngineImpl)
+   */
   function calculateLeaseEngine(contract) {
+    // Önce önbelleğe bak — kontrat değişmediyse tüm tabloyu
+    // yeniden hesaplamak yerine önceki sonucu döndür.
+    const cached = getCachedCalculation(contract);
+    if (cached) {
+      return cached;
+    }
+
+    const result = calculateLeaseEngineImpl(contract);
+    setCachedCalculation(contract, result);
+    return result;
+  }
+
+  /**
+   * TFRS 16 kiralama hesaplama motorunun asıl uygulaması. Kira
+   * yükümlülüğü, kullanım hakkı (ROU) varlığı, amortisman ve ödeme
+   * planını hesaplar. Doğrudan çağrılmak yerine calculateLeaseEngine()
+   * üzerinden (önbellekli) kullanılması önerilir.
+   *
+   * @param {Object} contract - Kiralama sözleşmesi
+   * @returns {Object} result
+   * @returns {number} result.months - Toplam ay sayısı
+   * @returns {number} result.liability - Başlangıç kira yükümlülüğü
+   * @returns {number} result.rouAssets - Başlangıç ROU varlığı
+   * @returns {number} result.depreciation - Aylık amortisman
+   * @returns {boolean} result.usesUsefulLifeDepreciation - Faydalı ömre göre mi amortize ediliyor
+   * @returns {string} result.paymentFrequency - Ödeme frekansı
+   * @returns {string} result.paymentTiming - Ödeme zamanı
+   * @returns {number} result.totalVariableExpense - TFRS 16.53(e) değişken kira gideri toplamı
+   * @returns {Array<Object>} result.schedule - Dönemsel ödeme planı
+   * @returns {Object} result.assumptions - Hesaplamada kullanılan varsayımlar
+   * @returns {boolean} result.exempt - Kısa vadeli/düşük değerli istisna uygulanıp uygulanmadığı
+   */
+  function calculateLeaseEngineImpl(contract) {
 
     const assumptions = {
 
@@ -4319,7 +4757,10 @@ document.addEventListener("DOMContentLoaded", () => {
      TABLE
   ========================================================== */
 
-  function renderTable() {
+  let tableCurrentPage = 1;
+  const TABLE_PAGE_SIZE = 50;
+
+  function renderTable(renderOptions = {}) {
 
     const tbody =
       document.getElementById(
@@ -4327,6 +4768,12 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
     if (!tbody) return;
+
+    // renderTable bir event listener olarak da bağlanıyor
+    // (input/change), o durumda ilk argüman bir Event nesnesidir —
+    // resetPage yalnızca açıkça false verildiğinde atlanır (goToTablePage).
+    const resetPage = renderOptions?.resetPage !== false;
+    if (resetPage) tableCurrentPage = 1;
 
     const search =
       (
@@ -4386,9 +4833,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       );
 
-    tbody.innerHTML = "";
+    // 🚀 Performans: DOM'a satır satır değil, bir kerede
+    // (DocumentFragment ile) eklenir; ayrıca sadece geçerli
+    // sayfadaki kayıtlar oluşturulur (binlerce satırda tüm tabloyu
+    // yeniden inşa etmek yerine).
+    const totalPages =
+      Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
 
-    filtered.forEach(
+    if (tableCurrentPage > totalPages) tableCurrentPage = totalPages;
+    if (tableCurrentPage < 1) tableCurrentPage = 1;
+
+    const pageStart = (tableCurrentPage - 1) * TABLE_PAGE_SIZE;
+    const pageRows = filtered.slice(pageStart, pageStart + TABLE_PAGE_SIZE);
+
+    const fragment = document.createDocumentFragment();
+
+    pageRows.forEach(
       contract => {
 
         const renewal =
@@ -4506,11 +4966,14 @@ document.addEventListener("DOMContentLoaded", () => {
               )
           );
 
-        tbody.appendChild(
+        fragment.appendChild(
           row
         );
       }
     );
+
+    tbody.innerHTML = "";
+    tbody.appendChild(fragment);
 
     setText(
       "resultCount",
@@ -4525,6 +4988,48 @@ document.addEventListener("DOMContentLoaded", () => {
         "hidden",
         filtered.length > 0
       );
+
+    renderTablePagination(tbody, filtered.length, totalPages);
+  }
+
+  function renderTablePagination(tbody, totalRows, totalPages) {
+
+    let container = document.getElementById("paginationContainer");
+
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "paginationContainer";
+      const table = tbody.closest("table");
+      const parent = table?.parentNode || tbody.parentNode;
+      parent.insertBefore(container, table ? table.nextSibling : null);
+    }
+
+    if (totalRows <= TABLE_PAGE_SIZE) {
+      container.innerHTML = "";
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;">
+        <button type="button" class="secondary-button" data-page-nav="prev" ${tableCurrentPage <= 1 ? "disabled" : ""}>← Önceki</button>
+        <span>${tableCurrentPage} / ${totalPages} (${totalRows} kayıt)</span>
+        <button type="button" class="secondary-button" data-page-nav="next" ${tableCurrentPage >= totalPages ? "disabled" : ""}>Sonraki →</button>
+      </div>
+    `;
+
+    container
+      .querySelector('[data-page-nav="prev"]')
+      ?.addEventListener("click", () => goToTablePage(tableCurrentPage - 1));
+
+    container
+      .querySelector('[data-page-nav="next"]')
+      ?.addEventListener("click", () => goToTablePage(tableCurrentPage + 1));
+  }
+
+  function goToTablePage(page) {
+    if (!Number.isFinite(page) || page < 1) return;
+    tableCurrentPage = page;
+    renderTable({ resetPage: false });
   }
 
 
@@ -4814,6 +5319,23 @@ document.addEventListener("DOMContentLoaded", () => {
      CONTRACT VALIDATION
   ========================================================== */
 
+  /**
+   * Sözleşme verilerini TFRS 16 kurallarına göre doğrular.
+   *
+   * @param {Object} contract - Doğrulanacak sözleşme
+   * @param {string} contract.id - Sözleşme ID (zorunlu)
+   * @param {string} contract.company - Şirket adı (zorunlu)
+   * @param {string} contract.supplier - Tedarikçi adı (zorunlu)
+   * @param {number} contract.monthlyPayment - Aylık kira (zorunlu, >0)
+   * @param {string} contract.startDate - Başlangıç tarihi (zorunlu)
+   * @param {string} contract.endDate - Bitiş tarihi (zorunlu, başlangıçtan sonra)
+   * @param {number} contract.discountRate - İskonto oranı (>=0)
+   * @param {boolean} [contract.shortTermLease] - Kısa vadeli kiralama istisnası (TFRS 16.5)
+   * @param {boolean} [contract.purchaseOption] - Satın alma opsiyonu var mı?
+   * @returns {Object} result
+   * @returns {boolean} result.valid - Sözleşme geçerli mi?
+   * @returns {string[]} result.errors - Doğrulama hata mesajları
+   */
   function validateContract(
     contract
   ) {
@@ -5134,7 +5656,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!validation.valid) {
 
-          alert(
+          showAlert(
             validation.errors.join(
               "\n"
             )
@@ -5151,7 +5673,7 @@ document.addEventListener("DOMContentLoaded", () => {
           )
         ) {
 
-          alert(
+          showAlert(
             "Bu Sözleşme ID zaten mevcut."
           );
 
@@ -6650,7 +7172,7 @@ document.addEventListener("DOMContentLoaded", () => {
               : createModification(contract, input);
 
           if (!result.valid) {
-            alert(result.errors.join("\n"));
+            showAlert(result.errors.join("\n"));
             return;
           }
 
@@ -6686,7 +7208,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   applyModification(contract, id);
 
                 if (!result.valid) {
-                  alert(result.errors.join("\n"));
+                  showAlert(result.errors.join("\n"));
                   return;
                 }
 
@@ -6700,7 +7222,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   cancelModification(contract, id);
 
                 if (!result.valid) {
-                  alert(result.errors.join("\n"));
+                  showAlert(result.errors.join("\n"));
                   return;
                 }
 
@@ -6827,7 +7349,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : createReassessment(contract, input);
 
       if (!result.valid) {
-        alert(result.errors.join("\n"));
+        showAlert(result.errors.join("\n"));
         return;
       }
       resetReassessmentFormMode();
@@ -6854,7 +7376,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action === "apply") {
           const result = applyReassessment(contract, id);
           if (!result.valid) {
-            alert(result.errors.join("\n"));
+            showAlert(result.errors.join("\n"));
             return;
           }
           refresh();
@@ -6865,7 +7387,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action === "cancel") {
           const result = cancelReassessment(contract, id);
           if (!result.valid) {
-            alert(result.errors.join("\n"));
+            showAlert(result.errors.join("\n"));
             return;
           }
           openDetail(contract.id);
@@ -7663,7 +8185,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!engine.schedule.length) {
 
-      alert(
+      showAlert(
         "Aktarılacak ödeme planı bulunamadı."
       );
 
@@ -7862,6 +8384,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     selectedContractId =
       id;
+
+    // Bu kontratın önbelleğini tazele (detay ekranı her zaman
+    // en güncel hesaplamayı göstermeli).
+    clearCalculationCache(id);
 
     const engine =
       calculateLease(
@@ -8072,7 +8598,7 @@ document.addEventListener("DOMContentLoaded", () => {
           .getElementById("exportContractAuditTrailButton")
           ?.addEventListener("click", () => {
             const ok = typeof exportAuditTrail === "function" ? exportAuditTrail(contract.id) : false;
-            if (!ok) alert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı.");
+            if (!ok) showAlert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı.");
           });
 
 
@@ -8910,7 +9436,7 @@ document.addEventListener("DOMContentLoaded", () => {
       !voucherDate
     ) {
 
-      alert(
+      showAlert(
         "Lütfen raporlama yılını ve fiş tarihini eksiksiz girin."
       );
 
@@ -9715,7 +10241,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (invalid) {
 
-      alert(
+      showAlert(
         "Dengesiz fiş bulunduğu için Excel aktarımı yapılamaz."
       );
 
@@ -10315,7 +10841,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function confirmBulkImport() {
     const context = window.__GK_V191_IMPORT_CONTEXT__;
     if (!context?.jobId || !Array.isArray(context.rows)) {
-      alert("Önce geçerli bir Excel dosyası yükleyin.");
+      showAlert("Önce geçerli bir Excel dosyası yükleyin.");
       return;
     }
 
@@ -10341,10 +10867,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const committed = Array.isArray(result.committed) ? result.committed : [];
       const rejected = Number(result.preview?.rejectedRows) || 0;
       const businessWarnings = committed.filter(c => Array.isArray(c.businessRuleWarnings) && c.businessRuleWarnings.length).length;
-      alert(`${committed.length} kayıt aktarıldı${rejected ? `, ${rejected} kayıt reddedildi` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`);
+      showAlert(`${committed.length} kayıt aktarıldı${rejected ? `, ${rejected} kayıt reddedildi` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`);
     } catch (error) {
       console.error("V19.1 integration import commit error:", error);
-      alert(`Import tamamlanamadı: ${error?.message || String(error)}`);
+      showAlert(`Import tamamlanamadı: ${error?.message || String(error)}`);
     }
   }
 
@@ -10590,7 +11116,7 @@ document.addEventListener("DOMContentLoaded", () => {
           v21GuardContract("contracts.delete", contract, "DELETE");
         } catch (error) {
           console.error("V21 authorization denied:", error);
-          alert(error?.message || "You do not have permission to perform this action.");
+          showAlert(error?.message || "You do not have permission to perform this action.");
           return;
         }
 
@@ -14695,6 +15221,68 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  /* ==========================================================
+     BÜYÜK DOSYA İÇİN PARÇALI DOĞRULAMA (STREAMING PREVIEW)
+     ----------------------------------------------------------
+     previewImport() ile birebir aynı doğrulama mantığını ve aynı
+     çıktı şeklini üretir; tek fark, satırları parçalar (chunk)
+     halinde işleyip her parçadan sonra tarayıcıya kontrolü geri
+     vermesidir (await + setTimeout 0). Bu sayede binlerce satırlık
+     bir Excel/CSV dosyasında arayüz donmaz ve ilerleme gösterilebilir.
+     Küçük dosyalarda davranış ve sonuç previewImport() ile aynıdır;
+     bu yüzden sadece eşik üstü satır sayısında kullanılır.
+  ========================================================== */
+
+  const LARGE_IMPORT_CHUNK_SIZE = 200;
+  const LARGE_IMPORT_ROW_THRESHOLD = 500;
+
+  async function previewImportChunked(rows, options = {}, onProgress) {
+    const inputRows = Array.isArray(rows) ? rows : [];
+    const schema = validateImportSchema(inputRows, options);
+    if (!schema.supported) {
+      return { totalRows: inputRows.length, validRows: 0, warningRows: 0, rejectedRows: inputRows.length, sampleRows: [], schema, validationResults: [] };
+    }
+
+    const seenIds = new Set();
+    const validationResults = [];
+
+    for (let i = 0; i < inputRows.length; i += LARGE_IMPORT_CHUNK_SIZE) {
+      const chunk = inputRows.slice(i, i + LARGE_IMPORT_CHUNK_SIZE);
+
+      chunk.forEach((row, offset) => {
+        const index = i + offset;
+        const result = validateImportRow(row, index + 2, { ...options, seenIds });
+        if (result.normalizedData?.id) seenIds.add(String(result.normalizedData.id));
+        validationResults.push(result);
+      });
+
+      if (typeof onProgress === "function") {
+        onProgress(Math.min(inputRows.length, i + chunk.length), inputRows.length);
+      }
+
+      // Tarayıcıya kontrolü geri ver (UI thread'i bloklamamak için).
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    const existing = new Map((Array.isArray(contracts) ? contracts : []).map(c => [String(c.id), c]));
+    validationResults.forEach(result => {
+      const id = result.normalizedData?.id;
+      if (!id || result.status === INTEGRATION_ROW_STATUS.INVALID) return;
+      result.action = existing.has(String(id)) ? "UPDATE" : "CREATE";
+      if (existing.has(String(id))) result.existingContract = { id: existing.get(String(id)).id, company: existing.get(String(id)).company };
+    });
+
+    return {
+      totalRows: inputRows.length,
+      validRows: validationResults.filter(x => x.status === INTEGRATION_ROW_STATUS.VALID).length,
+      warningRows: validationResults.filter(x => x.status === INTEGRATION_ROW_STATUS.WARNING).length,
+      rejectedRows: validationResults.filter(x => x.status === INTEGRATION_ROW_STATUS.INVALID).length,
+      sampleRows: validationResults.slice(0, 20),
+      schema,
+      validationResults
+    };
+  }
+
   function dryRunImport(rows, options = {}) {
     const preview = previewImport(rows, { ...options, dryRun: true });
     const job = createImportJob({
@@ -15114,7 +15702,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const source = registerIntegrationSource({ sourceType, sourceName: name, importedBy: integrationActor(), status: "IMPORTED", recordCount: rows.length });
     const job = createImportJob({ sourceId: source.sourceId, sourceType, fileName: name, totalRows: rows.length, lifecycle: INTEGRATION_LIFECYCLE.IMPORTED });
-    const preview = previewImport(rows, { ...options, sourceId: source.sourceId, sourceType, fileName: name });
+
+    // Performans: satır sayısı eşiği aşan dosyalarda doğrulama
+    // parçalar halinde çalışır ve ilerleme UI'da gösterilir; küçük
+    // dosyalarda sonuç ve davranış birebir aynı kalır (previewImport).
+    const isLargeImport = rows.length > LARGE_IMPORT_ROW_THRESHOLD;
+    const importStatusEl = isLargeImport ? document.getElementById("bulkImportStatus") : null;
+
+    const preview = isLargeImport
+      ? await previewImportChunked(
+          rows,
+          { ...options, sourceId: source.sourceId, sourceType, fileName: name },
+          (done, total) => {
+            if (importStatusEl) {
+              importStatusEl.innerHTML = `⏳ Doğrulanıyor... %${Math.round((done / total) * 100)} (${done}/${total})`;
+            }
+          }
+        )
+      : previewImport(rows, { ...options, sourceId: source.sourceId, sourceType, fileName: name });
+
     updateImportJob(job.jobId, { totalRows: preview.totalRows, rejectedRows: preview.rejectedRows, warningRows: preview.warningRows, validationResults: preview.validationResults, errors: preview.validationResults.flatMap(x => x.errors || []), warnings: preview.validationResults.flatMap(x => x.warnings || []), lifecycle: INTEGRATION_LIFECYCLE.VALIDATED });
     return { success: true, source, job: getImportJob(job.jobId), preview, rows };
   }
@@ -15579,7 +16185,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const data = getIntegrationExportData(type, new Date());
       const rows = Array.isArray(data) ? data : [];
-      if (!rows.length) { alert("Aktarılacak veri bulunamadı."); return; }
+      if (!rows.length) { showAlert("Aktarılacak veri bulunamadı."); return; }
       if (typeof XLSX === "undefined") { throw new Error("Excel motoru yüklenemedi."); }
       const worksheet = XLSX.utils.json_to_sheet(rows);
       const workbook = XLSX.utils.book_new();
@@ -15588,7 +16194,7 @@ document.addEventListener("DOMContentLoaded", () => {
       createExportHistory(type, rows.length, { status: "COMPLETED" });
     } catch (error) {
       console.error("V19.1 Excel export error:", error);
-      alert(`Excel export tamamlanamadı: ${error?.message || String(error)}`);
+      showAlert(`Excel export tamamlanamadı: ${error?.message || String(error)}`);
     }
   }
 
