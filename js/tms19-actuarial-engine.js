@@ -1188,6 +1188,50 @@
                     validation,
 
 
+                hesaplamaDurumu:
+                    "BAŞARILI",
+
+
+                /*
+                 * UI (tms19.html) için düz erişim
+                 * alanları — personel, demografi, maas
+                 * objelerinin kopyası
+                 */
+
+                personelId:
+                    p.personelId,
+
+                adSoyad:
+                    p.adSoyad,
+
+                departman:
+                    p.departman,
+
+                pozisyon:
+                    p.pozisyon,
+
+                mevcutMaas:
+                    mevcutMaas,
+
+                yas:
+                    yas,
+
+                hizmetSuresi:
+                    hizmetSuresi,
+
+                emekliligeKalanYil:
+                    emekliligeKalanYil,
+
+                emeklilikMaasi:
+                    emeklilikMaasi,
+
+                kazanilmisFayda:
+                    kazanilmisFayda,
+
+                devamOlasiligi:
+                    devamOlasiligi,
+
+
                 metadata:
                     {
 
@@ -1807,6 +1851,377 @@
 
 
             return senaryolar;
+        };
+
+
+    /* ============================================================
+       14d — RİSK ANALİZİ (TEK PERSONEL)
+    ============================================================ */
+
+    TMS19.riskAnalizi =
+        function (
+            sonuc
+        ) {
+
+            const dbo =
+                TMS19.sayi(
+                    sonuc
+                        ?.muhasebe
+                        ?.dbo ??
+                    sonuc
+                        ?.dbo
+                );
+
+
+            const kalanYil =
+                TMS19.sayi(
+                    sonuc
+                        ?.demografi
+                        ?.emekliligeKalanYil ??
+                    sonuc
+                        ?.emekliligeKalanYil
+                );
+
+
+            const devam =
+                TMS19.sayi(
+                    sonuc
+                        ?.demografi
+                        ?.devamOlasiligi ??
+                    sonuc
+                        ?.devamOlasiligi
+                );
+
+
+            let skor =
+                0;
+
+
+            if (
+                dbo > 1000000
+            ) {
+
+                skor += 3;
+            }
+            else if (
+                dbo > 500000
+            ) {
+
+                skor += 2;
+            }
+            else if (
+                dbo > 250000
+            ) {
+
+                skor += 1;
+            }
+
+
+            if (
+                kalanYil <= 3
+            ) {
+
+                skor += 3;
+            }
+            else if (
+                kalanYil <= 5
+            ) {
+
+                skor += 2;
+            }
+            else if (
+                kalanYil <= 10
+            ) {
+
+                skor += 1;
+            }
+
+
+            if (
+                devam < 0.5
+            ) {
+
+                skor += 2;
+            }
+            else if (
+                devam < 0.75
+            ) {
+
+                skor += 1;
+            }
+
+
+            let genelRisk =
+                "DÜŞÜK";
+
+
+            if (
+                skor >= 6
+            ) {
+
+                genelRisk =
+                    "YÜKSEK";
+            }
+            else if (
+                skor >= 3
+            ) {
+
+                genelRisk =
+                    "ORTA";
+            }
+
+
+            return {
+
+                personelId:
+                    sonuc
+                        ?.personel
+                        ?.personelId ??
+                    sonuc
+                        ?.personelId,
+
+                dbo:
+                    dbo,
+
+                kalanYil:
+                    kalanYil,
+
+                devamOlasiligi:
+                    devam,
+
+                skor:
+                    skor,
+
+                genelRisk:
+                    genelRisk
+            };
+        };
+
+
+    /* ============================================================
+       14e — AUDIT TRAIL (TEK PERSONEL)
+    ============================================================ */
+
+    TMS19.auditTrail =
+        function (
+            personel,
+            varsayimlar = {}
+        ) {
+
+            if (
+                !personel
+            ) {
+
+                return [];
+            }
+
+
+            let sonuc;
+
+
+            try {
+
+                sonuc =
+                    TMS19.personelHesapla(
+                        personel,
+                        varsayimlar,
+                        0
+                    );
+            }
+            catch (
+                error
+            ) {
+
+                return [
+
+                    {
+                        adim:
+                            1,
+
+                        alan:
+                            "Hata",
+
+                        deger:
+                            0,
+
+                        aciklama:
+                            error.message
+                    }
+                ];
+            }
+
+
+            return [
+
+                {
+                    adim:
+                        1,
+
+                    alan:
+                        "Yaş",
+
+                    deger:
+                        sonuc.demografi.yas,
+
+                    aciklama:
+                        "Değerleme tarihi itibarıyla personel yaşı."
+                },
+
+                {
+                    adim:
+                        2,
+
+                    alan:
+                        "Hizmet Süresi",
+
+                    deger:
+                        sonuc.demografi
+                            .hizmetSuresi,
+
+                    aciklama:
+                        "İşe giriş tarihinden değerleme tarihine kadar geçen süre."
+                },
+
+                {
+                    adim:
+                        3,
+
+                    alan:
+                        "Emekliliğe Kalan Yıl",
+
+                    deger:
+                        sonuc.demografi
+                            .emekliligeKalanYil,
+
+                    aciklama:
+                        "Emeklilik yaşına kalan süre."
+                },
+
+                {
+                    adim:
+                        4,
+
+                    alan:
+                        "Projekte Edilen Maaş",
+
+                    deger:
+                        sonuc.maas
+                            .emeklilikMaasi,
+
+                    aciklama:
+                        "Maaş artış oranı ile emeklilik tarihine taşınan maaş."
+                },
+
+                {
+                    adim:
+                        5,
+
+                    alan:
+                        "Kıdem Tavanı Uygulandı mı",
+
+                    deger:
+                        sonuc.kidemTavani
+                            .uygulandi
+                            ? 1
+                            : 0,
+
+                    aciklama:
+                        sonuc.kidemTavani
+                            .uygulandi
+                            ? "Fayda hesaplama maaşı kıdem tavanı ile sınırlandırıldı."
+                            : "Kıdem tavanı uygulanmadı."
+                },
+
+                {
+                    adim:
+                        6,
+
+                    alan:
+                        "Devam Olasılığı",
+
+                    deger:
+                        sonuc.demografik
+                            .devamOlasiligi,
+
+                    aciklama:
+                        "Personel devir ve ölüm oranına göre hesaplanan devam olasılığı."
+                },
+
+                {
+                    adim:
+                        7,
+
+                    alan:
+                        "Kazanılmış Fayda",
+
+                    deger:
+                        sonuc.hizmet
+                            .kazanilmisFayda,
+
+                    aciklama:
+                        "Hizmet oranına göre kazanılmış kıdem tazminatı tutarı."
+                },
+
+                {
+                    adim:
+                        8,
+
+                    alan:
+                        "İskonto Faktörü",
+
+                    deger:
+                        sonuc.iskonto
+                            .faktor,
+
+                    aciklama:
+                        "İskonto oranı ile bugüne indirgeme faktörü."
+                },
+
+                {
+                    adim:
+                        9,
+
+                    alan:
+                        "DBO",
+
+                    deger:
+                        sonuc.muhasebe
+                            .dbo,
+
+                    aciklama:
+                        "Tanımlanmış Fayda Yükümlülüğü (bugünkü değer)."
+                },
+
+                {
+                    adim:
+                        10,
+
+                    alan:
+                        "Cari Hizmet Maliyeti",
+
+                    deger:
+                        sonuc.muhasebe
+                            .cariHizmetMaliyeti,
+
+                    aciklama:
+                        "Cari döneme ait hizmet maliyeti."
+                },
+
+                {
+                    adim:
+                        11,
+
+                    alan:
+                        "Faiz Maliyeti",
+
+                    deger:
+                        sonuc.muhasebe
+                            .faizMaliyeti,
+
+                    aciklama:
+                        "Açılış DBO üzerinden hesaplanan faiz maliyeti."
+                }
+            ];
         };
 
 
