@@ -12,7 +12,10 @@ CREATE TABLE IF NOT EXISTS companies (
 
 CREATE TABLE IF NOT EXISTS contracts (
     id VARCHAR(50) PRIMARY KEY,
-    company_id VARCHAR(50) REFERENCES companies(id),
+    -- NOT NULL: veri izolasyonu company_id filtresine dayanıyor —
+    -- şirketsiz bir kontrat hiçbir kullanıcıya görünmez (kimseye
+    -- gösterilemeyen "yetim" kayıt olurdu), bu yüzden zorunlu.
+    company_id VARCHAR(50) NOT NULL REFERENCES companies(id),
     company VARCHAR(100) NOT NULL,
     supplier VARCHAR(100) NOT NULL,
     monthly_payment DECIMAL(15,2) NOT NULL,
@@ -50,15 +53,20 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'VIEWER',
-    company_id VARCHAR(50) REFERENCES companies(id),
     status VARCHAR(20) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Bir kullanıcı birden fazla şirkete erişebilir (V21 companyIds
--- dizisiyle uyumlu çoktan-çoğa ilişki).
+-- Bir kullanıcının hangi şirket(ler)e erişebildiğinin TEK doğruluk
+-- kaynağı burasıdır (V21 companyIds dizisiyle uyumlu çoktan-çoğa
+-- ilişki). auth.js/login bu tablodan okur, JWT'ye bu listeyi gömer;
+-- tüm route'lardaki company_id = ANY(...) filtreleri buradan gelir.
+-- ADMIN rolü dahil hiçbir kullanıcı için otomatik "tüm şirketleri gör"
+-- istisnası YOKTUR — admin'e erişim vermek isteniyorsa, admin'in id'si
+-- bu tabloya istenen her company_id için ayrı ayrı eklenmelidir.
 CREATE TABLE IF NOT EXISTS user_companies (
     user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
     company_id VARCHAR(50) REFERENCES companies(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, company_id)
 );
+CREATE INDEX IF NOT EXISTS idx_user_companies_user ON user_companies(user_id);
