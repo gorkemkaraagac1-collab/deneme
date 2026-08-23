@@ -12,6 +12,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
+const authRouter = require("./routes/auth");
 const contractsRouter = require("./routes/contracts");
 const auditRouter = require("./routes/audit");
 const reportsRouter = require("./routes/reports");
@@ -32,6 +33,15 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "v25.1-backend-boilerplate" });
 });
 
+// /api/auth: register/login — kimlik doğrulama gerektirmez (buraya
+// girmenin amacı zaten kimlik doğrulamak).
+app.use("/api/auth", authRouter);
+
+// Aşağıdaki üç router'ın İÇİNDE (router.use(requireAuth)) zaten auth
+// zorunlu kılınmıştır — burada ayrıca eklemeye gerek yok, ama routerlar
+// içinde bu satır yoksa (yanlışlıkla silinirse) tüm veri açık kalır.
+// Bu yüzden her router dosyasının en üstünde router.use(requireAuth)
+// olduğunu değiştirirken kontrol edin.
 app.use("/api/contracts", contractsRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/reports", reportsRouter);
