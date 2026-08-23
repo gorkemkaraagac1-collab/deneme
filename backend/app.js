@@ -1,13 +1,15 @@
+cat > backend/app.js <<'EOF'
 /**
  * TFRS 16 Backend — Express Application
  *
- * Bu dosya yalnızca Express application oluşturur.
+ * Bu dosya sadece Express uygulamasını oluşturur.
+ * HTTP server başlatmaz.
  *
- * ÖNEMLİ:
- * app.listen() burada YOKTUR.
+ * Testlerde:
+ *   require("./app")
  *
- * Test ortamında Supertest doğrudan bu app'i kullanır.
- * Production/local çalıştırmada server.js app.listen() çağırır.
+ * Production/local çalıştırmada:
+ *   backend/server.js
  */
 
 require("dotenv").config();
@@ -31,9 +33,7 @@ const app = express();
  * ============================================================
  */
 
-app.use(
-  cors()
-);
+app.use(cors());
 
 app.use(
   express.json({
@@ -65,27 +65,20 @@ app.use((req, res, next) => {
  * ============================================================
  */
 
-app.get(
-  "/health",
-  (req, res) => {
+app.get("/health", (req, res) => {
 
-    res.status(200).json({
-      status: "ok",
-      version: "v26.1-license-system"
-    });
+  res.status(200).json({
+    status: "ok",
+    version: "v26.1-license-system"
+  });
 
-  }
-);
+});
 
 
 /**
  * ============================================================
- * AUTH ROUTES
+ * AUTH
  * ============================================================
- *
- * POST /api/auth/login
- * POST /api/auth/register
- * GET  /api/auth/me
  */
 
 app.use(
@@ -96,14 +89,8 @@ app.use(
 
 /**
  * ============================================================
- * ADMIN LICENSE ROUTES
+ * ADMIN LICENSE
  * ============================================================
- *
- * GET   /api/admin/plans
- * GET   /api/admin/companies/:companyId/license
- * POST  /api/admin/companies/:companyId/license
- * PATCH /api/admin/licenses/:licenseId/extend
- * POST  /api/admin/licenses/:licenseId/cancel
  */
 
 app.use(
@@ -114,7 +101,7 @@ app.use(
 
 /**
  * ============================================================
- * LICENSE AUTHORIZATION TEST ROUTES
+ * LICENSE TEST
  * ============================================================
  */
 
@@ -130,30 +117,15 @@ app.use(
  * ============================================================
  */
 
-
-/**
- * TFRS 16 Contracts
- */
-
 app.use(
   "/api/contracts",
   contractsRouter
 );
 
-
-/**
- * Audit
- */
-
 app.use(
   "/api/audit",
   auditRouter
 );
-
-
-/**
- * Reports
- */
 
 app.use(
   "/api/reports",
@@ -163,41 +135,37 @@ app.use(
 
 /**
  * ============================================================
- * 404 HANDLER
+ * 404
  * ============================================================
  */
 
-app.use(
-  (req, res) => {
+app.use((req, res) => {
 
-    res.status(404).json({
-      error: "İstenen endpoint bulunamadı"
-    });
+  res.status(404).json({
+    error: "İstenen endpoint bulunamadı"
+  });
 
-  }
-);
+});
 
 
 /**
  * ============================================================
- * CENTRAL ERROR HANDLER
+ * ERROR HANDLER
  * ============================================================
  */
 
-app.use(
-  (err, req, res, next) => {
+app.use((err, req, res, next) => {
 
-    console.error(
-      "Unhandled error:",
-      err
-    );
+  console.error(
+    "Unhandled error:",
+    err
+  );
 
-    res.status(500).json({
-      error: "Sunucuda beklenmeyen bir hata oluştu"
-    });
+  res.status(500).json({
+    error: "Sunucuda beklenmeyen bir hata oluştu"
+  });
 
-  }
-);
+});
 
 
 /**
@@ -207,3 +175,4 @@ app.use(
  */
 
 module.exports = app;
+EOF
