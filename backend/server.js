@@ -1,14 +1,8 @@
 /**
  * TFRS 16 Backend — HTTP Server
  *
- * Express application:
- *     backend/app.js
- *
- * HTTP server:
- *     backend/server.js
- *
- * Jest testleri app.js'i doğrudan kullanır.
- * Böylece test sırasında port açılmaz.
+ * app.js → Express application
+ * server.js → HTTP server lifecycle
  */
 
 require("dotenv").config();
@@ -16,18 +10,10 @@ require("dotenv").config();
 const app = require("./app");
 
 const PORT = process.env.PORT || 8080;
-const HOST = process.env.HOST || "0.0.0.0";
-
-
-/**
- * ============================================================
- * SERVER START
- * ============================================================
- */
 
 const server = app.listen(
   PORT,
-  HOST,
+  "0.0.0.0",
   () => {
 
     console.log(
@@ -39,21 +25,19 @@ const server = app.listen(
 
 
 /**
- * ============================================================
- * GRACEFUL SHUTDOWN
- * ============================================================
+ * Graceful shutdown
  */
 
 function shutdown(signal) {
 
   console.log(
-    `\n${signal} alındı. Server kapatılıyor...`
+    `\n${signal} received. Server kapatılıyor...`
   );
 
   server.close(() => {
 
     console.log(
-      "HTTP server kapatıldı."
+      "HTTP server başarıyla kapatıldı."
     );
 
     process.exit(0);
@@ -63,12 +47,6 @@ function shutdown(signal) {
 }
 
 
-/**
- * ============================================================
- * PROCESS SIGNALS
- * ============================================================
- */
-
 process.on(
   "SIGTERM",
   () => shutdown("SIGTERM")
@@ -77,39 +55,6 @@ process.on(
 process.on(
   "SIGINT",
   () => shutdown("SIGINT")
-);
-
-
-/**
- * ============================================================
- * UNHANDLED ERRORS
- * ============================================================
- */
-
-process.on(
-  "unhandledRejection",
-  error => {
-
-    console.error(
-      "Unhandled Promise Rejection:",
-      error
-    );
-
-  }
-);
-
-process.on(
-  "uncaughtException",
-  error => {
-
-    console.error(
-      "Uncaught Exception:",
-      error
-    );
-
-    shutdown("uncaughtException");
-
-  }
 );
 
 
