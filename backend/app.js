@@ -1,5 +1,18 @@
 /**
- * TFRS 16 Backend — Express.js giriş noktası.
+ * TFRS 16 Backend — Express Application
+ *
+ * Bu dosya sadece Express application oluşturur.
+ *
+ * DİKKAT:
+ * Burada app.listen() YOKTUR.
+ *
+ * Production server başlangıcı:
+ * backend/server.js
+ *
+ * Bunun ayrılmasının nedeni:
+ * - Jest testlerinde gerçek HTTP server açılmasını engellemek
+ * - EADDRINUSE problemlerini önlemek
+ * - Application ile infrastructure katmanını ayırmak
  */
 
 require("dotenv").config();
@@ -15,8 +28,6 @@ const adminLicenseRouter = require("./routes/admin-licenses");
 const licenseTestRouter = require("./routes/license-test");
 
 const app = express();
-
-const PORT = Number(process.env.PORT) || 8080;
 
 
 /**
@@ -41,6 +52,7 @@ app.use(
  */
 
 app.use((req, res, next) => {
+
   console.log(
     `${new Date().toISOString()} ${req.method} ${req.path}`
   );
@@ -56,10 +68,12 @@ app.use((req, res, next) => {
  */
 
 app.get("/health", (req, res) => {
+
   res.json({
     status: "ok",
     version: "v26.1-license-system"
   });
+
 });
 
 
@@ -67,6 +81,10 @@ app.get("/health", (req, res) => {
  * ============================================================
  * AUTH ROUTES
  * ============================================================
+ *
+ * POST /api/auth/login
+ * POST /api/auth/register
+ * GET  /api/auth/me
  */
 
 app.use(
@@ -79,6 +97,12 @@ app.use(
  * ============================================================
  * ADMIN LICENSE ROUTES
  * ============================================================
+ *
+ * GET   /api/admin/plans
+ * GET   /api/admin/companies/:companyId/license
+ * POST  /api/admin/companies/:companyId/license
+ * PATCH /api/admin/licenses/:licenseId/extend
+ * POST  /api/admin/licenses/:licenseId/cancel
  */
 
 app.use(
@@ -140,9 +164,12 @@ app.use(
  */
 
 app.use((req, res) => {
+
   res.status(404).json({
-    error: "İstenen endpoint bulunamadı"
+    error:
+      "İstenen endpoint bulunamadı"
   });
+
 });
 
 
@@ -160,63 +187,19 @@ app.use(
       err
     );
 
-    if (res.headersSent) {
-      return next(err);
-    }
-
-    return res.status(500).json({
+    res.status(500).json({
       error:
         "Sunucuda beklenmeyen bir hata oluştu"
     });
+
   }
 );
 
 
 /**
  * ============================================================
- * EXPRESS APPLICATION EXPORT
+ * EXPORT
  * ============================================================
- *
- * Testlerde:
- *
- * const app = require("../backend/app");
- *
- * kullanıldığında yalnızca Express application döner.
- *
- * HTTP server başlatılmaz.
  */
 
 module.exports = app;
-
-
-/**
- * ============================================================
- * SERVER START
- * ============================================================
- *
- * Bu blok yalnızca:
- *
- * node backend/app.js
- *
- * komutu ile dosya doğrudan çalıştırıldığında
- * execute edilir.
- *
- * Jest / Supertest tarafından require edildiğinde
- * çalışmaz.
- */
-
-if (require.main === module) {
-
-  app.listen(
-    PORT,
-    "0.0.0.0",
-    () => {
-
-      console.log(
-        `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
-      );
-
-    }
-  );
-
-}
