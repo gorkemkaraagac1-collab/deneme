@@ -18,7 +18,9 @@ const auditRouter = require("./routes/audit");
 const reportsRouter = require("./routes/reports");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Cloud Run varsayılan portu 8080'dir; ortam değişkeni yoksa 8080 kullanılır.
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -33,15 +35,11 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "v25.1-backend-boilerplate" });
 });
 
-// /api/auth: register/login — kimlik doğrulama gerektirmez (buraya
-// girmenin amacı zaten kimlik doğrulamak).
+// /api/auth: register/login — kimlik doğrulama gerektirmez
 app.use("/api/auth", authRouter);
 
 // Aşağıdaki üç router'ın İÇİNDE (router.use(requireAuth)) zaten auth
-// zorunlu kılınmıştır — burada ayrıca eklemeye gerek yok, ama routerlar
-// içinde bu satır yoksa (yanlışlıkla silinirse) tüm veri açık kalır.
-// Bu yüzden her router dosyasının en üstünde router.use(requireAuth)
-// olduğunu değiştirirken kontrol edin.
+// zorunlu kılınmıştır.
 app.use("/api/contracts", contractsRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/reports", reportsRouter);
@@ -52,8 +50,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 TFRS16 Backend çalışıyor: http://localhost:${PORT}`);
+// '0.0.0.0' eklenerek Cloud Run/Docker konteyner trafiğinin kabul edilmesi sağlandı.
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 TFRS16 Backend çalışıyor: port ${PORT}`);
 });
 
 module.exports = app;
