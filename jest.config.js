@@ -1,9 +1,7 @@
-module.exports = {
+cd /workspaces/deneme
 
-  /**
-   * Frontend/TFRS16 engine testleri window/document
-   * kullandığı için jsdom gereklidir.
-   */
+cat > jest.config.js <<'EOF'
+module.exports = {
   testEnvironment: "jsdom",
 
   testMatch: [
@@ -17,5 +15,5 @@ module.exports = {
   clearMocks: true,
 
   verbose: true
-
 };
+EOF
