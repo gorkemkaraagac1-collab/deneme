@@ -54,7 +54,11 @@ function normalizeCompanyIds(companyIds) {
   return [
     ...new Set(
       companyIds
-        .filter(id => id !== null && id !== undefined)
+        .filter(
+          id =>
+            id !== null &&
+            id !== undefined
+        )
         .map(id => String(id).trim())
         .filter(Boolean)
     )
@@ -66,16 +70,17 @@ function normalizeCompanyIds(companyIds) {
  * Kullanıcı oluşturulmadan önce şirketlerin gerçekten
  * mevcut olduğunu kontrol eder.
  *
- * Aynı zamanda şirket satırlarını FOR UPDATE ile kilitler.
+ * Şirket satırlarını FOR UPDATE ile kilitler.
  *
- * Bu lock kullanıcı limitindeki race condition'ı önlemek
- * açısından kritiktir.
+ * Bu lock kullanıcı limitindeki race condition'ı
+ * önlemek açısından kritiktir.
  */
 async function lockCompaniesForUserCreation(
   client,
   companyIds
 ) {
-  const sortedCompanyIds = [...companyIds].sort();
+  const sortedCompanyIds =
+    [...companyIds].sort();
 
   const result = await client.query(
     `
@@ -88,14 +93,17 @@ async function lockCompaniesForUserCreation(
     [sortedCompanyIds]
   );
 
-  const foundCompanyIds = result.rows.map(
-    row => String(row.id)
-  );
+  const foundCompanyIds =
+    result.rows.map(
+      row => String(row.id)
+    );
 
   const missingCompanyIds =
     sortedCompanyIds.filter(
       companyId =>
-        !foundCompanyIds.includes(companyId)
+        !foundCompanyIds.includes(
+          companyId
+        )
     );
 
   if (missingCompanyIds.length > 0) {
@@ -103,8 +111,11 @@ async function lockCompaniesForUserCreation(
       "Bir veya daha fazla şirket bulunamadı."
     );
 
-    error.code = "COMPANY_NOT_FOUND";
-    error.companyIds = missingCompanyIds;
+    error.code =
+      "COMPANY_NOT_FOUND";
+
+    error.companyIds =
+      missingCompanyIds;
 
     throw error;
   }
@@ -120,353 +131,544 @@ async function lockCompaniesForUserCreation(
  *
  * Yeni kullanıcı oluşturur.
  *
- * Kullanıcı birden fazla şirkete bağlanabilir.
+ * GÜVENLİK:
  *
- * Her şirket için:
+ * - Authentication zorunludur.
+ * - Sadece ADMIN kullanıcı oluşturabilir.
+ * - ADMIN sadece kendi şirketlerine kullanıcı ekleyebilir.
+ * - Client tarafından gönderilen role güvenilmez.
+ * - Yeni kullanıcı default olarak VIEWER olur.
  *
- * 1. Şirket satırı kilitlenir.
- * 2. Aktif lisans kontrol edilir.
- * 3. Kullanıcı limiti kontrol edilir.
- * 4. Kullanıcı oluşturulur.
- * 5. user_companies ilişkileri oluşturulur.
+ * Lisans:
+ *
+ * - Aktif lisans kontrol edilir.
+ * - Kullanıcı limiti kontrol edilir.
+ * - Şirketler transaction içerisinde kilitlenir.
  *
  * Tüm işlemler tek transaction içerisindedir.
- *
- * Herhangi bir şirketin limiti yetersizse:
- *
- * -> hiçbir şirket için kullanıcı oluşturulmaz.
  */
-router.post("/register", async (req, res) => {
-  const client = await pool.connect();
+router.post(
+  "/register",
+  requireAuth,
+  async (req, res) => {
 
-  try {
-    const {
-      id,
-      username,
-      password,
-      role,
-      companyIds
-    } = req.body;
+    const client =
+      await pool.connect();
 
-    /**
-     * --------------------------------------------------------
-     * INPUT VALIDATION
-     * --------------------------------------------------------
-     */
+    try {
 
-    if (
-      !id ||
-      !username ||
-      !password ||
-      !Array.isArray(companyIds) ||
-      companyIds.length === 0
-    ) {
-      return res.status(400).json({
-        error:
-          "id, username, password ve en az bir companyIds zorunludur"
-      });
-    }
+      /**
+       * --------------------------------------------------------
+       * AUTHORIZATION
+       * --------------------------------------------------------
+       */
 
-    if (password.length < 10) {
-      return res.status(400).json({
-        error:
-          "Parola en az 10 karakter olmalıdır"
-      });
-    }
-
-    const normalizedCompanyIds =
-      normalizeCompanyIds(companyIds);
-
-    if (normalizedCompanyIds.length === 0) {
-      return res.status(400).json({
-        error:
-          "En az bir geçerli şirket belirtilmelidir"
-      });
-    }
-
-    /**
-     * Güvenlik:
-     *
-     * Role değeri client tarafından serbestçe verilmemeli.
-     * Mevcut davranışı tamamen bozmamak için şimdilik
-     * sadece geçerli roller kabul edilir.
-     */
-    const allowedRoles = [
-      "ADMIN",
-      "MANAGER",
-      "VIEWER"
-    ];
-
-    const userRole =
-      role && allowedRoles.includes(role)
-        ? role
-        : "VIEWER";
+      if (!req.user) {
+        return res.status(401).json({
+          error:
+            "Kimlik doğrulaması gerekli"
+        });
+      }
 
 
-    /**
-     * Password hash transaction dışında hazırlanabilir.
-     * Böylece DB transaction gereksiz yere açık tutulmaz.
-     */
-    const passwordHash = await bcrypt.hash(
-      password,
-      BCRYPT_ROUNDS
-    );
+      if (req.user.role !== "ADMIN") {
+        return res.status(403).json({
+          error:
+            "Bu işlem için ADMIN yetkisi gereklidir."
+        });
+      }
 
 
-    /**
-     * --------------------------------------------------------
-     * TRANSACTION START
-     * --------------------------------------------------------
-     */
+      /**
+       * --------------------------------------------------------
+       * INPUT
+       * --------------------------------------------------------
+       */
 
-    await client.query("BEGIN");
-
-
-    /**
-     * --------------------------------------------------------
-     * 1. ŞİRKETLERİ KİLİTLE
-     * --------------------------------------------------------
-     *
-     * Aynı şirket üzerinde iki transaction'ın aynı anda
-     * kullanıcı limiti değerlendirmesini engeller.
-     */
-    await lockCompaniesForUserCreation(
-      client,
-      normalizedCompanyIds
-    );
+      const {
+        id,
+        username,
+        password,
+        companyIds
+      } = req.body;
 
 
-    /**
-     * --------------------------------------------------------
-     * 2. LİSANS / USER LIMIT KONTROLÜ
-     * --------------------------------------------------------
-     *
-     * Şirketleri sıralı şekilde kontrol ediyoruz.
-     *
-     * Örneğin:
-     *
-     * Company A -> Professional -> 4/5
-     * Company B -> Starter       -> 1/1
-     *
-     * Kullanıcı Company B'ye bağlanamayacağı için
-     * transaction tamamen rollback edilir.
-     */
-    const companyLicenseResults = [];
+      /**
+       * --------------------------------------------------------
+       * INPUT VALIDATION
+       * --------------------------------------------------------
+       */
 
-    for (const companyId of normalizedCompanyIds) {
+      if (
+        !id ||
+        !username ||
+        !password ||
+        !Array.isArray(companyIds) ||
+        companyIds.length === 0
+      ) {
+        return res.status(400).json({
+          error:
+            "id, username, password ve en az bir companyIds zorunludur"
+        });
+      }
 
-      const licenseCheck =
-        await canAddUserToCompany(
-          companyId,
-          client
+
+      if (
+        typeof id !== "string" ||
+        typeof username !== "string" ||
+        typeof password !== "string"
+      ) {
+        return res.status(400).json({
+          error:
+            "id, username ve password metin tipinde olmalıdır"
+        });
+      }
+
+
+      if (
+        password.length < 10
+      ) {
+        return res.status(400).json({
+          error:
+            "Parola en az 10 karakter olmalıdır"
+        });
+      }
+
+
+      const normalizedCompanyIds =
+        normalizeCompanyIds(
+          companyIds
         );
 
-      companyLicenseResults.push({
-        companyId,
-        ...licenseCheck
-      });
 
-      if (!licenseCheck.allowed) {
+      if (
+        normalizedCompanyIds.length === 0
+      ) {
+        return res.status(400).json({
+          error:
+            "En az bir geçerli şirket belirtilmelidir"
+        });
+      }
 
-        await client.query("ROLLBACK");
+
+      /**
+       * --------------------------------------------------------
+       * COMPANY AUTHORIZATION
+       * --------------------------------------------------------
+       *
+       * ADMIN yalnızca JWT'deki kendi şirketlerine
+       * kullanıcı ekleyebilir.
+       *
+       * Client tarafından gönderilen companyIds,
+       * req.user.companyIds ile karşılaştırılır.
+       */
+
+      const adminCompanyIds =
+        Array.isArray(
+          req.user.companyIds
+        )
+          ? req.user.companyIds.map(
+              String
+            )
+          : [];
+
+
+      const unauthorizedCompanyIds =
+        normalizedCompanyIds.filter(
+          companyId =>
+            !adminCompanyIds.includes(
+              String(companyId)
+            )
+        );
+
+
+      if (
+        unauthorizedCompanyIds.length > 0
+      ) {
+        return res.status(403).json({
+          error:
+            "Bu şirketlerden birine kullanıcı ekleme yetkiniz bulunmamaktadır.",
+
+          companyIds:
+            unauthorizedCompanyIds
+        });
+      }
+
+
+      /**
+       * --------------------------------------------------------
+       * ROLE
+       * --------------------------------------------------------
+       *
+       * Client'ın gönderdiği role artık
+       * kullanılmıyor.
+       *
+       * Bu sayede kullanıcı request'e:
+       *
+       * "role": "ADMIN"
+       *
+       * yazsa bile ADMIN oluşturamaz.
+       *
+       * İleride ADMIN'in kontrollü olarak
+       * MANAGER / VIEWER seçmesine izin verilebilir.
+       */
+
+      const userRole =
+        "VIEWER";
+
+
+      /**
+       * --------------------------------------------------------
+       * PASSWORD HASH
+       * --------------------------------------------------------
+       *
+       * Hash transaction başlamadan önce hazırlanır.
+       */
+
+      const passwordHash =
+        await bcrypt.hash(
+          password,
+          BCRYPT_ROUNDS
+        );
+
+
+      /**
+       * --------------------------------------------------------
+       * TRANSACTION START
+       * --------------------------------------------------------
+       */
+
+      await client.query(
+        "BEGIN"
+      );
+
+
+      /**
+       * --------------------------------------------------------
+       * 1. COMPANY LOCK
+       * --------------------------------------------------------
+       *
+       * Race condition önlenir.
+       */
+
+      await lockCompaniesForUserCreation(
+        client,
+        normalizedCompanyIds
+      );
+
+
+      /**
+       * --------------------------------------------------------
+       * 2. LICENSE / USER LIMIT CHECK
+       * --------------------------------------------------------
+       */
+
+      for (
+        const companyId
+        of normalizedCompanyIds
+      ) {
+
+        const licenseCheck =
+          await canAddUserToCompany(
+            companyId,
+            client
+          );
+
 
         /**
-         * Aktif lisans yok.
+         * ----------------------------------------------------
+         * NO ACTIVE LICENSE
+         * ----------------------------------------------------
          */
+
         if (
+          !licenseCheck.allowed &&
           licenseCheck.reason ===
-          "NO_ACTIVE_LICENSE"
+            "NO_ACTIVE_LICENSE"
         ) {
+
+          await client.query(
+            "ROLLBACK"
+          );
+
           return res.status(403).json({
+
             error:
               "Kullanıcı oluşturulamadı",
+
             code:
               "NO_ACTIVE_LICENSE",
+
             companyId,
+
             message:
               "Kullanıcının bağlanacağı şirketin geçerli bir lisansı bulunmamaktadır."
           });
         }
 
+
         /**
-         * Kullanıcı limiti dolu.
+         * ----------------------------------------------------
+         * USER LIMIT REACHED
+         * ----------------------------------------------------
          */
+
         if (
+          !licenseCheck.allowed &&
           licenseCheck.reason ===
-          "LIMIT_REACHED"
+            "LIMIT_REACHED"
         ) {
+
+          await client.query(
+            "ROLLBACK"
+          );
+
           return res.status(403).json({
+
             error:
               "Kullanıcı oluşturulamadı",
+
             code:
               "USER_LIMIT_REACHED",
+
             companyId,
+
             currentUsers:
               licenseCheck.currentUsers,
+
             maxUsers:
               licenseCheck.maxUsers,
+
             message:
               "Şirket kullanıcı limitine ulaşmıştır. Yeni kullanıcı eklemek için lisansınızı yükseltin."
           });
         }
 
-        return res.status(403).json({
-          error:
-            "Kullanıcı oluşturulamadı",
-          companyId,
-          message:
-            licenseCheck.message
-        });
+
+        /**
+         * ----------------------------------------------------
+         * OTHER LICENSE ERROR
+         * ----------------------------------------------------
+         */
+
+        if (
+          !licenseCheck.allowed
+        ) {
+
+          await client.query(
+            "ROLLBACK"
+          );
+
+          return res.status(403).json({
+
+            error:
+              "Kullanıcı oluşturulamadı",
+
+            companyId,
+
+            message:
+              licenseCheck.message ||
+              "Şirket lisansı kullanıcı eklenmesine izin vermiyor."
+          });
+        }
       }
-    }
 
 
-    /**
-     * --------------------------------------------------------
-     * 3. USER INSERT
-     * --------------------------------------------------------
-     */
-
-    await client.query(
-      `
-        INSERT INTO users (
-          id,
-          username,
-          password_hash,
-          role,
-          status
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          'ACTIVE'
-        )
-      `,
-      [
-        id,
-        username,
-        passwordHash,
-        userRole
-      ]
-    );
-
-
-    /**
-     * --------------------------------------------------------
-     * 4. USER ↔ COMPANY RELATIONSHIPS
-     * --------------------------------------------------------
-     */
-
-    for (const companyId of normalizedCompanyIds) {
+      /**
+       * --------------------------------------------------------
+       * 3. USER INSERT
+       * --------------------------------------------------------
+       */
 
       await client.query(
         `
-          INSERT INTO user_companies (
-            user_id,
-            company_id
+          INSERT INTO users (
+            id,
+            username,
+            password_hash,
+            role,
+            status
           )
-          VALUES ($1, $2)
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            'ACTIVE'
+          )
         `,
         [
           id,
-          companyId
+          username,
+          passwordHash,
+          userRole
         ]
       );
-    }
 
 
-    /**
-     * --------------------------------------------------------
-     * 5. COMMIT
-     * --------------------------------------------------------
-     */
+      /**
+       * --------------------------------------------------------
+       * 4. USER ↔ COMPANY
+       * --------------------------------------------------------
+       */
 
-    await client.query("COMMIT");
+      for (
+        const companyId
+        of normalizedCompanyIds
+      ) {
+
+        await client.query(
+          `
+            INSERT INTO user_companies (
+              user_id,
+              company_id
+            )
+            VALUES (
+              $1,
+              $2
+            )
+          `,
+          [
+            id,
+            companyId
+          ]
+        );
+      }
 
 
-    /**
-     * Response'a lisans bilgilerini de ekliyoruz.
-     * Frontend bunu doğrudan kullanabilir.
-     */
-    const licenses =
-      await getUserLicenses(id);
+      /**
+       * --------------------------------------------------------
+       * 5. COMMIT
+       * --------------------------------------------------------
+       */
 
-
-    return res.status(201).json({
-      message:
-        "Kullanıcı başarıyla oluşturuldu",
-
-      id,
-
-      username,
-
-      role: userRole,
-
-      companyIds:
-        normalizedCompanyIds,
-
-      licenses
-    });
-
-  } catch (error) {
-
-    /**
-     * Transaction açıksa rollback.
-     */
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackError) {
-      console.error(
-        "Transaction rollback hatası:",
-        rollbackError
+      await client.query(
+        "COMMIT"
       );
-    }
 
 
-    /**
-     * Duplicate user ID / username
-     */
-    if (error.code === "23505") {
-      return res.status(409).json({
-        error:
-          "Bu id veya username zaten kayıtlı"
-      });
-    }
+      /**
+       * --------------------------------------------------------
+       * LICENSE INFORMATION
+       * --------------------------------------------------------
+       */
+
+      const licenses =
+        await getUserLicenses(
+          id
+        );
 
 
-    /**
-     * Şirket bulunamadı.
-     */
-    if (
-      error.code ===
-      "COMPANY_NOT_FOUND"
-    ) {
-      return res.status(404).json({
-        error:
-          "Bir veya daha fazla şirket bulunamadı",
+      /**
+       * --------------------------------------------------------
+       * RESPONSE
+       * --------------------------------------------------------
+       */
+
+      return res.status(201).json({
+
+        message:
+          "Kullanıcı başarıyla oluşturuldu",
+
+        id,
+
+        username,
+
+        role:
+          userRole,
 
         companyIds:
-          error.companyIds || []
+          normalizedCompanyIds,
+
+        licenses
       });
+
+
+    } catch (error) {
+
+
+      /**
+       * --------------------------------------------------------
+       * ROLLBACK
+       * --------------------------------------------------------
+       */
+
+      try {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+      } catch (
+        rollbackError
+      ) {
+
+        console.error(
+          "Transaction rollback hatası:",
+          rollbackError
+        );
+      }
+
+
+      /**
+       * --------------------------------------------------------
+       * DUPLICATE
+       * --------------------------------------------------------
+       */
+
+      if (
+        error.code ===
+        "23505"
+      ) {
+
+        return res.status(409).json({
+          error:
+            "Bu id veya username zaten kayıtlı"
+        });
+      }
+
+
+      /**
+       * --------------------------------------------------------
+       * COMPANY NOT FOUND
+       * --------------------------------------------------------
+       */
+
+      if (
+        error.code ===
+        "COMPANY_NOT_FOUND"
+      ) {
+
+        return res.status(404).json({
+
+          error:
+            "Bir veya daha fazla şirket bulunamadı",
+
+          companyIds:
+            error.companyIds || []
+        });
+      }
+
+
+      console.error(
+        "Register hatası:",
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          "Kullanıcı oluşturulurken beklenmeyen bir hata oluştu"
+      });
+
+
+    } finally {
+
+      client.release();
+
     }
-
-
-    console.error(
-      "Register hatası:",
-      error
-    );
-
-    return res.status(500).json({
-      error:
-        "Kullanıcı oluşturulurken beklenmeyen bir hata oluştu"
-    });
-
-  } finally {
-    client.release();
   }
-});
+);
 
 
 /**
@@ -474,227 +676,253 @@ router.post("/register", async (req, res) => {
  * POST /api/auth/login
  * ============================================================
  *
- * Login response artık şirket lisanslarını da içerir.
+ * Login response şirket lisanslarını da içerir.
  */
-router.post("/login", async (req, res) => {
+router.post(
+  "/login",
+  async (req, res) => {
 
-  try {
+    try {
 
-    const {
-      username,
-      password
-    } = req.body;
-
-
-    /**
-     * Input validation.
-     */
-    if (!username || !password) {
-      return res.status(400).json({
-        error:
-          "username ve password zorunludur"
-      });
-    }
+      const {
+        username,
+        password
+      } = req.body;
 
 
-    /**
-     * Kullanıcıyı getir.
-     */
-    const result = await pool.query(
-      `
-        SELECT *
-        FROM users
-        WHERE username = $1
-          AND status = 'ACTIVE'
-      `,
-      [username]
-    );
-
-    const user = result.rows[0];
-
-
-    /**
-     * Kullanıcı yok.
-     */
-    if (!user) {
-      return res.status(401).json({
-        error:
-          "Kullanıcı adı veya parola hatalı"
-      });
-    }
-
-
-    /**
-     * Password validation.
-     */
-    const isValid =
-      await bcrypt.compare(
-        password,
-        user.password_hash
-      );
-
-
-    if (!isValid) {
-      return res.status(401).json({
-        error:
-          "Kullanıcı adı veya parola hatalı"
-      });
-    }
-
-
-    /**
-     * Kullanıcının şirketleri.
-     */
-    const companyIds =
-      await getUserCompanyIds(user.id);
-
-
-    /**
-     * Şirket lisansları.
-     */
-    const licenses =
-      await getUserLicenses(user.id);
-
-
-    /**
-     * En az bir aktif lisans var mı?
-     */
-    const activeLicenses =
-      licenses.filter(
-        license =>
-          license.hasActiveLicense
-      );
-
-
-    /**
-     * Kullanıcının en yüksek aktif planını
-     * frontend için kolay erişilebilir şekilde
-     * belirliyoruz.
-     */
-    const PLAN_LEVELS = {
-      starter: 1,
-      professional: 2,
-      enterprise: 3
-    };
-
-    let highestPlan = null;
-
-    for (const company of activeLicenses) {
-
-      const plan =
-        company.license?.planId;
-
-      if (!plan) {
-        continue;
-      }
+      /**
+       * INPUT VALIDATION
+       */
 
       if (
-        !highestPlan ||
-        (PLAN_LEVELS[plan] || 0) >
-          (PLAN_LEVELS[highestPlan] || 0)
+        !username ||
+        !password
       ) {
-        highestPlan = plan;
+        return res.status(400).json({
+          error:
+            "username ve password zorunludur"
+        });
       }
-    }
 
 
-    /**
-     * JWT.
-     *
-     * DİKKAT:
-     *
-     * JWT'ye lisans bilgilerini koymuyoruz.
-     *
-     * Çünkü lisans sonradan iptal edilebilir.
-     *
-     * Lisans bilgileri DB'den gerçek zamanlı
-     * kontrol edilmeye devam edecek.
-     */
-    const token =
-      signUserToken({
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        companyIds
+      /**
+       * USER
+       */
+
+      const result =
+        await pool.query(
+          `
+            SELECT *
+            FROM users
+            WHERE username = $1
+              AND status = 'ACTIVE'
+          `,
+          [username]
+        );
+
+
+      const user =
+        result.rows[0];
+
+
+      if (!user) {
+        return res.status(401).json({
+          error:
+            "Kullanıcı adı veya parola hatalı"
+        });
+      }
+
+
+      /**
+       * PASSWORD
+       */
+
+      const isValid =
+        await bcrypt.compare(
+          password,
+          user.password_hash
+        );
+
+
+      if (!isValid) {
+        return res.status(401).json({
+          error:
+            "Kullanıcı adı veya parola hatalı"
+        });
+      }
+
+
+      /**
+       * USER COMPANIES
+       */
+
+      const companyIds =
+        await getUserCompanyIds(
+          user.id
+        );
+
+
+      /**
+       * LICENSES
+       */
+
+      const licenses =
+        await getUserLicenses(
+          user.id
+        );
+
+
+      /**
+       * ACTIVE LICENSES
+       */
+
+      const activeLicenses =
+        licenses.filter(
+          license =>
+            license.hasActiveLicense
+        );
+
+
+      /**
+       * PLAN LEVEL
+       */
+
+      const PLAN_LEVELS = {
+        starter: 1,
+        professional: 2,
+        enterprise: 3
+      };
+
+
+      let highestPlan =
+        null;
+
+
+      for (
+        const company
+        of activeLicenses
+      ) {
+
+        const plan =
+          company.license?.planId;
+
+
+        if (!plan) {
+          continue;
+        }
+
+
+        if (
+          !highestPlan ||
+          (
+            PLAN_LEVELS[plan] || 0
+          ) >
+          (
+            PLAN_LEVELS[
+              highestPlan
+            ] || 0
+          )
+        ) {
+          highestPlan =
+            plan;
+        }
+      }
+
+
+      /**
+       * JWT
+       *
+       * Lisans bilgileri JWT içine konulmaz.
+       *
+       * Çünkü lisans sonradan iptal edilebilir.
+       */
+
+      const token =
+        signUserToken({
+          id:
+            user.id,
+
+          username:
+            user.username,
+
+          role:
+            user.role,
+
+          companyIds
+        });
+
+
+      /**
+       * LOGIN RESPONSE
+       */
+
+      return res.json({
+
+        token,
+
+        user: {
+
+          id:
+            user.id,
+
+          username:
+            user.username,
+
+          role:
+            user.role,
+
+          companyIds,
+
+          licenses,
+
+          licensedCompanies:
+            activeLicenses.map(
+              company => ({
+
+                companyId:
+                  company.companyId,
+
+                companyName:
+                  company.companyName,
+
+                planId:
+                  company.license.planId,
+
+                planName:
+                  company.license.planName
+
+              })
+            ),
+
+          hasActiveLicense:
+            activeLicenses.length > 0,
+
+          highestPlan
+
+        }
       });
 
 
-    /**
-     * Login response.
-     */
-    return res.json({
+    } catch (error) {
 
-      token,
+      console.error(
+        "Login hatası:",
+        error
+      );
 
-      user: {
-        id:
-          user.id,
-
-        username:
-          user.username,
-
-        role:
-          user.role,
-
-        companyIds,
-
-        /**
-         * Kullanıcının bağlı olduğu tüm şirketlerin
-         * lisans durumları.
-         */
-        licenses,
-
-        /**
-         * En az bir aktif lisansı olan şirketler.
-         */
-        licensedCompanies:
-          activeLicenses.map(
-            company => ({
-              companyId:
-                company.companyId,
-
-              companyName:
-                company.companyName,
-
-              planId:
-                company.license.planId,
-
-              planName:
-                company.license.planName
-            })
-          ),
-
-        /**
-         * Frontend'de hızlı kontrol için.
-         */
-        hasActiveLicense:
-          activeLicenses.length > 0,
-
-        highestPlan
-      }
-    });
-
-  } catch (error) {
-
-    console.error(
-      "Login hatası:",
-      error
-    );
-
-    return res.status(500).json({
-      error:
-        "Giriş işlemi sırasında beklenmeyen bir hata oluştu"
-    });
+      return res.status(500).json({
+        error:
+          "Giriş işlemi sırasında beklenmeyen bir hata oluştu"
+      });
+    }
   }
-});
+);
 
 
 /**
  * ============================================================
  * GET /api/auth/me
  * ============================================================
- *
- * Mevcut endpoint korunuyor.
  */
 router.get(
   "/me",
@@ -704,27 +932,32 @@ router.get(
     try {
 
       /**
-       * JWT'deki companyIds yerine güncel DB ilişkilerini
-       * okuyalım.
-       *
-       * Böylece kullanıcı şirket bağlantısı değişmişse
-       * /me endpoint'i güncel bilgi döndürür.
+       * Güncel şirket ilişkilerini DB'den okuyoruz.
        */
       const companyIds =
         await getUserCompanyIds(
           req.user.id
         );
 
+
+      /**
+       * Güncel lisans bilgileri.
+       */
       const licenses =
         await getUserLicenses(
           req.user.id
         );
 
+
+      /**
+       * Aktif lisanslar.
+       */
       const activeLicenses =
         licenses.filter(
           license =>
             license.hasActiveLicense
         );
+
 
       return res.json({
 
@@ -745,6 +978,7 @@ router.get(
           activeLicenses.length > 0
 
       });
+
 
     } catch (error) {
 
