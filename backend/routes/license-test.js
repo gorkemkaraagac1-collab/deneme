@@ -14,42 +14,31 @@ const router = express.Router();
 
 /**
  * ============================================================
- * ACTIVE LICENSE TEST
+ * AKTİF LİSANS TESTİ
  * ============================================================
  *
- * Endpoint:
+ * GET
+ * /api/license-test/active
  *
- * GET /api/license-test/active
- *
- * Amaç:
- *
- * 1. JWT authentication çalışıyor mu?
- * 2. Kullanıcının aktif lisansı var mı?
- * 3. License context doğru oluşturuluyor mu?
- * 4. Highest plan doğru hesaplanıyor mu?
- *
+ * Kullanıcının en az bir aktif lisansı olup olmadığını
+ * doğrular.
  */
 router.get(
   "/active",
-
   requireAuth,
-
   requireActiveLicense,
-
   (req, res) => {
 
-    const license =
-      req.license || {};
-
     const activeLicenses =
-      Array.isArray(
-        license.activeLicenses
-      )
-        ? license.activeLicenses
-        : [];
+      req.license?.activeLicenses ||
+      req.licensedCompanies ||
+      [];
 
+    const highestPlan =
+      req.license?.highestPlan ||
+      null;
 
-    return res.status(200).json({
+    return res.json({
 
       success: true,
 
@@ -59,46 +48,30 @@ router.get(
       license: {
 
         hasActiveLicense:
-          Boolean(
-            license.hasActiveLicense
-          ),
+          activeLicenses.length > 0,
 
-        highestPlan:
-          license.highestPlan || null,
-
-        highestLevel:
-          license.highestLevel || 0,
-
-        activeCompanyCount:
-          activeLicenses.length,
+        highestPlan,
 
         activeCompanies:
           activeLicenses.map(
             company => ({
 
               companyId:
-                company?.companyId || null,
+                company.companyId,
 
               companyName:
-                company?.companyName || null,
-
-              hasActiveLicense:
-                company?.hasActiveLicense === true,
+                company.companyName,
 
               planId:
-                company?.license?.planId || null,
+                company.license?.planId ||
+                company.planId ||
+                company.plan_id ||
+                null,
 
               planName:
-                company?.license?.planName || null,
-
-              status:
-                company?.license?.status || null,
-
-              startsAt:
-                company?.license?.startsAt || null,
-
-              expiresAt:
-                company?.license?.expiresAt || null
+                company.license?.planName ||
+                company.planName ||
+                null
 
             })
           )
@@ -113,68 +86,32 @@ router.get(
 
 /**
  * ============================================================
- * PROFESSIONAL PLAN TEST
+ * PROFESSIONAL PLAN TESTİ
  * ============================================================
  *
- * Endpoint:
- *
- * GET /api/license-test/professional
- *
- *
- * Minimum:
- *
- * Professional
- *
- * Allowed:
- *
- * Professional
- * Enterprise
- *
- *
- * Denied:
- *
- * Starter
- * No License
- *
+ * Professional veya Enterprise kullanıcılar
+ * erişebilmelidir.
  */
 router.get(
   "/professional",
-
   requireAuth,
-
   requireActiveLicense,
-
-  requirePlan(
-    "professional"
-  ),
-
+  requirePlan("professional"),
   (req, res) => {
 
-    return res.status(200).json({
+    return res.json({
 
       success: true,
 
       message:
         "Professional veya üzeri lisans doğrulandı",
 
-      license: {
+      currentPlan:
+        req.license?.highestPlan || null,
 
-        currentPlan:
-          req.license?.highestPlan || null,
-
-        currentLevel:
-          req.license?.highestLevel || 0,
-
-        requiredPlan:
-          req.license?.requiredPlan || "professional",
-
-        requiredLevel:
-          req.license?.requiredLevel || 2,
-
-        hasActiveLicense:
-          req.license?.hasActiveLicense === true
-
-      }
+      requiredPlan:
+        req.license?.requiredPlan ||
+        "professional"
 
     });
 
@@ -184,93 +121,36 @@ router.get(
 
 /**
  * ============================================================
- * ENTERPRISE PLAN TEST
+ * ENTERPRISE PLAN TESTİ
  * ============================================================
  *
- * Endpoint:
- *
- * GET /api/license-test/enterprise
- *
- *
- * Minimum:
- *
- * Enterprise
- *
- * Allowed:
- *
- * Enterprise
- *
- *
- * Denied:
- *
- * Professional
- * Starter
- * No License
- *
+ * Sadece Enterprise kullanıcılar erişebilmelidir.
  */
 router.get(
   "/enterprise",
-
   requireAuth,
-
   requireActiveLicense,
-
-  requirePlan(
-    "enterprise"
-  ),
-
+  requirePlan("enterprise"),
   (req, res) => {
 
-    return res.status(200).json({
+    return res.json({
 
       success: true,
 
       message:
         "Enterprise lisans doğrulandı",
 
-      license: {
+      currentPlan:
+        req.license?.highestPlan || null,
 
-        currentPlan:
-          req.license?.highestPlan || null,
-
-        currentLevel:
-          req.license?.highestLevel || 0,
-
-        requiredPlan:
-          req.license?.requiredPlan || "enterprise",
-
-        requiredLevel:
-          req.license?.requiredLevel || 3,
-
-        hasActiveLicense:
-          req.license?.hasActiveLicense === true
-
-      }
+      requiredPlan:
+        req.license?.requiredPlan ||
+        "enterprise"
 
     });
 
   }
 );
 
-
-/**
- * ============================================================
- * LICENSE ROUTER ERROR HANDLING
- * ============================================================
- *
- * Normalde global error handler app.js tarafından
- * yönetilecektir.
- *
- * Burada özel bir error middleware eklemiyoruz.
- *
- * Böylece merkezi error handling korunur.
- */
-
-
-/**
- * ============================================================
- * EXPORT
- * ============================================================
- */
 
 module.exports = router;
