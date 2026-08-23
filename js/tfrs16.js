@@ -947,7 +947,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const TFRS29_ACCOUNTS = {
     rouAsset: "260 Kullanım Hakkı Varlığı",
     leaseLiability: "401 Kiralama Yükümlülüğü",
-    inflationGainLoss: "698 Enflasyon Düzeltmesi K/Z"
+    inflationGainLoss: "698 Enflasyon Düzeltmesi K/Z",
+    // V18 Parça 2 düzeltme — kiralama yükümlülüğü hareket tablosunun
+    // "Parasal Kazanç/(Kayıp), net" satırı için ayrı alt hesap
+    // (kullanıcı onayı: "ayrı satır, ayrı hesap, 698 altında alt kalem").
+    liabilityMonetaryGainLoss: "698.02 Parasal Kazanç/(Kayıp), Net (Kiralama Yükümlülüğü)",
+    // VARSAYIM (ONAY BEKLİYOR): Bu satırın karşı hesabı. Yükümlülüğün
+    // (401) nominal bakiyesi bu restatement ile DEĞİŞMEZ (moneter kalem
+    // — TMS 29.28), dolayısıyla 401'e karşı bir kayıt YANLIŞ olur.
+    // Karşı taraf, tam kapsamlı TMS 29 uygulamasında "net parasal
+    // pozisyon kâr/zararı"nın diğer ayağını oluşturan özkaynak/sonuç
+    // hesabıdır; bu modül yalnızca kiralama portföyünü kapsadığından
+    // buraya geçici bir karşı hesap konuldu. Şirketin hesap planına göre
+    // DEĞİŞTİRİLMELİDİR (örn. 590 Dönem Net Karı/Zararı ya da ayrı bir
+    // "TMS 29 Parasal Pozisyon Karşılığı" hesabı).
+    monetaryPositionOffset: "590 TMS 29 Parasal Pozisyon Karşılığı (VARSAYIM — onaylayınız)"
   };
 
   const INFLATION_INDEX_STORAGE_KEY = "gk_tfrs16_inflation_index_v1";
@@ -1073,12 +1087,19 @@ document.addEventListener("DOMContentLoaded", () => {
    * yukarı fırlatır (çağıran taraf — validateInflationAdjustment —
    * bunu yakalayıp {valid,errors} formatına çevirir).
    *
+   * @param {string} [periodStart] Opsiyonel — YYYY-MM. Verilirse, bu
+   *   dönemden reportingPeriod'a kadar kiralama YÜKÜMLÜLÜĞÜ hareket
+   *   tablosu (açılış + girişler + faiz − ödemeler) TMS 29'a göre
+   *   düzeltilir ve "Parasal Kazanç/(Kayıp), net" hesaplanır (bkz.
+   *   liabilityMonetaryGainLoss). VERİLMEZSE eski davranış AYNEN
+   *   korunur (yükümlülük tarafında hareket tablosu hesaplanmaz,
+   *   liabilityMonetaryGainLoss=null) — GERİYE DÖNÜK UYUMLU.
    * @returns {Object} { reportingPeriod, acquisitionMonth, rows[],
    *   totals: { nominalROUClosing, restatedROUClosing,
    *   nominalLiabilityClosing, restatedLiabilityClosing,
-   *   netAdjustment } }
+   *   netAdjustment, liabilityMonetaryGainLoss, ... } }
    */
-  function applyTMS29Restatement(contract, reportingPeriod) {
+  function applyTMS29Restatement(contract, reportingPeriod, periodStart) {
     const rp = String(reportingPeriod || "").trim();
     if (!/^\d{4}-\d{2}$/.test(rp)) {
       throw new Error(`Geçersiz raporlama dönemi formatı: "${reportingPeriod}" (YYYY-MM bekleniyor).`);
@@ -1093,6 +1114,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (rp < acquisitionMonth) {
       throw new Error("Raporlama dönemi, sözleşme başlangıcından önce olamaz.");
+    }
+
+    // periodStart opsiyonel — verilmişse yükümlülük hareket tablosu
+    // restatement'ı tetiklenir (kullanıcı onayı: serbest/kullanıcı
+    // seçimli periodStart).
+    const ps = periodStart == null ? null : String(periodStart).trim();
+    if (ps !== null) {
+      if (!/^\d{4}-\d{2}$/.test(ps)) {
+        throw new Error(`Geçersiz periodStart formatı: "${periodStart}" (YYYY-MM bekleniyor).`);
+      }
+      if (ps < acquisitionMonth) {
+        throw new Error("periodStart, sözleşme başlangıcından önce olamaz.");
+      }
+      if (ps > rp) {
+        throw new Error("periodStart, raporlama döneminden sonra olamaz.");
+      }
     }
 
     const fullSchedule = getReassessmentBaseSchedule(contract) || [];
@@ -1143,25 +1180,110 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const nominalLiabilityClosing =
       lastRow ? lastRow.closingLiability : (calculateLeaseEngine(contract).liability || 0);
-    // Moneter kalem — düzeltilmiş tutar nominal ile aynıdır.
+    // Moneter kalem — kapanış bakiyesinin KENDİSİ için düzeltilmiş
+    // tutar nominal ile aynıdır (bu satır DEĞİŞMEDİ).
     const restatedLiabilityClosing = nominalLiabilityClosing;
 
     const netAdjustment = restatedROUClosing - nominalROUClosing;
+
+    // ----------------------------------------------------------
+    // Yükümlülük HAREKET TABLOSU restatement'ı (periodStart verildiyse).
+    // Açılış + girişler (modifikasyon/reassessment) + faiz − ödemeler,
+    // her biri KENDİ ayından rp'ye restate edilip toplanır. Bu toplam,
+    // moneter kalem olduğu için gerçek nominal kapanışla uyuşmaz;
+    // aradaki fark "Parasal Kazanç/(Kayıp), net" olarak ayrıca
+    // hesaplanır (IAS 29.28 — net moneter pozisyon kâr/zararı).
+    // ----------------------------------------------------------
+    let liabilityRollForward = null;
+    if (ps !== null) {
+      const priorRow = fullSchedule
+        .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < ps)
+        .pop();
+
+      const liabilityOpeningNominal = priorRow
+        ? priorRow.closingLiability
+        : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
+
+      const ratioOpeningToRp = getInflationRatio(ps, rp);
+      const liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+
+      const periodRows = fullSchedule.filter(row => {
+        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        return rowMonth >= ps && rowMonth <= rp;
+      });
+
+      let liabilityInterestNominal = 0, liabilityInterestRestated = 0;
+      let liabilityPaymentsNominal = 0, liabilityPaymentsRestated = 0;
+      periodRows.forEach(row => {
+        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        const ratioRowToRp = getInflationRatio(rowMonth, rp);
+        liabilityInterestNominal += row.interest;
+        liabilityInterestRestated += row.interest * ratioRowToRp;
+        liabilityPaymentsNominal += row.payment;
+        liabilityPaymentsRestated += row.payment * ratioRowToRp;
+      });
+
+      // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
+      // yükümlülük artışları, kendi effectiveDate ayından rp'ye restate
+      // edilir (kullanıcı onayı: effectiveDate'in ait olduğu ay).
+      const entryChanges = []
+        .concat(Array.isArray(contract?.modifications) ? contract.modifications : [])
+        .concat(Array.isArray(contract?.reassessments) ? contract.reassessments : [])
+        .filter(x => x && x.status === "APPLIED")
+        .map(x => {
+          const d = parseDate(x.effectiveDate);
+          return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.liabilityAdjustment) || 0 } : null;
+        })
+        .filter(x => x && x.month >= ps && x.month <= rp);
+
+      let liabilityEntriesNominal = 0, liabilityEntriesRestated = 0;
+      entryChanges.forEach(entry => {
+        const ratioEntryToRp = getInflationRatio(entry.month, rp);
+        liabilityEntriesNominal += entry.amount;
+        liabilityEntriesRestated += entry.amount * ratioEntryToRp;
+      });
+
+      const restatedSum =
+        liabilityOpeningRestated + liabilityEntriesRestated + liabilityInterestRestated - liabilityPaymentsRestated;
+
+      // Negatifse KAZANÇ (yükümlülüğün reel yükü azalmış — TMS 29.28),
+      // pozitifse KAYIP. Hareket tablosunda düşülen bir satır olarak
+      // gösterilir: açılış+girişler+faiz-ödemeler+parasalK/Z = kapanış.
+      const liabilityMonetaryGainLoss = nominalLiabilityClosing - restatedSum;
+
+      liabilityRollForward = {
+        periodStart: ps,
+        liabilityOpeningNominal,
+        liabilityOpeningRestated,
+        liabilityEntriesNominal,
+        liabilityEntriesRestated,
+        liabilityInterestNominal,
+        liabilityInterestRestated,
+        liabilityPaymentsNominal,
+        liabilityPaymentsRestated,
+        restatedSum,
+        liabilityMonetaryGainLoss
+      };
+    }
 
     return {
       reportingPeriod: rp,
       acquisitionMonth,
       ratioAcquisitionToRp,
       rows,
+      liabilityRollForward,
       totals: {
         nominalROUClosing,
         restatedROUClosing,
         nominalLiabilityClosing,
         restatedLiabilityClosing,
-        // VARSAYIM (onaylandı): yükümlülük moneter kalem olduğu için
-        // farkı her zaman 0'dır; net düzeltme tamamen ROU'dan gelir.
+        // VARSAYIM (onaylandı): yükümlülüğün KAPANIŞ bakiyesi moneter
+        // kalem olduğu için her zaman 0'dır (kapanış nominal=düzeltilmiş).
+        // "Parasal Kazanç/(Kayıp), net" ayrı bir kavramdır — bkz.
+        // liabilityMonetaryGainLoss (periodStart verilmediyse null).
         liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
-        netAdjustment
+        netAdjustment,
+        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null
       }
     };
   }
@@ -1208,6 +1330,46 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    // Yükümlülük hareket tablosu — Parasal Kazanç/(Kayıp), net
+    // (yalnızca applyTMS29Restatement'a periodStart verildiyse dolu
+    // olur; verilmediyse null — eski davranış korunur, jurnal etkilenmez).
+    const liabilityGainLoss = restatement?.totals?.liabilityMonetaryGainLoss;
+    if (Number.isFinite(liabilityGainLoss)) {
+      const gain = -liabilityGainLoss; // negatif liabilityGainLoss = kazanç
+      if (gain > 0.005) {
+        entries.push({
+          account: TFRS29_ACCOUNTS.monetaryPositionOffset,
+          debit: gain,
+          credit: 0,
+          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY",
+          controlStatus: "VALID"
+        });
+        entries.push({
+          account: TFRS29_ACCOUNTS.liabilityMonetaryGainLoss,
+          debit: 0,
+          credit: gain,
+          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY",
+          controlStatus: "VALID"
+        });
+      } else if (gain < -0.005) {
+        const loss = Math.abs(gain);
+        entries.push({
+          account: TFRS29_ACCOUNTS.liabilityMonetaryGainLoss,
+          debit: loss,
+          credit: 0,
+          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY",
+          controlStatus: "VALID"
+        });
+        entries.push({
+          account: TFRS29_ACCOUNTS.monetaryPositionOffset,
+          debit: 0,
+          credit: loss,
+          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY",
+          controlStatus: "VALID"
+        });
+      }
+    }
+
     const debit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
     const credit = entries.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
     const balanced = Math.abs(debit - credit) < 0.01;
@@ -1236,9 +1398,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return { valid: false, errors };
     }
 
+    // periodStart opsiyonel — verilirse yükümlülük hareket tablosu
+    // (Parasal Kazanç/Kayıp) da hesaplanır. Format kontrolü
+    // applyTMS29Restatement içinde yapılır.
+    const periodStartInput = input?.periodStart ? String(input.periodStart).trim() : null;
+
     let restatement = null;
     try {
-      restatement = applyTMS29Restatement(contract, reportingPeriod);
+      restatement = applyTMS29Restatement(contract, reportingPeriod, periodStartInput);
     } catch (error) {
       errors.push(error.message || String(error));
       return { valid: false, errors };
@@ -1263,6 +1430,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const adjustment = {
       id: `${prefix}-INFL-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       period: validation.restatement.reportingPeriod,
+      // periodStart opsiyonel — verilmişse (yükümlülük hareket tablosu
+      // / Parasal Kazanç-Kayıp restatement'ı) apply anında yeniden
+      // hesaplanabilmesi için saklanır (additive alan).
+      periodStart: validation.restatement.liabilityRollForward
+        ? validation.restatement.liabilityRollForward.periodStart
+        : null,
       testedAt: now,
       reason: input?.reason || "TMS 29 enflasyon düzeltmesi (kiralama portföyü)",
       status: "DRAFT",
@@ -1306,7 +1479,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // uygulama anında GÜNCEL veriyle yeniden hesaplanır.
     let restatement;
     try {
-      restatement = applyTMS29Restatement(contract, adjustment.period);
+      restatement = applyTMS29Restatement(contract, adjustment.period, adjustment.periodStart || null);
     } catch (error) {
       return { valid: false, errors: [error.message || String(error)] };
     }
