@@ -1,23 +1,34 @@
 const {
-  getUserLicenses
+  getUserLicenses,
+  getActiveCompanyLicense
 } = require("../services/license-service");
 
 
 /**
  * ============================================================
- * PLAN LEVELS
+ * LICENSE / ENTITLEMENT MIDDLEWARE
  * ============================================================
  *
- * Starter       = 1
- * Professional  = 2
- * Enterprise    = 3
+ * Mimari:
  *
- * Yetkilendirme mantığı:
+ * Authentication
+ *      ↓
+ * Company Access
+ *      ↓
+ * Active License
+ *      ↓
+ * Plan Entitlement
  *
- * Starter       -> Starter
- * Professional  -> Professional + Starter
- * Enterprise    -> Enterprise + Professional + Starter
+ * Plan hiyerarşisi:
+ *
+ * starter       = 1
+ * professional  = 2
+ * enterprise    = 3
+ *
+ * Üst plan alt plan özelliklerini kullanabilir.
  */
+
+
 const PLAN_LEVELS = {
   starter: 1,
   professional: 2,
@@ -26,10 +37,33 @@ const PLAN_LEVELS = {
 
 
 /**
- * ============================================================
- * GET ACTIVE USER LICENSES
- * ============================================================
+ * ------------------------------------------------------------
+ * PLAN NORMALIZATION
+ * ------------------------------------------------------------
  */
+
+function normalizePlan(plan) {
+
+  if (!plan) {
+    return null;
+  }
+
+  return String(plan)
+    .trim()
+    .toLowerCase();
+
+}
+
+
+/**
+ * ------------------------------------------------------------
+ * ACTIVE USER LICENSES
+ * ------------------------------------------------------------
+ *
+ * Kullanıcının bağlı olduğu şirketlerden yalnızca aktif
+ * lisansa sahip olanları döndürür.
+ */
+
 async function getActiveUserLicenses(userId) {
 
   const licenses =
@@ -44,31 +78,38 @@ async function getActiveUserLicenses(userId) {
       license &&
       license.hasActiveLicense === true
   );
+
 }
 
 
 /**
- * ============================================================
- * GET HIGHEST PLAN
- * ============================================================
+ * ------------------------------------------------------------
+ * HIGHEST PLAN
+ * ------------------------------------------------------------
+ *
+ * Kullanıcının tüm şirketleri içerisindeki en yüksek planı
+ * bulur.
+ *
+ * Bu fonksiyon GLOBAL dashboard bilgisi için kullanılmalıdır.
+ *
+ * Şirket bazlı yetkilendirmede kullanılmamalıdır.
  */
-function getHighestPlan(activeLicenses) {
 
-  let highestPlan = null;
-  let highestLevel = 0;
+function getHighestPlan(activeLicenses) {
 
   if (!Array.isArray(activeLicenses)) {
     return null;
   }
 
+  let highestPlan = null;
+  let highestLevel = 0;
+
   for (const company of activeLicenses) {
 
     const planId =
-      company?.license?.planId
-        ? String(company.license.planId)
-            .trim()
-            .toLowerCase()
-        : null;
+      normalizePlan(
+        company?.license?.planId
+      );
 
     const level =
       PLAN_LEVELS[planId] || 0;
@@ -79,21 +120,24 @@ function getHighestPlan(activeLicenses) {
       highestPlan = planId;
 
     }
+
   }
 
   return highestPlan;
+
 }
 
 
 /**
- * ============================================================
+ * ------------------------------------------------------------
  * REQUIRE ACTIVE LICENSE
- * ============================================================
+ * ------------------------------------------------------------
  *
- * Kullanıcının en az bir aktif lisansı bulunmalıdır.
+ * Kullanıcının en az bir aktif şirket lisansı olmasını ister.
  *
- * ADMIN için bypass yoktur.
+ * Global endpointlerde kullanılabilir.
  */
+
 async function requireActiveLicense(
   req,
   res,
@@ -106,10 +150,13 @@ async function requireActiveLicense(
 
       return res.status(401).json({
         error:
-          "Kimlik doğrulaması gereklidir"
+          "Kimlik doğrulaması gereklidir",
+        code:
+          "AUTH_REQUIRED"
       });
 
     }
+
 
     const activeLicenses =
       await getActiveUserLicenses(
@@ -141,15 +188,9 @@ async function requireActiveLicense(
       );
 
 
-    /**
-     * Request context.
-     *
-     * ÖNEMLİ:
-     *
-     * license-test.js buradaki
-     * req.license objesini kullanacaktır.
-     */
     req.license = {
+
+      ...(req.license || {}),
 
       activeLicenses,
 
@@ -173,208 +214,198 @@ async function requireActiveLicense(
     return res.status(500).json({
 
       error:
-        "Lisans kontrolü sırasında beklenmeyen bir hata oluştu"
+        "Lisans kontrolü sırasında beklenmeyen bir hata oluştu",
+
+      code:
+        "LICENSE_CHECK_ERROR"
 
     });
 
   }
+
 }
 
 
 /**
- * ============================================================
+ * ------------------------------------------------------------
  * REQUIRE PLAN
- * ============================================================
+ * ------------------------------------------------------------
  *
- * BU MIDDLEWARE COMPANY ID İSTEMEZ.
+ * GLOBAL plan kontrolüdür.
  *
- * Kullanıcının aktif lisansları içerisindeki
- * EN YÜKSEK PLAN üzerinden karar verir.
+ * Örneğin:
  *
- * Örnek:
+ * requirePlan("professional")
  *
- * Professional
- *     >= Professional
- *     => ALLOW
+ * Kullanıcının herhangi bir şirketinde Professional veya
+ * Enterprise lisans varsa geçer.
  *
- * Enterprise
- *     >= Professional
- *     => ALLOW
+ * ÖNEMLİ:
  *
- * Starter
- *     < Professional
- *     => DENY
+ * Şirket bazlı endpointlerde bunun yerine
+ * requireCompanyPlan() kullanılmalıdır.
  */
+
 function requirePlan(requiredPlan) {
 
   const normalizedPlan =
-    String(
-      requiredPlan || ""
-    )
-      .trim()
-      .toLowerCase();
-
-
-  if (
-    !PLAN_LEVELS[
-      normalizedPlan
-    ]
-  ) {
-
-    throw new Error(
-      `Geçersiz plan: ${requiredPlan}`
+    normalizePlan(
+      requiredPlan
     );
 
-  }
 
+    if (!PLAN_LEVELS[normalizedPlan]) {
 
-  return async function planMiddleware(
-    req,
-    res,
-    next
-  ) {
-
-    try {
-
-      if (!req.user || !req.user.id) {
-
-        return res.status(401).json({
-
-          error:
-            "Kimlik doğrulaması gereklidir"
-
-        });
-
-      }
-
-
-      /**
-       * requireActiveLicense daha önce
-       * çalıştıysa tekrar DB sorgusu yapma.
-       */
-      const activeLicenses =
-        req.license?.activeLicenses ||
-        await getActiveUserLicenses(
-          req.user.id
-        );
-
-
-      if (
-        !Array.isArray(activeLicenses) ||
-        activeLicenses.length === 0
-      ) {
-
-        return res.status(403).json({
-
-          error:
-            "Aktif lisans bulunmamaktadır",
-
-          code:
-            "NO_ACTIVE_LICENSE"
-
-        });
-
-      }
-
-
-      const highestPlan =
-        getHighestPlan(
-          activeLicenses
-        );
-
-
-      const currentLevel =
-        PLAN_LEVELS[
-          highestPlan
-        ] || 0;
-
-
-      const requiredLevel =
-        PLAN_LEVELS[
-          normalizedPlan
-        ];
-
-
-      if (
-        currentLevel <
-        requiredLevel
-      ) {
-
-        return res.status(403).json({
-
-          error:
-            "Bu özellik mevcut lisans planınızda kullanılamaz",
-
-          code:
-            "PLAN_REQUIRED",
-
-          requiredPlan:
-            normalizedPlan,
-
-          currentPlan:
-            highestPlan,
-
-          message:
-            `Bu özellik için ${normalizedPlan} veya daha üst bir lisans gereklidir.`
-
-        });
-
-      }
-
-
-      /**
-       * Request context'i güncelle.
-       */
-      req.license = {
-
-        ...(req.license || {}),
-
-        activeLicenses,
-
-        hasActiveLicense:
-          true,
-
-        highestPlan,
-
-        requiredPlan:
-          normalizedPlan
-
-      };
-
-
-      return next();
-
-    } catch (error) {
-
-      console.error(
-        "Plan middleware hatası:",
-        error
+      throw new Error(
+        `Geçersiz plan: ${requiredPlan}`
       );
-
-      return res.status(500).json({
-
-        error:
-          "Lisans planı kontrol edilirken beklenmeyen bir hata oluştu"
-
-      });
 
     }
 
-  };
+
+    return async function planMiddleware(
+      req,
+      res,
+      next
+    ) {
+
+      try {
+
+        if (!req.user || !req.user.id) {
+
+          return res.status(401).json({
+
+            error:
+              "Kimlik doğrulaması gereklidir",
+
+            code:
+              "AUTH_REQUIRED"
+
+          });
+
+        }
+
+
+        const activeLicenses =
+          req.license?.activeLicenses ||
+          await getActiveUserLicenses(
+            req.user.id
+          );
+
+
+        if (activeLicenses.length === 0) {
+
+          return res.status(403).json({
+
+            error:
+              "Aktif lisans bulunmamaktadır",
+
+            code:
+              "NO_ACTIVE_LICENSE"
+
+          });
+
+        }
+
+
+        const highestPlan =
+          getHighestPlan(
+            activeLicenses
+          );
+
+
+        const currentLevel =
+          PLAN_LEVELS[highestPlan] || 0;
+
+
+        const requiredLevel =
+          PLAN_LEVELS[normalizedPlan];
+
+
+        if (
+          currentLevel <
+          requiredLevel
+        ) {
+
+          return res.status(403).json({
+
+            error:
+              "Bu özellik mevcut lisans planınızda kullanılamaz",
+
+            code:
+              "PLAN_REQUIRED",
+
+            requiredPlan:
+              normalizedPlan,
+
+            currentPlan:
+              highestPlan,
+
+            message:
+              `Bu özellik için ${normalizedPlan} veya daha üst bir lisans gereklidir.`
+
+          });
+
+        }
+
+
+        req.license = {
+
+          ...(req.license || {}),
+
+          activeLicenses,
+
+          hasActiveLicense:
+            true,
+
+          highestPlan,
+
+          requiredPlan:
+            normalizedPlan
+
+        };
+
+
+        return next();
+
+      } catch (error) {
+
+        console.error(
+          "Plan middleware hatası:",
+          error
+        );
+
+        return res.status(500).json({
+
+          error:
+            "Lisans planı kontrol edilirken beklenmeyen bir hata oluştu",
+
+          code:
+            "PLAN_CHECK_ERROR"
+
+        });
+
+      }
+
+    };
+
 }
 
 
 /**
- * ============================================================
+ * ------------------------------------------------------------
  * REQUIRE COMPANY LICENSE
- * ============================================================
+ * ------------------------------------------------------------
  *
- * Şirket bazlı endpoint'lerde kullanılacak.
+ * Belirli bir şirket için:
  *
- * Bu middleware'i silmiyoruz.
- * Mevcut uygulamanın company-level authorization
- * ihtiyacı olabilir.
+ * 1. companyId var mı?
+ * 2. Kullanıcı bu şirkete bağlı mı?
+ * 3. Şirketin aktif lisansı var mı?
+ *
+ * Bu middleware tenant isolation'ın temelidir.
  */
+
 async function requireCompanyLicense(
   req,
   res,
@@ -386,15 +417,20 @@ async function requireCompanyLicense(
     if (!req.user || !req.user.id) {
 
       return res.status(401).json({
+
         error:
-          "Kimlik doğrulaması gereklidir"
+          "Kimlik doğrulaması gereklidir",
+
+        code:
+          "AUTH_REQUIRED"
+
       });
 
     }
 
 
     const companyId =
-      req.params.companyId ||
+      req.params?.companyId ||
       req.body?.companyId ||
       req.query?.companyId;
 
@@ -404,7 +440,10 @@ async function requireCompanyLicense(
       return res.status(400).json({
 
         error:
-          "companyId belirtilmelidir"
+          "companyId belirtilmelidir",
+
+        code:
+          "COMPANY_ID_REQUIRED"
 
       });
 
@@ -415,16 +454,16 @@ async function requireCompanyLicense(
       String(companyId);
 
 
-    /**
-     * JWT içerisindeki şirket erişimi.
-     */
+    const userCompanyIds =
+      Array.isArray(req.user.companyIds)
+        ? req.user.companyIds.map(String)
+        : [];
+
+
     const hasCompanyAccess =
-      Array.isArray(req.user.companyIds) &&
-      req.user.companyIds
-        .map(String)
-        .includes(
-          normalizedCompanyId
-        );
+      userCompanyIds.includes(
+        normalizedCompanyId
+      );
 
 
     if (!hasCompanyAccess) {
@@ -440,19 +479,6 @@ async function requireCompanyLicense(
       });
 
     }
-
-
-    /**
-     * Şirketin aktif lisansını
-     * service üzerinden kontrol ediyoruz.
-     *
-     * Burada requirePlan kullanmıyoruz.
-     */
-    const {
-      getActiveCompanyLicense
-    } = require(
-      "../services/license-service"
-    );
 
 
     const license =
@@ -479,6 +505,7 @@ async function requireCompanyLicense(
     req.companyId =
       normalizedCompanyId;
 
+
     req.companyLicense =
       license;
 
@@ -495,41 +522,271 @@ async function requireCompanyLicense(
     return res.status(500).json({
 
       error:
-        "Şirket lisansı kontrol edilirken beklenmeyen bir hata oluştu"
+        "Şirket lisansı kontrol edilirken beklenmeyen bir hata oluştu",
+
+      code:
+        "COMPANY_LICENSE_CHECK_ERROR"
 
     });
 
   }
+
 }
 
 
 /**
- * ============================================================
- * REQUIRE MINIMUM PLAN
- * ============================================================
+ * ------------------------------------------------------------
+ * REQUIRE COMPANY PLAN
+ * ------------------------------------------------------------
  *
- * CompanyId gerektirmez.
+ * EN ÖNEMLİ MIDDLEWARE.
  *
- * Kullanıcının tüm aktif lisansları üzerinden
- * en yüksek planı değerlendirir.
+ * Belirli şirketin kendi lisansını kontrol eder.
+ *
+ * Örnek:
+ *
+ * requireCompanyPlan("professional")
+ *
+ * Şirket Professional ise:
+ *
+ * Professional → ✅
+ * Enterprise   → ✅
+ * Starter      → ❌
+ *
+ * Başka bir şirkette Enterprise olması bu şirketin erişimini
+ * etkilemez.
  */
+
+function requireCompanyPlan(
+  requiredPlan
+) {
+
+  const normalizedPlan =
+    normalizePlan(
+      requiredPlan
+    );
+
+
+  if (!PLAN_LEVELS[normalizedPlan]) {
+
+    throw new Error(
+      `Geçersiz şirket planı: ${requiredPlan}`
+    );
+
+  }
+
+
+  return async function companyPlanMiddleware(
+    req,
+    res,
+    next
+  ) {
+
+    try {
+
+      if (!req.user || !req.user.id) {
+
+        return res.status(401).json({
+
+          error:
+            "Kimlik doğrulaması gereklidir",
+
+          code:
+            "AUTH_REQUIRED"
+
+        });
+
+      }
+
+
+      const companyId =
+        req.companyId ||
+        req.params?.companyId ||
+        req.body?.companyId ||
+        req.query?.companyId;
+
+
+      if (!companyId) {
+
+        return res.status(400).json({
+
+          error:
+            "companyId belirtilmelidir",
+
+          code:
+            "COMPANY_ID_REQUIRED"
+
+        });
+
+      }
+
+
+      const normalizedCompanyId =
+        String(companyId);
+
+
+      const userCompanyIds =
+        Array.isArray(req.user.companyIds)
+          ? req.user.companyIds.map(String)
+          : [];
+
+
+      if (
+        !userCompanyIds.includes(
+          normalizedCompanyId
+        )
+      ) {
+
+        return res.status(403).json({
+
+          error:
+            "Bu şirkete erişim yetkiniz bulunmamaktadır",
+
+          code:
+            "COMPANY_ACCESS_DENIED"
+
+        });
+
+      }
+
+
+      const companyLicense =
+        req.companyLicense ||
+        await getActiveCompanyLicense(
+          normalizedCompanyId
+        );
+
+
+      if (!companyLicense) {
+
+        return res.status(403).json({
+
+          error:
+            "Şirketin aktif lisansı bulunmamaktadır",
+
+          code:
+            "COMPANY_LICENSE_INACTIVE"
+
+        });
+
+      }
+
+
+      const currentPlan =
+        normalizePlan(
+          companyLicense.plan_id
+        );
+
+
+      const currentLevel =
+        PLAN_LEVELS[currentPlan] || 0;
+
+
+      const requiredLevel =
+        PLAN_LEVELS[normalizedPlan];
+
+
+      if (
+        currentLevel <
+        requiredLevel
+      ) {
+
+        return res.status(403).json({
+
+          error:
+            "Bu özellik mevcut lisans planınızda kullanılamaz",
+
+          code:
+            "PLAN_REQUIRED",
+
+          companyId:
+            normalizedCompanyId,
+
+          requiredPlan:
+            normalizedPlan,
+
+          currentPlan,
+
+          message:
+            `Bu özellik için ${normalizedPlan} veya daha üst bir lisans gereklidir.`
+
+        });
+
+      }
+
+
+      req.companyId =
+        normalizedCompanyId;
+
+
+      req.companyLicense =
+        companyLicense;
+
+
+      req.license = {
+
+        ...(req.license || {}),
+
+        hasActiveLicense:
+          true,
+
+        highestPlan:
+          currentPlan,
+
+        requiredPlan:
+          normalizedPlan,
+
+        companyId:
+          normalizedCompanyId
+
+      };
+
+
+      return next();
+
+    } catch (error) {
+
+      console.error(
+        "requireCompanyPlan hatası:",
+        error
+      );
+
+      return res.status(500).json({
+
+        error:
+          "Şirket lisans planı kontrol edilirken beklenmeyen bir hata oluştu",
+
+        code:
+          "COMPANY_PLAN_CHECK_ERROR"
+
+      });
+
+    }
+
+  };
+
+}
+
+
+/**
+ * ------------------------------------------------------------
+ * REQUIRE MINIMUM PLAN
+ * ------------------------------------------------------------
+ *
+ * requirePlan() için daha okunabilir alias.
+ */
+
 function requireMinimumPlan(
   minimumPlan
 ) {
 
   const normalizedPlan =
-    String(
-      minimumPlan || ""
-    )
-      .trim()
-      .toLowerCase();
+    normalizePlan(
+      minimumPlan
+    );
 
 
-  if (
-    !PLAN_LEVELS[
-      normalizedPlan
-    ]
-  ) {
+  if (!PLAN_LEVELS[normalizedPlan]) {
 
     throw new Error(
       `Geçersiz minimum plan: ${minimumPlan}`
@@ -541,14 +798,16 @@ function requireMinimumPlan(
   return requirePlan(
     normalizedPlan
   );
+
 }
 
 
 /**
- * ============================================================
+ * ------------------------------------------------------------
  * EXPORTS
- * ============================================================
+ * ------------------------------------------------------------
  */
+
 module.exports = {
 
   requireActiveLicense,
@@ -556,6 +815,8 @@ module.exports = {
   requireCompanyLicense,
 
   requirePlan,
+
+  requireCompanyPlan,
 
   requireMinimumPlan,
 
