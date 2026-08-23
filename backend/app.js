@@ -35,8 +35,11 @@ app.use(
 
 
 /**
- * Request logging.
+ * ============================================================
+ * REQUEST LOGGING
+ * ============================================================
  */
+
 app.use((req, res, next) => {
   console.log(
     `${new Date().toISOString()} ${req.method} ${req.path}`
@@ -64,6 +67,10 @@ app.get("/health", (req, res) => {
  * ============================================================
  * AUTH ROUTES
  * ============================================================
+ *
+ * POST /api/auth/login
+ * POST /api/auth/register
+ * GET  /api/auth/me
  */
 
 app.use(
@@ -76,6 +83,12 @@ app.use(
  * ============================================================
  * ADMIN LICENSE ROUTES
  * ============================================================
+ *
+ * GET   /api/admin/plans
+ * GET   /api/admin/companies/:companyId/license
+ * POST  /api/admin/companies/:companyId/license
+ * PATCH /api/admin/licenses/:licenseId/extend
+ * POST  /api/admin/licenses/:licenseId/cancel
  */
 
 app.use(
@@ -86,16 +99,26 @@ app.use(
 
 /**
  * ============================================================
- * LICENSE TEST ROUTES
+ * LICENSE AUTHORIZATION TEST ROUTES
  * ============================================================
  *
- * Test / doğrulama endpoint'leri.
- *
- * Örnek:
- *
  * GET /api/license-test/active
+ *
+ * Aktif lisans kontrolü.
+ *
+ *
  * GET /api/license-test/professional
+ *
+ * Professional veya üzeri plan kontrolü.
+ *
+ *
  * GET /api/license-test/enterprise
+ *
+ * Enterprise plan kontrolü.
+ *
+ * Bu endpointler production business functionality değildir.
+ * Authorization middleware'lerinin doğru çalıştığını
+ * doğrulamak amacıyla kullanılmaktadır.
  */
 
 app.use(
@@ -110,16 +133,28 @@ app.use(
  * ============================================================
  */
 
+
+/**
+ * TFRS 16 Contracts
+ */
 app.use(
   "/api/contracts",
   contractsRouter
 );
 
+
+/**
+ * Audit
+ */
 app.use(
   "/api/audit",
   auditRouter
 );
 
+
+/**
+ * Reports
+ */
 app.use(
   "/api/reports",
   reportsRouter
