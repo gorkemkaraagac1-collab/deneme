@@ -14007,7 +14007,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const unexplainedAdjustment = (closingLiability - expected) - modificationAdjustment - reassessmentAdjustment;
         const adjustments = modificationAdjustment + reassessmentAdjustment + unexplainedAdjustment;
         const difference = expected + adjustments - closingLiability;
-        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:Math.abs(difference)<=REPORTING_TOLERANCE?"READY":"WARNING", source:built.source });
+        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:Math.abs(difference)<=REPORTING_TOLERANCE?"READY":"WARNING", source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
     });
     report.rows = rows;
@@ -17217,6 +17217,21 @@ document.addEventListener("DOMContentLoaded", () => {
   let v191OpenView = null;
   let v191LastReportingDate = new Date();
 
+  // GK Advisory — dönem aralığı seçimi (Finansal Raporlama görünümü).
+  // "YYYY-MM-DD" string veya null (null = varsayılan: YTD, dönem başı
+  // = içinde bulunulan yılın 1 Ocak'ı, dönem sonu = bugün).
+  let v191PeriodStartOverride = null;
+  let v191PeriodEndOverride = null;
+
+  // GK Advisory — Sözleşme Bazında Detay tabloları varsayılan olarak
+  // KAPALI (yüzlerce sözleşmede sayfanın şişmesini önlemek için).
+  // Bir varlık sınıfı satırına tıklanınca ilgili detay tablosu o
+  // sınıfa filtrelenmiş şekilde otomatik açılır (drill-down).
+  let v191RouDetailExpanded = false;
+  let v191RouDetailAssetClassFilter = null;
+  let v191LiabDetailExpanded = false;
+  let v191LiabDetailAssetClassFilter = null;
+
   function v191Escape(value) {
     return escapeHtml(value == null ? "" : String(value));
   }
@@ -17298,15 +17313,90 @@ document.addEventListener("DOMContentLoaded", () => {
     return `<section class="kpi-grid">${items.map(item => `<div class="kpi-card"><div class="kpi-label">${v191Escape(item.label)}</div><div class="kpi-value">${item.value}</div><div class="kpi-description">${v191Escape(item.description || "")}</div></div>`).join("")}</section>`;
   }
 
+  // "YYYY-MM-DD" biçiminde <input type="date"> value'su üretir.
+  function v191DateInputValue(d) {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  // Varlık sınıfı özet tablosundaki bir satırı tıklanabilir hale getirir
+  // (drill-down): tıklanınca ilgili detay tablosu o sınıfa filtrelenmiş
+  // şekilde açılır.
+  function v191AssetClassDrillLink(kind, assetClass) {
+    const label = assetClass || "Sınıflandırılmamış";
+    const safeLabel = v191Escape(label);
+    const jsArg = String(label).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    return `<a href="#" onclick="window.GK_TFRS16.v191FilterDetail('${kind}', '${jsArg}'); return false;" style="color:#1d4ed8;text-decoration:underline;">${safeLabel}</a>`;
+  }
+
+  function v191PeriodPickerHtml(effectiveStart, effectiveEnd) {
+    const overridden = Boolean(v191PeriodStartOverride || v191PeriodEndOverride);
+    return `
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+      <div>
+        <label style="display:block;font-size:11px;color:#475569;margin-bottom:4px;">Dönem Başlangıcı</label>
+        <input type="date" id="v191PeriodStartInput" value="${v191DateInputValue(effectiveStart)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;color:#475569;margin-bottom:4px;">Dönem Sonu</label>
+        <input type="date" id="v191PeriodEndInput" value="${v191DateInputValue(effectiveEnd)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
+      </div>
+      <button type="button" class="primary-button" onclick="window.GK_TFRS16.v191ApplyPeriod(); return false;">Uygula</button>
+      ${overridden ? `<button type="button" class="secondary-button" onclick="window.GK_TFRS16.v191ResetPeriod(); return false;">Varsayılana Dön (YTD)</button>` : ""}
+      ${overridden ? `<span style="font-size:11px;color:#0f766e;">Özel dönem seçili</span>` : `<span style="font-size:11px;color:#64748b;">Varsayılan: yıl başından bugüne (YTD)</span>`}
+    </div>`;
+  }
+
+  // Sözleşme bazında detay bloğunu üretir. expanded=false iken büyük
+  // tablo HTML'i HİÇ üretilmez (yüzlerce sözleşmede performans için) —
+  // yalnızca "Detayı Göster" butonu ve varsa aktif filtre bilgisi basılır.
+  function v191ContractDetailBlock(kind, allRows, totalsRow, columns, expanded, assetClassFilter, groupedByAssetClass, sumKeys) {
+    const toggleFn = kind === "rou" ? "v191ToggleRouDetail" : "v191ToggleLiabDetail";
+    const clearFn = kind === "rou" ? "v191ClearRouFilter" : "v191ClearLiabFilter";
+    const filterInfo = assetClassFilter
+      ? `<span style="font-size:11px;color:#0f766e;margin-left:8px;">Filtre: <strong>${v191Escape(assetClassFilter)}</strong> · <a href="#" onclick="window.GK_TFRS16.${clearFn}(); return false;" style="color:#1d4ed8;">temizle</a></span>`
+      : "";
+
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0 6px;">
+      <h4 style="margin:0;font-size:12px;color:#475569;">Sözleşme Bazında Detay${filterInfo}</h4>
+      <button type="button" class="secondary-button" onclick="window.GK_TFRS16.${toggleFn}(); return false;">${expanded ? "Detayı Gizle" : "Detayı Göster"}</button>
+    </div>`;
+
+    if (!expanded) {
+      html += `<p style="font-size:11px;color:#94a3b8;margin:0;">Sözleşme sayısı ${allRows.length} — performans için detay tablosu varsayılan olarak kapalıdır. Yukarıdaki varlık sınıfı özetinde bir satıra tıklayarak da o sınıfa filtrelenmiş şekilde açabilirsiniz.</p>`;
+      return html;
+    }
+
+    let rows = allRows;
+    if (assetClassFilter) {
+      rows = allRows.filter(r => (r.assetClass || "Sınıflandırılmamış") === assetClassFilter);
+      const group = (groupedByAssetClass || []).find(g => g.assetClass === assetClassFilter);
+      if (group) {
+        const subtotalCells = sumKeys.map(k => `${v191Escape(columns.find(c => c.key === k)?.label || k)}: ${v191Value(group[k])}`).join(" · ");
+        html += `<p style="font-size:11px;color:#0f766e;margin:0 0 6px;">Filtrelenmiş alt toplam (${group.contractCount} sözleşme) — ${subtotalCells}</p>`;
+      }
+    }
+
+    const totals = assetClassFilter ? [] : totalsRow;
+    html += v191Table([...rows, ...totals], columns);
+    return html;
+  }
+
   function v191RenderFinancialReporting(date) {
-    const data = getTfrs16FinancialReportingSnapshot(date) || {};
+    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
+    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
+
+    // Balance sheet KPI snapshot'ı seçili dönem sonu itibarıyla alınır
+    // (kullanıcı geçmiş bir dönem seçtiyse KPI'lar da o tarihi yansıtmalı).
+    const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
 
-    const periodStart = new Date(date.getFullYear(), 0, 1);
-    const rouReport = getRuoAssetRollForwardReport(periodStart, date) || {};
-    const liabReport = getLeaseLiabilityRollForwardReport(periodStart, date) || {};
-    const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${date.toLocaleDateString("tr-TR")}`;
+    const periodStart = effectivePeriodStart;
+    const periodEnd = effectivePeriodEnd;
+    const rouReport = getRuoAssetRollForwardReport(periodStart, periodEnd) || {};
+    const liabReport = getLeaseLiabilityRollForwardReport(periodStart, periodEnd) || {};
+    const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${periodEnd.toLocaleDateString("tr-TR")}`;
 
     const rouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
     const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
@@ -17316,8 +17406,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
     const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
     const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
 
-    return v191Kpis([
+    const rouDetailColumns = [
+      { key: "contractId", label: "Sözleşme" },
+      { key: "company", label: "Şirket" },
+      { key: "openingRuo", label: "Açılış" },
+      { key: "depreciation", label: "Amortisman" },
+      { key: "modificationAdjustment", label: "Modifikasyon" },
+      { key: "reassessmentAdjustment", label: "Reassessment" },
+      { key: "otherAdjustment", label: "Diğer" },
+      { key: "closingRuo", label: "Kapanış" },
+      { key: "status", label: "Durum" }
+    ];
+    const liabDetailColumns = [
+      { key: "contractId", label: "Sözleşme" },
+      { key: "company", label: "Şirket" },
+      { key: "openingLiability", label: "Açılış" },
+      { key: "interest", label: "Faiz" },
+      { key: "payments", label: "Ödemeler" },
+      { key: "modificationAdjustment", label: "Modifikasyon" },
+      { key: "reassessmentAdjustment", label: "Reassessment" },
+      { key: "otherAdjustment", label: "Diğer" },
+      { key: "closingLiability", label: "Kapanış" },
+      { key: "status", label: "Durum" }
+    ];
+
+    return v191PeriodPickerHtml(effectivePeriodStart, effectivePeriodEnd) + v191Kpis([
       { label: "Lease Liability", value: v191Value(bs.leaseLiability), description: "Financial reporting balance sheet" },
       { label: "Current Liability", value: v191Value(bs.currentLiability), description: "Reporting-date classification" },
       { label: "Non-current Liability", value: v191Value(bs.nonCurrentLiability), description: "Reporting-date classification" },
@@ -17338,11 +17453,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <h3 style="margin:0;">Dipnot: Kullanım Hakkı Varlığı Hareket Tablosu</h3>
           <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.53(a) — Varlık sınıfı ve para birimi kırılımı aşağıda verilmiştir.</p>
         </div>
-        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportRouAssetMovementNote(new Date(${periodStart.getFullYear()},0,1), new Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportRouAssetMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet</h4>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet <span style="font-weight:400;color:#94a3b8;">(bir satıra tıklayarak detaya inebilirsiniz)</span></h4>
       ${v191Table(rouByAssetClass, [
-        { key: "assetClass", label: "Varlık Sınıfı" },
+        { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("rou", row.assetClass) },
         { key: "contractCount", label: "Sözleşme Sayısı" },
         { key: "openingRuo", label: "Açılış" },
         { key: "depreciation", label: "Amortisman" },
@@ -17362,18 +17477,7 @@ document.addEventListener("DOMContentLoaded", () => {
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingRuo", label: "Kapanış" }
       ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Sözleşme Bazında Detay</h4>
-      ${v191Table([...rouRows, ...rouTotalsRow], [
-        { key: "contractId", label: "Sözleşme" },
-        { key: "company", label: "Şirket" },
-        { key: "openingRuo", label: "Açılış" },
-        { key: "depreciation", label: "Amortisman" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "closingRuo", label: "Kapanış" },
-        { key: "status", label: "Durum" }
-      ])}
+      ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
       ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
     </div>
 
@@ -17383,8 +17487,20 @@ document.addEventListener("DOMContentLoaded", () => {
           <h3 style="margin:0;">Dipnot: Kira Yükümlülüğü Hareket Tablosu</h3>
           <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Vade analizi ayrı bir dipnot olarak Contract Financial Tools üzerinden alınabilir.</p>
         </div>
-        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},0,1), new Date(${date.getFullYear()},${date.getMonth()},${date.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet <span style="font-weight:400;color:#94a3b8;">(bir satıra tıklayarak detaya inebilirsiniz)</span></h4>
+      ${v191Table(liabByAssetClass, [
+        { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("liab", row.assetClass) },
+        { key: "contractCount", label: "Sözleşme Sayısı" },
+        { key: "openingLiability", label: "Açılış" },
+        { key: "interest", label: "Faiz" },
+        { key: "payments", label: "Ödemeler" },
+        { key: "modificationAdjustment", label: "Modifikasyon" },
+        { key: "reassessmentAdjustment", label: "Reassessment" },
+        { key: "otherAdjustment", label: "Diğer" },
+        { key: "closingLiability", label: "Kapanış" }
+      ])}
       <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet</h4>
       ${v191Table(liabByCurrency, [
         { key: "currency", label: "Para Birimi" },
@@ -17397,21 +17513,68 @@ document.addEventListener("DOMContentLoaded", () => {
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingLiability", label: "Kapanış" }
       ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Sözleşme Bazında Detay</h4>
-      ${v191Table([...liabRows, ...liabTotalsRow], [
-        { key: "contractId", label: "Sözleşme" },
-        { key: "company", label: "Şirket" },
-        { key: "openingLiability", label: "Açılış" },
-        { key: "interest", label: "Faiz" },
-        { key: "payments", label: "Ödemeler" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "closingLiability", label: "Kapanış" },
-        { key: "status", label: "Durum" }
-      ])}
+      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
     </div>`;
+  }
+
+  // ---- Dönem seçici ve detay toggle/drill-down handler'ları ----
+
+  function v191ApplyPeriod() {
+    const startInput = document.getElementById("v191PeriodStartInput");
+    const endInput = document.getElementById("v191PeriodEndInput");
+    const startVal = startInput?.value;
+    const endVal = endInput?.value;
+    if (!startVal || !endVal) {
+      showAlert("Lütfen hem dönem başlangıcı hem de dönem sonu tarihini seçin.");
+      return;
+    }
+    if (startVal > endVal) {
+      showAlert("Dönem başlangıcı, dönem sonundan sonra olamaz.");
+      return;
+    }
+    v191PeriodStartOverride = startVal;
+    v191PeriodEndOverride = endVal;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191ResetPeriod() {
+    v191PeriodStartOverride = null;
+    v191PeriodEndOverride = null;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191ToggleRouDetail() {
+    v191RouDetailExpanded = !v191RouDetailExpanded;
+    if (!v191RouDetailExpanded) v191RouDetailAssetClassFilter = null;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191ToggleLiabDetail() {
+    v191LiabDetailExpanded = !v191LiabDetailExpanded;
+    if (!v191LiabDetailExpanded) v191LiabDetailAssetClassFilter = null;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191FilterDetail(kind, assetClass) {
+    if (kind === "rou") {
+      v191RouDetailAssetClassFilter = assetClass;
+      v191RouDetailExpanded = true;
+    } else if (kind === "liab") {
+      v191LiabDetailAssetClassFilter = assetClass;
+      v191LiabDetailExpanded = true;
+    }
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191ClearRouFilter() {
+    v191RouDetailAssetClassFilter = null;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+  }
+
+  function v191ClearLiabFilter() {
+    v191LiabDetailAssetClassFilter = null;
+    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
   }
 
   function v191RenderRiskControls(date) {
@@ -17523,6 +17686,17 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "timestamp", label: "Timestamp" }, { key: "actor", label: "Actor" }, { key: "action", label: "Action" }, { key: "contractId", label: "Contract" }
     ])}`;
   }
+
+  window.GK_TFRS16 = window.GK_TFRS16 || {};
+  Object.assign(window.GK_TFRS16, {
+    v191ApplyPeriod,
+    v191ResetPeriod,
+    v191ToggleRouDetail,
+    v191ToggleLiabDetail,
+    v191FilterDetail,
+    v191ClearRouFilter,
+    v191ClearLiabFilter
+  });
 
   function v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReporting); v191OpenView(); }
   function v191OpenRiskControls() { v191OpenView = () => v191Show("Risk & Kontroller", "Existing V16.8 Risk & Control Engine", v191RenderRiskControls); v191OpenView(); }
@@ -23027,7 +23201,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const newPayment = Math.round((Number(contract.monthlyPayment) || 0) * (1 + changePercent / 100) * 100) / 100;
 
         const created = createReassessment(contract, {
-          reassessmentDate: today.toISOString().slice(0, 10),
+          // FIX (V18 Parça 1 — Vaka 4 hatası): reassessmentDate önceden
+          // bugünün gerçek tarihiydi; effectiveDate (reviewDate) neredeyse
+          // her zaman ondan önce kaldığı için createReassessment'taki
+          // "Effective Date, Reassessment Date'ten önce olamaz" kontrolüne
+          // takılıp reassessment hiç oluşturulamıyordu. reassessmentDate
+          // artık reviewDate ile aynı: otomatik reassessment, sözleşmenin
+          // kendi endeks inceleme (anniversary) tarihi itibarıyla yapılmış
+          // sayılır. Sistemin ne zaman kontrol ettiği indexLastCheckedDate'te
+          // ayrıca tutulmaya devam eder.
+          reassessmentDate: reviewDate.toISOString().slice(0, 10),
           effectiveDate: reviewDate.toISOString().slice(0, 10),
           type: "INDEX_RATE_CHANGE",
           newPayment,
@@ -24546,9 +24729,22 @@ document.addEventListener("DOMContentLoaded", () => {
     // yükümlülük farkı 0 (VARSAYIM — onaylandı: moneter kalem) ----
     let vaka2Pass = false;
     try {
-      addOrUpdateInflationIndexEntry("2026-01", 1000); // edinim ayı
-      addOrUpdateInflationIndexEntry("2026-02", 1000);
-      addOrUpdateInflationIndexEntry("2027-06", 1050); // %5 artış → raporlama dönemi
+      // FIX (V18 Parça 2 — Vaka 2 hatası): motor, edinim ayından raporlama
+      // dönemine kadar HER ay için endeks satırı arıyor (interpolasyon
+      // kasıtlı olarak yapılmıyor — bkz. getInflationIndex). Eskiden yalnızca
+      // 3 ay girildiği için test her seferinde "endeks eksik" hatasıyla
+      // düşüyor ve asıl doğrulama (ROU artışı/jurnal dengesi) hiç
+      // çalışmıyordu. Şimdi 2026-01 → 2027-06 arasındaki TÜM aylara sabit
+      // endeks (1000) veriliyor, yalnızca raporlama ayı 2027-06 %5 yüksek
+      // (1050) — böylece "düz bazda %5 artış" senaryosu gerçekten test edilir.
+      const v2Months = [];
+      for (let y = 2026; y <= 2027; y++) {
+        for (let m = 1; m <= 12; m++) {
+          const mo = `${y}-${String(m).padStart(2, "0")}`;
+          if (mo <= "2027-06") v2Months.push(mo);
+        }
+      }
+      v2Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
 
       const contract2 = { ...baseContract, id: "SELFTEST-V18P2-2" };
       ensureInflationAdjustmentState(contract2);
@@ -24579,9 +24775,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.error("Vaka 2 — düzeltme uygulanamadı:", applied.errors);
       }
 
-      deleteInflationIndexEntry("2026-01");
-      deleteInflationIndexEntry("2026-02");
-      deleteInflationIndexEntry("2027-06");
+      v2Months.forEach(mo => deleteInflationIndexEntry(mo));
     } catch (error) {
       console.error("Vaka 2 hata:", error);
     }
@@ -24649,7 +24843,12 @@ document.addEventListener("DOMContentLoaded", () => {
       addInflationIndexBulk,
       deleteInflationIndexEntry,
       runSelfTestsV18Part2,
-      runSelfTestsV25Part2
+      runSelfTestsV25Part2,
+      // V19.1 Financial Reporting — dönem seçici / detay drill-down testleri için
+      v191RenderFinancialReporting,
+      v191OpenFinancialReporting,
+      getRuoAssetRollForwardReport,
+      getLeaseLiabilityRollForwardReport
     };
   } catch (error) {
     console.error("Test export shim error:", error);
