@@ -1,4 +1,3 @@
-cat > backend/server.js <<'EOF'
 /**
  * TFRS 16 Backend — HTTP Server
  *
@@ -65,4 +64,3 @@ process.on(
 
 
 module.exports = server;
-EOF

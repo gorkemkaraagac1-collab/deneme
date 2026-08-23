@@ -1,4 +1,3 @@
-cat > backend/app.js <<'EOF'
 /**
  * TFRS 16 Backend — Express Application
  *
@@ -175,4 +174,3 @@ app.use((err, req, res, next) => {
  */
 
 module.exports = app;
-EOF
