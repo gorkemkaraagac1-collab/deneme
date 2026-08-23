@@ -1,0 +1,342 @@
+const pool = require("../db/pool");
+
+/**
+ * ============================================================
+ * LICENSE SERVICE
+ * ============================================================
+ *
+ * Şirket bazlı lisans ve kullanıcı limiti işlemlerinin
+ * merkezi servis katmanıdır.
+ *
+ * ÖNEMLİ:
+ * - Lisans şirkete aittir.
+ * - Kullanıcıya doğrudan lisans atanmaz.
+ * - Enterprise planında max_users = NULL => sınırsız kullanıcı.
+ * - Lisans geçerliliği status + tarih birlikte kontrol edilerek
+ *   belirlenir.
+ */
+
+/**
+ * Aktif ve tarih açısından geçerli şirket lisansını getirir.
+ *
+ * @param {string} companyId
+ * @param {object} db - pool veya transaction client
+ * @returns {Promise<object|null>}
+ */
+async function getActiveCompanyLicense(companyId, db = pool) {
+  const result = await db.query(
+    `
+      SELECT
+        cl.id,
+        cl.company_id,
+        cl.plan_id,
+        p.name AS plan_name,
+        p.max_users,
+        p.description,
+        cl.starts_at,
+        cl.expires_at,
+        cl.status,
+        cl.created_at
+      FROM company_licenses cl
+      INNER JOIN plans p
+        ON p.id = cl.plan_id
+      WHERE cl.company_id = $1
+        AND cl.status = 'active'
+        AND cl.starts_at <= NOW()
+        AND (
+          cl.expires_at IS NULL
+          OR cl.expires_at > NOW()
+        )
+      ORDER BY cl.starts_at DESC, cl.id DESC
+      LIMIT 1
+    `,
+    [companyId]
+  );
+
+  return result.rows[0] || null;
+}
+
+
+/**
+ * Şirketin mevcut kullanıcı sayısını döndürür.
+ *
+ * user_companies tablosu ilişki tablosu olduğu için
+ * COUNT(*) üzerinden hesaplanır.
+ *
+ * @param {string} companyId
+ * @param {object} db
+ * @returns {Promise<number>}
+ */
+async function getCompanyUserCount(companyId, db = pool) {
+  const result = await db.query(
+    `
+      SELECT COUNT(*)::INTEGER AS user_count
+      FROM user_companies
+      WHERE company_id = $1
+    `,
+    [companyId]
+  );
+
+  return result.rows[0]?.user_count || 0;
+}
+
+
+/**
+ * Şirket yeni kullanıcı kabul edebilir mi?
+ *
+ * Enterprise:
+ * max_users = NULL => sınırsız
+ *
+ * Diğer planlar:
+ * current_users < max_users
+ *
+ * @param {string} companyId
+ * @param {object} db
+ * @returns {Promise<object>}
+ */
+async function canAddUserToCompany(companyId, db = pool) {
+  const license = await getActiveCompanyLicense(companyId, db);
+
+  if (!license) {
+    return {
+      allowed: false,
+      reason: "NO_ACTIVE_LICENSE",
+      message: "Şirketin geçerli bir lisansı bulunmamaktadır.",
+      license: null,
+      currentUsers: await getCompanyUserCount(companyId, db)
+    };
+  }
+
+  const currentUsers = await getCompanyUserCount(companyId, db);
+
+  // Enterprise / sınırsız
+  if (license.max_users === null) {
+    return {
+      allowed: true,
+      reason: "UNLIMITED",
+      message: "Sınırsız kullanıcı lisansı.",
+      license,
+      currentUsers,
+      maxUsers: null,
+      remainingUsers: null
+    };
+  }
+
+  const allowed = currentUsers < license.max_users;
+
+  return {
+    allowed,
+    reason: allowed ? "AVAILABLE" : "LIMIT_REACHED",
+    message: allowed
+      ? "Yeni kullanıcı eklenebilir."
+      : "Şirket kullanıcı limitine ulaşmıştır.",
+    license,
+    currentUsers,
+    maxUsers: license.max_users,
+    remainingUsers: Math.max(
+      license.max_users - currentUsers,
+      0
+    )
+  };
+}
+
+
+/**
+ * Kullanıcının bağlı olduğu şirketlerin lisanslarını getirir.
+ *
+ * Bir kullanıcı birden fazla şirkete bağlı olabilir.
+ *
+ * @param {string} userId
+ * @param {object} db
+ * @returns {Promise<Array>}
+ */
+async function getUserLicenses(userId, db = pool) {
+  const result = await db.query(
+    `
+      SELECT
+        c.id AS company_id,
+        c.name AS company_name,
+
+        cl.id AS license_id,
+        cl.plan_id,
+        p.name AS plan_name,
+        p.max_users,
+        p.description,
+
+        cl.starts_at,
+        cl.expires_at,
+        cl.status,
+
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM user_companies uc2
+          WHERE uc2.company_id = c.id
+        ) AS current_users
+
+      FROM user_companies uc
+
+      INNER JOIN companies c
+        ON c.id = uc.company_id
+
+      LEFT JOIN LATERAL (
+        SELECT cl.*
+        FROM company_licenses cl
+        WHERE cl.company_id = c.id
+          AND cl.status = 'active'
+          AND cl.starts_at <= NOW()
+          AND (
+            cl.expires_at IS NULL
+            OR cl.expires_at > NOW()
+          )
+        ORDER BY cl.starts_at DESC, cl.id DESC
+        LIMIT 1
+      ) cl
+        ON TRUE
+
+      LEFT JOIN plans p
+        ON p.id = cl.plan_id
+
+      WHERE uc.user_id = $1
+
+      ORDER BY c.name ASC
+    `,
+    [userId]
+  );
+
+  return result.rows.map(row => ({
+    companyId: row.company_id,
+    companyName: row.company_name,
+
+    hasActiveLicense: Boolean(row.license_id),
+
+    license: row.license_id
+      ? {
+          id: row.license_id,
+          planId: row.plan_id,
+          planName: row.plan_name,
+          maxUsers: row.max_users,
+          description: row.description,
+          startsAt: row.starts_at,
+          expiresAt: row.expires_at,
+          status: row.status
+        }
+      : null,
+
+    currentUsers: Number(row.current_users || 0),
+
+    remainingUsers:
+      row.max_users === null || row.max_users === undefined
+        ? null
+        : Math.max(
+            Number(row.max_users) - Number(row.current_users || 0),
+            0
+          )
+  }));
+}
+
+
+/**
+ * Kullanıcının aktif lisanslı şirketlerini getirir.
+ *
+ * En az bir geçerli lisans varsa kullanıcı sistemde
+ * lisans açısından erişilebilir kabul edilir.
+ *
+ * @param {string} userId
+ * @param {object} db
+ * @returns {Promise<Array>}
+ */
+async function getUserLicensedCompanies(userId, db = pool) {
+  const licenses = await getUserLicenses(userId, db);
+
+  return licenses.filter(company => company.hasActiveLicense);
+}
+
+
+/**
+ * Şirketin geçerli lisansı var mı?
+ *
+ * @param {string} companyId
+ * @param {object} db
+ * @returns {Promise<boolean>}
+ */
+async function hasActiveCompanyLicense(companyId, db = pool) {
+  const license = await getActiveCompanyLicense(companyId, db);
+
+  return Boolean(license);
+}
+
+
+/**
+ * Şirketin belirli bir plana erişimi var mı?
+ *
+ * Örnek:
+ *
+ * hasPlanAccess(companyId, "professional")
+ *
+ * Enterprise'ın Professional özelliklerini de kullanabilmesini
+ * istiyorsak aşağıdaki hiyerarşi daha sonra ayrıca eklenebilir.
+ *
+ * Şimdilik exact plan kontrolüdür.
+ *
+ * @param {string} companyId
+ * @param {string} planName
+ * @param {object} db
+ * @returns {Promise<boolean>}
+ */
+async function hasPlanAccess(companyId, planName, db = pool) {
+  const license = await getActiveCompanyLicense(companyId, db);
+
+  if (!license) {
+    return false;
+  }
+
+  return license.plan_id === planName;
+}
+
+
+/**
+ * Kullanıcının en yüksek aktif planını belirler.
+ *
+ * Bu fonksiyon özellikle bir kullanıcı birden fazla şirkete
+ * bağlı olduğunda frontend'in genel lisans durumunu göstermek
+ * için kullanılabilir.
+ *
+ * Plan sırası:
+ *
+ * starter       = 1
+ * professional  = 2
+ * enterprise    = 3
+ */
+async function getUserHighestPlan(userId, db = pool) {
+  const licenses = await getUserLicensedCompanies(userId, db);
+
+  const planRank = {
+    starter: 1,
+    professional: 2,
+    enterprise: 3
+  };
+
+  if (licenses.length === 0) {
+    return null;
+  }
+
+  return licenses
+    .map(company => company.license)
+    .sort(
+      (a, b) =>
+        (planRank[b.planId] || 0) -
+        (planRank[a.planId] || 0)
+    )[0];
+}
+
+
+module.exports = {
+  getActiveCompanyLicense,
+  getCompanyUserCount,
+  canAddUserToCompany,
+  getUserLicenses,
+  getUserLicensedCompanies,
+  hasActiveCompanyLicense,
+  hasPlanAccess,
+  getUserHighestPlan
+};
