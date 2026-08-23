@@ -1,32 +1,41 @@
 const express = require("express");
 const pool = require("../db/pool");
+const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
+router.use(requireAuth);
+
 // GET /api/audit?contractId=&action=&limit=
-// Frontend'deki recordAuditEvent() ile aynı alan adlarını (actor,
-// action, entityType, entityId, contractId, oldValue, newValue,
-// metadata) kullanır — backend'e taşındığında dönüşüm gerekmez.
+// audit_events tablosunda doğrudan company_id yok — kontrata (contract_id)
+// bağlı. Bu yüzden contracts tablosuyla JOIN edilip, kontratın
+// company_id'si kullanıcının req.user.companyIds listesinde olması
+// ZORUNLU kılınıyor. contract_id NULL olan (kontrata bağlı olmayan)
+// audit kayıtları, sahibi belirsiz olduğu için hiçbir kullanıcıya
+// gösterilmez.
 router.get("/", async (req, res) => {
   try {
     const { contractId, action, limit } = req.query;
-    const conditions = [];
-    const params = [];
+    const conditions = ["c.company_id = ANY($1)"];
+    const params = [req.user.companyIds];
 
     if (contractId) {
       params.push(contractId);
-      conditions.push(`contract_id = $${params.length}`);
+      conditions.push(`a.contract_id = $${params.length}`);
     }
     if (action) {
       params.push(action);
-      conditions.push(`action = $${params.length}`);
+      conditions.push(`a.action = $${params.length}`);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     params.push(Math.min(Number(limit) || 200, 1000));
 
     const result = await pool.query(
-      `SELECT * FROM audit_events ${where} ORDER BY timestamp DESC LIMIT $${params.length}`,
+      `SELECT a.* FROM audit_events a
+       JOIN contracts c ON c.id = a.contract_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY a.timestamp DESC
+       LIMIT $${params.length}`,
       params
     );
     res.json(result.rows);
@@ -35,7 +44,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/audit — yeni bir audit event kaydeder
+// POST /api/audit — yeni bir audit event kaydeder. contractId
+// verilmişse, o kontratın gerçekten kullanıcının kendi şirketine ait
+// olduğu ÖNCE doğrulanır — aksi halde bir kullanıcı başka şirketin
+// kontratına sahte audit kaydı düşürebilirdi.
 router.post("/", async (req, res) => {
   try {
     const { id, actor, action, entityType, entityId, contractId, oldValue, newValue, metadata } = req.body;
@@ -44,13 +56,23 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "id, action, entityType zorunludur" });
     }
 
+    if (contractId) {
+      const owns = await pool.query(
+        "SELECT 1 FROM contracts WHERE id = $1 AND company_id = ANY($2)",
+        [contractId, req.user.companyIds]
+      );
+      if (owns.rows.length === 0) {
+        return res.status(403).json({ error: "Bu kontrata audit kaydı ekleme yetkiniz yok" });
+      }
+    }
+
     const result = await pool.query(
       `INSERT INTO audit_events (id, actor, action, entity_type, entity_id, contract_id, old_value, new_value, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         id,
-        actor || "system",
+        actor || req.user.username || "system",
         action,
         entityType,
         entityId || null,
