@@ -1,17 +1,16 @@
-/**
- * TFRS 16 Backend — Express.js giriş noktası.
- */
-
 require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+
+const pool = require("./db/pool");
 
 const authRouter = require("./routes/auth");
 const contractsRouter = require("./routes/contracts");
 const auditRouter = require("./routes/audit");
 const reportsRouter = require("./routes/reports");
 const adminLicenseRouter = require("./routes/admin-licenses");
+const licenseTestRouter = require("./routes/license-test");
 
 const app = express();
 
@@ -32,16 +31,27 @@ app.use(
   })
 );
 
+app.use(
+  express.urlencoded({
+    extended: true
+  })
+);
+
 
 /**
- * Basit request logging.
+ * ============================================================
+ * REQUEST LOGGING
+ * ============================================================
  */
+
 app.use((req, res, next) => {
+
   console.log(
-    `${new Date().toISOString()} ${req.method} ${req.path}`
+    `${new Date().toISOString()} ${req.method} ${req.originalUrl}`
   );
 
   next();
+
 });
 
 
@@ -51,25 +61,44 @@ app.use((req, res, next) => {
  * ============================================================
  */
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    version: "v26.1-license-system"
-  });
+app.get("/health", async (req, res) => {
+
+  try {
+
+    await pool.query("SELECT 1");
+
+    return res.json({
+      status: "ok",
+      version: "v26.1-license-system"
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Health check DB hatası:",
+      error
+    );
+
+    return res.status(503).json({
+      status: "error",
+      database: "unavailable"
+    });
+
+  }
+
 });
 
 
 /**
  * ============================================================
- * AUTH ROUTES
+ * AUTH
  * ============================================================
  *
- * /api/auth
- *
- * Login
- * Register
- * Me
+ * POST /api/auth/register
+ * POST /api/auth/login
+ * GET  /api/auth/me
  */
+
 app.use(
   "/api/auth",
   authRouter
@@ -78,38 +107,7 @@ app.use(
 
 /**
  * ============================================================
- * ADMIN LICENSE ROUTES
- * ============================================================
- *
- * Tüm endpoint'lerin içerisinde requireAdmin
- * middleware'i bulunmaktadır.
- *
- * Örnek:
- *
- * GET
- * /api/admin/plans
- *
- * GET
- * /api/admin/companies/:companyId/license
- *
- * POST
- * /api/admin/companies/:companyId/license
- *
- * PATCH
- * /api/admin/licenses/:licenseId/extend
- *
- * POST
- * /api/admin/licenses/:licenseId/cancel
- */
-app.use(
-  "/api/admin",
-  adminLicenseRouter
-);
-
-
-/**
- * ============================================================
- * APPLICATION ROUTES
+ * CONTRACTS
  * ============================================================
  */
 
@@ -118,14 +116,72 @@ app.use(
   contractsRouter
 );
 
+
+/**
+ * ============================================================
+ * AUDIT
+ * ============================================================
+ */
+
 app.use(
   "/api/audit",
   auditRouter
 );
 
+
+/**
+ * ============================================================
+ * REPORTS
+ * ============================================================
+ */
+
 app.use(
   "/api/reports",
   reportsRouter
+);
+
+
+/**
+ * ============================================================
+ * ADMIN LICENSE MANAGEMENT
+ * ============================================================
+ *
+ * Sadece ADMIN middleware'i kendi route'ları içerisinde
+ * kontrol eder.
+ *
+ * Örnek:
+ *
+ * GET    /api/admin/plans
+ * GET    /api/admin/licenses/:companyId
+ * POST   /api/admin/licenses/:companyId
+ * PATCH  /api/admin/licenses/:companyId
+ * DELETE /api/admin/licenses/:companyId
+ */
+
+app.use(
+  "/api/admin",
+  adminLicenseRouter
+);
+
+
+/**
+ * ============================================================
+ * LICENSE TEST ROUTES
+ * ============================================================
+ *
+ * Faz 5 authorization testleri için kullanılır.
+ *
+ * /api/license-test/active
+ * /api/license-test/professional
+ * /api/license-test/enterprise
+ *
+ * Production'a geçmeden önce bu route'ları kaldırabiliriz
+ * veya ayrı bir internal test mekanizmasına taşıyabiliriz.
+ */
+
+app.use(
+  "/api/license-test",
+  licenseTestRouter
 );
 
 
@@ -136,31 +192,37 @@ app.use(
  */
 
 app.use((req, res) => {
-  res.status(404).json({
-    error:
-      "İstenen endpoint bulunamadı"
+
+  return res.status(404).json({
+    error: "İstenen endpoint bulunamadı"
   });
+
 });
 
 
 /**
  * ============================================================
- * CENTRAL ERROR HANDLER
+ * GLOBAL ERROR HANDLER
  * ============================================================
  */
 
 app.use(
-  (err, req, res, next) => {
+  (error, req, res, next) => {
 
     console.error(
-      "Unhandled error:",
-      err
+      "Unhandled application error:",
+      error
     );
 
-    res.status(500).json({
+    if (res.headersSent) {
+      return next(error);
+    }
+
+    return res.status(500).json({
       error:
-        "Sunucuda beklenmeyen bir hata oluştu"
+        "Sunucu tarafında beklenmeyen bir hata oluştu"
     });
+
   }
 );
 
@@ -177,11 +239,8 @@ app.listen(
   () => {
 
     console.log(
-      `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
+      `TFRS16 Backend çalışıyor: http://0.0.0.0:${PORT}`
     );
 
   }
 );
-
-
-module.exports = app;
