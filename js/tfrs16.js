@@ -6500,6 +6500,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         event.preventDefault();
 
+        // BUG FIX (2026-08): initButtonLoadingV242()'nin global submit
+        // dinleyicisi (capture phase) her form gönderiminde submit
+        // butonunu "Kaydediliyor..." durumuna alıp DEVRE DIŞI
+        // bırakıyordu, ama bunu geri alan (setButtonLoading(..., false))
+        // HİÇBİR YERDE çağrılmıyordu — kayıt başarılı olsa da olmasa da
+        // buton SONSUZA KADAR "Kaydediliyor..." yazılı ve tıklanamaz
+        // kalıyordu. Ayrıca try/catch olmadığından, ortasında bir hata
+        // fırlarsa sözleşme hiç kaydedilmiyor ve kullanıcıya görünür
+        // bir hata mesajı da ÇIKMIYORDU (sessiz başarısızlık). Bu blok
+        // ikisini de giderir: hatayı showAlert ile GÖSTERİR, butonu
+        // finally içinde HER ZAMAN serbest bırakır.
+        const submitButton = event.target?.querySelector?.('button[type="submit"]');
+
+        try {
+
         const id =
           getInput(
             "contractId"
@@ -6881,6 +6896,17 @@ document.addEventListener("DOMContentLoaded", () => {
         closeContractModal();
 
         openDetail(id);
+
+        } catch (error) {
+          console.error("Sözleşme kaydedilirken hata:", error);
+          showAlert(
+            "Sözleşme kaydedilemedi: " +
+            (error?.message || String(error)) +
+            "\n\n(Teknik detay konsolda — F12/Web Inspector.)"
+          );
+        } finally {
+          if (submitButton) setButtonLoading(submitButton, false);
+        }
       }
     );
 
