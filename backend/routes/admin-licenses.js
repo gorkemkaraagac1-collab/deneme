@@ -19,7 +19,17 @@ const router = express.Router();
  * ADMIN LICENSE MANAGEMENT
  * ============================================================
  *
- * Tüm endpoint'ler ADMIN yetkisi gerektirir.
+ * Tüm endpoint'ler ADMIN yetkisi gerektirir (bkz. middleware/admin.js).
+ *
+ * KAPSAM: ADMIN burada PLATFORM-LEVEL bir yöneticidir — sadece
+ * kendi şirketiyle sınırlı değildir. Bu yüzden bu dosyadaki hiçbir
+ * endpoint companyId'yi req.user.companyIds ile karşılaştırmaz;
+ * ADMIN rolüne sahip herhangi bir kullanıcı :companyId parametresi
+ * ile belirtilen HERHANGİ BİR şirketin lisansını görüntüleyebilir,
+ * oluşturabilir, uzatabilir veya iptal edebilir. Bu, kasıtlı bir
+ * tasarım kararıdır (detaylı gerekçe için middleware/admin.js'e
+ * bakınız); şirket bazlı bir "company admin" rolü bu aşamada
+ * bilinçli olarak oluşturulmamıştır.
  */
 
 
