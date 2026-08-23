@@ -1,8 +1,12 @@
+cat > backend/server.js <<'EOF'
 /**
  * TFRS 16 Backend — HTTP Server
  *
- * app.js → Express application
- * server.js → HTTP server lifecycle
+ * Express application:
+ *   backend/app.js
+ *
+ * HTTP server:
+ *   backend/server.js
  */
 
 require("dotenv").config();
@@ -25,7 +29,9 @@ const server = app.listen(
 
 
 /**
- * Graceful shutdown
+ * ============================================================
+ * GRACEFUL SHUTDOWN
+ * ============================================================
  */
 
 function shutdown(signal) {
@@ -59,3 +65,4 @@ process.on(
 
 
 module.exports = server;
+EOF
