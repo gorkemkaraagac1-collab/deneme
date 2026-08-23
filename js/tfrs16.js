@@ -91,6 +91,44 @@ document.addEventListener("DOMContentLoaded", () => {
   GK FINANCE INTELLIGENCE
   TFRS 16 ACCOUNTING ENGINE V17
   ------------------------------------------------------------
+  V18 Parça 2 (additive — TMS 29 Enflasyon Düzeltmesi, kiralama
+  portföyü katmanı — TAM KAPSAMLI TMS 29 uygulaması DEĞİLDİR)
+  - Enflasyon endeks tablosu (localStorage: gk_tfrs16_inflation_index_v1),
+    getInflationIndex()/getInflationRatio(): eksik ay interpolasyonu
+    yapılmaz, anlamlı Error fırlatılır.
+  - applyTMS29Restatement(): getReassessmentBaseSchedule() (escalation +
+    modification + reassessment uygulanmış ETKİN plan) üzerinden SAF
+    hesaplama. ROU (gayri moneter) edinim ayından raporlama dönemine
+    endeksle düzeltilir; kiralama yükümlülüğü (MONETER) düzeltilmez —
+    nominal = düzeltilmiş (VARSAYIM, onaylı). Net fark tamamen ROU'dan
+    gelir.
+  - contract.inflationAdjustments[]: DRAFT→APPLIED/CANCELLED yaşam
+    döngüsü (mevcut reassessment deseniyle aynı): validateInflationAdjustment,
+    createInflationAdjustment, applyInflationAdjustment,
+    cancelInflationAdjustment.
+  - TFRS29_ACCOUNTS sabiti: hesap kodları tek noktadan değiştirilebilir.
+  - getCalculationCacheKey() imzasına inflationAdjustments eklendi.
+  - UI: kontrat detayında "Enflasyon Düzeltmesi (TMS 29)" paneli
+    (#inflationAdjustmentContainer, renderInflationAdjustmentSection).
+  - runSelfTestsV18Part2() (belge uyumluluğu için runSelfTestsV25Part2
+    takma adıyla da erişilebilir): regresyon + %5 endeks artışı +
+    eksik-ay hata testleri.
+  ------------------------------------------------------------
+  V18 Parça 1 (additive — Endeksli Ödeme/Escalation genişletmesi)
+  - leaseIncreaseType="fixedRate"/"index" için serbest periyot
+    (escalationFrequencyMonths), "compound"/"initial" baz seçimi
+    (escalationBase) ve özel ilk artış tarihi (escalationFirstDate).
+  - Bu üç alandan biri tanımlıysa computeEscalatedPaymentV18() devreye
+    girer; hiçbiri tanımlı değilse eski computeEscalatedPayment()
+    değişmeden çalışır (regresyon yok).
+  - CPI ay→endeks tablosu (localStorage: gk_tfrs16_cpi_index_v1) ve
+    syncIndexCurrentRateFromCpiTable(): mevcut indexCurrentRate alanını
+    besler, mevcut checkIndexReassessment()/createReassessment() aynen
+    kullanılır — yeni bir reassessment tipi eklenmedi.
+  - getEscalatedPayments(): UI rozetleri (🔺) için sadeleştirilmiş liste.
+  - getCalculationCacheKey() imzasına üç yeni alan eklendi.
+  - runSelfTestsV18Part1(): regresyon + compound/initial + CPI testleri.
+  ------------------------------------------------------------
   V15
   - Existing V14 functionality preserved
   - Contract portfolio
@@ -211,8 +249,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   contracts = contracts.map(
-    contract => ensureReassessmentState(
-      ensureModificationState(contract)
+    contract => ensureInflationAdjustmentState(
+      ensureReassessmentState(
+        ensureModificationState(contract)
+      )
     )
   );
 
@@ -332,8 +372,16 @@ document.addEventListener("DOMContentLoaded", () => {
         `${contract?.startDate || ""}|${contract?.endDate || ""}|` +
         `${contract?.paymentFrequency || ""}|${contract?.leaseIncreaseType || ""}|` +
         `${contract?.leaseIncreaseRate || ""}|${contract?.fixedIncrease || ""}|` +
+        // V18 Parça 1 — eklenmezse aynı ID farklı escalation V18
+        // alanlarıyla eski (yanlış) önbellek sonucunu döndürebilirdi.
+        `${contract?.escalationFrequencyMonths || ""}|${contract?.escalationBase || ""}|` +
+        `${contract?.escalationFirstDate || ""}|` +
         `${JSON.stringify(contract?.modifications || "")}|` +
-        `${JSON.stringify(contract?.reassessments || "")}`;
+        `${JSON.stringify(contract?.reassessments || "")}|` +
+        // V18 Parça 2 — TMS 29 enflasyon düzeltme eventleri de
+        // hesaplamayı (restatement önizlemesini) etkileyebileceğinden
+        // önbellek imzasına eklenir.
+        `${JSON.stringify(contract?.inflationAdjustments || "")}`;
     } catch (error) {
       signature = "";
     }
@@ -850,6 +898,480 @@ document.addEventListener("DOMContentLoaded", () => {
       payment: Number(contract?.monthlyPayment) || 0,
       discountRate: Number(contract?.discountRate) || 0
     };
+  }
+
+
+  /* ==========================================================
+     V18 Parça 2 — TMS 29 ENFLASYON DÜZELTMESİ
+     (KİRALAMA PORTFÖYÜ KATMANI)
+     ----------------------------------------------------------
+     SINIR: Bu modül TAM KAPSAMLI bir TMS 29 uygulaması DEĞİLDİR;
+     yalnızca kiralama portföyüne (ROU/kiralama yükümlülüğü) odaklı
+     bir düzeltme katmanıdır. Diğer finansal tablo kalemlerinin
+     (nakit, stok, özkaynak vb.) enflasyon düzeltmesi bu modülün
+     kapsamında DEĞİLDİR.
+
+     Muhasebe yaklaşımı (VARSAYIM — onaylandı):
+       - ROU varlığı GAYRİ MONETER kalemdir → edinim ayından
+         raporlama dönemine kadar genel fiyat endeksiyle düzeltilir.
+         Her dönemin amortismanı KENDİ ayından raporlama dönemine
+         düzeltilip toplanır (tek bir NBV çarpanı yerine).
+       - Kiralama yükümlülüğü MONETER kalemdir → zaten dönem sonu
+         ölçü biriminde ifade edildiğinden NOMİNAL tutarı ile
+         DÜZELTİLMİŞ tutarı AYNIDIR (fark = 0). Bu, TMS 29'un temel
+         ilkesidir (moneter kalemler restate edilmez); moneter
+         kâr/zararın kaynağı budur.
+       - Net düzeltme farkı (tamamı ROU tarafından gelir) TFRS29_
+         ACCOUNTS.inflationGainLoss hesabına gider.
+       - getReassessmentBaseSchedule() kullanılır — bu, contract'ın
+         ETKİN planını (escalation + modification + reassessment
+         uygulanmış) zaten döndürür; ikinci bir hesaplama motoru
+         YAZILMADI.
+     ========================================================== */
+
+  function ensureInflationAdjustmentState(contract) {
+    if (!contract || typeof contract !== "object") {
+      return contract;
+    }
+    if (!Array.isArray(contract.inflationAdjustments)) {
+      contract.inflationAdjustments = [];
+    }
+    if (!Array.isArray(contract.auditTrail)) {
+      contract.auditTrail = [];
+    }
+    return contract;
+  }
+
+  // Hesap kodları tek noktadan değiştirilebilir (VARSAYIM — ileride
+  // müşteri bazlı hesap eşleme tablosu ayrı bir parçada eklenecek).
+  const TFRS29_ACCOUNTS = {
+    rouAsset: "260 Kullanım Hakkı Varlığı",
+    leaseLiability: "401 Kiralama Yükümlülüğü",
+    inflationGainLoss: "698 Enflasyon Düzeltmesi K/Z"
+  };
+
+  const INFLATION_INDEX_STORAGE_KEY = "gk_tfrs16_inflation_index_v1";
+
+  function loadInflationIndexTable() {
+    try {
+      const raw = localStorage.getItem(INFLATION_INDEX_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter(e => e && typeof e.month === "string" && Number.isFinite(Number(e.index)))
+        : [];
+    } catch (error) {
+      console.error("Enflasyon endeks tablosu okunamadı:", error);
+      return [];
+    }
+  }
+
+  function saveInflationIndexTable(entries) {
+    try {
+      localStorage.setItem(INFLATION_INDEX_STORAGE_KEY, JSON.stringify(entries));
+      return true;
+    } catch (error) {
+      console.error("Enflasyon endeks tablosu kaydedilemedi:", error);
+      return false;
+    }
+  }
+
+  function addOrUpdateInflationIndexEntry(month, index) {
+    const m = String(month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(m)) {
+      return { valid: false, errors: ["Ay formatı YYYY-MM olmalı."] };
+    }
+    const idx = Number(index);
+    if (!Number.isFinite(idx) || idx <= 0) {
+      return { valid: false, errors: ["Endeks değeri pozitif sayısal olmalı."] };
+    }
+    const entries = loadInflationIndexTable();
+    const existingIdx = entries.findIndex(e => e.month === m);
+    const oldValue = existingIdx >= 0 ? entries[existingIdx].index : null;
+    if (existingIdx >= 0) entries[existingIdx].index = idx;
+    else entries.push({ month: m, index: idx });
+    entries.sort((a, b) => a.month.localeCompare(b.month));
+    saveInflationIndexTable(entries);
+    recordAuditEvent({
+      action: "INFLATION_INDEX_UPDATED",
+      entityType: "INFLATION_INDEX",
+      entityId: m,
+      reason: "Enflasyon endeks kaydı eklendi/güncellendi",
+      oldValue: { month: m, index: oldValue },
+      newValue: { month: m, index: idx }
+    });
+    return { valid: true, errors: [] };
+  }
+
+  /**
+   * Çoklu satır yapıştırma (bulk paste) desteği. Beklenen format:
+   * her satırda "YYYY-MM<tab veya boşluk veya virgül>endeks".
+   * Geçersiz satırlar atlanır, sonuçta {added, skipped} döner.
+   */
+  function addInflationIndexBulk(text) {
+    const lines = String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let added = 0, skipped = 0;
+    lines.forEach(line => {
+      const parts = line.split(/[\t,;\s]+/).filter(Boolean);
+      if (parts.length < 2) { skipped++; return; }
+      const result = addOrUpdateInflationIndexEntry(parts[0], parts[1]);
+      if (result.valid) added++; else skipped++;
+    });
+    return { added, skipped };
+  }
+
+  function deleteInflationIndexEntry(month) {
+    const entries = loadInflationIndexTable();
+    const filtered = entries.filter(e => e.month !== month);
+    saveInflationIndexTable(filtered);
+    recordAuditEvent({
+      action: "INFLATION_INDEX_DELETED",
+      entityType: "INFLATION_INDEX",
+      entityId: month,
+      reason: "Enflasyon endeks kaydı silindi"
+    });
+    return filtered.length !== entries.length;
+  }
+
+  /**
+   * Verilen aya ait endeks değerini döndürür. Bulunamazsa ANLAMLI
+   * bir Error fırlatır (eksik ay interpolasyonu YAPILMAZ — TESLİM
+   * belgesinin şartı).
+   */
+  function getInflationIndex(month) {
+    const m = String(month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(m)) {
+      throw new Error(`Geçersiz ay formatı: "${month}" (YYYY-MM bekleniyor).`);
+    }
+    const entries = loadInflationIndexTable();
+    const found = entries.find(e => e.month === m);
+    if (!found) {
+      throw new Error(`Enflasyon endeks tablosunda ${m} ayına ait kayıt yok (interpolasyon yapılmaz).`);
+    }
+    return Number(found.index);
+  }
+
+  /**
+   * fromMonth → toMonth arası endeks oranı (toIndex / fromIndex).
+   * Her iki ay da tabloda yoksa getInflationIndex() hatasını
+   * olduğu gibi yukarı fırlatır.
+   */
+  function getInflationRatio(fromMonth, toMonth) {
+    const fromIndex = getInflationIndex(fromMonth);
+    const toIndex = getInflationIndex(toMonth);
+    if (fromIndex <= 0) {
+      throw new Error(`${fromMonth} ayının endeksi sıfır/negatif olamaz.`);
+    }
+    return toIndex / fromIndex;
+  }
+
+  /**
+   * Kontratın ETKİN planı (getReassessmentBaseSchedule — escalation +
+   * modification + reassessment uygulanmış) üzerinden, raporlama
+   * dönemine kadar TMS 29 düzeltmesini hesaplar. SAF fonksiyondur —
+   * kontratı DEĞİŞTİRMEZ, localStorage'a yazmaz. Eksik endeks ayı
+   * varsa getInflationIndex/getInflationRatio'nun Error'unu aynen
+   * yukarı fırlatır (çağıran taraf — validateInflationAdjustment —
+   * bunu yakalayıp {valid,errors} formatına çevirir).
+   *
+   * @returns {Object} { reportingPeriod, acquisitionMonth, rows[],
+   *   totals: { nominalROUClosing, restatedROUClosing,
+   *   nominalLiabilityClosing, restatedLiabilityClosing,
+   *   netAdjustment } }
+   */
+  function applyTMS29Restatement(contract, reportingPeriod) {
+    const rp = String(reportingPeriod || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(rp)) {
+      throw new Error(`Geçersiz raporlama dönemi formatı: "${reportingPeriod}" (YYYY-MM bekleniyor).`);
+    }
+
+    const startDate = parseDate(contract?.startDate);
+    if (!startDate) {
+      throw new Error("Sözleşme başlangıç tarihi geçersiz.");
+    }
+    const acquisitionMonth =
+      `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
+
+    if (rp < acquisitionMonth) {
+      throw new Error("Raporlama dönemi, sözleşme başlangıcından önce olamaz.");
+    }
+
+    const fullSchedule = getReassessmentBaseSchedule(contract) || [];
+
+    const rowsUpToRp = fullSchedule.filter(row => {
+      const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+      return rowMonth <= rp;
+    });
+
+    // Edinim anındaki brüt ROU: ilk satırın açılış ROU'su (initialROU).
+    // Satır yoksa (henüz ödeme dönemi başlamamışsa) motoru doğrudan
+    // çağırıp initialROU'yu alıyoruz.
+    const grossROU =
+      fullSchedule.length
+        ? fullSchedule[0].rouOpening
+        : (calculateLeaseEngine(contract).rouAssets || 0);
+
+    const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
+    const restatedGrossROU = grossROU * ratioAcquisitionToRp;
+
+    let restatedAccumDep = 0;
+    const rows = rowsUpToRp.map(row => {
+      const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+      const ratioRowToRp = getInflationRatio(rowMonth, rp);
+      const restatedDepreciation = row.depreciation * ratioRowToRp;
+      restatedAccumDep += restatedDepreciation;
+
+      return {
+        period: row.period,
+        date: row.date,
+        month: rowMonth,
+        ratio: ratioRowToRp,
+        nominalDepreciation: row.depreciation,
+        restatedDepreciation,
+        // Yükümlülük moneter kalem — düzeltilmiş = nominal (fark yok).
+        nominalInterest: row.interest,
+        restatedInterest: row.interest,
+        nominalClosingLiability: row.closingLiability,
+        restatedClosingLiability: row.closingLiability,
+        nominalClosingROU: row.rouClosing
+      };
+    });
+
+    const lastRow = rowsUpToRp.length ? rowsUpToRp[rowsUpToRp.length - 1] : null;
+
+    const nominalROUClosing = lastRow ? lastRow.rouClosing : grossROU;
+    const restatedROUClosing = Math.max(0, restatedGrossROU - restatedAccumDep);
+
+    const nominalLiabilityClosing =
+      lastRow ? lastRow.closingLiability : (calculateLeaseEngine(contract).liability || 0);
+    // Moneter kalem — düzeltilmiş tutar nominal ile aynıdır.
+    const restatedLiabilityClosing = nominalLiabilityClosing;
+
+    const netAdjustment = restatedROUClosing - nominalROUClosing;
+
+    return {
+      reportingPeriod: rp,
+      acquisitionMonth,
+      ratioAcquisitionToRp,
+      rows,
+      totals: {
+        nominalROUClosing,
+        restatedROUClosing,
+        nominalLiabilityClosing,
+        restatedLiabilityClosing,
+        // VARSAYIM (onaylandı): yükümlülük moneter kalem olduğu için
+        // farkı her zaman 0'dır; net düzeltme tamamen ROU'dan gelir.
+        liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
+        netAdjustment
+      }
+    };
+  }
+
+  /**
+   * Düzeltme jurnalini üretir. Net fark pozitifse (restatedROU >
+   * nominalROU): ROU borçlanır, enflasyon düzeltme K/Z hesabı
+   * alacaklanır (kazanç). Negatifse tersi.
+   */
+  function generateInflationAdjustmentJournal(restatement) {
+    const net = Number(restatement?.totals?.netAdjustment) || 0;
+    const entries = [];
+
+    if (net > 0.005) {
+      entries.push({
+        account: TFRS29_ACCOUNTS.rouAsset,
+        debit: net,
+        credit: 0,
+        source: "INFLATION_ADJUSTMENT",
+        controlStatus: "VALID"
+      });
+      entries.push({
+        account: TFRS29_ACCOUNTS.inflationGainLoss,
+        debit: 0,
+        credit: net,
+        source: "INFLATION_ADJUSTMENT",
+        controlStatus: "VALID"
+      });
+    } else if (net < -0.005) {
+      const amount = Math.abs(net);
+      entries.push({
+        account: TFRS29_ACCOUNTS.inflationGainLoss,
+        debit: amount,
+        credit: 0,
+        source: "INFLATION_ADJUSTMENT",
+        controlStatus: "VALID"
+      });
+      entries.push({
+        account: TFRS29_ACCOUNTS.rouAsset,
+        debit: 0,
+        credit: amount,
+        source: "INFLATION_ADJUSTMENT",
+        controlStatus: "VALID"
+      });
+    }
+
+    const debit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+    const credit = entries.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+    const balanced = Math.abs(debit - credit) < 0.01;
+    entries.forEach(item => { item.controlStatus = balanced ? "VALID" : "UNBALANCED"; });
+
+    return entries;
+  }
+
+  /**
+   * {valid, errors[]} — hata durumunda (eksik endeks ayı dahil)
+   * ASLA throw ETMEZ, mevcut desenle tutarlı şekilde hata listesi
+   * döner. Başarılıysa hesaplanan restatement de sonuçta döner
+   * (createInflationAdjustment tarafından tekrar hesaplamamak için
+   * kullanılır).
+   */
+  function validateInflationAdjustment(contract, input) {
+    const errors = [];
+
+    if (!contract) {
+      return { valid: false, errors: ["Sözleşme bulunamadı."] };
+    }
+
+    const reportingPeriod = String(input?.reportingPeriod || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(reportingPeriod)) {
+      errors.push("Raporlama dönemi formatı YYYY-MM olmalı.");
+      return { valid: false, errors };
+    }
+
+    let restatement = null;
+    try {
+      restatement = applyTMS29Restatement(contract, reportingPeriod);
+    } catch (error) {
+      errors.push(error.message || String(error));
+      return { valid: false, errors };
+    }
+
+    return { valid: true, errors: [], restatement };
+  }
+
+  function createInflationAdjustment(contract, input) {
+    ensureInflationAdjustmentState(contract);
+
+    const validation = validateInflationAdjustment(contract, input);
+    if (!validation.valid) {
+      return validation;
+    }
+
+    const now = new Date().toISOString();
+    const prefix = String(contract?.id || "LEASE")
+      .replace(/[^A-Za-z0-9_-]/g, "")
+      .slice(0, 24) || "LEASE";
+
+    const adjustment = {
+      id: `${prefix}-INFL-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      period: validation.restatement.reportingPeriod,
+      testedAt: now,
+      reason: input?.reason || "TMS 29 enflasyon düzeltmesi (kiralama portföyü)",
+      status: "DRAFT",
+      restatedFigures: validation.restatement.totals,
+      journal: [],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    contract.inflationAdjustments.push(adjustment);
+
+    recordAuditEvent({
+      action: "INFLATION_ADJUSTMENT_CREATED",
+      entityType: "INFLATION_ADJUSTMENT",
+      entityId: adjustment.id,
+      contractId: contract.id,
+      reason: adjustment.reason,
+      newValue: adjustment
+    });
+
+    saveContracts(contracts);
+
+    return { valid: true, adjustment };
+  }
+
+  function applyInflationAdjustment(contract, adjustmentId) {
+    ensureInflationAdjustmentState(contract);
+
+    const adjustment = contract.inflationAdjustments.find(a => a.id === adjustmentId);
+    if (!adjustment) {
+      return { valid: false, errors: ["Enflasyon düzeltme kaydı bulunamadı."] };
+    }
+    if (adjustment.status === "APPLIED") {
+      return { valid: true, adjustment };
+    }
+    if (adjustment.status === "CANCELLED") {
+      return { valid: false, errors: ["CANCELLED düzeltme uygulanamaz."] };
+    }
+
+    // Oluşturulduğundan beri endeks tablosu değişmiş olabilir —
+    // uygulama anında GÜNCEL veriyle yeniden hesaplanır.
+    let restatement;
+    try {
+      restatement = applyTMS29Restatement(contract, adjustment.period);
+    } catch (error) {
+      return { valid: false, errors: [error.message || String(error)] };
+    }
+
+    const oldValue = { status: adjustment.status, restatedFigures: adjustment.restatedFigures };
+
+    adjustment.restatedFigures = restatement.totals;
+    adjustment.journal = generateInflationAdjustmentJournal(restatement);
+    adjustment.status = "APPLIED";
+    adjustment.updatedAt = new Date().toISOString();
+
+    recordAuditEvent({
+      action: "JOURNAL_GENERATED",
+      entityType: "JOURNAL",
+      entityId: `${contract.id}-${adjustment.id}-INFLATION`,
+      contractId: contract.id,
+      journalId: `${contract.id}-${adjustment.id}-INFLATION`,
+      reason: "Inflation adjustment journal generated",
+      metadata: {
+        source: "INFLATION_ADJUSTMENT",
+        totalDebit: adjustment.journal.reduce((sum, item) => sum + (Number(item.debit) || 0), 0),
+        totalCredit: adjustment.journal.reduce((sum, item) => sum + (Number(item.credit) || 0), 0)
+      }
+    });
+
+    recordAuditEvent({
+      action: "INFLATION_ADJUSTMENT_APPLIED",
+      entityType: "INFLATION_ADJUSTMENT",
+      entityId: adjustment.id,
+      contractId: contract.id,
+      reason: adjustment.reason,
+      oldValue,
+      newValue: { status: adjustment.status, restatedFigures: adjustment.restatedFigures }
+    });
+
+    saveContracts(contracts);
+
+    return { valid: true, adjustment };
+  }
+
+  function cancelInflationAdjustment(contract, adjustmentId) {
+    ensureInflationAdjustmentState(contract);
+
+    const adjustment = contract.inflationAdjustments.find(a => a.id === adjustmentId);
+    if (!adjustment) {
+      return { valid: false, errors: ["Enflasyon düzeltme kaydı bulunamadı."] };
+    }
+    if (adjustment.status !== "DRAFT") {
+      return { valid: false, errors: ["Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."] };
+    }
+
+    adjustment.status = "CANCELLED";
+    adjustment.updatedAt = new Date().toISOString();
+
+    recordAuditEvent({
+      action: "INFLATION_ADJUSTMENT_CANCELLED",
+      entityType: "INFLATION_ADJUSTMENT",
+      entityId: adjustment.id,
+      contractId: contract.id,
+      reason: "Kullanıcı tarafından iptal edildi"
+    });
+
+    saveContracts(contracts);
+
+    return { valid: true, adjustment };
   }
 
 
@@ -3626,6 +4148,168 @@ document.addEventListener("DOMContentLoaded", () => {
     return basePayment;
   }
 
+
+  /* ==========================================================
+     V18 Parça 1 — GENİŞLETİLMİŞ ENDEKSLİ ÖDEME HESABI
+     ----------------------------------------------------------
+     computeEscalatedPayment() (yukarıda) DEĞİŞTİRİLMEDİ. Bu
+     fonksiyon onun yanına eklenir ve yalnızca
+     contract.escalationFrequencyMonths / escalationBase /
+     escalationFirstDate alanlarından EN AZ BİRİ tanımlıysa
+     çağrılır (bkz. calculateLeaseEngineImpl'deki çağrı noktası
+     yaması). Hiçbiri tanımlı değilse eski yol aynen çalışır.
+     ========================================================== */
+
+  function computeEscalatedPaymentV18(
+    basePayment,
+    paymentDate,
+    contractStartDate,
+    escalationType,
+    escalationRate,
+    escalationFrequencyMonths,
+    escalationBase,
+    escalationFirstDate
+  ) {
+    const type = String(escalationType || "none").toLowerCase();
+
+    // fixedAmount kendi TL-artış mantığını korur (VARSAYIM); çağrı
+    // noktasında zaten sadece fixedRate/index için tetiklenir, burada
+    // ikinci bir güvenlik kontrolü:
+    if (type !== "fixedrate" && type !== "index") {
+      return basePayment;
+    }
+
+    const freqMonths =
+      Number(escalationFrequencyMonths) > 0
+        ? Number(escalationFrequencyMonths)
+        : 12; // varsayılan: yılda bir — eski davranışla aynı kadans
+
+    const anchor =
+      parseDate(escalationFirstDate) ||
+      parseDate(contractStartDate);
+
+    const pay = parseDate(paymentDate);
+
+    if (!anchor || !pay) return basePayment;
+
+    const monthsSinceAnchor =
+      (pay.getFullYear() - anchor.getFullYear()) * 12 +
+      (pay.getMonth() - anchor.getMonth());
+
+    // Ankor tarihinden önceki ödemelerde artış uygulanmaz (k=0).
+    const k =
+      monthsSinceAnchor < 0
+        ? 0
+        : Math.floor(monthsSinceAnchor / freqMonths);
+
+    const base = String(escalationBase || "compound").toLowerCase();
+    const r = (Number(escalationRate) || 0) / 100;
+
+    return base === "initial"
+      ? basePayment * (1 + r * k)          // basit / kümülatif olmayan
+      : basePayment * Math.pow(1 + r, k);  // bileşik (fixedRate ile aynı formül)
+  }
+
+
+  /* ==========================================================
+     V18 Parça 1 — CPI ENDEKS TABLOSU
+     ----------------------------------------------------------
+     Mevcut indexBaseRate/indexCurrentRate elle-giriş alanlarına
+     EK olarak kalıcı bir ay→endeks tablosu. Eksik ay İNTERPOLE
+     EDİLMEZ. checkIndexReassessment() DEĞİŞTİRİLMEDİ — bu katman
+     sadece contract.indexCurrentRate'i CPI tablosundan besleyip
+     onu aynen çağırır.
+     ========================================================== */
+
+  const CPI_INDEX_STORAGE_KEY = "gk_tfrs16_cpi_index_v1";
+
+  function loadCpiIndexTable() {
+    try {
+      const raw = localStorage.getItem(CPI_INDEX_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter(e => e && typeof e.month === "string" && Number.isFinite(Number(e.index)))
+        : [];
+    } catch (error) {
+      console.error("CPI endeks tablosu okunamadı:", error);
+      return [];
+    }
+  }
+
+  function saveCpiIndexTable(entries) {
+    try {
+      localStorage.setItem(CPI_INDEX_STORAGE_KEY, JSON.stringify(entries));
+      return true;
+    } catch (error) {
+      console.error("CPI endeks tablosu kaydedilemedi:", error);
+      return false;
+    }
+  }
+
+  function addOrUpdateCpiIndexEntry(month, index) {
+    const m = String(month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(m)) {
+      return { valid: false, errors: ["Ay formatı YYYY-MM olmalı."] };
+    }
+    const idx = Number(index);
+    if (!Number.isFinite(idx)) {
+      return { valid: false, errors: ["Endeks değeri sayısal olmalı."] };
+    }
+    const entries = loadCpiIndexTable();
+    const existingIdx = entries.findIndex(e => e.month === m);
+    if (existingIdx >= 0) entries[existingIdx].index = idx;
+    else entries.push({ month: m, index: idx });
+    entries.sort((a, b) => a.month.localeCompare(b.month));
+    saveCpiIndexTable(entries);
+    recordAuditEvent({
+      action: "CPI_INDEX_ENTRY_SAVED",
+      entityType: "CPI_INDEX",
+      entityId: m,
+      reason: "CPI endeks kaydı eklendi/güncellendi",
+      newValue: { month: m, index: idx }
+    });
+    return { valid: true, errors: [] };
+  }
+
+  function deleteCpiIndexEntry(month) {
+    const entries = loadCpiIndexTable();
+    const filtered = entries.filter(e => e.month !== month);
+    saveCpiIndexTable(filtered);
+    recordAuditEvent({
+      action: "CPI_INDEX_ENTRY_DELETED",
+      entityType: "CPI_INDEX",
+      entityId: month,
+      reason: "CPI endeks kaydı silindi"
+    });
+    return filtered.length !== entries.length;
+  }
+
+  function getCpiIndexForMonth(month) {
+    const entries = loadCpiIndexTable();
+    const found = entries.find(e => e.month === month);
+    return found ? Number(found.index) : null;
+  }
+
+  /**
+   * CPI tablosundan ilgili ayın endeksini bulup contract.indexCurrentRate'e
+   * yazar, ardından mevcut checkIndexReassessment(contract) ile aynen
+   * kontrol ettirir. Eksik ay için {ok:false} döner (interpolasyon yok).
+   */
+  function syncIndexCurrentRateFromCpiTable(contract, asOfMonth) {
+    if (!contract || contract.leaseIncreaseType !== "index") {
+      return { ok: false, error: "Sözleşme endeks bazlı (index) tipinde değil." };
+    }
+    const month = asOfMonth || normalizeDate(new Date()).slice(0, 7);
+    const currentIndex = getCpiIndexForMonth(month);
+    if (currentIndex === null) {
+      return { ok: false, error: `CPI tablosunda ${month} ayına ait kayıt yok (interpolasyon yapılmaz).` };
+    }
+    const oldValue = contract.indexCurrentRate;
+    contract.indexCurrentRate = currentIndex;
+    const checkResult = checkIndexReassessment(contract);
+    return { ok: true, month, currentIndex, oldValue, checkResult };
+  }
+
   /**
    * TFRS 16 kiralama hesaplama motoru (önbellekli sarmalayıcı).
    * Sözleşme değişmediyse önceki hesaplama sonucunu önbellekten döndürür;
@@ -3652,6 +4336,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const result = calculateLeaseEngineImpl(contract);
     setCachedCalculation(contract, result);
     return result;
+  }
+
+  /**
+   * calculateLeaseEngine() sonucundaki ödeme planından, UI'da artış
+   * rozeti (🔺) göstermek için sadeleştirilmiş bir liste türetir.
+   * Hesaplamayı TEKRARLAMAZ — mevcut schedule üzerinden okur.
+   * @returns {Array<{date, payment, basePayment, escalationMultiplier}>}
+   */
+  function getEscalatedPayments(contract) {
+    const engine = calculateLeaseEngine(contract);
+    const basePayment = Number(contract?.monthlyPayment) || 0;
+    return (engine.schedule || []).map(row => ({
+      date: row.date,
+      payment: row.payment,
+      basePayment,
+      escalationMultiplier: basePayment > 0 ? row.payment / basePayment : 1
+    }));
   }
 
   /**
@@ -3692,6 +4393,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
       fixedIncrease:
         Number(contract.fixedIncrease) || 0,
+
+      // V18 Parça 1 — undefined/null ise null bırakılır (0 DEĞİL);
+      // "tanımsız" (eski davranış) ile "0" (geçerli bir V18 değeri
+      // olabilir) birbirinden ayrılmak zorunda.
+      escalationFrequencyMonths:
+        contract.escalationFrequencyMonths !== undefined &&
+        contract.escalationFrequencyMonths !== null &&
+        contract.escalationFrequencyMonths !== ""
+          ? Number(contract.escalationFrequencyMonths)
+          : null,
+
+      escalationBase:
+        contract.escalationBase || null,
+
+      escalationFirstDate:
+        contract.escalationFirstDate || null,
 
       variablePayment:
         Number(contract.variablePayment) || 0,
@@ -3917,9 +4634,34 @@ document.addEventListener("DOMContentLoaded", () => {
       stepMonths === 1 ? 12 :
       stepMonths === 3 ? 4 : 1;
 
+    // V18 Parça 1 — üç yeni alandan biri TANIMLIYSA genişletilmiş
+    // hesap kullanılır; hiçbiri tanımlı değilse eski yol AYNEN
+    // çalışır (legacy kontratlarda davranış birebir korunur).
+    // fixedAmount kendi TL-artış mantığını korur (VARSAYIM).
+    const usesV18Escalation =
+      hasEscalation &&
+      assumptions.leaseIncreaseType !== "fixedAmount" &&
+      (
+        assumptions.escalationFrequencyMonths !== null ||
+        assumptions.escalationBase !== null ||
+        assumptions.escalationFirstDate !== null
+      );
+
     // Build per-payment amounts (with escalation when requested)
     const paymentAmounts = paymentDates.map((date, index) => {
       if (!hasEscalation) return payment;
+      if (usesV18Escalation) {
+        return computeEscalatedPaymentV18(
+          payment,
+          date,
+          contract.startDate,
+          assumptions.leaseIncreaseType,
+          assumptions.leaseIncreaseRate,
+          assumptions.escalationFrequencyMonths,
+          assumptions.escalationBase,
+          assumptions.escalationFirstDate
+        );
+      }
       // Use payment ordinal (1-based) so quarterly/annual still
       // step once per contract year via periodsPerYear.
       return computeEscalatedPayment(
@@ -5289,6 +6031,22 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.indexReviewDay ?? ""
     );
 
+    // V18 Parça 1
+    setInput(
+      "escalationFrequencyMonths",
+      contract?.escalationFrequencyMonths ?? ""
+    );
+
+    setInput(
+      "escalationBase",
+      contract?.escalationBase || "compound"
+    );
+
+    setInput(
+      "escalationFirstDate",
+      contract?.escalationFirstDate ? normalizeDate(contract.escalationFirstDate) : ""
+    );
+
     setCheckbox(
       "renewalOption",
       contract?.renewalOption === true
@@ -5730,6 +6488,20 @@ document.addEventListener("DOMContentLoaded", () => {
               ? Number(getInput("indexReviewDay"))
               : (existing?.indexReviewDay ?? null),
 
+          // V18 Parça 1
+          escalationFrequencyMonths:
+            getInput("escalationFrequencyMonths") !== ""
+              ? Number(getInput("escalationFrequencyMonths"))
+              : null,
+
+          escalationBase:
+            getInput("escalationBase") || "compound",
+
+          escalationFirstDate:
+            getInput("escalationFirstDate") !== ""
+              ? normalizeDate(getInput("escalationFirstDate"))
+              : null,
+
           renewalOption:
             getCheckbox("renewalOption"),
 
@@ -5877,6 +6649,31 @@ document.addEventListener("DOMContentLoaded", () => {
               reason: "Contract status changed",
               oldValue: { status: oldContractSnapshot.status },
               newValue: { status: contract.status }
+            });
+          }
+
+          // V18 Parça 1 — endeksleme konfigürasyonu değiştiyse genel
+          // UPDATE eventine EK olarak ayrı bir audit izi bırakılır.
+          const ESCALATION_FIELDS_V18 = [
+            "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease",
+            "escalationFrequencyMonths", "escalationBase", "escalationFirstDate"
+          ];
+          const oldEscCfg = {}, newEscCfg = {};
+          let escalationChanged = false;
+          ESCALATION_FIELDS_V18.forEach(f => {
+            oldEscCfg[f] = oldContractSnapshot[f] ?? null;
+            newEscCfg[f] = contract[f] ?? null;
+            if (oldEscCfg[f] !== newEscCfg[f]) escalationChanged = true;
+          });
+          if (escalationChanged) {
+            recordAuditEvent({
+              action: "ESCALATION_CONFIG_CHANGED",
+              entityType: "CONTRACT",
+              entityId: id,
+              contractId: id,
+              reason: "Kira artışı (escalation) konfigürasyonu değişti",
+              oldValue: oldEscCfg,
+              newValue: newEscCfg
             });
           }
 
@@ -7791,6 +8588,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div id="fxTranslationContainer"></div>
 
+        <div id="inflationAdjustmentContainer"></div>
+
         <div id="slbSectionContainer"></div>
 
         <div id="subleaseSectionContainer"></div>
@@ -7840,23 +8639,31 @@ document.addEventListener("DOMContentLoaded", () => {
         periodType
       );
 
+    // V18 Parça 1 — önceki satıra göre tutar sıçraması varsa 🔺 rozeti.
+    const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
+
     tbody.innerHTML =
       rows
-        .map(
-          item => `
+        .map((item, i) => {
+          const prevPayment = i > 0 ? rows[i - 1].payment : basePaymentV18;
+          const escalationBadge =
+            basePaymentV18 > 0 && Math.abs(item.payment - prevPayment) > 0.01
+              ? ` <span title="Endeksli/artışlı ödeme" style="color:#d97706;">🔺</span>`
+              : "";
+          return `
             <tr>
               <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${item.period}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${getMonthName(item.month)} ${item.year}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.openingLiability)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.payment)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.payment)}${escalationBadge}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.interest)}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.principal)}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.closingLiability)}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.depreciation)}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.rouClosing)}</td>
             </tr>
-          `
-        )
+          `;
+        })
         .join("");
 
     const empty =
@@ -7950,6 +8757,114 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
   }
+
+  /**
+   * V18 Parça 2 — "Enflasyon Düzeltmesi (TMS 29)" paneli. Dönem
+   * seçimi, önizleme (validateInflationAdjustment → applyTMS29Restatement),
+   * DRAFT oluşturma, uygula/iptal ve jurnal görünümü.
+   * SINIR notu UI'da da gösterilir (belge şartı).
+   */
+  function renderInflationAdjustmentSection(contract) {
+    const container = document.getElementById("inflationAdjustmentContainer");
+    if (!container) return;
+
+    ensureInflationAdjustmentState(contract);
+
+    const adjustments = (contract.inflationAdjustments || []).slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+    const rowsHtml = adjustments.map(a => `
+      <tr>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.period)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.status)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(a.restatedFigures?.netAdjustment || 0)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">
+          ${a.status === "DRAFT" ? `
+            <button type="button" class="infl-apply-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;">Uygula</button>
+            <button type="button" class="infl-cancel-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;">İptal</button>
+          ` : ""}
+        </td>
+      </tr>
+    `).join("");
+
+    container.innerHTML = `
+      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 29 — ENFLASYON DÜZELTMESİ</div>
+        <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
+          SINIR: Bu panel tam kapsamlı bir TMS 29 uygulaması değildir; yalnızca bu kiralama sözleşmesinin
+          ROU/kiralama yükümlülüğü kalemlerine odaklı bir düzeltme katmanıdır. Tam finansal tablo
+          düzeltmesi kapsam dışıdır.
+        </p>
+        <div style="display:flex;gap:8px;align-items:end;margin-top:10px;">
+          <div class="form-group" style="margin:0;">
+            <label for="inflReportingPeriod" style="font-size:11px;">Raporlama Dönemi</label>
+            <input id="inflReportingPeriod" type="month" style="padding:6px;">
+          </div>
+          <button type="button" id="inflPreviewBtn" style="font-size:12px;padding:6px 12px;">Önizle</button>
+          <button type="button" id="inflCreateBtn" style="font-size:12px;padding:6px 12px;">Taslak Oluştur</button>
+        </div>
+        <div id="inflPreviewResult" style="margin-top:10px;font-size:12px;"></div>
+        <div style="overflow:auto;margin-top:14px;border:1px solid #e5e7eb;border-radius:10px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">Durum</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Net Düzeltme</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml || `<tr><td colspan="4" style="padding:10px;color:#94a3b8;font-size:12px;">Kayıt yok.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("inflPreviewBtn")?.addEventListener("click", () => {
+      const period = document.getElementById("inflReportingPeriod")?.value || "";
+      const result = document.getElementById("inflPreviewResult");
+      const validation = validateInflationAdjustment(contract, { reportingPeriod: period });
+      if (!result) return;
+      if (!validation.valid) {
+        result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+        return;
+      }
+      const t = validation.restatement.totals;
+      result.innerHTML = `
+        Nominal ROU: ${formatCurrency(t.nominalROUClosing)} → Düzeltilmiş: ${formatCurrency(t.restatedROUClosing)} ·
+        Yükümlülük (moneter, değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
+        Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
+      `;
+    });
+
+    document.getElementById("inflCreateBtn")?.addEventListener("click", () => {
+      const period = document.getElementById("inflReportingPeriod")?.value || "";
+      const created = createInflationAdjustment(contract, { reportingPeriod: period });
+      if (!created.valid) {
+        showAlert(created.errors.join("\n"));
+        return;
+      }
+      renderInflationAdjustmentSection(contract);
+    });
+
+    container.querySelectorAll(".infl-apply-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const result = applyInflationAdjustment(contract, btn.dataset.id);
+        if (!result.valid) { showAlert(result.errors.join("\n")); return; }
+        renderInflationAdjustmentSection(contract);
+      });
+    });
+
+    container.querySelectorAll(".infl-cancel-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Bu taslak enflasyon düzeltmesi iptal edilecek. Emin misiniz?")) return;
+        const result = cancelInflationAdjustment(contract, btn.dataset.id);
+        if (!result.valid) { showAlert(result.errors.join("\n")); return; }
+        renderInflationAdjustmentSection(contract);
+      });
+    });
+  }
+
 
   function renderSlbSection(contract) {
     const container = document.getElementById("slbSectionContainer");
@@ -8288,6 +9203,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateScheduleSubPeriodUI();
     renderPaymentScheduleTable(contract);
     renderFxTranslationSection(contract);
+    renderInflationAdjustmentSection(contract);
     renderSlbSection(contract);
     renderSubleaseSection(contract);
 
@@ -23272,11 +24188,227 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (error) {
     console.error("V19.1 UI wiring init error (sidebar navigation etc.):", error);
   }
+
+  // V18 Parça 1 — leaseIncreaseType "fixedRate"/"index" seçiliyken
+  // escalationFrequencyMonths/escalationBase/escalationFirstDate
+  // alanlarını gösterir; "none"/"fixedAmount" iken gizler. HTML
+  // tarafında #escalationV18Fields id'li bir sarmalayıcı div
+  // beklenir (mevcut leaseIncreaseType select'inin yakınında).
+  try {
+    const leaseIncreaseTypeSelect = document.getElementById("leaseIncreaseType");
+    if (leaseIncreaseTypeSelect) {
+      leaseIncreaseTypeSelect.addEventListener("change", () => {
+        const val = getInput("leaseIncreaseType");
+        const box = document.getElementById("escalationV18Fields");
+        if (box) box.style.display = (val === "fixedRate" || val === "index") ? "block" : "none";
+      });
+    }
+  } catch (error) {
+    console.error("V18 Parça 1 escalation UI toggle init error:", error);
+  }
   try {
     refresh();
   } catch (error) {
     console.error("Initial refresh error:", error);
   }
+
+  /* ==========================================================
+     V18 Parça 1 — SELF-TEST SUITE
+     ========================================================== */
+  function runSelfTestsV18Part1() {
+    const results = [];
+    function check(name, expected, actual, tolerance = 0.01) {
+      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
+      results.push({ name, pass, expected, actual });
+      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
+      return pass;
+    }
+
+    const baseContract = {
+      id: "SELFTEST-V18-1",
+      monthlyPayment: 100000,
+      discountRate: 18,
+      startDate: "2026-01-01",
+      endDate: "2030-12-01", // 60 ay
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+
+    // ---- VAKA 1: REGRESYON (KRİTİK) — bağımsız kapalı-form PV ----
+    const monthlyRate = 18 / 100 / 12;
+    const manualAnnuityPV =
+      100000 * ((1 - Math.pow(1 + monthlyRate, -60)) / monthlyRate);
+    const noEscalationResult = calculateLeaseEngine({ ...baseContract });
+    check("Vaka 1 — Regresyon (kapalı-form PV eşleşmesi)", manualAnnuityPV, noEscalationResult.liability, 0.5);
+
+    // ---- VAKA 2: %20 yıllık compound artış ----
+    const contract2 = {
+      ...baseContract,
+      id: "SELFTEST-V18-2",
+      leaseIncreaseType: "fixedRate",
+      leaseIncreaseRate: 20,
+      escalationBase: "compound"
+    };
+    const result2 = calculateLeaseEngine(contract2);
+
+    let manualPV2 = 0;
+    for (let m = 1; m <= 60; m++) {
+      const yearIndex = Math.floor((m - 1) / 12);
+      const pay = 100000 * Math.pow(1.20, yearIndex);
+      manualPV2 += pay / Math.pow(1 + monthlyRate, m);
+    }
+    const pass2a = result2.liability > noEscalationResult.liability;
+    results.push({ name: "Vaka 2 — liability > Vaka 1", pass: pass2a });
+    console.log(`${pass2a ? "✅" : "❌"} Vaka 2 — liability > Vaka 1 — ${result2.liability.toFixed(2)} > ${noEscalationResult.liability.toFixed(2)}`);
+    check("Vaka 2 — bağımsız PV formülü ile eşleşme", manualPV2, result2.liability, 1);
+
+    // ---- VAKA 3: "initial" baz ≤ compound ----
+    const contract3 = { ...contract2, id: "SELFTEST-V18-3", escalationBase: "initial", escalationFrequencyMonths: 12 };
+    const result3 = calculateLeaseEngine(contract3);
+    const pass3 = result3.liability <= result2.liability + 0.01;
+    results.push({ name: "Vaka 3 — initial ≤ compound", pass: pass3 });
+    console.log(`${pass3 ? "✅" : "❌"} Vaka 3 — initial ≤ compound — initial: ${result3.liability.toFixed(2)}, compound: ${result2.liability.toFixed(2)}`);
+
+    // ---- VAKA 4: CPI → INDEX_RATE_CHANGE reassessment ----
+    let vaka4Pass = false;
+    try {
+      const contract4 = {
+        ...baseContract,
+        id: "SELFTEST-V18-4",
+        leaseIncreaseType: "index",
+        indexBaseRate: 1000,
+        indexReviewMonth: 0,
+        indexReviewDay: 1
+      };
+      ensureReassessmentState(contract4);
+      addOrUpdateCpiIndexEntry("2026-01", 1200); // %20 artış → %5 eşiği aşılır
+      const sync = syncIndexCurrentRateFromCpiTable(contract4, "2026-01");
+      vaka4Pass =
+        sync.ok === true &&
+        sync.checkResult?.reassessmentCreated === true &&
+        Array.isArray(contract4.reassessments) &&
+        contract4.reassessments.length > 0;
+      deleteCpiIndexEntry("2026-01");
+    } catch (error) {
+      console.error("Vaka 4 hata:", error);
+      vaka4Pass = false;
+    }
+    results.push({ name: "Vaka 4 — CPI → INDEX_RATE_CHANGE reassessment", pass: vaka4Pass });
+    console.log(`${vaka4Pass ? "✅" : "❌"} Vaka 4 — CPI endeks → reassessment oluşumu`);
+
+    const totalPass = results.filter(r => r.pass).length;
+    console.log(`\nV18 Parça 1 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
+    return results;
+  }
+
+
+  /* ==========================================================
+     V18 Parça 2 — SELF-TEST SUITE
+     ----------------------------------------------------------
+     Belgede istenen fonksiyon adı runSelfTestsV25Part2 idi; dosyanın
+     gerçek versiyonlama şeması "V18" olduğundan (Parça 1 onaylı
+     tasarım kararı) fonksiyon runSelfTestsV18Part2 olarak adlandırıldı.
+     window.__TFRS16_TEST__ üzerinden her iki isimle de erişilebilir.
+     ========================================================== */
+  function runSelfTestsV18Part2() {
+    const results = [];
+    function check(name, expected, actual, tolerance = 0.01) {
+      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
+      results.push({ name, pass, expected, actual });
+      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
+      return pass;
+    }
+
+    const baseContract = {
+      id: "SELFTEST-V18P2-1",
+      monthlyPayment: 100000,
+      discountRate: 18,
+      startDate: "2026-01-01",
+      endDate: "2027-12-01", // 24 ay
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+
+    // ---- VAKA 1: REGRESYON — inflationAdjustments boşken Parça 1
+    // sonuçlarıyla (liability/ROU/schedule) birebir aynı olmalı ----
+    const contract1 = { ...baseContract };
+    ensureInflationAdjustmentState(contract1);
+    const before = calculateLeaseEngine({ ...baseContract, id: "SELFTEST-V18P2-1B" });
+    const after = calculateLeaseEngine(contract1);
+    check("Vaka 1 — Regresyon (liability)", before.liability, after.liability, 0.01);
+    check("Vaka 1 — Regresyon (rouAssets)", before.rouAssets, after.rouAssets, 0.01);
+    const schedMatch =
+      before.schedule.length === after.schedule.length &&
+      before.schedule.every((row, i) => Math.abs(row.payment - after.schedule[i].payment) < 0.01);
+    results.push({ name: "Vaka 1 — Regresyon (schedule)", pass: schedMatch });
+    console.log(`${schedMatch ? "✅" : "❌"} Vaka 1 — Regresyon (schedule) — ${schedMatch ? "eşleşti" : "FARKLI"}`);
+
+    // ---- VAKA 2: endekste %5 artış → ROU artmış, jurnal dengeli,
+    // yükümlülük farkı 0 (VARSAYIM — onaylandı: moneter kalem) ----
+    let vaka2Pass = false;
+    try {
+      addOrUpdateInflationIndexEntry("2026-01", 1000); // edinim ayı
+      addOrUpdateInflationIndexEntry("2026-02", 1000);
+      addOrUpdateInflationIndexEntry("2027-06", 1050); // %5 artış → raporlama dönemi
+
+      const contract2 = { ...baseContract, id: "SELFTEST-V18P2-2" };
+      ensureInflationAdjustmentState(contract2);
+
+      const created = createInflationAdjustment(contract2, { reportingPeriod: "2027-06" });
+      const applied = created.valid
+        ? applyInflationAdjustment(contract2, created.adjustment.id)
+        : { valid: false, errors: created.errors };
+
+      if (applied.valid) {
+        const t = applied.adjustment.restatedFigures;
+        const journal = applied.adjustment.journal;
+        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
+        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
+        const balanced = Math.abs(debit - credit) < 0.01;
+        const rouIncreased = t.restatedROUClosing > t.nominalROUClosing;
+        const liabilityUnchanged = Math.abs(t.liabilityDifference) < 0.01;
+        const journalOnGainLossAccount = journal.some(j => j.account === TFRS29_ACCOUNTS.inflationGainLoss);
+
+        check("Vaka 2 — düzeltilmiş ROU > nominal ROU", 1, rouIncreased ? 1 : 0, 0);
+        check("Vaka 2 — jurnal borç = alacak", debit, credit, 0.01);
+        check("Vaka 2 — yükümlülük farkı = 0 (moneter, VARSAYIM)", 0, t.liabilityDifference, 0.01);
+        results.push({ name: "Vaka 2 — net fark enflasyon K/Z hesabında", pass: journalOnGainLossAccount });
+        console.log(`${journalOnGainLossAccount ? "✅" : "❌"} Vaka 2 — net fark ${TFRS29_ACCOUNTS.inflationGainLoss} hesabında`);
+
+        vaka2Pass = balanced && rouIncreased && liabilityUnchanged && journalOnGainLossAccount;
+      } else {
+        console.error("Vaka 2 — düzeltme uygulanamadı:", applied.errors);
+      }
+
+      deleteInflationIndexEntry("2026-01");
+      deleteInflationIndexEntry("2026-02");
+      deleteInflationIndexEntry("2027-06");
+    } catch (error) {
+      console.error("Vaka 2 hata:", error);
+    }
+    results.push({ name: "Vaka 2 — genel", pass: vaka2Pass });
+
+    // ---- VAKA 3: endeks tablosunda eksik ay → validateInflationAdjustment
+    // hata listesi döndürmeli (throw ETMEMELİ) ----
+    let vaka3Pass = false;
+    try {
+      const contract3 = { ...baseContract, id: "SELFTEST-V18P2-3" };
+      ensureInflationAdjustmentState(contract3);
+      // Kasıtlı olarak endeks tablosuna hiç kayıt eklenmedi.
+      const validation = validateInflationAdjustment(contract3, { reportingPeriod: "2099-01" });
+      vaka3Pass = validation.valid === false && Array.isArray(validation.errors) && validation.errors.length > 0;
+    } catch (error) {
+      console.error("Vaka 3 — beklenmedik throw (hata döndürmesi gerekirdi):", error);
+      vaka3Pass = false;
+    }
+    results.push({ name: "Vaka 3 — eksik endeks ayı → hata listesi (throw yok)", pass: vaka3Pass });
+    console.log(`${vaka3Pass ? "✅" : "❌"} Vaka 3 — eksik endeks ayı → hata listesi (throw yok)`);
+
+    const totalPass = results.filter(r => r.pass).length;
+    console.log(`\nV18 Parça 2 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
+    return results;
+  }
+  const runSelfTestsV25Part2 = runSelfTestsV18Part2; // belge uyumluluğu için takma ad
 
   /* ==========================================================
      TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
@@ -23297,7 +24429,28 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateVariance,
       calculateVariancePercent,
       checkIndexReassessment,
-      applyEarlyPayment
+      applyEarlyPayment,
+      // V18 Parça 1
+      getEscalatedPayments,
+      computeEscalatedPaymentV18,
+      addOrUpdateCpiIndexEntry,
+      deleteCpiIndexEntry,
+      getCpiIndexForMonth,
+      syncIndexCurrentRateFromCpiTable,
+      runSelfTestsV18Part1,
+      // V18 Parça 2
+      getInflationIndex,
+      getInflationRatio,
+      applyTMS29Restatement,
+      validateInflationAdjustment,
+      createInflationAdjustment,
+      applyInflationAdjustment,
+      cancelInflationAdjustment,
+      addOrUpdateInflationIndexEntry,
+      addInflationIndexBulk,
+      deleteInflationIndexEntry,
+      runSelfTestsV18Part2,
+      runSelfTestsV25Part2
     };
   } catch (error) {
     console.error("Test export shim error:", error);
