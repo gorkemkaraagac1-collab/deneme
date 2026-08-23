@@ -1,6 +1,3 @@
-cd /workspaces/deneme
-
-cat > jest.config.js <<'EOF'
 module.exports = {
   testEnvironment: "jsdom",
 
@@ -16,4 +13,3 @@ module.exports = {
 
   verbose: true
 };
-EOF
