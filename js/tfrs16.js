@@ -17382,6 +17382,48 @@ document.addEventListener("DOMContentLoaded", () => {
     return html;
   }
 
+  // ---- TMS 29 (enflasyon) düzeltmesi — Finansal Raporlama hareket
+  // tablolarına entegrasyon ----
+  //
+  // ÖNEMLİ: applyTMS29Restatement() edinim ayından raporlama dönemine
+  // kadar TÜM ayların endeksini ister (interpolasyon yapılmaz). Bu
+  // yüzden geniş bir portföyde birçok kontrat için endeks eksik
+  // kalabilir — bu durumda o kontrat "Endeks Eksik" olarak işaretlenir,
+  // NOMİNAL rakamlar etkilenmeden gösterilmeye devam eder.
+  function v191ComputePortfolioTms29(rows, periodStartMonth, rpMonth) {
+    const results = new Map();
+    let totalNetAdjustment = 0, totalMonetaryGainLoss = 0, computedCount = 0, missingCount = 0;
+    rows.forEach(row => {
+      const contract = (typeof contracts !== "undefined" ? contracts : []).find(c => String(c.id) === String(row.contractId));
+      if (!contract) { results.set(row.contractId, { ok: false, error: "Sözleşme bulunamadı." }); missingCount++; return; }
+      try {
+        const restatement = applyTMS29Restatement(contract, rpMonth, periodStartMonth);
+        const netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
+        const monetaryGainLoss = restatement?.totals?.liabilityMonetaryGainLoss;
+        results.set(row.contractId, { ok: true, netAdjustment, monetaryGainLoss: Number.isFinite(monetaryGainLoss) ? monetaryGainLoss : null });
+        totalNetAdjustment += netAdjustment;
+        if (Number.isFinite(monetaryGainLoss)) totalMonetaryGainLoss += monetaryGainLoss;
+        computedCount++;
+      } catch (error) {
+        results.set(row.contractId, { ok: false, error: error?.message || String(error) });
+        missingCount++;
+      }
+    });
+    return { results, totalNetAdjustment, totalMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
+  }
+
+  function v191Tms29SummaryHtml(tms29, periodLabel) {
+    return `<div style="margin-top:20px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+      <h4 style="margin:0 0 8px;font-size:12px;color:#92400e;">TMS 29 Enflasyon Düzeltmesi — ${v191Escape(periodLabel)}</h4>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:12px;">
+        <div><span style="color:#78350f;">ROU Düzeltmesi (kümülatif, edinimden bugüne):</span> <strong>${v191Value(tms29.totalNetAdjustment)}</strong></div>
+        <div><span style="color:#78350f;">Yükümlülük — Parasal Kazanç/(Kayıp), net (seçili dönem):</span> <strong style="color:${tms29.totalMonetaryGainLoss < 0 ? '#15803d' : tms29.totalMonetaryGainLoss > 0 ? '#b91c1c' : '#334155'};">${v191Value(tms29.totalMonetaryGainLoss)}</strong></div>
+      </div>
+      <p style="margin:8px 0 0;font-size:11px;color:#92400e;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — ${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var (bu sözleşmelerin nominal rakamları etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#a16207;">Negatif parasal kazanç/(kayıp) = kazanç (yükümlülüğün reel yükü azalmış, TMS 29.28); pozitif = kayıp.</p>
+    </div>`;
+  }
+
   function v191RenderFinancialReporting(date) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
@@ -17399,12 +17441,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${periodEnd.toLocaleDateString("tr-TR")}`;
 
     const rouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
-    const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
+    const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
+
+    // TMS 29 — seçili dönem (periodStart→periodEnd) için portföy
+    // enflasyon düzeltmesi. ROU ve yükümlülük satırları aynı sözleşme
+    // kümesini paylaştığından tek geçişte hesaplanır. Totals satırlarından
+    // ÖNCE hesaplanmalı (toplam satırında da kullanılıyor).
+    const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
+    const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
+    const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
+    rouRows.forEach(row => {
+      const r = tms29.results.get(row.contractId);
+      row.inflationNetAdjustment = r?.ok ? r.netAdjustment : null;
+      row.inflationStatus = r?.ok ? "OK" : "Endeks Eksik";
+    });
+    liabRows.forEach(row => {
+      const r = tms29.results.get(row.contractId);
+      row.monetaryGainLoss = r?.ok ? r.monetaryGainLoss : null;
+      row.inflationStatus = r?.ok ? "OK" : "Endeks Eksik";
+    });
+
+    const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", inflationNetAdjustment: tms29.totalNetAdjustment }] : [];
     const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
 
-    const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
-    const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR" }] : [];
+    const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", monetaryGainLoss: tms29.totalMonetaryGainLoss }] : [];
     const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
     const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
 
@@ -17417,6 +17478,7 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "reassessmentAdjustment", label: "Reassessment" },
       { key: "otherAdjustment", label: "Diğer" },
       { key: "closingRuo", label: "Kapanış" },
+      { key: "inflationNetAdjustment", label: "TMS 29 Düzeltmesi (Net)", render: row => row.inflationNetAdjustment === null ? `<span style="color:#94a3b8;">Endeks Eksik</span>` : v191Value(row.inflationNetAdjustment) },
       { key: "status", label: "Durum" }
     ];
     const liabDetailColumns = [
@@ -17429,6 +17491,7 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "reassessmentAdjustment", label: "Reassessment" },
       { key: "otherAdjustment", label: "Diğer" },
       { key: "closingLiability", label: "Kapanış" },
+      { key: "monetaryGainLoss", label: "Parasal Kazanç/(Kayıp), Net", render: row => row.monetaryGainLoss === null ? `<span style="color:#94a3b8;">Endeks Eksik</span>` : v191Value(row.monetaryGainLoss) },
       { key: "status", label: "Durum" }
     ];
 
@@ -17515,6 +17578,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ])}
       ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
+      ${v191Tms29SummaryHtml(tms29, periodLabel)}
     </div>`;
   }
 
