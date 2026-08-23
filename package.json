@@ -2,7 +2,7 @@
   "name": "tfrs16-financial-intelligence",
   "version": "0.1.0",
   "private": true,
-  "description": "TFRS 16 Financial Intelligence Platform - Express.js + PostgreSQL backend",
+  "description": "TFRS 16 Financial Intelligence Platform",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
@@ -12,16 +12,16 @@
     "test:coverage": "jest --runInBand --coverage"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "pg": "^8.12.0",
+    "dotenv": "^16.4.5",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.12.0"
+    "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "jest": "^30.0.0",
-    "jest-environment-jsdom": "^30.4.1",
-    "supertest": "^7.1.4"
+    "supertest": "^7.1.4",
+    "jest-environment-jsdom": "^30.4.1"
   }
 }
