@@ -16,7 +16,7 @@ const licenseTestRouter = require("./routes/license-test");
 
 const app = express();
 
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 
 
 /**
@@ -67,10 +67,6 @@ app.get("/health", (req, res) => {
  * ============================================================
  * AUTH ROUTES
  * ============================================================
- *
- * POST /api/auth/login
- * POST /api/auth/register
- * GET  /api/auth/me
  */
 
 app.use(
@@ -83,12 +79,6 @@ app.use(
  * ============================================================
  * ADMIN LICENSE ROUTES
  * ============================================================
- *
- * GET   /api/admin/plans
- * GET   /api/admin/companies/:companyId/license
- * POST  /api/admin/companies/:companyId/license
- * PATCH /api/admin/licenses/:licenseId/extend
- * POST  /api/admin/licenses/:licenseId/cancel
  */
 
 app.use(
@@ -101,24 +91,6 @@ app.use(
  * ============================================================
  * LICENSE AUTHORIZATION TEST ROUTES
  * ============================================================
- *
- * GET /api/license-test/active
- *
- * Aktif lisans kontrolü.
- *
- *
- * GET /api/license-test/professional
- *
- * Professional veya üzeri plan kontrolü.
- *
- *
- * GET /api/license-test/enterprise
- *
- * Enterprise plan kontrolü.
- *
- * Bu endpointler production business functionality değildir.
- * Authorization middleware'lerinin doğru çalıştığını
- * doğrulamak amacıyla kullanılmaktadır.
  */
 
 app.use(
@@ -169,8 +141,7 @@ app.use(
 
 app.use((req, res) => {
   res.status(404).json({
-    error:
-      "İstenen endpoint bulunamadı"
+    error: "İstenen endpoint bulunamadı"
   });
 });
 
@@ -189,7 +160,11 @@ app.use(
       err
     );
 
-    res.status(500).json({
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    return res.status(500).json({
       error:
         "Sunucuda beklenmeyen bir hata oluştu"
     });
@@ -199,18 +174,49 @@ app.use(
 
 /**
  * ============================================================
- * SERVER START
+ * EXPRESS APPLICATION EXPORT
  * ============================================================
+ *
+ * Testlerde:
+ *
+ * const app = require("../backend/app");
+ *
+ * kullanıldığında yalnızca Express application döner.
+ *
+ * HTTP server başlatılmaz.
  */
 
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
+module.exports = app;
 
-    console.log(
-      `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
-    );
 
-  }
-);
+/**
+ * ============================================================
+ * SERVER START
+ * ============================================================
+ *
+ * Bu blok yalnızca:
+ *
+ * node backend/app.js
+ *
+ * komutu ile dosya doğrudan çalıştırıldığında
+ * execute edilir.
+ *
+ * Jest / Supertest tarafından require edildiğinde
+ * çalışmaz.
+ */
+
+if (require.main === module) {
+
+  app.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
+
+      console.log(
+        `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
+      );
+
+    }
+  );
+
+}
