@@ -143,15 +143,25 @@ CREATE TABLE IF NOT EXISTS plans (
         NOT NULL
         UNIQUE,
 
-    max_users INTEGER
-        NOT NULL,
+    -- max_users = NULL => sınırsız kullanıcı (Enterprise planı).
+    -- Bu yüzden NOT NULL constraint'i KALDIRILDI: Enterprise
+    -- gerçek anlamda sınırsız kullanıcı kabul edilir ve bu satırda
+    -- bir sayı yerine NULL saklanır. Diğer tüm planlar (Starter,
+    -- Professional, vb.) pozitif bir tam sayı taşımaya devam eder.
+    max_users INTEGER,
 
     description TEXT,
 
     created_at TIMESTAMP DEFAULT NOW(),
 
+    -- NULL => sınırsız (izinli). NULL olmayan değerler için > 0
+    -- zorunlu kılınır. NOT: SQL'de "max_users > 0" ifadesi
+    -- max_users NULL olduğunda NULL'a değerlenir ve CHECK
+    -- constraint'leri NULL sonucunu otomatik olarak "geçti" sayar;
+    -- yine de niyeti kod okuyan için açık bırakmak adına NULL
+    -- durumu burada ayrıca belirtiliyor.
     CONSTRAINT chk_plans_max_users
-        CHECK (max_users > 0)
+        CHECK (max_users IS NULL OR max_users > 0)
 );
 
 
@@ -243,8 +253,8 @@ VALUES
 (
     'enterprise',
     'Enterprise',
-    100,
-    'Kurumsal kullanım paketi'
+    NULL, -- sınırsız kullanıcı (bkz. license-service.js: NULL = unlimited)
+    'Kurumsal kullanım paketi (sınırsız kullanıcı)'
 )
 ON CONFLICT (id) DO NOTHING;
 
