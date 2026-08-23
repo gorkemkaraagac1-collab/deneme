@@ -1,18 +1,41 @@
 /**
- * TFRS 16 Backend — Express Application
+ * ============================================================
+ * TFRS 16 FINANCIAL INTELLIGENCE PLATFORM
+ * Backend Application
+ * ============================================================
  *
- * Bu dosya sadece Express application oluşturur.
+ * Bu dosya Express application'ı oluşturur.
  *
- * DİKKAT:
- * Burada app.listen() YOKTUR.
+ * ÖNEMLİ:
+ * - Burada app.listen() KULLANILMAZ.
+ * - Jest / Supertest doğrudan bu app'i import eder.
+ * - HTTP server backend/server.js tarafından başlatılır.
  *
- * Production server başlangıcı:
- * backend/server.js
+ * Mimari:
  *
- * Bunun ayrılmasının nedeni:
- * - Jest testlerinde gerçek HTTP server açılmasını engellemek
- * - EADDRINUSE problemlerini önlemek
- * - Application ile infrastructure katmanını ayırmak
+ *     app.js
+ *       ↓
+ *     Express Application
+ *       ↓
+ *     Routes / Middleware
+ *
+ * Production:
+ *
+ *     server.js
+ *       ↓
+ *     app.js
+ *       ↓
+ *     app.listen()
+ *
+ * Test:
+ *
+ *     Jest
+ *       ↓
+ *     app.js
+ *       ↓
+ *     Supertest
+ *
+ * ============================================================
  */
 
 require("dotenv").config();
@@ -20,12 +43,33 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
+
+/**
+ * ============================================================
+ * ROUTERS
+ * ============================================================
+ */
+
 const authRouter = require("./routes/auth");
+
 const contractsRouter = require("./routes/contracts");
+
 const auditRouter = require("./routes/audit");
+
 const reportsRouter = require("./routes/reports");
-const adminLicenseRouter = require("./routes/admin-licenses");
-const licenseTestRouter = require("./routes/license-test");
+
+const adminLicenseRouter =
+  require("./routes/admin-licenses");
+
+const licenseTestRouter =
+  require("./routes/license-test");
+
+
+/**
+ * ============================================================
+ * EXPRESS APPLICATION
+ * ============================================================
+ */
 
 const app = express();
 
@@ -36,7 +80,28 @@ const app = express();
  * ============================================================
  */
 
-app.use(cors());
+
+/**
+ * CORS
+ *
+ * Development aşamasında frontend-backend
+ * farklı portlarda çalışabileceği için aktif.
+ *
+ * Production'da kontrollü origin whitelist
+ * uygulanması önerilir.
+ */
+
+app.use(
+  cors()
+);
+
+
+/**
+ * JSON BODY PARSER
+ *
+ * Maksimum request body:
+ * 2 MB
+ */
 
 app.use(
   express.json({
@@ -49,42 +114,69 @@ app.use(
  * ============================================================
  * REQUEST LOGGING
  * ============================================================
+ *
+ * Development / audit trail açısından temel
+ * HTTP request logging.
+ *
+ * Production'da:
+ * - request ID
+ * - user ID
+ * - IP
+ * - response status
+ * - duration
+ *
+ * gibi alanlar ayrıca loglanabilir.
  */
 
-app.use((req, res, next) => {
+app.use(
+  (req, res, next) => {
 
-  console.log(
-    `${new Date().toISOString()} ${req.method} ${req.path}`
-  );
+    console.log(
+      `${new Date().toISOString()} ${req.method} ${req.path}`
+    );
 
-  next();
-});
+    next();
+
+  }
+);
 
 
 /**
  * ============================================================
  * HEALTH CHECK
  * ============================================================
+ *
+ * GET /health
+ *
+ * Load balancer / VPS / Docker / monitoring
+ * tarafından kullanılabilir.
  */
 
-app.get("/health", (req, res) => {
+app.get(
+  "/health",
+  (req, res) => {
 
-  res.json({
-    status: "ok",
-    version: "v26.1-license-system"
-  });
+    res.json({
+      status: "ok",
+      version: "v26.1-license-system"
+    });
 
-});
+  }
+);
 
 
 /**
  * ============================================================
- * AUTH ROUTES
+ * AUTHENTICATION ROUTES
  * ============================================================
  *
  * POST /api/auth/login
+ *
  * POST /api/auth/register
- * GET  /api/auth/me
+ *
+ * GET /api/auth/me
+ *
+ * Authentication ve identity işlemleri.
  */
 
 app.use(
@@ -98,11 +190,22 @@ app.use(
  * ADMIN LICENSE ROUTES
  * ============================================================
  *
- * GET   /api/admin/plans
- * GET   /api/admin/companies/:companyId/license
- * POST  /api/admin/companies/:companyId/license
- * PATCH /api/admin/licenses/:licenseId/extend
- * POST  /api/admin/licenses/:licenseId/cancel
+ * GET
+ * /api/admin/plans
+ *
+ * GET
+ * /api/admin/companies/:companyId/license
+ *
+ * POST
+ * /api/admin/companies/:companyId/license
+ *
+ * PATCH
+ * /api/admin/licenses/:licenseId/extend
+ *
+ * POST
+ * /api/admin/licenses/:licenseId/cancel
+ *
+ * License administration.
  */
 
 app.use(
@@ -115,6 +218,30 @@ app.use(
  * ============================================================
  * LICENSE AUTHORIZATION TEST ROUTES
  * ============================================================
+ *
+ * Bu endpointler production business functionality
+ * değildir.
+ *
+ * Authorization middleware'lerinin doğru çalıştığını
+ * doğrulamak amacıyla kullanılmaktadır.
+ *
+ *
+ * GET
+ * /api/license-test/active
+ *
+ * Aktif lisans kontrolü.
+ *
+ *
+ * GET
+ * /api/license-test/professional
+ *
+ * Professional veya üzeri plan kontrolü.
+ *
+ *
+ * GET
+ * /api/license-test/enterprise
+ *
+ * Enterprise plan kontrolü.
  */
 
 app.use(
@@ -131,8 +258,19 @@ app.use(
 
 
 /**
- * TFRS 16 Contracts
+ * ------------------------------------------------------------
+ * TFRS 16 CONTRACTS
+ * ------------------------------------------------------------
+ *
+ * /api/contracts
+ *
+ * Contract creation
+ * Contract retrieval
+ * Contract calculation
+ * Contract updates
+ * etc.
  */
+
 app.use(
   "/api/contracts",
   contractsRouter
@@ -140,8 +278,15 @@ app.use(
 
 
 /**
- * Audit
+ * ------------------------------------------------------------
+ * AUDIT
+ * ------------------------------------------------------------
+ *
+ * /api/audit
+ *
+ * Audit trail / control / audit-related functionality.
  */
+
 app.use(
   "/api/audit",
   auditRouter
@@ -149,8 +294,15 @@ app.use(
 
 
 /**
- * Reports
+ * ------------------------------------------------------------
+ * REPORTS
+ * ------------------------------------------------------------
+ *
+ * /api/reports
+ *
+ * Financial reporting endpoints.
  */
+
 app.use(
   "/api/reports",
   reportsRouter
@@ -161,22 +313,33 @@ app.use(
  * ============================================================
  * 404 HANDLER
  * ============================================================
+ *
+ * Hiçbir route request'i karşılamadıysa buraya gelir.
  */
 
-app.use((req, res) => {
+app.use(
+  (req, res) => {
 
-  res.status(404).json({
-    error:
-      "İstenen endpoint bulunamadı"
-  });
+    res.status(404).json({
 
-});
+      error:
+        "İstenen endpoint bulunamadı"
+
+    });
+
+  }
+);
 
 
 /**
  * ============================================================
  * CENTRAL ERROR HANDLER
  * ============================================================
+ *
+ * Express error middleware.
+ *
+ * Route veya middleware içerisinde
+ * next(error) çağrıldığında buraya gelir.
  */
 
 app.use(
@@ -187,9 +350,25 @@ app.use(
       err
     );
 
+
+    /**
+     * Eğer response zaten başladıysa
+     * Express'in default error handling
+     * mekanizmasına bırak.
+     */
+
+    if (res.headersSent) {
+
+      return next(err);
+
+    }
+
+
     res.status(500).json({
+
       error:
         "Sunucuda beklenmeyen bir hata oluştu"
+
     });
 
   }
@@ -198,8 +377,30 @@ app.use(
 
 /**
  * ============================================================
- * EXPORT
+ * EXPORT EXPRESS APPLICATION
  * ============================================================
+ *
+ * ÇOK ÖNEMLİ:
+ *
+ * Burada app.listen() YOKTUR.
+ *
+ * Jest:
+ *
+ *     const app = require("../backend/app");
+ *
+ * şeklinde application'ı import eder.
+ *
+ * Supertest:
+ *
+ *     request(app)
+ *
+ * şeklinde çalışır.
+ *
+ * Production server:
+ *
+ *     backend/server.js
+ *
+ * içerisinden app.listen() çağırır.
  */
 
 module.exports = app;
