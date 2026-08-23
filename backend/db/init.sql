@@ -203,6 +203,19 @@ CREATE INDEX IF NOT EXISTS idx_company_licenses_status
 CREATE INDEX IF NOT EXISTS idx_company_licenses_expires
     ON company_licenses(expires_at);
 
+-- Aynı şirket için aynı anda birden fazla 'active' lisans satırı
+-- oluşmasını DATABASE seviyesinde engeller. admin-licenses.js zaten
+-- yeni lisans eklerken eskisini 'cancelled' yapıyor (application-level),
+-- ancak bu index olmadan bu kural yalnızca o tek code path'e bağımlı
+-- kalır (ör. ileride eklenecek başka bir insert yolu, manuel bir SQL
+-- veya bir race condition bu korumayı atlayabilir). Partial index
+-- olduğu için expired/cancelled geçmiş kayıtları etkilemez, sadece
+-- status = 'active' olan satırlar için company_id tekilliğini zorunlu
+-- kılar.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_company_licenses_one_active_per_company
+    ON company_licenses(company_id)
+    WHERE status = 'active';
+
 
 -- ============================================================
 -- DEFAULT PLANS
