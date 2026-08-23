@@ -267,22 +267,30 @@ async function hasActiveCompanyLicense(companyId, db = pool) {
 
 
 /**
- * Şirketin belirli bir plana erişimi var mı?
+ * Şirketin belirli bir plana (veya daha üstüne) erişimi var mı?
  *
  * Örnek:
  *
  * hasPlanAccess(companyId, "professional")
  *
- * Enterprise'ın Professional özelliklerini de kullanabilmesini
- * istiyorsak aşağıdaki hiyerarşi daha sonra ayrıca eklenebilir.
+ * Plan hiyerarşisi middleware/license.js ile birebir aynıdır:
  *
- * Şimdilik exact plan kontrolüdür.
+ * starter = 1, professional = 2, enterprise = 3
+ *
+ * Enterprise lisansı olan bir şirket professional/starter
+ * kontrolünden de geçer (üst plan alt plan özelliklerini kullanabilir).
  *
  * @param {string} companyId
  * @param {string} planName
  * @param {object} db
  * @returns {Promise<boolean>}
  */
+const PLAN_LEVELS = {
+  starter: 1,
+  professional: 2,
+  enterprise: 3
+};
+
 async function hasPlanAccess(companyId, planName, db = pool) {
   const license = await getActiveCompanyLicense(companyId, db);
 
@@ -290,7 +298,10 @@ async function hasPlanAccess(companyId, planName, db = pool) {
     return false;
   }
 
-  return license.plan_id === planName;
+  const currentLevel = PLAN_LEVELS[license.plan_id] || 0;
+  const requiredLevel = PLAN_LEVELS[planName] || 0;
+
+  return currentLevel >= requiredLevel;
 }
 
 
