@@ -1,26 +1,15 @@
 module.exports = {
   testEnvironment: "jsdom",
 
-  roots: [
-    "<rootDir>/test",
-    "<rootDir>/backend"
-  ],
-
   testMatch: [
-    "**/*.test.js",
-    "**/*.spec.js"
+    "**/test/**/*.test.js"
   ],
 
-  modulePathIgnorePatterns: [
-    "<rootDir>/backend/node_modules/"
-  ],
-
-  coveragePathIgnorePatterns: [
-    "/node_modules/",
-    "/test/"
+  setupFiles: [
+    "<rootDir>/test/setup.js"
   ],
 
   clearMocks: true,
 
-  restoreMocks: true
+  verbose: true
 };
