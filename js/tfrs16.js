@@ -14177,6 +14177,84 @@ document.addEventListener("DOMContentLoaded", () => {
     ], "Kullanim_Hakki_Varligi_Hareket_Tablosu");
   }
 
+  function exportTms29InflationNote(startDate, endDate) {
+    const start = rptDate(startDate), end = rptDate(endDate);
+    if (!start || !end || end < start) return false;
+    const rouReport = getRuoAssetRollForwardReport(start, end) || {};
+    const rouRows = Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : [];
+    if (!rouRows.length) return false;
+
+    const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
+    const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
+    const t = tms29.totals;
+
+    const rouDetailRows = rouRows.map(row => {
+      const r = tms29.results.get(row.contractId);
+      const rrf = r?.rouRollForward;
+      return {
+        "Sözleşme": row.contractId, "Şirket": row.company, "Varlık Sınıfı": row.assetClass, "Para Birimi": row.currency,
+        "Açılış (Restated)": rrf ? rptRound(rrf.rouOpeningRestated) : null,
+        "Girişler (Restated)": rrf ? rptRound(rrf.rouEntriesRestated) : null,
+        "Amortisman (Restated) (-)": rrf ? -Math.abs(rptRound(rrf.rouDepreciationRestated)) : null,
+        "Kapanış (Restated)": rrf ? rptRound(rrf.rouClosingRestatedPeriod) : null,
+        "Kapanış (Nominal)": rrf ? rptRound(rrf.rouClosingNominalPeriod) : null,
+        "Durum": r?.ok ? "OK" : "Endeks Eksik"
+      };
+    });
+    rouDetailRows.push({
+      "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
+      "Açılış (Restated)": rptRound(t.rouOpeningRestated), "Girişler (Restated)": rptRound(t.rouEntriesRestated),
+      "Amortisman (Restated) (-)": -Math.abs(rptRound(t.rouDepreciationRestated)),
+      "Kapanış (Restated)": rptRound(t.rouClosingRestatedPeriod), "Kapanış (Nominal)": rptRound(t.rouClosingNominalPeriod),
+      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`
+    });
+
+    const liabDetailRows = rouRows.map(row => {
+      const r = tms29.results.get(row.contractId);
+      const lrf = r?.liabilityRollForward;
+      return {
+        "Sözleşme": row.contractId, "Şirket": row.company, "Varlık Sınıfı": row.assetClass, "Para Birimi": row.currency,
+        "Açılış (Restated)": lrf ? rptRound(lrf.liabilityOpeningRestated) : null,
+        "Girişler (Restated)": lrf ? rptRound(lrf.liabilityEntriesRestated) : null,
+        "Faiz (Restated)": lrf ? rptRound(lrf.liabilityInterestRestated) : null,
+        "Ödemeler (Restated) (-)": lrf ? -Math.abs(rptRound(lrf.liabilityPaymentsRestated)) : null,
+        "Parasal Kazanç/(Kayıp), net (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLoss) : null,
+        "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal - lrf.liabilityPaymentsNominal) : null,
+        "Durum": r?.ok ? "OK" : "Endeks Eksik"
+      };
+    });
+    liabDetailRows.push({
+      "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
+      "Açılış (Restated)": rptRound(t.liabilityOpeningRestated), "Girişler (Restated)": rptRound(t.liabilityEntriesRestated),
+      "Faiz (Restated)": rptRound(t.liabilityInterestRestated), "Ödemeler (Restated) (-)": -Math.abs(rptRound(t.liabilityPaymentsRestated)),
+      "Parasal Kazanç/(Kayıp), net (-)": -rptRound(t.liabilityMonetaryGainLoss),
+      "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal),
+      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`
+    });
+
+    const rouAssetClassSummary = tms29.byAssetClass.map(g => ({
+      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
+      "Açılış (Restated)": g.rouOpeningRestated, "Girişler (Restated)": g.rouEntriesRestated,
+      "Amortisman (Restated) (-)": -Math.abs(g.rouDepreciationRestated),
+      "Kapanış (Restated)": g.rouClosingRestatedPeriod, "Kapanış (Nominal)": g.rouClosingNominalPeriod
+    }));
+    const liabAssetClassSummary = tms29.byAssetClass.map(g => ({
+      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
+      "Açılış (Restated)": g.liabilityOpeningRestated, "Girişler (Restated)": g.liabilityEntriesRestated,
+      "Faiz (Restated)": g.liabilityInterestRestated, "Ödemeler (Restated) (-)": -Math.abs(g.liabilityPaymentsRestated),
+      "Parasal Kazanç/(Kayıp), net (-)": -g.liabilityMonetaryGainLoss,
+      "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal
+    }));
+
+    return v191ExportSheetsToFile([
+      { rows: rouDetailRows, sheetName: "TMS29 ROU Detay" },
+      { rows: rouAssetClassSummary, sheetName: "TMS29 ROU Varlık Sınıfı" },
+      { rows: liabDetailRows, sheetName: "TMS29 Yükümlülük Detay" },
+      { rows: liabAssetClassSummary, sheetName: "TMS29 Yük. Varlık Sınıfı" }
+    ], "TMS29_Enflasyon_Duzeltmeli_Hareket_Tablosu");
+  }
+
   function exportLeaseLiabilityMovementNote(startDate, endDate) {
     const report = getLeaseLiabilityRollForwardReport(startDate, endDate);
     const dataRows = Array.isArray(report.rows) ? report.rows.filter(r => r.status !== "ERROR") : [];
@@ -17468,7 +17546,9 @@ document.addEventListener("DOMContentLoaded", () => {
           netAdjustment,
           monetaryGainLoss: lrf ? lrf.liabilityMonetaryGainLoss : null,
           rouClosingRestatedPeriod: rrf ? rrf.rouClosingRestatedPeriod : null,
-          rouClosingNominalPeriod: rrf ? rrf.rouClosingNominalPeriod : null
+          rouClosingNominalPeriod: rrf ? rrf.rouClosingNominalPeriod : null,
+          rouRollForward: rrf || null,
+          liabilityRollForward: lrf || null
         });
         totalNetAdjustment += netAdjustment;
         if (rrf && lrf) {
@@ -17513,7 +17593,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
   }
 
-  function v191Tms29SummaryHtml(tms29, periodLabel) {
+  function v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
     const t = tms29.totals;
     const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
 
@@ -17541,8 +17621,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
 
     return `<div style="margin-top:24px;">
-      <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tabloları</h4>
-      <p style="margin:4px 0 12px;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablolarından farklıdır.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tabloları</h4>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablolarından farklıdır.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportTms29InflationNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
 
       <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
       ${v191Table(rouRowsWithTotal, rouTms29Columns)}
@@ -17710,7 +17795,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ])}
       ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
-      ${v191Tms29SummaryHtml(tms29, periodLabel)}
+      ${v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
     </div>`;
   }
 
@@ -22505,6 +22590,7 @@ document.addEventListener("DOMContentLoaded", () => {
     calculateNonCurrentLiabilityAsOf,
     exportRouAssetMovementNote,
     exportLeaseLiabilityMovementNote,
+    exportTms29InflationNote,
     V24_SCHEMA_VERSION,
     V24_PLANNING_ENGINE_VERSION,
     V24_STORAGE_KEYS,
@@ -25044,7 +25130,8 @@ document.addEventListener("DOMContentLoaded", () => {
       v191RenderFinancialReporting,
       v191OpenFinancialReporting,
       getRuoAssetRollForwardReport,
-      getLeaseLiabilityRollForwardReport
+      getLeaseLiabilityRollForwardReport,
+      exportTms29InflationNote
     };
   } catch (error) {
     console.error("Test export shim error:", error);
