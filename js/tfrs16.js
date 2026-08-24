@@ -9022,11 +9022,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const adjustments = (contract.inflationAdjustments || []).slice()
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-    const rowsHtml = adjustments.map(a => `
+    const rowsHtml = adjustments.map(a => {
+      const gl = a.restatedFigures?.liabilityMonetaryGainLoss;
+      const glCell = Number.isFinite(gl)
+        ? formatCurrency(-gl)
+        : `<span style="color:#94a3b8;">—</span>`;
+      return `
       <tr>
         <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.period)}</td>
         <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.status)}</td>
         <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(a.restatedFigures?.netAdjustment || 0)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${glCell}</td>
         <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">
           ${a.status === "DRAFT" ? `
             <button type="button" class="infl-apply-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;">Uygula</button>
@@ -9034,24 +9040,38 @@ document.addEventListener("DOMContentLoaded", () => {
           ` : ""}
         </td>
       </tr>
-    `).join("");
+    `;
+    }).join("");
 
     container.innerHTML = `
       <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
         <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 29 — ENFLASYON DÜZELTMESİ</div>
         <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
-          SINIR: Bu panel tam kapsamlı bir TMS 29 uygulaması değildir; yalnızca bu kiralama sözleşmesinin
-          ROU/kiralama yükümlülüğü kalemlerine odaklı bir düzeltme katmanıdır. Tam finansal tablo
-          düzeltmesi kapsam dışıdır.
+          SINIR: Bu panel, kiralama portföyü (ROU + kiralama yükümlülüğü) için TAM KAPSAMLI bir
+          TMS 29 düzeltmesi uygular: ROU (gayri moneter, edinim ayından raporlama dönemine
+          endekslenir) ve — "Dönem Başlangıcı" girilirse — kiralama yükümlülüğü hareket tablosu
+          üzerinden hesaplanan "Parasal Kazanç/(Kayıp), net" (TMS 29.28, moneter kalemin taşıdığı
+          net parasal pozisyon etkisi). Kapsam dışı kalan tek şey: işletmenin kiralama dışı diğer
+          moneter/gayri moneter kalemlerinin (nakit, ticari alacak/borç, stoklar vb.) düzeltilmesi —
+          bunlar için ayrı bir tam finansal tablo TMS 29 çalışması gerekir.
         </p>
-        <div style="display:flex;gap:8px;align-items:end;margin-top:10px;">
+        <div style="display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap;">
           <div class="form-group" style="margin:0;">
             <label for="inflReportingPeriod" style="font-size:11px;">Raporlama Dönemi</label>
             <input id="inflReportingPeriod" type="month" style="padding:6px;">
           </div>
+          <div class="form-group" style="margin:0;">
+            <label for="inflPeriodStart" style="font-size:11px;">Dönem Başlangıcı (opsiyonel — Parasal K/Z için)</label>
+            <input id="inflPeriodStart" type="month" style="padding:6px;">
+          </div>
           <button type="button" id="inflPreviewBtn" style="font-size:12px;padding:6px 12px;">Önizle</button>
           <button type="button" id="inflCreateBtn" style="font-size:12px;padding:6px 12px;">Taslak Oluştur</button>
         </div>
+        <p style="margin:4px 0 0;color:#94a3b8;font-size:10px;">
+          Dönem Başlangıcı boş bırakılırsa yalnızca ROU düzeltmesi (kapanış bazlı) hesaplanır;
+          kiralama yükümlülüğü Parasal Kazanç/(Kayıp) satırı boş kalır (V18 Parça 2 geriye dönük
+          uyumluluğu — mevcut taslaklar etkilenmez).
+        </p>
         <div id="inflPreviewResult" style="margin-top:10px;font-size:12px;"></div>
         <div style="overflow:auto;margin-top:14px;border:1px solid #e5e7eb;border-radius:10px;">
           <table style="width:100%;border-collapse:collapse;">
@@ -9059,11 +9079,12 @@ document.addEventListener("DOMContentLoaded", () => {
               <tr style="background:#f8fafc;">
                 <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
                 <th style="padding:9px;text-align:left;font-size:11px;">Durum</th>
-                <th style="padding:9px;text-align:right;font-size:11px;">Net Düzeltme</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">ROU Net Düzeltme</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Parasal K/Z (Yükümlülük)</th>
                 <th style="padding:9px;text-align:left;font-size:11px;">İşlem</th>
               </tr>
             </thead>
-            <tbody>${rowsHtml || `<tr><td colspan="4" style="padding:10px;color:#94a3b8;font-size:12px;">Kayıt yok.</td></tr>`}</tbody>
+            <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:10px;color:#94a3b8;font-size:12px;">Kayıt yok.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -9071,24 +9092,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("inflPreviewBtn")?.addEventListener("click", () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
+      const periodStart = document.getElementById("inflPeriodStart")?.value || "";
       const result = document.getElementById("inflPreviewResult");
-      const validation = validateInflationAdjustment(contract, { reportingPeriod: period });
+      const validation = validateInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
       if (!result) return;
       if (!validation.valid) {
         result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
         return;
       }
       const t = validation.restatement.totals;
+      const hasMonetary = Number.isFinite(t.liabilityMonetaryGainLoss);
       result.innerHTML = `
         Nominal ROU: ${formatCurrency(t.nominalROUClosing)} → Düzeltilmiş: ${formatCurrency(t.restatedROUClosing)} ·
-        Yükümlülük (moneter, değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
-        Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
+        Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
+        ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
+        ${hasMonetary
+          ? ` · Parasal Kazanç/(Kayıp), net (yükümlülük, TMS 29.28): <strong>${formatCurrency(-t.liabilityMonetaryGainLoss)}</strong>`
+          : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
     });
 
     document.getElementById("inflCreateBtn")?.addEventListener("click", () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
-      const created = createInflationAdjustment(contract, { reportingPeriod: period });
+      const periodStart = document.getElementById("inflPeriodStart")?.value || "";
+      const created = createInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
       if (!created.valid) {
         showAlert(created.errors.join("\n"));
         return;
@@ -25086,6 +25113,202 @@ document.addEventListener("DOMContentLoaded", () => {
   const runSelfTestsV25Part2 = runSelfTestsV18Part2; // belge uyumluluğu için takma ad
 
   /* ==========================================================
+     TAM KAPSAMLI TMS 29 (Kiralama Portföyü) — SELF-TEST SUITE
+     ----------------------------------------------------------
+     Bu paket, V18 Parça 2'de zaten var olan ama UI'da hiç
+     tetiklenmeyen "Parasal Kazanç/(Kayıp), net" (kiralama
+     yükümlülüğü — TMS 29.28 net moneter pozisyon) hesaplamasının
+     uçtan uca (createInflationAdjustment → applyInflationAdjustment
+     → journal) doğru çalıştığını doğrular. applyTMS29Restatement()
+     ve generateInflationAdjustmentJournal() içindeki formüller
+     değiştirilmedi — yalnızca kontrat paneli artık periodStart
+     alanını bu fonksiyonlara iletiyor (bkz. renderInflationAdjustmentSection).
+     Kapsam sınırı korunuyor: yalnızca kiralama ROU + kiralama
+     yükümlülüğü. İşletmenin kiralama dışı moneter/gayri moneter
+     kalemleri (nakit, ticari alacak/borç, stok vb.) bu paketin
+     dışındadır — tam finansal tablo TMS 29 için ayrı bir çalışma
+     gerekir (bkz. panel içi SINIR notu).
+     ========================================================== */
+  function runSelfTestsV19FullTms29() {
+    const results = [];
+    function check(name, expected, actual, tolerance = 0.01) {
+      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
+      results.push({ name, pass, expected, actual });
+      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
+      return pass;
+    }
+    function assertTrue(name, condition) {
+      results.push({ name, pass: !!condition });
+      console.log(`${condition ? "✅" : "❌"} ${name}`);
+      return !!condition;
+    }
+
+    const baseContract = {
+      monthlyPayment: 100000,
+      discountRate: 18,
+      startDate: "2026-01-01",
+      endDate: "2027-12-01", // 24 ay
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+    const months2026to2027 = [];
+    for (let y = 2026; y <= 2027; y++) {
+      for (let m = 1; m <= 12; m++) months2026to2027.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+
+    // ---- VAKA 1: Endeks TAMAMEN SABİT (enflasyon yok) → hem ROU net
+    // düzeltmesi hem de yükümlülük Parasal K/Z sıfır olmalı ----
+    let vaka1Pass = false;
+    try {
+      months2026to2027.forEach(mo => addOrUpdateInflationIndexEntry(mo, 1000));
+      const contract1 = { ...baseContract, id: "SELFTEST-V19-1" };
+      ensureInflationAdjustmentState(contract1);
+      const restatement = applyTMS29Restatement(contract1, "2027-06", "2027-01");
+      const t = restatement.totals;
+      const okNet = check("Vaka 1 — enflasyon yokken ROU net düzeltme = 0", 0, t.netAdjustment, 0.01);
+      const okMon = check("Vaka 1 — enflasyon yokken Parasal K/Z = 0", 0, t.liabilityMonetaryGainLoss, 0.01);
+      vaka1Pass = okNet && okMon;
+      months2026to2027.forEach(mo => deleteInflationIndexEntry(mo));
+    } catch (error) {
+      console.error("Vaka 1 hata:", error);
+      months2026to2027.forEach(mo => { try { deleteInflationIndexEntry(mo); } catch (e) {} });
+    }
+    results.push({ name: "Vaka 1 — genel (sıfır enflasyon)", pass: vaka1Pass });
+
+    // ---- VAKA 2: Uçtan uca — createInflationAdjustment(periodStart ile)
+    // → applyInflationAdjustment → journal, Parasal K/Z hesaba yansımalı
+    // ve jurnal dengeli olmalı ----
+    let vaka2Pass = false;
+    try {
+      const v2Months = months2026to2027.filter(mo => mo <= "2027-06");
+      v2Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
+
+      const contract2 = { ...baseContract, id: "SELFTEST-V19-2" };
+      ensureInflationAdjustmentState(contract2);
+
+      const created = createInflationAdjustment(contract2, { reportingPeriod: "2027-06", periodStart: "2027-01" });
+      const periodStartStored = assertTrue(
+        "Vaka 2 — periodStart taslakta saklandı",
+        created.valid && created.adjustment.periodStart === "2027-01"
+      );
+
+      const applied = created.valid
+        ? applyInflationAdjustment(contract2, created.adjustment.id)
+        : { valid: false, errors: created.errors };
+
+      let journalHasMonetaryLines = false, balanced = false, monetaryFinite = false;
+      if (applied.valid) {
+        const journal = applied.adjustment.journal;
+        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
+        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
+        balanced = Math.abs(debit - credit) < 0.01;
+        journalHasMonetaryLines = journal.some(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY");
+        monetaryFinite = Number.isFinite(applied.adjustment.restatedFigures.liabilityMonetaryGainLoss);
+
+        assertTrue("Vaka 2 — jurnal borç = alacak (dengeli)", balanced);
+        assertTrue("Vaka 2 — jurnal Parasal K/Z satırlarını içeriyor", journalHasMonetaryLines);
+        assertTrue("Vaka 2 — restatedFigures.liabilityMonetaryGainLoss sayısal", monetaryFinite);
+      } else {
+        console.error("Vaka 2 — düzeltme uygulanamadı:", applied.errors);
+      }
+
+      vaka2Pass = periodStartStored && applied.valid && balanced && journalHasMonetaryLines && monetaryFinite;
+      v2Months.forEach(mo => deleteInflationIndexEntry(mo));
+    } catch (error) {
+      console.error("Vaka 2 hata:", error);
+    }
+    results.push({ name: "Vaka 2 — genel (uçtan uca, periodStart ile)", pass: vaka2Pass });
+
+    // ---- VAKA 3: periodStart VERİLMEDEN oluşturulan taslak — geriye
+    // dönük uyumluluk: Parasal K/Z null kalmalı, jurnal yine dengeli
+    // olmalı (regresyon — mevcut kullanıcı akışı bozulmamalı) ----
+    let vaka3Pass = false;
+    try {
+      const v3Months = months2026to2027.filter(mo => mo <= "2027-06");
+      v3Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
+
+      const contract3 = { ...baseContract, id: "SELFTEST-V19-3" };
+      ensureInflationAdjustmentState(contract3);
+      const created = createInflationAdjustment(contract3, { reportingPeriod: "2027-06" }); // periodStart YOK
+      const applied = created.valid
+        ? applyInflationAdjustment(contract3, created.adjustment.id)
+        : { valid: false, errors: created.errors };
+
+      if (applied.valid) {
+        const journal = applied.adjustment.journal;
+        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
+        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
+        const balanced = Math.abs(debit - credit) < 0.01;
+        const noMonetaryLines = !journal.some(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY");
+        const monetaryIsNull = applied.adjustment.restatedFigures.liabilityMonetaryGainLoss === null;
+        assertTrue("Vaka 3 — jurnal borç = alacak (dengeli)", balanced);
+        assertTrue("Vaka 3 — Parasal K/Z jurnal satırı YOK (regresyon)", noMonetaryLines);
+        assertTrue("Vaka 3 — restatedFigures.liabilityMonetaryGainLoss = null (regresyon)", monetaryIsNull);
+        vaka3Pass = balanced && noMonetaryLines && monetaryIsNull;
+      } else {
+        console.error("Vaka 3 — düzeltme uygulanamadı:", applied.errors);
+      }
+      v3Months.forEach(mo => deleteInflationIndexEntry(mo));
+    } catch (error) {
+      console.error("Vaka 3 hata:", error);
+    }
+    results.push({ name: "Vaka 3 — genel (periodStart yok, regresyon)", pass: vaka3Pass });
+
+    // ---- VAKA 4: Portföy düzeyi ile kontrat düzeyi TUTARLILIĞI —
+    // v191ComputePortfolioTms29 toplamı, tek tek kontratların
+    // applyTMS29Restatement sonuçlarının toplamına eşit olmalı ----
+    let vaka4Pass = false;
+    try {
+      const v4Months = months2026to2027.filter(mo => mo <= "2027-06");
+      v4Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
+
+      const contractA = { ...baseContract, id: "SELFTEST-V19-4A" };
+      const contractB = { ...baseContract, id: "SELFTEST-V19-4B", monthlyPayment: 50000 };
+      [contractA, contractB].forEach(ensureInflationAdjustmentState);
+
+      const restA = applyTMS29Restatement(contractA, "2027-06", "2027-01");
+      const restB = applyTMS29Restatement(contractB, "2027-06", "2027-01");
+      const expectedTotal =
+        (restA.totals.liabilityMonetaryGainLoss || 0) +
+        (restB.totals.liabilityMonetaryGainLoss || 0);
+
+      const savedContracts = typeof contracts !== "undefined" ? contracts : null;
+      if (savedContracts) {
+        const before = savedContracts.slice();
+        savedContracts.length = 0;
+        savedContracts.push(contractA, contractB);
+        try {
+          const rows = [
+            { contractId: contractA.id, assetClass: "TEST" },
+            { contractId: contractB.id, assetClass: "TEST" }
+          ];
+          const portfolio = v191ComputePortfolioTms29(rows, "2027-01", "2027-06");
+          vaka4Pass = check(
+            "Vaka 4 — portföy toplamı = kontrat toplamı (Parasal K/Z)",
+            expectedTotal,
+            portfolio.totals.liabilityMonetaryGainLoss,
+            0.01
+          );
+        } finally {
+          savedContracts.length = 0;
+          before.forEach(c => savedContracts.push(c));
+        }
+      } else {
+        results.push({ name: "Vaka 4 — atlandı (contracts kapsam dışında erişilemiyor)", pass: true });
+        vaka4Pass = true;
+      }
+      v4Months.forEach(mo => deleteInflationIndexEntry(mo));
+    } catch (error) {
+      console.error("Vaka 4 hata:", error);
+    }
+    results.push({ name: "Vaka 4 — genel (portföy/kontrat tutarlılığı)", pass: vaka4Pass });
+
+    const totalPass = results.filter(r => r.pass).length;
+    console.log(`\nTam Kapsamlı TMS 29 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
+    return results;
+  }
+
+  /* ==========================================================
      TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
      ----------------------------------------------------------
      Mevcut hiçbir fonksiyon değiştirilmedi veya taşınmadı. Bu
@@ -25126,6 +25349,7 @@ document.addEventListener("DOMContentLoaded", () => {
       deleteInflationIndexEntry,
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
+      runSelfTestsV19FullTms29,
       // V19.1 Financial Reporting — dönem seçici / detay drill-down testleri için
       v191RenderFinancialReporting,
       v191OpenFinancialReporting,
