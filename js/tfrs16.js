@@ -17442,6 +17442,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // NOMİNAL rakamlar etkilenmeden gösterilmeye devam eder.
   function v191ComputePortfolioTms29(rows, periodStartMonth, rpMonth) {
     const results = new Map();
+    const flatRows = [];
     const totals = {
       rouOpeningNominal: 0, rouOpeningRestated: 0,
       rouEntriesNominal: 0, rouEntriesRestated: 0,
@@ -17470,7 +17471,9 @@ document.addEventListener("DOMContentLoaded", () => {
           rouClosingNominalPeriod: rrf ? rrf.rouClosingNominalPeriod : null
         });
         totalNetAdjustment += netAdjustment;
-        if (rrf) {
+        if (rrf && lrf) {
+          const flatRow = { assetClass: row.assetClass, ...rrf, ...lrf };
+          flatRows.push(flatRow);
           totals.rouOpeningNominal += rrf.rouOpeningNominal;
           totals.rouOpeningRestated += rrf.rouOpeningRestated;
           totals.rouEntriesNominal += rrf.rouEntriesNominal;
@@ -17479,8 +17482,6 @@ document.addEventListener("DOMContentLoaded", () => {
           totals.rouDepreciationRestated += rrf.rouDepreciationRestated;
           totals.rouClosingNominalPeriod += rrf.rouClosingNominalPeriod;
           totals.rouClosingRestatedPeriod += rrf.rouClosingRestatedPeriod;
-        }
-        if (lrf) {
           totals.liabilityOpeningNominal += lrf.liabilityOpeningNominal;
           totals.liabilityOpeningRestated += lrf.liabilityOpeningRestated;
           totals.liabilityEntriesNominal += lrf.liabilityEntriesNominal;
@@ -17497,43 +17498,61 @@ document.addEventListener("DOMContentLoaded", () => {
         missingCount++;
       }
     });
-    return { results, totals, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
+
+    // Varlık sınıfı bazında kırılım — mevcut gruplama altyapısı (nominal
+    // hareket tabloları için de kullanılan) yeniden kullanılıyor.
+    const tms29SumKeys = [
+      "rouOpeningNominal","rouOpeningRestated","rouEntriesNominal","rouEntriesRestated",
+      "rouDepreciationNominal","rouDepreciationRestated","rouClosingNominalPeriod","rouClosingRestatedPeriod",
+      "liabilityOpeningNominal","liabilityOpeningRestated","liabilityEntriesNominal","liabilityEntriesRestated",
+      "liabilityInterestNominal","liabilityInterestRestated","liabilityPaymentsNominal","liabilityPaymentsRestated",
+      "liabilityMonetaryGainLoss"
+    ];
+    const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, tms29SumKeys);
+
+    return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
   }
 
   function v191Tms29SummaryHtml(tms29, periodLabel) {
     const t = tms29.totals;
     const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
-    return `<div style="margin-top:20px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-      <h4 style="margin:0 0 4px;font-size:12px;color:#92400e;">TMS 29 Enflasyon Düzeltmeli Hareket Tabloları — ${v191Escape(periodLabel)} (dönem sonu satın alma gücü)</h4>
-      <p style="margin:0 0 10px;font-size:10px;color:#a16207;">Aşağıdaki tablolar, seçili dönemin Açılış/Girişler/Amortisman-Faiz-Ödeme/Kapanış satırlarını, dönem sonu (${v191Escape(periodLabel.split(" - ")[1] || "")}) satın alma gücüne endeksleyerek gösterir — üstteki nominal hareket tablolarından FARKLIDIR.</p>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
-        <div>
-          <h5 style="margin:0 0 4px;font-size:11px;color:#78350f;">Kullanım Hakkı Varlığı (ROU) — Restated</h5>
-          <table style="width:100%;font-size:11px;border-collapse:collapse;">
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Açılış</td><td style="text-align:right;">${v191Value(t.rouOpeningRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Girişler (mod./reassessment)</td><td style="text-align:right;">${v191Value(t.rouEntriesRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Amortisman (−)</td><td style="text-align:right;">${v191Value(-t.rouDepreciationRestated)}</td></tr>
-            <tr style="border-top:1px solid #fde68a;font-weight:600;"><td style="padding:4px 6px 0 0;">Kapanış (Restated)</td><td style="text-align:right;padding-top:4px;">${v191Value(t.rouClosingRestatedPeriod)}</td></tr>
-            <tr><td style="padding:2px 6px 0 0;color:#94a3b8;">Kapanış (Nominal, karşılaştırma)</td><td style="text-align:right;color:#94a3b8;">${v191Value(t.rouClosingNominalPeriod)}</td></tr>
-          </table>
-          ${!rouReconciles ? `<p style="margin:4px 0 0;font-size:10px;color:#b91c1c;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var, kontrol edilmeli.</p>` : ""}
-        </div>
-        <div>
-          <h5 style="margin:0 0 4px;font-size:11px;color:#78350f;">Kira Yükümlülüğü — Restated</h5>
-          <table style="width:100%;font-size:11px;border-collapse:collapse;">
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Açılış</td><td style="text-align:right;">${v191Value(t.liabilityOpeningRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Girişler (mod./reassessment)</td><td style="text-align:right;">${v191Value(t.liabilityEntriesRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Faiz</td><td style="text-align:right;">${v191Value(t.liabilityInterestRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Ödemeler (−)</td><td style="text-align:right;">${v191Value(-t.liabilityPaymentsRestated)}</td></tr>
-            <tr><td style="padding:2px 6px 2px 0;color:${t.liabilityMonetaryGainLoss < 0 ? '#15803d' : t.liabilityMonetaryGainLoss > 0 ? '#b91c1c' : '#78350f'};">Parasal Kazanç/(Kayıp), net (−)</td><td style="text-align:right;color:${t.liabilityMonetaryGainLoss < 0 ? '#15803d' : t.liabilityMonetaryGainLoss > 0 ? '#b91c1c' : '#334155'};">${v191Value(-t.liabilityMonetaryGainLoss)}</td></tr>
-            <tr style="border-top:1px solid #fde68a;font-weight:600;"><td style="padding:4px 6px 0 0;">Kapanış (= Nominal, moneter kalem)</td><td style="text-align:right;padding-top:4px;">${v191Value(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal)}</td></tr>
-          </table>
-        </div>
-      </div>
+    const rouRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
+    const liabRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
 
-      <p style="margin:10px 0 0;font-size:11px;color:#92400e;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — ${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var (bu sözleşmelerin nominal rakamları etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
-      <p style="margin:4px 0 0;font-size:10px;color:#a16207;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır. Yükümlülük (moneter): kapanış bakiyesi DEĞİŞMEZ (TMS 29.28), satın alma gücü kaybı/kazancı ayrı "Parasal Kazanç/(Kayıp)" satırında gösterilir.</p>
+    const rouTms29Columns = [
+      { key: "assetClass", label: "Varlık Sınıfı" },
+      { key: "contractCount", label: "Sözleşme Sayısı" },
+      { key: "rouOpeningRestated", label: "Açılış" },
+      { key: "rouEntriesRestated", label: "Girişler" },
+      { key: "rouDepreciationRestated", label: "Amortisman", render: row => v191Value(-row.rouDepreciationRestated) },
+      { key: "rouClosingRestatedPeriod", label: "Kapanış (Restated)" },
+      { key: "rouClosingNominalPeriod", label: "Kapanış (Nominal)" }
+    ];
+    const liabTms29Columns = [
+      { key: "assetClass", label: "Varlık Sınıfı" },
+      { key: "contractCount", label: "Sözleşme Sayısı" },
+      { key: "liabilityOpeningRestated", label: "Açılış" },
+      { key: "liabilityEntriesRestated", label: "Girişler" },
+      { key: "liabilityInterestRestated", label: "Faiz" },
+      { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
+      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
+      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
+    ];
+
+    return `<div style="margin-top:24px;">
+      <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tabloları</h4>
+      <p style="margin:4px 0 12px;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablolarından farklıdır.</p>
+
+      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
+      ${v191Table(rouRowsWithTotal, rouTms29Columns)}
+      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
+
+      <h5 style="margin:16px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
+      ${v191Table(liabRowsWithTotal, liabTms29Columns)}
+
+      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır. Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
     </div>`;
   }
 
