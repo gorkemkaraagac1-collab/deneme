@@ -260,89 +260,24 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================
--- TEST COMPANY
--- ============================================================
-
-INSERT INTO companies (
-    id,
-    name,
-    code
-)
-VALUES (
-    'TEST-COMPANY-001',
-    'Test Şirketi',
-    'TEST001'
-)
-ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- TEST ADMIN USER
+-- GÜVENLİK NOTU — TEST/DEMO VERİSİ BU DOSYADAN KALDIRILDI
 -- ============================================================
 --
--- Kullanıcı:
--- admin
+-- Önceden burada, bilinen bir parolaya ("Admin123!") sahip bir
+-- test ADMIN kullanıcısı (username: admin) KOŞULSUZ olarak her
+-- init.sql çalıştırmasında (dolayısıyla yanlışlıkla production
+-- veritabanına karşı da) oluşturuluyordu. Bilinen/varsayılan
+-- kimlik bilgileriyle bir ADMIN hesabının otomatik olarak
+-- oluşturulması, production ortamında ciddi bir yetkisiz erişim
+-- riskidir (OWASP A07 — Kimlik Doğrulama Hataları / varsayılan
+-- kimlik bilgileri).
 --
--- Şifre:
--- Admin123!
+-- Bu veri artık ayrı bir dosyada tutuluyor:
 --
--- bcrypt hash:
--- $2b$10$7EqJtq98hPqEX7fNZaFWoO
+--   backend/db/seed-dev.sql
 --
--- NOT:
--- Bu hash sadece geliştirme/test amacıyla kullanılmalıdır.
---
-
-INSERT INTO users (
-    id,
-    username,
-    password_hash,
-    role,
-    status
-)
-VALUES (
-    'TEST-ADMIN-001',
-    'admin',
-    '$2b$10$7EqJtq98hPqEX7fNZaFWoO',
-    'ADMIN',
-    'ACTIVE'
-)
-ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- TEST USER ↔ TEST COMPANY
--- ============================================================
-
-INSERT INTO user_companies (
-    user_id,
-    company_id
-)
-VALUES (
-    'TEST-ADMIN-001',
-    'TEST-COMPANY-001'
-)
-ON CONFLICT (user_id, company_id) DO NOTHING;
-
-
--- ============================================================
--- TEST COMPANY LICENSE
--- ============================================================
-
-INSERT INTO company_licenses (
-    id,
-    company_id,
-    plan_id,
-    starts_at,
-    expires_at,
-    status
-)
-VALUES (
-    'TEST-LICENSE-001',
-    'TEST-COMPANY-001',
-    'professional',
-    NOW(),
-    NOW() + INTERVAL '1 year',
-    'active'
-)
-ON CONFLICT (id) DO NOTHING;
+-- init.sql YALNIZCA şemayı ve gerçek iş verisi olan planları
+-- (plans) içerir. seed-dev.sql ise BİLİNÇLİ OLARAK ayrı çalıştırılır
+-- ve yalnızca local geliştirme / otomatik test ortamlarında
+-- uygulanmalıdır — production deploy pipeline'ına dahil
+-- edilmemelidir.
