@@ -28,7 +28,11 @@ router.get("/", async (req, res) => {
       conditions.push(`a.action = $${params.length}`);
     }
 
-    params.push(Math.min(Number(limit) || 200, 1000));
+    const rawLimit = Number(limit);
+    const safeLimit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 1000)
+      : 200;
+    params.push(safeLimit);
 
     const result = await pool.query(
       `SELECT a.* FROM audit_events a
@@ -40,7 +44,8 @@ router.get("/", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("GET /api/audit hatası:", error);
+    res.status(500).json({ error: "Audit kayıtları alınırken beklenmeyen bir hata oluştu" });
   }
 });
 
@@ -50,7 +55,7 @@ router.get("/", async (req, res) => {
 // kontratına sahte audit kaydı düşürebilirdi.
 router.post("/", async (req, res) => {
   try {
-    const { id, actor, action, entityType, entityId, contractId, oldValue, newValue, metadata } = req.body;
+    const { id, action, entityType, entityId, contractId, oldValue, newValue, metadata } = req.body;
 
     if (!id || !action || !entityType) {
       return res.status(400).json({ error: "id, action, entityType zorunludur" });
@@ -66,13 +71,20 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // GÜVENLİK: "actor" (kaydı kimin yaptığı) client'ın body'sinden
+    // ASLA alınmaz — aksi halde herhangi bir kullanıcı kendi
+    // eylemini başka bir kullanıcının üzerine yazarak audit trail'i
+    // sahteleyebilirdi (audit log integrity / non-repudiation
+    // ihlali). Bu alan yalnızca doğrulanmış JWT kimliğinden gelir.
+    const actor = req.user.username || req.user.id || "system";
+
     const result = await pool.query(
       `INSERT INTO audit_events (id, actor, action, entity_type, entity_id, contract_id, old_value, new_value, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         id,
-        actor || req.user.username || "system",
+        actor,
         action,
         entityType,
         entityId || null,
@@ -84,7 +96,8 @@ router.post("/", async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("POST /api/audit hatası:", error);
+    res.status(500).json({ error: "Audit kaydı oluşturulurken beklenmeyen bir hata oluştu" });
   }
 });
 

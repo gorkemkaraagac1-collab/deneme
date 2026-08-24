@@ -5,6 +5,7 @@ const pool = require("../db/pool");
 
 const { signUserToken } = require("../utils/jwt");
 const { requireAuth } = require("../middleware/auth");
+const { createRateLimiter } = require("../middleware/rate-limit");
 
 const {
   canAddUserToCompany,
@@ -14,6 +15,41 @@ const {
 const router = express.Router();
 
 const BCRYPT_ROUNDS = 12;
+
+/**
+ * ============================================================
+ * BRUTE-FORCE / ABUSE PROTECTION
+ * ============================================================
+ *
+ * /login username+password brute-force denemelerine karşı en
+ * kritik endpoint'tir; IP başına sıkı bir limit uygulanır.
+ * Kullanıcı adı bilinmeyen/hatalı parola denemelerinde bile
+ * aynı jenerik hata döndüğü için (user enumeration önlenmiş
+ * durumda), rate limiting brute-force'a karşı asıl savunma
+ * hattıdır.
+ *
+ * /register zaten requireAuth + requireAdmin ile korunuyor
+ * (yalnızca kimliği doğrulanmış bir ADMIN çağırabilir), yine de
+ * ele geçirilmiş bir admin hesabının toplu kullanıcı oluşturarak
+ * lisans limitlerini yoklamasını/abuse etmesini zorlaştırmak için
+ * daha gevşek bir limit uygulanır.
+ */
+const loginRateLimiter = createRateLimiter({
+  windowMs: Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 10,
+  keyGenerator: req =>
+    `login:${req.ip}:${(req.body && req.body.username) || ""}`,
+  message:
+    "Çok fazla başarısız giriş denemesi. Lütfen daha sonra tekrar deneyin."
+});
+
+const registerRateLimiter = createRateLimiter({
+  windowMs: Number(process.env.REGISTER_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: Number(process.env.REGISTER_RATE_LIMIT_MAX) || 30,
+  keyGenerator: req => `register:${req.ip}`,
+  message:
+    "Çok fazla kullanıcı oluşturma isteği. Lütfen daha sonra tekrar deneyin."
+});
 
 
 /**
@@ -149,6 +185,7 @@ async function lockCompaniesForUserCreation(
  */
 router.post(
   "/register",
+  registerRateLimiter,
   requireAuth,
   async (req, res) => {
 
@@ -680,6 +717,7 @@ router.post(
  */
 router.post(
   "/login",
+  loginRateLimiter,
   async (req, res) => {
 
     try {
