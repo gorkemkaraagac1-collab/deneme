@@ -3,6 +3,14 @@ const jwt = require("jsonwebtoken");
 const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
 
+// Yalnızca simetrik HS256 imzalarına izin verilir. jwt.verify()'a
+// algorithms listesi verilmezse, kütüphane token header'ındaki
+// "alg" alanına güvenerek doğrulama yapabilir; bu da algorithm
+// confusion saldırılarına (ör. "none" veya beklenmeyen bir
+// algoritmayla üretilmiş sahte token) karşı gereksiz bir yüzey
+// açar. Açık bir allowlist bu riski tamamen ortadan kaldırır.
+const ALLOWED_ALGORITHMS = ["HS256"];
+
 if (!SECRET) {
   // Sunucu, gizli anahtar olmadan ASLA ayağa kalkmamalı — yoksa
   // token'lar tahmin edilebilir/sahte üretilebilir hale gelir.
@@ -28,7 +36,7 @@ function signUserToken(user) {
       companyIds: user.companyIds || []
     },
     SECRET,
-    { expiresIn: EXPIRES_IN }
+    { expiresIn: EXPIRES_IN, algorithm: ALLOWED_ALGORITHMS[0] }
   );
 }
 
@@ -38,7 +46,7 @@ function signUserToken(user) {
  * @param {string} token
  */
 function verifyUserToken(token) {
-  return jwt.verify(token, SECRET);
+  return jwt.verify(token, SECRET, { algorithms: ALLOWED_ALGORITHMS });
 }
 
 module.exports = { signUserToken, verifyUserToken };
