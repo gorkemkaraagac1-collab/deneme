@@ -25,7 +25,10 @@ router.get("/summary", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    // Ham DB hata mesajı (SQL detayları, tablo/kolon adları vb.)
+    // client'a asla dönmez — yalnızca server loguna yazılır.
+    console.error("GET /api/reports/summary hatası:", error);
+    res.status(500).json({ error: "Rapor oluşturulurken beklenmeyen bir hata oluştu" });
   }
 });
 
@@ -33,7 +36,15 @@ router.get("/summary", async (req, res) => {
 // yine yalnızca kullanıcının kendi şirket(ler)i.
 router.get("/expiring", async (req, res) => {
   try {
-    const days = Math.min(Number(req.query.days) || 90, 3650);
+    // Number("") -> 0, Number("abc") -> NaN, Number("-5") -> -5.
+    // Number.isFinite ile hem NaN hem de Infinity/-Infinity reddedilir;
+    // ardından 1..3650 aralığına clamp edilir (negatif/aşırı büyük
+    // değerler ile anlamsız/aşırı maliyetli sorgular önlenir).
+    const rawDays = Number(req.query.days);
+    const days = Number.isFinite(rawDays)
+      ? Math.min(Math.max(Math.trunc(rawDays), 1), 3650)
+      : 90;
+
     const result = await pool.query(
       `SELECT * FROM contracts
        WHERE status = 'active'
@@ -44,7 +55,8 @@ router.get("/expiring", async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("GET /api/reports/expiring hatası:", error);
+    res.status(500).json({ error: "Rapor oluşturulurken beklenmeyen bir hata oluştu" });
   }
 });
 
