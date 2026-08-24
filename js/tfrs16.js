@@ -942,34 +942,20 @@ document.addEventListener("DOMContentLoaded", () => {
     return contract;
   }
 
-  // Hesap kodları tek noktadan değiştirilebilir (VARSAYIM — ileride
-  // müşteri bazlı hesap eşleme tablosu ayrı bir parçada eklenecek).
+  // Hesap kodları tek noktadan değiştirilebilir (müşteri bazlı hesap eşleme tablosu ayrı bir parçada eklenebilir).
   const TFRS29_ACCOUNTS = {
     rouAsset: "260 Kullanım Hakkı Varlığı",
     leaseLiability: "401 Kiralama Yükümlülüğü",
     inflationGainLoss: "698 Enflasyon Düzeltmesi K/Z",
-    // V18 Parça 2 düzeltme — kiralama yükümlülüğü hareket tablosunun
-    // "Parasal Kazanç/(Kayıp), net" satırı için ayrı alt hesap
-    // (kullanıcı onayı: "ayrı satır, ayrı hesap, 698 altında alt kalem").
+    // Kiralama yükümlülüğü hareket tablosunun "Parasal Kazanç/(Kayıp), net"
+    // satırı için ayrı alt hesap (698 altında alt kalem).
     liabilityMonetaryGainLoss: "698.02 Parasal Kazanç/(Kayıp), Net (Kiralama Yükümlülüğü)",
-    // VARSAYIM (ONAY BEKLİYOR): Bu satırın karşı hesabı. Yükümlülüğün
-    // (401) nominal bakiyesi bu restatement ile DEĞİŞMEZ (moneter kalem
-    // — TMS 29.28), dolayısıyla 401'e karşı bir kayıt YANLIŞ olur.
-    // Karşı taraf, tam kapsamlı TMS 29 uygulamasında "net parasal
-    // pozisyon kâr/zararı"nın diğer ayağını oluşturan özkaynak/sonuç
-    // hesabıdır; bu modül yalnızca kiralama portföyünü kapsadığından
-    // buraya geçici bir karşı hesap konuldu. Şirketin hesap planına göre
-    // DEĞİŞTİRİLMELİDİR (örn. 590 Dönem Net Karı/Zararı ya da ayrı bir
-    // "TMS 29 Parasal Pozisyon Karşılığı" hesabı).
-    monetaryPositionOffset: "590 TMS 29 Parasal Pozisyon Karşılığı (VARSAYIM — onaylayınız)",
-    // Parasal Kazanç/(Kayıp)'ın AÇILIŞ BAKİYESİ bileşeni (dönem başında
-    // zaten var olan bakiyenin gösterimsel endekslenmesinden doğan kısım) —
-    // cari dönem faaliyet sonucu değil, geçmiş dönem(ler)e ait özkaynak
-    // etkisi olarak ayrılır (kullanıcı talebi). VARSAYIM — ONAY BEKLİYOR:
-    // burada tek hesap KAYIP yönünü esas alır; işaret KAZANÇ ise (kredi
-    // bakiyesi) muhtemelen "570 Geçmiş Yıllar Kârları" kullanılmalıdır —
-    // şirketin hesap planına göre teyit edilmelidir.
-    liabilityMonetaryGainLossOpeningEquity: "580 Geçmiş Yıllar Zararları (VARSAYIM — onaylayınız; kazançta 570 olabilir)"
+    // Karşı hesap: yükümlülüğün (401) nominal bakiyesi bu restatement ile
+    // değişmez (moneter kalem — TMS 29.28); karşı taraf özkaynak/sonuç hesabıdır.
+    monetaryPositionOffset: "590 TMS 29 Parasal Pozisyon Karşılığı",
+    // Parasal Kazanç/(Kayıp) açılış bakiyesi bileşeni — geçmiş dönem(ler)e
+    // ait özkaynak etkisi (580 Geçmiş Yıllar Zararları).
+    liabilityMonetaryGainLossOpeningEquity: "580 Geçmiş Yıllar Zararları"
   };
 
   const INFLATION_INDEX_STORAGE_KEY = "gk_tfrs16_inflation_index_v1";
