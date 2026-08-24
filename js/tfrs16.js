@@ -5994,6 +5994,10 @@ document.addEventListener("DOMContentLoaded", () => {
             ${escapeHtml(
               contract.company
             )}
+            <div style="margin-top:4px;">
+              ${typeof v26StandardsBadgeHtml === "function" ? v26StandardsBadgeHtml(contract) : ""}
+              <span style="font-size:10px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
+            </div>
           </td>
 
           <td>
@@ -6369,6 +6373,9 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     injectAssetClassField(contract);
+    if (typeof injectV26CurrencyFields === "function") {
+      injectV26CurrencyFields(contract);
+    }
 
     const title =
       document.getElementById(
@@ -6447,6 +6454,129 @@ document.addEventListener("DOMContentLoaded", () => {
       customInput.style.display = "none";
       customInput.value = "";
     }
+  }
+
+  /**
+   * V26 — Sözleşme formuna fonksiyonel / sunum PB alanları,
+   * şirket seçici ve TMS21/TMS29 override kutularını enjekte eder.
+   * Mevcut #currency alanı varsa onu kullanır (id çakışması yok).
+   */
+  function injectV26CurrencyFields(contract) {
+    const form = document.getElementById("contractForm");
+    if (!form) return;
+    const grid = form.querySelector(".form-grid") || form;
+    const hasNativeCurrency = !!form.querySelector("#currency");
+
+    let panel = document.getElementById("v26CurrencyPanel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "v26CurrencyPanel";
+      panel.className = "form-group";
+      panel.style.cssText = "grid-column:1/-1;border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#f8fafc;margin-top:8px;";
+      panel.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px;">Para Birimi & Standartlar (V26)</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+          <label style="font-size:12px;color:#64748b;font-weight:600;">Şirket (V26)
+            <select id="companyId" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-top:4px;"></select>
+          </label>
+          ${hasNativeCurrency ? "" : `
+          <label style="font-size:12px;color:#64748b;font-weight:600;">İşlem PB
+            <select id="currency" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-top:4px;"></select>
+          </label>`}
+          <label style="font-size:12px;color:#64748b;font-weight:600;">Fonksiyonel PB
+            <select id="functionalCurrency" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-top:4px;"></select>
+          </label>
+          <label style="font-size:12px;color:#64748b;font-weight:600;">Sunum PB
+            <select id="reportingCurrency" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-top:4px;"></select>
+          </label>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12px;color:#475569;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="tms21Force" /> TMS21 zorla (manuel override)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="tms29Force" /> TMS29 zorla (manuel override)
+          </label>
+        </div>
+        <div id="v26FormStandardsPreview" style="margin-top:10px;"></div>
+      `;
+      grid.appendChild(panel);
+
+      const refreshPreview = () => {
+        const preview = document.getElementById("v26FormStandardsPreview");
+        if (!preview || typeof getApplicableStandards !== "function") return;
+        const draft = {
+          currency: document.getElementById("currency")?.value || "TRY",
+          functionalCurrency: document.getElementById("functionalCurrency")?.value || "TRY",
+          reportingCurrency: document.getElementById("reportingCurrency")?.value || "TRY",
+          tms21Force: !!document.getElementById("tms21Force")?.checked,
+          tms29Force: !!document.getElementById("tms29Force")?.checked
+        };
+        const coId = document.getElementById("companyId")?.value;
+        const company = typeof v26FindCompany === "function" ? v26FindCompany(coId) : null;
+        const std = getApplicableStandards(draft, company);
+        preview.innerHTML = `
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px;font-size:12px;color:#0c4a6e;">
+            <strong>Otomatik tespit:</strong>
+            <span class="gk-std-badge ${std.badgeClass}" style="margin-left:6px;">${escapeHtml(std.badgeLabel)}</span>
+            <span style="margin-left:8px;">${escapeHtml(std.message)}</span>
+          </div>`;
+      };
+
+      panel.querySelector("#companyId")?.addEventListener("change", () => {
+        const co = typeof v26FindCompany === "function"
+          ? v26FindCompany(document.getElementById("companyId")?.value)
+          : null;
+        if (co?.functionalCurrency) {
+          const fxSel = document.getElementById("functionalCurrency");
+          if (fxSel) fxSel.value = co.functionalCurrency;
+        }
+        if (co?.name) {
+          const companyInput = document.getElementById("company");
+          if (companyInput) companyInput.value = co.name;
+        }
+        refreshPreview();
+      });
+      form.addEventListener("change", e => {
+        if (["currency", "functionalCurrency", "reportingCurrency", "tms21Force", "tms29Force", "companyId"].includes(e.target?.id)) {
+          refreshPreview();
+        }
+      });
+      panel._refreshPreview = refreshPreview;
+    }
+
+    const currencies = ["TRY", "EUR", "USD", "GBP", "CHF", "JPY", "AED", "SAR"];
+
+    const fillSelect = (id, selected) => {
+      const el = document.getElementById(id);
+      if (!el || el.tagName !== "SELECT") return;
+      const opts = [...new Set([...currencies, selected].filter(Boolean))];
+      const current = selected || el.value;
+      el.innerHTML = opts.map(c => `<option value="${c}" ${c === current ? "selected" : ""}>${c}</option>`).join("");
+    };
+
+    const companies = typeof v26LoadCompanies === "function" ? v26LoadCompanies() : [];
+    const coSelect = document.getElementById("companyId");
+    if (coSelect) {
+      const selectedId = contract?.companyId || "";
+      coSelect.innerHTML =
+        `<option value="">— Seçiniz —</option>` +
+        companies.map(c => {
+          const sel = selectedId === c.id || contract?.company === c.name || contract?.company === c.code;
+          return `<option value="${escapeHtml(c.id)}" ${sel ? "selected" : ""}>${escapeHtml(c.code)} — ${escapeHtml(c.name)}</option>`;
+        }).join("");
+    }
+
+    fillSelect("currency", (contract?.currency || "TRY").toUpperCase());
+    fillSelect("functionalCurrency", (contract?.functionalCurrency || "TRY").toUpperCase());
+    fillSelect("reportingCurrency", (contract?.reportingCurrency || contract?.functionalCurrency || "TRY").toUpperCase());
+
+    const tms21 = document.getElementById("tms21Force");
+    const tms29 = document.getElementById("tms29Force");
+    if (tms21) tms21.checked = contract?.tms21Force === true;
+    if (tms29) tms29.checked = contract?.tms29Force === true;
+
+    if (panel._refreshPreview) panel._refreshPreview();
   }
 
   function resolveAssetClassFromForm() {
@@ -6695,6 +6825,34 @@ document.addEventListener("DOMContentLoaded", () => {
           currency:
             getInput("currency") ||
             "TRY",
+
+          // V26 — çoklu para birimi / standart override alanları
+          functionalCurrency:
+            getInput("functionalCurrency") ||
+            existing?.functionalCurrency ||
+            "TRY",
+
+          reportingCurrency:
+            getInput("reportingCurrency") ||
+            existing?.reportingCurrency ||
+            getInput("functionalCurrency") ||
+            existing?.functionalCurrency ||
+            "TRY",
+
+          companyId:
+            getInput("companyId") ||
+            existing?.companyId ||
+            null,
+
+          tms21Force:
+            document.getElementById("tms21Force")
+              ? !!document.getElementById("tms21Force").checked
+              : (existing?.tms21Force === true),
+
+          tms29Force:
+            document.getElementById("tms29Force")
+              ? !!document.getElementById("tms29Force").checked
+              : (existing?.tms29Force === true),
 
           // V16.7 FIX — GK Advisory review: paymentFrequency and
           // paymentTiming were present as <select> fields in the
@@ -9843,8 +10001,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     if (content) {
+      const v26StdHtml = typeof renderContractStandardsPanel === "function"
+        ? renderContractStandardsPanel(contract)
+        : (typeof v26StandardsBadgeHtml === "function"
+          ? `<div style="margin-bottom:12px;">${v26StandardsBadgeHtml(contract)}</div>`
+          : "");
 
       content.innerHTML = `
+        ${v26StdHtml}
 
         <div class="detail-grid">
 
@@ -9888,6 +10052,7 @@ document.addEventListener("DOMContentLoaded", () => {
               ${formatCurrency(
                 contract.monthlyPayment
               )}
+              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
             </strong>
 
           </div>
@@ -25446,14 +25611,973 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ==========================================================
+     V26 — ÇOKLU PARA BİRİMİ / TMS21 / TMS29 / KONSOLİDASYON UI
+     (ADDITIVE)
+     ========================================================== */
+
+  const V26_COMPANIES_KEY = "gk_tfrs16_companies_v26";
+  const V26_CURRENCIES = ["TRY", "EUR", "USD", "GBP", "CHF", "JPY", "AED", "SAR"];
+  const V26_COUNTRIES = [
+    { code: "TR", name: "Türkiye" },
+    { code: "DE", name: "Almanya" },
+    { code: "US", name: "ABD" },
+    { code: "UK", name: "Birleşik Krallık" },
+    { code: "FR", name: "Fransa" },
+    { code: "NL", name: "Hollanda" },
+    { code: "AE", name: "BAE" },
+    { code: "SA", name: "Suudi Arabistan" }
+  ];
+
+  function getApplicableStandards(contract, company) {
+    const transactionCurrency = String(
+      contract?.currency || contract?.transactionCurrency || "TRY"
+    ).toUpperCase();
+
+    const functionalCurrency = String(
+      contract?.functionalCurrency ||
+      company?.baseCurrency ||
+      company?.functionalCurrency ||
+      (typeof resolveContractFunctionalCurrency === "function"
+        ? resolveContractFunctionalCurrency(contract)
+        : null) ||
+      "TRY"
+    ).toUpperCase();
+
+    const reportingCurrency = String(
+      contract?.reportingCurrency ||
+      contract?.presentationCurrency ||
+      functionalCurrency
+    ).toUpperCase();
+
+    const result = {
+      tms21: false,
+      tms29: false,
+      presentationFx: false,
+      message: "",
+      transactionCurrency,
+      functionalCurrency,
+      reportingCurrency,
+      badgeClass: "gk-std-green",
+      badgeLabel: "—"
+    };
+
+    if (transactionCurrency !== functionalCurrency) {
+      result.tms21 = true;
+      result.message += `TMS21 (${transactionCurrency} → ${functionalCurrency}) `;
+    }
+    if (functionalCurrency === "TRY") {
+      result.tms29 = true;
+      result.message += "TMS29 (TRY enflasyon düzeltmesi) ";
+    }
+    if (contract?.tms21Force === true) {
+      result.tms21 = true;
+      if (!result.message.includes("TMS21")) result.message += "TMS21 (manuel) ";
+    }
+    if (contract?.tms29Force === true) {
+      result.tms29 = true;
+      if (!result.message.includes("TMS29")) result.message += "TMS29 (manuel) ";
+    }
+    if (reportingCurrency !== functionalCurrency) {
+      result.presentationFx = true;
+      result.message += `+ Sunum Çevrimi (${functionalCurrency} → ${reportingCurrency})`;
+    }
+
+    result.message = result.message.trim() || "TMS21/TMS29 uygulanmaz (aynı para birimi)";
+
+    if (result.tms21 && result.tms29) {
+      result.badgeClass = "gk-std-purple";
+      result.badgeLabel = "TMS21 + TMS29";
+    } else if (result.tms21) {
+      result.badgeClass = "gk-std-blue";
+      result.badgeLabel = "TMS21";
+    } else if (result.tms29) {
+      result.badgeClass = "gk-std-yellow";
+      result.badgeLabel = "TMS29";
+    } else {
+      result.badgeClass = "gk-std-green";
+      result.badgeLabel = "—";
+    }
+    if (result.presentationFx) {
+      if (!result.tms21 && !result.tms29) {
+        result.badgeClass = "gk-std-gray";
+        result.badgeLabel = "Sunum FX";
+      } else {
+        result.badgeLabel += " + Sunum";
+      }
+    }
+    return result;
+  }
+
+  function v26LoadCompanies() {
+    try {
+      const raw = localStorage.getItem(V26_COMPANIES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch (error) {
+      console.error("V26 şirket listesi okunamadı:", error);
+    }
+    try {
+      if (typeof v22CompanyList === "function") {
+        const list = v22CompanyList().map((c, i) => ({
+          id: c.id || `TR-${String(i + 1).padStart(3, "0")}`,
+          code: c.code || c.id || `TR-${String(i + 1).padStart(3, "0")}`,
+          name: c.name || c.code || "Şirket",
+          country: c.country || "TR",
+          functionalCurrency: c.baseCurrency || c.functionalCurrency || "TRY",
+          groupId: c.groupId || "GRP-1",
+          status: c.status || "ACTIVE"
+        }));
+        if (list.length) {
+          v26SaveCompanies(list);
+          return list;
+        }
+      }
+    } catch (error) {}
+    const defaults = [
+      { id: "TR-001", code: "TR-001", name: "Teknoloji A.Ş.", country: "TR", functionalCurrency: "TRY", groupId: "GRP-1", status: "ACTIVE" },
+      { id: "DE-001", code: "DE-001", name: "GmbH", country: "DE", functionalCurrency: "EUR", groupId: "GRP-1", status: "ACTIVE" },
+      { id: "US-001", code: "US-001", name: "LLC", country: "US", functionalCurrency: "USD", groupId: "GRP-1", status: "ACTIVE" },
+      { id: "TR-002", code: "TR-002", name: "Lojistik Ltd.", country: "TR", functionalCurrency: "TRY", groupId: "GRP-1", status: "ACTIVE" }
+    ];
+    v26SaveCompanies(defaults);
+    return defaults;
+  }
+
+  function v26SaveCompanies(list) {
+    try {
+      localStorage.setItem(V26_COMPANIES_KEY, JSON.stringify(list));
+      return true;
+    } catch (error) {
+      console.error("V26 şirket listesi kaydedilemedi:", error);
+      return false;
+    }
+  }
+
+  function v26FindCompany(companyIdOrName) {
+    const list = v26LoadCompanies();
+    const key = String(companyIdOrName || "").trim();
+    return list.find(c => c.id === key || c.code === key || c.name === key) || null;
+  }
+
+  function v26ResolveCompanyForContract(contract) {
+    if (!contract) return null;
+    return v26FindCompany(contract.companyId) || v26FindCompany(contract.company) || null;
+  }
+
+  function v26StandardsBadgeHtml(contract) {
+    const company = v26ResolveCompanyForContract(contract);
+    const std = getApplicableStandards(contract, company);
+    return `<span class="gk-std-badge ${std.badgeClass}" title="${escapeHtml(std.message)}">${escapeHtml(std.badgeLabel)}</span>`;
+  }
+
+  function injectV26Styles() {
+    if (document.getElementById("gk-v26-multi-fx-styles")) return;
+    const style = document.createElement("style");
+    style.id = "gk-v26-multi-fx-styles";
+    style.textContent = `
+      .gk-std-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:.02em; white-space:nowrap; }
+      .gk-std-green { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+      .gk-std-blue { background:#dbeafe; color:#1e40af; border:1px solid #93c5fd; }
+      .gk-std-yellow { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
+      .gk-std-purple { background:#f3e8ff; color:#6b21a8; border:1px solid #d8b4fe; }
+      .gk-std-gray { background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; }
+      .gk-v26-page { padding:20px; max-width:1200px; margin:0 auto; }
+      .gk-v26-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+      .gk-v26-table { width:100%; border-collapse:collapse; font-size:13px; }
+      .gk-v26-table th { text-align:left; padding:10px 12px; background:#f8fafc; border-bottom:2px solid #e2e8f0; font-weight:600; color:#334155; }
+      .gk-v26-table td { padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#1e293b; }
+      .gk-v26-table tr:hover td { background:#f8fafc; }
+      .gk-v26-btn { padding:8px 16px; border-radius:8px; border:0; background:#1e293b; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+      .gk-v26-btn:hover { background:#0f172a; }
+      .gk-v26-btn-secondary { background:#fff; color:#334155; border:1px solid #e2e8f0; }
+      .gk-v26-btn-secondary:hover { background:#f8fafc; }
+      .gk-v26-form-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-top:12px; }
+      .gk-v26-form-grid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#64748b; font-weight:600; }
+      .gk-v26-form-grid input, .gk-v26-form-grid select { padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; color:#1e293b; }
+      .gk-v26-legend { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; font-size:12px; }
+      .gk-v26-legend span { display:inline-flex; align-items:center; gap:6px; }
+      .gk-v26-auto-detect { background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px; padding:12px 14px; margin-top:12px; font-size:13px; color:#0c4a6e; }
+      @media (max-width:768px) { .gk-v26-page { padding:12px; } .gk-v26-form-grid { grid-template-columns:1fr; } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function v26CurrencyOptions(selected) {
+    return V26_CURRENCIES.map(c => `<option value="${c}" ${c === selected ? "selected" : ""}>${c}</option>`).join("");
+  }
+
+  function v26CountryOptions(selected) {
+    return V26_COUNTRIES.map(c => `<option value="${c.code}" ${c.code === selected ? "selected" : ""}>${c.name} (${c.code})</option>`).join("");
+  }
+
+  function v26ConvertToPresentation(amount, fromCurrency, toCurrency, asOfDate) {
+    const from = String(fromCurrency || "TRY").toUpperCase();
+    const to = String(toCurrency || from).toUpperCase();
+    if (from === to) return { amount: Number(amount) || 0, rate: 1, from, to, ok: true };
+    try {
+      if (typeof convertCurrencyOnDate === "function") {
+        const r = convertCurrencyOnDate(amount, from, to, asOfDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"), { allowMissing: true, audit: false });
+        if (r?.error || !Number.isFinite(r?.convertedAmount)) {
+          return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: r?.error || "FX_RATE_NOT_FOUND" };
+        }
+        return { amount: r.convertedAmount, rate: r.fxRate, from, to, ok: true };
+      }
+    } catch (error) {
+      return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: error.message };
+    }
+    return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: "FX_ENGINE_UNAVAILABLE" };
+  }
+
+  function renderCompanyManagementPage(container) {
+    if (!container) return;
+    injectV26Styles();
+    const companies = v26LoadCompanies();
+    container.innerHTML = `
+      <div class="gk-v26-page">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Şirket Yönetimi</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">Fonksiyonel para birimi, ülke ve grup tanımları</p>
+          </div>
+          <button type="button" class="gk-v26-btn" id="v26AddCompanyBtn">+ Yeni Şirket Ekle</button>
+        </div>
+        <div class="gk-v26-card" id="v26CompanyFormCard" style="display:none;">
+          <h3 style="margin:0 0 8px;font-size:15px;">Şirket Formu</h3>
+          <div class="gk-v26-form-grid">
+            <label>Şirket Kodu<input id="v26CoCode" placeholder="TR-001" /></label>
+            <label>Şirket Adı<input id="v26CoName" placeholder="Teknoloji A.Ş." /></label>
+            <label>Ülke<select id="v26CoCountry">${v26CountryOptions("TR")}</select></label>
+            <label>Fonksiyonel Para Birimi<select id="v26CoFx">${v26CurrencyOptions("TRY")}</select></label>
+            <label>Grup ID (opsiyonel)<input id="v26CoGroup" placeholder="GRP-1" /></label>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:8px;">
+            <button type="button" class="gk-v26-btn" id="v26SaveCompanyBtn">Kaydet</button>
+            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26CancelCompanyBtn">İptal</button>
+          </div>
+          <input type="hidden" id="v26CoEditId" value="" />
+        </div>
+        <div class="gk-v26-card">
+          <table class="gk-v26-table">
+            <thead><tr><th>Şirket Kodu</th><th>Şirket Adı</th><th>Ülke</th><th>Fonksiyonel PB</th><th>Grup</th><th></th></tr></thead>
+            <tbody>
+              ${companies.map(c => `
+                <tr data-id="${escapeHtml(c.id)}">
+                  <td><strong>${escapeHtml(c.code)}</strong></td>
+                  <td>${escapeHtml(c.name)}</td>
+                  <td>${escapeHtml(c.country || "—")}</td>
+                  <td><span class="gk-std-badge gk-std-blue">${escapeHtml(c.functionalCurrency || "TRY")}</span></td>
+                  <td>${escapeHtml(c.groupId || "—")}</td>
+                  <td style="text-align:right;">
+                    <button type="button" class="gk-v26-btn gk-v26-btn-secondary v26-edit-co" data-id="${escapeHtml(c.id)}" style="padding:4px 10px;font-size:12px;">Düzenle</button>
+                    <button type="button" class="gk-v26-btn gk-v26-btn-secondary v26-del-co" data-id="${escapeHtml(c.id)}" style="padding:4px 10px;font-size:12px;color:#b91c1c;">Sil</button>
+                  </td>
+                </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;">Henüz şirket yok</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <div class="gk-v26-legend">
+          <span><span class="gk-std-badge gk-std-green">—</span> TMS21/TMS29 yok</span>
+          <span><span class="gk-std-badge gk-std-blue">TMS21</span> Kur çevrimi</span>
+          <span><span class="gk-std-badge gk-std-yellow">TMS29</span> Enflasyon</span>
+          <span><span class="gk-std-badge gk-std-purple">TMS21 + TMS29</span> Her ikisi</span>
+          <span><span class="gk-std-badge gk-std-gray">Sunum FX</span> Ek çevrim</span>
+        </div>
+      </div>`;
+
+    const formCard = container.querySelector("#v26CompanyFormCard");
+    container.querySelector("#v26AddCompanyBtn")?.addEventListener("click", () => {
+      container.querySelector("#v26CoEditId").value = "";
+      container.querySelector("#v26CoCode").value = "";
+      container.querySelector("#v26CoName").value = "";
+      container.querySelector("#v26CoCountry").value = "TR";
+      container.querySelector("#v26CoFx").value = "TRY";
+      container.querySelector("#v26CoGroup").value = "GRP-1";
+      formCard.style.display = "block";
+    });
+    container.querySelector("#v26CancelCompanyBtn")?.addEventListener("click", () => { formCard.style.display = "none"; });
+    container.querySelector("#v26SaveCompanyBtn")?.addEventListener("click", () => {
+      const editId = container.querySelector("#v26CoEditId").value;
+      const code = String(container.querySelector("#v26CoCode").value || "").trim();
+      const name = String(container.querySelector("#v26CoName").value || "").trim();
+      const country = container.querySelector("#v26CoCountry").value;
+      const functionalCurrency = container.querySelector("#v26CoFx").value;
+      const groupId = String(container.querySelector("#v26CoGroup").value || "").trim() || null;
+      if (!code || !name) {
+        if (typeof showAlert === "function") showAlert("Şirket kodu ve adı zorunludur.");
+        return;
+      }
+      const list = v26LoadCompanies();
+      if (editId) {
+        const idx = list.findIndex(c => c.id === editId);
+        if (idx >= 0) list[idx] = { ...list[idx], code, name, country, functionalCurrency, groupId };
+      } else {
+        if (list.some(c => c.code === code || c.id === code)) {
+          if (typeof showAlert === "function") showAlert("Bu şirket kodu zaten var.");
+          return;
+        }
+        list.push({ id: code, code, name, country, functionalCurrency, groupId, status: "ACTIVE" });
+      }
+      v26SaveCompanies(list);
+      if (typeof recordAuditEvent === "function") {
+        recordAuditEvent({
+          action: editId ? "COMPANY_UPDATED" : "COMPANY_CREATED",
+          entityType: "COMPANY",
+          entityId: code,
+          reason: "V26 Şirket Yönetimi",
+          newValue: { code, name, country, functionalCurrency, groupId }
+        });
+      }
+      renderCompanyManagementPage(container);
+    });
+    container.querySelectorAll(".v26-edit-co").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const c = v26FindCompany(btn.getAttribute("data-id"));
+        if (!c) return;
+        container.querySelector("#v26CoEditId").value = c.id;
+        container.querySelector("#v26CoCode").value = c.code || "";
+        container.querySelector("#v26CoName").value = c.name || "";
+        container.querySelector("#v26CoCountry").value = c.country || "TR";
+        container.querySelector("#v26CoFx").value = c.functionalCurrency || "TRY";
+        container.querySelector("#v26CoGroup").value = c.groupId || "";
+        formCard.style.display = "block";
+      });
+    });
+    container.querySelectorAll(".v26-del-co").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id");
+        const ok = typeof showConfirm === "function"
+          ? await showConfirm("Bu şirketi silmek istediğinize emin misiniz?", { danger: true, title: "Şirket Sil" })
+          : confirm("Silinsin mi?");
+        if (!ok) return;
+        v26SaveCompanies(v26LoadCompanies().filter(c => c.id !== id));
+        renderCompanyManagementPage(container);
+      });
+    });
+  }
+
+  function renderContractStandardsPanel(contract) {
+    const company = v26ResolveCompanyForContract(contract);
+    const std = getApplicableStandards(contract, company);
+    return `
+      <div class="gk-v26-auto-detect">
+        <strong>Otomatik Standart Tespiti</strong>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <span class="gk-std-badge ${std.badgeClass}">${escapeHtml(std.badgeLabel)}</span>
+          <span style="color:#0369a1;">${escapeHtml(std.message)}</span>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:#0c4a6e;">
+          İşlem PB: <strong>${escapeHtml(std.transactionCurrency)}</strong> ·
+          Fonksiyonel PB: <strong>${escapeHtml(std.functionalCurrency)}</strong> ·
+          Sunum PB: <strong>${escapeHtml(std.reportingCurrency)}</strong>
+        </div>
+      </div>`;
+  }
+
+  function v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate) {
+    const companies = v26LoadCompanies().filter(c => !groupId || c.groupId === groupId);
+    const asOf = reportingDate || new Date().toISOString().slice(0, 10);
+    const allContracts = typeof contracts !== "undefined" ? contracts : [];
+
+    // V22 ownership / scope ile kesişim (varsa)
+    let scopeCompanyIds = null;
+    try {
+      if (groupId && typeof getConsolidationScope === "function") {
+        const scope = getConsolidationScope(groupId) || [];
+        if (scope.length) scopeCompanyIds = new Set(scope.map(s => String(s.companyId)));
+      }
+    } catch (e) {}
+
+    const rows = companies
+      .filter(co => !scopeCompanyIds || scopeCompanyIds.has(String(co.id)) || scopeCompanyIds.has(String(co.code)))
+      .map(co => {
+        const coContracts = allContracts.filter(
+          ct => String(ct.companyId || "") === co.id ||
+            String(ct.company || "") === co.name ||
+            String(ct.company || "") === co.code
+        );
+        let leaseLiability = 0;
+        let rouAsset = 0;
+        let openingRou = 0;
+        let depreciation = 0;
+        let additions = 0;
+        let openingLiability = 0;
+        let interestAccrued = 0;
+        let paymentsTotal = 0;
+        const contractDetails = [];
+        coContracts.forEach(ct => {
+          try {
+            const calc = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(ct) : null;
+            const txCur = String(ct.currency || co.functionalCurrency || "TRY").toUpperCase();
+            const fnCur = String(ct.functionalCurrency || co.functionalCurrency || "TRY").toUpperCase();
+            let cLiab = 0, cRou = 0, cOpenRou = 0, cDep = 0, cOpenLiab = 0, cInt = 0, cPay = 0;
+            if (calc) {
+              cLiab = Number(calc.liability) || 0;
+              cRou = Number(calc.rouAssets) || 0;
+              leaseLiability += cLiab;
+              rouAsset += cRou;
+              const schedule = calc.schedule || [];
+              if (schedule.length) {
+                cOpenRou = Number(schedule[0].rouOpening) || cRou;
+                cOpenLiab = Number(schedule[0].openingLiability) || cLiab;
+                cDep = schedule.reduce((s, r) => s + (Number(r.depreciation) || 0), 0);
+                cInt = schedule.reduce((s, r) => s + (Number(r.interest) || 0), 0);
+                cPay = schedule.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+                openingRou += cOpenRou;
+                openingLiability += cOpenLiab;
+                depreciation += cDep;
+                interestAccrued += cInt;
+                paymentsTotal += cPay;
+              } else {
+                openingRou += cRou;
+                openingLiability += cLiab;
+                cOpenRou = cRou;
+                cOpenLiab = cLiab;
+              }
+            }
+            const stdCt = getApplicableStandards(
+              { ...ct, currency: txCur, functionalCurrency: fnCur, reportingCurrency: presentationCurrency },
+              co
+            );
+            const liabP = v26ConvertToPresentation(cLiab, fnCur, presentationCurrency, asOf);
+            const rouP = v26ConvertToPresentation(cRou, fnCur, presentationCurrency, asOf);
+            contractDetails.push({
+              contractId: ct.id,
+              supplier: ct.supplier || "",
+              transactionCurrency: txCur,
+              functionalCurrency: fnCur,
+              leaseLiability: cLiab,
+              rouAsset: cRou,
+              openingRou: cOpenRou,
+              depreciation: cDep,
+              openingLiability: cOpenLiab,
+              interestAccrued: cInt,
+              paymentsTotal: cPay,
+              leaseLiabilityPres: liabP.amount,
+              rouAssetPres: rouP.amount,
+              standards: stdCt
+            });
+          } catch (e) {}
+        });
+        additions = Math.max(0, rouAsset + depreciation - openingRou);
+        const fx = co.functionalCurrency || "TRY";
+        const liabFx = v26ConvertToPresentation(leaseLiability, fx, presentationCurrency, asOf);
+        const rouFx = v26ConvertToPresentation(rouAsset, fx, presentationCurrency, asOf);
+        const openingRouFx = v26ConvertToPresentation(openingRou, fx, presentationCurrency, asOf);
+        const depFx = v26ConvertToPresentation(depreciation, fx, presentationCurrency, asOf);
+        const addFx = v26ConvertToPresentation(additions, fx, presentationCurrency, asOf);
+        const openingLiabFx = v26ConvertToPresentation(openingLiability, fx, presentationCurrency, asOf);
+        const interestFx = v26ConvertToPresentation(interestAccrued, fx, presentationCurrency, asOf);
+        const paymentsFx = v26ConvertToPresentation(paymentsTotal, fx, presentationCurrency, asOf);
+        const sample = {
+          currency: fx,
+          functionalCurrency: fx,
+          reportingCurrency: presentationCurrency
+        };
+        const std = getApplicableStandards(sample, co);
+        return {
+          company: co,
+          contractCount: coContracts.length,
+          leaseLiability,
+          rouAsset,
+          openingRou,
+          depreciation,
+          additions,
+          openingLiability,
+          interestAccrued,
+          paymentsTotal,
+          currency: fx,
+          leaseLiabilityPres: liabFx.amount,
+          rouAssetPres: rouFx.amount,
+          openingRouPres: openingRouFx.amount,
+          depreciationPres: depFx.amount,
+          additionsPres: addFx.amount,
+          openingLiabilityPres: openingLiabFx.amount,
+          interestAccruedPres: interestFx.amount,
+          paymentsTotalPres: paymentsFx.amount,
+          fxRate: liabFx.rate,
+          fxOk: liabFx.ok && rouFx.ok,
+          fxError: liabFx.error || rouFx.error || null,
+          standards: std,
+          contractDetails
+        };
+      });
+
+    const contractDetailsFlat = rows.flatMap(r =>
+      (r.contractDetails || []).map(cd => ({
+        ...cd,
+        companyCode: r.company.code,
+        companyName: r.company.name
+      }))
+    );
+
+    return {
+      rows,
+      contractDetails: contractDetailsFlat,
+      totals: {
+        contractCount: rows.reduce((s, r) => s + r.contractCount, 0),
+        leaseLiability: rows.reduce((s, r) => s + r.leaseLiability, 0),
+        rouAsset: rows.reduce((s, r) => s + r.rouAsset, 0),
+        leaseLiabilityPres: rows.reduce((s, r) => s + r.leaseLiabilityPres, 0),
+        rouAssetPres: rows.reduce((s, r) => s + r.rouAssetPres, 0),
+        openingRou: rows.reduce((s, r) => s + r.openingRou, 0),
+        depreciation: rows.reduce((s, r) => s + r.depreciation, 0),
+        additions: rows.reduce((s, r) => s + r.additions, 0),
+        openingRouPres: rows.reduce((s, r) => s + r.openingRouPres, 0),
+        depreciationPres: rows.reduce((s, r) => s + r.depreciationPres, 0),
+        additionsPres: rows.reduce((s, r) => s + r.additionsPres, 0),
+        openingLiability: rows.reduce((s, r) => s + r.openingLiability, 0),
+        interestAccrued: rows.reduce((s, r) => s + r.interestAccrued, 0),
+        paymentsTotal: rows.reduce((s, r) => s + r.paymentsTotal, 0),
+        openingLiabilityPres: rows.reduce((s, r) => s + r.openingLiabilityPres, 0),
+        interestAccruedPres: rows.reduce((s, r) => s + r.interestAccruedPres, 0),
+        paymentsTotalPres: rows.reduce((s, r) => s + r.paymentsTotalPres, 0)
+      }
+    };
+  }
+
+  function v26ExportConsolidationExcel(groupId, presentationCurrency, reportingDate) {
+    const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
+    const fmt = typeof formatCurrency === "function" ? formatCurrency : n => Number(n).toFixed(2);
+    const rows = data.rows.map(r => ({
+      "Şirket Kodu": r.company.code,
+      "Şirket Adı": r.company.name,
+      "Fonksiyonel PB": r.currency,
+      "Sözleşme Sayısı": r.contractCount,
+      "Kira Yükümlülüğü (Fonks.)": r.leaseLiability,
+      "ROU (Fonks.)": r.rouAsset,
+      [`Kira Yükümlülüğü (${presentationCurrency})`]: r.leaseLiabilityPres,
+      [`ROU (${presentationCurrency})`]: r.rouAssetPres,
+      "Kur": r.fxRate ?? "",
+      "FX OK": r.fxOk ? "Evet" : "Hayır",
+      "Standartlar": r.standards.badgeLabel,
+      "Açıklama": r.standards.message
+    }));
+    rows.push({
+      "Şirket Kodu": "TOPLAM",
+      "Şirket Adı": "",
+      "Fonksiyonel PB": presentationCurrency,
+      "Sözleşme Sayısı": data.totals.contractCount,
+      "Kira Yükümlülüğü (Fonks.)": data.totals.leaseLiability,
+      "ROU (Fonks.)": data.totals.rouAsset,
+      [`Kira Yükümlülüğü (${presentationCurrency})`]: data.totals.leaseLiabilityPres,
+      [`ROU (${presentationCurrency})`]: data.totals.rouAssetPres,
+      "Kur": "",
+      "FX OK": "",
+      "Standartlar": "",
+      "Açıklama": ""
+    });
+
+    if (typeof XLSX !== "undefined") {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Konsolidasyon");
+      const rollRows = data.rows.map(r => ({
+        "Şirket": r.company.code,
+        [`Açılış ROU (${presentationCurrency})`]: r.openingRouPres,
+        [`İlaveler (${presentationCurrency})`]: r.additionsPres,
+        [`Amortisman (${presentationCurrency})`]: r.depreciationPres,
+        [`Kapanış ROU (${presentationCurrency})`]: r.rouAssetPres,
+        "Fonks. PB": r.currency
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rollRows), "ROU Hareket");
+      const liabRows = data.rows.map(r => ({
+        "Şirket": r.company.code,
+        [`Açılış Yük. (${presentationCurrency})`]: r.openingLiabilityPres,
+        [`Faiz (${presentationCurrency})`]: r.interestAccruedPres,
+        [`Ödemeler (${presentationCurrency})`]: r.paymentsTotalPres,
+        [`Kapanış Yük. (${presentationCurrency})`]: r.leaseLiabilityPres,
+        "Fonks. PB": r.currency
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(liabRows), "Yukumluluk Hareket");
+      const contractRows = (data.contractDetails || []).map(cd => ({
+        "Sözleşme": cd.contractId,
+        "Şirket": cd.companyCode,
+        "Tedarikçi": cd.supplier,
+        "İşlem PB": cd.transactionCurrency,
+        "Fonks. PB": cd.functionalCurrency,
+        [`Kira Yük. (${presentationCurrency})`]: cd.leaseLiabilityPres,
+        [`ROU (${presentationCurrency})`]: cd.rouAssetPres,
+        "Standartlar": cd.standards?.badgeLabel || "",
+        "Açıklama": cd.standards?.message || ""
+      }));
+      if (contractRows.length) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(contractRows), "Sozlesme Detay");
+      }
+      XLSX.writeFile(wb, `TFRS16_Konsolidasyon_${groupId}_${presentationCurrency}_${Date.now()}.xlsx`);
+      if (typeof recordAuditEvent === "function") {
+        recordAuditEvent({
+          action: "EXPORT",
+          entityType: "CONSOLIDATION",
+          entityId: groupId,
+          reason: "V26 konsolidasyon Excel export",
+          metadata: { presentationCurrency, reportingDate, rowCount: rows.length }
+        });
+      }
+      return true;
+    }
+    // CSV fallback
+    const headers = Object.keys(rows[0] || {});
+    const csv = [headers.join(";"), ...rows.map(row => headers.map(h => String(row[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `TFRS16_Konsolidasyon_${groupId}_${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  }
+
+  function renderConsolidationReportPage(container, options = {}) {
+    if (!container) return;
+    injectV26Styles();
+    const presentationCurrency = options.presentationCurrency || "USD";
+    const reportingDate = options.reportingDate || new Date().toISOString().slice(0, 10);
+    const companies = v26LoadCompanies();
+    const groupIds = [...new Set(companies.map(c => c.groupId).filter(Boolean))];
+    const groupId = options.groupId || groupIds[0] || "GRP-1";
+    const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
+    const fmt = typeof formatCurrency === "function" ? formatCurrency : n => Number(n || 0).toFixed(0);
+    const fxMissing = data.rows.some(r => !r.fxOk && r.currency !== presentationCurrency);
+
+    container.innerHTML = `
+      <div class="gk-v26-page">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Konsolidasyon Raporu</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              Grup: <strong>${escapeHtml(groupId)}</strong> ·
+              Raporlama: <strong>${escapeHtml(reportingDate)}</strong> ·
+              Sunum PB: <strong>${escapeHtml(presentationCurrency)}</strong>
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="v26ConsolGroup" class="gk-v26-btn gk-v26-btn-secondary" style="padding:8px 12px;">
+              ${groupIds.map(g => `<option value="${escapeHtml(g)}" ${g === groupId ? "selected" : ""}>${escapeHtml(g)}</option>`).join("") || `<option value="GRP-1">GRP-1</option>`}
+            </select>
+            <select id="v26ConsolPresFx" class="gk-v26-btn gk-v26-btn-secondary" style="padding:8px 12px;">
+              ${v26CurrencyOptions(presentationCurrency)}
+            </select>
+            <input type="date" id="v26ConsolDate" value="${escapeHtml(reportingDate)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" />
+            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26ConsolRefresh">Yenile</button>
+            <button type="button" class="gk-v26-btn" id="v26ConsolExcel">Excel'e Aktar</button>
+            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26ConsolPrint">Yazdır / PDF</button>
+          </div>
+        </div>
+
+        ${fxMissing ? `<div class="gk-v26-card" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412;font-size:13px;">
+          Bazı satırlarda V23 kur tablosunda kapanış kuru bulunamadı; bu satırlar fonksiyonel tutarla gösterildi.
+          Kur eklemek için V23 FX motorunu / TCMB senkronunu kullanın.
+        </div>` : ""}
+
+        <div class="gk-v26-card">
+          <table class="gk-v26-table">
+            <thead>
+              <tr>
+                <th>Şirket</th>
+                <th>Fonks. PB</th>
+                <th style="text-align:right;">Sözleşme</th>
+                <th style="text-align:right;">Kira Yük. (Fonks.)</th>
+                <th style="text-align:right;">ROU (Fonks.)</th>
+                <th style="text-align:right;">Kira Yük. (${escapeHtml(presentationCurrency)})</th>
+                <th style="text-align:right;">ROU (${escapeHtml(presentationCurrency)})</th>
+                <th>Standartlar</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr>
+                  <td><strong>${escapeHtml(r.company.code)}</strong> ${escapeHtml(r.company.name)}</td>
+                  <td>${escapeHtml(r.currency)}</td>
+                  <td style="text-align:right;">${r.contractCount}</td>
+                  <td style="text-align:right;">${fmt(r.leaseLiability)}</td>
+                  <td style="text-align:right;">${fmt(r.rouAsset)}</td>
+                  <td style="text-align:right;">${fmt(r.leaseLiabilityPres)}${!r.fxOk && r.currency !== presentationCurrency ? " *" : ""}</td>
+                  <td style="text-align:right;">${fmt(r.rouAssetPres)}${!r.fxOk && r.currency !== presentationCurrency ? " *" : ""}</td>
+                  <td><span class="gk-std-badge ${r.standards.badgeClass}" title="${escapeHtml(r.standards.message)}">${escapeHtml(r.standards.badgeLabel)}</span></td>
+                </tr>`).join("")}
+              <tr style="font-weight:700;background:#f8fafc;">
+                <td colspan="2">TOPLAM</td>
+                <td style="text-align:right;">${data.totals.contractCount}</td>
+                <td style="text-align:right;">${fmt(data.totals.leaseLiability)}</td>
+                <td style="text-align:right;">${fmt(data.totals.rouAsset)}</td>
+                <td style="text-align:right;">${fmt(data.totals.leaseLiabilityPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.rouAssetPres)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 10px;font-size:15px;">ROU Hareket Tablosu (Konsolide — ${escapeHtml(presentationCurrency)})</h3>
+          <table class="gk-v26-table">
+            <thead>
+              <tr>
+                <th>Şirket</th>
+                <th style="text-align:right;">Açılış</th>
+                <th style="text-align:right;">İlaveler</th>
+                <th style="text-align:right;">Amortisman</th>
+                <th style="text-align:right;">Kapanış</th>
+                <th>Fonks. PB</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr>
+                  <td>${escapeHtml(r.company.code)}</td>
+                  <td style="text-align:right;">${fmt(r.openingRouPres)}</td>
+                  <td style="text-align:right;">${fmt(r.additionsPres)}</td>
+                  <td style="text-align:right;">${fmt(r.depreciationPres)}</td>
+                  <td style="text-align:right;">${fmt(r.rouAssetPres)}</td>
+                  <td>${escapeHtml(r.currency)}</td>
+                </tr>`).join("")}
+              <tr style="font-weight:700;background:#f8fafc;">
+                <td>TOPLAM (${escapeHtml(presentationCurrency)})</td>
+                <td style="text-align:right;">${fmt(data.totals.openingRouPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.additionsPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.depreciationPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.rouAssetPres)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 10px;font-size:15px;">Kira Yükümlülüğü Hareket Tablosu (Konsolide — ${escapeHtml(presentationCurrency)})</h3>
+          <table class="gk-v26-table">
+            <thead>
+              <tr>
+                <th>Şirket</th>
+                <th style="text-align:right;">Açılış</th>
+                <th style="text-align:right;">Faiz</th>
+                <th style="text-align:right;">Ödemeler</th>
+                <th style="text-align:right;">Kapanış</th>
+                <th>Fonks. PB</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.rows.map(r => `
+                <tr>
+                  <td>${escapeHtml(r.company.code)}</td>
+                  <td style="text-align:right;">${fmt(r.openingLiabilityPres)}</td>
+                  <td style="text-align:right;">${fmt(r.interestAccruedPres)}</td>
+                  <td style="text-align:right;">${fmt(r.paymentsTotalPres)}</td>
+                  <td style="text-align:right;">${fmt(r.leaseLiabilityPres)}</td>
+                  <td>${escapeHtml(r.currency)}</td>
+                </tr>`).join("")}
+              <tr style="font-weight:700;background:#f8fafc;">
+                <td>TOPLAM (${escapeHtml(presentationCurrency)})</td>
+                <td style="text-align:right;">${fmt(data.totals.openingLiabilityPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.interestAccruedPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.paymentsTotalPres)}</td>
+                <td style="text-align:right;">${fmt(data.totals.leaseLiabilityPres)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">
+            Tutarlar sunum PB'sine V23 kapanış kuru ile çevrilmiştir (kur yoksa fonksiyonel tutar kullanılır).
+            Dönemsel detay için V19.1 Finansal Raporlama ekranını kullanın.
+          </p>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 10px;font-size:15px;">Sözleşme Bazlı Detay (${escapeHtml(presentationCurrency)})</h3>
+          <table class="gk-v26-table">
+            <thead>
+              <tr>
+                <th>Sözleşme</th>
+                <th>Şirket</th>
+                <th>İşlem PB</th>
+                <th>Fonks. PB</th>
+                <th style="text-align:right;">Kira Yük.</th>
+                <th style="text-align:right;">ROU</th>
+                <th>Standartlar</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(data.contractDetails || []).map(cd => `
+                <tr>
+                  <td><strong>${escapeHtml(cd.contractId)}</strong><div style="font-size:11px;color:#64748b;">${escapeHtml(cd.supplier || "")}</div></td>
+                  <td>${escapeHtml(cd.companyCode)}</td>
+                  <td>${escapeHtml(cd.transactionCurrency)}</td>
+                  <td>${escapeHtml(cd.functionalCurrency)}</td>
+                  <td style="text-align:right;">${fmt(cd.leaseLiabilityPres)}</td>
+                  <td style="text-align:right;">${fmt(cd.rouAssetPres)}</td>
+                  <td><span class="gk-std-badge ${cd.standards.badgeClass}" title="${escapeHtml(cd.standards.message)}">${escapeHtml(cd.standards.badgeLabel)}</span></td>
+                </tr>`).join("") || `<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Bu grupta sözleşme yok</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 8px;font-size:14px;">Test Senaryoları (referans)</h3>
+          <table class="gk-v26-table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Senaryo</th>
+                <th>Şirket PB</th>
+                <th>İşlem PB</th>
+                <th>Sunum PB</th>
+                <th>TMS21</th>
+                <th>TMS29</th>
+                <th>Açıklama</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>LEASE-001</td><td>TRY</td><td>TRY</td><td>TRY</td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td><span class="gk-std-badge gk-std-yellow">EVET</span></td><td>TL işlem, TL raporlama</td></tr>
+              <tr><td>LEASE-002</td><td>EUR</td><td>EUR</td><td>EUR</td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>EUR işlem, EUR raporlama</td></tr>
+              <tr><td>LEASE-003</td><td>TRY</td><td>EUR</td><td>TRY</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-yellow">EVET</span></td><td>EUR işlem, TL raporlama</td></tr>
+              <tr><td>LEASE-004</td><td>TRY</td><td>EUR</td><td>USD</td><td><span class="gk-std-badge gk-std-purple">EVET</span></td><td><span class="gk-std-badge gk-std-purple">EVET</span></td><td>EUR→TL + USD sunum</td></tr>
+              <tr><td>LEASE-005</td><td>USD</td><td>EUR</td><td>USD</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>EUR işlem, USD raporlama</td></tr>
+              <tr><td>LEASE-006</td><td>EUR</td><td>TRY</td><td>EUR</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>TRY işlem, EUR raporlama</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 8px;font-size:14px;">Dipnotlar</h3>
+          <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.7;">
+            <li>TMS21 Kur Farkı — V23 FX motoru / <code>getFxRateAuto</code> / <code>convertCurrencyOnDate</code></li>
+            <li>TMS29 Enflasyon — yalnızca fonksiyonel PB = TRY (V18 Parça 2)</li>
+            <li>Grup kapsamı — V22 <code>getConsolidationScope</code> (tanımlıysa filtrelenir)</li>
+            <li>Eliminasyon / iştirak payı — V22 ownership katmanı (ayrı rapor)</li>
+          </ul>
+        </div>
+      </div>`;
+
+    const reRender = () => {
+      renderConsolidationReportPage(container, {
+        groupId: container.querySelector("#v26ConsolGroup")?.value || groupId,
+        presentationCurrency: container.querySelector("#v26ConsolPresFx")?.value || presentationCurrency,
+        reportingDate: container.querySelector("#v26ConsolDate")?.value || reportingDate
+      });
+    };
+    container.querySelector("#v26ConsolRefresh")?.addEventListener("click", reRender);
+    container.querySelector("#v26ConsolGroup")?.addEventListener("change", reRender);
+    container.querySelector("#v26ConsolPresFx")?.addEventListener("change", reRender);
+    container.querySelector("#v26ConsolExcel")?.addEventListener("click", () => {
+      const g = container.querySelector("#v26ConsolGroup")?.value || groupId;
+      const fx = container.querySelector("#v26ConsolPresFx")?.value || presentationCurrency;
+      const d = container.querySelector("#v26ConsolDate")?.value || reportingDate;
+      v26ExportConsolidationExcel(g, fx, d);
+      if (typeof showToast === "function") showToast("Konsolidasyon dışa aktarıldı", "success", 2000);
+      else if (typeof showAlert === "function") showAlert("Konsolidasyon Excel/CSV indirildi.");
+    });
+    container.querySelector("#v26ConsolPrint")?.addEventListener("click", () => {
+      const page = container.querySelector(".gk-v26-page");
+      if (!page) return;
+      const w = window.open("", "_blank", "noopener,noreferrer");
+      if (!w) {
+        window.print();
+        return;
+      }
+      w.document.write(`<!DOCTYPE html><html><head><title>Konsolidasyon ${escapeHtml(groupId)}</title>
+        <style>
+          body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a;}
+          table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}
+          th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;}
+          th{background:#f8fafc;}
+          .gk-std-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;}
+          .gk-std-green{background:#dcfce7;color:#166534;}
+          .gk-std-blue{background:#dbeafe;color:#1e40af;}
+          .gk-std-yellow{background:#fef9c3;color:#854d0e;}
+          .gk-std-purple{background:#f3e8ff;color:#6b21a8;}
+          .gk-std-gray{background:#f1f5f9;color:#475569;}
+          button,select,input{display:none!important;}
+          @media print{body{padding:0;}}
+        </style></head><body>${page.innerHTML}</body></html>`);
+      w.document.close();
+      setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+    });
+  }
+
+  function injectV26Navigation() {
+    if (window.__GK_TFRS16_V26_NAV__) return;
+    window.__GK_TFRS16_V26_NAV__ = true;
+    const tryInject = () => {
+      const sidebar = document.querySelector(".sidebar, #sidebar, nav, #mobileSidebar");
+      if (!sidebar) return false;
+      if (document.getElementById("v26NavCompanies")) return true;
+      const navBlock = document.createElement("div");
+      navBlock.id = "v26NavBlock";
+      navBlock.style.cssText = "padding:8px 12px;border-top:1px solid #e2e8f0;margin-top:8px;";
+      navBlock.innerHTML = `
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.06em;margin-bottom:6px;">ÇOKLU PB / KONSOLİDASYON</div>
+        <button type="button" id="v26NavCompanies" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Şirket Yönetimi</button>
+        <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>`;
+      sidebar.appendChild(navBlock);
+      const openInMain = renderer => {
+        let host = document.getElementById("v26PageHost");
+        if (!host) {
+          host = document.createElement("div");
+          host.id = "v26PageHost";
+          const main = document.querySelector(".main, #mainContent, main, #app-content");
+          (main || document.body).appendChild(host);
+        }
+        host.style.display = "block";
+        renderer(host);
+        host.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+      document.getElementById("v26NavCompanies")?.addEventListener("click", () => openInMain(renderCompanyManagementPage));
+      document.getElementById("v26NavConsol")?.addEventListener("click", () => openInMain(c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })));
+      return true;
+    };
+    if (!tryInject()) {
+      setTimeout(tryInject, 800);
+      setTimeout(tryInject, 2000);
+    }
+  }
+
+  function v26HookContractDetail() {
+    if (window.__GK_TFRS16_V26_DETAIL_HOOK__) return;
+    window.__GK_TFRS16_V26_DETAIL_HOOK__ = true;
+    const observer = new MutationObserver(() => {
+      const detail = document.getElementById("detailModal") || document.querySelector(".contract-detail, #contractDetail");
+      if (!detail || detail.classList?.contains("hidden")) return;
+      if (detail.querySelector(".gk-v26-auto-detect")) return;
+      const cid = (typeof selectedContractId !== "undefined" && selectedContractId) || null;
+      if (!cid || typeof contracts === "undefined") return;
+      const contract = contracts.find(c => c.id === cid);
+      if (!contract) return;
+      const panel = document.createElement("div");
+      panel.innerHTML = renderContractStandardsPanel(contract);
+      const anchor = detail.querySelector(".modal-body, .detail-body, .card-body") || detail;
+      if (panel.firstElementChild) anchor.insertBefore(panel.firstElementChild, anchor.firstChild);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  try {
+    injectV26Styles();
+    injectV26Navigation();
+    v26HookContractDetail();
+  } catch (error) {
+    console.error("V26 multi-currency UI init error:", error);
+  }
+
+  Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
+    getApplicableStandards,
+    v26LoadCompanies,
+    v26SaveCompanies,
+    v26FindCompany,
+    v26StandardsBadgeHtml,
+    v26BuildConsolidationRows,
+    v26ExportConsolidationExcel,
+    renderCompanyManagementPage,
+    renderConsolidationReportPage,
+    renderContractStandardsPanel,
+    injectV26CurrencyFields
+  });
+
+  /* ==========================================================
      TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
-     ----------------------------------------------------------
-     Mevcut hiçbir fonksiyon değiştirilmedi veya taşınmadı. Bu
-     blok, closure içinde zaten tanımlı olan fonksiyon referanslarını
-     yalnızca Node/Jest test ortamının erişebilmesi için
-     window.__TFRS16_TEST__ üzerinden açığa çıkarır.
-     Tarayıcıda normal kullanıcı akışına hiçbir etkisi yoktur —
-     sadece mevcut referansları bir nesneye kopyalar.
      ========================================================== */
   try {
     window.__TFRS16_TEST__ = {
@@ -25465,7 +26589,6 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateVariancePercent,
       checkIndexReassessment,
       applyEarlyPayment,
-      // V18 Parça 1
       getEscalatedPayments,
       computeEscalatedPaymentV18,
       addOrUpdateCpiIndexEntry,
@@ -25473,7 +26596,6 @@ document.addEventListener("DOMContentLoaded", () => {
       getCpiIndexForMonth,
       syncIndexCurrentRateFromCpiTable,
       runSelfTestsV18Part1,
-      // V18 Parça 2
       getInflationIndex,
       getInflationRatio,
       applyTMS29Restatement,
@@ -25487,12 +26609,16 @@ document.addEventListener("DOMContentLoaded", () => {
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
       runSelfTestsV19FullTms29,
-      // V19.1 Financial Reporting — dönem seçici / detay drill-down testleri için
       v191RenderFinancialReporting,
       v191OpenFinancialReporting,
       getRuoAssetRollForwardReport,
       getLeaseLiabilityRollForwardReport,
-      exportTms29InflationNote
+      exportTms29InflationNote,
+      getApplicableStandards,
+      v26LoadCompanies,
+      v26StandardsBadgeHtml,
+      v26BuildConsolidationRows,
+      v26ExportConsolidationExcel
     };
   } catch (error) {
     console.error("Test export shim error:", error);
