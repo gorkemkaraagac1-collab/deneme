@@ -1195,6 +1195,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // hesaplanır (IAS 29.28 — net moneter pozisyon kâr/zararı).
     // ----------------------------------------------------------
     let liabilityRollForward = null;
+    let rouRollForward = null;
     if (ps !== null) {
       const priorRow = fullSchedule
         .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < ps)
@@ -1204,8 +1205,16 @@ document.addEventListener("DOMContentLoaded", () => {
         ? priorRow.closingLiability
         : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
 
+      // ROU tarafı için de aynı "dönem başından önceki son satır" mantığı
+      // (moneter olmayan kalem — TMS 29.13 uyarınca dönem sonu satın alma
+      // gücüne getirilir, yükümlülükten farklı olarak KENDİSİ değişir).
+      const rouOpeningNominal = priorRow
+        ? priorRow.rouClosing
+        : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
+
       const ratioOpeningToRp = getInflationRatio(ps, rp);
       const liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+      const rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
 
       const periodRows = fullSchedule.filter(row => {
         const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
@@ -1214,6 +1223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let liabilityInterestNominal = 0, liabilityInterestRestated = 0;
       let liabilityPaymentsNominal = 0, liabilityPaymentsRestated = 0;
+      let rouDepreciationNominal = 0, rouDepreciationRestated = 0;
       periodRows.forEach(row => {
         const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
         const ratioRowToRp = getInflationRatio(rowMonth, rp);
@@ -1221,15 +1231,19 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityInterestRestated += row.interest * ratioRowToRp;
         liabilityPaymentsNominal += row.payment;
         liabilityPaymentsRestated += row.payment * ratioRowToRp;
+        rouDepreciationNominal += row.depreciation;
+        rouDepreciationRestated += row.depreciation * ratioRowToRp;
       });
 
       // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
       // yükümlülük artışları, kendi effectiveDate ayından rp'ye restate
       // edilir (kullanıcı onayı: effectiveDate'in ait olduğu ay).
-      const entryChanges = []
+      const appliedChanges = []
         .concat(Array.isArray(contract?.modifications) ? contract.modifications : [])
         .concat(Array.isArray(contract?.reassessments) ? contract.reassessments : [])
-        .filter(x => x && x.status === "APPLIED")
+        .filter(x => x && x.status === "APPLIED");
+
+      const entryChanges = appliedChanges
         .map(x => {
           const d = parseDate(x.effectiveDate);
           return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.liabilityAdjustment) || 0 } : null;
@@ -1241,6 +1255,22 @@ document.addEventListener("DOMContentLoaded", () => {
         const ratioEntryToRp = getInflationRatio(entry.month, rp);
         liabilityEntriesNominal += entry.amount;
         liabilityEntriesRestated += entry.amount * ratioEntryToRp;
+      });
+
+      // ROU girişleri: aynı modifikasyon/reassessment kayıtlarının
+      // rouAdjustment alanı (liabilityAdjustment yerine).
+      const rouEntryChanges = appliedChanges
+        .map(x => {
+          const d = parseDate(x.effectiveDate);
+          return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.rouAdjustment) || 0 } : null;
+        })
+        .filter(x => x && x.month >= ps && x.month <= rp);
+
+      let rouEntriesNominal = 0, rouEntriesRestated = 0;
+      rouEntryChanges.forEach(entry => {
+        const ratioEntryToRp = getInflationRatio(entry.month, rp);
+        rouEntriesNominal += entry.amount;
+        rouEntriesRestated += entry.amount * ratioEntryToRp;
       });
 
       const restatedSum =
@@ -1264,6 +1294,25 @@ document.addEventListener("DOMContentLoaded", () => {
         restatedSum,
         liabilityMonetaryGainLoss
       };
+
+      // ROU — moneter olmayan kalem: kapanış NOMİNAL değil, gerçekten
+      // düzeltilmiş tutar (açılış + girişler − amortisman, hepsi rp
+      // satın alma gücünde). Yükümlülükteki gibi ayrı bir "parasal K/Z"
+      // satırı YOKTUR — TMS 29.13, tüm fark doğrudan 698 hesabına gider.
+      const rouClosingRestatedPeriod = rouOpeningRestated + rouEntriesRestated - rouDepreciationRestated;
+      const rouClosingNominalPeriod = lastRow ? lastRow.rouClosing : rouOpeningNominal;
+
+      rouRollForward = {
+        periodStart: ps,
+        rouOpeningNominal,
+        rouOpeningRestated,
+        rouEntriesNominal,
+        rouEntriesRestated,
+        rouDepreciationNominal,
+        rouDepreciationRestated,
+        rouClosingNominalPeriod,
+        rouClosingRestatedPeriod
+      };
     }
 
     return {
@@ -1272,6 +1321,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ratioAcquisitionToRp,
       rows,
       liabilityRollForward,
+      rouRollForward,
       totals: {
         nominalROUClosing,
         restatedROUClosing,
@@ -17392,35 +17442,98 @@ document.addEventListener("DOMContentLoaded", () => {
   // NOMİNAL rakamlar etkilenmeden gösterilmeye devam eder.
   function v191ComputePortfolioTms29(rows, periodStartMonth, rpMonth) {
     const results = new Map();
-    let totalNetAdjustment = 0, totalMonetaryGainLoss = 0, computedCount = 0, missingCount = 0;
+    const totals = {
+      rouOpeningNominal: 0, rouOpeningRestated: 0,
+      rouEntriesNominal: 0, rouEntriesRestated: 0,
+      rouDepreciationNominal: 0, rouDepreciationRestated: 0,
+      rouClosingNominalPeriod: 0, rouClosingRestatedPeriod: 0,
+      liabilityOpeningNominal: 0, liabilityOpeningRestated: 0,
+      liabilityEntriesNominal: 0, liabilityEntriesRestated: 0,
+      liabilityInterestNominal: 0, liabilityInterestRestated: 0,
+      liabilityPaymentsNominal: 0, liabilityPaymentsRestated: 0,
+      liabilityMonetaryGainLoss: 0
+    };
+    let totalNetAdjustment = 0, computedCount = 0, missingCount = 0;
     rows.forEach(row => {
       const contract = (typeof contracts !== "undefined" ? contracts : []).find(c => String(c.id) === String(row.contractId));
       if (!contract) { results.set(row.contractId, { ok: false, error: "Sözleşme bulunamadı." }); missingCount++; return; }
       try {
         const restatement = applyTMS29Restatement(contract, rpMonth, periodStartMonth);
         const netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
-        const monetaryGainLoss = restatement?.totals?.liabilityMonetaryGainLoss;
-        results.set(row.contractId, { ok: true, netAdjustment, monetaryGainLoss: Number.isFinite(monetaryGainLoss) ? monetaryGainLoss : null });
+        const rrf = restatement?.rouRollForward;
+        const lrf = restatement?.liabilityRollForward;
+        results.set(row.contractId, {
+          ok: true,
+          netAdjustment,
+          monetaryGainLoss: lrf ? lrf.liabilityMonetaryGainLoss : null,
+          rouClosingRestatedPeriod: rrf ? rrf.rouClosingRestatedPeriod : null,
+          rouClosingNominalPeriod: rrf ? rrf.rouClosingNominalPeriod : null
+        });
         totalNetAdjustment += netAdjustment;
-        if (Number.isFinite(monetaryGainLoss)) totalMonetaryGainLoss += monetaryGainLoss;
+        if (rrf) {
+          totals.rouOpeningNominal += rrf.rouOpeningNominal;
+          totals.rouOpeningRestated += rrf.rouOpeningRestated;
+          totals.rouEntriesNominal += rrf.rouEntriesNominal;
+          totals.rouEntriesRestated += rrf.rouEntriesRestated;
+          totals.rouDepreciationNominal += rrf.rouDepreciationNominal;
+          totals.rouDepreciationRestated += rrf.rouDepreciationRestated;
+          totals.rouClosingNominalPeriod += rrf.rouClosingNominalPeriod;
+          totals.rouClosingRestatedPeriod += rrf.rouClosingRestatedPeriod;
+        }
+        if (lrf) {
+          totals.liabilityOpeningNominal += lrf.liabilityOpeningNominal;
+          totals.liabilityOpeningRestated += lrf.liabilityOpeningRestated;
+          totals.liabilityEntriesNominal += lrf.liabilityEntriesNominal;
+          totals.liabilityEntriesRestated += lrf.liabilityEntriesRestated;
+          totals.liabilityInterestNominal += lrf.liabilityInterestNominal;
+          totals.liabilityInterestRestated += lrf.liabilityInterestRestated;
+          totals.liabilityPaymentsNominal += lrf.liabilityPaymentsNominal;
+          totals.liabilityPaymentsRestated += lrf.liabilityPaymentsRestated;
+          totals.liabilityMonetaryGainLoss += lrf.liabilityMonetaryGainLoss;
+        }
         computedCount++;
       } catch (error) {
         results.set(row.contractId, { ok: false, error: error?.message || String(error) });
         missingCount++;
       }
     });
-    return { results, totalNetAdjustment, totalMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
+    return { results, totals, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
   }
 
   function v191Tms29SummaryHtml(tms29, periodLabel) {
+    const t = tms29.totals;
+    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
     return `<div style="margin-top:20px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-      <h4 style="margin:0 0 8px;font-size:12px;color:#92400e;">TMS 29 Enflasyon Düzeltmesi — ${v191Escape(periodLabel)}</h4>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:12px;">
-        <div><span style="color:#78350f;">ROU Düzeltmesi (kümülatif, edinimden bugüne):</span> <strong>${v191Value(tms29.totalNetAdjustment)}</strong></div>
-        <div><span style="color:#78350f;">Yükümlülük — Parasal Kazanç/(Kayıp), net (seçili dönem):</span> <strong style="color:${tms29.totalMonetaryGainLoss < 0 ? '#15803d' : tms29.totalMonetaryGainLoss > 0 ? '#b91c1c' : '#334155'};">${v191Value(tms29.totalMonetaryGainLoss)}</strong></div>
+      <h4 style="margin:0 0 4px;font-size:12px;color:#92400e;">TMS 29 Enflasyon Düzeltmeli Hareket Tabloları — ${v191Escape(periodLabel)} (dönem sonu satın alma gücü)</h4>
+      <p style="margin:0 0 10px;font-size:10px;color:#a16207;">Aşağıdaki tablolar, seçili dönemin Açılış/Girişler/Amortisman-Faiz-Ödeme/Kapanış satırlarını, dönem sonu (${v191Escape(periodLabel.split(" - ")[1] || "")}) satın alma gücüne endeksleyerek gösterir — üstteki nominal hareket tablolarından FARKLIDIR.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+        <div>
+          <h5 style="margin:0 0 4px;font-size:11px;color:#78350f;">Kullanım Hakkı Varlığı (ROU) — Restated</h5>
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Açılış</td><td style="text-align:right;">${v191Value(t.rouOpeningRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Girişler (mod./reassessment)</td><td style="text-align:right;">${v191Value(t.rouEntriesRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Amortisman (−)</td><td style="text-align:right;">${v191Value(-t.rouDepreciationRestated)}</td></tr>
+            <tr style="border-top:1px solid #fde68a;font-weight:600;"><td style="padding:4px 6px 0 0;">Kapanış (Restated)</td><td style="text-align:right;padding-top:4px;">${v191Value(t.rouClosingRestatedPeriod)}</td></tr>
+            <tr><td style="padding:2px 6px 0 0;color:#94a3b8;">Kapanış (Nominal, karşılaştırma)</td><td style="text-align:right;color:#94a3b8;">${v191Value(t.rouClosingNominalPeriod)}</td></tr>
+          </table>
+          ${!rouReconciles ? `<p style="margin:4px 0 0;font-size:10px;color:#b91c1c;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var, kontrol edilmeli.</p>` : ""}
+        </div>
+        <div>
+          <h5 style="margin:0 0 4px;font-size:11px;color:#78350f;">Kira Yükümlülüğü — Restated</h5>
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Açılış</td><td style="text-align:right;">${v191Value(t.liabilityOpeningRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Girişler (mod./reassessment)</td><td style="text-align:right;">${v191Value(t.liabilityEntriesRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Faiz</td><td style="text-align:right;">${v191Value(t.liabilityInterestRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:#78350f;">Ödemeler (−)</td><td style="text-align:right;">${v191Value(-t.liabilityPaymentsRestated)}</td></tr>
+            <tr><td style="padding:2px 6px 2px 0;color:${t.liabilityMonetaryGainLoss < 0 ? '#15803d' : t.liabilityMonetaryGainLoss > 0 ? '#b91c1c' : '#78350f'};">Parasal Kazanç/(Kayıp), net (−)</td><td style="text-align:right;color:${t.liabilityMonetaryGainLoss < 0 ? '#15803d' : t.liabilityMonetaryGainLoss > 0 ? '#b91c1c' : '#334155'};">${v191Value(-t.liabilityMonetaryGainLoss)}</td></tr>
+            <tr style="border-top:1px solid #fde68a;font-weight:600;"><td style="padding:4px 6px 0 0;">Kapanış (= Nominal, moneter kalem)</td><td style="text-align:right;padding-top:4px;">${v191Value(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal)}</td></tr>
+          </table>
+        </div>
       </div>
-      <p style="margin:8px 0 0;font-size:11px;color:#92400e;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — ${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var (bu sözleşmelerin nominal rakamları etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
-      <p style="margin:4px 0 0;font-size:10px;color:#a16207;">Negatif parasal kazanç/(kayıp) = kazanç (yükümlülüğün reel yükü azalmış, TMS 29.28); pozitif = kayıp.</p>
+
+      <p style="margin:10px 0 0;font-size:11px;color:#92400e;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — ${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var (bu sözleşmelerin nominal rakamları etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#a16207;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır. Yükümlülük (moneter): kapanış bakiyesi DEĞİŞMEZ (TMS 29.28), satın alma gücü kaybı/kazancı ayrı "Parasal Kazanç/(Kayıp)" satırında gösterilir.</p>
     </div>`;
   }
 
