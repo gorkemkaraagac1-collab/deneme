@@ -25,6 +25,7 @@ const auditRouter = require("./routes/audit");
 const reportsRouter = require("./routes/reports");
 const adminLicenseRouter = require("./routes/admin-licenses");
 const licenseTestRouter = require("./routes/license-test");
+const inflationIndicesRouter = require("./routes/inflation-indices");
 
 const app = express();
 
@@ -219,6 +220,22 @@ app.use(
 app.use(
   "/api/reports",
   reportsRouter
+);
+
+/**
+ * ============================================================
+ * INFLATION INDICES (TÜİK / TFRS 16 — TMS 29 restatement veri kaynağı)
+ * ============================================================
+ *
+ * Bağımsız bir "/api/tms29" DEĞİLDİR — TFRS 16'nın enflasyon
+ * düzeltmesi bileşenine veri sağlayan yardımcı bir endpoint.
+ * Kendi router'ı içinde requireAuth/requireActiveLicense/
+ * requireAdmin ve rate limiting zaten uygulanıyor (bkz.
+ * routes/inflation-indices.js).
+ */
+app.use(
+  "/api/inflation-indices",
+  inflationIndicesRouter
 );
 
 
