@@ -14669,6 +14669,39 @@ document.addEventListener("DOMContentLoaded", () => {
     ], "Kira_Yukumlulugu_Hareket_Tablosu");
   }
 
+  function exportLeaseLiquidityRiskNote(reportingDate) {
+    const report = getLeaseLiquidityRiskDisclosure(reportingDate);
+    const row = Array.isArray(report.rows) ? report.rows[0] : null;
+    if (!row) return false;
+    const bucketCol = id => rptRound(row.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
+    const mainRow = {
+      "Sözleşme uyarınca vadeler": row.label,
+      "Defter Değeri": row.carryingValue,
+      "Sözleşme uyarınca nakit çıkışlar toplamı": row.contractualCashOutflowsTotal,
+      "3 aydan kısa": bucketCol("UNDER_3_MONTHS"),
+      "3-12 ay arası": bucketCol("3_TO_12_MONTHS"),
+      "1-5 yıl arası": bucketCol("1_TO_5_YEARS"),
+      "5 yıldan uzun": bucketCol("OVER_5_YEARS")
+    };
+    const companyReport = getLeaseLiquidityRiskDisclosure(reportingDate, { byCompany: true });
+    const companyRows = (Array.isArray(companyReport.rows) ? companyReport.rows : []).map(r => {
+      const cBucket = id => rptRound(r.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
+      return {
+        "Şirket": r.company,
+        "Defter Değeri": r.carryingValue,
+        "Sözleşme uyarınca nakit çıkışlar toplamı": r.contractualCashOutflowsTotal,
+        "3 aydan kısa": cBucket("UNDER_3_MONTHS"),
+        "3-12 ay arası": cBucket("3_TO_12_MONTHS"),
+        "1-5 yıl arası": cBucket("1_TO_5_YEARS"),
+        "5 yıldan uzun": cBucket("OVER_5_YEARS")
+      };
+    });
+    return v191ExportSheetsToFile([
+      { rows: [mainRow], sheetName: "Likidite Riski (Kiralama)" },
+      { rows: companyRows, sheetName: "Şirket Bazında" }
+    ], "Kiralama_Yukumlulukleri_Likidite_Riski_Dipnotu");
+  }
+
   function v191ExportRowsToFile(rows, fileBaseName, sheetName) {
     if (!rows.length) return false;
     return v191ExportSheetsToFile([{ rows, sheetName }], fileBaseName);
@@ -18111,6 +18144,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
+    const liquidityDisclosure = data.liquidityRiskDisclosure || getLeaseLiquidityRiskDisclosure(effectivePeriodEnd);
+    const liquidityDisclosureRow = (liquidityDisclosure.rows || [])[0] || null;
+    const v191LiquidityBucketValue = (row, id) => rptRound((row?.buckets || []).find(b => b.bucket === id)?.cashOutflow || 0);
+    const liquidityRows = liquidityDisclosureRow ? [{
+      label: liquidityDisclosureRow.label,
+      carryingValue: liquidityDisclosureRow.carryingValue,
+      contractualCashOutflowsTotal: liquidityDisclosureRow.contractualCashOutflowsTotal,
+      under3: v191LiquidityBucketValue(liquidityDisclosureRow, "UNDER_3_MONTHS"),
+      b3to12: v191LiquidityBucketValue(liquidityDisclosureRow, "3_TO_12_MONTHS"),
+      b1to5y: v191LiquidityBucketValue(liquidityDisclosureRow, "1_TO_5_YEARS"),
+      over5y: v191LiquidityBucketValue(liquidityDisclosureRow, "OVER_5_YEARS")
+    }] : [];
 
     const periodStart = effectivePeriodStart;
     const periodEnd = effectivePeriodEnd;
@@ -18226,7 +18271,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="margin:0;">Dipnot: Kira Yükümlülüğü Hareket Tablosu</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Vade analizi ayrı bir dipnot olarak Contract Financial Tools üzerinden alınabilir.</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Likidite riski (vade analizi) dipnotu aşağıda ayrıca yer almaktadır.</p>
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
@@ -18257,6 +18302,26 @@ document.addEventListener("DOMContentLoaded", () => {
       ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
       ${v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
+    </div>
+
+    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="margin:0;">Dipnot: Kiralama Yükümlülükleri — Likidite Riski (TFRS 7.39)</h3>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptIsoDate(effectivePeriodEnd))} · "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiquidityRiskNote(new Date(${effectivePeriodEnd.getFullYear()},${effectivePeriodEnd.getMonth()},${effectivePeriodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
+      ${v191Table(liquidityRows, [
+        { key: "label", label: "Sözleşme uyarınca vadeler" },
+        { key: "carryingValue", label: "Defter Değeri" },
+        { key: "contractualCashOutflowsTotal", label: "Sözleşme uyarınca nakit çıkışlar toplamı" },
+        { key: "under3", label: "3 aydan kısa" },
+        { key: "b3to12", label: "3-12 ay arası" },
+        { key: "b1to5y", label: "1-5 yıl arası" },
+        { key: "over5y", label: "5 yıldan uzun" }
+      ])}
+      ${liquidityDisclosure.reconciliation && !liquidityDisclosure.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ ${v191Escape((liquidityDisclosure.warnings || [])[0] || "Mutabakat farkı var.")}</p>` : `<p style="margin:8px 0 0;font-size:10px;color:#94a3b8;">Sözleşme uyarınca nakit çıkışları toplamı ile defter değeri arasındaki fark (${v191Value(liquidityDisclosure.reconciliation?.undiscountedInterestComponent || 0)}), gelecekteki iskonto edilmemiş faizi temsil eder.</p>`}
     </div>`;
   }
 
@@ -23052,6 +23117,7 @@ document.addEventListener("DOMContentLoaded", () => {
     exportRouAssetMovementNote,
     exportLeaseLiabilityMovementNote,
     exportTms29InflationNote,
+    exportLeaseLiquidityRiskNote,
     V24_SCHEMA_VERSION,
     V24_PLANNING_ENGINE_VERSION,
     V24_STORAGE_KEYS,
@@ -27043,6 +27109,8 @@ document.addEventListener("DOMContentLoaded", () => {
       getRuoAssetRollForwardReport,
       getLeaseLiabilityRollForwardReport,
       exportTms29InflationNote,
+      getLeaseLiquidityRiskDisclosure,
+      exportLeaseLiquidityRiskNote,
       getApplicableStandards,
       v26LoadCompanies,
       v26StandardsBadgeHtml,
@@ -27134,6 +27202,8 @@ document.addEventListener("DOMContentLoaded", () => {
       getRuoAssetRollForwardReport,
       getLeaseLiabilityRollForwardReport,
       exportTms29InflationNote,
+      getLeaseLiquidityRiskDisclosure,
+      exportLeaseLiquidityRiskNote,
       getApplicableStandards,
       v26LoadCompanies,
       v26StandardsBadgeHtml,
