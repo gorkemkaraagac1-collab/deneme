@@ -971,7 +971,86 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const INFLATION_INDEX_STORAGE_KEY = "gk_tfrs16_inflation_index_v1";
 
+  /* ==========================================================
+     TÜİK BACKEND CACHE (additive — TFRS 16 motoruna dokunmaz)
+     ----------------------------------------------------------
+     getInflationIndex()/getInflationRatio()/applyTMS29Restatement()
+     SENKRON kalmaya devam eder. Bu blok, backend'den (GET
+     /api/inflation-indices) önceden çekilmiş VERIFIED endeks
+     verisini bellek-içi bir değişkende (backendInflationIndexCache)
+     tutar; loadInflationIndexTable() bu cache doluysa onu, boşsa
+     (backend henüz sorulmadıysa/erişilemediyse) eskisi gibi
+     localStorage'daki manuel tabloyu döner — asenkron fetch,
+     hesaplama zincirine hiçbir şekilde karışmaz.
+
+     ÖNEMLİ — BİLİNEN SINIRLAMA (CHANGES.md'de ayrıca raporlanıyor):
+     Bu dosyadaki mevcut oturum/kullanıcı yönetimi (window.GKAuth,
+     bkz. auth.js) tamamen istemci-taraflı bir PROTOTİPTİR ve
+     backend/'deki gerçek JWT authentication'dan TAMAMEN BAĞIMSIZDIR.
+     Dolayısıyla bugün tarayıcıda gerçek bir Bearer token YOKTUR;
+     refreshInflationIndexCacheFromBackend() bunu fark eder ve
+     401/hata durumunda SESSİZCE "başarılı" görünmez — hatayı loglar
+     ve cache'i boş bırakır, böylece loadInflationIndexTable()
+     otomatik olarak mevcut localStorage davranışına düşer (yanlış
+     veri asla üretilmez). Gerçek uçtan uca çalışma için frontend'in
+     backend JWT'sine geçirilmesi ayrı bir iş kalemidir — bu
+     değişikliğin kapsamı DIŞINDADIR.
+     ========================================================== */
+  let backendInflationIndexCache = null; // null = backend henüz sorulmadı
+
+  function getInflationIndexAuthToken() {
+    // Gerçek JWT wiring tamamlanana kadar olası bir token
+    // anahtarını best-effort okur; yoksa null döner (fetch zaten
+    // 401 ile başarısız olur ve aşağıda güvenle ele alınır).
+    try {
+      return localStorage.getItem("gk_backend_jwt") || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function refreshInflationIndexCacheFromBackend(months) {
+    try {
+      const token = getInflationIndexAuthToken();
+      if (!token) {
+        console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
+        return false;
+      }
+
+      const query = Array.isArray(months) && months.length ? `?months=${encodeURIComponent(months.join(","))}` : "";
+      const response = await fetch(`/api/inflation-indices${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        console.error(`TÜİK endeks cache'i yenilenemedi: HTTP ${response.status}. localStorage tablosu kullanılacak.`);
+        return false;
+      }
+
+      const body = await response.json();
+      const indices = Array.isArray(body?.indices) ? body.indices : null;
+      if (!indices) {
+        console.error("TÜİK endeks cache'i yenilenemedi: beklenmeyen yanıt formatı. localStorage tablosu kullanılacak.");
+        return false;
+      }
+
+      backendInflationIndexCache = indices
+        .filter(e => e && typeof e.month === "string" && Number.isFinite(Number(e.index)))
+        .map(e => ({ month: e.month, index: Number(e.index) }));
+
+      return true;
+    } catch (error) {
+      console.error("TÜİK endeks cache'i yenilenirken hata oluştu. localStorage tablosu kullanılacak.", error);
+      return false;
+    }
+  }
+
   function loadInflationIndexTable() {
+    if (Array.isArray(backendInflationIndexCache)) {
+      return backendInflationIndexCache;
+    }
+
     try {
       const raw = localStorage.getItem(INFLATION_INDEX_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
@@ -26805,6 +26884,8 @@ document.addEventListener("DOMContentLoaded", () => {
       addOrUpdateInflationIndexEntry,
       addInflationIndexBulk,
       deleteInflationIndexEntry,
+      loadInflationIndexTable,
+      refreshInflationIndexCacheFromBackend,
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
       runSelfTestsV19FullTms29,
@@ -26894,6 +26975,8 @@ document.addEventListener("DOMContentLoaded", () => {
       addOrUpdateInflationIndexEntry,
       addInflationIndexBulk,
       deleteInflationIndexEntry,
+      loadInflationIndexTable,
+      refreshInflationIndexCacheFromBackend,
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
       runSelfTestsV19FullTms29,
