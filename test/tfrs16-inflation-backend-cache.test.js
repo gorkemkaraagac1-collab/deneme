@@ -1,0 +1,157 @@
+/**
+ * ============================================================
+ * TMS 29 ENGINE REGRESSION + loadInflationIndexTable FALLBACK
+ * ============================================================
+ *
+ * AMAÇ: getInflationIndex()/getInflationRatio()/
+ * applyTMS29Restatement() zincirinin davranışının, backend/TÜİK
+ * entegrasyonu eklendikten SONRA da (bu değişiklikten ÖNCEKİYLE
+ * BİREBİR AYNI) çalıştığını doğrulamak — bu, brief'in "en kritik
+ * nokta" olarak belirttiği regresyon kontrolüdür.
+ *
+ * Bu test dosyası her zaman jsdom + jest ortamında, backend'e
+ * gerçek bir fetch YAPMADAN çalışır (aşağıdaki testlerde
+ * global.fetch kasıtlı olarak tanımsız/mock'suz bırakılıyor —
+ * bu da tam olarak "backend henüz sorulmadı" senaryosunu temsil
+ * ediyor ve loadInflationIndexTable()'ın localStorage'a geri
+ * düşme davranışını sınıyor).
+ */
+
+const { loadTfrs16 } = require("./helpers/loadTfrs16");
+
+describe("loadInflationIndexTable — backend cache boşken localStorage'a düşer", () => {
+  let tfrs16;
+
+  beforeEach(() => {
+    localStorage.clear();
+    tfrs16 = loadTfrs16();
+  });
+
+  test("backend hiç sorulmadıysa (varsayılan durum) localStorage'daki manuel tablo döner", () => {
+    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 3500);
+    tfrs16.addOrUpdateInflationIndexEntry("2025-02", 3550);
+
+    const table = tfrs16.loadInflationIndexTable();
+    expect(table).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ month: "2025-01", index: 3500 }),
+        expect.objectContaining({ month: "2025-02", index: 3550 })
+      ])
+    );
+  });
+
+  test("getInflationIndex hâlâ eksik ay için Error fırlatır (sessiz varsayılan YOK)", () => {
+    expect(() => tfrs16.getInflationIndex("2099-01")).toThrow();
+  });
+});
+
+describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle geri düşer", () => {
+  let tfrs16;
+
+  beforeEach(() => {
+    localStorage.clear();
+    tfrs16 = loadTfrs16();
+  });
+
+  test("gk_backend_jwt yoksa fetch hiç denenmez, false döner, cache boş kalır", async () => {
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(() => {
+      throw new Error("fetch çağrılmamalıydı");
+    });
+
+    const result = await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
+
+    expect(result).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // Cache dolmadığı için loadInflationIndexTable yine localStorage'a düşer.
+    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 3500);
+    const table = tfrs16.loadInflationIndexTable();
+    expect(table.some(e => e.month === "2025-01" && e.index === 3500)).toBe(true);
+
+    fetchSpy.mockRestore();
+  });
+
+  test("backend 401 dönerse (token geçersiz) sessizce 'başarılı' görünmez, false döner", async () => {
+    localStorage.setItem("gk_backend_jwt", "fake-token-for-test");
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({ ok: false, status: 401 });
+
+    const result = await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
+
+    expect(result).toBe(false);
+    fetchSpy.mockRestore();
+  });
+
+  test("backend başarılı yanıt verirse cache dolar ve loadInflationIndexTable ARTIK localStorage'ı DEĞİL cache'i döner", async () => {
+    localStorage.setItem("gk_backend_jwt", "fake-token-for-test");
+    // localStorage'da FARKLI bir değer var — cache doluysa bu görmezden gelinmeli.
+    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 1111);
+
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        indices: [{ month: "2025-01", index: 3500, source: "TUIK_AUTO", sourceUrl: null, retrievedAt: "2025-02-01", verificationStatus: "VERIFIED" }]
+      })
+    });
+
+    const result = await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
+    expect(result).toBe(true);
+
+    const table = tfrs16.loadInflationIndexTable();
+    expect(table).toEqual([{ month: "2025-01", index: 3500 }]);
+
+    // getInflationIndex de artık backend'den gelen değeri kullanır.
+    expect(tfrs16.getInflationIndex("2025-01")).toBe(3500);
+
+    fetchSpy.mockRestore();
+  });
+});
+
+describe("applyTMS29Restatement — motor davranışı DEĞİŞMEDİ (regresyon)", () => {
+  let tfrs16;
+
+  beforeEach(() => {
+    localStorage.clear();
+    tfrs16 = loadTfrs16();
+  });
+
+  test("sabit endeksle restatement çağrısı hâlâ senkron çalışır ve net düzeltme sıfır çıkar", () => {
+    // Mevcut runSelfTestsV19FullTms29 (Vaka 1) ile AYNI desen:
+    // applyTMS29Restatement bir kontrat objesi üzerinde doğrudan
+    // çağrılır, contract.schedule dışarıdan set edilmez — motor
+    // kendi içinde getReassessmentBaseSchedule() ile hesaplar.
+    const baseContract = {
+      monthlyPayment: 100000,
+      discountRate: 18,
+      startDate: "2026-01-01",
+      endDate: "2027-12-01",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+
+    const months = [];
+    for (let y = 2026; y <= 2027; y++) {
+      for (let m = 1; m <= 12; m++) months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    months.forEach(mo => tfrs16.addOrUpdateInflationIndexEntry(mo, 1000));
+
+    const contract = { ...baseContract, id: "TEST-REGRESSION-INFL-001" };
+
+    const restatement = tfrs16.applyTMS29Restatement(contract, "2027-06", "2027-01");
+
+    // Motor hâlâ senkron çalışıyor — Promise dönmüyor.
+    expect(restatement).not.toBeInstanceOf(Promise);
+    expect(restatement.totals).toBeTruthy();
+
+    // Enflasyon tamamen sabitken (1000 -> 1000) net düzeltme ve
+    // parasal kazanç/kayıp sıfıra yakın olmalı — bu, motorun
+    // hesaplama mantığının değişmediğinin doğrudan bir kanıtıdır.
+    expect(Math.abs(restatement.totals.netAdjustment)).toBeLessThanOrEqual(0.01);
+    expect(Math.abs(restatement.totals.liabilityMonetaryGainLoss)).toBeLessThanOrEqual(0.01);
+  });
+
+  test("runSelfTestsV19FullTms29 (mevcut TMS 29 self-test paketi) hâlâ tamamen geçiyor", () => {
+    const results = tfrs16.runSelfTestsV19FullTms29();
+    const failed = results.filter(r => !r.pass);
+    expect(failed).toEqual([]);
+  });
+});
