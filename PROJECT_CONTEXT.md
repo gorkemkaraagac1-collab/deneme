@@ -1,76 +1,57 @@
-# FINANCIAL INTELLIGENCE PLATFORM
-# PROJECT CONTEXT — MASTER
+# PROJECT CONTEXT — FINANCIAL INTELLIGENCE PLATFORM
 
-> Bu dosya projenin teknik ve ticari hafızasıdır.
-> Geliştirme öncesinde okunmalıdır.
-> Bu dosyadaki mimari kararlar kullanıcı tarafından bilinçli olarak alınmıştır.
-> Kullanıcı açıkça değiştirmedikçe bu kararlar korunmalıdır.
+## 1. PROJECT PURPOSE
 
----
+Bu repository bir Financial Intelligence Platform / Financial SaaS projesidir.
 
-# 1. ANA TİCARİ HEDEF
+Ana ticari amaç:
 
-Bu projenin ilk ve en önemli hedefi:
+> TFRS 16 modülünü production-ready hale getirmek, release etmek, ilk müşterilere satmak ve gelir üretmeye başlamak.
 
-**TFRS 16 modülünü production-ready hale getirmek, RELEASE etmek, müşterilere satmak ve gelir üretmeye başlamaktır.**
+Stratejik sıra:
 
-Öncelik sırası:
+TFRS16
+→ Production
+→ Release
+→ İlk Satış
+→ Gelir
+→ Sonraki Modüller
 
-**TFRS 16 → Production → Release → Satış → Gelir → Sonra diğer modüller**
-
-TFRS 16 release edilmeden:
-
-- TMS 19
-- standalone TMS 29
-- DCF
-- Hedge Accounting
-- diğer yeni finansal modüller
-
-gereksiz şekilde geliştirilmeyecektir.
-
-Amaç aynı anda bütün platformu tamamlamak değil, önce **satılabilir ilk finansal ürünü** piyasaya çıkarmaktır.
+Bu nedenle TFRS16 release edilmeden unrelated modüllere veya gereksiz teknik geliştirmelere scope genişletilmemelidir.
 
 ---
 
-# 2. TFRS 16 ANA ÜRÜNDÜR
+# 2. CURRENT PRIMARY PRODUCT
 
-TFRS 16 mevcut çalışan ana finansal hesaplama motorudur.
+## TFRS 16
 
-TFRS 16'nın lisans/entitlement yapısı **zaten oluşturulmuştur**.
+İlk release edilecek ve satılacak ürün TFRS 16'dır.
 
-Yeni bir TFRS 16 lisansı veya gereksiz yeni entitlement modeli oluşturulmayacaktır.
+TFRS16'nın mevcut product license / entitlement sistemi zaten bulunmaktadır.
 
-Mevcut lisans sistemi korunacak ve production'da gerçekten enforce edildiği doğrulanacaktır.
+Yeni bir TFRS16 lisans sistemi oluşturulmayacaktır.
 
----
+Mevcut:
 
-# 3. TÜİK ENDEKS ENTEGRASYONUNUN KAPSAMI
+Authentication
+→ Authorization
+→ Company/Tenant Access
+→ Product Entitlement
+→ Operation
 
-ÇOK ÖNEMLİ:
-
-TÜİK endeks entegrasyonu **standalone TMS 29 ürünü değildir.**
-
-Tek amacı:
-
-**TFRS 16 içindeki mevcut TMS 29 restatement motorunu resmi TÜİK endeks verisiyle beslemektir.**
-
-Bu nedenle:
-
-- yeni TMS 29 ürünü oluşturulmaz
-- yeni TMS 29 lisansı oluşturulmaz
-- `/api/tms29` oluşturulmaz
-- TMS 29 dashboard oluşturulmaz
-- standalone TMS 29 raporu oluşturulmaz
-- `tms29.html` bu çalışmaya dahil edilmez
-- mevcut standalone TMS 29 modülü refactor edilmez
-
-TÜİK altyapısı yalnızca TFRS 16'nın veri kaynağıdır.
+zinciri korunacaktır.
 
 ---
 
-# 4. TÜİK → TFRS 16 VERİ AKIŞI
+# 3. CRITICAL TÜİK SCOPE DECISION
 
-Kabul edilen mimari:
+TÜİK endeks entegrasyonu standalone TMS 29 ürünü değildir.
+
+TÜİK entegrasyonunun tek amacı:
+
+> TFRS16 içerisindeki mevcut TMS29 restatement hesaplama motoruna güvenilir endeks verisi sağlamaktır.
+
+Mimari:
 
 TÜİK
 ↓
@@ -82,7 +63,9 @@ PostgreSQL
 ↓
 API
 ↓
-TFRS 16 Cache
+TFRS16 Cache
+↓
+loadInflationIndexTable()
 ↓
 getInflationIndex()
 ↓
@@ -90,55 +73,692 @@ getInflationRatio()
 ↓
 applyTMS29Restatement()
 
-Bu mimari korunacaktır.
+TÜİK entegrasyonu TFRS16'nın bir alt veri kaynağı / destek fonksiyonudur.
+
+Standalone TMS29 ürünü değildir.
 
 ---
 
-# 5. DEĞİŞTİRİLMEYECEK TFRS 16 FONKSİYONLARI
+# 4. STRICTLY OUT OF SCOPE
 
-Aşağıdaki fonksiyonlar mevcut finansal hesaplama motorunun parçasıdır:
+TFRS16 production release edilmeden aşağıdakiler yapılmayacaktır:
 
-- `getInflationIndex()`
-- `getInflationRatio()`
-- `applyTMS29Restatement()`
-- `validateInflationAdjustment()`
-- `createInflationAdjustment()`
-- `applyInflationAdjustment()`
-- `cancelInflationAdjustment()`
-- `generateInflationAdjustmentJournal()`
-- `getReassessmentBaseSchedule()`
+- /api/tms29 oluşturmak
+- standalone TMS29 API geliştirmek
+- standalone TMS29 dashboard geliştirmek
+- TMS29 için yeni license / entitlement oluşturmak
+- mevcut TMS29 ürününü yeniden tasarlamak
+- TMS19 production geliştirmek
+- DCF production geliştirmek
+- Hedge Accounting production geliştirmek
+- unrelated dashboard geliştirmek
+- gereksiz refactor yapmak
+- mevcut çalışan finansal motorları yeniden yazmak
+
+Özellikle:
+
+TÜİK index functionality ≠ TMS29 standalone product.
+
+TÜİK index functionality TFRS16'nın TMS29 restatement veri kaynağıdır.
+
+---
+
+# 5. TFRS16 CALCULATION ENGINE — DO NOT CHANGE
+
+Aşağıdaki fonksiyonların iş mantığı değiştirilmemelidir:
+
+- getInflationIndex()
+- getInflationRatio()
+- applyTMS29Restatement()
+- validateInflationAdjustment()
+- createInflationAdjustment()
+- applyInflationAdjustment()
+- cancelInflationAdjustment()
+- generateInflationAdjustmentJournal()
+- getReassessmentBaseSchedule()
 
 Bu fonksiyonlar:
 
-- değiştirilmeyecek
-- async yapılmayacak
-- Promise döndürmeyecek
-- hesaplama mantığı değiştirilmeyecek
-- database logic içine alınmayacak
-- authentication logic içine alınmayacak
-- network request yapmayacak
+- synchronous kalmalıdır
+- async yapılmamalıdır
+- Promise döndürmemelidir
+- DB/network/persistence logic içermemelidir
+- mevcut hesaplama davranışı korunmalıdır
 
-TFRS 16 hesaplama motoru korunacaktır.
+TFRS16 motoruna veri sağlama entegrasyon noktası:
 
-Backend ile frontend arasındaki adapter noktası:
+loadInflationIndexTable()
 
-`loadInflationIndexTable()`
+Bu fonksiyon backend cache entegrasyonu için kullanılabilir.
 
-olacaktır.
+Ancak hesaplama motorunun synchronous contract'ı değiştirilmemelidir.
 
 ---
 
-# 6. TÜİK BACKEND DOSYALARI
+# 6. FINANCIAL DATA PRINCIPLE
 
-Mevcut TÜİK altyapısında:
+Finansal veri akışı:
 
-```text
-backend/
-├── utils/
-│   └── index-validation.js
-│
-├── services/
-│   └── tuik-index-service.js
-│
-└── routes/
-    └── inflation-indices.js
+DATA SOURCE
+→ VALIDATION
+→ CALCULATION
+→ CONTROL
+→ AUDIT
+
+Aşağıdakiler kesinlikle yasaktır:
+
+- fake financial data
+- mock data in production
+- silent fallback
+- interpolation
+- estimation
+- unknown index
+- default index value
+- missing value ile hesaplama
+
+Eksik veya güvenilir olmayan endeks varsa sistem açık ve anlamlı hata üretmelidir.
+
+---
+
+# 7. TÜİK INDEX DATA MODEL
+
+PostgreSQL tablosu:
+
+inflation_indices
+
+Endeks ulusal/genel referans veri olduğu için:
+
+company_id YOKTUR.
+
+Finansal referans veriler immutable/supersede mantığıyla tutulur.
+
+Aynı ayın değeri değişirse:
+
+Original Record
+↓
+Superseded
+↓
+New Record
+
+Eski kayıt overwrite edilmez.
+
+Yeni kayıt oluşturulur.
+
+superseded_by ile ilişki kurulmalıdır.
+
+TFRS16 API yalnızca:
+
+verification_status = VERIFIED
+AND
+superseded_by IS NULL
+
+kayıtlarını servis etmelidir.
+
+PENDING ve REJECTED kayıtlar hiçbir şekilde TFRS16 hesaplamasına girmemelidir.
+
+---
+
+# 8. TÜİK DATA GOVERNANCE
+
+TÜİK kaynaklı kayıtlar:
+
+PENDING
+
+olarak başlamalıdır.
+
+Yetkili kullanıcı/admin tarafından doğrulanmadan:
+
+VERIFIED
+
+olamaz.
+
+Beklenen akış:
+
+TÜİK Sync
+↓
+PENDING
+↓
+Validation
+↓
+Admin / Authorized Review
+↓
+VERIFIED
+↓
+TFRS16 API
+↓
+TFRS16 Calculation
+
+PENDING → VERIFIED workflow production release için tamamlanmalıdır.
+
+---
+
+# 9. TÜİK SOURCE
+
+Gerçek TÜİK endpoint'i production/network erişimi olan ortamda doğrulanmalıdır.
+
+Response shape tahmin edilmemelidir.
+
+Varsayılan veya sahte response kullanılmamalıdır.
+
+TUIK_INDEX_SOURCE_URL production configuration üzerinden sağlanmalıdır.
+
+Gerçek endpoint doğrulanmadan TÜİK entegrasyonu production-ready kabul edilmemelidir.
+
+---
+
+# 10. CURRENT TÜİK FILES
+
+Mevcut TÜİK entegrasyon dosyaları:
+
+- backend/utils/index-validation.js
+- backend/services/tuik-index-service.js
+- backend/routes/inflation-indices.js
+- backend/db/init.sql
+- js/tfrs16.js
+
+TFRS16 tarafında yalnızca:
+
+loadInflationIndexTable()
+
+backend cache entegrasyon noktasıdır.
+
+---
+
+# 11. BACKEND ARCHITECTURE
+
+Tercih edilen yapı:
+
+app.js
+→ Express application
+
+server.js
+→ production startup / listen()
+
+Backend architecture:
+
+Internet
+↓
+HTTPS :443
+↓
+Nginx / Reverse Proxy
+↓
+Node.js Backend
+↓
+PostgreSQL
+
+Node.js backend doğrudan public internet'e açılmamalıdır.
+
+app.js listen() çağırmamalıdır.
+
+server.js production startup için kullanılmalıdır.
+
+---
+
+# 12. GOOGLE CLOUD STATUS
+
+Google Cloud altyapısı daha önce kurulmuştur.
+
+Cloud altyapısı sıfırdan kurulmayacaktır.
+
+Sonraki cloud çalışmaları mevcut altyapının doğrulanması ve production hardening çalışmalarıdır.
+
+Kontrol edilecekler:
+
+- mevcut GCP project
+- Compute / VPS instance
+- Static IP
+- Firewall
+- SSH hardening
+- Node.js
+- Docker / Docker Compose veya mevcut deployment modeli
+- PostgreSQL
+- Nginx
+- HTTPS
+- Secrets
+- Monitoring
+- Backup
+- Restore
+- Deployment
+
+"Google Cloud kurulmalı" şeklinde yeni altyapı kurulum scope'u açılmamalıdır.
+
+Ama mevcut GCP altyapısının gerçekten production-ready olduğu doğrulanmalıdır.
+
+---
+
+# 13. AUTHENTICATION
+
+Backend gerçek JWT authentication kullanmaktadır.
+
+Frontend'deki mevcut auth.js / GKAuth mekanizması client-side prototype niteliğindedir.
+
+Production release için:
+
+Frontend
+→ Backend /api/auth
+→ gerçek JWT
+→ Bearer Token
+→ protected backend API
+
+bağlantısı tamamlanmalıdır.
+
+Frontend TFRS16 backend çağrılarında gerçek Bearer token kullanmalıdır.
+
+Client-side demo authentication production authentication olarak kabul edilmemelidir.
+
+---
+
+# 14. AUTHORIZATION / ENTITLEMENT
+
+Security model:
+
+Authentication
+↓
+Authorization
+↓
+Company/Tenant Access
+↓
+Product Entitlement
+↓
+Operation
+
+Mevcut middleware'ler mümkün olduğunca yeniden kullanılmalıdır.
+
+Yeni middleware ancak gerçekten gerekli olduğu repository incelemesiyle kanıtlanırsa oluşturulabilir.
+
+TFRS16 mevcut entitlement kullanılacaktır.
+
+TÜİK index functionality için yeni TMS29 entitlement oluşturulmayacaktır.
+
+Admin-only operations mevcut admin authorization ile korunmalıdır.
+
+Fail-closed yaklaşımı kullanılmalıdır.
+
+---
+
+# 15. SECURITY PRINCIPLES
+
+Backend security model:
+
+FAIL CLOSED
+
+Kurallar:
+
+- Authentication bypass yok
+- Authorization bypass yok
+- License bypass yok
+- Tenant/company isolation korunacak
+- SQL yalnızca parameterized query
+- Secret source code'da olmayacak
+- .env commit edilmeyecek
+- JWT algorithm allowlist kullanılacak
+- CORS allowlist kullanılacak
+- Production HTTPS kullanılacak
+- Production DB SSL kullanılacak
+- Rate limiting uygulanacak
+- Security headers uygulanacak
+- Production error response'larında stack trace gösterilmeyecek
+- Internal SQL/error detayları client'a dönülmeyecek
+
+---
+
+# 16. DATABASE
+
+PostgreSQL kullanılmaktadır.
+
+Database kuralları:
+
+- parameterized SQL
+- minimum privilege
+- referential integrity
+- CHECK constraints
+- UNIQUE constraints
+- immutable financial/reference records
+- transaction integrity
+- auditability
+- backup
+- restore testing
+
+Production database doğrudan public internet'e açılmamalıdır.
+
+Production DB credentials source code'a yazılmamalıdır.
+
+---
+
+# 17. SECRETS
+
+Production secrets repository'de bulunmayacaktır.
+
+Özellikle:
+
+- JWT_SECRET
+- DB_PASSWORD
+- DATABASE_URL
+- API credentials
+- TÜİK credentials/configuration
+
+güvenli environment/configuration üzerinden yönetilecektir.
+
+GCP Secret Manager tercih edilir.
+
+.env.example yalnızca placeholder içermelidir.
+
+Daha önce gerçek secret commit edilmişse yalnızca dosyayı silmek yeterli değildir.
+
+Secret rotation/revocation değerlendirilmelidir.
+
+---
+
+# 18. AUDIT
+
+Kritik işlemler audit edilebilir olmalıdır.
+
+Audit modeli:
+
+WHO
+→ WHAT
+→ WHEN
+→ SOURCE
+→ RESULT
+
+Özellikle:
+
+- TÜİK synchronization
+- index verification
+- manual override
+- license changes
+- company access
+- critical financial operations
+
+izlenebilir olmalıdır.
+
+Mevcut audit mekanizması varsa yeni bir audit sistemi oluşturulmayacaktır.
+
+---
+
+# 19. TESTING
+
+Production release öncesinde gerçek ortamda:
+
+npm test
+
+çalıştırılmalıdır.
+
+Test kapsamı:
+
+- unit
+- integration
+- API
+- authentication
+- authorization
+- license
+- rate limiting
+- validation
+- TÜİK service
+- missing index
+- invalid index
+- TFRS16 regression
+- production-like environment
+- backup/restore
+
+Security negative tests:
+
+No JWT → 401
+
+Invalid JWT → 401
+
+Expired JWT → 401
+
+Valid JWT + insufficient permission → 403
+
+Wrong company → 403
+
+Missing TFRS16 entitlement → 403
+
+Valid authorized request → success
+
+Rate limit exceeded → 429
+
+---
+
+# 20. GIT DEVELOPMENT DISCIPLINE
+
+Her kod değişikliğinden önce:
+
+1. Repository yapısını oku.
+2. İlgili dosyaları oku.
+3. git status
+4. git diff
+5. Bağımlılıkları belirle.
+6. Security impact değerlendir.
+7. Database impact değerlendir.
+8. Backward compatibility değerlendir.
+9. Minimal değişiklik yap.
+10. Test et.
+11. git diff tekrar kontrol et.
+12. Riskleri raporla.
+
+Mevcut uncommitted değişiklikler korunmalıdır.
+
+Kullanıcı onayı olmadan:
+
+git reset --hard
+
+git clean -fd
+
+ve benzeri destructive komutlar çalıştırılmayacaktır.
+
+---
+
+# 21. CHANGE MANAGEMENT
+
+Her implementation sonrasında rapor:
+
+## Ne bulundu?
+
+Mevcut repository durumu.
+
+## Ne değişti?
+
+Dosya bazında değişiklik.
+
+## Neden değişti?
+
+Security / functionality / release gerekçesi.
+
+## Test sonucu
+
+Gerçek çalıştırılan testler.
+
+Çalıştırılamayan testler açıkça belirtilmelidir.
+
+"Test geçti" denmemelidir eğer gerçekten çalıştırılmadıysa.
+
+## Riskler
+
+Açık blocker ve residual riskler belirtilmelidir.
+
+---
+
+# 22. PRODUCTION RELEASE CHECKLIST
+
+TFRS16 production-ready kabul edilmeden aşağıdakiler tamamlanmalıdır:
+
+### Cloud
+
+- mevcut Google Cloud altyapısı doğrulandı
+- production server hazır
+- static IP
+- firewall
+- SSH hardening
+
+### Backend
+
+- production Node.js
+- app.js / server.js ayrımı
+- process restart
+- production configuration
+
+### Network
+
+- domain
+- DNS
+- Nginx
+- HTTPS
+- HTTP → HTTPS redirect
+- TLS
+
+### Database
+
+- production PostgreSQL
+- minimum privilege
+- SSL/TLS
+- schema
+- inflation_indices
+- backup
+- gerçek restore testi
+
+### Secrets
+
+- JWT_SECRET
+- DB credentials
+- API configuration
+- secure secret management
+
+### Security
+
+- authentication
+- authorization
+- TFRS16 entitlement
+- CORS
+- rate limiting
+- security headers
+- parameterized SQL
+- input validation
+
+### TÜİK
+
+- gerçek endpoint doğrulandı
+- response shape doğrulandı
+- validation tamamlandı
+- PENDING → VERIFIED workflow tamamlandı
+- yalnızca VERIFIED + active records servis ediliyor
+- audit trail çalışıyor
+
+### Frontend
+
+- gerçek backend JWT
+- Bearer token
+- TFRS16 backend integration
+- client-side demo auth production'dan çıkarılmış
+
+### Testing
+
+- npm test
+- API
+- auth
+- authorization
+- license
+- TÜİK
+- TFRS16 regression
+- negative tests
+- production-like tests
+
+### Operations
+
+- monitoring
+- logging
+- health check
+- backup
+- restore
+- restart/crash recovery
+
+### UAT
+
+TFRS16:
+
+Login
+→ Company Access
+→ TFRS16 Entitlement
+→ Contract Creation
+→ Initial Recognition
+→ Schedule
+→ Modification
+→ Reassessment
+→ TMS29 Restatement
+→ TÜİK Index Retrieval
+→ Inflation Adjustment
+→ Journal
+→ Audit
+
+tamamlanmalıdır.
+
+---
+
+# 23. CURRENT RELEASE BLOCKERS
+
+Repository incelemesi sonucunda blocker listesi güncellenmelidir.
+
+Şu konular özellikle doğrulanmalıdır:
+
+1. Frontend gerçek JWT entegrasyonu
+2. Gerçek TÜİK endpoint doğrulaması
+3. PENDING → VERIFIED workflow
+4. Mevcut Google Cloud production deployment
+5. Production PostgreSQL
+6. HTTPS / Nginx / firewall
+7. Secrets
+8. npm test
+9. CI
+10. Backup + gerçek restore
+11. Monitoring
+12. TFRS16 UAT
+
+Bu maddeler repository/cloud üzerinden doğrulanmadan "production-ready" iddiasında bulunulmaz.
+
+---
+
+# 24. DEVELOPMENT DECISION RULE
+
+Her yeni iş için önce şu soru sorulmalıdır:
+
+> "Bu değişiklik TFRS16'nın production release'ine ve ilk satışına doğrudan katkı sağlıyor mu?"
+
+Eğer cevap hayır ise:
+
+- implementation başlatma
+- scope'u sorgula
+- sonraki faza bırak
+
+Özellikle yeni modül veya yeni lisans geliştirmelerinde bu kontrol zorunludur.
+
+---
+
+# 25. GOLDEN RULE
+
+# ÖNCE TFRS16'YI RELEASE ET.
+# SONRA SAT.
+# SONRA GELİR ÜRET.
+# SONRA DİĞER MODÜLLERE GEÇ.
+
+TFRS16 release edilmeden TMS19, standalone TMS29, DCF, Hedge Accounting vb. modüllere gereksiz production scope'u açılmayacaktır.
+
+TÜİK entegrasyonu yalnızca TFRS16'nın mevcut TMS29 restatement motorunu besleyen veri altyapısıdır.
+
+Mevcut TFRS16 hesaplama motoru korunacaktır.
+
+Amaç:
+
+FINANCIAL-GRADE
++
+AUDITABLE
++
+SECURE
++
+MAINTAINABLE
++
+PRODUCTION-READY
++
+SELLABLE
+
+bir TFRS16 ürünü ortaya çıkarmaktır.
