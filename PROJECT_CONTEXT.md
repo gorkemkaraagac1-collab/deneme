@@ -734,6 +734,307 @@ Eğer cevap hayır ise:
 
 ---
 
+---
+
+# 26. TFRS16.JS REFACTOR STRATEGY
+
+Mevcut `js/tfrs16.js` dosyası yaklaşık 1.2 MB büyüklüğündedir.
+
+Bu büyüklük teknik borç / maintainability konusu olarak kabul edilmektedir.
+
+Ancak:
+
+> TFRS16 production release öncesinde sırf dosya büyük olduğu için kapsamlı refactor yapılmayacaktır.
+
+## RELEASE ÖNCESİ KURAL
+
+TFRS16 release tamamlanana kadar:
+
+- mevcut çalışan TFRS16 hesaplama motoru korunacaktır
+- gereksiz dosya bölme yapılmayacaktır
+- büyük çaplı architecture refactor yapılmayacaktır
+- function signature değiştirilmeyecektir
+- calculation flow yeniden tasarlanmayacaktır
+- synchronous calculation engine async yapılmayacaktır
+- çalışan finansal algoritmalar yeniden yazılmayacaktır
+
+Yalnızca production release için zorunlu olan değişiklikler yapılabilir.
+
+Örneğin:
+
+- security blocker
+- authentication
+- authorization
+- license enforcement
+- TÜİK backend integration
+- API integration
+- critical bug
+- release blocker
+- test failure
+- production compatibility problemi
+
+doğrudan düzeltilir.
+
+## RELEASE SONRASI REFACTOR
+
+TFRS16 production'a alındıktan ve ilk müşteri / ilk gelir aşamasına geçildikten sonra `tfrs16.js` kontrollü şekilde modüler hale getirilecektir.
+
+Muhtemel hedef yapı:
+
+js/
+├── tfrs16-core.js
+├── tfrs16-calculation.js
+├── tfrs16-schedule.js
+├── tfrs16-modification.js
+├── tfrs16-reassessment.js
+├── tfrs16-tms29.js
+├── tfrs16-inflation.js
+├── tfrs16-api.js
+├── tfrs16-ui.js
+└── tfrs16.js
+
+Ancak bu yapı kesin architecture olarak kabul edilmez.
+
+Refactor sırasında önce mevcut dependency/function ilişkileri çıkarılacak, sonra modüller kontrollü şekilde ayrılacaktır.
+
+## REFACTOR PRINCIPLE
+
+Refactor:
+
+BEHAVIOR PRESERVATION
+
+prensibiyle yapılacaktır.
+
+Örneğin:
+
+getInflationIndex()
+→ getInflationRatio()
+→ applyTMS29Restatement()
+
+hesaplama zincirinin finansal davranışı değiştirilmeyecektir.
+
+Aşağıdaki fonksiyonların public/internal contract'ları korunacaktır:
+
+- getInflationIndex()
+- getInflationRatio()
+- applyTMS29Restatement()
+- validateInflationAdjustment()
+- createInflationAdjustment()
+- applyInflationAdjustment()
+- cancelInflationAdjustment()
+- generateInflationAdjustmentJournal()
+- getReassessmentBaseSchedule()
+
+Refactor sonrası aynı input için aynı finansal output alınması regression testleriyle doğrulanacaktır.
+
+## REFACTOR SAFETY
+
+Refactor başlamadan önce:
+
+1. mevcut test suite tamamen çalıştırılır
+2. TFRS16 regression baseline oluşturulur
+3. function dependency map çıkarılır
+4. public API / global dependency'ler belirlenir
+5. frontend dependency'leri belirlenir
+6. backend integration noktaları belirlenir
+7. financial calculation outputs baseline olarak kaydedilir
+
+Refactor:
+
+- küçük parçalar halinde
+- test ederek
+- diff kontrol ederek
+- backward compatibility korunarak
+
+yapılacaktır.
+
+Bir refactor adımı finansal hesaplama sonucunu değiştirirse ilgili değişiklik durdurulacak ve neden analiz edilmeden devam edilmeyecektir.
+
+## STRATEGIC PRINCIPLE
+
+Technical cleanliness, production release'ın önüne geçirilmeyecektir.
+
+Öncelik:
+
+TFRS16 Stability
+→ Production
+→ Release
+→ First Customer
+→ Revenue
+→ Refactor
+→ Scale
+
+---
+
+# 27. CURRENT TECHNICAL STATE — AUGUST 2026
+
+Repository statik incelemelerine göre mevcut durumda:
+
+## Büyük ölçüde mevcut
+
+- TFRS16 calculation engine
+- TFRS16 entitlement enforcement
+- JWT backend authentication
+- authorization middleware
+- company/tenant isolation
+- JWT HS256 algorithm allowlist
+- CORS allowlist
+- rate limiting
+- security headers
+- parameterized SQL
+- TÜİK validation layer
+- inflation_indices PostgreSQL model
+- immutable/supersede index model
+- VERIFIED-only API filtering
+- audit infrastructure
+- Dockerfile
+- app.js / server.js separation
+- TFRS16 inflation cache integration point
+
+## Release öncesi doğrulanması / tamamlanması gerekenler
+
+- frontend → backend gerçek JWT integration
+- gerçek TÜİK endpoint / response shape verification
+- PENDING → VERIFIED API workflow
+- production GCP configuration verification
+- production PostgreSQL
+- Nginx
+- HTTPS
+- DNS
+- firewall
+- production secrets
+- secret rotation where required
+- CI pipeline
+- real npm test execution
+- monitoring
+- backup
+- real restore test
+- TFRS16 UAT
+
+## ÖNEMLİ
+
+Repository statik olarak incelenmiş olması, production-ready olduğu anlamına gelmez.
+
+Kod seviyesinde:
+
+"implemented"
+
+ile
+
+"production verified"
+
+ayrımı korunacaktır.
+
+Bir özellik ancak gerçek ortamda çalıştırılıp doğrulandığında production-ready kabul edilir.
+
+---
+
+# 28. DEPENDENCY / BUILD REPRODUCIBILITY
+
+Repository'de gerçek Node.js package yapısı root seviyesindedir.
+
+Backend bağımsız bir npm package değildir.
+
+Production dependency management root `package.json` üzerinden yürütülmektedir.
+
+Gerçek production/release ortamında:
+
+- root `package-lock.json` oluşturulmalı
+- dependency versions lock edilmelidir
+- CI mümkün olduğunda `npm ci` kullanmalıdır
+- Docker build aynı lockfile üzerinden reproducible dependency installation yapmalıdır
+
+`backend/package-lock.json` mevcutsa bunun gerçek lockfile olup olmadığı kontrol edilmelidir.
+
+Eski / orphan / geçersiz lockfile production dependency management için kullanılmamalıdır.
+
+Fake veya elle oluşturulmuş lockfile oluşturulmayacaktır.
+
+---
+
+# 29. TEST RESULT INTEGRITY
+
+Test sonucu raporlanırken aşağıdaki ayrım zorunludur:
+
+PASS
+→ Test gerçekten çalıştırıldı ve geçti.
+
+FAIL
+→ Test gerçekten çalıştırıldı ve başarısız oldu.
+
+NOT RUN
+→ Test ortam nedeniyle çalıştırılamadı.
+
+NOT VERIFIED
+→ Kod mevcut olsa bile gerçek production-like ortamda doğrulanmadı.
+
+Syntax OK
+→ Sadece JavaScript syntax kontrol edildi; functional test anlamına gelmez.
+
+Özellikle:
+
+`node --check`
+
+sonucu:
+
+TEST PASS
+
+olarak raporlanmayacaktır.
+
+Aynı şekilde test çalıştırılmadan:
+
+"production-ready"
+
+sonucu çıkarılmayacaktır.
+
+---
+
+# 30. RELEASE VS TECHNICAL DEBT
+
+Release öncesi karar mekanizması:
+
+CRITICAL SECURITY / FINANCIAL CORRECTNESS / RELEASE BLOCKER
+→ NOW
+
+MAINTAINABILITY / CODE CLEANLINESS
+→ AFTER RELEASE
+
+PERFORMANCE OPTIMIZATION
+→ AFTER BASELINE
+
+ARCHITECTURAL REFACTOR
+→ AFTER FIRST STABLE RELEASE
+
+NEW PRODUCT / NEW MODULE
+→ AFTER FIRST REVENUE
+
+Bu karar mekanizması TFRS16 release süresince korunacaktır.
+
+---
+
+# 31. FINAL PRODUCT STRATEGY
+
+İlk hedef büyük bir platformu aynı anda tamamlamak değildir.
+
+İlk hedef:
+
+> Satılabilir, güvenli, denetlenebilir ve finansal olarak güvenilir bir TFRS16 ürünü çıkarmaktır.
+
+Başarı sırası:
+
+TFRS16
+→ Production
+→ UAT
+→ Release
+→ First Customer
+→ First Revenue
+→ Customer Feedback
+→ Stabilization
+→ TFRS16 Refactor / Scale
+→ Next Module
+
+Sonraki modüller ancak TFRS16'nın production ve ticari başarısından sonra önceliklendirilecektir.
+
 # 25. GOLDEN RULE
 
 # ÖNCE TFRS16'YI RELEASE ET.
