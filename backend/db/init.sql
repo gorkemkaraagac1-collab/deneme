@@ -260,6 +260,121 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================
+-- INFLATION INDICES (TÜİK / TMS 29 — TFRS 16'nın enflasyon
+-- düzeltmesi bileşeni için endeks veri altyapısı)
+-- ============================================================
+--
+-- ÖNEMLİ — KAPSAM: Bu tablo BAĞIMSIZ bir "TMS 29 ürünü" DEĞİLDİR.
+-- Yalnızca js/tfrs16.js içindeki mevcut TMS 29 restatement
+-- motorunun (getInflationIndex/getInflationRatio/
+-- applyTMS29Restatement — bu tablodan HABERSİZ, davranışı
+-- değişmeyen fonksiyonlar) ihtiyaç duyduğu aylık endeks
+-- değerlerini, önceden manuel girilen localStorage verisi yerine,
+-- doğrulanabilir/audit edilebilir bir kaynaktan sağlamak için
+-- vardır. company_id İÇERMEZ (bilinçli): endeks verisi şirkete
+-- özel değil, ulusal/genel bir referans veridir; erişim TFRS 16
+-- lisans entitlement'ı seviyesinde kontrol edilir (bkz.
+-- routes/inflation-indices.js), tenant izolasyonu bu tabloda
+-- anlamsızdır.
+--
+-- IMMUTABLE TASARIM: Bir ay için endeks değeri sonradan
+-- değişirse (TÜİK revize eder veya manuel override yapılırsa),
+-- mevcut satır ASLA UPDATE edilmez. Yerine yeni bir satır
+-- eklenir ve eski satırın superseded_by alanı yeni satırın id'sine
+-- bağlanır. Böylece geçmişte hangi değerin ne zaman "aktif" kabul
+-- edildiği tam olarak izlenebilir kalır (audit trail).
+--
+-- "Aktif" (geçerli) kayıt her zaman superseded_by IS NULL olandır.
+-- Hesaplamada kullanılabilmesi için AYRICA
+-- verification_status = 'VERIFIED' olması şarttır — PENDING/REJECTED
+-- kayıtlar hesaplamaya asla girmez (bkz. routes/inflation-indices.js
+-- GET handler'ındaki WHERE koşulu).
+
+CREATE TABLE IF NOT EXISTS inflation_indices (
+    id BIGSERIAL PRIMARY KEY,
+
+    -- Şu an tek bir seri (TÜFE genel) kullanılıyor, ancak ileride
+    -- farklı endeks serileri (ör. Yİ-ÜFE) ayrışabilsin diye alan
+    -- şimdiden ayrılıyor. Sabit bir değerle başlatılabilir
+    -- (ör. 'TUFE_GENEL') — gereksiz bir "index_series" master
+    -- tablosu bu aşamada eklenmedi (fazla soyutlama).
+    index_type VARCHAR(30) NOT NULL,
+
+    -- getInflationIndex()/getInflationRatio() ile birebir uyumlu
+    -- format: 'YYYY-MM'. DB seviyesinde de zorunlu kılınır —
+    -- frontend/backend validasyonu atlanırsa dahi bozuk formatta
+    -- satır oluşamaz.
+    index_month VARCHAR(7) NOT NULL,
+
+    CONSTRAINT chk_inflation_index_month_format
+        CHECK (index_month ~ '^\d{4}-(0[1-9]|1[0-2])$'),
+
+    index_value DECIMAL(15,4) NOT NULL,
+
+    CONSTRAINT chk_inflation_index_value_positive
+        CHECK (index_value > 0),
+
+    -- 'TUIK_AUTO': otomatik TÜİK senkronizasyonundan gelen kayıt.
+    -- 'MANUAL_OVERRIDE': bir admin tarafından elle girilmiş kayıt.
+    source VARCHAR(20) NOT NULL,
+
+    CONSTRAINT chk_inflation_index_source
+        CHECK (source IN ('TUIK_AUTO', 'MANUAL_OVERRIDE')),
+
+    source_url TEXT,
+
+    retrieved_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    -- Otomatik senkronizasyonda NULL kalır (sistem tarafından
+    -- çekilmiştir); manuel override'da işlemi yapan kullanıcının
+    -- id'sini taşır.
+    retrieved_by VARCHAR(50),
+
+    verified_at TIMESTAMP,
+    verified_by VARCHAR(50),
+
+    verification_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+
+    CONSTRAINT chk_inflation_index_verification_status
+        CHECK (verification_status IN ('PENDING', 'VERIFIED', 'REJECTED')),
+
+    -- Bu satırın yerini alan (superseding) yeni satırın id'si.
+    -- NULL => bu satır hâlâ "aktif" kayıttır. Kendi tablosuna
+    -- referans verdiği için tablo oluşturulduktan SONRA
+    -- eklenmesi gerekir (aşağıdaki ALTER TABLE).
+    superseded_by BIGINT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- superseded_by, aynı tabloya (kendine) referans verdiği için
+-- CREATE TABLE içinde REFERENCES ile tanımlanmadı — Postgres
+-- bunu destekler ama okunabilirlik açısından ayrı bir ALTER TABLE
+-- ile eklemek, "bu FK kendine referans veriyor" niyetini daha
+-- açık kılıyor.
+ALTER TABLE inflation_indices
+    ADD CONSTRAINT fk_inflation_indices_superseded_by
+        FOREIGN KEY (superseded_by)
+        REFERENCES inflation_indices(id);
+
+-- KRİTİK CONSTRAINT: aynı index_type + index_month için yalnızca
+-- TEK bir "aktif" (superseded_by IS NULL) kayıt bulunabilir.
+-- Bu, normal bir UNIQUE constraint DEĞİL, PARTIAL UNIQUE INDEX'tir
+-- (WHERE superseded_by IS NULL) — çünkü aynı ay için birden fazla
+-- superseded (eski/audit) kayıt bilerek tutulur; yasaklanan yalnızca
+-- aynı anda birden fazla "aktif" kayıt olmasıdır.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inflation_indices_active_unique
+    ON inflation_indices(index_type, index_month)
+    WHERE superseded_by IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_inflation_indices_month
+    ON inflation_indices(index_month);
+
+CREATE INDEX IF NOT EXISTS idx_inflation_indices_verification_status
+    ON inflation_indices(verification_status);
+
+
+-- ============================================================
 -- GÜVENLİK NOTU — TEST/DEMO VERİSİ BU DOSYADAN KALDIRILDI
 -- ============================================================
 --
