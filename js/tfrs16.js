@@ -268,6 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return [
       {
         id: "LEASE-001",
+        companyId: "COMP-GK-HOLDING",
         company: "GK Holding",
         supplier: "ABC Plaza",
         monthlyPayment: 125000,
@@ -280,6 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       {
         id: "LEASE-002",
+        companyId: "COMP-GK-HOLDING",
         company: "GK Holding",
         supplier: "XYZ Logistics",
         monthlyPayment: 85000,
@@ -292,6 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       {
         id: "LEASE-003",
+        companyId: "COMP-GK-TEKNOLOJI",
         company: "GK Teknoloji",
         supplier: "Tech Office",
         monthlyPayment: 65000,
