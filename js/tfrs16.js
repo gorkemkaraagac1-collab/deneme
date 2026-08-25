@@ -14183,6 +14183,17 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "MORE_THAN_5_YEARS", name: "More than 5 years", min: 60, max: Infinity }
   ]);
 
+  // TFRS 7.39 liquidity risk disclosure buckets ("Finansal araçlardan
+  // kaynaklanan risklerin niteliği ve düzeyi" dipnotunda kullanılan
+  // vade dilimleri). REPORTING_BUCKETS'daki 8 dilim, bu dipnotta
+  // görülen 4 dilime eşlenir.
+  const DISCLOSURE_RISK_BUCKETS = Object.freeze([
+    { id: "UNDER_3_MONTHS", name: "3 aydan kısa", sources: ["WITHIN_1_MONTH", "1_3_MONTHS"] },
+    { id: "3_TO_12_MONTHS", name: "3-12 ay arası", sources: ["3_6_MONTHS", "6_12_MONTHS"] },
+    { id: "1_TO_5_YEARS", name: "1-5 yıl arası", sources: ["1_2_YEARS", "2_3_YEARS", "3_5_YEARS"] },
+    { id: "OVER_5_YEARS", name: "5 yıldan uzun", sources: ["MORE_THAN_5_YEARS"] }
+  ]);
+
   function rptNumber(value, fallback = 0) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
@@ -14345,6 +14356,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (m < 36) return REPORTING_BUCKETS[5];
     if (m < 60) return REPORTING_BUCKETS[6];
     return REPORTING_BUCKETS[7];
+  }
+
+  function rptRemapToDisclosureBuckets(granularBuckets) {
+    const list = Array.isArray(granularBuckets) ? granularBuckets : [];
+    return DISCLOSURE_RISK_BUCKETS.map(db => {
+      const cashOutflow = db.sources.reduce((sum, sourceId) => {
+        const match = list.find(b => b.bucket === sourceId);
+        return sum + (match ? rptNumber(match.cashPayment) : 0);
+      }, 0);
+      return { bucket: db.id, bucketName: db.name, cashOutflow: rptRound(cashOutflow) };
+    });
   }
 
   function rptRiskForDays(days) {
@@ -14786,6 +14808,67 @@ document.addEventListener("DOMContentLoaded", () => {
     return {company:String(company||""),reportingDate:rptIsoDate(reportingDate),buckets,totals:{cashPayment:rptRound(buckets.reduce((s,b)=>s+b.cashPayment,0)),principal:rptRound(buckets.reduce((s,b)=>s+b.principal,0)),interest:rptRound(buckets.reduce((s,b)=>s+b.interest,0))}};
   }
 
+  /**
+   * TFRS 7.39 uyarınca kiralama yükümlülükleri için likidite riski dipnotu
+   * ("Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notunda
+   * yer alan "Kiralama yükümlülükleri" satırını üretir).
+   *
+   * Çıktı, denetim raporlarında görülen dipnot formatına birebir uyar:
+   *   Defter Değeri | Sözleşme uyarınca nakit çıkışlar toplamı |
+   *   3 aydan kısa | 3-12 ay arası | 1-5 yıl arası | 5 yıldan uzun
+   *
+   * @param {Date|string} reportingDate
+   * @param {object} [options]
+   * @param {boolean} [options.byCompany] - true ise şirket bazında satırlar döner.
+   * @returns {object} report - rptEmptyReport şablonunda, options.byCompany=false
+   *   iken report.rows tek elemanlı ["Kiralama yükümlülükleri"] dizisidir.
+   */
+  function getLeaseLiquidityRiskDisclosure(reportingDate, options = {}) {
+    const d = rptResolveDate(reportingDate);
+    const report = rptEmptyReport("Lease Liability Liquidity Risk Disclosure (TFRS 7.39)", d, "LEASE_SCHEDULE + REPORTING_DATE_ENGINE");
+    const currentNonCurrent = getCurrentNonCurrentReport(d);
+    const carryingValueRows = Array.isArray(currentNonCurrent.rows) ? currentNonCurrent.rows.filter(r => r.status !== "ERROR") : [];
+
+    if (options.byCompany) {
+      const maturityByContract = getLeasePaymentMaturityAnalysis(d, { byContract: true });
+      const companies = Array.from(new Set(rptSafeContracts().map(c => String(c.company || ""))));
+      const rows = companies.map(company => {
+        const contractBucketRows = maturityByContract.rows.filter(r => String(r.company || "") === company);
+        const granular = REPORTING_BUCKETS.map(b => ({ bucket: b.id, cashPayment: 0 }));
+        contractBucketRows.forEach(r => (r.buckets || []).forEach((b, i) => { granular[i].cashPayment += rptNumber(b.cashPayment); }));
+        const buckets = rptRemapToDisclosureBuckets(granular);
+        const carryingValue = rptRound(carryingValueRows.filter(r => String(r.company || "") === company).reduce((s, r) => s + rptNumber(r.totalLiability), 0));
+        const contractualCashOutflowsTotal = rptRound(buckets.reduce((s, b) => s + b.cashOutflow, 0));
+        return { company, label: "Kiralama yükümlülükleri", carryingValue, contractualCashOutflowsTotal, buckets };
+      });
+      report.rows = rows;
+      report.totals = {
+        carryingValue: rptRound(rows.reduce((s, r) => s + r.carryingValue, 0)),
+        contractualCashOutflowsTotal: rptRound(rows.reduce((s, r) => s + r.contractualCashOutflowsTotal, 0))
+      };
+      if (Array.isArray(maturityByContract.errors) && maturityByContract.errors.length) report.errors.push(...maturityByContract.errors);
+    } else {
+      const maturity = getLeasePaymentMaturityAnalysis(d);
+      const buckets = rptRemapToDisclosureBuckets(maturity.rows);
+      const carryingValue = rptRound(rptNumber(currentNonCurrent.totals.totalLiability));
+      const contractualCashOutflowsTotal = rptRound(buckets.reduce((s, b) => s + b.cashOutflow, 0));
+      report.rows = [{ label: "Kiralama yükümlülükleri", carryingValue, contractualCashOutflowsTotal, buckets }];
+      report.totals = { carryingValue, contractualCashOutflowsTotal };
+      if (Array.isArray(maturity.errors) && maturity.errors.length) report.errors.push(...maturity.errors);
+    }
+
+    report.reconciliation = {
+      // Sözleşme uyarınca nakit çıkışları toplamı, iskonto edilmemiş
+      // tutarlardır; bu nedenle defter değerinden büyük olması beklenir.
+      // Fark, gelecekteki faiz (finansman gideri) bileşenini temsil eder.
+      undiscountedInterestComponent: rptRound(report.totals.contractualCashOutflowsTotal - report.totals.carryingValue),
+      passed: report.totals.contractualCashOutflowsTotal >= report.totals.carryingValue - REPORTING_TOLERANCE
+    };
+    if (!report.reconciliation.passed) report.warnings.push("Sözleşme uyarınca nakit çıkışları toplamı, defter değerinin altında kaldı; veri tutarlılığını kontrol edin.");
+    if (Array.isArray(currentNonCurrent.errors) && currentNonCurrent.errors.length) report.errors.push(...currentNonCurrent.errors);
+    return rptFinalize(report);
+  }
+
   function getCurrentNonCurrentReport(reportingDate,filters={}) {
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Current / Non-current Analysis",d,"REPORTING_DATE_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>{
@@ -15016,15 +15099,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getTfrs16FinancialReportingSnapshot(reportingDate){
-    const d=rptResolveDate(reportingDate), cfo=typeof getTfrs16CfoSnapshot==="function"?getTfrs16CfoSnapshot(d):{}, bs=getLeaseBalanceSheetImpact(d), periodStart=new Date(d.getFullYear(),d.getMonth(),1), pl=getLeaseProfitLossImpact(periodStart,d), cf=getLeaseCashFlowReport(periodStart,d), liabilityRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d), maturity=getLeasePaymentMaturityAnalysis(d), expiry=getLeaseContractExpiryReport(d), renewal=getRenewalRiskReport(d), modification=getModificationReport(d), reassessment=getReassessmentReport(d), journal=getJournalSummaryReport(), control=getControlExceptionReport(), controlSummary=getControlSummaryReport(), audit=getAuditTrailReport({dateTo:rptIsoDate(d)}), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), reconciliation=getTfrs16ReportingReconciliation(d);
-    const errors=[liabilityRoll,rouRoll,maturity,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.errors)?r.errors:[]);
-    const warnings=[liabilityRoll,rouRoll,maturity,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.warnings)?r.warnings:[]);
+    const d=rptResolveDate(reportingDate), cfo=typeof getTfrs16CfoSnapshot==="function"?getTfrs16CfoSnapshot(d):{}, bs=getLeaseBalanceSheetImpact(d), periodStart=new Date(d.getFullYear(),d.getMonth(),1), pl=getLeaseProfitLossImpact(periodStart,d), cf=getLeaseCashFlowReport(periodStart,d), liabilityRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d), maturity=getLeasePaymentMaturityAnalysis(d), liquidityRiskDisclosure=getLeaseLiquidityRiskDisclosure(d), expiry=getLeaseContractExpiryReport(d), renewal=getRenewalRiskReport(d), modification=getModificationReport(d), reassessment=getReassessmentReport(d), journal=getJournalSummaryReport(), control=getControlExceptionReport(), controlSummary=getControlSummaryReport(), audit=getAuditTrailReport({dateTo:rptIsoDate(d)}), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), reconciliation=getTfrs16ReportingReconciliation(d);
+    const errors=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.errors)?r.errors:[]);
+    const warnings=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.warnings)?r.warnings:[]);
     if(cfo?.status==="WARNING") warnings.push("CFO data layer reports open control exceptions.");
     if(cfo?.status==="ERROR") errors.push("CFO data layer reported calculation errors.");
     const reconciliationWarning=[reconciliation.liability,reconciliation.cashFlow,reconciliation.liabilityRollForward,reconciliation.rouRollForward,reconciliation.journal,reconciliation.companyTotals].some(x=>x&&x.passed===false);
     if(reconciliationWarning) warnings.push("One or more reporting reconciliation checks failed.");
     const status=errors.length?"ERROR":(warnings.length?"WARNING":"READY");
-    return {version:REPORTING_ENGINE_VERSION,reportingDate:rptIsoDate(d),generatedAt:new Date().toISOString(),status,balanceSheet:bs,profitLoss:pl,cashFlow:cf,liabilityRollForward:liabilityRoll,rouRollForward:rouRoll,maturityAnalysis:maturity,expiryReport:expiry,renewalReport:renewal,modificationReport:modification,reassessmentReport:reassessment,contractRegister:getLeaseContractRegister(d),journalSummary:journal,controlSummary,auditSummary:audit,controlExceptionReport:control,companyExposure:company,currencyExposure:currency,cfoSnapshot:cfo,reconciliation,dataQuality:{status,errors:errors.length,warnings:warnings.length,errorList:errors,warningsList:warnings},traceability:{contract:"CONTRACT_MASTER",schedule:"LEASE_SCHEDULE",calculation:"PROFESSIONAL_CALCULATION_ENGINE",modification:"MODIFICATION_ENGINE",reassessment:"REASSESSMENT_ENGINE",journal:"JOURNAL_ENGINE",audit:"AUDIT_TRAIL_ENGINE",riskControl:"CONTROL_ENGINE"}};
+    return {version:REPORTING_ENGINE_VERSION,reportingDate:rptIsoDate(d),generatedAt:new Date().toISOString(),status,balanceSheet:bs,profitLoss:pl,cashFlow:cf,liabilityRollForward:liabilityRoll,rouRollForward:rouRoll,maturityAnalysis:maturity,liquidityRiskDisclosure,expiryReport:expiry,renewalReport:renewal,modificationReport:modification,reassessmentReport:reassessment,contractRegister:getLeaseContractRegister(d),journalSummary:journal,controlSummary,auditSummary:audit,controlExceptionReport:control,companyExposure:company,currencyExposure:currency,cfoSnapshot:cfo,reconciliation,dataQuality:{status,errors:errors.length,warnings:warnings.length,errorList:errors,warningsList:warnings},traceability:{contract:"CONTRACT_MASTER",schedule:"LEASE_SCHEDULE",calculation:"PROFESSIONAL_CALCULATION_ENGINE",modification:"MODIFICATION_ENGINE",reassessment:"REASSESSMENT_ENGINE",journal:"JOURNAL_ENGINE",audit:"AUDIT_TRAIL_ENGINE",riskControl:"CONTROL_ENGINE"}};
   }
 
   function runV1610ReportingTests(){
@@ -15036,6 +15119,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ["LIABILITY_ROLL_FORWARD",Math.abs(rptNumber(snap.liabilityRollForward.reconciliation?.difference))<=REPORTING_TOLERANCE||snap.liabilityRollForward.status==="ERROR"],
         ["ROU_ROLL_FORWARD",Math.abs(rptNumber(snap.rouRollForward.reconciliation?.difference))<=REPORTING_TOLERANCE||snap.rouRollForward.status==="ERROR"],
         ["MATURITY_ANALYSIS",Array.isArray(snap.maturityAnalysis.rows)],
+        ["LIQUIDITY_RISK_DISCLOSURE",Array.isArray(snap.liquidityRiskDisclosure.rows)&&snap.liquidityRiskDisclosure.rows.length===1&&Array.isArray(snap.liquidityRiskDisclosure.rows[0].buckets)&&snap.liquidityRiskDisclosure.rows[0].buckets.length===4],
         ["CURRENT_NON_CURRENT",Array.isArray(snap.cfoSnapshot?.companies)||Array.isArray(snap.contractRegister.rows)],
         ["COMPANY_EXPOSURE",Array.isArray(snap.companyExposure.rows)],
         ["CURRENCY_SEPARATION",Array.isArray(snap.currencyExposure.rows)],
@@ -23224,6 +23308,7 @@ document.addEventListener("DOMContentLoaded", () => {
     getLeasePaymentMaturityAnalysis,
     getContractMaturityAnalysis,
     getCompanyMaturityAnalysis,
+    getLeaseLiquidityRiskDisclosure,
     getCurrentNonCurrentReport,
     getContractExpiryReport,
     getRenewalRiskReport,
