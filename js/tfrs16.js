@@ -12593,6 +12593,9 @@ document.addEventListener("DOMContentLoaded", () => {
         "Şirket":
           "GK Holding",
 
+        "Şirket Kodu":
+          "COMP-GK-HOLDING",
+
         "Tedarikçi":
           "Örnek Tedarikçi",
 
@@ -16648,7 +16651,8 @@ document.addEventListener("DOMContentLoaded", () => {
       schemaVersion: INTEGRATION_SCHEMA_VERSION,
       fields: Object.freeze({
         contractId: ["contract id", "contractid", "lease id", "sözleşme id", "sozlesme id", "id"],
-        company: ["company", "company code", "companycode", "şirket", "sirket"],
+        companyId: ["company id", "companyid", "company code", "companycode", "şirket id", "sirket id", "şirket kodu", "sirket kodu"],
+        company: ["company", "şirket", "sirket"],
         supplier: ["supplier", "vendor", "tedarikçi", "tedarikci"],
         monthlyPayment: ["monthly payment", "payment", "lease payment", "aylık kira", "aylik kira", "kira ödeme", "kira odeme"],
         startDate: ["start date", "lease start", "commencement date", "başlangıç tarihi", "baslangic tarihi"],
@@ -16994,9 +16998,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const dateResultStart = normalizeIntegrationDate(integrationFindValue(row, fields.startDate || []));
     const dateResultEnd = normalizeIntegrationDate(integrationFindValue(row, fields.endDate || []));
     const dateResultRenewal = normalizeIntegrationDate(integrationFindValue(row, fields.renewalDate || []));
+    const rawCompanyId = String(integrationFindValue(row, fields.companyId || []) || "").trim();
+    const rawCompanyName = String(integrationFindValue(row, fields.company || []) || "").trim();
+    let resolvedCompanyId = rawCompanyId || null;
+    if (!resolvedCompanyId && rawCompanyName && typeof v26LoadCompanies === "function") {
+      try {
+        const master = v26LoadCompanies();
+        const match = master.find(c =>
+          String(c.id || "").toLowerCase() === rawCompanyName.toLowerCase() ||
+          String(c.code || "").toLowerCase() === rawCompanyName.toLowerCase() ||
+          String(c.name || "").toLowerCase() === rawCompanyName.toLowerCase()
+        );
+        if (match) resolvedCompanyId = match.id;
+      } catch (error) {}
+    }
     const normalizedData = {
       id: integrationFindValue(row, fields.contractId || []),
-      company: integrationFindValue(row, fields.company || []),
+      companyId: resolvedCompanyId,
+      company: rawCompanyName,
       supplier: integrationFindValue(row, fields.supplier || []),
       monthlyPayment: integrationNumber(integrationFindValue(row, fields.monthlyPayment || []), NaN),
       startDate: dateResultStart && typeof dateResultStart === "object" ? null : dateResultStart,
@@ -17188,6 +17207,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function buildContractFromIntegrationData(data, existing = null, metadata = {}) {
     const base = existing ? integrationClone(existing) : {
       id: String(data.id),
+      companyId: data.companyId || null,
       company: data.company || "",
       supplier: data.supplier || "",
       monthlyPayment: data.monthlyPayment,
@@ -17220,6 +17240,7 @@ document.addEventListener("DOMContentLoaded", () => {
       reassessments: []
     };
     base.id = String(data.id);
+    base.companyId = data.companyId ?? base.companyId ?? null;
     base.company = data.company ?? base.company;
     base.supplier = data.supplier ?? base.supplier;
     base.monthlyPayment = data.monthlyPayment;
@@ -25790,33 +25811,73 @@ document.addEventListener("DOMContentLoaded", () => {
     return result;
   }
 
+  /**
+   * V26 GK-FIX: companyId birleştirme.
+   * ÖNCEKİ DAVRANIŞ: localStorage'da bir kere V26_COMPANIES_KEY set
+   * edildikten sonra (örn. ilk açılışta boş kontrat listesiyle TR-001
+   * default'ları cache'lenmişse), bu fonksiyon hep o eski cache'i
+   * döndürüyordu ve kontratlara sonradan eklenen gerçek companyId'lerle
+   * (örn. COMP-GK-HOLDING) bir daha ASLA senkronize olmuyordu. Sonuç:
+   * manuel kontrat formundaki şirket dropdown'u (V26) farklı bir ID
+   * uzayı gösteriyor, V21 multi-tenant guard (getTenantContracts) ise
+   * kontrattaki gerçek companyId'yi bekliyor → kontrat "görünmez" oluyor.
+   *
+   * YENİ DAVRANIŞ (additive, mevcut kayıtlar silinmiyor/değiştirilmiyor):
+   * 1) Cache'i oku.
+   * 2) v22CompanyList() (= kontratlardan türeyen gerçek companyId listesi)
+   *    ile karşılaştır.
+   * 3) Cache'de ID veya code olarak KARŞILIĞI OLMAYAN her companyId'yi
+   *    cache'e EKLE (V26 UI'dan elle yapılmış isim/groupId değişiklikleri
+   *    korunur, sadece eksik olanlar tamamlanır).
+   * 4) Cache boşsa eskisi gibi v22'den türet; o da boşsa TR-001 default'larına düş.
+   */
   function v26LoadCompanies() {
+    let cached = null;
     try {
       const raw = localStorage.getItem(V26_COMPANIES_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length) return parsed;
+        if (Array.isArray(parsed) && parsed.length) cached = parsed;
       }
     } catch (error) {
       console.error("V26 şirket listesi okunamadı:", error);
     }
+
+    let liveFromContracts = [];
     try {
       if (typeof v22CompanyList === "function") {
-        const list = v22CompanyList().map((c, i) => ({
-          id: c.id || `TR-${String(i + 1).padStart(3, "0")}`,
-          code: c.code || c.id || `TR-${String(i + 1).padStart(3, "0")}`,
+        liveFromContracts = v22CompanyList().map((c, i) => ({
+          id: String(c.id || `TR-${String(i + 1).padStart(3, "0")}`),
+          code: String(c.code || c.id || `TR-${String(i + 1).padStart(3, "0")}`),
           name: c.name || c.code || "Şirket",
           country: c.country || "TR",
           functionalCurrency: c.baseCurrency || c.functionalCurrency || "TRY",
-          groupId: c.groupId || "GRP-1",
+          groupId: c.groupId || null,
           status: c.status || "ACTIVE"
         }));
-        if (list.length) {
-          v26SaveCompanies(list);
-          return list;
-        }
       }
     } catch (error) {}
+
+    if (cached) {
+      const knownKeys = new Set();
+      cached.forEach(c => {
+        if (c.id) knownKeys.add(String(c.id));
+        if (c.code) knownKeys.add(String(c.code));
+      });
+      const missing = liveFromContracts.filter(c => !knownKeys.has(c.id) && !knownKeys.has(c.code));
+      if (missing.length) {
+        const merged = [...cached, ...missing];
+        v26SaveCompanies(merged);
+        return merged;
+      }
+      return cached;
+    }
+
+    if (liveFromContracts.length) {
+      v26SaveCompanies(liveFromContracts);
+      return liveFromContracts;
+    }
+
     const defaults = [
       { id: "TR-001", code: "TR-001", name: "Teknoloji A.Ş.", country: "TR", functionalCurrency: "TRY", groupId: "GRP-1", status: "ACTIVE" },
       { id: "DE-001", code: "DE-001", name: "GmbH", country: "DE", functionalCurrency: "EUR", groupId: "GRP-1", status: "ACTIVE" },
