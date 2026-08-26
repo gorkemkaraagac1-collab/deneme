@@ -18,11 +18,9 @@ const server = app.listen(
   PORT,
   "0.0.0.0",
   () => {
-
     console.log(
       `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
     );
-
   }
 );
 
@@ -34,23 +32,18 @@ const server = app.listen(
  */
 
 function shutdown(signal) {
-
   console.log(
     `\n${signal} received. Server kapatılıyor...`
   );
 
   server.close(() => {
-
     console.log(
       "HTTP server başarıyla kapatıldı."
     );
 
     process.exit(0);
-
   });
-
 }
-
 
 process.on(
   "SIGTERM",
