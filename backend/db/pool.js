@@ -25,19 +25,23 @@ if (missingEnv.length > 0) {
 }
 
 /**
- * SSL: Production'da varsayılan olarak açıktır (çoğu managed
- * Postgres sağlayıcısı — RDS, Cloud SQL, vb. — SSL ister).
- * DB_SSL=false ile açıkça kapatılabilir (ör. aynı özel ağdaki
- * bir DB'ye düz bağlantı gerekiyorsa). DB_SSL_REJECT_UNAUTHORIZED
+ * SSL: Varsayılan olarak KAPALIDIR. Cloud Run üzerinde Cloud SQL'e
+ * Unix soketi (/cloudsql/INSTANCE_CONNECTION_NAME) veya Cloud SQL
+ * Auth Proxy/Connector üzerinden bağlanılıyorsa, şifreleme zaten
+ * proxy <-> Cloud SQL bacağında (mTLS ile) sağlanır; uygulama ile
+ * yerel soket arasındaki bağlantı düz metindir ve SSL negotiation
+ * KABUL ETMEZ. Bu yüzden NODE_ENV=production kontrolüyle SSL'i
+ * otomatik zorlamak yanlıştır ve "The server does not support SSL
+ * connections" hatasına yol açar.
+ *
+ * SSL yalnızca DB_SSL=true açıkça verildiğinde etkinleştirilir
+ * (ör. Cloud SQL'e public IP üzerinden doğrudan TCP ile ve SSL
+ * zorunluyken bağlanılan senaryolar için). DB_SSL_REJECT_UNAUTHORIZED
  * varsayılan olarak "true"dur; self-signed sertifika kullanan
  * ortamlarda bilinçli olarak "false" yapılabilir.
  */
 function resolveSslOption() {
-  if (process.env.DB_SSL === "false") {
-    return false;
-  }
-
-  if (process.env.DB_SSL === "true" || process.env.NODE_ENV === "production") {
+  if (process.env.DB_SSL === "true") {
     return {
       rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false"
     };
