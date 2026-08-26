@@ -235,6 +235,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const CALCULATION_CACHE = new Map();
   const CALCULATION_CACHE_MAX_SIZE = 200;
 
+  // V26_COMPANIES_KEY de aynı TDZ nedeniyle buraya taşındı: ilk
+  // refresh() çağrısı (aşağıda, sayfa açılışında) v26StandardsBadgeHtml
+  // üzerinden v26LoadCompanies()'i tetikliyor ve bu sabit dosyanın
+  // sonunda (V26 bölümünde) tanımlıysa erişim anında "Cannot access
+  // before initialization" hatası fırlatıyordu (try/catch içinde
+  // yakalanıp yutulduğu için sessiz kalıyordu, ama her satırda
+  // gereksiz konsol hatası ve boşa localStorage denemesi yaratıyordu).
+  const V26_COMPANIES_KEY = "gk_tfrs16_companies_v26";
+
   let contracts = loadContracts();
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
@@ -25869,7 +25878,6 @@ document.addEventListener("DOMContentLoaded", () => {
      (ADDITIVE)
      ========================================================== */
 
-  const V26_COMPANIES_KEY = "gk_tfrs16_companies_v26";
   const V26_CURRENCIES = ["TRY", "EUR", "USD", "GBP", "CHF", "JPY", "AED", "SAR"];
   const V26_COUNTRIES = [
     { code: "TR", name: "Türkiye" },
