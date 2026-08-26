@@ -1,0 +1,35 @@
+# ============================================================
+# GÜVENLİK: .env dosyaları gerçek kimlik bilgileri (DB_PASSWORD,
+# JWT_SECRET, vb.) içerebilir. Cloud Run zaten bu değerleri
+# environment variable / Secret Manager referansı olarak enjekte
+# ediyor; .env dosyasının image içine gömülmesine hiçbir zaman
+# gerek yok ve image'ı inceleyen herkese kimlik bilgilerini
+# sızdırır. Daha önce .dockerignore boş olduğu için
+# COPY backend ./backend komutu backend/.env dosyasını da
+# (gerçek şifreyle birlikte) image'a kopyalıyordu.
+# ============================================================
+.env
+.env.*
+!.env.example
+
+# Bağımlılıklar image içinde npm install ile kurulur; host'taki
+# node_modules'ün kopyalanması hem gereksiz hem de platform/arch
+# uyuşmazlığına yol açabilir.
+node_modules
+**/node_modules
+
+# Versiyon kontrolü ve CI/CD meta verileri runtime'da gerekmez.
+.git
+.github
+
+# Test dosyaları ve geliştirme belgeleri production image'ının
+# parçası olmamalı.
+test
+**/*.test.js
+coverage
+
+# Yerel geliştirme/IDE dosyaları.
+.vscode
+.idea
+*.log
+npm-debug.log*
