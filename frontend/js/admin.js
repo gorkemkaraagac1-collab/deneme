@@ -98,7 +98,7 @@ const AdminAPI = {
 async function checkAdminAuth() {
     const token = localStorage.getItem('access_token');
     if (!token) {
-        window.location.href = '/login.html';
+        window.location.href = '../login.html';
         return false;
     }
     
@@ -111,13 +111,13 @@ async function checkAdminAuth() {
         
         if (!response.ok) {
             localStorage.removeItem('access_token');
-            window.location.href = '/login.html';
+            window.location.href = '../login.html';
             return false;
         }
         
         const data = await response.json();
         if (data.data.role !== 'ADMIN') {
-            window.location.href = '/dashboard.html';
+            window.location.href = '../dashboard.html';
             return false;
         }
         
@@ -127,7 +127,7 @@ async function checkAdminAuth() {
         
     } catch (error) {
         console.error('Auth check error:', error);
-        window.location.href = '/login.html';
+        window.location.href = '../login.html';
         return false;
     }
 }
@@ -182,5 +182,5 @@ function escapeHtml(text) {
 
 function logout() {
     localStorage.removeItem('access_token');
-    window.location.href = '/login.html';
+    window.location.href = '../login.html';
 }
