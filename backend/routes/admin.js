@@ -133,6 +133,15 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
         });
     }
 
+    // Reject whitespace-only passwords (e.g. "          ") without
+    // trimming the actual password value used below for hashing.
+    if (password.trim().length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password cannot be empty or whitespace only'
+        });
+    }
+
     // Align with /api/auth/register password policy
     if (password.length < 10) {
         return res.status(400).json({
