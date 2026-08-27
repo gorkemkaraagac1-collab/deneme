@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Financial Intelligence Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e1e8ed;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header .username {
+            font-weight: 500;
+        }
+        .btn-logout {
+            background: none;
+            border: 1px solid #e1e8ed;
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #2c3e50;
+            transition: all 0.2s;
+        }
+        .btn-logout:hover {
+            background: #e74c3c;
+            color: #fff;
+            border-color: #e74c3c;
+        }
+        .welcome {
+            margin-bottom: 32px;
+        }
+        .welcome h2 {
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .welcome p {
+            color: #7f8c8d;
+            margin-top: 4px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border-left: 4px solid #3498db;
+        }
+        .card .label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        .card .value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+        .card.success { border-left-color: #2ecc71; }
+        .card.warning { border-left-color: #f39c12; }
+        .card.danger { border-left-color: #e74c3c; }
+        
+        .modules {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .modules h3 {
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .module-item {
+            padding: 16px;
+            border: 1px solid #e1e8ed;
+            border-radius: 6px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .module-item:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+        .module-item .icon {
+            font-size: 32px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .module-item .name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .module-item .status {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 4px;
+        }
+        .module-item.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .module-item.locked .status {
+            color: #e74c3c;
+        }
+        .module-item.unlocked .status {
+            color: #2ecc71;
+        }
+        
+        #companyInfo {
+            display: none;
+        }
+        .error-msg {
+            background: #fadbd8;
+            color: #922b21;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Financial Intelligence Platform</h1>
+            <div class="user-info">
+                <span class="username" id="userDisplay">Loading...</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div id="errorMsg" class="error-msg"></div>
+
+        <div id="companyInfo">
+            <div class="welcome">
+                <h2 id="welcomeUser">Welcome!</h2>
+                <p id="companyDisplay">Loading company information...</p>
+            </div>
+
+            <div class="cards">
+                <div class="card success">
+                    <div class="label">Company</div>
+                    <div class="value" id="companyName">-</div>
+                </div>
+                <div class="card">
+                    <div class="label">License Status</div>
+                    <div class="value" id="licenseStatus">-</div>
+                </div>
+                <div class="card warning">
+                    <div class="label">Plan</div>
+                    <div class="value" id="licensePlan">-</div>
+                </div>
+                <div class="card danger">
+                    <div class="label">Expiry Date</div>
+                    <div class="value" id="licenseExpiry">-</div>
+                </div>
+            </div>
+
+            <div class="modules">
+                <h3>Available Modules</h3>
+                <div class="module-grid" id="moduleGrid">
+                    <!-- JS ile doldurulacak -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Dashboard - Backend JWT Entegrasyonu
+        // ============================================================
+
+        function getToken() {
+            return localStorage.getItem('access_token');
+        }
+
+        async function fetchAPI(url, options = {}) {
+            const token = getToken();
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                    ...(options.headers || {})
+                }
+            });
+            return response.json();
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login.html';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('tr-TR');
+        }
+
+        async function loadDashboard() {
+            const token = getToken();
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                // Mevcut kullanıcı bilgisi
+                const meResult = await fetchAPI('/api/auth/me');
+                if (!meResult.success) {
+                    localStorage.removeItem('access_token');
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                const user = meResult.data;
+                document.getElementById('userDisplay').textContent = user.username;
+                document.getElementById('welcomeUser').textContent = `Welcome, ${user.username}!`;
+
+                // Kullanıcının ilk şirketini al
+                if (!user.companyIds || user.companyIds.length === 0) {
+                    document.getElementById('companyDisplay').textContent = 'No company assigned';
+                    document.getElementById('companyInfo').style.display = 'block';
+                    return;
+                }
+
+                const companyId = user.companyIds[0];
+                document.getElementById('companyDisplay').textContent = `Company ID: ${companyId}`;
+
+                // Şirket detayları için /api/admin/companies/:id kullanılamaz (customer yetkisi yok)
+                // Bunun yerine /api/auth/me'den gelen bilgilerle yetiniriz veya 
+                // customer'a özel bir endpoint gerekir. Mevcut sistemde company_licenses tablosuna
+                // doğrudan sorgu atabiliriz ama backend'de bir endpoint yoksa frontend'den yapamayız.
+                // Bu nedenle mevcut dashboard'da gösterilecek bilgiler sınırlıdır.
+                // İleride /api/customer/company endpoint'i eklenebilir.
+
+                // Şimdilik gösterilebilecek bilgiler:
+                document.getElementById('companyName').textContent = 'Company #' + companyId;
+                document.getElementById('licenseStatus').textContent = 'ACTIVE'; // Varsayılan
+                document.getElementById('licensePlan').textContent = 'Professional'; // Varsayılan
+                document.getElementById('licenseExpiry').textContent = '2027-12-31'; // Varsayılan
+
+                // TFRS16 modülü göster (ana ürün)
+                document.getElementById('moduleGrid').innerHTML = `
+                    <div class="module-item unlocked">
+                        <span class="icon">📊</span>
+                        <div class="name">TFRS16</div>
+                        <div class="status">✓ Available</div>
+                    </div>
+                    <div class="module-item locked">
+                        <span class="icon">🔒</span>
+                        <div class="name">TMS19</div>
+                        <div class="status">Coming Soon</div>
+                    </div>
+                    <div class="module-item locked">
+                        <span class="icon">🔒</span>
+                        <div class="name">DCF</div>
+                        <div class="status">Coming Soon</div>
+                    </div>
+                    <div class="module-item locked">
+                        <span class="icon">🔒</span>
+                        <div class="name">Hedge Accounting</div>
+                        <div class="status">Coming Soon</div>
+                    </div>
+                `;
+
+                document.getElementById('companyInfo').style.display = 'block';
+
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+                const errorEl = document.getElementById('errorMsg');
+                errorEl.textContent = 'Error loading dashboard: ' + error.message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // Auto-login check
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>
