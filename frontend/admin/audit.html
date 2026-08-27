@@ -61,15 +61,16 @@
                     <thead>
                         <tr>
                             <th>Timestamp</th>
-                            <th>Action</th>
                             <th>User</th>
+                            <th>Company</th> <!-- YENİ SÜTUN -->
+                            <th>Action</th>
                             <th>Entity</th>
                             <th>Success</th>
                             <th>Details</th>
                         </tr>
                     </thead>
                     <tbody id="auditTableBody">
-                        <tr><td colspan="6" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
                 <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--text-light);">
@@ -104,7 +105,7 @@
                 const result = await AdminAPI.getAudit(params);
                 if (!result.success) {
                     document.getElementById('auditTableBody').innerHTML = 
-                        `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
                     return;
                 }
                 
@@ -113,8 +114,11 @@
                 const html = result.data.map(e => `
                     <tr>
                         <td style="font-size:12px;">${formatDate(e.timestamp)}</td>
-                        <td><strong>${escapeHtml(e.action)}</strong></td>
                         <td>${escapeHtml(e.user_username || 'System')}</td>
+                        <td>
+                            ${e.company_name ? `${escapeHtml(e.company_name)} (${escapeHtml(e.company_code || '')})` : 'N/A'}
+                        </td> <!-- YENİ SÜTUN -->
+                        <td><strong>${escapeHtml(e.action)}</strong></td>
                         <td>${escapeHtml(e.entity_type)} ${e.entity_id ? '#'+e.entity_id : ''}</td>
                         <td><span class="status ${e.success ? 'success' : 'failed'}">${e.success ? '✓' : '✗'}</span></td>
                         <td style="font-size:12px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -125,13 +129,15 @@
                 `).join('');
                 
                 document.getElementById('auditTableBody').innerHTML = html || 
-                    `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">No audit events found</td></tr>`;
+                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No audit events found</td></tr>`;
                 
                 document.getElementById('auditPagination').textContent = 
                     `Showing ${currentPage * pageSize + 1} - ${Math.min((currentPage + 1) * pageSize, totalItems)} of ${totalItems}`;
                     
             } catch (error) {
                 console.error('Load audit error:', error);
+                document.getElementById('auditTableBody').innerHTML = 
+                    `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error loading audit data</td></tr>`;
             }
         }
 
