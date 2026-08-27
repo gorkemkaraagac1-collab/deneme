@@ -543,10 +543,10 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// 4. AUDIT LOG (COMPANY BİLGİSİ EKLENDİ)
+// 4. AUDIT LOG (CONTEXT-BASED COMPANY ÇÖZÜMÜ İLE GÜNCELLENDİ)
 // ============================================================
 
-// GET /api/admin/audit - Audit log listele (Company bilgisi ile)
+// GET /api/admin/audit - Audit log listele (Context-Based Company)
 router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
     const { limit = 100, offset = 0, action, entity_type, user_id } = req.query;
     
@@ -560,16 +560,30 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
                 ae.entity_id,
                 ae.user_id,
                 u.username as user_username,
-                -- YENİ: Company bilgisi (LEFT JOIN ile)
-                c.name AS company_name,
-                c.code AS company_code,
+                -- Context-based company resolution
+                -- entity_type = 'company' ise doğrudan company
+                -- entity_type = 'license' ise license üzerinden company
+                -- Diğer durumlarda NULL (frontend'de N/A gösterilecek)
+                CASE 
+                    WHEN ae.entity_type = 'company' THEN c_entity.name
+                    WHEN ae.entity_type = 'license' THEN c_license.name
+                    ELSE NULL
+                END AS company_name,
+                CASE 
+                    WHEN ae.entity_type = 'company' THEN c_entity.code
+                    WHEN ae.entity_type = 'license' THEN c_license.code
+                    ELSE NULL
+                END AS company_code,
                 ae.old_value,
                 ae.new_value,
                 ae.success
             FROM audit_events ae
             LEFT JOIN users u ON ae.user_id = u.id
-            LEFT JOIN user_companies uc ON u.id = uc.user_id
-            LEFT JOIN companies c ON uc.company_id = c.id
+            -- Entity_type = 'company' ise doğrudan company'ye JOIN
+            LEFT JOIN companies c_entity ON ae.entity_id = c_entity.id AND ae.entity_type = 'company'
+            -- Entity_type = 'license' ise license üzerinden company'ye JOIN
+            LEFT JOIN company_licenses cl ON ae.entity_id = cl.id AND ae.entity_type = 'license'
+            LEFT JOIN companies c_license ON cl.company_id = c_license.id
             WHERE 1=1
         `;
         
@@ -591,8 +605,8 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
             params.push(user_id);
         }
         
-        // YENİ: GROUP BY eklendi (çoklu company'leri önlemek için)
-        query += ` GROUP BY ae.id, u.id, c.id ORDER BY ae.timestamp DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+        // GROUP BY yok - her event tek bir satırda gelir
+        query += ` ORDER BY ae.timestamp DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
         params.push(parseInt(limit), parseInt(offset));
         
         const result = await pool.query(query, params);
