@@ -50,7 +50,7 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-// POST /api/admin/users - Yeni kullanıcı oluştur
+// POST /api/admin/users - Yeni kullanıcı oluştur (GELİŞTİRİLMİŞ AUDIT)
 router.post('/users', requireAuth, requireAdmin, async (req, res) => {
     const { username, password, role, status, company_ids } = req.body;
     
@@ -95,9 +95,13 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
         
         const newUser = insertResult.rows[0];
         
-        // Company atamaları
-        if (company_ids && Array.isArray(company_ids) && company_ids.length > 0) {
-            for (const companyId of company_ids) {
+        // Company atamaları (benzersiz ID'ler)
+        const uniqueCompanyIds = company_ids && Array.isArray(company_ids) 
+            ? [...new Set(company_ids)] 
+            : [];
+            
+        if (uniqueCompanyIds.length > 0) {
+            for (const companyId of uniqueCompanyIds) {
                 await client.query(
                     `INSERT INTO user_companies (user_id, company_id)
                      VALUES ($1, $2)
@@ -107,7 +111,7 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
             }
         }
         
-        // Audit log
+        // Audit log - GELİŞTİRİLMİŞ: company_ids eklendi
         await client.query(
             `INSERT INTO audit_events (
                 action, entity_type, entity_id, user_id, old_value, new_value
@@ -118,7 +122,12 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
                 newUser.id,
                 req.user.id,
                 null,
-                JSON.stringify({ username, role: role || 'VIEWER', status: status || 'ACTIVE' })
+                JSON.stringify({ 
+                    username, 
+                    role: role || 'VIEWER', 
+                    status: status || 'ACTIVE',
+                    company_ids: uniqueCompanyIds
+                })
             ]
         );
         
@@ -139,7 +148,7 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// PATCH /api/admin/users/:id - Kullanıcı güncelle (GÜVENLİK SERTLEŞTİRİLMİŞ)
+// PATCH /api/admin/users/:id - Kullanıcı güncelle (GÜVENLİK SERTLEŞTİRİLMİŞ + GELİŞTİRİLMİŞ AUDIT)
 // ============================================================
 router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const userId = req.params.id;
@@ -147,15 +156,12 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const requestingUserId = req.user.id;
 
     // --- 1. TEMEL VALİDASYONLAR ---
-    // Eğer role gönderilmişse, geçerli bir değer mi?
     if (role !== undefined && !['ADMIN', 'VIEWER'].includes(role)) {
         return res.status(400).json({ success: false, error: 'Invalid role' });
     }
-    // Eğer status gönderilmişse, geçerli bir değer mi?
     if (status !== undefined && !['ACTIVE', 'INACTIVE'].includes(status)) {
         return res.status(400).json({ success: false, error: 'Invalid status' });
     }
-    // company_ids gönderilmişse, tipi array mi?
     if (company_ids !== undefined && !Array.isArray(company_ids)) {
         return res.status(400).json({ success: false, error: 'company_ids must be an array' });
     }
@@ -165,7 +171,6 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
         await client.query('BEGIN');
 
         // --- 2. KULLANICI VARLIĞI KONTROLÜ ---
-        // Eski bilgileri audit log için al
         const userResult = await client.query(
             `SELECT id, username, role, status FROM users WHERE id = $1`,
             [userId]
@@ -179,27 +184,36 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
         }
         const currentUser = userResult.rows[0];
 
-        // --- 3. COMPANY_IDS VALİDASYONU ---
-        // Eğer company_ids gönderildiyse, tüm ID'ler geçerli mi?
-        if (company_ids !== undefined && company_ids.length > 0) {
-            // Benzersiz ID'leri al (SQL injection önlemek için parametreli sorgu)
-            const placeholders = company_ids.map((_, i) => `$${i + 2}`).join(',');
-            const companyCheckQuery = `
-                SELECT COUNT(*) as count FROM companies WHERE id IN (${placeholders})
-            `;
-            const companyCheckResult = await client.query(companyCheckQuery, [userId, ...company_ids]);
+        // --- 3. MEVCUT COMPANY ID'LERİNİ AL (AUDIT İÇİN) ---
+        const currentCompaniesResult = await client.query(
+            `SELECT company_id FROM user_companies WHERE user_id = $1`,
+            [userId]
+        );
+        const currentCompanyIds = currentCompaniesResult.rows.map(row => row.company_id);
+
+        // --- 4. COMPANY_IDS VALİDASYONU ---
+        let uniqueCompanyIds = [];
+        if (company_ids !== undefined) {
+            // Benzersiz ID'leri al
+            uniqueCompanyIds = [...new Set(company_ids)];
             
-            // Eğer bulunan company sayısı, gönderilen ID sayısından azsa geçersiz ID var demektir.
-            if (parseInt(companyCheckResult.rows[0].count) !== company_ids.length) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ success: false, error: 'One or more company IDs are invalid' });
+            if (uniqueCompanyIds.length > 0) {
+                // Tüm ID'ler geçerli mi kontrol et
+                const placeholders = uniqueCompanyIds.map((_, i) => `$${i + 2}`).join(',');
+                const companyCheckQuery = `
+                    SELECT COUNT(*) as count FROM companies WHERE id IN (${placeholders})
+                `;
+                const companyCheckResult = await client.query(companyCheckQuery, [userId, ...uniqueCompanyIds]);
+                
+                if (parseInt(companyCheckResult.rows[0].count) !== uniqueCompanyIds.length) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ success: false, error: 'One or more company IDs are invalid' });
+                }
             }
         }
 
-        // --- 4. ADMIN KENDİNİ KORUMA KURALLARI ---
-        // Eğer kullanıcı kendi hesabını güncelliyorsa...
+        // --- 5. ADMIN KENDİNİ KORUMA KURALLARI ---
         if (userId === requestingUserId) {
-            // ... kendini INACTIVE yapmaya çalışıyorsa engelle.
             if (status === 'INACTIVE') {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ 
@@ -207,7 +221,6 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
                     error: 'You cannot deactivate your own administrator account.' 
                 });
             }
-            // ... kendini VIEWER yapmaya çalışıyorsa engelle.
             if (role === 'VIEWER') {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ 
@@ -217,10 +230,8 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
             }
         }
 
-        // --- 5. SON AKTİF ADMIN KORUMASI ---
-        // Eğer hedef kullanıcı bir ADMIN ise ve yapılan değişiklik onu ADMIN olmaktan çıkarıyorsa...
+        // --- 6. SON AKTİF ADMIN KORUMASI ---
         if (currentUser.role === 'ADMIN' && (role === 'VIEWER' || status === 'INACTIVE')) {
-            // Mevcut aktif admin sayısını kontrol et (hedef kullanıcı hariç)
             const activeAdminQuery = `
                 SELECT COUNT(*) as count FROM users 
                 WHERE role = 'ADMIN' AND status = 'ACTIVE' AND id != $1
@@ -228,7 +239,6 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
             const activeAdminResult = await client.query(activeAdminQuery, [userId]);
             const otherActiveAdmins = parseInt(activeAdminResult.rows[0].count);
 
-            // Eğer bu işlem sonucunda sistemde başka aktif admin kalmayacaksa...
             if (otherActiveAdmins === 0) {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ 
@@ -238,8 +248,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
             }
         }
 
-        // --- 6. VERİTABANI GÜNCELLEMELERİ ---
-        // Users tablosunu güncelle
+        // --- 7. VERİTABANI GÜNCELLEMELERİ ---
         let updateUserQuery = 'UPDATE users SET ';
         const updateFields = [];
         const queryParams = [];
@@ -254,22 +263,21 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
             queryParams.push(status);
         }
 
-        // Eğer güncellenecek alan varsa...
         if (updateFields.length > 0) {
             updateUserQuery += updateFields.join(', ') + ` WHERE id = $${paramCount}`;
             queryParams.push(userId);
             await client.query(updateUserQuery, queryParams);
         }
 
-        // company_ids güncellemesi (eğer gönderildiyse)
+        // company_ids güncellemesi
         if (company_ids !== undefined) {
             // Mevcut atamaları sil
             await client.query(
                 'DELETE FROM user_companies WHERE user_id = $1',
                 [userId]
             );
-            // Yeni atamaları ekle (eğer boş değilse)
-            for (const companyId of company_ids) {
+            // Yeni atamaları ekle
+            for (const companyId of uniqueCompanyIds) {
                 await client.query(
                     `INSERT INTO user_companies (user_id, company_id) VALUES ($1, $2)`,
                     [userId, companyId]
@@ -277,7 +285,21 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
             }
         }
 
-        // --- 7. AUDIT LOG OLUŞTUR ---
+        // --- 8. AUDIT LOG OLUŞTUR (GELİŞTİRİLMİŞ: old ve new company_ids) ---
+        const oldValue = {
+            id: currentUser.id,
+            username: currentUser.username,
+            role: currentUser.role,
+            status: currentUser.status,
+            company_ids: currentCompanyIds
+        };
+
+        const newValue = {
+            role: role !== undefined ? role : currentUser.role,
+            status: status !== undefined ? status : currentUser.status,
+            company_ids: company_ids !== undefined ? uniqueCompanyIds : 'unchanged'
+        };
+
         await client.query(
             `INSERT INTO audit_events (
                 action, entity_type, entity_id, user_id, old_value, new_value
@@ -287,19 +309,8 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
                 'user',
                 userId,
                 req.user.id,
-                // Eski değerleri detaylandır
-                JSON.stringify({ 
-                    id: currentUser.id, 
-                    username: currentUser.username, 
-                    role: currentUser.role, 
-                    status: currentUser.status 
-                }),
-                // Yeni değerleri detaylandır
-                JSON.stringify({ 
-                    role: role !== undefined ? role : currentUser.role, 
-                    status: status !== undefined ? status : currentUser.status,
-                    company_ids: company_ids !== undefined ? company_ids : 'unchanged'
-                })
+                JSON.stringify(oldValue),
+                JSON.stringify(newValue)
             ]
         );
 
@@ -313,7 +324,6 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Admin update user error:', error);
-        // Hassas bilgileri dışa vurma, genel hata mesajı gönder
         res.status(500).json({ success: false, error: 'Internal server error' });
     } finally {
         client.release();
@@ -388,7 +398,6 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
     try {
         await client.query('BEGIN');
         
-        // Code kontrolü
         const existingCompany = await client.query(
             'SELECT id FROM companies WHERE code = $1',
             [code]
@@ -402,7 +411,6 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
             });
         }
         
-        // Şirket oluştur
         const result = await client.query(
             `INSERT INTO companies (name, code, tax_number, address, phone, email)
              VALUES ($1, $2, $3, $4, $5, $6)
@@ -412,7 +420,6 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
         
         const newCompany = result.rows[0];
         
-        // Audit log
         await client.query(
             `INSERT INTO audit_events (
                 action, entity_type, entity_id, user_id, old_value, new_value
@@ -448,7 +455,6 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
     const companyId = req.params.id;
     
     try {
-        // Şirket bilgisi
         const companyResult = await pool.query(
             `SELECT * FROM companies WHERE id = $1`,
             [companyId]
@@ -463,7 +469,6 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
         
         const company = companyResult.rows[0];
         
-        // Kullanıcılar
         const usersResult = await pool.query(`
             SELECT u.id, u.username, u.role, u.status
             FROM users u
@@ -471,7 +476,6 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
             WHERE uc.company_id = $1
         `, [companyId]);
         
-        // Lisanslar
         const licensesResult = await pool.query(`
             SELECT 
                 cl.id,
@@ -503,8 +507,7 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// 3. LICENSE MANAGEMENT (Mevcut admin-licenses.js kullanılıyor)
-// Burada sadece tüm lisansları listeleme endpoint'i ekleniyor
+// 3. LICENSE MANAGEMENT
 // ============================================================
 
 // GET /api/admin/licenses - Tüm lisansları listele
@@ -543,12 +546,29 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// 4. AUDIT LOG (CONTEXT-BASED COMPANY ÇÖZÜMÜ İLE GÜNCELLENDİ)
+// 4. AUDIT LOG (CONTEXT-BASED COMPANY - MULTI-COMPANY DUPLICATE FIX)
 // ============================================================
 
-// GET /api/admin/audit - Audit log listele (Context-Based Company)
+// GET /api/admin/audit - Audit log listele
 router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
     const { limit = 100, offset = 0, action, entity_type, user_id } = req.query;
+    
+    // --- PAGINATION VALIDATION ---
+    const parsedLimit = parseInt(limit);
+    const parsedOffset = parseInt(offset);
+    
+    if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 500) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid pagination parameters. limit must be between 1 and 500.' 
+        });
+    }
+    if (isNaN(parsedOffset) || parsedOffset < 0) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid pagination parameters. offset must be 0 or greater.' 
+        });
+    }
     
     try {
         let query = `
@@ -607,7 +627,7 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
         
         // GROUP BY yok - her event tek bir satırda gelir
         query += ` ORDER BY ae.timestamp DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
-        params.push(parseInt(limit), parseInt(offset));
+        params.push(parsedLimit, parsedOffset);
         
         const result = await pool.query(query, params);
         
@@ -636,8 +656,8 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
             data: result.rows,
             pagination: {
                 total: parseInt(countResult.rows[0].count),
-                limit: parseInt(limit),
-                offset: parseInt(offset)
+                limit: parsedLimit,
+                offset: parsedOffset
             }
         });
         
@@ -648,7 +668,7 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// 5. DASHBOARD METRICS
+// 5. DASHBOARD METRICS (AUDIT İLE TUTARLI CONTEXT-BASED COMPANY)
 // ============================================================
 
 // GET /api/admin/dashboard - Dashboard metrikleri
@@ -677,18 +697,24 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
             WHERE status = 'ACTIVE'
         `);
         
-        // Son aktiviteler
+        // Son aktiviteler (AUDIT endpoint ile tutarlı context-based company)
         const recentActivity = await pool.query(`
             SELECT 
                 ae.timestamp,
                 ae.action,
                 ae.entity_type,
                 u.username as user_username,
-                c.name as company_name,
+                CASE 
+                    WHEN ae.entity_type = 'company' THEN c_entity.name
+                    WHEN ae.entity_type = 'license' THEN c_license.name
+                    ELSE NULL
+                END AS company_name,
                 ae.success
             FROM audit_events ae
             LEFT JOIN users u ON ae.user_id = u.id
-            LEFT JOIN companies c ON ae.entity_id = c.id AND ae.entity_type = 'company'
+            LEFT JOIN companies c_entity ON ae.entity_id = c_entity.id AND ae.entity_type = 'company'
+            LEFT JOIN company_licenses cl ON ae.entity_id = cl.id AND ae.entity_type = 'license'
+            LEFT JOIN companies c_license ON cl.company_id = c_license.id
             ORDER BY ae.timestamp DESC
             LIMIT 10
         `);
