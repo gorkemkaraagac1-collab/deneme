@@ -72,7 +72,14 @@
 
     <script src="/js/admin.js"></script>
     <script>
+        // --- Global Değişkenler ---
         let allCompanies = [];
+        // Kullanıcı verilerini ID'ye göre saklamak için bir obje
+        let usersMap = {};
+        // Düzenleme sırasında butonu kilitlemek için
+        let isEditSubmitting = false;
+
+        // --- Mevcut Fonksiyonlar (Yeni eklenenlerle birlikte) ---
 
         async function loadCompaniesForSelect() {
             try {
@@ -94,6 +101,12 @@
                     return;
                 }
                 
+                // Kullanıcı verilerini haritaya kaydet
+                usersMap = {};
+                result.data.forEach(user => {
+                    usersMap[user.id] = user;
+                });
+
                 const html = result.data.map(u => `
                     <tr>
                         <td><strong>${escapeHtml(u.username)}</strong></td>
@@ -115,6 +128,123 @@
             }
         }
 
+        // --- YENİ / GÜNCELLENEN FONKSİYONLAR ---
+
+        // 1. Düzenleme Modal'ını Göster
+        function editUser(userId) {
+            // Daha önce yüklenmiş kullanıcı verilerini bul
+            const user = usersMap[userId];
+            if (!user) {
+                alert('Kullanıcı verileri bulunamadı. Lütfen sayfayı yenileyin.');
+                return;
+            }
+
+            // Mevcut kullanıcının şirket ID'lerini al
+            const currentCompanyIds = (user.companies || []).map(c => c.company_id);
+
+            // Şirket seçeneklerini oluştur
+            const companyOptions = allCompanies.map(c => 
+                `<option value="${c.id}" ${currentCompanyIds.includes(c.id) ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
+            ).join('');
+
+            // Modal içeriğini oluştur
+            const modalContent = `
+                <form id="editUserForm" onsubmit="saveUserEdit(event, '${user.id}')">
+                    <div class="form-group">
+                        <label>Username (readonly)</label>
+                        <input type="text" value="${escapeHtml(user.username)}" readonly style="background:#f0f0f0;">
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select name="role" required>
+                            <option value="VIEWER" ${user.role === 'VIEWER' ? 'selected' : ''}>VIEWER</option>
+                            <option value="ADMIN" ${user.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" required>
+                            <option value="ACTIVE" ${user.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
+                            <option value="INACTIVE" ${user.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Companies</label>
+                        <select name="company_ids" multiple style="height:120px;">
+                            ${companyOptions}
+                        </select>
+                        <small style="color:var(--text-light);">Hold Ctrl to select multiple. Select none to remove all assignments.</small>
+                    </div>
+                    <div id="editFormError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="editSubmitBtn">Save Changes</button>
+                    </div>
+                </form>
+            `;
+
+            showModal(`Edit User: ${escapeHtml(user.username)}`, modalContent);
+        }
+
+        // 2. Düzenleme Formunu Kaydet
+        async function saveUserEdit(event, userId) {
+            event.preventDefault();
+            
+            // Eğer zaten bir işlem devam ediyorsa, çık
+            if (isEditSubmitting) return;
+            
+            const form = event.target;
+            const submitBtn = document.getElementById('editSubmitBtn');
+            const errorDiv = document.getElementById('editFormError');
+            
+            // Butonu devre dışı bırak ve metni değiştir
+            isEditSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            errorDiv.style.display = 'none';
+
+            // Form verilerini topla
+            const role = form.role.value;
+            const status = form.status.value;
+            
+            // Seçili şirket ID'lerini al
+            const companySelect = form.company_ids;
+            const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
+
+            const data = {
+                role: role,
+                status: status,
+                company_ids: company_ids
+            };
+
+            try {
+                const result = await AdminAPI.updateUser(userId, data);
+                
+                if (result.success) {
+                    // Başarılı
+                    closeModal();
+                    await loadUsers(); // Listeyi yenile
+                    // Basit bir başarı mesajı (isteğe bağlı)
+                    alert('Kullanıcı başarıyla güncellendi!');
+                } else {
+                    // Hata
+                    errorDiv.textContent = 'Hata: ' + (result.error || 'Bilinmeyen bir hata oluştu.');
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Update user error:', error);
+                errorDiv.textContent = 'Bir hata oluştu: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                // Butonu tekrar aktif et
+                isEditSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save Changes';
+            }
+        }
+
+        // --- Diğer Mevcut Fonksiyonlar (showCreateUserModal, createUser) ---
+        // (Bu fonksiyonlar zaten mevcut, değişiklik yok. Sadece kopyalandı.)
         function showCreateUserModal() {
             const companyOptions = allCompanies.map(c => 
                 `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
@@ -188,11 +318,7 @@
             }
         }
 
-        function editUser(id) {
-            alert('Edit user functionality - PATCH /api/admin/users/' + id);
-            // TODO: Implement edit modal with user details
-        }
-
+        // --- Sayfa Yükleme ---
         document.addEventListener('DOMContentLoaded', async () => {
             const authenticated = await checkAdminAuth();
             if (authenticated) {
@@ -200,6 +326,9 @@
                 loadUsers();
             }
         });
+
+        // --- Güvenlik Uyarısı (Konsola) ---
+        console.warn('Security Note: This frontend is for UI purposes only. All critical authorization checks are performed on the backend.');
     </script>
 </body>
 </html>
