@@ -293,6 +293,10 @@
         // Dashboard - Backend JWT Entegrasyonu + License Bilgisi
         // ============================================================
 
+        // Backend: Cloud Run (frontend GitHub Pages'te barındığı için
+        // relative "/api/..." istekleri kendi origin'ine gider, backend'e değil)
+        const API_BASE_URL = "https://deneme-git-285469227510.europe-west1.run.app";
+
         // --- Helper Functions ---
         function getToken() {
             return localStorage.getItem('access_token');
@@ -300,7 +304,7 @@
 
         async function fetchAPI(url, options = {}) {
             const token = getToken();
-            const response = await fetch(url, {
+            const response = await fetch(`${API_BASE_URL}${url}`, {
                 ...options,
                 headers: {
                     'Content-Type': 'application/json',
