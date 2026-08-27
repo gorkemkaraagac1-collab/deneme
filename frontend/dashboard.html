@@ -317,7 +317,7 @@
 
         function logout() {
             localStorage.removeItem('access_token');
-            window.location.href = '/login.html';
+            window.location.href = './login.html';
         }
 
         function formatDate(dateStr) {
@@ -353,7 +353,7 @@
         async function loadDashboard() {
             const token = getToken();
             if (!token) {
-                window.location.href = '/login.html';
+                window.location.href = './login.html';
                 return;
             }
 
@@ -362,7 +362,7 @@
                 const meResult = await fetchAPI('/api/auth/me');
                 if (!meResult.success) {
                     localStorage.removeItem('access_token');
-                    window.location.href = '/login.html';
+                    window.location.href = './login.html';
                     return;
                 }
 
