@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Financial Intelligence Platform</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="/admin/index.html" class="active">
+                <span class="icon">📊</span> Dashboard
+            </a>
+            <a href="/admin/companies.html">
+                <span class="icon">🏢</span> Companies
+            </a>
+            <a href="/admin/users.html">
+                <span class="icon">👤</span> Users
+            </a>
+            <a href="/admin/licenses.html">
+                <span class="icon">🔑</span> Licenses
+            </a>
+            <a href="/admin/audit.html">
+                <span class="icon">📋</span> Audit Log
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <header class="top-header">
+            <div class="page-title">Dashboard</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            <!-- Dashboard Cards -->
+            <div class="dashboard-cards" id="dashboardCards">
+                <div class="stat-card">
+                    <div class="stat-number" id="statCompanies">-</div>
+                    <div class="stat-label">Companies</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number" id="statLicenses">-</div>
+                    <div class="stat-label">Active Licenses</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number" id="statUsers">-</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="statTfrs16">-</div>
+                    <div class="stat-label">TFRS16 Customers</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <h3>Recent Activity</h3>
+                <div id="recentActivity">
+                    <p style="color: var(--text-light);">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/admin.js"></script>
+    <script>
+        // Dashboard verilerini yükle
+        async function loadDashboard() {
+            try {
+                const result = await AdminAPI.getDashboard();
+                if (!result.success) {
+                    console.error('Dashboard error:', result.error);
+                    return;
+                }
+                
+                const data = result.data;
+                document.getElementById('statCompanies').textContent = data.companies;
+                document.getElementById('statLicenses').textContent = data.active_licenses;
+                document.getElementById('statUsers').textContent = data.users;
+                document.getElementById('statTfrs16').textContent = data.tfrs16_customers;
+                
+                // Recent Activity
+                const activityHtml = data.recent_activity.map(item => `
+                    <div class="activity-item">
+                        <span class="time">${formatDate(item.timestamp)}</span>
+                        <span class="action">${escapeHtml(item.action)}</span>
+                        <span class="details">
+                            ${escapeHtml(item.user_username || 'System')}
+                            ${item.company_name ? `→ ${escapeHtml(item.company_name)}` : ''}
+                            ${item.entity_type ? `(${item.entity_type})` : ''}
+                        </span>
+                        <span class="status ${item.success ? 'success' : 'failed'}">
+                            ${item.success ? 'SUCCESS' : 'FAILED'}
+                        </span>
+                    </div>
+                `).join('');
+                
+                document.getElementById('recentActivity').innerHTML = activityHtml || 
+                    '<p style="color: var(--text-light);">No recent activity</p>';
+                
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
