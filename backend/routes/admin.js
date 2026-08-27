@@ -1,16 +1,48 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/admin');
+const { createRateLimiter } = require('../middleware/rate-limit');
 
 // ============================================================
 // ADMIN ROUTES
 // ============================================================
 // Tüm admin API'leri:
-// Authentication -> Authorization -> ADMIN role
+// Authentication -> Authorization -> ADMIN role (platform-level)
 // ============================================================
+
+// Mutation rate limiter — reuse existing architecture (no new library)
+const adminMutationRateLimiter = createRateLimiter({
+    windowMs: Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: Number(process.env.ADMIN_RATE_LIMIT_MAX) || 60,
+    keyGenerator: req => `admin-mutation:${req.ip}:${(req.user && req.user.id) || 'anon'}`,
+    message: 'Çok fazla admin işlem isteği. Lütfen daha sonra tekrar deneyin.'
+});
+
+/**
+ * Generate a unique string ID compatible with VARCHAR(50) schema.
+ * Used because users/companies tables require an explicit id (no DEFAULT/SERIAL).
+ */
+function generateEntityId(prefix) {
+    const suffix = crypto.randomBytes(8).toString('hex');
+    return `${prefix}-${Date.now()}-${suffix}`.slice(0, 50);
+}
+
+/**
+ * Reject unknown body keys for mass-assignment protection.
+ * Returns null if OK, or error message string if unknown keys present.
+ */
+function rejectUnknownFields(body, allowedKeys) {
+    if (!body || typeof body !== 'object') return null;
+    const unknown = Object.keys(body).filter(k => !allowedKeys.includes(k));
+    if (unknown.length > 0) {
+        return `Unknown field(s): ${unknown.join(', ')}`;
+    }
+    return null;
+}
 
 
 // ============================================================
@@ -67,19 +99,31 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/admin/users
 // ============================================================
 
-router.post('/users', requireAuth, requireAdmin, async (req, res) => {
+router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    const unknownErr = rejectUnknownFields(req.body, [
+        'username', 'password', 'role', 'status', 'company_ids'
+    ]);
+    if (unknownErr) {
+        return res.status(400).json({
+            success: false,
+            error: unknownErr
+        });
+    }
+
     const {
-        username,
+        username: rawUsername,
         password,
         role,
         status,
         company_ids
     } = req.body;
 
-    if (!username || typeof username !== 'string') {
+    const username = typeof rawUsername === 'string' ? rawUsername.trim() : '';
+
+    if (!username || username.length < 3 || username.length > 50) {
         return res.status(400).json({
             success: false,
-            error: 'Username is required'
+            error: 'Username is required and must be 3-50 characters'
         });
     }
 
@@ -87,6 +131,21 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
         return res.status(400).json({
             success: false,
             error: 'Password is required'
+        });
+    }
+
+    // Align with /api/auth/register password policy
+    if (password.length < 10) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password must be at least 10 characters'
+        });
+    }
+
+    if (password.length > 128) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password is too long'
         });
     }
 
@@ -172,15 +231,17 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
 
         const userRole = role || 'VIEWER';
         const userStatus = status || 'ACTIVE';
+        const newUserId = generateEntityId('USER');
 
         const insertResult = await client.query(
             `INSERT INTO users (
+                id,
                 username,
                 password_hash,
                 role,
                 status
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING
                 id,
                 username,
@@ -188,6 +249,7 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
                 status,
                 created_at`,
             [
+                newUserId,
                 username,
                 hashedPassword,
                 userRole,
@@ -255,6 +317,14 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
             );
         }
 
+        // Unique constraint race (username) — prefer 409 over 500
+        if (error && error.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                error: 'Username already exists'
+            });
+        }
+
         console.error(
             'Admin create user error:',
             error
@@ -275,9 +345,26 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
 // PATCH /api/admin/users/:id
 // ============================================================
 
-router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
-    const userId = String(req.params.id);
+router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    const userId = String(req.params.id || '').trim();
     const requestingUserId = String(req.user.id);
+
+    if (!userId || userId.length > 50) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid user ID'
+        });
+    }
+
+    const unknownErr = rejectUnknownFields(req.body, [
+        'role', 'status', 'company_ids'
+    ]);
+    if (unknownErr) {
+        return res.status(400).json({
+            success: false,
+            error: unknownErr
+        });
+    }
 
     const {
         role,
@@ -664,7 +751,7 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
                     JOIN plans p
                         ON cl.plan_id = p.id
                     WHERE cl.company_id = c.id
-                      AND cl.status = 'ACTIVE'
+                      AND cl.status = 'active'
                     ORDER BY cl.created_at DESC
                     LIMIT 1
                 ) AS active_license
@@ -703,27 +790,76 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/admin/companies
 // ============================================================
 
-router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
+router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+
+    const unknownErr = rejectUnknownFields(req.body, [
+        'name', 'code', 'tax_number', 'address', 'phone', 'email'
+    ]);
+    if (unknownErr) {
+        return res.status(400).json({
+            success: false,
+            error: unknownErr
+        });
+    }
 
     const {
-        name,
-        code,
+        name: rawName,
+        code: rawCode,
         tax_number,
         address,
         phone,
         email
     } = req.body;
 
-    if (
-        !name ||
-        typeof name !== 'string' ||
-        !code ||
-        typeof code !== 'string'
-    ) {
+    const name = typeof rawName === 'string' ? rawName.trim() : '';
+    const code = typeof rawCode === 'string' ? rawCode.trim() : '';
+
+    if (!name || name.length < 1 || name.length > 150) {
         return res.status(400).json({
             success: false,
-            error: 'Name and code are required'
+            error: 'Name is required and must be 1-150 characters'
         });
+    }
+
+    if (!code || code.length < 1 || code.length > 50) {
+        return res.status(400).json({
+            success: false,
+            error: 'Code is required and must be 1-50 characters'
+        });
+    }
+
+    // Optional field length / basic format guards
+    if (tax_number !== undefined && tax_number !== null) {
+        if (typeof tax_number !== 'string' || tax_number.length > 50) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid tax_number'
+            });
+        }
+    }
+    if (email !== undefined && email !== null && email !== '') {
+        if (typeof email !== 'string' || email.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email format'
+            });
+        }
+    }
+    if (phone !== undefined && phone !== null) {
+        if (typeof phone !== 'string' || phone.length > 50) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid phone'
+            });
+        }
+    }
+    if (address !== undefined && address !== null) {
+        if (typeof address !== 'string' || address.length > 500) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid address'
+            });
+        }
     }
 
     const client = await pool.connect();
@@ -750,8 +886,11 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
             });
         }
 
+        const newCompanyId = generateEntityId('COMP');
+
         const result = await client.query(
             `INSERT INTO companies (
+                id,
                 name,
                 code,
                 tax_number,
@@ -759,7 +898,7 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
                 phone,
                 email
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING
                 id,
                 name,
@@ -770,6 +909,7 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
                 email,
                 created_at`,
             [
+                newCompanyId,
                 name,
                 code,
                 tax_number || null,
@@ -819,6 +959,14 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
             );
         }
 
+        // Unique constraint race on code (if DB has UNIQUE) or other
+        if (error && error.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                error: 'Company code already exists'
+            });
+        }
+
         console.error(
             'Admin create company error:',
             error
@@ -841,13 +989,28 @@ router.post('/companies', requireAuth, requireAdmin, async (req, res) => {
 
 router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
 
-    const companyId = req.params.id;
+    const companyId = String(req.params.id || '').trim();
+
+    if (!companyId || companyId.length > 50) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid company ID'
+        });
+    }
 
     try {
 
         const companyResult =
             await pool.query(
-                `SELECT *
+                `SELECT
+                    id,
+                    name,
+                    code,
+                    tax_number,
+                    address,
+                    phone,
+                    email,
+                    created_at
                  FROM companies
                  WHERE id = $1`,
                 [companyId]
@@ -1192,8 +1355,8 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
             await pool.query(
                 `SELECT COUNT(*) AS total
                  FROM company_licenses
-                 WHERE status = 'ACTIVE'
-                   AND expires_at > NOW()`
+                 WHERE status = 'active'
+                   AND (expires_at IS NULL OR expires_at > NOW())`
             );
 
         const usersResult =
@@ -1207,7 +1370,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
             await pool.query(
                 `SELECT COUNT(DISTINCT company_id) AS total
                  FROM contracts
-                 WHERE status = 'ACTIVE'`
+                 WHERE status = 'active'`
             );
 
         const recentActivity =
