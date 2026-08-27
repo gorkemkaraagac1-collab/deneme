@@ -59,7 +59,6 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
                 u.role,
                 u.status,
                 u.created_at,
-                u.last_login,
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -277,19 +276,21 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
 
         await client.query(
             `INSERT INTO audit_events (
+                id,
+                actor,
                 action,
                 entity_type,
                 entity_id,
-                user_id,
                 old_value,
                 new_value
             )
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
+                generateEntityId('AUD'),
+                String(req.user.id),
                 'CREATE_USER',
                 'user',
                 newUser.id,
-                req.user.id,
                 null,
                 JSON.stringify({
                     username,
@@ -664,19 +665,21 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
 
         await client.query(
             `INSERT INTO audit_events (
+                id,
+                actor,
                 action,
                 entity_type,
                 entity_id,
-                user_id,
                 old_value,
                 new_value
             )
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
+                generateEntityId('AUD'),
+                String(req.user.id),
                 'UPDATE_USER',
                 'user',
                 userId,
-                req.user.id,
                 JSON.stringify(oldValue),
                 JSON.stringify(newValue)
             ]
@@ -730,10 +733,6 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
                 c.name,
                 c.code,
                 c.created_at,
-                c.tax_number,
-                c.address,
-                c.phone,
-                c.email,
 
                 COUNT(DISTINCT uc.user_id) AS user_count,
 
@@ -888,34 +887,25 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
 
         const newCompanyId = generateEntityId('COMP');
 
+        // init.sql companies columns: id, name, code, created_at only.
+        // Extended body fields validated above for API forward-compat;
+        // not persisted until schema migration exists.
         const result = await client.query(
             `INSERT INTO companies (
                 id,
                 name,
-                code,
-                tax_number,
-                address,
-                phone,
-                email
+                code
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3)
             RETURNING
                 id,
                 name,
                 code,
-                tax_number,
-                address,
-                phone,
-                email,
                 created_at`,
             [
                 newCompanyId,
                 name,
-                code,
-                tax_number || null,
-                address || null,
-                phone || null,
-                email || null
+                code
             ]
         );
 
@@ -923,19 +913,21 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
 
         await client.query(
             `INSERT INTO audit_events (
+                id,
+                actor,
                 action,
                 entity_type,
                 entity_id,
-                user_id,
                 old_value,
                 new_value
             )
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
+                generateEntityId('AUD'),
+                String(req.user.id),
                 'CREATE_COMPANY',
                 'company',
                 newCompany.id,
-                req.user.id,
                 null,
                 JSON.stringify(newCompany)
             ]
@@ -1006,10 +998,6 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
                     id,
                     name,
                     code,
-                    tax_number,
-                    address,
-                    phone,
-                    email,
                     created_at
                  FROM companies
                  WHERE id = $1`,
@@ -1194,7 +1182,7 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
                 ae.action,
                 ae.entity_type,
                 ae.entity_id,
-                ae.user_id,
+                ae.actor,
                 u.username AS user_username,
 
                 CASE
@@ -1214,13 +1202,12 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
                 END AS company_code,
 
                 ae.old_value,
-                ae.new_value,
-                ae.success
+                ae.new_value
 
             FROM audit_events ae
 
             LEFT JOIN users u
-                ON ae.user_id = u.id
+                ON ae.actor = u.id
 
             LEFT JOIN companies c_entity
                 ON ae.entity_id = c_entity.id
@@ -1250,7 +1237,7 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
         }
 
         if (user_id) {
-            query += ` AND ae.user_id = $${paramIndex++}`;
+            query += ` AND ae.actor = $${paramIndex++}`;
             params.push(user_id);
         }
 
@@ -1297,7 +1284,7 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
 
         if (user_id) {
             countQuery +=
-                ` AND ae.user_id = $${countIndex++}`;
+                ` AND ae.actor = $${countIndex++}`;
 
             countParams.push(user_id);
         }
@@ -1387,14 +1374,12 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
                         WHEN ae.entity_type = 'license'
                             THEN c_license.name
                         ELSE NULL
-                    END AS company_name,
-
-                    ae.success
+                    END AS company_name
 
                 FROM audit_events ae
 
                 LEFT JOIN users u
-                    ON ae.user_id = u.id
+                    ON ae.actor = u.id
 
                 LEFT JOIN companies c_entity
                     ON ae.entity_id = c_entity.id
