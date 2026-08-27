@@ -543,10 +543,10 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================
-// 4. AUDIT LOG
+// 4. AUDIT LOG (COMPANY BİLGİSİ EKLENDİ)
 // ============================================================
 
-// GET /api/admin/audit - Audit log listele
+// GET /api/admin/audit - Audit log listele (Company bilgisi ile)
 router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
     const { limit = 100, offset = 0, action, entity_type, user_id } = req.query;
     
@@ -560,11 +560,16 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
                 ae.entity_id,
                 ae.user_id,
                 u.username as user_username,
+                -- YENİ: Company bilgisi (LEFT JOIN ile)
+                c.name AS company_name,
+                c.code AS company_code,
                 ae.old_value,
                 ae.new_value,
                 ae.success
             FROM audit_events ae
             LEFT JOIN users u ON ae.user_id = u.id
+            LEFT JOIN user_companies uc ON u.id = uc.user_id
+            LEFT JOIN companies c ON uc.company_id = c.id
             WHERE 1=1
         `;
         
@@ -586,7 +591,8 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
             params.push(user_id);
         }
         
-        query += ` ORDER BY ae.timestamp DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+        // YENİ: GROUP BY eklendi (çoklu company'leri önlemek için)
+        query += ` GROUP BY ae.id, u.id, c.id ORDER BY ae.timestamp DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
         params.push(parseInt(limit), parseInt(offset));
         
         const result = await pool.query(query, params);
