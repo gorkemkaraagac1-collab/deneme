@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users - Admin Panel</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="/admin/index.html">📊 Dashboard</a>
+            <a href="/admin/companies.html">🏢 Companies</a>
+            <a href="/admin/users.html" class="active">👤 Users</a>
+            <a href="/admin/licenses.html">🔑 Licenses</a>
+            <a href="/admin/audit.html">📋 Audit Log</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <header class="top-header">
+            <div class="page-title">Users</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>All Users</h3>
+                    <button class="btn btn-primary" onclick="showCreateUserModal()">+ New User</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Companies</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr><td colspan="6" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Create User</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="/js/admin.js"></script>
+    <script>
+        let allCompanies = [];
+
+        async function loadCompaniesForSelect() {
+            try {
+                const result = await AdminAPI.getCompanies();
+                if (result.success) {
+                    allCompanies = result.data;
+                }
+            } catch (error) {
+                console.error('Load companies error:', error);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const result = await AdminAPI.getUsers();
+                if (!result.success) {
+                    document.getElementById('usersTableBody').innerHTML = 
+                        `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                    return;
+                }
+                
+                const html = result.data.map(u => `
+                    <tr>
+                        <td><strong>${escapeHtml(u.username)}</strong></td>
+                        <td><span class="badge badge-active">${escapeHtml(u.role || 'VIEWER')}</span></td>
+                        <td>${getStatusBadge(u.status)}</td>
+                        <td>${(u.companies || []).map(c => escapeHtml(c.company_name)).join(', ')}</td>
+                        <td>${formatDateShort(u.created_at)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')">Edit</button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('usersTableBody').innerHTML = html || 
+                    `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">No users found</td></tr>`;
+                    
+            } catch (error) {
+                console.error('Load users error:', error);
+            }
+        }
+
+        function showCreateUserModal() {
+            const companyOptions = allCompanies.map(c => 
+                `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
+            ).join('');
+            
+            const content = `
+                <form id="createUserForm" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label>Username *</label>
+                        <input type="text" name="username" required placeholder="e.g. john.doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Password *</label>
+                        <input type="password" name="password" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select name="role">
+                            <option value="VIEWER">VIEWER</option>
+                            <option value="ADMIN">ADMIN</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="ACTIVE">ACTIVE</option>
+                            <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Companies</label>
+                        <select name="company_ids" multiple style="height:100px;">
+                            ${companyOptions}
+                        </select>
+                        <small style="color:var(--text-light);">Hold Ctrl to select multiple</small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create User</button>
+                    </div>
+                </form>
+            `;
+            showModal('Create User', content);
+        }
+
+        async function createUser(event) {
+            event.preventDefault();
+            const form = event.target;
+            
+            const companySelect = form.company_ids;
+            const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
+            
+            const data = {
+                username: form.username.value.trim(),
+                password: form.password.value,
+                role: form.role.value,
+                status: form.status.value,
+                company_ids: company_ids.length > 0 ? company_ids : []
+            };
+            
+            try {
+                const result = await AdminAPI.createUser(data);
+                if (result.success) {
+                    closeModal();
+                    loadUsers();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating user: ' + error.message);
+            }
+        }
+
+        function editUser(id) {
+            alert('Edit user functionality - PATCH /api/admin/users/' + id);
+            // TODO: Implement edit modal with user details
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                await loadCompaniesForSelect();
+                loadUsers();
+            }
+        });
+    </script>
+</body>
+</html>
