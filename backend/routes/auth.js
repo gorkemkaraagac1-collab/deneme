@@ -999,21 +999,26 @@ router.get(
 
       return res.json({
 
-        id:
-          req.user.id,
+        success: true,
 
-        username:
-          req.user.username,
+        data: {
 
-        role:
-          req.user.role,
+          id:
+            req.user.id,
 
-        companyIds,
+          username:
+            req.user.username,
 
-        licenses,
+          role:
+            req.user.role,
 
-        hasActiveLicense:
-          activeLicenses.length > 0
+          companyIds,
+
+          licenses,
+
+          hasActiveLicense:
+            activeLicenses.length > 0
+        }
 
       });
 
