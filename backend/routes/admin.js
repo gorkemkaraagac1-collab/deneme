@@ -138,75 +138,146 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-// PATCH /api/admin/users/:id - Kullanıcı güncelle
+// ============================================================
+// PATCH /api/admin/users/:id - Kullanıcı güncelle (GÜVENLİK SERTLEŞTİRİLMİŞ)
+// ============================================================
 router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
     const userId = req.params.id;
     const { role, status, company_ids } = req.body;
-    
+    const requestingUserId = req.user.id;
+
+    // --- 1. TEMEL VALİDASYONLAR ---
+    // Eğer role gönderilmişse, geçerli bir değer mi?
+    if (role !== undefined && !['ADMIN', 'VIEWER'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid role' });
+    }
+    // Eğer status gönderilmişse, geçerli bir değer mi?
+    if (status !== undefined && !['ACTIVE', 'INACTIVE'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+    // company_ids gönderilmişse, tipi array mi?
+    if (company_ids !== undefined && !Array.isArray(company_ids)) {
+        return res.status(400).json({ success: false, error: 'company_ids must be an array' });
+    }
+
     const client = await pool.connect();
-    
     try {
         await client.query('BEGIN');
-        
-        // Kullanıcıyı bul
-        const userCheck = await client.query(
-            'SELECT id, username FROM users WHERE id = $1',
+
+        // --- 2. KULLANICI VARLIĞI KONTROLÜ ---
+        // Eski bilgileri audit log için al
+        const userResult = await client.query(
+            `SELECT id, username, role, status FROM users WHERE id = $1`,
             [userId]
         );
-        
-        if (userCheck.rows.length === 0) {
+        if (userResult.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ 
                 success: false, 
                 error: 'User not found' 
             });
         }
-        
-        const oldUser = userCheck.rows[0];
-        
-        // Güncelleme
-        let updateFields = [];
-        let values = [];
+        const currentUser = userResult.rows[0];
+
+        // --- 3. COMPANY_IDS VALİDASYONU ---
+        // Eğer company_ids gönderildiyse, tüm ID'ler geçerli mi?
+        if (company_ids !== undefined && company_ids.length > 0) {
+            // Benzersiz ID'leri al (SQL injection önlemek için parametreli sorgu)
+            const placeholders = company_ids.map((_, i) => `$${i + 2}`).join(',');
+            const companyCheckQuery = `
+                SELECT COUNT(*) as count FROM companies WHERE id IN (${placeholders})
+            `;
+            const companyCheckResult = await client.query(companyCheckQuery, [userId, ...company_ids]);
+            
+            // Eğer bulunan company sayısı, gönderilen ID sayısından azsa geçersiz ID var demektir.
+            if (parseInt(companyCheckResult.rows[0].count) !== company_ids.length) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ success: false, error: 'One or more company IDs are invalid' });
+            }
+        }
+
+        // --- 4. ADMIN KENDİNİ KORUMA KURALLARI ---
+        // Eğer kullanıcı kendi hesabını güncelliyorsa...
+        if (userId === requestingUserId) {
+            // ... kendini INACTIVE yapmaya çalışıyorsa engelle.
+            if (status === 'INACTIVE') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'You cannot deactivate your own administrator account.' 
+                });
+            }
+            // ... kendini VIEWER yapmaya çalışıyorsa engelle.
+            if (role === 'VIEWER') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'You cannot demote your own administrator account.' 
+                });
+            }
+        }
+
+        // --- 5. SON AKTİF ADMIN KORUMASI ---
+        // Eğer hedef kullanıcı bir ADMIN ise ve yapılan değişiklik onu ADMIN olmaktan çıkarıyorsa...
+        if (currentUser.role === 'ADMIN' && (role === 'VIEWER' || status === 'INACTIVE')) {
+            // Mevcut aktif admin sayısını kontrol et (hedef kullanıcı hariç)
+            const activeAdminQuery = `
+                SELECT COUNT(*) as count FROM users 
+                WHERE role = 'ADMIN' AND status = 'ACTIVE' AND id != $1
+            `;
+            const activeAdminResult = await client.query(activeAdminQuery, [userId]);
+            const otherActiveAdmins = parseInt(activeAdminResult.rows[0].count);
+
+            // Eğer bu işlem sonucunda sistemde başka aktif admin kalmayacaksa...
+            if (otherActiveAdmins === 0) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Cannot perform this operation. At least one active ADMIN user must remain.' 
+                });
+            }
+        }
+
+        // --- 6. VERİTABANI GÜNCELLEMELERİ ---
+        // Users tablosunu güncelle
+        let updateUserQuery = 'UPDATE users SET ';
+        const updateFields = [];
+        const queryParams = [];
         let paramCount = 1;
-        
+
         if (role !== undefined) {
             updateFields.push(`role = $${paramCount++}`);
-            values.push(role);
+            queryParams.push(role);
         }
-        
         if (status !== undefined) {
             updateFields.push(`status = $${paramCount++}`);
-            values.push(status);
+            queryParams.push(status);
         }
-        
+
+        // Eğer güncellenecek alan varsa...
         if (updateFields.length > 0) {
-            values.push(userId);
-            await client.query(
-                `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramCount}`,
-                values
-            );
+            updateUserQuery += updateFields.join(', ') + ` WHERE id = $${paramCount}`;
+            queryParams.push(userId);
+            await client.query(updateUserQuery, queryParams);
         }
-        
-        // Company atamalarını güncelle
-        if (company_ids && Array.isArray(company_ids)) {
+
+        // company_ids güncellemesi (eğer gönderildiyse)
+        if (company_ids !== undefined) {
             // Mevcut atamaları sil
             await client.query(
                 'DELETE FROM user_companies WHERE user_id = $1',
                 [userId]
             );
-            
-            // Yeni atamaları ekle
+            // Yeni atamaları ekle (eğer boş değilse)
             for (const companyId of company_ids) {
                 await client.query(
-                    `INSERT INTO user_companies (user_id, company_id)
-                     VALUES ($1, $2)
-                     ON CONFLICT (user_id, company_id) DO NOTHING`,
+                    `INSERT INTO user_companies (user_id, company_id) VALUES ($1, $2)`,
                     [userId, companyId]
                 );
             }
         }
-        
-        // Audit log
+
+        // --- 7. AUDIT LOG OLUŞTUR ---
         await client.query(
             `INSERT INTO audit_events (
                 action, entity_type, entity_id, user_id, old_value, new_value
@@ -216,21 +287,33 @@ router.patch('/users/:id', requireAuth, requireAdmin, async (req, res) => {
                 'user',
                 userId,
                 req.user.id,
-                JSON.stringify(oldUser),
-                JSON.stringify({ role, status, company_ids })
+                // Eski değerleri detaylandır
+                JSON.stringify({ 
+                    id: currentUser.id, 
+                    username: currentUser.username, 
+                    role: currentUser.role, 
+                    status: currentUser.status 
+                }),
+                // Yeni değerleri detaylandır
+                JSON.stringify({ 
+                    role: role !== undefined ? role : currentUser.role, 
+                    status: status !== undefined ? status : currentUser.status,
+                    company_ids: company_ids !== undefined ? company_ids : 'unchanged'
+                })
             ]
         );
-        
+
         await client.query('COMMIT');
-        
+
         res.json({
             success: true,
             message: 'User updated successfully'
         });
-        
+
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Admin update user error:', error);
+        // Hassas bilgileri dışa vurma, genel hata mesajı gönder
         res.status(500).json({ success: false, error: 'Internal server error' });
     } finally {
         client.release();
