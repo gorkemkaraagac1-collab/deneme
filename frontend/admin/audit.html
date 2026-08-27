@@ -62,7 +62,7 @@
                         <tr>
                             <th>Timestamp</th>
                             <th>User</th>
-                            <th>Company</th> <!-- YENİ SÜTUN -->
+                            <th>Company</th>
                             <th>Action</th>
                             <th>Entity</th>
                             <th>Success</th>
@@ -117,7 +117,7 @@
                         <td>${escapeHtml(e.user_username || 'System')}</td>
                         <td>
                             ${e.company_name ? `${escapeHtml(e.company_name)} (${escapeHtml(e.company_code || '')})` : 'N/A'}
-                        </td> <!-- YENİ SÜTUN -->
+                        </td>
                         <td><strong>${escapeHtml(e.action)}</strong></td>
                         <td>${escapeHtml(e.entity_type)} ${e.entity_id ? '#'+e.entity_id : ''}</td>
                         <td><span class="status ${e.success ? 'success' : 'failed'}">${e.success ? '✓' : '✗'}</span></td>
