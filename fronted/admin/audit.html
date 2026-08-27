@@ -119,4 +119,36 @@
                         <td><span class="status ${e.success ? 'success' : 'failed'}">${e.success ? '✓' : '✗'}</span></td>
                         <td style="font-size:12px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                             ${e.old_value ? 'OLD: ' + escapeHtml(JSON.stringify(e.old_value)) : ''}
-                            ${e.new_value ? ' NEW: ' + escapeHtml(JSON.stringify(e.new
+                            ${e.new_value ? ' NEW: ' + escapeHtml(JSON.stringify(e.new_value)) : ''}
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('auditTableBody').innerHTML = html || 
+                    `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">No audit events found</td></tr>`;
+                
+                document.getElementById('auditPagination').textContent = 
+                    `Showing ${currentPage * pageSize + 1} - ${Math.min((currentPage + 1) * pageSize, totalItems)} of ${totalItems}`;
+                    
+            } catch (error) {
+                console.error('Load audit error:', error);
+            }
+        }
+
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            const maxPage = Math.ceil(totalItems / pageSize) - 1;
+            if (newPage < 0 || newPage > maxPage) return;
+            currentPage = newPage;
+            loadAudit();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadAudit();
+            }
+        });
+    </script>
+</body>
+</html>
