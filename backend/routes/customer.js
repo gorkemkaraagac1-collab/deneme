@@ -34,7 +34,7 @@ router.get('/license', requireAuth, async (req, res) => {
             FROM company_licenses cl
             JOIN plans p ON cl.plan_id = p.id
             WHERE cl.company_id = $1
-              AND cl.status = 'ACTIVE'
+              AND cl.status = 'active'
             ORDER BY cl.created_at DESC
             LIMIT 1
         `, [companyId]);
