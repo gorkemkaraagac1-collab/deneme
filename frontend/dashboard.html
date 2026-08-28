@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Financial Intelligence Platform</title>
+    <title>Kontrol Paneli — Finansal Zeka Platformu</title>
     <style>
         * {
             margin: 0;
@@ -198,6 +198,18 @@
             color: #7f8c8d;
             font-size: 14px;
         }
+
+        .module-item.module-link {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+        }
+        .module-item.module-link:hover {
+            border-color: #3498db;
+            background: #f0f7ff;
+            transform: translateY(-1px);
+        }
         .no-license-msg {
             color: #7f8c8d;
             font-size: 14px;
@@ -209,287 +221,4 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>Financial Intelligence Platform</h1>
-            <div class="user-info">
-                <span class="username" id="userDisplay">Loading...</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </div>
-
-        <!-- Error Message -->
-        <div id="errorMsg" class="error-msg"></div>
-
-        <!-- Company Info Section -->
-        <div id="companyInfo">
-            <div class="welcome">
-                <h2 id="welcomeUser">Welcome!</h2>
-                <p id="companyDisplay">Loading company information...</p>
-            </div>
-
-            <!-- Dashboard Cards -->
-            <div class="cards" id="dashboardCards">
-                <!-- Company Card -->
-                <div class="card info">
-                    <div class="label">Company</div>
-                    <div class="value" id="companyName">-</div>
-                </div>
-
-                <!-- License Card -->
-                <div class="card success" id="licenseCard" style="display: none;">
-                    <div class="label">License / Subscription</div>
-                    <div id="licenseContent">
-                        <!-- Loading State -->
-                        <div id="licenseLoading" class="loading-spinner">Loading license information...</div>
-                        
-                        <!-- Success State -->
-                        <div id="licenseSuccess" style="display: none;">
-                            <div class="detail-row">
-                                <span class="label-sm">Plan</span>
-                                <span class="value-sm" id="licensePlan">-</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="label-sm">Status</span>
-                                <span class="value-sm" id="licenseStatusBadge">-</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="label-sm">Start Date</span>
-                                <span class="value-sm" id="licenseStart">-</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="label-sm">End Date</span>
-                                <span class="value-sm" id="licenseEnd">-</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="label-sm">Max Users</span>
-                                <span class="value-sm" id="licenseMaxUsers">-</span>
-                            </div>
-                        </div>
-                        
-                        <!-- No License State -->
-                        <div id="licenseNoLicense" style="display: none;">
-                            <p class="no-license-msg">No active license found for this company.</p>
-                        </div>
-                        
-                        <!-- Error State -->
-                        <div id="licenseError" style="display: none; color: #e74c3c; font-size: 14px;">
-                            Failed to load license information.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Available Modules -->
-            <div class="modules">
-                <h3>Available Modules</h3>
-                <div class="module-grid" id="moduleGrid">
-                    <!-- JS ile doldurulacak -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // ============================================================
-        // Dashboard - Backend JWT Entegrasyonu + License Bilgisi
-        // ============================================================
-
-        // Backend: Cloud Run (frontend GitHub Pages'te barındığı için
-        // relative "/api/..." istekleri kendi origin'ine gider, backend'e değil)
-        const API_BASE_URL = "https://deneme-git-285469227510.europe-west1.run.app";
-
-        // --- Helper Functions ---
-        function getToken() {
-            return localStorage.getItem('access_token');
-        }
-
-        async function fetchAPI(url, options = {}) {
-            const token = getToken();
-            const response = await fetch(`${API_BASE_URL}${url}`, {
-                ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                    ...(options.headers || {})
-                }
-            });
-            return response.json();
-        }
-
-        function logout() {
-            localStorage.removeItem('access_token');
-            window.location.href = './login.html';
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        }
-
-        function formatDateShort(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('tr-TR');
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function getStatusBadge(status) {
-            const statusMap = {
-                'ACTIVE': '<span class="status-badge active">ACTIVE</span>',
-                'INACTIVE': '<span class="status-badge inactive">INACTIVE</span>',
-                'EXPIRED': '<span class="status-badge expired">EXPIRED</span>',
-                'PENDING': '<span class="status-badge pending">PENDING</span>'
-            };
-            return statusMap[status] || `<span class="status-badge">${escapeHtml(status || 'UNKNOWN')}</span>`;
-        }
-
-        // --- Load Dashboard ---
-        async function loadDashboard() {
-            const token = getToken();
-            if (!token) {
-                window.location.href = './login.html';
-                return;
-            }
-
-            try {
-                // 1. Mevcut kullanıcı bilgisi
-                const meResult = await fetchAPI('/api/auth/me');
-                if (!meResult.success) {
-                    localStorage.removeItem('access_token');
-                    window.location.href = './login.html';
-                    return;
-                }
-
-                const user = meResult.data;
-                document.getElementById('userDisplay').textContent = user.username;
-                document.getElementById('welcomeUser').textContent = `Welcome, ${user.username}!`;
-
-                // 2. Kullanıcının şirket bilgilerini al
-                if (!user.companyIds || user.companyIds.length === 0) {
-                    document.getElementById('companyDisplay').textContent = 'No company assigned';
-                    document.getElementById('companyInfo').style.display = 'block';
-                    return;
-                }
-
-                const companyId = user.companyIds[0];
-                document.getElementById('companyDisplay').textContent = `Company ID: ${companyId}`;
-
-                // 3. Şirket bilgilerini al (opsiyonel)
-                await loadCompanyInfo(companyId);
-
-                // 4. License bilgilerini al
-                await loadLicenseInfo();
-
-                // 5. Module grid'i göster
-                loadModuleGrid();
-
-                document.getElementById('companyInfo').style.display = 'block';
-
-            } catch (error) {
-                console.error('Dashboard load error:', error);
-                const errorEl = document.getElementById('errorMsg');
-                errorEl.textContent = 'Error loading dashboard: ' + error.message;
-                errorEl.style.display = 'block';
-            }
-        }
-
-        // --- Load Company Info ---
-        async function loadCompanyInfo(companyId) {
-            try {
-                const result = await fetchAPI(`/api/admin/companies/${companyId}`);
-                if (result.success && result.data) {
-                    document.getElementById('companyName').textContent = result.data.name || result.data.code || '-';
-                } else {
-                    document.getElementById('companyName').textContent = 'Company #' + companyId;
-                }
-            } catch (error) {
-                console.error('Company info error:', error);
-                document.getElementById('companyName').textContent = 'Company #' + companyId;
-            }
-        }
-
-        // --- Load License Info ---
-        async function loadLicenseInfo() {
-            const licenseCard = document.getElementById('licenseCard');
-            const loadingEl = document.getElementById('licenseLoading');
-            const successEl = document.getElementById('licenseSuccess');
-            const noLicenseEl = document.getElementById('licenseNoLicense');
-            const errorEl = document.getElementById('licenseError');
-
-            // Kartı göster, loading'i göster, diğerlerini gizle
-            licenseCard.style.display = 'block';
-            loadingEl.style.display = 'block';
-            successEl.style.display = 'none';
-            noLicenseEl.style.display = 'none';
-            errorEl.style.display = 'none';
-
-            try {
-                const result = await fetchAPI('/api/customer/license');
-                loadingEl.style.display = 'none';
-
-                if (result.success && result.data) {
-                    // Başarılı: Bilgileri göster
-                    document.getElementById('licensePlan').textContent = result.data.plan_name || '-';
-                    
-                    const statusHtml = getStatusBadge(result.data.license_status);
-                    document.getElementById('licenseStatusBadge').innerHTML = statusHtml;
-                    
-                    document.getElementById('licenseStart').textContent = formatDateShort(result.data.start_date);
-                    document.getElementById('licenseEnd').textContent = formatDateShort(result.data.end_date);
-                    document.getElementById('licenseMaxUsers').textContent = result.data.max_users || '∞';
-                    
-                    successEl.style.display = 'block';
-                    
-                } else if (result.error && result.error.includes('No active license')) {
-                    // Lisans yok
-                    noLicenseEl.style.display = 'block';
-                } else {
-                    // Diğer hatalar
-                    errorEl.textContent = 'Error: ' + (result.error || 'Unknown error');
-                    errorEl.style.display = 'block';
-                }
-            } catch (error) {
-                loadingEl.style.display = 'none';
-                errorEl.textContent = 'Error loading license: ' + error.message;
-                errorEl.style.display = 'block';
-                console.error('License fetch error:', error);
-            }
-        }
-
-        // --- Load Module Grid ---
-        function loadModuleGrid() {
-            document.getElementById('moduleGrid').innerHTML = `
-                <div class="module-item unlocked">
-                    <span class="icon">📊</span>
-                    <div class="name">TFRS16</div>
-                    <div class="status">✓ Available</div>
-                </div>
-                <div class="module-item locked">
-                    <span class="icon">🔒</span>
-                    <div class="name">TMS19</div>
-                    <div class="status">Coming Soon</div>
-                </div>
-                <div class="module-item locked">
-                    <span class="icon">🔒</span>
-                    <div class="name">DCF</div>
-                    <div class="status">Coming Soon</div>
-                </div>
-                <div class="module-item locked">
-                    <span class="icon">🔒</span>
-                    <div class="name">Hedge Accounting</div>
-                    <div class="status">Coming Soon</div>
-                </div>
-            `;
-        }
-
-        // --- Auto-login check ---
-        document.addEventListener('DOMContentLoaded', loadDashboard);
-    </script>
-</body>
-</html>
+            <h1>Finansal Zeka Platformu</h1>
