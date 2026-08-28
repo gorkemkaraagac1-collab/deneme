@@ -124,12 +124,47 @@ body {
   min-height: 100vh;
 }
 
+/* ============================================================
+   TOPBAR - YENİ YAPI
+============================================================ */
+
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 25px;
   gap: 20px;
+}
+
+.topbar-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.gk-user-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gk-user-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gk-user-info #gkCurrentUsername {
+  font-weight: 600;
+  color: var(--text);
 }
 
 .eyebrow {
@@ -139,20 +174,24 @@ body {
   letter-spacing: 1px;
 }
 
-h1 {
-  margin: 5px 0;
+.topbar-title h1 {
+  margin: 0;
   font-size: 29px;
+  line-height: 1.2;
 }
 
 .period {
   color: var(--muted);
   font-size: 12px;
+  margin-top: 2px;
 }
 
 .topbar-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 
@@ -176,6 +215,7 @@ h1 {
     background .15s ease,
     border-color .15s ease,
     transform .05s ease;
+  white-space: nowrap;
 }
 
 .primary-button {
@@ -515,6 +555,10 @@ footer {
   overflow-y: auto;
 }
 
+.modal.hidden {
+  display: none !important;
+}
+
 .modal-content {
   background: white;
   width: min(720px, 100%);
@@ -591,16 +635,21 @@ footer {
   color: var(--muted);
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
   outline: none;
   font-size: 12px;
+  background: white;
+  font-family: inherit;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
 }
 
 .modal-footer,
@@ -989,10 +1038,12 @@ footer {
 
   .topbar-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .topbar-actions > * {
     flex: 1;
+    min-width: 120px;
   }
 
   .validation-summary {
@@ -1047,6 +1098,19 @@ footer {
     width: 100%;
   }
 
+  .topbar-title h1 {
+    font-size: 24px;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
+  }
+
+  .topbar-actions > * {
+    width: 100%;
+    flex: none;
+  }
+
 }
 
 
@@ -1066,6 +1130,15 @@ footer {
 
   .validation-summary {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .gk-user-info {
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  .topbar-title h1 {
+    font-size: 20px;
   }
 
 }
