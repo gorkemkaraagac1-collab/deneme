@@ -144,6 +144,20 @@ async updateUser(id, data) {
         );
     return response.json();
 },
+async resetUserPassword(id, newPassword) {
+    const response =
+        await fetch(
+            `${this.baseURL}/users/${encodeURIComponent(id)}/password`,
+            {
+                method: "PATCH",
+                headers:
+                    this.getHeaders(),
+                body:
+                    JSON.stringify({ new_password: newPassword })
+            }
+        );
+    return response.json();
+},
 /*
  * ========================================================
  * LICENSES
