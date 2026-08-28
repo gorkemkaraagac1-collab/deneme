@@ -189,6 +189,30 @@ CREATE TABLE IF NOT EXISTS plans (
         CHECK (max_users IS NULL OR max_users > 0)
 );
 
+-- DÜZELTME: Planlar için kullanıcı sayısı sınırı vardı (max_users)
+-- ama sözleşme (kontrat) sayısı için hiçbir sınır yoktu — Starter
+-- planındaki bir şirket de Enterprise ile aynı sayıda sözleşme
+-- girebiliyordu. max_users ile birebir aynı NULL=sınırsız
+-- kuralıyla max_contracts eklendi (bkz. services/license-service.js:
+-- canAddContractToCompany, routes/contracts.js POST /).
+-- IF NOT EXISTS/DO $$ kullanılıyor çünkü bu script zaten deploy
+-- edilmiş ortamlara karşı da (idempotent şekilde) çalıştırılabilir
+-- olmalı.
+ALTER TABLE plans
+    ADD COLUMN IF NOT EXISTS max_contracts INTEGER;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_plans_max_contracts'
+    ) THEN
+        ALTER TABLE plans
+            ADD CONSTRAINT chk_plans_max_contracts
+                CHECK (max_contracts IS NULL OR max_contracts > 0);
+    END IF;
+END $$;
+
 
 -- ============================================================
 -- COMPANY LICENSES
@@ -260,6 +284,7 @@ INSERT INTO plans (
     id,
     name,
     max_users,
+    max_contracts,
     description
 )
 VALUES
@@ -267,19 +292,22 @@ VALUES
     'starter',
     'Starter',
     3,
+    25,
     'Temel kullanım paketi'
 ),
 (
     'professional',
     'Professional',
     10,
+    150,
     'Profesyonel kullanım paketi'
 ),
 (
     'enterprise',
     'Enterprise',
     NULL, -- sınırsız kullanıcı (bkz. license-service.js: NULL = unlimited)
-    'Kurumsal kullanım paketi (sınırsız kullanıcı)'
+    NULL, -- sınırsız sözleşme (bkz. license-service.js: NULL = unlimited)
+    'Kurumsal kullanım paketi (sınırsız kullanıcı, sınırsız sözleşme)'
 )
 ON CONFLICT (id) DO NOTHING;
 
