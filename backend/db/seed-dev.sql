@@ -24,10 +24,19 @@
 --
 -- Şifre (yalnızca dev/test — production'da ASLA kullanılmamalı,
 -- kullanıldıysa derhal döndürülmeli/silinmelidir):
---   Admin123!
+--   Gk.135790
 --
 -- bcrypt hash (yukarıdaki parolaya ait):
---   $2b$10$7EqJtq98hPqEX7fNZaFWoO
+--   $2b$10$edNdBIc0KpIrXXEumxx8sO..Q/l6HFwcCSdotM4aezzGRd0TBt9t6
+--
+-- NOT (DÜZELTME): Bu dosyada daha önce burada duran hash 29
+-- karakterdi; geçerli bir bcrypt hash'i tam 60 karakter olmalıdır
+-- ($2b$10$ + 22 karakter salt + 31 karakter hash). Eksik/bozuk hash
+-- yüzünden bcrypt.compare() login sırasında exception fırlatıyor ve
+-- bu da auth.js'teki catch bloğunu tetikleyerek kullanıcıya
+-- "Giriş işlemi sırasında beklenmeyen bir hata oluştu" 500 hatası
+-- olarak dönüyordu. Aşağıdaki hash tam ve doğrulanmış 60 karakterlik
+-- bir bcrypt hash'idir.
 
 -- ============================================================
 -- TEST COMPANY
@@ -60,7 +69,7 @@ INSERT INTO users (
 VALUES (
     'TEST-ADMIN-001',
     'admin',
-    '$2b$10$7EqJtq98hPqEX7fNZaFWoO',
+    '$2b$10$edNdBIc0KpIrXXEumxx8sO..Q/l6HFwcCSdotM4aezzGRd0TBt9t6',
     'ADMIN',
     'ACTIVE'
 )
