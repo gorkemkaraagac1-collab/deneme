@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log - Admin Panel</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="index.html">📊 Dashboard</a>
+            <a href="companies.html">🏢 Companies</a>
+            <a href="users.html">👤 Users</a>
+            <a href="licenses.html">🔑 Licenses</a>
+            <a href="audit.html" class="active">📋 Audit Log</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <header class="top-header">
+            <div class="page-title">Audit Log</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>All Audit Events</h3>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <select id="filterAction" onchange="loadAudit()">
+                            <option value="">All Actions</option>
+                            <option value="LOGIN">LOGIN</option>
+                            <option value="CREATE_USER">CREATE_USER</option>
+                            <option value="UPDATE_USER">UPDATE_USER</option>
+                            <option value="RESET_PASSWORD">RESET_PASSWORD</option>
+                            <option value="CREATE_COMPANY">CREATE_COMPANY</option>
+                            <option value="CREATE_LICENSE">CREATE_LICENSE</option>
+                            <option value="EXTEND_LICENSE">EXTEND_LICENSE</option>
+                            <option value="CANCEL_LICENSE">CANCEL_LICENSE</option>
+                        </select>
+                        <select id="filterEntity" onchange="loadAudit()">
+                            <option value="">All Types</option>
+                            <option value="user">User</option>
+                            <option value="company">Company</option>
+                            <option value="license">License</option>
+                        </select>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Company</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th>Success</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody">
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                    </tbody>
+                </table>
+                <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--text-light);">
+                    <span id="auditPagination">Loading...</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline" onclick="changePage(-1)">Previous</button>
+                        <button class="btn btn-sm btn-outline" onclick="changePage(1)">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/admin.js"></script>
+    <script>
+        let currentPage = 0;
+        const pageSize = 50;
+        let totalItems = 0;
+
+        async function loadAudit() {
+            const action = document.getElementById('filterAction').value;
+            const entity = document.getElementById('filterEntity').value;
+            
+            const params = {
+                limit: pageSize,
+                offset: currentPage * pageSize
+            };
+            if (action) params.action = action;
+            if (entity) params.entity_type = entity;
+            
+            try {
+                const result = await AdminAPI.getAudit(params);
+                if (!result.success) {
+                    document.getElementById('auditTableBody').innerHTML = 
+                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                    return;
+                }
+                
+                totalItems = result.pagination.total;
+                
+                const html = result.data.map(e => `
+                    <tr>
+                        <td style="font-size:12px;">${formatDate(e.timestamp)}</td>
+                        <td>${escapeHtml(e.user_username || 'System')}</td>
+                        <td>
+                            ${e.company_name ? `${escapeHtml(e.company_name)} (${escapeHtml(e.company_code || '')})` : 'N/A'}
+                        </td>
+                        <td><strong>${escapeHtml(e.action)}</strong></td>
+                        <td>${escapeHtml(e.entity_type)} ${e.entity_id ? '#'+e.entity_id : ''}</td>
+                        <td><span class="status ${e.success ? 'success' : 'failed'}">${e.success ? '✓' : '✗'}</span></td>
+                        <td style="font-size:12px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            ${e.old_value ? 'OLD: ' + escapeHtml(JSON.stringify(e.old_value)) : ''}
+                            ${e.new_value ? ' NEW: ' + escapeHtml(JSON.stringify(e.new_value)) : ''}
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('auditTableBody').innerHTML = html || 
+                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No audit events found</td></tr>`;
+                
+                document.getElementById('auditPagination').textContent = 
+                    `Showing ${currentPage * pageSize + 1} - ${Math.min((currentPage + 1) * pageSize, totalItems)} of ${totalItems}`;
+                    
+            } catch (error) {
+                console.error('Load audit error:', error);
+                document.getElementById('auditTableBody').innerHTML = 
+                    `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error loading audit data</td></tr>`;
+            }
+        }
+
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            const maxPage = Math.ceil(totalItems / pageSize) - 1;
+            if (newPage < 0 || newPage > maxPage) return;
+            currentPage = newPage;
+            loadAudit();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadAudit();
+            }
+        });
+    </script>
+</body>
+</html>
