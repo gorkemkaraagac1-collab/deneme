@@ -114,7 +114,7 @@
 
         if (usernameEl) {
           usernameEl.textContent = user && user.username
-            ? `👤 ${user.username}${user.role ? " (" + user.role + ")" : ""}`
+            ? `${user.username}${user.role ? " (" + user.role + ")" : ""}`
             : "Kullanıcı bilgisi bulunamadı";
         }
       } catch (error) {
@@ -157,24 +157,27 @@
 
   <main class="main">
     <header class="topbar">
-      <div>
+      <div class="topbar-title">
+        <div id="gkUserInfo" class="gk-user-info">
+          👤 <span id="gkCurrentUsername">—</span>
+        </div>
+
         <div class="eyebrow">TFRS 16 / KİRALAMA MUHASEBESİ</div>
         <h1>Sözleşme Portföyü</h1>
         <div class="period">Tüm aktif kira sözleşmeleri</div>
       </div>
+
       <div class="topbar-actions">
-        <!--
-          DÜZELTME: Hangi kullanıcının giriş yaptığı hiçbir yerde
-          görünmüyordu. login.html'in localStorage'a yazdığı
-          current_user bilgisi burada gösteriliyor.
-        -->
-        <div id="gkUserInfo" style="display:flex;align-items:center;gap:8px;margin-right:8px;font-size:11px;color:#64748b;">
-          <span id="gkCurrentUsername">—</span>
-          <button id="gkLogoutButton" class="secondary-button" type="button">Çıkış Yap</button>
-        </div>
         <a href="dashboard.html" class="secondary-button">← CFO Cockpit</a>
-        <button id="bulkImportButton" class="secondary-button" type="button">⇧ Excel'den Toplu Aktar</button>
-        <button id="newContractButton" class="primary-button" type="button">+ Yeni Sözleşme</button>
+        <button id="bulkImportButton" class="secondary-button" type="button">
+          ⇧ Excel'den Toplu Aktar
+        </button>
+        <button id="newContractButton" class="primary-button" type="button">
+          + Yeni Sözleşme
+        </button>
+        <button id="gkLogoutButton" class="secondary-button" type="button">
+          Çıkış Yap
+        </button>
       </div>
     </header>
 
