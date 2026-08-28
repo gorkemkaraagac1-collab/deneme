@@ -93,6 +93,45 @@
           window.location.replace(LOGIN_PAGE);
         });
     })();
+
+    /*
+     * ============================================================
+     * GİRİŞ YAPAN KULLANICI BİLGİSİ
+     * ============================================================
+     *
+     * login.html başarılı girişte localStorage'a "current_user"
+     * (JSON: {id, username, role, ...}) yazıyor. Bu sayfada hiçbir
+     * yerde gösterilmiyordu; artık topbar'da kullanıcı adı görünür
+     * ve çıkış butonu oturumu temizleyip login'e yönlendirir.
+     */
+    document.addEventListener("DOMContentLoaded", function () {
+      const usernameEl = document.getElementById("gkCurrentUsername");
+      const logoutBtn = document.getElementById("gkLogoutButton");
+
+      try {
+        const raw = localStorage.getItem("current_user");
+        const user = raw ? JSON.parse(raw) : null;
+
+        if (usernameEl) {
+          usernameEl.textContent = user && user.username
+            ? `👤 ${user.username}${user.role ? " (" + user.role + ")" : ""}`
+            : "Kullanıcı bilgisi bulunamadı";
+        }
+      } catch (error) {
+        console.error("current_user okunamadı:", error);
+        if (usernameEl) {
+          usernameEl.textContent = "Kullanıcı bilgisi okunamadı";
+        }
+      }
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener("click", function () {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("current_user");
+          window.location.href = "frontend/login.html";
+        });
+      }
+    });
   </script>
 </head>
 <body>
@@ -124,6 +163,15 @@
         <div class="period">Tüm aktif kira sözleşmeleri</div>
       </div>
       <div class="topbar-actions">
+        <!--
+          DÜZELTME: Hangi kullanıcının giriş yaptığı hiçbir yerde
+          görünmüyordu. login.html'in localStorage'a yazdığı
+          current_user bilgisi burada gösteriliyor.
+        -->
+        <div id="gkUserInfo" style="display:flex;align-items:center;gap:8px;margin-right:8px;font-size:11px;color:#64748b;">
+          <span id="gkCurrentUsername">—</span>
+          <button id="gkLogoutButton" class="secondary-button" type="button">Çıkış Yap</button>
+        </div>
         <a href="dashboard.html" class="secondary-button">← CFO Cockpit</a>
         <button id="bulkImportButton" class="secondary-button" type="button">⇧ Excel'den Toplu Aktar</button>
         <button id="newContractButton" class="primary-button" type="button">+ Yeni Sözleşme</button>
