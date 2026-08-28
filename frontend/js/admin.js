@@ -327,6 +327,22 @@ async cancelLicense(licenseId) {
         return { success: false, error: result.error || "Lisans iptal edilemedi" };
     }
     return { success: true, data: result.license, message: result.message };
+},
+async updatePlan(planId, data) {
+    const response =
+        await fetch(
+            `${this.baseURL}/plans/${encodeURIComponent(planId)}`,
+            {
+                method: "PATCH",
+                headers: this.getHeaders(),
+                body: JSON.stringify(data)
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Plan güncellenemedi" };
+    }
+    return { success: true, data: result };
 }
 
 };
