@@ -73,6 +73,25 @@
 
     <script src="../js/admin.js"></script>
     <script>
+        let allPlans = [];
+
+        async function loadPlans() {
+            try {
+                const result = await AdminAPI.getPlans();
+                if (result.success) {
+                    allPlans = result.data;
+                }
+            } catch (error) {
+                console.error('Load plans error:', error);
+            }
+        }
+
+        function openAssignModal(preselectedCompanyId) {
+            showAssignLicenseModal(companiesCache, allPlans, preselectedCompanyId, loadCompanies);
+        }
+
+        let companiesCache = [];
+
         async function loadCompanies() {
             try {
                 const result = await AdminAPI.getCompanies();
@@ -82,6 +101,8 @@
                     return;
                 }
                 
+                companiesCache = result.data;
+
                 const html = result.data.map(c => `
                     <tr>
                         <td><strong>${escapeHtml(c.code)}</strong></td>
@@ -92,6 +113,7 @@
                         <td>${c.active_license ? formatDateShort(c.active_license.expires_at) : '-'}</td>
                         <td>
                             <button class="btn btn-sm btn-outline" onclick="viewCompany('${c.id}')">View</button>
+                            <button class="btn btn-sm btn-primary" onclick="openAssignModal('${c.id}')">License</button>
                         </td>
                     </tr>
                 `).join('');
@@ -204,6 +226,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const authenticated = await checkAdminAuth();
             if (authenticated) {
+                await loadPlans();
                 loadCompanies();
             }
         });
