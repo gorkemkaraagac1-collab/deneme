@@ -38,7 +38,7 @@
             <div class="table-container">
                 <div class="table-header">
                     <h3>All Licenses</h3>
-                    <button class="btn btn-primary" onclick="alert('Use /api/admin/companies/:id/license endpoint')">
+                    <button class="btn btn-primary" onclick="openAssignModal()">
                         + Assign License
                     </button>
                 </div>
@@ -62,8 +62,48 @@
         </div>
     </div>
 
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Assign License</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
     <script src="../js/admin.js"></script>
     <script>
+        let allCompanies = [];
+        let allPlans = [];
+
+        async function loadCompaniesForSelect() {
+            try {
+                const result = await AdminAPI.getCompanies();
+                if (result.success) {
+                    allCompanies = result.data;
+                }
+            } catch (error) {
+                console.error('Load companies error:', error);
+            }
+        }
+
+        async function loadPlans() {
+            try {
+                const result = await AdminAPI.getPlans();
+                if (result.success) {
+                    allPlans = result.data;
+                }
+            } catch (error) {
+                console.error('Load plans error:', error);
+            }
+        }
+
+        function openAssignModal(preselectedCompanyId) {
+            showAssignLicenseModal(allCompanies, allPlans, preselectedCompanyId, loadLicenses);
+        }
+
         async function loadLicenses() {
             try {
                 const result = await AdminAPI.getLicenses();
@@ -98,22 +138,17 @@
         }
 
         async function extendLicense(id) {
-            const months = prompt('Kaç ay uzatılsın? (1-12)', '12');
+            const months = prompt('Kaç ay uzatılsın? (1-120)', '12');
             if (!months) return;
             
             const monthsNum = parseInt(months);
-            if (isNaN(monthsNum) || monthsNum < 1 || monthsNum > 12) {
-                alert('Lütfen 1-12 arası bir değer girin.');
+            if (isNaN(monthsNum) || monthsNum < 1 || monthsNum > 120) {
+                alert('Lütfen 1-120 arası bir değer girin.');
                 return;
             }
             
             try {
-                const response = await fetch(`/api/admin/licenses/${id}/extend`, {
-                    method: 'PATCH',
-                    headers: AdminAPI.getHeaders(),
-                    body: JSON.stringify({ months: monthsNum })
-                });
-                const result = await response.json();
+                const result = await AdminAPI.extendLicense(id, { additionalMonths: monthsNum });
                 if (result.success) {
                     alert('License extended successfully!');
                     loadLicenses();
@@ -129,11 +164,7 @@
             if (!confirm('License iptal edilsin mi?')) return;
             
             try {
-                const response = await fetch(`/api/admin/licenses/${id}/cancel`, {
-                    method: 'POST',
-                    headers: AdminAPI.getHeaders()
-                });
-                const result = await response.json();
+                const result = await AdminAPI.cancelLicense(id);
                 if (result.success) {
                     alert('License cancelled successfully!');
                     loadLicenses();
@@ -148,6 +179,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const authenticated = await checkAdminAuth();
             if (authenticated) {
+                await Promise.all([loadCompaniesForSelect(), loadPlans()]);
                 loadLicenses();
             }
         });
