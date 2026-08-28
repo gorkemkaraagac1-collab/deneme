@@ -51,8 +51,42 @@ function rejectUnknownFields(body, allowedKeys) {
 // ============================================================
 
 // GET /api/admin/users
+// DÜZELTME: arama ve sayfalama yoktu — müşteri/kullanıcı sayısı arttıkça
+// bu sayfa tek, sonsuz uzayan bir tabloya dönüşüyordu. ?search= (username
+// üzerinde, case-insensitive, kısmi eşleşme) ve ?limit=/?offset= eklendi.
+// Geriye dönük uyumluluk için parametreler opsiyoneldir; hiçbiri
+// verilmezse önceki davranışla aynı şekilde (limit=50) tüm liste döner.
 router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+    const { search, limit = 50, offset = 0 } = req.query;
+
+    const parsedLimit = Number.parseInt(limit, 10);
+    const parsedOffset = Number.parseInt(offset, 10);
+
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 500) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid pagination parameters. limit must be between 1 and 500.'
+        });
+    }
+
+    if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid pagination parameters. offset must be 0 or greater.'
+        });
+    }
+
+    const searchTerm = typeof search === 'string' ? search.trim() : '';
+
     try {
+        const whereClause = searchTerm
+            ? `WHERE u.username ILIKE $3`
+            : '';
+
+        const params = searchTerm
+            ? [parsedLimit, parsedOffset, `%${searchTerm}%`]
+            : [parsedLimit, parsedOffset];
+
         const result = await pool.query(`
             SELECT
                 u.id,
@@ -75,13 +109,27 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
                 ON u.id = uc.user_id
             LEFT JOIN companies c
                 ON uc.company_id = c.id
+            ${whereClause}
             GROUP BY u.id
             ORDER BY u.created_at DESC
-        `);
+            LIMIT $1 OFFSET $2
+        `, params);
+
+        const countResult = await pool.query(
+            searchTerm
+                ? `SELECT COUNT(*) AS count FROM users u WHERE u.username ILIKE $1`
+                : `SELECT COUNT(*) AS count FROM users u`,
+            searchTerm ? [`%${searchTerm}%`] : []
+        );
 
         return res.json({
             success: true,
-            data: result.rows
+            data: result.rows,
+            pagination: {
+                total: Number.parseInt(countResult.rows[0].count, 10),
+                limit: parsedLimit,
+                offset: parsedOffset
+            }
         });
 
     } catch (error) {
@@ -927,17 +975,59 @@ router.patch('/users/:id/password', requireAuth, requireAdmin, adminMutationRate
 // ============================================================
 
 // GET /api/admin/companies
+// DÜZELTME: arama ve sayfalama yoktu (bkz. GET /users için aynı not).
+// ?search= şirket adı VEYA kodu üzerinde eşleşir. Ayrıca dashboard'daki
+// "TFRS16 Customers" kutusunun drill-down eksikliğini gidermek için her
+// satıra aktif TFRS16 kontrat sayısı eklendi (tam detay için bkz.
+// GET /companies/:id ve GET /tfrs16/customers).
 router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
+    const { search, limit = 50, offset = 0 } = req.query;
+
+    const parsedLimit = Number.parseInt(limit, 10);
+    const parsedOffset = Number.parseInt(offset, 10);
+
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 500) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid pagination parameters. limit must be between 1 and 500.'
+        });
+    }
+
+    if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid pagination parameters. offset must be 0 or greater.'
+        });
+    }
+
+    const searchTerm = typeof search === 'string' ? search.trim() : '';
+
     try {
+
+        const whereClause = searchTerm
+            ? `WHERE c.name ILIKE $3 OR c.code ILIKE $3`
+            : '';
+
+        const params = searchTerm
+            ? [parsedLimit, parsedOffset, `%${searchTerm}%`]
+            : [parsedLimit, parsedOffset];
 
         const result = await pool.query(`
             SELECT
                 c.id,
                 c.name,
                 c.code,
+                c.status,
                 c.created_at,
 
                 COUNT(DISTINCT uc.user_id) AS user_count,
+
+                (
+                    SELECT COUNT(*)
+                    FROM contracts ct
+                    WHERE ct.company_id = c.id
+                      AND ct.status = 'active'
+                ) AS tfrs16_active_contracts,
 
                 (
                     SELECT json_build_object(
@@ -963,14 +1053,29 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
             LEFT JOIN user_companies uc
                 ON c.id = uc.company_id
 
+            ${whereClause}
+
             GROUP BY c.id
 
             ORDER BY c.created_at DESC
-        `);
+            LIMIT $1 OFFSET $2
+        `, params);
+
+        const countResult = await pool.query(
+            searchTerm
+                ? `SELECT COUNT(*) AS count FROM companies c WHERE c.name ILIKE $1 OR c.code ILIKE $1`
+                : `SELECT COUNT(*) AS count FROM companies c`,
+            searchTerm ? [`%${searchTerm}%`] : []
+        );
 
         return res.json({
             success: true,
-            data: result.rows
+            data: result.rows,
+            pagination: {
+                total: Number.parseInt(countResult.rows[0].count, 10),
+                limit: parsedLimit,
+                offset: parsedOffset
+            }
         });
 
     } catch (error) {
@@ -1201,6 +1306,7 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
                     id,
                     name,
                     code,
+                    status,
                     created_at
                  FROM companies
                  WHERE id = $1`,
@@ -1248,12 +1354,58 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
                 [companyId]
             );
 
+        // ------------------------------------------------------------
+        // DÜZELTME: Admin panelinden bir müşterinin TFRS16 kontrat verisi
+        // hiç görünmüyordu (kaç kontratı var, hangi tedarikçilerle, ne
+        // büyüklükte). Dashboard'daki "TFRS16 Customers" sayısı sadece
+        // aktif kontratı olan farklı şirket sayısıydı — tıklanabilir
+        // değildi, drill-down yoktu. Şirket detayına kontrat listesi +
+        // özet eklendi.
+        // ------------------------------------------------------------
+        const contractsResult =
+            await pool.query(
+                `SELECT
+                    id,
+                    supplier,
+                    monthly_payment,
+                    currency,
+                    start_date,
+                    end_date,
+                    status
+                 FROM contracts
+                 WHERE company_id = $1
+                 ORDER BY status ASC, end_date ASC`,
+                [companyId]
+            );
+
+        const contracts = contractsResult.rows;
+        const activeContracts = contracts.filter(c => c.status === 'active');
+
+        const supplierSet = new Set(activeContracts.map(c => c.supplier));
+
+        const totalsByCurrency = {};
+        for (const contract of activeContracts) {
+            const currency = contract.currency || 'TRY';
+            const amount = Number(contract.monthly_payment) || 0;
+            totalsByCurrency[currency] = (totalsByCurrency[currency] || 0) + amount;
+        }
+
+        const contractsSummary = {
+            active_count: activeContracts.length,
+            total_count: contracts.length,
+            suppliers: Array.from(supplierSet),
+            total_monthly_payment_by_currency: Object.entries(totalsByCurrency)
+                .map(([currency, total]) => ({ currency, total }))
+        };
+
         return res.json({
             success: true,
             data: {
                 ...company,
                 users: usersResult.rows,
-                licenses: licensesResult.rows
+                licenses: licensesResult.rows,
+                contracts,
+                contracts_summary: contractsSummary
             }
         });
 
@@ -1268,6 +1420,129 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
             success: false,
             error: 'Internal server error'
         });
+    }
+});
+
+
+// ============================================================
+// PATCH /api/admin/companies/:id/status
+// ============================================================
+// DÜZELTME: Kullanıcı için status=INACTIVE (pasifleştirme) yapılabiliyordu
+// ama şirket için hiçbir deaktivasyon/silme yolu yoktu. Gerçek bir DELETE
+// hâlâ desteklenmiyor (kontratlar/lisanslar/audit geçmişi referans
+// verdiğinden veri kaybı riski taşır) — kullanıcılardakiyle aynı
+// pasifleştirme deseni uygulanıyor. INACTIVE yapıldığında
+// license-service.js artık bu şirket için aktif lisansı reddeder, yani
+// bu sadece kozmetik bir bayrak değil, gerçek bir erişim kesme işlemidir.
+router.patch('/companies/:id/status', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    const companyId = String(req.params.id || '').trim();
+
+    if (!companyId || companyId.length > 50) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid company ID'
+        });
+    }
+
+    const unknownErr = rejectUnknownFields(req.body, ['status']);
+    if (unknownErr) {
+        return res.status(400).json({
+            success: false,
+            error: unknownErr
+        });
+    }
+
+    const { status } = req.body;
+
+    if (!status || !['ACTIVE', 'INACTIVE'].includes(status)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid status. Must be ACTIVE or INACTIVE'
+        });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const companyResult = await client.query(
+            `SELECT id, name, status
+             FROM companies
+             WHERE id = $1
+             FOR UPDATE`,
+            [companyId]
+        );
+
+        if (companyResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+
+        const currentCompany = companyResult.rows[0];
+
+        await client.query(
+            `UPDATE companies
+             SET status = $1
+             WHERE id = $2`,
+            [status, companyId]
+        );
+
+        await client.query(
+            `INSERT INTO audit_events (
+                id,
+                actor,
+                action,
+                entity_type,
+                entity_id,
+                old_value,
+                new_value
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                generateEntityId('AUD'),
+                String(req.user.id),
+                'UPDATE_COMPANY_STATUS',
+                'company',
+                companyId,
+                JSON.stringify({ status: currentCompany.status }),
+                JSON.stringify({ status })
+            ]
+        );
+
+        await client.query('COMMIT');
+
+        return res.json({
+            success: true,
+            message: `Company ${status === 'INACTIVE' ? 'deactivated' : 'activated'} successfully`
+        });
+
+    } catch (error) {
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error(
+                'Admin update company status rollback error:',
+                rollbackError
+            );
+        }
+
+        console.error(
+            'Admin update company status error:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+
+    } finally {
+        client.release();
     }
 });
 
@@ -1324,6 +1599,81 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
 
         console.error(
             'Admin get licenses error:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+
+// ============================================================
+// GET /api/admin/licenses/expiring
+// ============================================================
+// DÜZELTME: reports.js içindeki /api/reports/expiring endpoint'i sadece
+// isteği yapan kullanıcının KENDİ şirketi için çalışıyordu — platform
+// genelinde "önümüzdeki N gün içinde bitecek lisanslar" görünümü admin
+// panelinde yoktu, yenileme takibi elle (Licenses tablosundaki "Expires"
+// sütununa bakarak) yapılıyordu. Bu, customer-facing /expiring ile aynı
+// days-parametresi deseni kullanır ama tüm şirketleri kapsar.
+router.get('/licenses/expiring', requireAuth, requireAdmin, async (req, res) => {
+
+    const rawDays = Number(req.query.days);
+    const days = Number.isFinite(rawDays)
+        ? Math.min(Math.max(Math.trunc(rawDays), 1), 3650)
+        : 30;
+
+    try {
+
+        const result = await pool.query(`
+            SELECT
+                cl.id,
+                cl.company_id,
+                c.name AS company_name,
+                c.code AS company_code,
+                c.status AS company_status,
+                cl.plan_id,
+                p.name AS plan_name,
+                p.max_users,
+                cl.status,
+                cl.starts_at,
+                cl.expires_at,
+                COUNT(DISTINCT uc.user_id) AS current_users,
+                (cl.expires_at::date - NOW()::date) AS days_remaining
+
+            FROM company_licenses cl
+
+            JOIN companies c
+                ON cl.company_id = c.id
+
+            JOIN plans p
+                ON cl.plan_id = p.id
+
+            LEFT JOIN user_companies uc
+                ON c.id = uc.company_id
+
+            WHERE cl.status = 'active'
+              AND cl.expires_at IS NOT NULL
+              AND cl.expires_at BETWEEN NOW() AND NOW() + ($1 || ' days')::interval
+
+            GROUP BY cl.id, c.id, p.id
+
+            ORDER BY cl.expires_at ASC
+        `, [days]);
+
+        return res.json({
+            success: true,
+            data: result.rows,
+            days
+        });
+
+    } catch (error) {
+
+        console.error(
+            'Admin get expiring licenses error:',
             error
         );
 
@@ -1527,6 +1877,88 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
 
 
 // ============================================================
+// GET /api/admin/tfrs16/customers
+// ============================================================
+// DÜZELTME: Admin, TFRS16 verisinin kendisini hiç göremiyordu.
+// Dashboard'daki "TFRS16 Customers" kutusu sadece contracts tablosunda
+// aktif kontratı olan farklı şirket sayısıydı — tıklanabilir değildi,
+// drill-down yoktu. Bu endpoint platform genelinde her müşterinin kaç
+// kontratı olduğunu, hangi tedarikçilerle çalıştığını ve toplam
+// büyüklüğünü (para birimine göre aylık ödeme toplamı) döner. Tek bir
+// müşterinin tam kontrat listesi için GET /companies/:id kullanılır
+// (contracts + contracts_summary alanları, aşağıdaki liste ile aynı
+// hesaplama mantığını kullanır).
+router.get('/tfrs16/customers', requireAuth, requireAdmin, async (req, res) => {
+
+    try {
+
+        const result = await pool.query(`
+            SELECT
+                c.id,
+                c.name,
+                c.code,
+                c.status,
+
+                COUNT(*) FILTER (WHERE ct.status = 'active') AS active_contract_count,
+                COUNT(*) AS total_contract_count,
+
+                COALESCE(
+                    ARRAY_AGG(DISTINCT ct.supplier) FILTER (WHERE ct.status = 'active'),
+                    ARRAY[]::text[]
+                ) AS suppliers,
+
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'currency', currency_totals.currency,
+                                'total', currency_totals.total
+                            )
+                        )
+                        FROM (
+                            SELECT
+                                ct2.currency,
+                                SUM(ct2.monthly_payment) AS total
+                            FROM contracts ct2
+                            WHERE ct2.company_id = c.id
+                              AND ct2.status = 'active'
+                            GROUP BY ct2.currency
+                        ) currency_totals
+                    ),
+                    '[]'::json
+                ) AS total_monthly_payment_by_currency
+
+            FROM companies c
+
+            INNER JOIN contracts ct
+                ON ct.company_id = c.id
+
+            GROUP BY c.id
+
+            ORDER BY active_contract_count DESC, c.name ASC
+        `);
+
+        return res.json({
+            success: true,
+            data: result.rows
+        });
+
+    } catch (error) {
+
+        console.error(
+            'Admin get tfrs16 customers error:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+
+// ============================================================
 // 5. ADMIN DASHBOARD
 // ============================================================
 
@@ -1561,6 +1993,19 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
                 `SELECT COUNT(DISTINCT company_id) AS total
                  FROM contracts
                  WHERE status = 'active'`
+            );
+
+        // DÜZELTME: dashboard'da süresi yaklaşan lisanslar için hiçbir
+        // proaktif gösterge yoktu. Sabit 30 günlük pencere burada sadece
+        // özet sayı için kullanılır; tam liste ve ayarlanabilir gün
+        // aralığı için bkz. GET /api/admin/licenses/expiring.
+        const expiringLicensesResult =
+            await pool.query(
+                `SELECT COUNT(*) AS total
+                 FROM company_licenses
+                 WHERE status = 'active'
+                   AND expires_at IS NOT NULL
+                   AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '30 days'`
             );
 
         const recentActivity =
@@ -1624,6 +2069,12 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
                 tfrs16_customers:
                     Number.parseInt(
                         tfrs16Result.rows[0].total,
+                        10
+                    ),
+
+                expiring_licenses_30d:
+                    Number.parseInt(
+                        expiringLicensesResult.rows[0].total,
                         10
                     ),
 
