@@ -773,13 +773,41 @@ router.post(
 
       /**
        * PASSWORD
+       *
+       * DÜZELTME: user.password_hash veritabanında bozuk/eksik
+       * (geçersiz uzunlukta, örn. 60 karakterden kısa) bir bcrypt
+       * hash'i olarak saklanmışsa bcrypt.compare() exception fırlatır.
+       * Bu durum önceden yakalanmadığı için dıştaki genel catch
+       * bloğuna düşüyor ve kullanıcıya "Giriş işlemi sırasında
+       * beklenmeyen bir hata oluştu" 500 hatası dönüyordu; log'da da
+       * gerçek sebep (bozuk hash) belirsiz kalıyordu. Burada ayrı bir
+       * try/catch ile bu durum açıkça yakalanıp loglanıyor ve
+       * kullanıcıya normal "hatalı kullanıcı adı/parola" cevabı
+       * dönülüyor.
        */
 
-      const isValid =
-        await bcrypt.compare(
-          password,
-          user.password_hash
+      let isValid;
+
+      try {
+
+        isValid =
+          await bcrypt.compare(
+            password,
+            user.password_hash
+          );
+
+      } catch (bcryptError) {
+
+        console.error(
+          `Login: kullanıcı '${username}' için password_hash geçersiz/bozuk (bcrypt.compare hata verdi):`,
+          bcryptError
         );
+
+        return res.status(401).json({
+          error:
+            "Kullanıcı adı veya parola hatalı"
+        });
+      }
 
 
       if (!isValid) {
