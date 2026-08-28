@@ -40,6 +40,14 @@ async function getActiveCompanyLicense(companyId, db = pool) {
       FROM company_licenses cl
       INNER JOIN plans p
         ON p.id = cl.plan_id
+      -- DÜZELTME: şirket admin panelinden INACTIVE yapıldığında bu
+      -- gerçekten erişimi kesmeliydi, sadece bir bayrak olarak kalmamalıydı.
+      -- companies.status = 'ACTIVE' şartı olmadan, pasifleştirilmiş bir
+      -- şirketin kullanıcıları company_licenses satırı hâlâ 'active' ve
+      -- süresi dolmamış olduğu için sisteme erişmeye devam ederdi.
+      INNER JOIN companies c
+        ON c.id = cl.company_id
+       AND c.status = 'ACTIVE'
       WHERE cl.company_id = $1
         AND cl.status = 'active'
         AND cl.starts_at <= NOW()
@@ -182,6 +190,10 @@ async function getUserLicenses(userId, db = pool) {
         SELECT cl.*
         FROM company_licenses cl
         WHERE cl.company_id = c.id
+          -- getActiveCompanyLicense ile aynı kural: şirket admin
+          -- panelinden pasifleştirilmişse (status != 'ACTIVE') hiçbir
+          -- lisans "aktif" sayılmaz.
+          AND c.status = 'ACTIVE'
           AND cl.status = 'active'
           AND cl.starts_at <= NOW()
           AND (
