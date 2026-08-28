@@ -1,5 +1,7 @@
 const express = require("express");
 
+const crypto = require("crypto");
+
 const pool = require("../db/pool");
 
 const {
@@ -12,6 +14,60 @@ const {
 } = require("../services/license-service");
 
 const router = express.Router();
+
+/**
+ * admin.js içindeki generateEntityId ile aynı mantık —
+ * VARCHAR(50) şemasıyla uyumlu, id DEFAULT/SERIAL olmadığı için
+ * burada da elle üretiliyor.
+ */
+function generateEntityId(prefix) {
+  const suffix = crypto.randomBytes(8).toString("hex");
+  return `${prefix}-${Date.now()}-${suffix}`.slice(0, 50);
+}
+
+/**
+ * Lisans mutasyonlarını audit_events tablosuna yazar.
+ *
+ * ÖNEMLİ — DÜZELTME NOTU:
+ * Bu dosyadaki hiçbir endpoint daha önce audit_events'e yazmıyordu;
+ * admin.js'deki CREATE_USER/UPDATE_USER/CREATE_COMPANY loglanırken
+ * CREATE_LICENSE/EXTEND_LICENSE/CANCEL_LICENSE hiç loglanmıyordu
+ * (audit.html'deki filtre seçenekleri buna rağmen zaten vardı).
+ * `db` parametresi, transaction içinde çağrıldığında aynı client'ı
+ * (COMMIT'ten önce) kullanabilmek için eklendi.
+ */
+async function logLicenseAudit(
+  db,
+  {
+    actor,
+    action,
+    entityId,
+    oldValue,
+    newValue
+  }
+) {
+  await db.query(
+    `INSERT INTO audit_events (
+        id,
+        actor,
+        action,
+        entity_type,
+        entity_id,
+        old_value,
+        new_value
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      generateEntityId("AUD"),
+      String(actor),
+      action,
+      "license",
+      entityId,
+      oldValue !== undefined ? JSON.stringify(oldValue) : null,
+      newValue !== undefined ? JSON.stringify(newValue) : null
+    ]
+  );
+}
 
 
 /**
@@ -416,13 +472,28 @@ router.post(
         );
 
 
+      const license =
+        licenseResult.rows[0];
+
+
+      await logLicenseAudit(client, {
+        actor: req.user.id,
+        action: "CREATE_LICENSE",
+        entityId: license.id,
+        oldValue: null,
+        newValue: {
+          company_id: license.company_id,
+          plan_id: license.plan_id,
+          starts_at: license.starts_at,
+          expires_at: license.expires_at,
+          status: license.status
+        }
+      });
+
+
       await client.query(
         "COMMIT"
       );
-
-
-      const license =
-        licenseResult.rows[0];
 
 
       return res.status(201).json({
@@ -700,6 +771,25 @@ router.patch(
         );
 
 
+      const updatedLicense =
+        updateResult.rows[0];
+
+
+      await logLicenseAudit(client, {
+        actor: req.user.id,
+        action: "EXTEND_LICENSE",
+        entityId: licenseId,
+        oldValue: {
+          expires_at: license.expires_at,
+          status: license.status
+        },
+        newValue: {
+          expires_at: updatedLicense.expires_at,
+          status: updatedLicense.status
+        }
+      });
+
+
       await client.query(
         "COMMIT"
       );
@@ -711,7 +801,7 @@ router.patch(
           "Lisans süresi başarıyla uzatıldı",
 
         license:
-          updateResult.rows[0]
+          updatedLicense
 
       });
 
@@ -761,6 +851,18 @@ router.post(
       } = req.params;
 
 
+      const priorResult =
+        await pool.query(
+          `SELECT status FROM company_licenses WHERE id = $1`,
+          [licenseId]
+        );
+
+      const priorStatus =
+        priorResult.rows[0]
+          ? priorResult.rows[0].status
+          : null;
+
+
       const result =
         await pool.query(
           `
@@ -790,13 +892,30 @@ router.post(
       }
 
 
+      const cancelledLicense =
+        result.rows[0];
+
+
+      await logLicenseAudit(pool, {
+        actor: req.user.id,
+        action: "CANCEL_LICENSE",
+        entityId: licenseId,
+        oldValue: {
+          status: priorStatus
+        },
+        newValue: {
+          status: cancelledLicense.status
+        }
+      });
+
+
       return res.json({
 
         message:
           "Lisans başarıyla iptal edildi",
 
         license:
-          result.rows[0]
+          cancelledLicense
 
       });
 
