@@ -13,6 +13,31 @@ CREATE TABLE IF NOT EXISTS companies (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- DÜZELTME: Kullanıcılar için status=INACTIVE (pasifleştirme) yolu vardı
+-- ama şirketler için hiçbir deaktivasyon mekanizması yoktu — bir müşteri
+-- churn olduğunda ya da ödeme sorunu yaşandığında admin'in elinde şirketi
+-- (ve dolayısıyla tüm kullanıcılarının erişimini) durdurabileceği bir yol
+-- bulunmuyordu. IF NOT EXISTS kullanılıyor çünkü bu script, tablo zaten
+-- var olan deploy edilmiş ortamlara karşı da (idempotent şekilde)
+-- çalıştırılabilir olmalı.
+ALTER TABLE companies
+    ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_companies_status'
+    ) THEN
+        ALTER TABLE companies
+            ADD CONSTRAINT chk_companies_status
+                CHECK (status IN ('ACTIVE', 'INACTIVE'));
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_companies_status
+    ON companies(status);
+
 
 -- ============================================================
 -- CONTRACTS
