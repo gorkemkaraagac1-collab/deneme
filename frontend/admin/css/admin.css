@@ -115,6 +115,41 @@ body {
 }
 
 /* ============================================================
+   Mobile Nav Toggle + Overlay
+   ============================================================ */
+.menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    flex-shrink: 0;
+}
+
+.menu-toggle:hover {
+    background: var(--bg);
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.45);
+    z-index: 999;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* ============================================================
    Main Content
    ============================================================ */
 .main-content {
@@ -131,7 +166,8 @@ body {
     height: var(--header-height);
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 12px;
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
@@ -141,12 +177,19 @@ body {
 .top-header .page-title {
     font-size: 18px;
     font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .top-header .user-info {
     display: flex;
     align-items: center;
     gap: 16px;
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .top-header .user-info .username {
@@ -523,6 +566,7 @@ body {
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.25);
     }
     
     .sidebar.open {
@@ -531,6 +575,10 @@ body {
     
     .main-content {
         margin-left: 0;
+    }
+    
+    .menu-toggle {
+        display: inline-block;
     }
     
     .top-header {
@@ -554,5 +602,13 @@ body {
 @media (max-width: 480px) {
     .dashboard-cards {
         grid-template-columns: 1fr;
+    }
+
+    .top-header .user-info .username {
+        display: none;
+    }
+
+    .top-header .user-info {
+        gap: 8px;
     }
 }
