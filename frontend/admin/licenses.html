@@ -19,6 +19,7 @@
             <a href="companies.html">🏢 Companies</a>
             <a href="users.html">👤 Users</a>
             <a href="licenses.html" class="active">🔑 Licenses</a>
+            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
             <a href="audit.html">📋 Audit Log</a>
         </div>
     </nav>
@@ -41,6 +42,14 @@
                     <button class="btn btn-primary" onclick="openAssignModal()">
                         + Assign License
                     </button>
+                </div>
+                <div class="table-toolbar">
+                    <label class="toolbar-label" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="expiringOnlyCheckbox" onchange="onExpiringToggle()">
+                        Yalnızca süresi yaklaşanları göster (
+                        <input type="number" id="expiringDaysInput" value="30" min="1" max="3650" style="width:70px;min-width:70px;" onchange="onExpiringToggle()">
+                        gün içinde)
+                    </label>
                 </div>
                 <table>
                     <thead>
@@ -80,7 +89,9 @@
 
         async function loadCompaniesForSelect() {
             try {
-                const result = await AdminAPI.getCompanies();
+                // Dropdown için tam liste gerekir — sayfalama limitiyle
+                // (varsayılan 50) kesilmesin diye yüksek bir limit veriyoruz.
+                const result = await AdminAPI.getCompanies({ limit: 500 });
                 if (result.success) {
                     allCompanies = result.data;
                 }
@@ -106,7 +117,13 @@
 
         async function loadLicenses() {
             try {
-                const result = await AdminAPI.getLicenses();
+                const expiringOnly = document.getElementById('expiringOnlyCheckbox').checked;
+                const days = document.getElementById('expiringDaysInput').value || 30;
+
+                const result = expiringOnly
+                    ? await AdminAPI.getExpiringLicenses(days)
+                    : await AdminAPI.getLicenses();
+
                 if (!result.success) {
                     document.getElementById('licensesTableBody').innerHTML = 
                         `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
@@ -130,10 +147,27 @@
                 `).join('');
                 
                 document.getElementById('licensesTableBody').innerHTML = html || 
-                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No licenses found</td></tr>`;
+                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">${expiringOnly ? 'No licenses expiring in this range' : 'No licenses found'}</td></tr>`;
                     
             } catch (error) {
                 console.error('Load licenses error:', error);
+            }
+        }
+
+        // DÜZELTME: platform genelinde "önümüzdeki N gün içinde bitecek
+        // lisanslar" görünümü yoktu — yenileme takibi elle yapılıyordu.
+        // Dashboard'daki "Expiring Licenses (30d)" kutusu buraya
+        // ?expiring=30 ile bağlanır ve checkbox'ı otomatik işaretler.
+        function onExpiringToggle() {
+            loadLicenses();
+        }
+
+        function initExpiringFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            const expiring = params.get('expiring');
+            if (expiring) {
+                document.getElementById('expiringOnlyCheckbox').checked = true;
+                document.getElementById('expiringDaysInput').value = expiring;
             }
         }
 
@@ -179,6 +213,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const authenticated = await checkAdminAuth();
             if (authenticated) {
+                initExpiringFromQuery();
                 await Promise.all([loadCompaniesForSelect(), loadPlans()]);
                 loadLicenses();
             }

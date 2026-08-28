@@ -19,6 +19,7 @@
             <a href="companies.html">🏢 Companies</a>
             <a href="users.html" class="active">👤 Users</a>
             <a href="licenses.html">🔑 Licenses</a>
+            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
             <a href="audit.html">📋 Audit Log</a>
         </div>
     </nav>
@@ -40,6 +41,9 @@
                     <h3>All Users</h3>
                     <button class="btn btn-primary" onclick="showCreateUserModal()">+ New User</button>
                 </div>
+                <div class="table-toolbar">
+                    <input type="text" id="userSearchInput" placeholder="Search by username..." oninput="onUserSearchInput()">
+                </div>
                 <table>
                     <thead>
                         <tr>
@@ -55,6 +59,7 @@
                         <tr><td colspan="6" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
+                <div id="usersPagination"></div>
             </div>
         </div>
     </div>
@@ -83,7 +88,9 @@
 
         async function loadCompaniesForSelect() {
             try {
-                const result = await AdminAPI.getCompanies();
+                // Dropdown için tam liste gerekir — sayfalama limitiyle
+                // (varsayılan 50) kesilmesin diye yüksek bir limit veriyoruz.
+                const result = await AdminAPI.getCompanies({ limit: 500 });
                 if (result.success) {
                     allCompanies = result.data;
                 }
@@ -94,7 +101,10 @@
 
         async function loadUsers() {
             try {
-                const result = await AdminAPI.getUsers();
+                const params = { limit: usersState.limit, offset: usersState.offset };
+                if (usersState.search) params.search = usersState.search;
+
+                const result = await AdminAPI.getUsers(params);
                 if (!result.success) {
                     document.getElementById('usersTableBody').innerHTML = 
                         `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
@@ -122,10 +132,30 @@
                 
                 document.getElementById('usersTableBody').innerHTML = html || 
                     `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">No users found</td></tr>`;
+
+                document.getElementById('usersPagination').innerHTML =
+                    renderPagination(result.pagination, changeUsersPage);
                     
             } catch (error) {
                 console.error('Load users error:', error);
             }
+        }
+
+        let usersState = { search: '', limit: 20, offset: 0 };
+
+        function onUserSearchInput() {
+            debouncedUserSearch();
+        }
+
+        const debouncedUserSearch = debounce(() => {
+            usersState.search = document.getElementById('userSearchInput').value.trim();
+            usersState.offset = 0;
+            loadUsers();
+        }, 350);
+
+        function changeUsersPage(newOffset) {
+            usersState.offset = newOffset;
+            loadUsers();
         }
 
         // --- YENİ / GÜNCELLENEN FONKSİYONLAR ---
