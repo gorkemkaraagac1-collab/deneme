@@ -959,6 +959,7 @@ router.get(
               id,
               name,
               max_users,
+              max_contracts,
               description,
               created_at
             FROM plans
@@ -984,6 +985,183 @@ router.get(
       return res.status(500).json({
         error:
           "Planlar alınırken bir hata oluştu"
+      });
+    }
+  }
+);
+
+
+/**
+ * ============================================================
+ * 6. PLAN GÜNCELLE
+ * ============================================================
+ *
+ * Admin panelinden bir planın kullanıcı/sözleşme limitlerini ve
+ * açıklamasını düzenlemek için. Plan adı (id) ve isim (name)
+ * kasıtlı olarak DEĞİŞTİRİLEMEZ — id, company_licenses.plan_id
+ * tarafından referans alınıyor ve PLAN_LEVELS (starter/
+ * professional/enterprise sıralaması) kod içinde bu id'lere göre
+ * sabitlenmiş (bkz. license-service.js, middleware/license.js,
+ * routes/auth.js). Sadece limitler ve açıklama değişebilir.
+ *
+ * PATCH
+ * /api/admin/plans/:id
+ *
+ * Body:
+ * {
+ *   maxUsers: number | null,
+ *   maxContracts: number | null,
+ *   description: string
+ * }
+ */
+router.patch(
+  "/plans/:id",
+  requireAdmin,
+  async (req, res) => {
+
+    const { id } = req.params;
+
+    const {
+      maxUsers,
+      maxContracts,
+      description
+    } = req.body;
+
+
+    /**
+     * INPUT VALIDATION
+     *
+     * null => sınırsız (izinli). Sayı ise pozitif tam sayı olmalı.
+     * undefined => bu alan güncellenmiyor (mevcut değer korunur).
+     */
+    function isValidLimit(value) {
+      return (
+        value === null ||
+        value === undefined ||
+        (
+          Number.isInteger(value) &&
+          value > 0
+        )
+      );
+    }
+
+    if (
+      !isValidLimit(maxUsers) ||
+      !isValidLimit(maxContracts)
+    ) {
+      return res.status(400).json({
+        error:
+          "maxUsers ve maxContracts null (sınırsız) veya pozitif bir tam sayı olmalıdır"
+      });
+    }
+
+    if (
+      description !== undefined &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        error:
+          "description bir metin olmalıdır"
+      });
+    }
+
+
+    try {
+
+      const existingResult =
+        await pool.query(
+          `
+            SELECT
+              id,
+              name,
+              max_users,
+              max_contracts,
+              description
+            FROM plans
+            WHERE id = $1
+          `,
+          [id]
+        );
+
+      if (existingResult.rows.length === 0) {
+        return res.status(404).json({
+          error:
+            "Belirtilen plan bulunamadı"
+        });
+      }
+
+      const existing =
+        existingResult.rows[0];
+
+
+      const nextMaxUsers =
+        maxUsers !== undefined
+          ? maxUsers
+          : existing.max_users;
+
+      const nextMaxContracts =
+        maxContracts !== undefined
+          ? maxContracts
+          : existing.max_contracts;
+
+      const nextDescription =
+        description !== undefined
+          ? description
+          : existing.description;
+
+
+      const updateResult =
+        await pool.query(
+          `
+            UPDATE plans
+            SET
+              max_users = $1,
+              max_contracts = $2,
+              description = $3
+            WHERE id = $4
+            RETURNING
+              id,
+              name,
+              max_users,
+              max_contracts,
+              description,
+              created_at
+          `,
+          [
+            nextMaxUsers,
+            nextMaxContracts,
+            nextDescription,
+            id
+          ]
+        );
+
+
+      await logLicenseAudit(
+        pool,
+        {
+          actor: req.user.id,
+          action: "UPDATE_PLAN",
+          entityId: id,
+          oldValue: existing,
+          newValue: updateResult.rows[0]
+        }
+      );
+
+
+      return res.json(
+        updateResult.rows[0]
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Plan güncelleme hatası:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "Plan güncellenirken bir hata oluştu"
       });
     }
   }
