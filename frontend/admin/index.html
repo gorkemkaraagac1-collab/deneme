@@ -27,6 +27,9 @@
             <a href="licenses.html">
                 <span class="icon">🔑</span> Licenses
             </a>
+            <a href="tfrs16.html">
+                <span class="icon">🧾</span> TFRS16 Customers
+            </a>
             <a href="audit.html">
                 <span class="icon">📋</span> Audit Log
             </a>
@@ -61,10 +64,14 @@
                     <div class="stat-number" id="statUsers">-</div>
                     <div class="stat-label">Active Users</div>
                 </div>
-                <div class="stat-card">
+                <a href="tfrs16.html" class="stat-card clickable">
                     <div class="stat-number" id="statTfrs16">-</div>
-                    <div class="stat-label">TFRS16 Customers</div>
-                </div>
+                    <div class="stat-label">TFRS16 Customers ›</div>
+                </a>
+                <a href="licenses.html?expiring=30" class="stat-card clickable warning">
+                    <div class="stat-number" id="statExpiringLicenses">-</div>
+                    <div class="stat-label">Expiring Licenses (30d) ›</div>
+                </a>
             </div>
 
             <!-- Recent Activity -->
@@ -93,6 +100,7 @@
                 document.getElementById('statLicenses').textContent = data.active_licenses;
                 document.getElementById('statUsers').textContent = data.users;
                 document.getElementById('statTfrs16').textContent = data.tfrs16_customers;
+                document.getElementById('statExpiringLicenses').textContent = data.expiring_licenses_30d;
                 
                 // Recent Activity
                 const activityHtml = data.recent_activity.map(item => `

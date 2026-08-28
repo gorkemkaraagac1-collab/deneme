@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TFRS16 Customers - Admin Panel</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="index.html">📊 Dashboard</a>
+            <a href="companies.html">🏢 Companies</a>
+            <a href="users.html">👤 Users</a>
+            <a href="licenses.html">🔑 Licenses</a>
+            <a href="tfrs16.html" class="active">🧾 TFRS16 Customers</a>
+            <a href="audit.html">📋 Audit Log</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <header class="top-header">
+            <div class="page-title">TFRS16 Customers</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Companies with TFRS16 Contracts</h3>
+                </div>
+                <p style="color:var(--text-light); font-size:13px; margin:-8px 0 16px;">
+                    Dashboard'daki "TFRS16 Customers" sayısının detayı: her müşterinin kaç kontratı olduğu,
+                    hangi tedarikçilerle çalıştığı ve aktif kontratlarının toplam büyüklüğü (aylık ödeme,
+                    para birimine göre).
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Status</th>
+                            <th>Active Contracts</th>
+                            <th>Total Contracts</th>
+                            <th>Suppliers</th>
+                            <th>Total Monthly Payment</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tfrs16TableBody">
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Contracts</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="../js/admin.js"></script>
+    <script>
+        function formatMoney(amount, currency) {
+            const n = Number(amount) || 0;
+            return n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (currency || '');
+        }
+
+        async function loadTfrs16Customers() {
+            try {
+                const result = await AdminAPI.getTfrs16Customers();
+                if (!result.success) {
+                    document.getElementById('tfrs16TableBody').innerHTML =
+                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                    return;
+                }
+
+                const html = result.data.map(c => {
+                    const totals = (c.total_monthly_payment_by_currency || [])
+                        .map(t => formatMoney(t.total, t.currency))
+                        .join(', ') || '-';
+                    const suppliers = (c.suppliers || []);
+                    const supplierText = suppliers.length > 3
+                        ? `${suppliers.slice(0, 3).map(escapeHtml).join(', ')} +${suppliers.length - 3} more`
+                        : suppliers.map(escapeHtml).join(', ') || '-';
+
+                    return `
+                        <tr>
+                            <td><strong>${escapeHtml(c.name)}</strong><br><small style="color:var(--text-light);">${escapeHtml(c.code)}</small></td>
+                            <td>${getStatusBadge(c.status)}</td>
+                            <td>${c.active_contract_count}</td>
+                            <td>${c.total_contract_count}</td>
+                            <td>${supplierText}</td>
+                            <td>${totals}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline" onclick="viewContracts('${c.id}')">View Contracts</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                document.getElementById('tfrs16TableBody').innerHTML = html ||
+                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No TFRS16 contracts found</td></tr>`;
+
+            } catch (error) {
+                console.error('Load tfrs16 customers error:', error);
+            }
+        }
+
+        async function viewContracts(companyId) {
+            try {
+                const result = await AdminAPI.getCompany(companyId);
+                if (!result.success) {
+                    alert('Error: ' + result.error);
+                    return;
+                }
+
+                const c = result.data;
+                const contracts = c.contracts || [];
+
+                const rows = contracts.map(ct => `
+                    <tr>
+                        <td>${escapeHtml(ct.supplier)}</td>
+                        <td>${formatMoney(ct.monthly_payment, ct.currency)}</td>
+                        <td>${formatDateShort(ct.start_date)}</td>
+                        <td>${formatDateShort(ct.end_date)}</td>
+                        <td>${getStatusBadge((ct.status || '').toUpperCase())}</td>
+                    </tr>
+                `).join('');
+
+                const content = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Supplier</th>
+                                <th>Monthly Payment</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows || '<tr><td colspan="5" style="text-align:center;color:var(--text-light);">No contracts</td></tr>'}
+                        </tbody>
+                    </table>
+                `;
+
+                showModal(`Contracts: ${escapeHtml(c.name)}`, content);
+
+            } catch (error) {
+                alert('Error loading contracts: ' + error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadTfrs16Customers();
+            }
+        });
+    </script>
+</body>
+</html>
