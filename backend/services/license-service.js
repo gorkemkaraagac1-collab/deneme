@@ -32,6 +32,7 @@ async function getActiveCompanyLicense(companyId, db = pool) {
         cl.plan_id,
         p.name AS plan_name,
         p.max_users,
+        p.max_contracts,
         p.description,
         cl.starts_at,
         cl.expires_at,
@@ -150,6 +151,90 @@ async function canAddUserToCompany(companyId, db = pool) {
 
 
 /**
+ * Şirketin mevcut sözleşme (kontrat) sayısını döndürür.
+ *
+ * @param {string} companyId
+ * @param {object} db
+ * @returns {Promise<number>}
+ */
+async function getCompanyContractCount(companyId, db = pool) {
+  const result = await db.query(
+    `
+      SELECT COUNT(*)::INTEGER AS contract_count
+      FROM contracts
+      WHERE company_id = $1
+    `,
+    [companyId]
+  );
+
+  return result.rows[0]?.contract_count || 0;
+}
+
+
+/**
+ * Şirket yeni bir sözleşme (kontrat) ekleyebilir mi?
+ *
+ * canAddUserToCompany ile birebir aynı mantık, kullanıcı yerine
+ * kontrat sayısı üzerinden çalışır:
+ *
+ * Enterprise:
+ * max_contracts = NULL => sınırsız
+ *
+ * Diğer planlar:
+ * currentContracts < max_contracts
+ *
+ * @param {string} companyId
+ * @param {object} db
+ * @returns {Promise<object>}
+ */
+async function canAddContractToCompany(companyId, db = pool) {
+  const license = await getActiveCompanyLicense(companyId, db);
+
+  if (!license) {
+    return {
+      allowed: false,
+      reason: "NO_ACTIVE_LICENSE",
+      message: "Şirketin geçerli bir lisansı bulunmamaktadır.",
+      license: null,
+      currentContracts: await getCompanyContractCount(companyId, db)
+    };
+  }
+
+  const currentContracts = await getCompanyContractCount(companyId, db);
+
+  // Enterprise / sınırsız
+  if (license.max_contracts === null) {
+    return {
+      allowed: true,
+      reason: "UNLIMITED",
+      message: "Sınırsız sözleşme lisansı.",
+      license,
+      currentContracts,
+      maxContracts: null,
+      remainingContracts: null
+    };
+  }
+
+  const allowed = currentContracts < license.max_contracts;
+
+  return {
+    allowed,
+    reason: allowed ? "AVAILABLE" : "LIMIT_REACHED",
+    message: allowed
+      ? "Yeni sözleşme eklenebilir."
+      : "Şirket sözleşme limitine ulaşmıştır.",
+    license,
+    currentContracts,
+    maxContracts: license.max_contracts,
+    remainingContracts: Math.max(
+      license.max_contracts - currentContracts,
+      0
+    )
+  };
+}
+
+
+/**
  * Kullanıcının bağlı olduğu şirketlerin lisanslarını getirir.
  *
  * Bir kullanıcı birden fazla şirkete bağlı olabilir.
@@ -169,6 +254,7 @@ async function getUserLicenses(userId, db = pool) {
         cl.plan_id,
         p.name AS plan_name,
         p.max_users,
+        p.max_contracts,
         p.description,
 
         cl.starts_at,
@@ -179,7 +265,13 @@ async function getUserLicenses(userId, db = pool) {
           SELECT COUNT(*)::INTEGER
           FROM user_companies uc2
           WHERE uc2.company_id = c.id
-        ) AS current_users
+        ) AS current_users,
+
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM contracts ct
+          WHERE ct.company_id = c.id
+        ) AS current_contracts
 
       FROM user_companies uc
 
@@ -227,6 +319,7 @@ async function getUserLicenses(userId, db = pool) {
           planId: row.plan_id,
           planName: row.plan_name,
           maxUsers: row.max_users,
+          maxContracts: row.max_contracts,
           description: row.description,
           startsAt: row.starts_at,
           expiresAt: row.expires_at,
@@ -241,6 +334,16 @@ async function getUserLicenses(userId, db = pool) {
         ? null
         : Math.max(
             Number(row.max_users) - Number(row.current_users || 0),
+            0
+          ),
+
+    currentContracts: Number(row.current_contracts || 0),
+
+    remainingContracts:
+      row.max_contracts === null || row.max_contracts === undefined
+        ? null
+        : Math.max(
+            Number(row.max_contracts) - Number(row.current_contracts || 0),
             0
           )
   }));
@@ -357,6 +460,8 @@ module.exports = {
   getActiveCompanyLicense,
   getCompanyUserCount,
   canAddUserToCompany,
+  getCompanyContractCount,
+  canAddContractToCompany,
   getUserLicenses,
   getUserLicensedCompanies,
   hasActiveCompanyLicense,
