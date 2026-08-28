@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plans - Admin Panel</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="index.html">📊 Dashboard</a>
+            <a href="companies.html">🏢 Companies</a>
+            <a href="users.html">👤 Users</a>
+            <a href="licenses.html">🔑 Licenses</a>
+            <a href="plans.html" class="active">📦 Plans</a>
+            <a href="../../tfrs16.html" target="_blank">🧮 TFRS16 Hesaplama Motoru</a>
+            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
+            <a href="audit.html">📋 Audit Log</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <header class="top-header">
+            <div class="page-title">Plans</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Lisans Planları</h3>
+                </div>
+                <p style="padding:0 20px 12px;color:var(--text-light);font-size:13px;">
+                    Plan adı ve id'si değiştirilemez (şirket lisansları ve sistem
+                    genelindeki plan sıralaması bu id'lere bağlıdır). Kullanıcı
+                    limiti, sözleşme limiti ve açıklama buradan düzenlenebilir.
+                    Limit alanını boş bırakmak <strong>sınırsız</strong> anlamına gelir.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Açıklama</th>
+                            <th>Kullanıcı Limiti</th>
+                            <th>Sözleşme Limiti</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="plansTableBody">
+                        <tr><td colspan="5" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Planı Düzenle</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="../js/admin.js"></script>
+    <script>
+        let allPlans = [];
+
+        function formatLimit(value) {
+            return (value === null || value === undefined) ? "∞ (sınırsız)" : value;
+        }
+
+        async function loadPlans() {
+            try {
+                const result = await AdminAPI.getPlans();
+
+                if (!result.success) {
+                    document.getElementById('plansTableBody').innerHTML =
+                        `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Error: ${escapeHtml(result.error)}</td></tr>`;
+                    return;
+                }
+
+                allPlans = result.data;
+
+                const html = allPlans.map(p => `
+                    <tr>
+                        <td><strong>${escapeHtml(p.name)}</strong><br><small style="color:var(--text-light);">${escapeHtml(p.id)}</small></td>
+                        <td>${escapeHtml(p.description || '-')}</td>
+                        <td>${formatLimit(p.max_users)}</td>
+                        <td>${formatLimit(p.max_contracts)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="openEditModal('${p.id}')">Düzenle</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('plansTableBody').innerHTML = html ||
+                    `<tr><td colspan="5" style="text-align:center;color:var(--text-light);">Plan bulunamadı</td></tr>`;
+
+            } catch (error) {
+                console.error('Load plans error:', error);
+                document.getElementById('plansTableBody').innerHTML =
+                    `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Planlar yüklenirken hata oluştu</td></tr>`;
+            }
+        }
+
+        function openEditModal(planId) {
+            const plan = allPlans.find(p => p.id === planId);
+            if (!plan) return;
+
+            document.getElementById('modalTitle').textContent = `${plan.name} Planını Düzenle`;
+
+            document.getElementById('modalBody').innerHTML = `
+                <form id="editPlanForm" onsubmit="submitEditPlan(event, '${plan.id}')">
+                    <div class="form-group">
+                        <label>Plan</label>
+                        <input type="text" value="${escapeHtml(plan.name)}" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Açıklama</label>
+                        <input type="text" id="editPlanDescription" value="${escapeHtml(plan.description || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label>Kullanıcı Limiti (boş = sınırsız)</label>
+                        <input type="number" id="editPlanMaxUsers" min="1" step="1" value="${plan.max_users === null || plan.max_users === undefined ? '' : plan.max_users}">
+                    </div>
+                    <div class="form-group">
+                        <label>Sözleşme Limiti (boş = sınırsız)</label>
+                        <input type="number" id="editPlanMaxContracts" min="1" step="1" value="${plan.max_contracts === null || plan.max_contracts === undefined ? '' : plan.max_contracts}">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal()">İptal</button>
+                        <button type="submit" class="btn btn-primary">Kaydet</button>
+                    </div>
+                </form>
+            `;
+
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function parseLimitInput(elementId) {
+            const raw = document.getElementById(elementId).value.trim();
+            if (raw === '') return null;
+
+            const parsed = parseInt(raw, 10);
+            if (isNaN(parsed) || parsed <= 0) {
+                throw new Error('Limit alanları boş (sınırsız) veya pozitif bir tam sayı olmalıdır.');
+            }
+            return parsed;
+        }
+
+        async function submitEditPlan(event, planId) {
+            event.preventDefault();
+
+            let maxUsers;
+            let maxContracts;
+
+            try {
+                maxUsers = parseLimitInput('editPlanMaxUsers');
+                maxContracts = parseLimitInput('editPlanMaxContracts');
+            } catch (validationError) {
+                alert(validationError.message);
+                return;
+            }
+
+            const description = document.getElementById('editPlanDescription').value;
+
+            try {
+                const result = await AdminAPI.updatePlan(planId, {
+                    maxUsers,
+                    maxContracts,
+                    description
+                });
+
+                if (result.success) {
+                    closeModal();
+                    loadPlans();
+                } else {
+                    alert('Hata: ' + result.error);
+                }
+            } catch (error) {
+                alert('Plan güncellenirken hata oluştu: ' + error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadPlans();
+            }
+        });
+    </script>
+</body>
+</html>
