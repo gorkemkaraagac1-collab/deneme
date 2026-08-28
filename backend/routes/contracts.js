@@ -7,6 +7,10 @@ const {
   requireCompanyLicense
 } = require("../middleware/license");
 
+const {
+  canAddContractToCompany
+} = require("../services/license-service");
+
 const router = express.Router();
 
 
@@ -234,6 +238,37 @@ router.post(
             "Geçersiz şirket erişimi",
           code:
             "COMPANY_ACCESS_DENIED"
+        });
+
+      }
+
+
+      /**
+       * DÜZELTME: Planların max_users ile aynı şekilde bir
+       * max_contracts (sözleşme) limiti var artık, ama daha önce
+       * hiçbir yerde kontrol edilmiyordu — Starter planındaki bir
+       * şirket de Enterprise ile aynı sayıda sözleşme
+       * girebiliyordu. requireCompanyLicense zaten aktif lisansı
+       * doğruladı; burada ayrıca o lisansın sözleşme limitine
+       * ulaşılıp ulaşılmadığına bakılıyor.
+       */
+      const contractLimitCheck =
+        await canAddContractToCompany(
+          authorizedCompanyId
+        );
+
+      if (!contractLimitCheck.allowed) {
+
+        return res.status(403).json({
+          error:
+            contractLimitCheck.message ||
+            "Şirket sözleşme limitine ulaşmıştır.",
+          code:
+            contractLimitCheck.reason,
+          currentContracts:
+            contractLimitCheck.currentContracts,
+          maxContracts:
+            contractLimitCheck.maxContracts
         });
 
       }
