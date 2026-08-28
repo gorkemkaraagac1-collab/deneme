@@ -6,6 +6,7 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/admin');
 const { createRateLimiter } = require('../middleware/rate-limit');
+const { canAddUserToCompany } = require('../services/license-service');
 
 // ============================================================
 // ADMIN ROUTES
@@ -232,6 +233,29 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
                     success: false,
                     error: 'One or more company IDs are invalid'
                 });
+            }
+
+            // --------------------------------------------------
+            // DÜZELTME: Plan max_users limiti daha önce burada HİÇ
+            // kontrol edilmiyordu — bu endpoint'ten bir şirkete
+            // lisans planının izin verdiğinden fazla kullanıcı
+            // eklenebiliyordu (bu kontrol yalnızca auth.js'deki
+            // self-service /register akışında vardı). Aynı kontrolü
+            // (canAddUserToCompany) burada da uyguluyoruz.
+            // --------------------------------------------------
+            for (const companyId of uniqueCompanyIds) {
+                const capacity = await canAddUserToCompany(companyId, client);
+
+                if (!capacity.allowed) {
+                    await client.query('ROLLBACK');
+
+                    return res.status(403).json({
+                        success: false,
+                        error: capacity.message,
+                        code: capacity.reason,
+                        companyId
+                    });
+                }
             }
         }
 
@@ -510,6 +534,32 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
                     });
                 }
             }
+
+            // ------------------------------------------------
+            // DÜZELTME: Kullanıcıyı YENİ bir şirkete eklerken de
+            // plan max_users limiti kontrol edilmeliydi. Zaten
+            // bağlı olduğu şirketler için tekrar kontrol
+            // gerekmiyor (o kullanıcı zaten sayılıyor) — yalnızca
+            // company_ids içinde YENİ eklenen id'ler kontrol edilir.
+            // ------------------------------------------------
+            const newlyAddedCompanyIds = uniqueCompanyIds.filter(
+                id => !currentCompanyIds.includes(id)
+            );
+
+            for (const companyId of newlyAddedCompanyIds) {
+                const capacity = await canAddUserToCompany(companyId, client);
+
+                if (!capacity.allowed) {
+                    await client.query('ROLLBACK');
+
+                    return res.status(403).json({
+                        success: false,
+                        error: capacity.message,
+                        code: capacity.reason,
+                        companyId
+                    });
+                }
+            }
         }
 
         // ----------------------------------------------------
@@ -714,6 +764,150 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
 
         console.error(
             'Admin update user error:',
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+
+    } finally {
+        client.release();
+    }
+});
+
+
+// ============================================================
+// PATCH /api/admin/users/:id/password
+// ============================================================
+// DÜZELTME: Ne admin panelinde ne de müşteri tarafında şifre
+// sıfırlama imkanı yoktu — bir kullanıcı şifresini unuttuğunda tek
+// yol o kullanıcıyı silip (silme de zaten yok) yeniden oluşturmaktı.
+// Platform-level ADMIN'in herhangi bir kullanıcının şifresini
+// doğrudan sıfırlayabilmesi için eklendi. Şifre hash'i audit_events'e
+// asla yazılmaz — yalnızca işlemin kendisi ve hedef kullanıcı adı
+// loglanır.
+router.patch('/users/:id/password', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    const bcrypt = require('bcryptjs');
+    const userId = String(req.params.id || '').trim();
+
+    if (!userId || userId.length > 50) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid user ID'
+        });
+    }
+
+    const unknownErr = rejectUnknownFields(req.body, ['new_password']);
+    if (unknownErr) {
+        return res.status(400).json({
+            success: false,
+            error: unknownErr
+        });
+    }
+
+    const { new_password: newPassword } = req.body;
+
+    if (!newPassword || typeof newPassword !== 'string') {
+        return res.status(400).json({
+            success: false,
+            error: 'new_password is required'
+        });
+    }
+
+    if (newPassword.trim().length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password cannot be empty or whitespace only'
+        });
+    }
+
+    // POST /users ile aynı politika (auth.js /register ile de hizalı)
+    if (newPassword.length < 10) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password must be at least 10 characters'
+        });
+    }
+
+    if (newPassword.length > 128) {
+        return res.status(400).json({
+            success: false,
+            error: 'Password is too long'
+        });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const userResult = await client.query(
+            `SELECT id, username FROM users WHERE id = $1 FOR UPDATE`,
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        const targetUser = userResult.rows[0];
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        await client.query(
+            `UPDATE users
+             SET password_hash = $1
+             WHERE id = $2`,
+            [hashedPassword, userId]
+        );
+
+        await client.query(
+            `INSERT INTO audit_events (
+                id,
+                actor,
+                action,
+                entity_type,
+                entity_id,
+                old_value,
+                new_value
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                generateEntityId('AUD'),
+                String(req.user.id),
+                'RESET_PASSWORD',
+                'user',
+                userId,
+                null,
+                JSON.stringify({ username: targetUser.username })
+            ]
+        );
+
+        await client.query('COMMIT');
+
+        return res.json({
+            success: true,
+            message: 'Password reset successfully'
+        });
+
+    } catch (error) {
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error(
+                'Admin reset password rollback error:',
+                rollbackError
+            );
+        }
+
+        console.error(
+            'Admin reset password error:',
             error
         );
 
