@@ -5,6 +5,95 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TFRS 16 | Contract Portfolio</title>
   <link rel="stylesheet" href="css/tfrs16.css">
+  <style>
+    /*
+     * DÜZELTME: Bu sayfa daha önce herkese açıktı (login/lisans
+     * kontrolü yoktu). Lisans doğrulaması bitene kadar içerik
+     * gizli tutulur; doğrulama başarılı olursa "gk-license-ok"
+     * sınıfı eklenerek gösterilir.
+     */
+    body { visibility: hidden; }
+    body.gk-license-ok { visibility: visible; }
+  </style>
+  <script>
+    /*
+     * ============================================================
+     * ERİŞİM KONTROLÜ (LOGIN + AKTİF LİSANS)
+     * ============================================================
+     *
+     * Bu sayfa önceden herhangi bir kimlik/lisans kontrolü olmadan
+     * herkese açıktı. Artık:
+     *   1) localStorage'da geçerli bir access_token yoksa
+     *      doğrudan login sayfasına yönlendirilir.
+     *   2) Token varsa backend'deki mevcut
+     *      GET /api/customer/license (requireAuth korumalı)
+     *      endpoint'i ile kullanıcının aktif bir lisansı olup
+     *      olmadığı doğrulanır.
+     *   3) Token geçersizse (401) oturum temizlenip login'e,
+     *      aktif lisans yoksa (404) pricing sayfasına yönlendirilir.
+     *   4) Sadece doğrulama başarılı olursa sayfa içeriği gösterilir.
+     *
+     * NOT: Bu, tarayıcı tarafında bir erişim kontrolüdür (kullanım
+     * kolaylığını engellemek için). Sözleşme verisi zaten yalnızca
+     * localStorage'da tutulduğu ve backend'e yazılmadığı için asıl
+     * hassas nokta veri sızıntısı değil, aracın lisanssız
+     * kullanılabilmesiydi — bu kontrol onu kapatıyor.
+     */
+    (function () {
+      const API_BASE_URL =
+        "https://deneme-git-285469227510.europe-west1.run.app";
+
+      const LOGIN_PAGE = "frontend/login.html";
+      const PRICING_PAGE = "pricing.html";
+
+      const token = localStorage.getItem("access_token");
+
+      if (!token) {
+        window.location.replace(LOGIN_PAGE);
+        return;
+      }
+
+      fetch(`${API_BASE_URL}/api/customer/license`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      })
+        .then(response => {
+          if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("current_user");
+            window.location.replace(LOGIN_PAGE);
+            return null;
+          }
+
+          if (response.status === 404) {
+            window.location.replace(PRICING_PAGE);
+            return null;
+          }
+
+          if (!response.ok) {
+            throw new Error(`Lisans kontrolü başarısız: HTTP ${response.status}`);
+          }
+
+          return response.json();
+        })
+        .then(result => {
+          if (!result) {
+            return;
+          }
+
+          if (result.success) {
+            document.body.classList.add("gk-license-ok");
+          } else {
+            window.location.replace(PRICING_PAGE);
+          }
+        })
+        .catch(error => {
+          console.error("Lisans doğrulama hatası:", error);
+          window.location.replace(LOGIN_PAGE);
+        });
+    })();
+  </script>
 </head>
 <body>
 <div class="app">
