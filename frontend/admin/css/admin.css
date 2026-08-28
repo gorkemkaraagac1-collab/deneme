@@ -263,6 +263,85 @@ body {
 .stat-card.warning { border-left-color: var(--warning); }
 .stat-card.danger { border-left-color: var(--danger); }
 
+/* DÜZELTME: "TFRS16 Customers" kutusu tıklanabilir değildi, drill-down
+   yoktu. Artık bazı kartlar bir sayfaya bağlanıyor (bkz. index.html). */
+.stat-card.clickable {
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.stat-card.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+/* ============================================================
+   Toolbar (search + filters above a table)
+   ============================================================ */
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.table-toolbar input[type="text"],
+.table-toolbar input[type="number"] {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    min-width: 220px;
+}
+
+.table-toolbar input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.table-toolbar .toolbar-label {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+/* ============================================================
+   Pagination
+   ============================================================ */
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.pagination-info {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pagination-page {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.pagination-controls button[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* ============================================================
    Recent Activity
    ============================================================ */
