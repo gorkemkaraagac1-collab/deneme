@@ -38,6 +38,40 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_companies_status
     ON companies(status);
 
+-- P0 — HOLDİNG HİYERARŞİSİ: companies.parent_company_id
+--
+-- Amaç: bir ACCOUNTANT_MANAGER'ın kendi ağacında (holding + alt
+-- şirketler) alt şirket oluşturabilmesi ve lisansın ana şirkete
+-- bağlanıp alt şirketlere miras kalması (bkz. company_licenses,
+-- aşağıda). parent_company_id NULL ise şirket bir ANA şirkettir
+-- (holding kökü veya tek başına düz müşteri — hiyerarşi zorunlu
+-- değildir, mevcut tüm şirketler bu değişiklikten sonra da NULL
+-- parent ile aynı şekilde çalışmaya devam eder).
+--
+-- ON DELETE RESTRICT: bir alt şirketi olan ana şirket, önce alt
+-- şirketler taşınmadan/silinmeden silinemez (companies tablosunda
+-- zaten gerçek bir DELETE yolu yok, sadece status=INACTIVE — bu
+-- kısıt yine de ileride eklenebilecek bir DELETE yoluna karşı
+-- güvenlik payı bırakır).
+ALTER TABLE companies
+    ADD COLUMN IF NOT EXISTS parent_company_id VARCHAR(50)
+        REFERENCES companies(id) ON DELETE RESTRICT;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_companies_not_self_parent'
+    ) THEN
+        ALTER TABLE companies
+            ADD CONSTRAINT chk_companies_not_self_parent
+                CHECK (parent_company_id IS DISTINCT FROM id);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_companies_parent_company_id
+    ON companies(parent_company_id);
+
 
 -- ============================================================
 -- CONTRACTS
@@ -136,6 +170,48 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- P0 — HOLDİNG/KULLANICI YÖNETİMİ PLANI: email, ad/soyad, ilk şifre
+-- zorunluluğu.
+--
+-- ÖNEMLİ: email burada henüz login kimliği DEĞİL. username kolonu
+-- ve auth.js/login akışı bu P0'da DEĞİŞTİRİLMİYOR (bkz. onaylanan
+-- plan madde 6: "Login kimliği: EMAIL" geçişi, mevcut auth akışını
+-- etkileyeceği için P1'e (JWT/erişim ağacı) bırakıldı — PROJECT_
+-- CONTEXT.md'deki "minimal değişiklik / önce release" ilkesi
+-- gereği bu fazda sadece şema hazırlanıyor, davranış değişmiyor).
+--
+-- email NULLABLE bırakıldı: mevcut kullanıcı satırlarının email'i
+-- yok, geriye dönük dolduruncaya kadar NOT NULL yapılamaz. UNIQUE
+-- kısıt kısmi index ile sadece dolu olan email'lerde uygulanıyor
+-- (Postgres'te normal UNIQUE zaten birden fazla NULL'a izin verir,
+-- ama niyet açık olsun diye WHERE email IS NOT NULL ile yazıldı).
+--
+-- must_change_password DEFAULT FALSE: mevcut kullanıcıları
+-- zorla şifre değiştirmeye yönlendirmemek için. Yeni kullanıcı
+-- oluşturma akışı (P1/P3, /api/org/users ve admin.js POST /users)
+-- bu alanı INSERT sırasında açıkça TRUE geçecek.
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS email VARCHAR(150),
+    ADD COLUMN IF NOT EXISTS first_name VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS last_name VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_users_email_format'
+    ) THEN
+        ALTER TABLE users
+            ADD CONSTRAINT chk_users_email_format
+                CHECK (email IS NULL OR email ~ '^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+    ON users(LOWER(email))
+    WHERE email IS NOT NULL;
+
 
 -- ============================================================
 -- USER ↔ COMPANY
@@ -213,6 +289,25 @@ BEGIN
     END IF;
 END $$;
 
+-- P0 — HOLDİNG HİYERARŞİSİ: max_companies (ağaçtaki TOPLAM şirket,
+-- ana dahil). max_users/max_contracts ile birebir aynı NULL=sınırsız
+-- deseni izler; enforcement (P1/P3'te ağaç büyüklüğü sayımı) service
+-- katmanında yapılacak, burada sadece limit değeri saklanıyor.
+ALTER TABLE plans
+    ADD COLUMN IF NOT EXISTS max_companies INTEGER;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_plans_max_companies'
+    ) THEN
+        ALTER TABLE plans
+            ADD CONSTRAINT chk_plans_max_companies
+                CHECK (max_companies IS NULL OR max_companies > 0);
+    END IF;
+END $$;
+
 
 -- ============================================================
 -- COMPANY LICENSES
@@ -275,6 +370,41 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_company_licenses_one_active_per_company
     ON company_licenses(company_id)
     WHERE status = 'active';
 
+-- P0 — CUSTOM PLAN: per-lisans limit override.
+--
+-- plans tablosu paylaşımlı/sabit master veridir (Starter/Professional/
+-- Enterprise satırları hâlâ tüm şirketler arasında ortak). Custom
+-- planında ise her holding/anlaşma farklı limitlere sahip olabilir
+-- ("Admin elle girer: max_companies, max_users, max_contracts" —
+-- onaylanan plan madde 2). Bu yüzden limitler plans satırına değil,
+-- BU lisans satırına (company_licenses) yazılır.
+--
+-- NULL = "plans tablosundaki değeri kullan" (mevcut Starter/
+-- Professional/Enterprise lisansları için hiçbir davranış değişmez).
+-- Dolu değer = bu lisansa özel override (Custom lisanslar için).
+-- COALESCE(override, plan.değer) uygulaması license-service.js'te
+-- P1'de yapılacak — bu fazda yalnızca şema hazırlanıyor.
+ALTER TABLE company_licenses
+    ADD COLUMN IF NOT EXISTS max_users_override INTEGER,
+    ADD COLUMN IF NOT EXISTS max_contracts_override INTEGER,
+    ADD COLUMN IF NOT EXISTS max_companies_override INTEGER;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_company_licenses_overrides_positive'
+    ) THEN
+        ALTER TABLE company_licenses
+            ADD CONSTRAINT chk_company_licenses_overrides_positive
+                CHECK (
+                    (max_users_override IS NULL OR max_users_override > 0)
+                    AND (max_contracts_override IS NULL OR max_contracts_override > 0)
+                    AND (max_companies_override IS NULL OR max_companies_override > 0)
+                );
+    END IF;
+END $$;
+
 
 -- ============================================================
 -- DEFAULT PLANS
@@ -308,6 +438,31 @@ VALUES
     NULL, -- sınırsız kullanıcı (bkz. license-service.js: NULL = unlimited)
     NULL, -- sınırsız sözleşme (bkz. license-service.js: NULL = unlimited)
     'Kurumsal kullanım paketi (sınırsız kullanıcı, sınırsız sözleşme)'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- P0 — CUSTOM PLAN (holding / özel anlaşma)
+--
+-- Bu satırın kendi max_users/max_contracts/max_companies alanları
+-- kasıtlı olarak NULL bırakılıyor (kolon default'u zaten NULL):
+-- gerçek limitler plana değil, her holding için ayrı ayrı
+-- company_licenses.*_override kolonlarına yazılır (yukarıya bkz.).
+-- Bu INSERT script'te max_companies kolonunun eklendiği ALTER
+-- TABLE'dan SONRA çalışır, dolayısıyla kolon her zaman mevcuttur.
+INSERT INTO plans (
+    id,
+    name,
+    max_users,
+    max_contracts,
+    description
+)
+VALUES
+(
+    'custom',
+    'Custom',
+    NULL,
+    NULL,
+    'Holding / özel anlaşma — limitler lisans bazında (company_licenses.*_override) tanımlanır'
 )
 ON CONFLICT (id) DO NOTHING;
 
