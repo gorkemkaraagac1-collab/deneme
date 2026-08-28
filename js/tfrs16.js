@@ -185,6 +185,269 @@ document.addEventListener("DOMContentLoaded", () => {
   */
 
   const STORAGE_KEY = "gk_tfrs16_contracts_v7";
+
+  /* ==========================================================
+     BACKEND (PostgreSQL) CONTRACT API
+     ----------------------------------------------------------
+     Sözleşmeler Google Cloud PostgreSQL'e yazılır.
+     localStorage yalnızca önbellek / offline yedektir.
+  ========================================================== */
+  const TFRS16_API_BASE =
+    "https://deneme-git-285469227510.europe-west1.run.app";
+
+  let sessionCompanies = []; // [{ id, name }]
+  let sessionCompanyIds = [];
+
+  function tfrs16GetToken() {
+    return (
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("gk_backend_jwt") ||
+      null
+    );
+  }
+
+  async function tfrs16ApiFetch(path, options = {}) {
+    const token = tfrs16GetToken();
+    if (!token) {
+      const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
+      err.code = "NO_TOKEN";
+      throw err;
+    }
+    const res = await fetch(`${TFRS16_API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    });
+    let body = null;
+    const text = await res.text();
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch (_) {
+      body = text;
+    }
+    if (!res.ok) {
+      const msg =
+        (body && (body.error || body.message)) ||
+        `API hatası (${res.status})`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.body = body;
+      throw err;
+    }
+    return body;
+  }
+
+  function mapDbContractToUi(row) {
+    if (!row || typeof row !== "object") return null;
+    const start =
+      row.startDate ||
+      row.start_date ||
+      "";
+    const end = row.endDate || row.end_date || "";
+    return {
+      id: row.id,
+      companyId: row.companyId || row.company_id || "",
+      company: row.company || "",
+      supplier: row.supplier || "",
+      monthlyPayment: Number(
+        row.monthlyPayment != null
+          ? row.monthlyPayment
+          : row.monthly_payment != null
+            ? row.monthly_payment
+            : 0
+      ),
+      startDate: typeof start === "string" ? start.slice(0, 10) : start,
+      endDate: typeof end === "string" ? end.slice(0, 10) : end,
+      discountRate: Number(
+        row.discountRate != null
+          ? row.discountRate
+          : row.discount_rate != null
+            ? row.discount_rate
+            : 0
+      ),
+      currency: row.currency || "TRY",
+      status: String(row.status || "active").toLowerCase(),
+      modification: false,
+      modifications: [],
+      reassessments: []
+    };
+  }
+
+  async function loadSessionCompanies() {
+    try {
+      const me = await tfrs16ApiFetch("/api/auth/me");
+      const data = me?.data || me || {};
+      sessionCompanyIds = Array.isArray(data.companyIds)
+        ? data.companyIds.map(String)
+        : [];
+      const fromLicenses = Array.isArray(data.licenses)
+        ? data.licenses
+            .filter(l => l && l.companyId)
+            .map(l => ({
+              id: String(l.companyId),
+              name: l.companyName || String(l.companyId)
+            }))
+        : [];
+      // companyIds içinde olup licenses'ta olmayanlar
+      const seen = new Set(fromLicenses.map(c => c.id));
+      sessionCompanies = [
+        ...fromLicenses,
+        ...sessionCompanyIds
+          .filter(id => !seen.has(String(id)))
+          .map(id => ({ id: String(id), name: String(id) }))
+      ];
+      return sessionCompanies;
+    } catch (error) {
+      console.warn("Şirket listesi alınamadı:", error);
+      sessionCompanies = [];
+      sessionCompanyIds = [];
+      return [];
+    }
+  }
+
+  function getPrimarySessionCompany() {
+    return sessionCompanies[0] || null;
+  }
+
+  function applySessionCompanyToForm(contract = null) {
+    const companyInput = document.getElementById("company");
+    let companyIdInput = document.getElementById("companyId");
+    if (!companyIdInput) {
+      companyIdInput = document.createElement("input");
+      companyIdInput.type = "hidden";
+      companyIdInput.id = "companyId";
+      companyIdInput.name = "companyId";
+      document.getElementById("contractForm")?.appendChild(companyIdInput);
+    }
+
+    // Şirket alanını select'e çevir (bir kez)
+    if (companyInput && companyInput.tagName === "INPUT" && sessionCompanies.length) {
+      const select = document.createElement("select");
+      select.id = "company";
+      select.name = "company";
+      select.required = true;
+      select.style.cssText = companyInput.style.cssText || "";
+      select.className = companyInput.className || "";
+      sessionCompanies.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.dataset.companyId = c.id;
+        opt.textContent = c.name;
+        select.appendChild(opt);
+      });
+      select.addEventListener("change", () => {
+        const opt = select.selectedOptions[0];
+        companyIdInput.value = opt?.dataset?.companyId || "";
+      });
+      companyInput.replaceWith(select);
+    } else if (companyInput && companyInput.tagName === "SELECT") {
+      // seçenekleri güncelle
+      const current = companyInput.value;
+      companyInput.innerHTML = "";
+      sessionCompanies.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.dataset.companyId = c.id;
+        opt.textContent = c.name;
+        companyInput.appendChild(opt);
+      });
+      if (current) companyInput.value = current;
+    }
+
+    const primary = getPrimarySessionCompany();
+    if (contract?.companyId) {
+      companyIdInput.value = contract.companyId;
+      const match = sessionCompanies.find(c => c.id === String(contract.companyId));
+      const companyEl = document.getElementById("company");
+      if (companyEl && match) companyEl.value = match.name;
+      else if (companyEl && contract.company) companyEl.value = contract.company;
+    } else if (primary) {
+      companyIdInput.value = primary.id;
+      const companyEl = document.getElementById("company");
+      if (companyEl) companyEl.value = primary.name;
+    }
+  }
+
+  async function persistContractToApi(contract, isUpdate) {
+    const companyId =
+      contract.companyId ||
+      document.getElementById("companyId")?.value ||
+      getPrimarySessionCompany()?.id;
+
+    if (!companyId) {
+      throw new Error(
+        "Şirket ID bulunamadı. Kullanıcıya atanmış şirket yok veya oturum geçersiz."
+      );
+    }
+
+    const payload = {
+      id: contract.id,
+      companyId: String(companyId),
+      company: contract.company,
+      supplier: contract.supplier,
+      monthlyPayment: contract.monthlyPayment,
+      startDate: contract.startDate,
+      endDate: contract.endDate,
+      discountRate: contract.discountRate || 0,
+      currency: contract.currency || "TRY",
+      status: contract.status || "active"
+    };
+
+    if (isUpdate) {
+      return tfrs16ApiFetch(
+        `/api/contracts/${encodeURIComponent(contract.id)}`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      );
+    }
+    return tfrs16ApiFetch("/api/contracts", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function deleteContractFromApi(contractId) {
+    return tfrs16ApiFetch(
+      `/api/contracts/${encodeURIComponent(contractId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  async function hydrateContractsFromApi() {
+    try {
+      await loadSessionCompanies();
+      const rows = await tfrs16ApiFetch("/api/contracts");
+      if (!Array.isArray(rows)) {
+        console.warn("GET /api/contracts beklenen dizi değil:", rows);
+        return;
+      }
+      const mapped = rows
+        .map(mapDbContractToUi)
+        .filter(Boolean)
+        .map(c =>
+          ensureInflationAdjustmentState(
+            ensureReassessmentState(ensureModificationState(c))
+          )
+        );
+      contracts = mapped;
+      try {
+        saveContracts(contracts);
+      } catch (_) {}
+      if (typeof refresh === "function") refresh();
+      console.info(
+        `[TFRS16] ${contracts.length} sözleşme API'den yüklendi.`
+      );
+    } catch (error) {
+      console.warn(
+        "[TFRS16] API'den sözleşme yüklenemedi, localStorage kullanılıyor:",
+        error?.message || error
+      );
+    }
+  }
+
+
   const ASSET_CLASS_STORAGE_KEY = "gk_tfrs16_asset_classes_v1";
   const ASSET_CLASS_PREDEFINED = ["Arsa", "Makine", "Taşıt", "Diğer"];
   const ASSET_CLASS_UNCLASSIFIED = "Sınıflandırılmamış";
@@ -245,6 +508,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const V26_COMPANIES_KEY = "gk_tfrs16_companies_v26";
 
   let contracts = loadContracts();
+
+  // PostgreSQL'den sözleşmeleri yükle (kaynak gerçek DB)
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      hydrateContractsFromApi();
+    });
+  } else {
+    setTimeout(() => hydrateContractsFromApi(), 0);
+  }
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
   // kontrol/entegrasyon kayıtlarını arka planda temizle (UI'ı bloklamaz).
@@ -6290,11 +6562,13 @@ document.addEventListener("DOMContentLoaded", () => {
       contract?.id || ""
     );
 
-    setInput(
-      "company",
-      contract?.company ||
-        "GK Holding"
-    );
+    // Kullanıcının şirketleri (API) — GK Holding sabitini kaldır
+    applySessionCompanyToForm(contract);
+    if (contract?.company) {
+      setInput("company", contract.company);
+    } else if (!sessionCompanies.length) {
+      setInput("company", contract?.company || "");
+    }
 
     setInput(
       "supplier",
@@ -6832,7 +7106,7 @@ document.addEventListener("DOMContentLoaded", () => {
     )
     ?.addEventListener(
       "submit",
-      event => {
+      async event => {
 
         event.preventDefault();
 
@@ -7077,6 +7351,12 @@ document.addEventListener("DOMContentLoaded", () => {
             existing?.assetClass ||
             "",
 
+          companyId:
+            document.getElementById("companyId")?.value ||
+            existing?.companyId ||
+            getPrimarySessionCompany()?.id ||
+            "",
+
           status:
             existing?.status ||
             "active",
@@ -7168,6 +7448,13 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
+        // PostgreSQL'e önce yaz — hata olursa yerel liste değişmez
+        await persistContractToApi(contract, Boolean(existing));
+        contract.companyId =
+          contract.companyId ||
+          document.getElementById("companyId")?.value ||
+          getPrimarySessionCompany()?.id ||
+          "";
 
         if (existing) {
 
@@ -7260,6 +7547,13 @@ document.addEventListener("DOMContentLoaded", () => {
         closeContractModal();
 
         openDetail(id);
+
+        showAlert(
+          existing
+            ? "Sözleşme güncellendi ve veritabanına kaydedildi."
+            : "Sözleşme oluşturuldu ve veritabanına kaydedildi.",
+          "success"
+        );
 
         } catch (error) {
           console.error("Sözleşme kaydedilirken hata:", error);
@@ -12829,7 +13123,7 @@ document.addEventListener("DOMContentLoaded", () => {
     )
     ?.addEventListener(
       "click",
-      () => {
+      async () => {
 
         if (
           !selectedContractId
@@ -12883,12 +13177,25 @@ document.addEventListener("DOMContentLoaded", () => {
           metadata: { deletedContractSnapshot: deletedSnapshot, auditRetention: "central" }
         });
 
+        const deletedId = selectedContractId;
+
         contracts =
           contracts.filter(
             item =>
               item.id !==
               selectedContractId
           );
+
+        try {
+          await deleteContractFromApi(deletedId);
+        } catch (apiErr) {
+          console.error("API silme hatası:", apiErr);
+          showAlert(
+            "Veritabanından silinemedi: " +
+            (apiErr?.message || String(apiErr))
+          );
+          // Yerel listeden silindi; yine de uyarı ver
+        }
 
         saveContracts(
           contracts
