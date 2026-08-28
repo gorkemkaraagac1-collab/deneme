@@ -222,3 +222,291 @@
         <!-- Header -->
         <div class="header">
             <h1>Finansal Zeka Platformu</h1>
+            <div class="user-info">
+                <span class="username" id="userDisplay">Yükleniyor...</span>
+                <button class="btn-logout" onclick="logout()">Çıkış Yap</button>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMsg" class="error-msg"></div>
+
+        <!-- Company Info Section -->
+        <div id="companyInfo">
+            <div class="welcome">
+                <h2 id="welcomeUser">Hoş geldiniz!</h2>
+                <p id="companyDisplay">Şirket bilgileri yükleniyor...</p>
+            </div>
+
+            <!-- Dashboard Cards -->
+            <div class="cards" id="dashboardCards">
+                <!-- Company Card -->
+                <div class="card info">
+                    <div class="label">Şirket</div>
+                    <div class="value" id="companyName">-</div>
+                </div>
+
+                <!-- License Card -->
+                <div class="card success" id="licenseCard" style="display: none;">
+                    <div class="label">Lisans / Abonelik</div>
+                    <div id="licenseContent">
+                        <!-- Loading State -->
+                        <div id="licenseLoading" class="loading-spinner">Lisans bilgileri yükleniyor...</div>
+                        
+                        <!-- Success State -->
+                        <div id="licenseSuccess" style="display: none;">
+                            <div class="detail-row">
+                                <span class="label-sm">Plan</span>
+                                <span class="value-sm" id="licensePlan">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="label-sm">Durum</span>
+                                <span class="value-sm" id="licenseStatusBadge">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="label-sm">Başlangıç</span>
+                                <span class="value-sm" id="licenseStart">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="label-sm">Bitiş</span>
+                                <span class="value-sm" id="licenseEnd">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="label-sm">Maks. Kullanıcı</span>
+                                <span class="value-sm" id="licenseMaxUsers">-</span>
+                            </div>
+                        </div>
+                        
+                        <!-- No License State -->
+                        <div id="licenseNoLicense" style="display: none;">
+                            <p class="no-license-msg">Bu şirket için aktif lisans bulunamadı.</p>
+                        </div>
+                        
+                        <!-- Error State -->
+                        <div id="licenseError" style="display: none; color: #e74c3c; font-size: 14px;">
+                            Lisans bilgileri yüklenemedi.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Available Modules -->
+            <div class="modules">
+                <h3>Kullanılabilir Modüller</h3>
+                <div class="module-grid" id="moduleGrid">
+                    <!-- JS ile doldurulacak -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Dashboard - Backend JWT Entegrasyonu + License Bilgisi
+        // ============================================================
+
+        // Backend: Cloud Run (frontend GitHub Pages'te barındığı için
+        // relative "/api/..." istekleri kendi origin'ine gider, backend'e değil)
+        const API_BASE_URL = "https://deneme-git-285469227510.europe-west1.run.app";
+
+        // --- Helper Functions ---
+        function getToken() {
+            return localStorage.getItem('access_token');
+        }
+
+        async function fetchAPI(url, options = {}) {
+            const token = getToken();
+            const response = await fetch(`${API_BASE_URL}${url}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                    ...(options.headers || {})
+                }
+            });
+            return response.json();
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = './login.html';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatDateShort(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('tr-TR');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getStatusBadge(status) {
+            const statusMap = {
+                'ACTIVE': '<span class="status-badge active">AKTİF</span>',
+                'active': '<span class="status-badge active">AKTİF</span>',
+                'INACTIVE': '<span class="status-badge inactive">PASİF</span>',
+                'inactive': '<span class="status-badge inactive">PASİF</span>',
+                'EXPIRED': '<span class="status-badge expired">SÜRESİ DOLMUŞ</span>',
+                'expired': '<span class="status-badge expired">SÜRESİ DOLMUŞ</span>',
+                'PENDING': '<span class="status-badge pending">BEKLEMEDE</span>',
+                'pending': '<span class="status-badge pending">BEKLEMEDE</span>'
+            };
+            return statusMap[status] || `<span class="status-badge">${escapeHtml(status || 'UNKNOWN')}</span>`;
+        }
+
+        // --- Load Dashboard ---
+        async function loadDashboard() {
+            const token = getToken();
+            if (!token) {
+                window.location.href = './login.html';
+                return;
+            }
+
+            try {
+                // 1. Mevcut kullanıcı bilgisi
+                const meResult = await fetchAPI('/api/auth/me');
+                if (!meResult.success) {
+                    localStorage.removeItem('access_token');
+                    window.location.href = './login.html';
+                    return;
+                }
+
+                const user = meResult.data;
+                document.getElementById('userDisplay').textContent = user.username;
+                document.getElementById('welcomeUser').textContent = `Hoş geldiniz, ${user.username}!`;
+
+                // 2. Kullanıcının şirket bilgilerini al
+                if (!user.companyIds || user.companyIds.length === 0) {
+                    document.getElementById('companyDisplay').textContent = 'Atanmış şirket yok';
+                    document.getElementById('companyInfo').style.display = 'block';
+                    return;
+                }
+
+                const companyId = user.companyIds[0];
+                document.getElementById('companyDisplay').textContent = `Şirket ID: ${companyId}`;
+
+                // 3. Şirket bilgilerini al (opsiyonel)
+                await loadCompanyInfo(companyId);
+
+                // 4. License bilgilerini al
+                await loadLicenseInfo();
+
+                // 5. Module grid'i göster
+                loadModuleGrid();
+
+                document.getElementById('companyInfo').style.display = 'block';
+
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+                const errorEl = document.getElementById('errorMsg');
+                errorEl.textContent = 'Kontrol paneli yüklenemedi: ' + error.message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // --- Load Company Info ---
+        async function loadCompanyInfo(companyId) {
+            try {
+                const result = await fetchAPI(`/api/admin/companies/${companyId}`);
+                if (result.success && result.data) {
+                    document.getElementById('companyName').textContent = result.data.name || result.data.code || '-';
+                } else {
+                    document.getElementById('companyName').textContent = 'Şirket #' + companyId;
+                }
+            } catch (error) {
+                console.error('Company info error:', error);
+                document.getElementById('companyName').textContent = 'Şirket #' + companyId;
+            }
+        }
+
+        // --- Load License Info ---
+        async function loadLicenseInfo() {
+            const licenseCard = document.getElementById('licenseCard');
+            const loadingEl = document.getElementById('licenseLoading');
+            const successEl = document.getElementById('licenseSuccess');
+            const noLicenseEl = document.getElementById('licenseNoLicense');
+            const errorEl = document.getElementById('licenseError');
+
+            // Kartı göster, loading'i göster, diğerlerini gizle
+            licenseCard.style.display = 'block';
+            loadingEl.style.display = 'block';
+            successEl.style.display = 'none';
+            noLicenseEl.style.display = 'none';
+            errorEl.style.display = 'none';
+
+            try {
+                const result = await fetchAPI('/api/customer/license');
+                loadingEl.style.display = 'none';
+
+                if (result.success && result.data) {
+                    // Başarılı: Bilgileri göster
+                    document.getElementById('licensePlan').textContent = result.data.plan_name || '-';
+                    
+                    const statusHtml = getStatusBadge(result.data.license_status);
+                    document.getElementById('licenseStatusBadge').innerHTML = statusHtml;
+                    
+                    document.getElementById('licenseStart').textContent = formatDateShort(result.data.start_date);
+                    document.getElementById('licenseEnd').textContent = formatDateShort(result.data.end_date);
+                    document.getElementById('licenseMaxUsers').textContent = result.data.max_users || '∞';
+                    
+                    successEl.style.display = 'block';
+                    
+                } else if (result.error && result.error.includes('No active license')) {
+                    // Lisans yok
+                    noLicenseEl.style.display = 'block';
+                } else {
+                    // Diğer hatalar
+                    errorEl.textContent = 'Hata: ' + (result.error || 'Bilinmeyen hata');
+                    errorEl.style.display = 'block';
+                }
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                errorEl.textContent = 'Lisans yükleme hatası: ' + error.message;
+                errorEl.style.display = 'block';
+                console.error('License fetch error:', error);
+            }
+        }
+
+        // --- Load Module Grid ---
+        function loadModuleGrid() {
+            // TFRS16: frontend/dashboard.html -> ../tfrs16.html (repo kökü)
+            document.getElementById('moduleGrid').innerHTML = `
+                <a href="../tfrs16.html" class="module-item unlocked module-link">
+                    <span class="icon">📊</span>
+                    <div class="name">TFRS 16</div>
+                    <div class="status">✓ Kullanılabilir</div>
+                </a>
+                <div class="module-item locked" title="Yakında">
+                    <span class="icon">🔒</span>
+                    <div class="name">TMS 19</div>
+                    <div class="status">Yakında</div>
+                </div>
+                <div class="module-item locked" title="Yakında">
+                    <span class="icon">🔒</span>
+                    <div class="name">DCF</div>
+                    <div class="status">Yakında</div>
+                </div>
+                <div class="module-item locked" title="Yakında">
+                    <span class="icon">🔒</span>
+                    <div class="name">Hedge Muhasebesi</div>
+                    <div class="status">Yakında</div>
+                </div>
+            `;
+        }
+
+        // --- Auto-login check ---
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>
