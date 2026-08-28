@@ -182,6 +182,80 @@ async getAudit(params = {}) {
             }
         );
     return response.json();
+},
+/*
+ * ========================================================
+ * LICENSES (assign / extend / cancel / plans)
+ * ------------------------------------------------------
+ * Not: routes/admin-licenses.js diğer admin route'larının
+ * aksine { success, data } formatını KULLANMIYOR — sadece
+ * { license/plans } ya da { error } döndürüyor. Burada
+ * frontend'in geri kalanıyla tutarlı olması için
+ * response.ok'a göre { success, data, error } formatına
+ * normalize ediyoruz.
+ * ========================================================
+ */
+async getPlans() {
+    const response =
+        await fetch(
+            `${this.baseURL}/plans`,
+            {
+                method: "GET",
+                headers: this.getHeaders()
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Planlar alınamadı" };
+    }
+    return { success: true, data: result.plans || [] };
+},
+async assignLicense(companyId, data) {
+    const response =
+        await fetch(
+            `${this.baseURL}/companies/${encodeURIComponent(companyId)}/license`,
+            {
+                method: "POST",
+                headers: this.getHeaders(),
+                body: JSON.stringify(data)
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Lisans atanamadı" };
+    }
+    return { success: true, data: result.license, message: result.message };
+},
+async extendLicense(licenseId, data) {
+    const response =
+        await fetch(
+            `${this.baseURL}/licenses/${encodeURIComponent(licenseId)}/extend`,
+            {
+                method: "PATCH",
+                headers: this.getHeaders(),
+                body: JSON.stringify(data)
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Lisans uzatılamadı" };
+    }
+    return { success: true, data: result.license, message: result.message };
+},
+async cancelLicense(licenseId) {
+    const response =
+        await fetch(
+            `${this.baseURL}/licenses/${encodeURIComponent(licenseId)}/cancel`,
+            {
+                method: "POST",
+                headers: this.getHeaders()
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Lisans iptal edilemedi" };
+    }
+    return { success: true, data: result.license, message: result.message };
 }
 
 };
@@ -417,4 +491,181 @@ localStorage.removeItem(
 window.location.href =
     "../login.html";
 
+}
+
+// ============================================================
+// MOBILE NAV (hamburger + overlay)
+// ------------------------------------------------------------
+// Sidebar CSS zaten mobilde .sidebar'ı translateX(-100%) ile
+// gizliyordu ama hiçbir sayfada onu açacak bir buton yoktu, bu
+// yüzden telefonda sidebar'a hiç erişilemiyordu. Bunu tüm admin
+// sayfalarında merkezi olarak (her HTML dosyasını tek tek
+// değiştirmeden) çözüyoruz.
+// ============================================================
+
+function initMobileNav() {
+
+    const sidebar = document.getElementById("sidebar");
+    const header = document.querySelector(".top-header");
+    if (!sidebar || !header) return;
+
+    // Overlay (bir kere)
+    let overlay = document.getElementById("sidebarOverlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "sidebarOverlay";
+        overlay.className = "sidebar-overlay";
+        document.body.appendChild(overlay);
+    }
+
+    // Hamburger butonu (bir kere)
+    let toggle = document.getElementById("menuToggle");
+    if (!toggle) {
+        toggle = document.createElement("button");
+        toggle.id = "menuToggle";
+        toggle.className = "menu-toggle";
+        toggle.type = "button";
+        toggle.setAttribute("aria-label", "Menüyü aç/kapat");
+        toggle.textContent = "☰";
+        header.insertBefore(toggle, header.firstChild);
+    }
+
+    function openSidebar() {
+        sidebar.classList.add("open");
+        overlay.classList.add("active");
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("active");
+    }
+
+    toggle.addEventListener("click", () => {
+        if (sidebar.classList.contains("open")) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    overlay.addEventListener("click", closeSidebar);
+
+    // Bir linke tıklanınca kapat (sayfa değişse bile temiz olsun)
+    sidebar.querySelectorAll("a").forEach((link) => {
+        link.addEventListener("click", closeSidebar);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", initMobileNav);
+
+// ============================================================
+// SHARED: ASSIGN / MANAGE LICENSE MODAL
+// ------------------------------------------------------------
+// licenses.html ve companies.html tarafından ortak kullanılır.
+// ============================================================
+
+let _assignLicenseSubmitting = false;
+
+function buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId) {
+
+    const companyOptions = (companies || []).map(c => `
+        <option value="${c.id}" ${c.id === preselectedCompanyId ? "selected" : ""}>
+            ${escapeHtml(c.name)} (${escapeHtml(c.code)})
+        </option>
+    `).join("");
+
+    const planOptions = (plans || []).map(p => `
+        <option value="${p.id}">
+            ${escapeHtml(p.name)}${p.max_users ? " — max " + p.max_users + " kullanıcı" : ""}
+        </option>
+    `).join("");
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    return `
+        <form id="assignLicenseForm" onsubmit="submitAssignLicense(event)">
+            <div class="form-group">
+                <label>Company *</label>
+                <select name="company_id" required>${companyOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Plan *</label>
+                <select name="plan_id" required>${planOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" name="starts_at" value="${today}">
+            </div>
+            <div class="form-group">
+                <label>Expiry Date</label>
+                <input type="date" name="expires_at">
+                <small style="color:var(--text-light);">Boş bırakılırsa süresiz lisans oluşturulur.</small>
+            </div>
+            <div id="assignLicenseError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="assignLicenseSubmitBtn">Assign License</button>
+            </div>
+        </form>
+    `;
+}
+
+function showAssignLicenseModal(companies, plans, preselectedCompanyId, onSuccess) {
+
+    if (!plans || plans.length === 0) {
+        alert("Atanabilecek bir plan bulunamadı. Önce backend tarafında bir plan tanımlanmalı.");
+        return;
+    }
+    if (!companies || companies.length === 0) {
+        alert("Önce en az bir şirket oluşturmalısınız.");
+        return;
+    }
+
+    window._onLicenseAssigned = onSuccess;
+    showModal(
+        "Assign License",
+        buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId)
+    );
+}
+
+async function submitAssignLicense(event) {
+
+    event.preventDefault();
+    if (_assignLicenseSubmitting) return;
+
+    const form = event.target;
+    const errorDiv = document.getElementById("assignLicenseError");
+    const submitBtn = document.getElementById("assignLicenseSubmitBtn");
+
+    _assignLicenseSubmitting = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Saving...";
+    errorDiv.style.display = "none";
+
+    const companyId = form.company_id.value;
+    const data = {
+        planId: form.plan_id.value,
+        startsAt: form.starts_at.value || undefined,
+        expiresAt: form.expires_at.value || null
+    };
+
+    try {
+        const result = await AdminAPI.assignLicense(companyId, data);
+        if (result.success) {
+            closeModal();
+            if (typeof window._onLicenseAssigned === "function") {
+                window._onLicenseAssigned();
+            }
+        } else {
+            errorDiv.textContent = "Hata: " + (result.error || "Bilinmeyen bir hata oluştu.");
+            errorDiv.style.display = "block";
+        }
+    } catch (error) {
+        errorDiv.textContent = "Hata: " + error.message;
+        errorDiv.style.display = "block";
+    } finally {
+        _assignLicenseSubmitting = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Assign License";
+    }
 }
