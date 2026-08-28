@@ -64,10 +64,45 @@ async getDashboard() {
  * COMPANIES
  * ========================================================
  */
-async getCompanies() {
+async getCompanies(params = {}) {
+    const query =
+        new URLSearchParams(params)
+            .toString();
+    const url =
+        query
+            ? `${this.baseURL}/companies?${query}`
+            : `${this.baseURL}/companies`;
     const response =
         await fetch(
-            `${this.baseURL}/companies`,
+            url,
+            {
+                method: "GET",
+                headers: this.getHeaders()
+            }
+        );
+    return response.json();
+},
+async updateCompanyStatus(id, status) {
+    const response =
+        await fetch(
+            `${this.baseURL}/companies/${encodeURIComponent(id)}/status`,
+            {
+                method: "PATCH",
+                headers: this.getHeaders(),
+                body: JSON.stringify({ status })
+            }
+        );
+    return response.json();
+},
+/*
+ * ========================================================
+ * TFRS16 CUSTOMERS (drill-down)
+ * ========================================================
+ */
+async getTfrs16Customers() {
+    const response =
+        await fetch(
+            `${this.baseURL}/tfrs16/customers`,
             {
                 method: "GET",
                 headers: this.getHeaders()
@@ -105,10 +140,17 @@ async getCompany(id) {
  * USERS
  * ========================================================
  */
-async getUsers() {
+async getUsers(params = {}) {
+    const query =
+        new URLSearchParams(params)
+            .toString();
+    const url =
+        query
+            ? `${this.baseURL}/users?${query}`
+            : `${this.baseURL}/users`;
     const response =
         await fetch(
-            `${this.baseURL}/users`,
+            url,
             {
                 method: "GET",
                 headers: this.getHeaders()
@@ -167,6 +209,21 @@ async getLicenses() {
     const response =
         await fetch(
             `${this.baseURL}/licenses`,
+            {
+                method: "GET",
+                headers: this.getHeaders()
+            }
+        );
+    return response.json();
+},
+async getExpiringLicenses(days) {
+    const query =
+        days
+            ? `?days=${encodeURIComponent(days)}`
+            : "";
+    const response =
+        await fetch(
+            `${this.baseURL}/licenses/expiring${query}`,
             {
                 method: "GET",
                 headers: this.getHeaders()
@@ -443,6 +500,57 @@ return `
     </span>
 `;
 
+}
+
+// ============================================================
+// PAGINATION HELPER
+// ------------------------------------------------------------
+// companies.html ve users.html tarafından ortak kullanılır.
+// pagination: { total, limit, offset } (bkz. admin.js backend
+// route'larının döndürdüğü format).
+// ============================================================
+
+function renderPagination(pagination, onPageChange) {
+
+    if (!pagination || !pagination.total) {
+        return "";
+    }
+
+    const { total, limit, offset } = pagination;
+    const currentPage = Math.floor(offset / limit) + 1;
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+
+    if (totalPages <= 1) {
+        return `<div class="pagination-info">${total} sonuç</div>`;
+    }
+
+    window._paginationOnPageChange = onPageChange;
+
+    const prevOffset = Math.max(offset - limit, 0);
+    const nextOffset = offset + limit;
+    const prevDisabled = offset <= 0 ? "disabled" : "";
+    const nextDisabled = offset + limit >= total ? "disabled" : "";
+
+    return `
+        <div class="pagination">
+            <span class="pagination-info">${total} sonuçtan ${offset + 1}-${Math.min(offset + limit, total)} arası</span>
+            <div class="pagination-controls">
+                <button class="btn btn-sm btn-outline" ${prevDisabled} onclick="window._paginationOnPageChange(${prevOffset})">‹ Prev</button>
+                <span class="pagination-page">Sayfa ${currentPage} / ${totalPages}</span>
+                <button class="btn btn-sm btn-outline" ${nextDisabled} onclick="window._paginationOnPageChange(${nextOffset})">Next ›</button>
+            </div>
+        </div>
+    `;
+}
+
+// Basit debounce — arama kutusu her tuş vuruşunda değil, yazma
+// durduktan bir süre sonra istek atar.
+function debounce(fn, delayMs) {
+    let timer = null;
+    return function debounced(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delayMs);
+    };
 }
 
 function showModal(title, content) {
