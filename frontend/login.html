@@ -236,12 +236,51 @@ async function handleLogin(event) {
             );
             /*
              * ------------------------------------------------
-             * ADMIN
+             * P1-D — MUST CHANGE PASSWORD
              * ------------------------------------------------
+             * DÜZELTME: bu akış önceden burada HİÇ kontrol
+             * edilmiyordu — backend zaten requireAuth seviyesinde
+             * mustChangePassword=true olan kullanıcıyı GET /me ve
+             * POST /change-password dışındaki HER ŞEYDEN 403
+             * (MUST_CHANGE_PASSWORD) ile engelliyordu, ama frontend
+             * yine de normal dashboard'a yönlendiriyordu — kullanıcı
+             * "her tıklamada 403 alan" bozuk bir ekranla
+             * karşılaşıyordu. Artık mustChangePassword=true ise
+             * hangi rol olursa olsun doğrudan parola değiştirme
+             * ekranına yönlendiriliyor.
+             */
+            if (result.user.mustChangePassword) {
+                window.location.href =
+                    "./admin/change-password.html";
+                return;
+            }
+            /*
+             * ------------------------------------------------
+             * STAFF (ADMIN / ACCOUNTANT_MANAGER)
+             * ------------------------------------------------
+             * DÜZELTME: ACCOUNTANT_MANAGER önceden ADMIN ile aynı
+             * satırda kontrol edilmediği için müşteri dashboard'una
+             * (./dashboard.html) düşüyordu — hâlbuki backend P1'de
+             * bu role users/companies admin API'lerine erişim
+             * (requireStaffAccess) veriyor. Admin paneli artık
+             * ACCOUNTANT_MANAGER'ı da kabul ediyor (bkz. admin.js
+             * checkAdminAuth) ve ADMIN-only sayfa/aksiyonları kendi
+             * içinde gizliyor.
              */
             if (result.user.role === "ADMIN") {
                 window.location.href =
                     "./admin/index.html";
+                return;
+            }
+            if (result.user.role === "ACCOUNTANT_MANAGER") {
+                /*
+                 * admin/index.html (Dashboard) backend'de requireAdmin
+                 * (ADMIN-only) ile korunuyor — ACCOUNTANT_MANAGER'ı
+                 * oraya gönderip sonra users.html'e sektirmek yerine
+                 * doğrudan erişebildiği sayfaya yönlendiriyoruz.
+                 */
+                window.location.href =
+                    "./admin/users.html";
                 return;
             }
             /*
