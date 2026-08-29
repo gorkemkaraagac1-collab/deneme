@@ -27,6 +27,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin')); // Admin panel API'leri
 app.use('/api/admin', require('./routes/admin-licenses')); // Mevcut license API'leri
 app.use('/api/customer', require('./routes/customer')); // YENİ: Customer API'leri
+app.use('/api/org', require('./routes/org')); // P3: Organization API (limits/companies)
 app.use('/api/contracts', require('./routes/contracts'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/reports', require('./routes/reports'));
