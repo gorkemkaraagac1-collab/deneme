@@ -93,6 +93,10 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
                 u.username,
                 u.role,
                 u.status,
+                u.email,
+                u.first_name,
+                u.last_name,
+                u.must_change_password,
                 u.created_at,
                 COALESCE(
                     json_agg(
@@ -149,7 +153,8 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 
 router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
     const unknownErr = rejectUnknownFields(req.body, [
-        'username', 'password', 'role', 'status', 'company_ids'
+        'username', 'password', 'role', 'status', 'company_ids',
+        'email', 'first_name', 'last_name'
     ]);
     if (unknownErr) {
         return res.status(400).json({
@@ -163,15 +168,61 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
         password,
         role,
         status,
-        company_ids
+        company_ids,
+        email: rawEmail,
+        first_name: rawFirstName,
+        last_name: rawLastName
     } = req.body;
 
-    const username = typeof rawUsername === 'string' ? rawUsername.trim() : '';
+    // --------------------------------------------------------
+    // P0 — HOLDİNG/KULLANICI YÖNETİMİ: email, first_name, last_name.
+    //
+    // "Email = login kimliği" hedefine, mevcut auth.js /login akışını
+    // (username ile sorgular) DEĞİŞTİRMEDEN ulaşmak için: username
+    // verilmezse ama email verilmişse, username = email olarak
+    // otomatik doldurulur (bkz. onaylı plan madde 3: "username
+    // alanı kullanılacaksa değeri = email"). Kullanıcı hem username
+    // hem email verirse ikisi de ayrı ayrı saklanır (geriye dönük
+    // uyumluluk — mevcut admin panelinden username ile kullanıcı
+    // oluşturma akışı kırılmaz).
+    // --------------------------------------------------------
+
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+    const firstName = typeof rawFirstName === 'string' ? rawFirstName.trim() : '';
+    const lastName = typeof rawLastName === 'string' ? rawLastName.trim() : '';
+
+    if (email) {
+        if (email.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email format'
+            });
+        }
+    }
+
+    if (rawFirstName !== undefined && (typeof rawFirstName !== 'string' || firstName.length > 100)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid first_name'
+        });
+    }
+
+    if (rawLastName !== undefined && (typeof rawLastName !== 'string' || lastName.length > 100)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid last_name'
+        });
+    }
+
+    const usernameProvided = typeof rawUsername === 'string' ? rawUsername.trim() : '';
+    const username = usernameProvided || email;
 
     if (!username || username.length < 3 || username.length > 50) {
         return res.status(400).json({
             success: false,
-            error: 'Username is required and must be 3-50 characters'
+            error: usernameProvided
+                ? 'Username is required and must be 3-50 characters'
+                : 'username veya email zorunludur (3-50 karakter; email verilirse username olarak kullanılır)'
         });
     }
 
@@ -206,7 +257,12 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
         });
     }
 
-    if (role !== undefined && !['ADMIN', 'VIEWER'].includes(role)) {
+    // P0: ACCOUNTANT_MANAGER eklendi. Bu rolün gerçek yetki
+    // kapsamı (kendi holding ağacını yönetme, alt şirket oluşturma)
+    // henüz uygulanmıyor — JWT/erişim ağacı enforcement'ı P1/P3
+    // kapsamındadır (bkz. middleware/admin.js tasarım notu). Burada
+    // sadece rolün admin panelinden atanabilir olması sağlanıyor.
+    if (role !== undefined && !['ADMIN', 'ACCOUNTANT_MANAGER', 'VIEWER'].includes(role)) {
         return res.status(400).json({
             success: false,
             error: 'Invalid role'
@@ -247,6 +303,29 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
                 success: false,
                 error: 'Username already exists'
             });
+        }
+
+        // P0: email de username gibi login kimliği adayı olduğu için
+        // ayrıca ve AYRI bir 409 mesajıyla kontrol ediliyor (DB'deki
+        // idx_users_email_unique kısmi index'i zaten bunu garanti
+        // eder, ama burada erken ve anlaşılır bir hata döndürmek
+        // için uygulama katmanında da kontrol ediyoruz).
+        if (email) {
+            const existingEmail = await client.query(
+                `SELECT id
+                 FROM users
+                 WHERE LOWER(email) = $1`,
+                [email]
+            );
+
+            if (existingEmail.rows.length > 0) {
+                await client.query('ROLLBACK');
+
+                return res.status(409).json({
+                    success: false,
+                    error: 'Email already exists'
+                });
+            }
         }
 
         const uniqueCompanyIds = company_ids
@@ -319,21 +398,32 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
                 username,
                 password_hash,
                 role,
-                status
+                status,
+                email,
+                first_name,
+                last_name,
+                must_change_password
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
             RETURNING
                 id,
                 username,
                 role,
                 status,
+                email,
+                first_name,
+                last_name,
+                must_change_password,
                 created_at`,
             [
                 newUserId,
                 username,
                 hashedPassword,
                 userRole,
-                userStatus
+                userStatus,
+                email || null,
+                firstName || null,
+                lastName || null
             ]
         );
 
@@ -399,8 +489,17 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
             );
         }
 
-        // Unique constraint race (username) — prefer 409 over 500
+        // Unique constraint race (username veya email) — 500 yerine 409.
+        // constraint adına göre username/email ayrımı yapılıyor;
+        // eşleşmezse (beklenmedik bir unique kısıt) genel mesaj kullanılır.
         if (error && error.code === '23505') {
+            if (error.constraint === 'idx_users_email_unique') {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Email already exists'
+                });
+            }
+
             return res.status(409).json({
                 success: false,
                 error: 'Username already exists'
@@ -439,7 +538,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
     }
 
     const unknownErr = rejectUnknownFields(req.body, [
-        'role', 'status', 'company_ids'
+        'role', 'status', 'company_ids', 'email', 'first_name', 'last_name'
     ]);
     if (unknownErr) {
         return res.status(400).json({
@@ -451,16 +550,59 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
     const {
         role,
         status,
-        company_ids
+        company_ids,
+        email: rawEmail,
+        first_name: rawFirstName,
+        last_name: rawLastName
     } = req.body;
+
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
+    const firstName = typeof rawFirstName === 'string' ? rawFirstName.trim() : rawFirstName;
+    const lastName = typeof rawLastName === 'string' ? rawLastName.trim() : rawLastName;
 
     // --------------------------------------------------------
     // Validation
     // --------------------------------------------------------
 
     if (
+        email !== undefined &&
+        email !== null &&
+        (typeof email !== 'string' || email.length > 150 ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    ) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid email format'
+        });
+    }
+
+    if (
+        firstName !== undefined &&
+        firstName !== null &&
+        (typeof firstName !== 'string' || firstName.length > 100)
+    ) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid first_name'
+        });
+    }
+
+    if (
+        lastName !== undefined &&
+        lastName !== null &&
+        (typeof lastName !== 'string' || lastName.length > 100)
+    ) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid last_name'
+        });
+    }
+
+    // P0: ACCOUNTANT_MANAGER eklendi (bkz. POST /users'taki aynı not —
+    // yetki kapsamı henüz uygulanmıyor, sadece atanabilir hale geldi).
+    if (
         role !== undefined &&
-        !['ADMIN', 'VIEWER'].includes(role)
+        !['ADMIN', 'ACCOUNTANT_MANAGER', 'VIEWER'].includes(role)
     ) {
         return res.status(400).json({
             success: false,
@@ -502,7 +644,10 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
                 id,
                 username,
                 role,
-                status
+                status,
+                email,
+                first_name,
+                last_name
              FROM users
              WHERE id = $1
              FOR UPDATE`,
@@ -519,6 +664,29 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
         }
 
         const currentUser = userResult.rows[0];
+
+        // ----------------------------------------------------
+        // P0: email uniqueness (kendi mevcut email'i hariç)
+        // ----------------------------------------------------
+
+        if (email) {
+            const existingEmail = await client.query(
+                `SELECT id
+                 FROM users
+                 WHERE LOWER(email) = $1
+                   AND id != $2`,
+                [email, userId]
+            );
+
+            if (existingEmail.rows.length > 0) {
+                await client.query('ROLLBACK');
+
+                return res.status(409).json({
+                    success: false,
+                    error: 'Email already exists'
+                });
+            }
+        }
 
         // ----------------------------------------------------
         // Current companies
@@ -701,6 +869,30 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
             updateParams.push(status);
         }
 
+        if (email !== undefined) {
+            updateFields.push(
+                `email = $${paramIndex++}`
+            );
+
+            updateParams.push(email);
+        }
+
+        if (firstName !== undefined) {
+            updateFields.push(
+                `first_name = $${paramIndex++}`
+            );
+
+            updateParams.push(firstName);
+        }
+
+        if (lastName !== undefined) {
+            updateFields.push(
+                `last_name = $${paramIndex++}`
+            );
+
+            updateParams.push(lastName);
+        }
+
         if (updateFields.length > 0) {
             updateParams.push(userId);
 
@@ -764,6 +956,21 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
                     ? status
                     : currentUser.status,
 
+            email:
+                email !== undefined
+                    ? email
+                    : currentUser.email,
+
+            first_name:
+                firstName !== undefined
+                    ? firstName
+                    : currentUser.first_name,
+
+            last_name:
+                lastName !== undefined
+                    ? lastName
+                    : currentUser.last_name,
+
             company_ids:
                 company_ids !== undefined
                     ? uniqueCompanyIds
@@ -814,6 +1021,16 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
             'Admin update user error:',
             error
         );
+
+        // P0: email unique kısıt çakışması (race condition) — 500
+        // yerine 409 döndür.
+        if (error && error.code === '23505' &&
+            error.constraint === 'idx_users_email_unique') {
+            return res.status(409).json({
+                success: false,
+                error: 'Email already exists'
+            });
+        }
 
         return res.status(500).json({
             success: false,
@@ -1018,6 +1235,7 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
                 c.name,
                 c.code,
                 c.status,
+                c.parent_company_id,
                 c.created_at,
 
                 COUNT(DISTINCT uc.user_id) AS user_count,
@@ -1100,7 +1318,7 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
 router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
 
     const unknownErr = rejectUnknownFields(req.body, [
-        'name', 'code', 'tax_number', 'address', 'phone', 'email'
+        'name', 'code', 'tax_number', 'address', 'phone', 'email', 'parent_company_id'
     ]);
     if (unknownErr) {
         return res.status(400).json({
@@ -1115,11 +1333,31 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
         tax_number,
         address,
         phone,
-        email
+        email,
+        parent_company_id: rawParentCompanyId
     } = req.body;
 
     const name = typeof rawName === 'string' ? rawName.trim() : '';
     const code = typeof rawCode === 'string' ? rawCode.trim() : '';
+
+    // P0 — HOLDİNG HİYERARŞİSİ: parent_company_id opsiyonel.
+    // Belirtilmezse/null ise şirket bir ANA şirkettir (mevcut düz
+    // şirket davranışı — plan madde 4, Senaryo A: "Hiyerarşi zorunlu
+    // değildir. parent yoksa sistem tek şirket gibi çalışır").
+    // Ağaç büyüklüğü/limit (max_companies) enforcement'ı BURADA
+    // YAPILMIYOR — P1/P3 kapsamı (bkz. onaylı not: "P1'de yapılacak
+    // enforcement/counting mantığını bu aşamada kapsam dışı bırak").
+    const parentCompanyId =
+        rawParentCompanyId === undefined || rawParentCompanyId === null || rawParentCompanyId === ''
+            ? null
+            : String(rawParentCompanyId).trim();
+
+    if (parentCompanyId !== null && (parentCompanyId.length === 0 || parentCompanyId.length > 50)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid parent_company_id'
+        });
+    }
 
     if (!name || name.length < 1 || name.length > 150) {
         return res.status(400).json({
@@ -1193,27 +1431,54 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
             });
         }
 
+        // P0: parent_company_id belirtilmişse gerçekten var olan bir
+        // şirketi göstermeli. FOR UPDATE gerekmiyor — burada sadece
+        // referans bütünlüğü kontrol ediliyor, parent şirketin kendi
+        // satırı değiştirilmiyor (max_companies sayımı P1/P3'te, o
+        // zaman kilitlenecek).
+        if (parentCompanyId !== null) {
+            const parentCheck = await client.query(
+                `SELECT id
+                 FROM companies
+                 WHERE id = $1`,
+                [parentCompanyId]
+            );
+
+            if (parentCheck.rows.length === 0) {
+                await client.query('ROLLBACK');
+
+                return res.status(400).json({
+                    success: false,
+                    error: 'parent_company_id references a company that does not exist'
+                });
+            }
+        }
+
         const newCompanyId = generateEntityId('COMP');
 
-        // init.sql companies columns: id, name, code, created_at only.
-        // Extended body fields validated above for API forward-compat;
-        // not persisted until schema migration exists.
+        // init.sql companies columns: id, name, code, parent_company_id,
+        // created_at (+ status). tax_number/address/phone/email
+        // hâlâ persist edilmiyor (bkz. yukarıdaki mevcut not — bu P0
+        // kapsamının dışında, önceden de böyleydi).
         const result = await client.query(
             `INSERT INTO companies (
                 id,
                 name,
-                code
+                code,
+                parent_company_id
             )
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, $3, $4)
             RETURNING
                 id,
                 name,
                 code,
+                parent_company_id,
                 created_at`,
             [
                 newCompanyId,
                 name,
-                code
+                code,
+                parentCompanyId
             ]
         );
 
@@ -1307,6 +1572,7 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
                     name,
                     code,
                     status,
+                    parent_company_id,
                     created_at
                  FROM companies
                  WHERE id = $1`,

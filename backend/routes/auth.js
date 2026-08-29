@@ -937,6 +937,24 @@ router.post(
           role:
             user.role,
 
+          // P0 — HOLDİNG/KULLANICI YÖNETİMİ: dashboard karşılama
+          // metni ("Hoş geldiniz, {Ad} {Soyad}") ve email = login
+          // kimliği hedefi için. Mevcut kullanıcılarda bu alanlar
+          // NULL olabilir (email/ad/soyad daha önce hiç girilmemiş
+          // olabilir) — frontend fallback (username göstermek gibi)
+          // uygulayabilir, burada zorunlu kılınmıyor.
+          email:
+            user.email,
+
+          firstName:
+            user.first_name,
+
+          lastName:
+            user.last_name,
+
+          mustChangePassword:
+            user.must_change_password,
+
           companyIds,
 
           licenses,
@@ -998,6 +1016,32 @@ router.get(
     try {
 
       /**
+       * P0: email/first_name/last_name/must_change_password JWT
+       * payload'ında YOK (bkz. signUserToken — bilinçli olarak
+       * lisans bilgisi gibi bu alanlar da token'a konulmadı, token
+       * yapısını değiştirmemek için). Bu yüzden burada DB'den ayrıca
+       * okunuyor. companyIds/licenses zaten aynı sebeple DB'den
+       * taze okunuyordu — aynı desen izleniyor.
+       */
+      const userProfileResult =
+        await pool.query(
+          `
+            SELECT
+              email,
+              first_name,
+              last_name,
+              must_change_password
+            FROM users
+            WHERE id = $1
+          `,
+          [req.user.id]
+        );
+
+      const userProfile =
+        userProfileResult.rows[0] || {};
+
+
+      /**
        * Güncel şirket ilişkilerini DB'den okuyoruz.
        */
       const companyIds =
@@ -1039,6 +1083,18 @@ router.get(
 
           role:
             req.user.role,
+
+          email:
+            userProfile.email,
+
+          firstName:
+            userProfile.first_name,
+
+          lastName:
+            userProfile.last_name,
+
+          mustChangePassword:
+            userProfile.must_change_password,
 
           companyIds,
 

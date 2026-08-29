@@ -192,6 +192,12 @@ router.get(
               maxUsers:
                 license.max_users,
 
+              maxContracts:
+                license.max_contracts,
+
+              maxCompanies:
+                license.max_companies,
+
               description:
                 license.description,
 
@@ -265,7 +271,10 @@ router.post(
       const {
         planId,
         startsAt,
-        expiresAt
+        expiresAt,
+        maxUsersOverride,
+        maxContractsOverride,
+        maxCompaniesOverride
       } = req.body;
 
 
@@ -274,6 +283,39 @@ router.post(
         return res.status(400).json({
           error:
             "planId zorunludur"
+        });
+      }
+
+
+      /**
+       * P0 — CUSTOM PLAN OVERRIDE VALIDASYONU
+       *
+       * Bu alanlar yalnızca planId === 'custom' için anlamlıdır, ama
+       * DB seviyesinde (chk_company_licenses_overrides_positive) hangi
+       * plan olursa olsun "NULL veya pozitif tam sayı" kuralı geçerli
+       * olduğu için input validasyonu da plan'dan bağımsız tutuluyor.
+       * null/undefined => override yok (plan'ın kendi değeri kullanılır).
+       */
+      function isValidOverride(value) {
+        return (
+          value === null ||
+          value === undefined ||
+          (
+            Number.isInteger(value) &&
+            value > 0
+          )
+        );
+      }
+
+      if (
+        !isValidOverride(maxUsersOverride) ||
+        !isValidOverride(maxContractsOverride) ||
+        !isValidOverride(maxCompaniesOverride)
+      ) {
+
+        return res.status(400).json({
+          error:
+            "maxUsersOverride, maxContractsOverride ve maxCompaniesOverride null (plan değerini kullan) veya pozitif bir tam sayı olmalıdır"
         });
       }
 
@@ -436,6 +478,11 @@ router.post(
 
       /**
        * Yeni lisans.
+       *
+       * P0: max_*_override kolonları eklendi. undefined/null gelirse
+       * DB'de NULL saklanır (= plan değerini kullan); pg parametre
+       * olarak JS undefined kabul etmediği için null'a normalize
+       * ediliyor.
        */
       const licenseResult =
         await client.query(
@@ -445,14 +492,20 @@ router.post(
               plan_id,
               starts_at,
               expires_at,
-              status
+              status,
+              max_users_override,
+              max_contracts_override,
+              max_companies_override
             )
             VALUES (
               $1,
               $2,
               $3,
               $4,
-              'active'
+              'active',
+              $5,
+              $6,
+              $7
             )
             RETURNING
               id,
@@ -461,13 +514,19 @@ router.post(
               starts_at,
               expires_at,
               status,
+              max_users_override,
+              max_contracts_override,
+              max_companies_override,
               created_at
           `,
           [
             companyId,
             planId,
             startDate,
-            endDate
+            endDate,
+            maxUsersOverride ?? null,
+            maxContractsOverride ?? null,
+            maxCompaniesOverride ?? null
           ]
         );
 
@@ -486,7 +545,10 @@ router.post(
           plan_id: license.plan_id,
           starts_at: license.starts_at,
           expires_at: license.expires_at,
-          status: license.status
+          status: license.status,
+          max_users_override: license.max_users_override,
+          max_contracts_override: license.max_contracts_override,
+          max_companies_override: license.max_companies_override
         }
       });
 
@@ -507,8 +569,11 @@ router.post(
           planName:
             plan.name,
 
+          // Custom override doluysa onu, değilse plan'ın paylaşımlı
+          // değerini gösterir (bkz. license-service.js aynı COALESCE
+          // mantığı).
           maxUsers:
-            plan.max_users,
+            license.max_users_override ?? plan.max_users,
 
           description:
             plan.description
@@ -960,6 +1025,7 @@ router.get(
               name,
               max_users,
               max_contracts,
+              max_companies,
               description,
               created_at
             FROM plans
@@ -1024,6 +1090,7 @@ router.patch(
     const {
       maxUsers,
       maxContracts,
+      maxCompanies,
       description
     } = req.body;
 
@@ -1047,11 +1114,12 @@ router.patch(
 
     if (
       !isValidLimit(maxUsers) ||
-      !isValidLimit(maxContracts)
+      !isValidLimit(maxContracts) ||
+      !isValidLimit(maxCompanies)
     ) {
       return res.status(400).json({
         error:
-          "maxUsers ve maxContracts null (sınırsız) veya pozitif bir tam sayı olmalıdır"
+          "maxUsers, maxContracts ve maxCompanies null (sınırsız) veya pozitif bir tam sayı olmalıdır"
       });
     }
 
@@ -1076,6 +1144,7 @@ router.patch(
               name,
               max_users,
               max_contracts,
+              max_companies,
               description
             FROM plans
             WHERE id = $1
@@ -1104,6 +1173,11 @@ router.patch(
           ? maxContracts
           : existing.max_contracts;
 
+      const nextMaxCompanies =
+        maxCompanies !== undefined
+          ? maxCompanies
+          : existing.max_companies;
+
       const nextDescription =
         description !== undefined
           ? description
@@ -1117,19 +1191,22 @@ router.patch(
             SET
               max_users = $1,
               max_contracts = $2,
-              description = $3
-            WHERE id = $4
+              max_companies = $3,
+              description = $4
+            WHERE id = $5
             RETURNING
               id,
               name,
               max_users,
               max_contracts,
+              max_companies,
               description,
               created_at
           `,
           [
             nextMaxUsers,
             nextMaxContracts,
+            nextMaxCompanies,
             nextDescription,
             id
           ]
