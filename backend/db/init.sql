@@ -111,6 +111,30 @@ CREATE INDEX IF NOT EXISTS idx_contracts_status
 CREATE INDEX IF NOT EXISTS idx_contracts_end_date
     ON contracts(end_date);
 
+-- P2 — ZENGİN SÖZLEŞME VERİSİ (modifications/reassessments/SLB/
+-- sublease/TMS29 enflasyon düzeltmesi/TMS21 fonksiyonel para birimi/
+-- erken ödemeler).
+--
+-- SORUN: js/tfrs16.js hesap motoru bu alanları contract objesinin
+-- üzerinde tutuyor (contract.modifications, contract.reassessments,
+-- contract.saleAndLeaseback, contract.sublease,
+-- contract.inflationAdjustments, contract.functionalCurrency,
+-- contract.earlyPayments vb.) ama persistContractToApi() bunları
+-- hiç backend'e göndermiyordu — yalnızca 9 temel alan (company,
+-- supplier, monthlyPayment, ... vb.) senkronize oluyordu. Bu yüzden
+-- bu zengin veri yalnızca localStorage'da yaşıyordu ve
+-- hydrateContractsFromApi()'nin mapDbContractToUi() ile her sayfa
+-- açılışında modifications/reassessments'i sıfıra hardcode etmesi
+-- (bu ALTER'dan önceki davranış) sessiz veri kaybına yol açıyordu.
+--
+-- ÇÖZÜM: tek bir JSONB kolon. Motorun kendi alan adlarını/şeklini
+-- şemaya taşımıyoruz (motora dokunulmuyor) — motorun ürettiği
+-- objeyi olduğu gibi bu kolona serileştirip saklıyoruz. Yeni bir
+-- alan grubu eklendiğinde (örn. motor yeni bir analiz türü
+-- kazandığında) burada migration gerekmez.
+ALTER TABLE contracts
+    ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;
+
 
 -- ============================================================
 -- AUDIT EVENTS
