@@ -864,6 +864,7 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
         // ----------------------------------------------------
 
         let uniqueCompanyIds = [];
+        let newlyAddedCompanyIds = [];
 
         if (company_ids !== undefined) {
             uniqueCompanyIds = [
@@ -913,11 +914,69 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
             // gerekmiyor (o kullanıcı zaten sayılıyor) — yalnızca
             // company_ids içinde YENİ eklenen id'ler kontrol edilir.
             // ------------------------------------------------
-            const newlyAddedCompanyIds = uniqueCompanyIds.filter(
+            newlyAddedCompanyIds = uniqueCompanyIds.filter(
                 id => !currentCompanyIds.includes(id)
             );
 
             for (const companyId of newlyAddedCompanyIds) {
+                const capacity = await canAddUserToCompany(companyId, client);
+
+                if (!capacity.allowed) {
+                    await client.query('ROLLBACK');
+
+                    return res.status(403).json({
+                        success: false,
+                        error: capacity.message,
+                        code: capacity.reason,
+                        companyId
+                    });
+                }
+            }
+        }
+
+        // ----------------------------------------------------
+        // DÜZELTME (P3 — kabul kriteri: "INACTIVE → ACTIVE
+        // dönüşünde max_users kontrol edilir"):
+        //
+        // Yukarıdaki kapasite kontrolü SADECE company_ids'e YENİ
+        // eklenen şirketler için çalışıyordu. Bir kullanıcı zaten
+        // bağlı olduğu şirket(ler)de INACTIVE'ken (bu yüzden
+        // getTreeActiveUserCount'a hiç dahil değilken) status=ACTIVE
+        // ile PATCH edilirse hiçbir kapasite kontrolünden
+        // geçmiyordu — yani plan max_users=10 olan ve zaten 10
+        // ACTIVE kullanıcısı olan bir şirkette, 11. (INACTIVE)
+        // kullanıcıyı PATCH /users/:id { status: "ACTIVE" } ile
+        // tekrar aktive etmek limiti sessizce aşabiliyordu.
+        //
+        // Bu kontrol henüz UPDATE çalışmadığı için (currentUser.status
+        // DB'de hâlâ eski değeriyle), canAddUserToCompany'nin saydığı
+        // "mevcut ACTIVE kullanıcı sayısı" bu kullanıcıyı henüz
+        // İÇERMİYOR — yani "currentUsers < maxUsers" testi doğru
+        // şekilde "bu kullanıcı eklenirse sığar mı" sorusuna cevap
+        // veriyor.
+        // ----------------------------------------------------
+
+        const isReactivating =
+            status === 'ACTIVE' &&
+            currentUser.status !== 'ACTIVE';
+
+        if (isReactivating) {
+            const finalCompanyIds =
+                company_ids !== undefined
+                    ? uniqueCompanyIds
+                    : currentCompanyIds;
+
+            const alreadyCheckedCompanyIds =
+                new Set(newlyAddedCompanyIds);
+
+            for (const companyId of finalCompanyIds) {
+                if (alreadyCheckedCompanyIds.has(companyId)) {
+                    // Bu şirket için kapasite zaten yukarıda
+                    // kontrol edildi (yeni eklenen şirket) —
+                    // tekrar sorgulamaya gerek yok.
+                    continue;
+                }
+
                 const capacity = await canAddUserToCompany(companyId, client);
 
                 if (!capacity.allowed) {

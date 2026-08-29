@@ -1,23 +1,58 @@
 const express = require("express");
 const pool = require("../db/pool");
 const { requireAuth } = require("../middleware/auth");
+const { resolveAccessScope, isCompanyInScope } = require("../services/organization-service");
 
 const router = express.Router();
 
 router.use(requireAuth);
 
+// P3 DÜZELTMESİ: bu route önceden HER YERDE doğrudan req.user.companyIds
+// (JWT'den, kullanıcının DOĞRUDAN bağlı olduğu şirketler) kullanıyordu.
+// Bu, iki ayrı sorun yaratıyordu:
+//  1) ADMIN için: ADMIN'in companyIds'i genelde boş/anlamsızdır (platform-
+//     level roldür, belirli şirketlere "bağlı" değildir) — ADMIN bu
+//     endpoint'i çağırdığında muhtemelen HİÇBİR audit kaydı görmüyordu,
+//     hâlbuki ADMIN global erişime sahip olmalı (middleware/admin.js'teki
+//     tasarım kararıyla tutarlı).
+//  2) ACCOUNTANT_MANAGER için: yalnızca DOĞRUDAN atandığı şirket(ler)in
+//     audit kayıtlarını görüyordu, kendi holding ALT AĞACINDAKİ (child)
+//     şirketlerin kayıtlarını GÖREMİYORDU — P1'in "ACCOUNTANT_MANAGER
+//     kendi subtree'sini görür" ilkesiyle çelişiyordu.
+// Artık her istekte resolveAccessScope() ile hesaplanan accessScope
+// kullanılıyor (contracts.js/admin.js ile AYNI merkezi kaynak).
+// ACCOUNTANT/CONTROLLER/VIEWER için sonuç ESKİ davranışla BİREBİR AYNIDIR
+// (resolveAccessScope bu roller için doğrudan req.user.companyIds döner).
+router.use(async (req, res, next) => {
+  try {
+    req.accessScope = await resolveAccessScope(req.user);
+    return next();
+  } catch (error) {
+    console.error("audit.js erişim kapsamı hesaplama hatası:", error);
+    return res.status(500).json({
+      error: "Yetki kapsamı hesaplanırken beklenmeyen bir hata oluştu"
+    });
+  }
+});
+
 // GET /api/audit?contractId=&action=&limit=
 // audit_events tablosunda doğrudan company_id yok — kontrata (contract_id)
 // bağlı. Bu yüzden contracts tablosuyla JOIN edilip, kontratın
-// company_id'si kullanıcının req.user.companyIds listesinde olması
-// ZORUNLU kılınıyor. contract_id NULL olan (kontrata bağlı olmayan)
-// audit kayıtları, sahibi belirsiz olduğu için hiçbir kullanıcıya
+// company_id'si isteği yapanın accessScope'unda olması ZORUNLU kılınıyor
+// (ADMIN: kısıtlama yok — global; ACCOUNTANT_MANAGER: kendi alt ağacı;
+// diğerleri: req.user.companyIds). contract_id NULL olan (kontrata bağlı
+// olmayan) audit kayıtları, sahibi belirsiz olduğu için hiçbir kullanıcıya
 // gösterilmez.
 router.get("/", async (req, res) => {
   try {
     const { contractId, action, limit } = req.query;
-    const conditions = ["c.company_id = ANY($1)"];
-    const params = [req.user.companyIds];
+    const conditions = [];
+    const params = [];
+
+    if (!req.accessScope.isGlobalAdmin) {
+      params.push(req.accessScope.allowedCompanyIds);
+      conditions.push(`c.company_id = ANY($${params.length})`);
+    }
 
     if (contractId) {
       params.push(contractId);
@@ -34,10 +69,12 @@ router.get("/", async (req, res) => {
       : 200;
     params.push(safeLimit);
 
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const result = await pool.query(
       `SELECT a.* FROM audit_events a
        JOIN contracts c ON c.id = a.contract_id
-       WHERE ${conditions.join(" AND ")}
+       ${whereClause}
        ORDER BY a.timestamp DESC
        LIMIT $${params.length}`,
       params
@@ -50,7 +87,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/audit — yeni bir audit event kaydeder. contractId
-// verilmişse, o kontratın gerçekten kullanıcının kendi şirketine ait
+// verilmişse, o kontratın gerçekten isteği yapanın accessScope'unda
 // olduğu ÖNCE doğrulanır — aksi halde bir kullanıcı başka şirketin
 // kontratına sahte audit kaydı düşürebilirdi.
 router.post("/", async (req, res) => {
@@ -62,11 +99,16 @@ router.post("/", async (req, res) => {
     }
 
     if (contractId) {
-      const owns = await pool.query(
-        "SELECT 1 FROM contracts WHERE id = $1 AND company_id = ANY($2)",
-        [contractId, req.user.companyIds]
+      const contractResult = await pool.query(
+        "SELECT company_id FROM contracts WHERE id = $1",
+        [contractId]
       );
-      if (owns.rows.length === 0) {
+
+      const contractCompanyId = contractResult.rows[0]
+        ? String(contractResult.rows[0].company_id)
+        : null;
+
+      if (!contractCompanyId || !isCompanyInScope(contractCompanyId, req.accessScope)) {
         return res.status(403).json({ error: "Bu kontrata audit kaydı ekleme yetkiniz yok" });
       }
     }
