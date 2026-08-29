@@ -403,6 +403,14 @@ router.post("/companies", requireStaffAccess, async (req, res) => {
         return res.status(409).json({ error: "Company code already exists" });
       }
 
+      // P4 SERTLEŞTİRME — bkz. admin.js POST /companies'teki aynı not
+      // (23514 = chk_companies_not_self_parent CHECK constraint).
+      if (error && error.code === "23514") {
+        return res.status(400).json({
+          error: "Bir şirket kendi üst şirketi (parent) olamaz"
+        });
+      }
+
       throw error;
     } finally {
       client.release();

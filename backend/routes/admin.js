@@ -1815,6 +1815,19 @@ router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (r
             });
         }
 
+        // P4 SERTLEŞTİRME (savunma amaçlı — normal akışta yeni şirket
+        // id'si sunucu tarafında rastgele üretildiği ve hiçbir route
+        // parent_company_id'yi SONRADAN değiştirmediği için pratikte
+        // ulaşılamaz): DB'deki chk_companies_not_self_parent CHECK
+        // constraint'i (23514) yakalanmadan önce bu satıra düşerse
+        // kullanıcıya çıplak bir 500 yerine anlaşılır bir 400 dönülür.
+        if (error && error.code === '23514') {
+            return res.status(400).json({
+                success: false,
+                error: 'Bir şirket kendi üst şirketi (parent) olamaz'
+            });
+        }
+
         console.error(
             'Admin create company error:',
             error
