@@ -1,4 +1,5 @@
 const { requireAuth } = require("./auth");
+const { resolveAccessScope } = require("../services/organization-service");
 
 /**
  * ============================================================
@@ -84,6 +85,67 @@ function requireAdmin(req, res, next) {
   });
 }
 
+/**
+ * ============================================================
+ * STAFF ACCESS MIDDLEWARE (P1)
+ * ============================================================
+ *
+ * requireAdmin'in aksine, bu middleware ADMIN'in yanı sıra
+ * ACCOUNTANT_MANAGER rolüne de izin verir — P1-B kapsamında
+ * ACCOUNTANT_MANAGER artık kendi holding ağacında kullanıcı/şirket
+ * yönetebilmelidir (bkz. db/init.sql P0 yorumu: "bir
+ * ACCOUNTANT_MANAGER'ın kendi ağacında alt şirket oluşturabilmesi").
+ *
+ * requireAdmin'den farklı olarak req.accessScope'u da hesaplayıp
+ * request'e ekler — route'lar bunu kullanarak sonuçları/işlemleri
+ * kendi ağaçlarıyla sınırlar (services/organization-service.js:
+ * resolveAccessScope/isCompanyInScope).
+ *
+ * ADMIN için req.accessScope.isGlobalAdmin=true olur (kısıtlama
+ * yok) — requireAdmin ile korunan platform-level endpoint'lerin
+ * (licenses, audit, dashboard, vb.) davranışı bu middleware'den
+ * ETKİLENMEZ, onlar hâlâ requireAdmin kullanır.
+ */
+
+function requireStaffAccess(req, res, next) {
+  requireAuth(req, res, async () => {
+
+    if (
+      !req.user ||
+      !["ADMIN", "ACCOUNTANT_MANAGER"].includes(req.user.role)
+    ) {
+      return res.status(403).json({
+        error:
+          "Bu işlem için ADMIN veya ACCOUNTANT_MANAGER yetkisi gereklidir",
+        code:
+          "STAFF_ACCESS_REQUIRED"
+      });
+    }
+
+    try {
+
+      req.accessScope = await resolveAccessScope(req.user);
+
+      return next();
+
+    } catch (error) {
+
+      console.error(
+        "requireStaffAccess erişim kapsamı hesaplama hatası:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "Yetki kapsamı hesaplanırken beklenmeyen bir hata oluştu"
+      });
+
+    }
+
+  });
+}
+
 module.exports = {
-  requireAdmin
+  requireAdmin,
+  requireStaffAccess
 };
