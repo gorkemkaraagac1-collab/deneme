@@ -60,13 +60,15 @@
                             <th>Plan</th>
                             <th>Status</th>
                             <th>Users (Current/Max)</th>
+                            <th>Contracts Limit</th>
+                            <th>Companies Limit</th>
                             <th>Starts</th>
                             <th>Expires</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="licensesTableBody">
-                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                        <tr><td colspan="9" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -117,6 +119,10 @@
             showAssignLicenseModal(allCompanies, allPlans, preselectedCompanyId, loadLicenses);
         }
 
+        function formatLimitValue(value) {
+            return (value === null || value === undefined) ? '∞' : value;
+        }
+
         async function loadLicenses() {
             try {
                 const expiringOnly = document.getElementById('expiringOnlyCheckbox').checked;
@@ -128,19 +134,31 @@
 
                 if (!result.success) {
                     document.getElementById('licensesTableBody').innerHTML = 
-                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                        `<tr><td colspan="9" style="text-align:center;color:var(--danger);">Error: ${describeApiError(result)}</td></tr>`;
                     return;
                 }
                 
+                // DÜZELTME (P2 — kabul kriteri #12): önceden burada
+                // l.max_users (planın HAM değeri) gösteriliyordu — Custom
+                // bir lisansa max_users_override atansa bile bu sütun
+                // hep planın (genelde NULL/∞) değerini gösteriyordu.
+                // Artık backend'in COALESCE(override, plan) ile
+                // hesapladığı effective_max_* alanları kullanılıyor.
+                // effective_max_contracts/companies bu satırlarda YOK
+                // (expiring endpoint'i onları dönmüyor) — undefined
+                // durumunda '-' gösteriyoruz.
                 const html = result.data.map(l => `
                     <tr>
                         <td><strong>${escapeHtml(l.company_name)}</strong><br><small style="color:var(--text-light);">${escapeHtml(l.company_code)}</small></td>
                         <td>${escapeHtml(l.plan_name)}</td>
                         <td>${getStatusBadge(l.status)}</td>
-                        <td>${l.current_users || 0} / ${l.max_users ? l.max_users : '∞'}</td>
+                        <td>${l.current_users || 0} / ${formatLimitValue(l.effective_max_users !== undefined ? l.effective_max_users : l.max_users)}</td>
+                        <td>${l.effective_max_contracts !== undefined ? formatLimitValue(l.effective_max_contracts) : '-'}</td>
+                        <td>${l.effective_max_companies !== undefined ? formatLimitValue(l.effective_max_companies) : '-'}</td>
                         <td>${formatDateShort(l.starts_at)}</td>
                         <td>${formatDateShort(l.expires_at)}</td>
                         <td>
+                            ${l.plan_id === 'custom' ? `<button class="btn btn-sm btn-outline" onclick='openEditLimitsModal(${JSON.stringify(l).replace(/'/g, "&#39;")})'>Limits</button>` : ''}
                             <button class="btn btn-sm btn-success" onclick="extendLicense('${l.id}')">Extend</button>
                             ${l.status === 'ACTIVE' ? 
                                 `<button class="btn btn-sm btn-danger" onclick="cancelLicense('${l.id}')">Cancel</button>` : ''}
@@ -149,10 +167,89 @@
                 `).join('');
                 
                 document.getElementById('licensesTableBody').innerHTML = html || 
-                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">${expiringOnly ? 'No licenses expiring in this range' : 'No licenses found'}</td></tr>`;
+                    `<tr><td colspan="9" style="text-align:center;color:var(--text-light);">${expiringOnly ? 'No licenses expiring in this range' : 'No licenses found'}</td></tr>`;
                     
             } catch (error) {
                 console.error('Load licenses error:', error);
+            }
+        }
+
+        // P2 — CUSTOM PLAN limit düzenleme (kabul kriteri #13).
+        // PATCH /api/admin/licenses/:licenseId/limits: undefined =
+        // dokunma, null = override'ı temizle (plana dön), number =
+        // yeni override.
+        function openEditLimitsModal(license) {
+            const content = `
+                <form id="editLimitsForm" onsubmit="submitEditLimits(event, '${license.id}')">
+                    <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">
+                        ${escapeHtml(license.company_name)} — Custom plan limitleri. Boş bırakmak
+                        <strong>sınırsız</strong> anlamına gelir.
+                    </p>
+                    <div class="form-group">
+                        <label>Max Users</label>
+                        <input type="number" name="max_users_override" min="1" step="1"
+                            value="${license.max_users_override != null ? license.max_users_override : ''}"
+                            placeholder="sınırsız">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Contracts</label>
+                        <input type="number" name="max_contracts_override" min="1" step="1"
+                            value="${license.max_contracts_override != null ? license.max_contracts_override : ''}"
+                            placeholder="sınırsız">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Companies</label>
+                        <input type="number" name="max_companies_override" min="1" step="1"
+                            value="${license.max_companies_override != null ? license.max_companies_override : ''}"
+                            placeholder="sınırsız">
+                    </div>
+                    <div id="editLimitsError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="editLimitsSubmitBtn">Save</button>
+                    </div>
+                </form>
+            `;
+            showModal(`Edit Limits: ${license.company_name}`, content);
+        }
+
+        async function submitEditLimits(event, licenseId) {
+            event.preventDefault();
+            const form = event.target;
+            const errorDiv = document.getElementById('editLimitsError');
+            const submitBtn = document.getElementById('editLimitsSubmitBtn');
+
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
+            // Boş alan => null (override'ı temizle / plan değerine dön).
+            // Bu form her zaman ÜÇ alanı da gönderir (undefined
+            // göndermiyoruz) — yani "dokunma" davranışı burada
+            // kullanılmıyor, kullanıcı gördüğü üç alanı olduğu gibi
+            // kaydediyor. Backend zaten null/pozitif-tam-sayı dışında
+            // bir değeri 400 ile reddeder.
+            const data = {
+                maxUsersOverride: parseOptionalPositiveInt(form.max_users_override.value) ?? null,
+                maxContractsOverride: parseOptionalPositiveInt(form.max_contracts_override.value) ?? null,
+                maxCompaniesOverride: parseOptionalPositiveInt(form.max_companies_override.value) ?? null
+            };
+
+            try {
+                const result = await AdminAPI.updateLicenseLimits(licenseId, data);
+                if (result.success) {
+                    closeModal();
+                    loadLicenses();
+                } else {
+                    errorDiv.textContent = describeApiError(result);
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Hata: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save';
             }
         }
 
@@ -189,7 +286,7 @@
                     alert('License extended successfully!');
                     loadLicenses();
                 } else {
-                    alert('Error: ' + result.error);
+                    alert(describeApiError(result));
                 }
             } catch (error) {
                 alert('Error extending license: ' + error.message);
@@ -205,7 +302,7 @@
                     alert('License cancelled successfully!');
                     loadLicenses();
                 } else {
-                    alert('Error: ' + result.error);
+                    alert(describeApiError(result));
                 }
             } catch (error) {
                 alert('Error cancelling license: ' + error.message);

@@ -15,14 +15,14 @@
         </div>
         <div class="sidebar-nav">
             <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
+            <a href="index.html" data-admin-only>📊 Dashboard</a>
             <a href="companies.html">🏢 Companies</a>
             <a href="users.html" class="active">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
+            <a href="licenses.html" data-admin-only>🔑 Licenses</a>
+            <a href="plans.html" data-admin-only>📦 Plans</a>
             <a href="../../tfrs16.html" target="_blank">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="audit.html">📋 Audit Log</a>
+            <a href="tfrs16.html" data-admin-only>🧾 TFRS16 Customers</a>
+            <a href="audit.html" data-admin-only>📋 Audit Log</a>
         </div>
     </nav>
 
@@ -49,7 +49,8 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Username</th>
+                            <th>Kullanıcı</th>
+                            <th>Email</th>
                             <th>Role</th>
                             <th>Status</th>
                             <th>Companies</th>
@@ -58,7 +59,7 @@
                         </tr>
                     </thead>
                     <tbody id="usersTableBody">
-                        <tr><td colspan="6" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
                 <div id="usersPagination"></div>
@@ -85,6 +86,36 @@
         let usersMap = {};
         // Düzenleme sırasında butonu kilitlemek için
         let isEditSubmitting = false;
+        let isCreateSubmitting = false;
+
+        // P1 madde 4 — rol yaratma matrisi (frontend UX katmanı;
+        // gerçek kontrol backend'de canAssignRole() ile yapılır).
+        // ADMIN: 5 rolün tümünü atayabilir.
+        // ACCOUNTANT_MANAGER: yalnızca ACCOUNTANT/CONTROLLER/VIEWER
+        // atayabilir (ADMIN veya ACCOUNTANT_MANAGER OLUŞTURAMAZ).
+        const ROLES_ASSIGNABLE_BY = {
+            ADMIN: ["ADMIN", "ACCOUNTANT_MANAGER", "ACCOUNTANT", "CONTROLLER", "VIEWER"],
+            ACCOUNTANT_MANAGER: ["ACCOUNTANT", "CONTROLLER", "VIEWER"]
+        };
+
+        function getCurrentAdminUser() {
+            try {
+                return JSON.parse(localStorage.getItem("current_user") || "null");
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function getAssignableRoles() {
+            const me = getCurrentAdminUser();
+            return ROLES_ASSIGNABLE_BY[me && me.role] || [];
+        }
+
+        function roleOptionsHtml(selectedRole) {
+            return getAssignableRoles().map(r =>
+                `<option value="${r}" ${r === selectedRole ? "selected" : ""}>${r}</option>`
+            ).join("");
+        }
 
         // --- Mevcut Fonksiyonlar (Yeni eklenenlerle birlikte) ---
 
@@ -92,6 +123,9 @@
             try {
                 // Dropdown için tam liste gerekir — sayfalama limitiyle
                 // (varsayılan 50) kesilmesin diye yüksek bir limit veriyoruz.
+                // Not: backend zaten ACCOUNTANT_MANAGER için kendi holding
+                // ağacıyla scope'luyor (requireStaffAccess) — burada ekstra
+                // bir filtreleme gerekmiyor.
                 const result = await AdminAPI.getCompanies({ limit: 500 });
                 if (result.success) {
                     allCompanies = result.data;
@@ -109,7 +143,7 @@
                 const result = await AdminAPI.getUsers(params);
                 if (!result.success) {
                     document.getElementById('usersTableBody').innerHTML = 
-                        `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${describeApiError(result)}</td></tr>`;
                     return;
                 }
                 
@@ -119,9 +153,16 @@
                     usersMap[user.id] = user;
                 });
 
-                const html = result.data.map(u => `
+                const html = result.data.map(u => {
+                    const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
+                    return `
                     <tr>
-                        <td><strong>${escapeHtml(u.username)}</strong></td>
+                        <td>
+                            <strong>${escapeHtml(fullName || u.username)}</strong>
+                            ${fullName ? `<br><small style="color:var(--text-light);">${escapeHtml(u.username)}</small>` : ''}
+                            ${u.must_change_password ? '<br><small style="color:var(--warning, #d68910);">Şifre değişikliği bekleniyor</small>' : ''}
+                        </td>
+                        <td>${escapeHtml(u.email || '-')}</td>
                         <td><span class="badge badge-active">${escapeHtml(u.role || 'VIEWER')}</span></td>
                         <td>${getStatusBadge(u.status)}</td>
                         <td>${(u.companies || []).map(c => escapeHtml(c.company_name)).join(', ')}</td>
@@ -130,10 +171,11 @@
                             <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')">Edit</button>
                         </td>
                     </tr>
-                `).join('');
+                `;
+                }).join('');
                 
                 document.getElementById('usersTableBody').innerHTML = html || 
-                    `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">No users found</td></tr>`;
+                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No users found</td></tr>`;
 
                 document.getElementById('usersPagination').innerHTML =
                     renderPagination(result.pagination, changeUsersPage);
@@ -179,6 +221,17 @@
                 `<option value="${c.id}" ${currentCompanyIds.includes(c.id) ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
             ).join('');
 
+            // Rol seçenekleri — mevcut kullanıcının rolü, düzenleyenin
+            // atayabileceği roller arasında yoksa (örn. bir
+            // ACCOUNTANT_MANAGER başka bir ACCOUNTANT_MANAGER'ı
+            // görüntülüyorsa) yine de seçili gösterilir ama listeye
+            // eklenmez — backend zaten böyle bir değişikliği reddeder,
+            // burada sadece mevcut değerin kaybolmamasını sağlıyoruz.
+            let roleOptions = roleOptionsHtml(user.role);
+            if (!getAssignableRoles().includes(user.role)) {
+                roleOptions = `<option value="${user.role}" selected>${user.role} (değiştirilemez)</option>` + roleOptions;
+            }
+
             // Modal içeriğini oluştur
             const modalContent = `
                 <form id="editUserForm" onsubmit="saveUserEdit(event, '${user.id}')">
@@ -187,11 +240,20 @@
                         <input type="text" value="${escapeHtml(user.username)}" readonly style="background:#f0f0f0;">
                     </div>
                     <div class="form-group">
+                        <label>Ad</label>
+                        <input type="text" name="first_name" value="${escapeHtml(user.first_name || '')}" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Soyad</label>
+                        <input type="text" name="last_name" value="${escapeHtml(user.last_name || '')}" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" name="email" value="${escapeHtml(user.email || '')}" maxlength="150">
+                    </div>
+                    <div class="form-group">
                         <label>Role</label>
-                        <select name="role" required>
-                            <option value="VIEWER" ${user.role === 'VIEWER' ? 'selected' : ''}>VIEWER</option>
-                            <option value="ADMIN" ${user.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
-                        </select>
+                        <select name="role" required>${roleOptions}</select>
                     </div>
                     <div class="form-group">
                         <label>Status</label>
@@ -199,6 +261,7 @@
                             <option value="ACTIVE" ${user.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
                             <option value="INACTIVE" ${user.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option>
                         </select>
+                        <small style="color:var(--text-light);">INACTIVE: kullanıcı giriş yapamaz ve lisans kullanıcı limitine dahil edilmez.</small>
                     </div>
                     <div class="form-group">
                         <label>Companies</label>
@@ -235,18 +298,17 @@
             submitBtn.textContent = 'Saving...';
             errorDiv.style.display = 'none';
 
-            // Form verilerini topla
-            const role = form.role.value;
-            const status = form.status.value;
-            
             // Seçili şirket ID'lerini al
             const companySelect = form.company_ids;
             const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
 
             const data = {
-                role: role,
-                status: status,
-                company_ids: company_ids
+                role: form.role.value,
+                status: form.status.value,
+                company_ids: company_ids,
+                first_name: form.first_name.value.trim(),
+                last_name: form.last_name.value.trim(),
+                email: form.email.value.trim()
             };
 
             try {
@@ -256,11 +318,9 @@
                     // Başarılı
                     closeModal();
                     await loadUsers(); // Listeyi yenile
-                    // Basit bir başarı mesajı (isteğe bağlı)
-                    alert('Kullanıcı başarıyla güncellendi!');
                 } else {
                     // Hata
-                    errorDiv.textContent = 'Hata: ' + (result.error || 'Bilinmeyen bir hata oluştu.');
+                    errorDiv.textContent = describeApiError(result);
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
@@ -275,29 +335,42 @@
             }
         }
 
-        // --- Diğer Mevcut Fonksiyonlar (showCreateUserModal, createUser) ---
-        // (Bu fonksiyonlar zaten mevcut, değişiklik yok. Sadece kopyalandı.)
+        // --- Kullanıcı Oluşturma ---
+        // P0/P1 DÜZELTMESİ: önceden bu form yalnızca username/password/
+        // role(VIEWER|ADMIN)/status/companies içeriyordu — email, ad,
+        // soyad hiç yoktu; role seçimi yalnızca 2 sabit değere izin
+        // veriyordu (ACCOUNTANT_MANAGER/ACCOUNTANT/CONTROLLER hiç
+        // oluşturulamıyordu); password minlength=6 backend'in gerçek
+        // kuralıyla (>=10) çelişiyordu.
         function showCreateUserModal() {
             const companyOptions = allCompanies.map(c => 
                 `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
             ).join('');
+
+            const roleOptions = roleOptionsHtml();
             
             const content = `
                 <form id="createUserForm" onsubmit="createUser(event)">
                     <div class="form-group">
-                        <label>Username *</label>
-                        <input type="text" name="username" required placeholder="e.g. john.doe">
+                        <label>Ad</label>
+                        <input type="text" name="first_name" maxlength="100" placeholder="e.g. Görkem">
                     </div>
                     <div class="form-group">
-                        <label>Password *</label>
-                        <input type="password" name="password" required minlength="6">
+                        <label>Soyad</label>
+                        <input type="text" name="last_name" maxlength="100" placeholder="e.g. Karaağaç">
+                    </div>
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" name="email" required maxlength="150" placeholder="e.g. gorkem@example.com">
+                        <small style="color:var(--text-light);">Giriş kimliği olarak kullanılacaktır.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>İlk Şifre *</label>
+                        <input type="password" name="password" required minlength="10" placeholder="En az 10 karakter">
                     </div>
                     <div class="form-group">
                         <label>Role</label>
-                        <select name="role">
-                            <option value="VIEWER">VIEWER</option>
-                            <option value="ADMIN">ADMIN</option>
-                        </select>
+                        <select name="role">${roleOptions}</select>
                     </div>
                     <div class="form-group">
                         <label>Status</label>
@@ -313,9 +386,10 @@
                         </select>
                         <small style="color:var(--text-light);">Hold Ctrl to select multiple</small>
                     </div>
+                    <div id="createUserError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create User</button>
+                        <button type="submit" class="btn btn-primary" id="createUserSubmitBtn">Create User</button>
                     </div>
                 </form>
             `;
@@ -324,13 +398,27 @@
 
         async function createUser(event) {
             event.preventDefault();
+            if (isCreateSubmitting) return;
+
             const form = event.target;
+            const errorDiv = document.getElementById('createUserError');
+            const submitBtn = document.getElementById('createUserSubmitBtn');
+
+            isCreateSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            errorDiv.style.display = 'none';
             
             const companySelect = form.company_ids;
             const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
             
+            // NOT: username GÖNDERİLMİYOR — backend, username
+            // belirtilmezse email'i username olarak kullanır (bkz.
+            // routes/admin.js POST /users P0 yorumu).
             const data = {
-                username: form.username.value.trim(),
+                email: form.email.value.trim(),
+                first_name: form.first_name.value.trim(),
+                last_name: form.last_name.value.trim(),
                 password: form.password.value,
                 role: form.role.value,
                 status: form.status.value,
@@ -343,16 +431,24 @@
                     closeModal();
                     loadUsers();
                 } else {
-                    alert('Error: ' + result.error);
+                    errorDiv.textContent = describeApiError(result);
+                    errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                alert('Error creating user: ' + error.message);
+                errorDiv.textContent = 'Kullanıcı oluşturulurken hata oluştu: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                isCreateSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create User';
             }
         }
 
         // --- Sayfa Yükleme ---
         document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
+            // P2: ACCOUNTANT_MANAGER de bu sayfaya erişebilir (bkz.
+            // requireStaffAccess — backend/middleware/admin.js).
+            const authenticated = await checkAdminAuth(['ADMIN', 'ACCOUNTANT_MANAGER']);
             if (authenticated) {
                 await loadCompaniesForSelect();
                 loadUsers();

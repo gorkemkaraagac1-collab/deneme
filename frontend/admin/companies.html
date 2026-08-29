@@ -15,14 +15,14 @@
         </div>
         <div class="sidebar-nav">
             <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
+            <a href="index.html" data-admin-only>📊 Dashboard</a>
             <a href="companies.html" class="active">🏢 Companies</a>
             <a href="users.html">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
+            <a href="licenses.html" data-admin-only>🔑 Licenses</a>
+            <a href="plans.html" data-admin-only>📦 Plans</a>
             <a href="../../tfrs16.html" target="_blank">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="audit.html">📋 Audit Log</a>
+            <a href="tfrs16.html" data-admin-only>🧾 TFRS16 Customers</a>
+            <a href="audit.html" data-admin-only>📋 Audit Log</a>
         </div>
     </nav>
 
@@ -51,6 +51,7 @@
                         <tr>
                             <th>Code</th>
                             <th>Name</th>
+                            <th>Parent</th>
                             <th>Status</th>
                             <th>Users</th>
                             <th>Plan</th>
@@ -60,7 +61,7 @@
                         </tr>
                     </thead>
                     <tbody id="companiesTableBody">
-                        <tr><td colspan="8" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                        <tr><td colspan="9" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
                 <div id="companiesPagination"></div>
@@ -83,6 +84,25 @@
     <script>
         let allPlans = [];
 
+        function getCurrentAdminUser() {
+            try {
+                return JSON.parse(localStorage.getItem("current_user") || "null");
+            } catch (_) {
+                return null;
+            }
+        }
+
+        // Şirket oluşturma / lisans yönetimi / durum değiştirme
+        // ADMIN-only backend route'ları kullanır (requireAdmin —
+        // bkz. routes/admin.js PATCH /companies/:id/status ve
+        // admin-licenses.js POST .../license). ACCOUNTANT_MANAGER
+        // requireStaffAccess ile YALNIZCA görüntüleme + kendi
+        // ağacına yeni (alt) şirket ekleme yapabilir.
+        function isPlatformAdmin() {
+            const me = getCurrentAdminUser();
+            return !!me && me.role === 'ADMIN';
+        }
+
         async function loadPlans() {
             try {
                 const result = await AdminAPI.getPlans();
@@ -97,13 +117,18 @@
         // Assign-license modal dropdown dosyanın kalanından bağımsız,
         // sayfalanmamış tam şirket listesine ihtiyaç duyar — companiesCache
         // artık sayfalı (bkz. loadCompanies), o yüzden burada ayrı bir
-        // yüksek-limitli çağrı kullanılır.
+        // yüksek-limitli çağrı kullanılır. Aynı liste artık Parent
+        // Company seçici ve "Parent" sütunundaki isim çözümlemesi için
+        // de kullanılıyor.
         let allCompaniesForAssign = [];
+        let companyNameById = {};
         async function loadAllCompaniesForAssign() {
             try {
                 const result = await AdminAPI.getCompanies({ limit: 500 });
                 if (result.success) {
                     allCompaniesForAssign = result.data;
+                    companyNameById = {};
+                    allCompaniesForAssign.forEach(c => { companyNameById[c.id] = c.name; });
                 }
             } catch (error) {
                 console.error('Load companies (assign) error:', error);
@@ -140,16 +165,18 @@
                 const result = await AdminAPI.getCompanies(params);
                 if (!result.success) {
                     document.getElementById('companiesTableBody').innerHTML = 
-                        `<tr><td colspan="8" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
+                        `<tr><td colspan="9" style="text-align:center;color:var(--danger);">Error: ${describeApiError(result)}</td></tr>`;
                     return;
                 }
                 
                 companiesCache = result.data;
+                const canManage = isPlatformAdmin();
 
                 const html = result.data.map(c => `
                     <tr>
                         <td><strong>${escapeHtml(c.code)}</strong></td>
                         <td>${escapeHtml(c.name)}</td>
+                        <td>${c.parent_company_id ? escapeHtml(companyNameById[c.parent_company_id] || c.parent_company_id) : '<span style="color:var(--text-light);">— (ana şirket)</span>'}</td>
                         <td>${getStatusBadge(c.status || 'ACTIVE')}</td>
                         <td>${c.user_count || 0}</td>
                         <td>${c.active_license ? escapeHtml(c.active_license.plan_name) : '-'}</td>
@@ -157,16 +184,18 @@
                         <td>${c.active_license ? formatDateShort(c.active_license.expires_at) : '-'}</td>
                         <td>
                             <button class="btn btn-sm btn-outline" onclick="viewCompany('${c.id}')">View</button>
-                            <button class="btn btn-sm btn-primary" onclick="openAssignModal('${c.id}')">License</button>
-                            ${(c.status || 'ACTIVE') === 'ACTIVE'
-                                ? `<button class="btn btn-sm btn-danger" onclick="toggleCompanyStatus('${c.id}', 'INACTIVE')">Deactivate</button>`
-                                : `<button class="btn btn-sm btn-success" onclick="toggleCompanyStatus('${c.id}', 'ACTIVE')">Activate</button>`}
+                            ${canManage ? `<button class="btn btn-sm btn-primary" onclick="openAssignModal('${c.id}')">License</button>` : ''}
+                            ${canManage
+                                ? ((c.status || 'ACTIVE') === 'ACTIVE'
+                                    ? `<button class="btn btn-sm btn-danger" onclick="toggleCompanyStatus('${c.id}', 'INACTIVE')">Deactivate</button>`
+                                    : `<button class="btn btn-sm btn-success" onclick="toggleCompanyStatus('${c.id}', 'ACTIVE')">Activate</button>`)
+                                : ''}
                         </td>
                     </tr>
                 `).join('');
                 
                 document.getElementById('companiesTableBody').innerHTML = html || 
-                    `<tr><td colspan="8" style="text-align:center;color:var(--text-light);">No companies found</td></tr>`;
+                    `<tr><td colspan="9" style="text-align:center;color:var(--text-light);">No companies found</td></tr>`;
 
                 document.getElementById('companiesPagination').innerHTML =
                     renderPagination(result.pagination, changeCompaniesPage);
@@ -185,14 +214,28 @@
                 if (result.success) {
                     loadCompanies();
                 } else {
-                    alert('Error: ' + result.error);
+                    alert(describeApiError(result));
                 }
             } catch (error) {
                 alert('Error updating company status: ' + error.message);
             }
         }
 
+        // P0/P1 DÜZELTMESİ: bu form önceden Parent Company alanı hiç
+        // içermiyordu — backend parent_company_id'yi POST /companies'te
+        // zaten kabul ediyor ve döndürüyordu (bkz. routes/admin.js P0/P1
+        // yorumları), ama frontend'de hiçbir yerde gösterilmiyordu. Bu
+        // yüzden hiyerarşi kurmak imkansızdı; ayrıca ACCOUNTANT_MANAGER
+        // için parent_company_id ZORUNLUDUR (backend PARENT_COMPANY_
+        // REQUIRED ile 403 döner) — bu yüzden alan ADMIN için opsiyonel,
+        // ACCOUNTANT_MANAGER için zorunlu olarak işaretleniyor.
         function showCreateCompanyModal() {
+            const isAdmin = isPlatformAdmin();
+
+            const parentOptions = allCompaniesForAssign.map(c =>
+                `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
+            ).join('');
+
             const content = `
                 <form id="createCompanyForm" onsubmit="createCompany(event)">
                     <div class="form-group">
@@ -202,6 +245,18 @@
                     <div class="form-group">
                         <label>Company Name *</label>
                         <input type="text" name="name" required placeholder="e.g. ABC Energy A.S.">
+                    </div>
+                    <div class="form-group">
+                        <label>Parent Company ${isAdmin ? '' : '*'}</label>
+                        <select name="parent_company_id" ${isAdmin ? '' : 'required'}>
+                            ${isAdmin ? '<option value="">— (yeni bir ana şirket / holding)</option>' : ''}
+                            ${parentOptions}
+                        </select>
+                        <small style="color:var(--text-light);">
+                            ${isAdmin
+                                ? 'Boş bırakılırsa bağımsız yeni bir ana şirket oluşturulur.'
+                                : 'Yalnızca kendi holding ağacınızdaki bir şirketi üst şirket olarak seçebilirsiniz; ADMIN yetkiniz olmadığı için bu alan zorunludur.'}
+                        </small>
                     </div>
                     <div class="form-group">
                         <label>Tax Number</label>
@@ -219,9 +274,10 @@
                         <label>Address</label>
                         <textarea name="address" rows="2" placeholder="Company address"></textarea>
                     </div>
+                    <div id="createCompanyError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Company</button>
+                        <button type="submit" class="btn btn-primary" id="createCompanySubmitBtn">Create Company</button>
                     </div>
                 </form>
             `;
@@ -231,9 +287,17 @@
         async function createCompany(event) {
             event.preventDefault();
             const form = event.target;
+            const errorDiv = document.getElementById('createCompanyError');
+            const submitBtn = document.getElementById('createCompanySubmitBtn');
+
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
             const data = {
                 code: form.code.value.trim(),
                 name: form.name.value.trim(),
+                parent_company_id: form.parent_company_id.value || null,
                 tax_number: form.tax_number.value.trim() || null,
                 email: form.email.value.trim() || null,
                 phone: form.phone.value.trim() || null,
@@ -244,12 +308,18 @@
                 const result = await AdminAPI.createCompany(data);
                 if (result.success) {
                     closeModal();
+                    await loadAllCompaniesForAssign();
                     loadCompanies();
                 } else {
-                    alert('Error: ' + result.error);
+                    errorDiv.textContent = describeApiError(result);
+                    errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                alert('Error creating company: ' + error.message);
+                errorDiv.textContent = 'Error creating company: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Company';
             }
         }
 
@@ -257,7 +327,7 @@
             try {
                 const result = await AdminAPI.getCompany(id);
                 if (!result.success) {
-                    alert('Error: ' + result.error);
+                    alert(describeApiError(result));
                     return;
                 }
                 
@@ -267,10 +337,15 @@
                     .map(t => `${Number(t.total).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t.currency}`)
                     .join(', ') || '-';
 
+                const parentName = c.parent_company_id
+                    ? (companyNameById[c.parent_company_id] || c.parent_company_id)
+                    : '— (ana şirket)';
+
                 const content = `
                     <div style="margin-bottom:16px;">
                         <p><strong>Code:</strong> ${escapeHtml(c.code)}</p>
                         <p><strong>Name:</strong> ${escapeHtml(c.name)}</p>
+                        <p><strong>Parent Company:</strong> ${escapeHtml(parentName)}</p>
                         <p><strong>Status:</strong> ${getStatusBadge(c.status || 'ACTIVE')}</p>
                         <p><strong>Tax Number:</strong> ${escapeHtml(c.tax_number || '-')}</p>
                         <p><strong>Email:</strong> ${escapeHtml(c.email || '-')}</p>
@@ -302,7 +377,11 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
+            // P2: ACCOUNTANT_MANAGER de bu sayfaya erişebilir (bkz.
+            // requireStaffAccess) — ama Licenses/status değişikliği
+            // gibi ADMIN-only işlemler yukarıda isPlatformAdmin() ile
+            // zaten gizleniyor.
+            const authenticated = await checkAdminAuth(['ADMIN', 'ACCOUNTANT_MANAGER']);
             if (authenticated) {
                 await Promise.all([loadPlans(), loadAllCompaniesForAssign()]);
                 loadCompanies();

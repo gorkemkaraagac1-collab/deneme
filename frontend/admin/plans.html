@@ -55,11 +55,12 @@
                             <th>Açıklama</th>
                             <th>Kullanıcı Limiti</th>
                             <th>Sözleşme Limiti</th>
+                            <th>Şirket Limiti</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="plansTableBody">
-                        <tr><td colspan="5" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                        <tr><td colspan="6" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -103,6 +104,7 @@
                         <td>${escapeHtml(p.description || '-')}</td>
                         <td>${formatLimit(p.max_users)}</td>
                         <td>${formatLimit(p.max_contracts)}</td>
+                        <td>${formatLimit(p.max_companies)}</td>
                         <td>
                             <button class="btn btn-sm btn-success" onclick="openEditModal('${p.id}')">Düzenle</button>
                         </td>
@@ -110,12 +112,12 @@
                 `).join('');
 
                 document.getElementById('plansTableBody').innerHTML = html ||
-                    `<tr><td colspan="5" style="text-align:center;color:var(--text-light);">Plan bulunamadı</td></tr>`;
+                    `<tr><td colspan="6" style="text-align:center;color:var(--text-light);">Plan bulunamadı</td></tr>`;
 
             } catch (error) {
                 console.error('Load plans error:', error);
                 document.getElementById('plansTableBody').innerHTML =
-                    `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Planlar yüklenirken hata oluştu</td></tr>`;
+                    `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Planlar yüklenirken hata oluştu</td></tr>`;
             }
         }
 
@@ -142,6 +144,11 @@
                     <div class="form-group">
                         <label>Sözleşme Limiti (boş = sınırsız)</label>
                         <input type="number" id="editPlanMaxContracts" min="1" step="1" value="${plan.max_contracts === null || plan.max_contracts === undefined ? '' : plan.max_contracts}">
+                    </div>
+                    <div class="form-group">
+                        <label>Şirket Limiti (boş = sınırsız)</label>
+                        <input type="number" id="editPlanMaxCompanies" min="1" step="1" value="${plan.max_companies === null || plan.max_companies === undefined ? '' : plan.max_companies}">
+                        <small style="color:var(--text-light);">Bu holding ağacındaki toplam şirket sayısı (ana şirket dahil).</small>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal()">İptal</button>
@@ -173,10 +180,12 @@
 
             let maxUsers;
             let maxContracts;
+            let maxCompanies;
 
             try {
                 maxUsers = parseLimitInput('editPlanMaxUsers');
                 maxContracts = parseLimitInput('editPlanMaxContracts');
+                maxCompanies = parseLimitInput('editPlanMaxCompanies');
             } catch (validationError) {
                 alert(validationError.message);
                 return;
@@ -188,6 +197,7 @@
                 const result = await AdminAPI.updatePlan(planId, {
                     maxUsers,
                     maxContracts,
+                    maxCompanies,
                     description
                 });
 
@@ -195,7 +205,7 @@
                     closeModal();
                     loadPlans();
                 } else {
-                    alert('Hata: ' + result.error);
+                    alert('Hata: ' + describeApiError(result));
                 }
             } catch (error) {
                 alert('Plan güncellenirken hata oluştu: ' + error.message);
