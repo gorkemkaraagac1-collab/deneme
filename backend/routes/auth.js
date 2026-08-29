@@ -9,8 +9,10 @@ const { createRateLimiter } = require("../middleware/rate-limit");
 
 const {
   canAddUserToCompany,
-  getUserLicenses
+  getUserLicenses,
+  lockRootCompanyForLimit
 } = require("../services/license-service");
+
 
 const router = express.Router();
 
@@ -386,12 +388,19 @@ router.post(
        * --------------------------------------------------------
        *
        * Race condition önlenir.
+       * P5-A: Hem atanan şirketler hem de ağacın kökü
+       * FOR UPDATE ile kilitlenir (tree-level user count
+       * için root kilidi kritik).
        */
 
       await lockCompaniesForUserCreation(
         client,
         normalizedCompanyIds
       );
+
+      for (const companyId of normalizedCompanyIds) {
+        await lockRootCompanyForLimit(companyId, client);
+      }
 
 
       /**
@@ -410,6 +419,7 @@ router.post(
             companyId,
             client
           );
+
 
 
         /**
