@@ -45,6 +45,19 @@ const USER_A = { id: "USER-A", username: "userA", role: "VIEWER", companyIds: [C
 const USER_B = { id: "USER-B", username: "userB", role: "VIEWER", companyIds: [COMPANY_B] };
 const ADMIN_USER = { id: "USER-ADMIN", username: "admin", role: "ADMIN", companyIds: [] };
 
+// P1: routes/contracts.js artık PUT/DELETE (ve POST) için bir
+// yazma-yetkisi kapısı (CONTRACT_WRITE_ACCESS_DENIED) içeriyor ve
+// VIEWER bu kapıdan hiçbir zaman geçemiyor (P1-B). Aşağıdaki
+// testlerden bazıları VIEWER ile YAZMA endpoint'lerine istek atıp
+// ya "kendi kontratı" başarı senaryosunu ya da "başka şirket"
+// izolasyon senaryosunu doğruluyordu — ikisi de artık VIEWER'ın
+// KENDİSİ için anlamsız (VIEWER zaten hiçbir zaman yazamaz). Bu
+// testlerin ASIL amacını (tenant isolation / başarılı CRUD) VIEWER
+// kısıtlamasından ayırmak için, yalnızca PUT/DELETE senaryolarında
+// kullanılan yazma yetkili kullanıcı eşdeğerleri:
+const USER_A_ACCOUNTANT = { id: "USER-A2", username: "userA2", role: "ACCOUNTANT", companyIds: [COMPANY_A] };
+const USER_B_ACCOUNTANT = { id: "USER-B2", username: "userB2", role: "ACCOUNTANT", companyIds: [COMPANY_B] };
+
 const CONTRACT_A = { id: "CONTRACT-A1", company_id: COMPANY_A };
 
 /**
@@ -67,11 +80,34 @@ describe("license-service.canAddUserToCompany — gerçek plan limitleri", () =>
     jest.resetModules();
   });
 
-  function fakeDb({ license, userCount }) {
+  function fakeDb({ license, userCount, companyStatus = "ACTIVE" }) {
     return {
       query: jest.fn((sql) => {
+        // P1: getActiveCompanyLicense/canAddUserToCompany artık önce
+        // ağacın kökünü (getCompanyAncestryChain) ve ağacın tamamını
+        // (getDescendantCompanyIds) sorguluyor (bkz.
+        // services/organization-service.js). Bu testler tek başına
+        // (parent_company_id NULL) bir şirketi simüle ediyor, bu
+        // yüzden hem ancestry hem tree sorgusu için "ağaç = [COMPANY_A]"
+        // dönülüyor — P1'in garanti ettiği geriye dönük uyumluluk
+        // (root === companyId) burada da geçerli.
+        if (sql.includes("WITH RECURSIVE ancestry")) {
+          return Promise.resolve({
+            rows: [{ id: COMPANY_A, parent_company_id: null, status: companyStatus, depth: 0 }]
+          });
+        }
+        if (sql.includes("WITH RECURSIVE tree")) {
+          return Promise.resolve({ rows: [{ id: COMPANY_A }] });
+        }
         if (sql.includes("FROM company_licenses cl") && sql.includes("INNER JOIN plans p")) {
           return Promise.resolve({ rows: license ? [license] : [] });
+        }
+        // P1: getTreeActiveUserCount — ACTIVE kullanıcıları
+        // user_companies + users JOIN ile sayan yeni tree-wide sorgu
+        // (eski COUNT(*) sorgusunun yerini aldı — bkz.
+        // services/license-service.js).
+        if (sql.includes("FROM user_companies uc") && sql.includes("u.status = 'ACTIVE'")) {
+          return Promise.resolve({ rows: [{ user_count: userCount }] });
         }
         if (sql.includes("FROM user_companies") && sql.includes("COUNT(*)")) {
           return Promise.resolve({ rows: [{ user_count: userCount }] });
@@ -230,7 +266,7 @@ describe("Contract full CRUD tenant isolation", () => {
 
     const res = await request(app)
       .put(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B))
+      .set(authHeader(USER_B_ACCOUNTANT))
       .send({ monthlyPayment: 5000 });
 
     expect(res.status).toBe(404);
@@ -251,7 +287,7 @@ describe("Contract full CRUD tenant isolation", () => {
 
     const res = await request(app)
       .delete(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B));
+      .set(authHeader(USER_B_ACCOUNTANT));
 
     expect(res.status).toBe(404);
 
@@ -299,7 +335,7 @@ describe("Contract full CRUD tenant isolation", () => {
 
     const putRes = await request(app)
       .put(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_A))
+      .set(authHeader(USER_A_ACCOUNTANT))
       .send({ monthlyPayment: 5000 });
 
     expect(putRes.status).toBe(200);
@@ -325,7 +361,7 @@ describe("Contract full CRUD tenant isolation", () => {
 
     const deleteRes = await request(app)
       .delete(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_A));
+      .set(authHeader(USER_A_ACCOUNTANT));
 
     expect(deleteRes.status).toBe(204);
     const deleteCalls = poolQueryMock.mock.calls.filter(
@@ -663,8 +699,24 @@ describe("POST /api/auth/register — kullanıcı limiti (uçtan uca)", () => {
       if (sql.includes("FROM companies") && sql.includes("FOR UPDATE")) {
         return Promise.resolve({ rows: [{ id: COMPANY_A }] });
       }
+      // P1: getActiveCompanyLicense/canAddUserToCompany artık önce
+      // ağacın kökünü (ancestry) ve tamamını (tree) sorguluyor —
+      // bkz. fakeDb() içindeki aynı not (Suite 1). COMPANY_A burada
+      // da tek başına (parent=NULL) bir şirket olarak simüle ediliyor.
+      if (sql.includes("WITH RECURSIVE ancestry")) {
+        return Promise.resolve({
+          rows: [{ id: COMPANY_A, parent_company_id: null, status: "ACTIVE", depth: 0 }]
+        });
+      }
+      if (sql.includes("WITH RECURSIVE tree")) {
+        return Promise.resolve({ rows: [{ id: COMPANY_A }] });
+      }
       if (sql.includes("FROM company_licenses cl") && sql.includes("INNER JOIN plans p")) {
         return Promise.resolve({ rows: license ? [license] : [] });
+      }
+      // P1: getTreeActiveUserCount — bkz. fakeDb() içindeki aynı not.
+      if (sql.includes("FROM user_companies uc") && sql.includes("u.status = 'ACTIVE'")) {
+        return Promise.resolve({ rows: [{ user_count: currentUserCount }] });
       }
       if (sql.includes("FROM user_companies") && sql.includes("COUNT(*)")) {
         return Promise.resolve({ rows: [{ user_count: currentUserCount }] });
