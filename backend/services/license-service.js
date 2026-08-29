@@ -31,8 +31,17 @@ async function getActiveCompanyLicense(companyId, db = pool) {
         cl.company_id,
         cl.plan_id,
         p.name AS plan_name,
-        p.max_users,
-        p.max_contracts,
+        -- P0: Custom plan override — company_licenses.*_override doluysa
+        -- (Custom lisanslarda admin elle girer) o değer, boşsa (NULL)
+        -- plans tablosundaki paylaşımlı değer kullanılır. Starter/
+        -- Professional/Enterprise lisanslarında override her zaman NULL
+        -- olduğu için bu satır o planlar için ESKİ davranışla (p.max_users)
+        -- birebir aynı sonucu üretir — mevcut enforcement mantığı
+        -- (canAddUserToCompany/canAddContractToCompany) hiçbir kod
+        -- değişikliği olmadan Custom override'ı da otomatik uygular.
+        COALESCE(cl.max_users_override, p.max_users) AS max_users,
+        COALESCE(cl.max_contracts_override, p.max_contracts) AS max_contracts,
+        COALESCE(cl.max_companies_override, p.max_companies) AS max_companies,
         p.description,
         cl.starts_at,
         cl.expires_at,
@@ -253,8 +262,13 @@ async function getUserLicenses(userId, db = pool) {
         cl.id AS license_id,
         cl.plan_id,
         p.name AS plan_name,
-        p.max_users,
-        p.max_contracts,
+        -- P0: getActiveCompanyLicense ile aynı override mantığı (yukarıya
+        -- bkz.) — burada da cl.* zaten LATERAL alt sorgudan geldiği için
+        -- max_users_override/max_contracts_override/max_companies_override
+        -- kolonları mevcuttur.
+        COALESCE(cl.max_users_override, p.max_users) AS max_users,
+        COALESCE(cl.max_contracts_override, p.max_contracts) AS max_contracts,
+        COALESCE(cl.max_companies_override, p.max_companies) AS max_companies,
         p.description,
 
         cl.starts_at,
@@ -320,6 +334,7 @@ async function getUserLicenses(userId, db = pool) {
           planName: row.plan_name,
           maxUsers: row.max_users,
           maxContracts: row.max_contracts,
+          maxCompanies: row.max_companies,
           description: row.description,
           startsAt: row.starts_at,
           expiresAt: row.expires_at,
