@@ -24,7 +24,28 @@ if (!SECRET) {
  * Bir kullanıcı için imzalı JWT üretir. Token'a yalnızca yetkilendirme
  * için gereken minimum bilgi konur — parola hash'i asla token'a
  * girmez.
- * @param {{id:string, username:string, role:string, companyIds:string[]}} user
+ *
+ * P1-A: JWT'ye organizasyon/holding ağacının TAMAMI gömülmez (bkz.
+ * services/organization-service.js — ağaç erişimi ihtiyaç anında
+ * DB'den hesaplanır). Token'da yalnızca minimum gerekli context
+ * tutulur: userId, role, companyIds (kullanıcının DOĞRUDAN bağlı
+ * olduğu şirket(ler) — ACCOUNTANT_MANAGER için "primary company
+ * context", ağaç bu id(ler)den yukarı ÇIKILMADAN aşağı doğru
+ * hesaplanır) ve mustChangePassword (P1-D — normal uygulama
+ * erişimini DB'ye her istekte gitmeden engelleyebilmek için token'a
+ * konan tek ek, küçük bir bayrak).
+ *
+ * STALE TOKEN NOTU: mustChangePassword token'a login/parola
+ * değişikliği ANINDA yazılan bir STOKTUR — sonradan (ör. admin bir
+ * kullanıcının parolasını sıfırlayıp must_change_password'ü tekrar
+ * TRUE yaparsa) DB'deki değer değişse bile, o kullanıcının o anda
+ * elindeki ESKİ token süresi dolana kadar (JWT_EXPIRES_IN, varsayılan
+ * 8s) eski (stale) bayrağı taşımaya devam eder. Bu, kısa token
+ * ömrüyle sınırlı, bilinçli bir tasarım tercihidir (token
+ * iptali/blacklist altyapısı bu projede yok); admin tarafından
+ * parola sıfırlanan bir kullanıcı için ekstra güvence isteniyorsa
+ * (ör. oturumu anında sonlandırma) bu P1 kapsamının dışındadır.
+ * @param {{id:string, username:string, role:string, companyIds:string[], mustChangePassword?:boolean}} user
  * @returns {string}
  */
 function signUserToken(user) {
@@ -33,7 +54,8 @@ function signUserToken(user) {
       sub: user.id,
       username: user.username,
       role: user.role,
-      companyIds: user.companyIds || []
+      companyIds: user.companyIds || [],
+      mustChangePassword: Boolean(user.mustChangePassword)
     },
     SECRET,
     { expiresIn: EXPIRES_IN, algorithm: ALLOWED_ALGORITHMS[0] }
