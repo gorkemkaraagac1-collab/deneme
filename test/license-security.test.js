@@ -42,6 +42,19 @@ const COMPANY_B = "COMPANY-B";
 const USER_A = { id: "USER-A", username: "userA", role: "VIEWER", companyIds: [COMPANY_A] };
 const USER_B = { id: "USER-B", username: "userB", role: "VIEWER", companyIds: [COMPANY_B] };
 
+// P1: routes/contracts.js artık PUT/DELETE için bir yazma-yetkisi
+// (CONTRACT_WRITE_ACCESS_DENIED) kapısı içeriyor ve VIEWER bu
+// kapıdan hiçbir zaman geçemiyor (P1-B — CONTROLLER/VIEWER salt
+// okunur). Aşağıdaki "company isolation" testleri VIEWER ile YAZMA
+// endpoint'lerine istek atıp 404 (şirket izolasyonu) bekliyordu;
+// P1 sonrası VIEWER için bu istekler artık (haklı olarak) yetki
+// nedeniyle 403 CONTRACT_WRITE_ACCESS_DENIED ile daha ERKEN kesiliyor
+// — 404 mantığına hiç ulaşmıyor. Bu, izolasyon testinin amacını
+// (company_id = ANY(...) filtresini) VIEWER'ın yazma yasağından
+// AYIRMAK için, yalnızca PUT/DELETE izolasyon testlerinde kullanılan
+// yazma yetkili bir kullanıcı:
+const USER_B_ACCOUNTANT = { id: "USER-B2", username: "userB2", role: "ACCOUNTANT", companyIds: [COMPANY_B] };
+
 const CONTRACT_A = { id: "CONTRACT-A1", company_id: COMPANY_A };
 
 function makeLicenseRow(companyId, planId, status = "active") {
@@ -290,14 +303,14 @@ describe("Contract company isolation", () => {
     poolQueryMock.mockImplementation((sql) => {
       // İlk sorgu: kontratın sahibini company_id = ANY($2) ile arar.
       if (sql.includes("SELECT") && sql.includes("company_id") && sql.includes("FROM contracts")) {
-        return Promise.resolve({ rows: [] }); // USER_B'nin erişemediği kontrat
+        return Promise.resolve({ rows: [] }); // erişilemeyen kontrat
       }
       return Promise.resolve({ rows: [] });
     });
 
     const res = await request(app)
       .put(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B))
+      .set(authHeader(USER_B_ACCOUNTANT))
       .send({ monthlyPayment: 2000 });
 
     expect(res.status).toBe(404);
@@ -313,7 +326,7 @@ describe("Contract company isolation", () => {
 
     const res = await request(app)
       .delete(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B));
+      .set(authHeader(USER_B_ACCOUNTANT));
 
     expect(res.status).toBe(404);
   });

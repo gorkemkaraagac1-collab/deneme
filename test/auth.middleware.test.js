@@ -237,7 +237,13 @@ describe("Authentication Middleware", () => {
       companyIds: [
         "COMPANY-A",
         "COMPANY-B"
-      ]
+      ],
+
+      // P1-D: requireAuth artık her zaman mustChangePassword'ü
+      // (token'da yoksa false olarak) req.user'a ekliyor — bkz.
+      // middleware/auth.js.
+      mustChangePassword:
+        false
 
     });
 
