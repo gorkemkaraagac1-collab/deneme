@@ -8,8 +8,10 @@ const {
 } = require("../middleware/license");
 
 const {
-  canAddContractToCompany
+  canAddContractToCompany,
+  lockRootCompanyForLimit
 } = require("../services/license-service");
+
 
 const {
   resolveAccessScope,
@@ -315,75 +317,91 @@ router.post(
        * girebiliyordu. requireCompanyLicense zaten aktif lisansı
        * doğruladı; burada ayrıca o lisansın sözleşme limitine
        * ulaşılıp ulaşılmadığına bakılıyor.
+       *
+       * P5-B: Transaction + root FOR UPDATE ile TOCTOU kapatıldı.
        */
-      const contractLimitCheck =
-        await canAddContractToCompany(
-          authorizedCompanyId
-        );
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
 
-      if (!contractLimitCheck.allowed) {
+        await lockRootCompanyForLimit(authorizedCompanyId, client);
 
-        return res.status(403).json({
-          error:
-            contractLimitCheck.message ||
-            "Şirket sözleşme limitine ulaşmıştır.",
-          code:
-            contractLimitCheck.reason,
-          currentContracts:
-            contractLimitCheck.currentContracts,
-          maxContracts:
-            contractLimitCheck.maxContracts
-        });
+        const contractLimitCheck =
+          await canAddContractToCompany(
+            authorizedCompanyId,
+            client
+          );
 
-      }
+        if (!contractLimitCheck.allowed) {
+          await client.query("ROLLBACK");
 
+          return res.status(403).json({
+            error:
+              contractLimitCheck.message ||
+              "Şirket sözleşme limitine ulaşmıştır.",
+            code:
+              contractLimitCheck.reason,
+            currentContracts:
+              contractLimitCheck.currentContracts,
+            maxContracts:
+              contractLimitCheck.maxContracts
+          });
+        }
 
-      const result = await pool.query(
-        `
-          INSERT INTO contracts (
+        const result = await client.query(
+          `
+            INSERT INTO contracts (
+              id,
+              company_id,
+              company,
+              supplier,
+              monthly_payment,
+              start_date,
+              end_date,
+              discount_rate,
+              currency,
+              details
+            )
+            VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              $8,
+              $9,
+              $10
+            )
+            RETURNING *
+          `,
+          [
             id,
-            company_id,
+            authorizedCompanyId,
             company,
             supplier,
-            monthly_payment,
-            start_date,
-            end_date,
-            discount_rate,
-            currency,
-            details
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            $7,
-            $8,
-            $9,
-            $10
-          )
-          RETURNING *
-        `,
-        [
-          id,
-          authorizedCompanyId,
-          company,
-          supplier,
-          monthlyPayment,
-          startDate,
-          endDate,
-          discountRate || 0,
-          currency || "TRY",
-          JSON.stringify(details && typeof details === "object" ? details : {})
-        ]
-      );
+            monthlyPayment,
+            startDate,
+            endDate,
+            discountRate || 0,
+            currency || "TRY",
+            JSON.stringify(details && typeof details === "object" ? details : {})
+          ]
+        );
 
+        await client.query("COMMIT");
 
-      return res.status(201).json(
-        result.rows[0]
-      );
+        return res.status(201).json(
+          result.rows[0]
+        );
+      } catch (txError) {
+        try { await client.query("ROLLBACK"); } catch (_) { /* ignore */ }
+        throw txError;
+      } finally {
+        client.release();
+      }
+
 
     } catch (error) {
 
