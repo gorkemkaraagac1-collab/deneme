@@ -239,11 +239,12 @@ describe("Authentication Middleware", () => {
         "COMPANY-B"
       ],
 
-      // P1-D: requireAuth artık her zaman mustChangePassword'ü
-      // (token'da yoksa false olarak) req.user'a ekliyor — bkz.
-      // middleware/auth.js.
-      mustChangePassword:
-        false
+      // P3 DÜZELTMESİ (test regresyonu): requireAuth P1-D'den beri
+      // req.user'a mustChangePassword de koyuyor (bkz.
+      // middleware/auth.js) — bu test P1'den ÖNCE yazılmıştı ve
+      // güncellenmemişti, gerçek (doğru) davranışla artık eşleşmeyen
+      // eski bir beklenti taşıyordu. Kod DEĞİL, test güncellendi.
+      mustChangePassword: false
 
     });
 

@@ -58,6 +58,19 @@ const COMPANY_B = "COMPANY-B";
 const USER_A = { id: "USER-A", username: "userA", role: "VIEWER", companyIds: [COMPANY_A] };
 const USER_B = { id: "USER-B", username: "userB", role: "VIEWER", companyIds: [COMPANY_B] };
 
+// P3 DÜZELTMESİ (test regresyonu — kod DEĞİL): PUT/DELETE
+// "başka şirketin kontratı" testleri IDOR/company-scope davranışını
+// (404, var/yok bilgisi sızdırılmaz) doğrulamak istiyor. Ama VIEWER
+// zaten requireContractWriteRole tarafından HER durumda (kendi
+// şirketi olsa bile) 403 ile reddedilir — yani USER_B (VIEWER) ile
+// bu test aslında IDOR/scope kontrolünü hiç EGZERSİZ ETMİYORDU,
+// yalnızca write-role gate'ini tetikliyordu (403, ama "404
+// bekleniyordu" yanlış varsayımıyla yazılmıştı — jsdom çökmesi
+// yüzünden bu hiç fark edilmemişti). Gerçek IDOR senaryosunu test
+// etmek için yazma yetkisi OLAN ama COMPANY_B'ye atanmış bir
+// kullanıcı gerekiyor.
+const USER_B_WRITER = { id: "USER-B2", username: "userB2", role: "ACCOUNTANT", companyIds: [COMPANY_B] };
+
 const CONTRACT_A = { id: "CONTRACT-A1", company_id: COMPANY_A };
 
 function makeLicenseRow(companyId, planId, status = "active") {
@@ -306,14 +319,14 @@ describe("Contract company isolation", () => {
     poolQueryMock.mockImplementation((sql) => {
       // İlk sorgu: kontratın sahibini company_id = ANY($2) ile arar.
       if (sql.includes("SELECT") && sql.includes("company_id") && sql.includes("FROM contracts")) {
-        return Promise.resolve({ rows: [] }); // USER_B'nin erişemediği kontrat
+        return Promise.resolve({ rows: [] }); // USER_B_WRITER'ın erişemediği kontrat
       }
       return Promise.resolve({ rows: [] });
     });
 
     const res = await request(app)
       .put(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B))
+      .set(authHeader(USER_B_WRITER))
       .send({ monthlyPayment: 2000 });
 
     expect(res.status).toBe(404);
@@ -329,7 +342,7 @@ describe("Contract company isolation", () => {
 
     const res = await request(app)
       .delete(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B));
+      .set(authHeader(USER_B_WRITER));
 
     expect(res.status).toBe(404);
   });
@@ -372,11 +385,16 @@ describe("Audit company isolation", () => {
   });
 
   test("POST /api/audit — başka şirketin kontratına audit kaydı -> 403", async () => {
-    // audit.js önce "SELECT 1 FROM contracts WHERE id = $1 AND
-    // company_id = ANY($2)" ile sahiplik doğruluyor; USER_B, COMPANY_A'nın
-    // kontratına erişemediği için bu sorgu 0 satır dönmeli.
+    // P3 DÜZELTMESİ (test regresyonu — kod DEĞİL): audit.js artık
+    // sahiplik kontrolünü accessScope üzerinden yapıyor (ADMIN/
+    // ACCOUNTANT_MANAGER için doğru davranması amacıyla) — bunun
+    // için önce kontratın company_id'sini ÇEKİYOR ("SELECT
+    // company_id FROM contracts WHERE id = $1"), eskisi gibi
+    // doğrudan bir "AND company_id = ANY($2)" ile filtrelemiyor.
+    // USER_B için bu satır zaten mevcut olmadığından (boş rows)
+    // sonuç aynı: 403.
     poolQueryMock.mockImplementation((sql) => {
-      if (sql.includes("SELECT 1 FROM contracts")) {
+      if (sql.includes("SELECT company_id FROM contracts")) {
         return Promise.resolve({ rows: [] });
       }
       return Promise.resolve({ rows: [] });
@@ -397,8 +415,8 @@ describe("Audit company isolation", () => {
 
   test("POST /api/audit — kendi şirketinin kontratına audit kaydı -> 201", async () => {
     poolQueryMock.mockImplementation((sql) => {
-      if (sql.includes("SELECT 1 FROM contracts")) {
-        return Promise.resolve({ rows: [{ "?column?": 1 }] });
+      if (sql.includes("SELECT company_id FROM contracts")) {
+        return Promise.resolve({ rows: [{ company_id: COMPANY_A }] });
       }
       if (sql.includes("INSERT INTO audit_events")) {
         return Promise.resolve({
