@@ -1,4 +1,20 @@
 /**
+ * @jest-environment node
+ *
+ * P3 DÜZELTMESİ (test altyapısı — üretim kodu DEĞİL): jest.config.js
+ * GLOBAL olarak testEnvironment: "jsdom" kullanıyor (js/tfrs16.js gibi
+ * DOM'a ihtiyaç duyan frontend testleri için gerekli). Ancak bu dosya
+ * supertest ile gerçek bir Express app'e (backend/app.js) istek atıyor
+ * ve backend/routes/admin.js (app.js üzerinden transitively yükleniyor)
+ * modül yüklenirken middleware/rate-limit.js'teki
+ * setInterval(...).unref() çağrısını tetikliyor. jsdom'un sahte timer
+ * nesneleri .unref() metodunu SAĞLAMIYOR — bu da bu dosyanın (ve app.js
+ * yükleyen diğer tüm backend test dosyalarının) require aşamasında
+ * tamamen çökmesine yol açıyordu (P0-P2'den beri var olan, bu P3
+ * çalışmasından ÖNCE de mevcut bir altyapı kusuru — bkz. P3 Kod Raporu
+ * madde 6). Bu docblock yalnızca BU DOSYANIN ortamını "node"ya
+ * çeviriyor (dosya başına override, jest.config.js'teki global ayar
+ * DEĞİŞMİYOR) — DOM'a ihtiyaç duyan diğer test dosyaları etkilenmez.
  * ============================================================
  * LICENSE / TENANT ISOLATION SECURITY TESTS
  * ============================================================
@@ -41,19 +57,6 @@ const COMPANY_B = "COMPANY-B";
 
 const USER_A = { id: "USER-A", username: "userA", role: "VIEWER", companyIds: [COMPANY_A] };
 const USER_B = { id: "USER-B", username: "userB", role: "VIEWER", companyIds: [COMPANY_B] };
-
-// P1: routes/contracts.js artık PUT/DELETE için bir yazma-yetkisi
-// (CONTRACT_WRITE_ACCESS_DENIED) kapısı içeriyor ve VIEWER bu
-// kapıdan hiçbir zaman geçemiyor (P1-B — CONTROLLER/VIEWER salt
-// okunur). Aşağıdaki "company isolation" testleri VIEWER ile YAZMA
-// endpoint'lerine istek atıp 404 (şirket izolasyonu) bekliyordu;
-// P1 sonrası VIEWER için bu istekler artık (haklı olarak) yetki
-// nedeniyle 403 CONTRACT_WRITE_ACCESS_DENIED ile daha ERKEN kesiliyor
-// — 404 mantığına hiç ulaşmıyor. Bu, izolasyon testinin amacını
-// (company_id = ANY(...) filtresini) VIEWER'ın yazma yasağından
-// AYIRMAK için, yalnızca PUT/DELETE izolasyon testlerinde kullanılan
-// yazma yetkili bir kullanıcı:
-const USER_B_ACCOUNTANT = { id: "USER-B2", username: "userB2", role: "ACCOUNTANT", companyIds: [COMPANY_B] };
 
 const CONTRACT_A = { id: "CONTRACT-A1", company_id: COMPANY_A };
 
@@ -303,14 +306,14 @@ describe("Contract company isolation", () => {
     poolQueryMock.mockImplementation((sql) => {
       // İlk sorgu: kontratın sahibini company_id = ANY($2) ile arar.
       if (sql.includes("SELECT") && sql.includes("company_id") && sql.includes("FROM contracts")) {
-        return Promise.resolve({ rows: [] }); // erişilemeyen kontrat
+        return Promise.resolve({ rows: [] }); // USER_B'nin erişemediği kontrat
       }
       return Promise.resolve({ rows: [] });
     });
 
     const res = await request(app)
       .put(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B_ACCOUNTANT))
+      .set(authHeader(USER_B))
       .send({ monthlyPayment: 2000 });
 
     expect(res.status).toBe(404);
@@ -326,7 +329,7 @@ describe("Contract company isolation", () => {
 
     const res = await request(app)
       .delete(`/api/contracts/${CONTRACT_A.id}`)
-      .set(authHeader(USER_B_ACCOUNTANT));
+      .set(authHeader(USER_B));
 
     expect(res.status).toBe(404);
   });
