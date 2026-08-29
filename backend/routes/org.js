@@ -322,11 +322,11 @@ router.post("/companies", requireStaffAccess, async (req, res) => {
       }
 
       if (parentCompanyId !== null) {
-        // Race-safe: parent satırını kilitle (aynı transaction
-        // içinde, max_companies sayımından ÖNCE) — bkz. license-
-        // service.js canAddCompanyToTree dosya başı notu.
+        // Race-safe: parent satırını doğrula + ağacın kökünü
+        // FOR UPDATE ile kilitle (P5-C — tree-level max_companies
+        // TOCTOU koruması).
         const parentCheck = await client.query(
-          "SELECT id FROM companies WHERE id = $1 FOR UPDATE",
+          "SELECT id FROM companies WHERE id = $1",
           [parentCompanyId]
         );
 
@@ -337,7 +337,11 @@ router.post("/companies", requireStaffAccess, async (req, res) => {
           });
         }
 
+        const { lockRootCompanyForLimit } = require("../services/license-service");
+        await lockRootCompanyForLimit(parentCompanyId, client);
+
         const capacity = await canAddCompanyToTree(parentCompanyId, client);
+
 
         if (!capacity.allowed) {
           await client.query("ROLLBACK");
