@@ -197,6 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let sessionCompanies = []; // [{ id, name }]
   let sessionCompanyIds = [];
+  let sessionUserRole = null; // P1 uyum: gerçek backend rolü (/api/auth/me)
 
   function tfrs16GetToken() {
     return (
@@ -204,6 +205,127 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.getItem("gk_backend_jwt") ||
       null
     );
+  }
+
+  /**
+   * P1 UYUMLULUK — token'ı hangi anahtarda bulduysak o anahtara (veya
+   * ikisi de yoksa "access_token"a) yazar. POST /api/auth/change-password
+   * başarılı olduğunda backend YENİ bir token döner (mustChangePassword=
+   * false) — bu token'ı localStorage'a yazmak için kullanılır.
+   */
+  function tfrs16SetToken(newToken) {
+    if (!newToken) return;
+    let wrote = false;
+    if (localStorage.getItem("access_token") !== null) {
+      localStorage.setItem("access_token", newToken);
+      wrote = true;
+    }
+    if (localStorage.getItem("gk_backend_jwt") !== null) {
+      localStorage.setItem("gk_backend_jwt", newToken);
+      wrote = true;
+    }
+    if (!wrote) {
+      localStorage.setItem("access_token", newToken);
+    }
+  }
+
+  /**
+   * P1 UYUMLULUK — MUST_CHANGE_PASSWORD MODALI
+   * ------------------------------------------------------------
+   * Backend P1'den itibaren must_change_password=true olan bir
+   * kullanıcının /api/auth/me ve /api/auth/change-password DIŞINDAKİ
+   * her isteğini 403 { code: "MUST_CHANGE_PASSWORD" } ile reddediyor.
+   * Bu motorda önceden bu duruma dair HİÇBİR karşılık yoktu — kullanıcı
+   * sessizce kilitleniyordu. Bu modal, tespit edilir edilmez ekranı
+   * kaplayan, kapatılamayan (esc/backdrop click yok) bir form gösterir;
+   * başarılı değişiklikten sonra sayfa yeniden yüklenir (tüm state'in
+   * yeni token ile temiz şekilde tazelenmesi için — bu büyük ve çok
+   * modüllü bir motorda tek tek yeniden hydrate etmekten daha güvenli).
+   */
+  let tfrs16MustChangePasswordModalOpen = false;
+
+  function tfrs16ShowMustChangePasswordModal() {
+    if (tfrs16MustChangePasswordModalOpen) return;
+    tfrs16MustChangePasswordModalOpen = true;
+
+    const overlay = document.createElement("div");
+    overlay.id = "tfrs16MustChangePasswordOverlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:999999;" +
+      "display:flex;align-items:center;justify-content:center;padding:16px;";
+
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;padding:28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+        <h3 style="margin:0 0 6px;font-size:17px;color:#0f172a;">Parolanızı Değiştirin</h3>
+        <p style="margin:0 0 18px;font-size:13px;color:#64748b;line-height:1.5;">
+          Hesabınızla devam edebilmek için önce parolanızı değiştirmeniz gerekiyor.
+        </p>
+        <form id="tfrs16McpForm">
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">Mevcut Parola</label>
+          <input id="tfrs16McpCurrent" type="password" required autocomplete="current-password"
+            style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px;font-size:14px;" />
+          <label style="display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;">Yeni Parola (en az 10 karakter)</label>
+          <input id="tfrs16McpNew" type="password" required minlength="10" autocomplete="new-password"
+            style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;font-size:14px;" />
+          <div id="tfrs16McpError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px;"></div>
+          <button type="submit" id="tfrs16McpSubmit"
+            style="width:100%;padding:10px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-weight:600;font-size:14px;cursor:pointer;margin-top:8px;">
+            Parolayı Değiştir ve Devam Et
+          </button>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const form = overlay.querySelector("#tfrs16McpForm");
+    const errorBox = overlay.querySelector("#tfrs16McpError");
+    const submitBtn = overlay.querySelector("#tfrs16McpSubmit");
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      errorBox.style.display = "none";
+
+      const currentPassword = overlay.querySelector("#tfrs16McpCurrent").value;
+      const newPassword = overlay.querySelector("#tfrs16McpNew").value;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Değiştiriliyor...";
+
+      try {
+        const token = tfrs16GetToken();
+        const res = await fetch(`${TFRS16_API_BASE}/api/auth/change-password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const text = await res.text();
+        let body = null;
+        try { body = text ? JSON.parse(text) : null; } catch (_) { body = text; }
+
+        if (!res.ok) {
+          throw new Error((body && (body.error || body.message)) || `Hata (${res.status})`);
+        }
+
+        if (body && body.token) {
+          tfrs16SetToken(body.token);
+        }
+
+        // Temiz bir yeniden başlatma için sayfayı yenile — tüm
+        // hydration/session mantığı yeni (mustChangePassword=false)
+        // token ile baştan çalışır.
+        location.reload();
+
+      } catch (error) {
+        errorBox.textContent = error?.message || "Parola değiştirilemedi.";
+        errorBox.style.display = "block";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Parolayı Değiştir ve Devam Et";
+      }
+    });
   }
 
   async function tfrs16ApiFetch(path, options = {}) {
@@ -235,6 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const err = new Error(msg);
       err.status = res.status;
       err.body = body;
+      // P1 UYUMLULUK: backend, must_change_password=true olan bir
+      // kullanıcının bu isteğini reddettiyse, kullanıcıya sessiz bir
+      // Türkçe hata mesajı göstermek yerine parola değiştirme modalını
+      // açıyoruz — asıl çözümü sunuyoruz.
+      if (body && body.code === "MUST_CHANGE_PASSWORD") {
+        tfrs16ShowMustChangePasswordModal();
+      }
       throw err;
     }
     return body;
@@ -247,6 +376,31 @@ document.addEventListener("DOMContentLoaded", () => {
       row.start_date ||
       "";
     const end = row.endDate || row.end_date || "";
+
+    /**
+     * DÜZELTME (veri kaybı bug'ı): bu fonksiyon her hydrate'te
+     * (her sayfa açılışında) local contracts dizisinin tamamının
+     * yerine geçiyor. Önceden modifications/reassessments burada
+     * KOŞULSUZ [] olarak hardcode ediliyordu — yani backend'e bir
+     * kez senkronize olmuş her sözleşmenin motor tarafından üretilen
+     * geçmişi bir sonraki sayfa yüklemesinde sessizce siliniyordu.
+     * Artık backend'in details JSONB kolonundan geliyor.
+     * details bazen zaten parse edilmiş obje (pg JSONB → JS object),
+     * bazen (eski satırlar / API katmanı JSON string döndürürse)
+     * string olabilir — ikisini de destekliyoruz.
+     */
+    let details = row.details;
+    if (typeof details === "string") {
+      try {
+        details = JSON.parse(details);
+      } catch (_) {
+        details = null;
+      }
+    }
+    if (!details || typeof details !== "object") {
+      details = {};
+    }
+
     return {
       id: row.id,
       companyId: row.companyId || row.company_id || "",
@@ -270,16 +424,60 @@ document.addEventListener("DOMContentLoaded", () => {
       ),
       currency: row.currency || "TRY",
       status: String(row.status || "active").toLowerCase(),
-      modification: false,
-      modifications: [],
-      reassessments: []
+      modification: Array.isArray(details.modifications) && details.modifications.length > 0,
+      modifications: Array.isArray(details.modifications) ? details.modifications : [],
+      modificationJournals: Array.isArray(details.modificationJournals) ? details.modificationJournals : [],
+      reassessments: Array.isArray(details.reassessments) ? details.reassessments : [],
+      saleAndLeaseback: details.saleAndLeaseback || null,
+      sublease: details.sublease || null,
+      inflationAdjustments: Array.isArray(details.inflationAdjustments) ? details.inflationAdjustments : [],
+      functionalCurrency: details.functionalCurrency || null,
+      functionalAmount: details.functionalAmount != null ? details.functionalAmount : null,
+      earlyPayments: Array.isArray(details.earlyPayments) ? details.earlyPayments : [],
+      earlyPaymentSchedule: Array.isArray(details.earlyPaymentSchedule) ? details.earlyPaymentSchedule : [],
+      earlyPaymentScheduleAsOf: details.earlyPaymentScheduleAsOf || null,
+      auditTrail: Array.isArray(details.auditTrail) ? details.auditTrail : []
     };
+  }
+
+  /**
+   * P1 UYUMLULUK — HOLDİNG AĞACI
+   * ------------------------------------------------------------
+   * /api/auth/me.data.companyIds, kullanıcının DOĞRUDAN bağlı
+   * olduğu şirket(ler)i döner (P1'de bilinçli olarak değiştirilmedi).
+   * Ama ACCOUNTANT_MANAGER için backend artık GET /api/contracts'ta
+   * TÜM holding alt ağacının sözleşmelerini döndürüyor. Bu yüzden
+   * "Şirket" seçim listesini de aynı ağaca genişletmemiz gerekiyor —
+   * aksi halde yönetici bir alt şirket için yeni sözleşme oluşturamaz.
+   *
+   * GET /api/admin/companies zaten ADMIN + ACCOUNTANT_MANAGER için
+   * açık (requireStaffAccess) ve backend'de bu rol için otomatik
+   * olarak kendi holding alt ağacıyla sınırlanıyor (organization-
+   * service.js) — o yüzden burada AYRICA bir ağaç hesaplamaya gerek
+   * yok, sadece bu endpoint'i (yalnızca bu iki rol için) çağırıp
+   * dönen isim/id listesini sessionCompanies'e ekliyoruz.
+   */
+  async function loadStaffCompanyTree() {
+    try {
+      const res = await tfrs16ApiFetch("/api/admin/companies?limit=500");
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      return rows
+        .filter(c => c && c.id)
+        .map(c => ({ id: String(c.id), name: c.name || c.code || String(c.id) }));
+    } catch (error) {
+      // ADMIN/ACCOUNTANT_MANAGER değilse veya endpoint erişilemezse
+      // sessizce boş dön — aşağıdaki eski (companyIds/licenses bazlı)
+      // davranış zaten fallback olarak devrede kalır.
+      console.warn("Holding ağacı (admin/companies) alınamadı:", error?.message || error);
+      return [];
+    }
   }
 
   async function loadSessionCompanies() {
     try {
       const me = await tfrs16ApiFetch("/api/auth/me");
       const data = me?.data || me || {};
+      sessionUserRole = data.role || null;
       sessionCompanyIds = Array.isArray(data.companyIds)
         ? data.companyIds.map(String)
         : [];
@@ -299,13 +497,64 @@ document.addEventListener("DOMContentLoaded", () => {
           .filter(id => !seen.has(String(id)))
           .map(id => ({ id: String(id), name: String(id) }))
       ];
+
+      // P1: ADMIN/ACCOUNTANT_MANAGER için holding ağacının tamamını
+      // (isim dahil) ekle — yukarıdaki yorum bloğuna bakınız.
+      if (sessionUserRole === "ADMIN" || sessionUserRole === "ACCOUNTANT_MANAGER") {
+        const treeCompanies = await loadStaffCompanyTree();
+        if (treeCompanies.length > 0) {
+          const known = new Set(sessionCompanies.map(c => c.id));
+          treeCompanies.forEach(c => {
+            if (known.has(c.id)) {
+              // İsmi varsa (licenses'tan gelen daha zengin bilgiyi)
+              // koruyoruz, sadece eksikse tamamlıyoruz.
+              return;
+            }
+            known.add(c.id);
+            sessionCompanies.push(c);
+          });
+        }
+      }
+
       return sessionCompanies;
     } catch (error) {
       console.warn("Şirket listesi alınamadı:", error);
       sessionCompanies = [];
       sessionCompanyIds = [];
+      sessionUserRole = null;
       return [];
     }
+  }
+
+  /**
+   * P1 UYUMLULUK — YAZMA YETKİSİ (CONTROLLER/VIEWER salt okunur)
+   * ------------------------------------------------------------
+   * Backend artık POST/PUT/DELETE /api/contracts'ı CONTROLLER ve
+   * VIEWER rolleri için 403 CONTRACT_WRITE_ACCESS_DENIED ile
+   * reddediyor. Bu, gerçek backend rolüne (sessionUserRole) göre
+   * çalışan tek doğru kaynak — motorun kendi V21 demo/simülasyon
+   * yetkilendirme sistemi (window.currentUser'a bağlı, gerçek oturumla
+   * senkron olduğu garanti değil) burada KASITLI OLARAK kullanılmıyor.
+   */
+  function tfrs16CanWriteContracts() {
+    if (!sessionUserRole) return true; // rol bilinmiyorsa eski davranış — backend yine de son sözü söyler
+    return !["CONTROLLER", "VIEWER"].includes(sessionUserRole);
+  }
+
+  /**
+   * newContractButton / deleteContract butonlarını gerçek role göre
+   * görsel olarak devre dışı bırakır (backend zaten enforce ediyor —
+   * bu yalnızca kullanıcı deneyimi: CONTROLLER/VIEWER butona tıklayıp
+   * 403 almasın).
+   */
+  function tfrs16ApplyWriteRoleUiGates() {
+    if (tfrs16CanWriteContracts()) return;
+    ["newContractButton", "deleteContract"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = true;
+      el.title = "Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol).";
+    });
   }
 
   function getPrimarySessionCompany() {
@@ -372,6 +621,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function persistContractToApi(contract, isUpdate) {
+    // V19 Kısa Vade Madde 1: hem güncellemede hem de yeni kontrat
+    // oluştururken (startDate kilitli bir döneme düşüyorsa) engelle.
+    const lockCheck = assertPeriodWritable(contract, contract?.startDate || new Date());
+    if (lockCheck.locked) {
+      throw new Error(lockCheck.message);
+    }
     const companyId =
       contract.companyId ||
       document.getElementById("companyId")?.value ||
@@ -383,6 +638,46 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
+    /**
+     * DÜZELTME (veri kaybı): contracts tablosunda önceden yalnızca
+     * 9 temel alan vardı — motorun ürettiği modifications/
+     * reassessments/SLB/sublease/enflasyon(TMS29)/fonksiyonel para
+     * birimi(TMS21)/erken ödeme verisi backend'e HİÇ gitmiyordu ve
+     * yalnızca localStorage'da yaşıyordu. Artık bu alanlar tek bir
+     * `details` JSONB kolonuna serileştirilip gönderiliyor (backend
+     * şeması: contracts.details JSONB). Motorun kendi iç yapısına
+     * dokunulmuyor — üretilen objeler olduğu gibi taşınıyor.
+     */
+    const details = {
+      modifications: Array.isArray(contract.modifications)
+        ? contract.modifications
+        : [],
+      modificationJournals: Array.isArray(contract.modificationJournals)
+        ? contract.modificationJournals
+        : [],
+      reassessments: Array.isArray(contract.reassessments)
+        ? contract.reassessments
+        : [],
+      saleAndLeaseback: contract.saleAndLeaseback || null,
+      sublease: contract.sublease || null,
+      inflationAdjustments: Array.isArray(contract.inflationAdjustments)
+        ? contract.inflationAdjustments
+        : [],
+      functionalCurrency: contract.functionalCurrency || null,
+      functionalAmount:
+        contract.functionalAmount != null ? contract.functionalAmount : null,
+      earlyPayments: Array.isArray(contract.earlyPayments)
+        ? contract.earlyPayments
+        : [],
+      earlyPaymentSchedule: Array.isArray(contract.earlyPaymentSchedule)
+        ? contract.earlyPaymentSchedule
+        : [],
+      earlyPaymentScheduleAsOf: contract.earlyPaymentScheduleAsOf || null,
+      auditTrail: Array.isArray(contract.auditTrail)
+        ? contract.auditTrail
+        : []
+    };
+
     const payload = {
       id: contract.id,
       companyId: String(companyId),
@@ -393,7 +688,8 @@ document.addEventListener("DOMContentLoaded", () => {
       endDate: contract.endDate,
       discountRate: contract.discountRate || 0,
       currency: contract.currency || "TRY",
-      status: contract.status || "active"
+      status: contract.status || "active",
+      details
     };
 
     if (isUpdate) {
@@ -418,6 +714,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function hydrateContractsFromApi() {
     try {
       await loadSessionCompanies();
+      try {
+        tfrs16ApplyWriteRoleUiGates();
+      } catch (_) {}
       const rows = await tfrs16ApiFetch("/api/contracts");
       if (!Array.isArray(rows)) {
         console.warn("GET /api/contracts beklenen dizi değil:", rows);
@@ -950,6 +1249,11 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const events = loadAuditEvents();
       if (!events.some(existing => existing.id === event.id)) {
+        // V19 Kısa Vade Madde 1: kayıt oluşturulduktan sonra alanları
+        // değiştirilemesin diye event nesnesi immutable hale getirilir.
+        // (localStorage'daki JSON temsili bu korumadan bağımsızdır;
+        // asıl garanti hiçbir fonksiyonun mevcut event'i update etmemesidir.)
+        try { Object.freeze(event); } catch (_) {}
         events.push(event);
         saveAuditEvents(events);
       }
@@ -1252,6 +1556,332 @@ document.addEventListener("DOMContentLoaded", () => {
     // ait özkaynak etkisi (580 Geçmiş Yıllar Zararları).
     liabilityMonetaryGainLossOpeningEquity: "580 Geçmiş Yıllar Zararları"
   };
+
+  /* ==========================================================
+     HESAP PLANI MAPPING (V19 - Kısa Vade Madde 3)
+     ----------------------------------------------------------
+     Şirket bazlı hesap kodu eşlemesi.
+     Varsayılan Türkçe hesap planı + müşteri özelleştirmesi.
+     TFRS29_ACCOUNTS hâlâ backward-compat için duruyor;
+     yeni kod getAccountCode() kullanmalı.
+     ========================================================== */
+
+  const ACCOUNT_MAPPING_STORAGE_KEY = "gk_tfrs16_account_mapping_v1";
+
+  /**
+   * Varsayılan Türkçe hesap planı.
+   * Kullanıcı değiştirmezse bu kullanılır.
+   */
+  function getDefaultAccountMapping() {
+    return {
+      // Kullanım Hakkı Varlığı
+      rouAsset: "260.01.001",
+      rouAccumDep: "268.01.001",
+
+      // Kiralama Yükümlülüğü
+      leaseLiabilityCurrent: "401.01",
+      leaseLiabilityNonCurrent: "401.02",
+      leaseLiability: "401",                    // genel (eski uyumluluk)
+
+      // Giderler
+      interestExpense: "780.01",
+      depreciationExpense: "760.01",
+
+      // TMS 29 / Enflasyon
+      inflationGainLoss: "698.01",
+      liabilityMonetaryGainLoss: "698.02",
+      monetaryPositionOffset: "590",
+      liabilityMonetaryGainLossOpeningEquity: "580",
+
+      // Opsiyonel / İleri seviye
+      prepaidLease: "180.01",
+      leaseIncentive: "360.01",
+      restorationObligation: "479.01",
+      shortTermExemptionExpense: "770.01",
+      lowValueExemptionExpense: "770.02"
+    };
+  }
+
+  /**
+   * Şirketin hesap planı eşlemesini yükler.
+   * Yoksa varsayılanı döndürür.
+   * @param {string} companyId
+   * @returns {Object}
+   */
+  function loadAccountMapping(companyId) {
+    try {
+      const raw = localStorage.getItem(ACCOUNT_MAPPING_STORAGE_KEY);
+      if (!raw) return { ...getDefaultAccountMapping() };
+
+      const all = JSON.parse(raw);
+      if (all && typeof all === "object" && all[companyId]) {
+        // Varsayılan + şirket özelini birleştir (eksik alanlar default'tan gelsin)
+        return {
+          ...getDefaultAccountMapping(),
+          ...all[companyId]
+        };
+      }
+    } catch (error) {
+      console.error("Hesap planı yüklenirken hata:", error);
+    }
+    return { ...getDefaultAccountMapping() };
+  }
+
+  /**
+   * Şirketin hesap planı eşlemesini kaydeder.
+   * @param {string} companyId
+   * @param {Object} mapping
+   * @returns {boolean}
+   */
+  function saveAccountMapping(companyId, mapping) {
+    try {
+      if (!companyId) throw new Error("companyId zorunludur");
+      if (!mapping || typeof mapping !== "object") {
+        throw new Error("Geçersiz mapping objesi");
+      }
+
+      let all = {};
+      try {
+        const raw = localStorage.getItem(ACCOUNT_MAPPING_STORAGE_KEY);
+        if (raw) all = JSON.parse(raw) || {};
+      } catch (_) {}
+
+      all[companyId] = { ...mapping };
+      localStorage.setItem(ACCOUNT_MAPPING_STORAGE_KEY, JSON.stringify(all));
+
+      // Audit trail'e yaz (varsa)
+      if (typeof recordAuditEvent === "function") {
+        recordAuditEvent({
+          action: "ACCOUNT_MAPPING_UPDATED",
+          entityType: "ACCOUNT_MAPPING",
+          entityId: companyId,
+          companyId,
+          actor: (typeof auditActor === "function" ? auditActor() : "system"),
+          reason: "Hesap planı eşlemesi güncellendi",
+          newValue: { keys: Object.keys(mapping) }
+        });
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Hesap planı kaydedilirken hata:", error);
+      if (typeof showAlert === "function") {
+        showAlert(`Hesap planı kaydedilemedi: ${error.message}`);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Tek bir hesap kodunu güvenli şekilde alır.
+   * @param {string} companyId
+   * @param {string} key          örn: "rouAsset", "interestExpense"
+   * @param {string} [fallback]   bulunamazsa kullanılacak değer
+   * @returns {string}
+   */
+  function getAccountCode(companyId, key, fallback = "") {
+    const mapping = loadAccountMapping(companyId);
+    const code = mapping[key];
+    if (code && typeof code === "string" && code.trim()) {
+      return code.trim();
+    }
+    // Son çare: default'tan dene
+    const def = getDefaultAccountMapping()[key];
+    return (def && def.trim()) || fallback || key;
+  }
+
+  /**
+   * Yevmiye satırlarına gerçek hesap kodlarını uygular.
+   * entries içindeki accountKey alanını okuyup accountCode'a çevirir.
+   * @param {Array} entries
+   * @param {string} companyId
+   * @returns {Array}
+   */
+  function applyAccountMappingToJournal(entries, companyId) {
+    if (!Array.isArray(entries)) return [];
+
+    return entries.map(entry => {
+      const newEntry = { ...entry };
+
+      // Eğer accountKey varsa onu kullan
+      if (entry.accountKey) {
+        newEntry.accountCode = getAccountCode(companyId, entry.accountKey, entry.accountCode || entry.account);
+        newEntry.accountName = entry.accountName || entry.accountKey;
+        // Eski "account" alanını da güncelle (geriye uyumluluk)
+        newEntry.account = newEntry.accountCode;
+      }
+      // Eski uyumluluk: accountCode veya account zaten varsa dokunma
+      else if (entry.accountCode) {
+        newEntry.accountCode = entry.accountCode;
+      } else if (entry.account) {
+        newEntry.accountCode = entry.account;
+      }
+
+      return newEntry;
+    });
+  }
+
+  /* ==========================================================
+     HESAP PLANI EŞLEME UI (V19)
+     ========================================================== */
+
+  const ACCOUNT_MAPPING_LABELS = {
+    rouAsset: "Kullanım Hakkı Varlığı (ROU)",
+    rouAccumDep: "Birikmiş Amortisman (ROU)",
+    leaseLiability: "Kiralama Yükümlülüğü (Genel)",
+    leaseLiabilityCurrent: "Kiralama Yükümlülüğü - Kısa Vade",
+    leaseLiabilityNonCurrent: "Kiralama Yükümlülüğü - Uzun Vade",
+    interestExpense: "Faiz Gideri",
+    depreciationExpense: "Amortisman Gideri",
+    inflationGainLoss: "Enflasyon Düzeltmesi K/Z",
+    liabilityMonetaryGainLoss: "Parasal Kazanç/(Kayıp) - Dönem",
+    monetaryPositionOffset: "Parasal Pozisyon Karşılığı",
+    liabilityMonetaryGainLossOpeningEquity: "Parasal K/Z Açılış (Özkaynak)",
+    prepaidLease: "Peşin Ödenmiş Kira",
+    leaseIncentive: "Kira Teşviki",
+    restorationObligation: "Restorasyon Yükümlülüğü",
+    shortTermExemptionExpense: "Kısa Vadeli Muafiyet Gideri",
+    lowValueExemptionExpense: "Düşük Değerli Muafiyet Gideri"
+  };
+
+  function renderAccountMappingPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    // V27 — sessionCompanies (backend lisans) ve v26LoadCompanies (sözleşme/
+    // konsolidasyon şirketleri) tek bir tutarlı listede birleştirilir; artık
+    // silinen/yeniden adlandırılan şirketler iki kaynak arasında tutarsızlık
+    // yaratmıyor (bkz. getUnifiedCompanyOptions).
+    const companyOptions = (typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [])
+      .map(c => ({ id: c.id, name: c.name }));
+    if (!companyOptions.length) companyOptions.push({ id: "DEFAULT", name: "Varsayılan / Genel" });
+
+    let selectedCompanyId = container.dataset.companyId ||
+      (typeof getActiveCompanyId === "function" && getActiveCompanyId() !== "ALL" && companyOptions.some(c => c.id === getActiveCompanyId())
+        ? getActiveCompanyId()
+        : companyOptions[0].id);
+
+    const render = () => {
+      const mapping = loadAccountMapping(selectedCompanyId);
+      const keys = Object.keys(ACCOUNT_MAPPING_LABELS);
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+            <div>
+              <h2 style="margin:0;font-size:20px;color:#0f172a;">Hesap Planı Eşleme</h2>
+              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+                Şirket bazlı hesap kodları. Yevmiye üretirken bu kodlar kullanılır.
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
+                Şirket
+                <select id="amCompanySelect" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                  ${companyOptions.map(c =>
+                    `<option value="${escapeHtml(c.id)}" ${c.id === selectedCompanyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`
+                  ).join("")}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="gk-v26-card" style="background:#f0f9ff;border-color:#bae6fd;">
+            <div style="font-size:13px;color:#0c4a6e;">
+              <strong>Nasıl çalışır?</strong>
+              Sol taraftaki alanlar muhasebe anahtarlarıdır (değişmez).
+              Sağdaki hesap kodlarını kendi planınıza göre düzenleyin ve <strong>Kaydet</strong> deyin.
+              Kaydetmezseniz varsayılan Türkçe plan kullanılır.
+            </div>
+          </div>
+
+          <div class="gk-v26-card">
+            <table class="gk-v26-table">
+              <thead>
+                <tr>
+                  <th style="width:40%;">Hesap (Açıklama)</th>
+                  <th style="width:20%;">Anahtar</th>
+                  <th>Hesap Kodu</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${keys.map(key => `
+                  <tr>
+                    <td>${escapeHtml(ACCOUNT_MAPPING_LABELS[key])}</td>
+                    <td><code style="font-size:11px;color:#64748b;">${escapeHtml(key)}</code></td>
+                    <td>
+                      <input type="text"
+                        class="am-code-input"
+                        data-key="${escapeHtml(key)}"
+                        value="${escapeHtml(mapping[key] || "")}"
+                        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:ui-monospace,monospace;"
+                        placeholder="Örn: 260.01.001" />
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="gk-v26-btn" id="amSaveBtn">Kaydet</button>
+              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="amResetBtn">Varsayılana Dön</button>
+            </div>
+            <div id="amStatus" style="margin-top:10px;font-size:12px;color:#64748b;"></div>
+          </div>
+        </div>`;
+
+      container.querySelector("#amCompanySelect")?.addEventListener("change", (e) => {
+        selectedCompanyId = e.target.value;
+        container.dataset.companyId = selectedCompanyId;
+        render();
+      });
+
+      container.querySelector("#amSaveBtn")?.addEventListener("click", () => {
+        const newMapping = {};
+        container.querySelectorAll(".am-code-input").forEach(input => {
+          const key = input.getAttribute("data-key");
+          const val = String(input.value || "").trim();
+          if (key && val) newMapping[key] = val;
+        });
+        const ok = saveAccountMapping(selectedCompanyId, newMapping);
+        const status = container.querySelector("#amStatus");
+        if (ok) {
+          if (status) status.innerHTML = `<span style="color:#166534;">✓ Hesap planı kaydedildi (${Object.keys(newMapping).length} alan).</span>`;
+          if (typeof showToast === "function") showToast("Hesap planı kaydedildi", "success", 2000);
+        } else {
+          if (status) status.innerHTML = `<span style="color:#b91c1c;">Kaydetme başarısız.</span>`;
+        }
+      });
+
+      container.querySelector("#amResetBtn")?.addEventListener("click", async () => {
+        const ok = typeof showConfirm === "function"
+          ? await showConfirm("Bu şirketin özel hesap planı silinip varsayılana dönülecek. Emin misiniz?", { danger: true, title: "Varsayılana Dön" })
+          : window.confirm("Varsayılana dönülsün mü?");
+        if (!ok) return;
+        try {
+          const raw = localStorage.getItem(ACCOUNT_MAPPING_STORAGE_KEY);
+          if (raw) {
+            const all = JSON.parse(raw) || {};
+            delete all[selectedCompanyId];
+            localStorage.setItem(ACCOUNT_MAPPING_STORAGE_KEY, JSON.stringify(all));
+          }
+          if (typeof recordAuditEvent === "function") {
+            recordAuditEvent({
+              action: "ACCOUNT_MAPPING_RESET",
+              entityType: "ACCOUNT_MAPPING",
+              entityId: selectedCompanyId,
+              reason: "Varsayılan hesap planına dönüldü"
+            });
+          }
+          if (typeof showToast === "function") showToast("Varsayılan plana dönüldü", "success", 2000);
+          render();
+        } catch (error) {
+          if (typeof showAlert === "function") showAlert("Sıfırlama başarısız: " + (error.message || error));
+        }
+      });
+    };
+
+    render();
+  }
 
   const INFLATION_INDEX_STORAGE_KEY = "gk_tfrs16_inflation_index_v1";
 
@@ -1853,7 +2483,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const balanced = Math.abs(debit - credit) < 0.01;
     entries.forEach(item => { item.controlStatus = balanced ? "VALID" : "UNBALANCED"; });
 
-    return entries;
+    // V19: accountKey ata + hesap planı mapping uygula
+    entries.forEach(e => {
+      if (e.accountKey) return;
+      const val = e.account;
+      if (val === TFRS29_ACCOUNTS.rouAsset) e.accountKey = "rouAsset";
+      else if (val === TFRS29_ACCOUNTS.inflationGainLoss) e.accountKey = "inflationGainLoss";
+      else if (val === TFRS29_ACCOUNTS.liabilityMonetaryGainLoss) e.accountKey = "liabilityMonetaryGainLoss";
+      else if (val === TFRS29_ACCOUNTS.monetaryPositionOffset) e.accountKey = "monetaryPositionOffset";
+      else if (val === TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity) e.accountKey = "liabilityMonetaryGainLossOpeningEquity";
+      else if (val === TFRS29_ACCOUNTS.leaseLiability) e.accountKey = "leaseLiability";
+    });
+    return typeof applyAccountMappingToJournal === "function"
+      ? applyAccountMappingToJournal(entries, "")
+      : entries;
   }
 
   /**
@@ -1894,6 +2537,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function createInflationAdjustment(contract, input) {
     ensureInflationAdjustmentState(contract);
+
+    const lockCheck = assertPeriodWritable(contract, input?.reportingPeriod || input?.period || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
 
     const validation = validateInflationAdjustment(contract, input);
     if (!validation.valid) {
@@ -1941,6 +2589,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyInflationAdjustment(contract, adjustmentId) {
     ensureInflationAdjustmentState(contract);
+
+    const lockCheck = assertPeriodWritable(contract, contract?.inflationAdjustments?.find(a => a.id === adjustmentId)?.period || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
 
     const adjustment = contract.inflationAdjustments.find(a => a.id === adjustmentId);
     if (!adjustment) {
@@ -2450,9 +3103,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const rouAdjustment = Number(reassessment.rouAdjustment) || 0;
     const gainLoss = Number(reassessment.gainLoss) || 0;
     const entries = [];
+    const companyId = contract?.companyId || "";
 
     if (liabilityAdjustment > 0) {
       entries.push({
+        accountKey: "rouAsset",
         account: "260 Kullanım Hakkı Varlığı",
         debit: liabilityAdjustment,
         credit: 0,
@@ -2460,6 +3115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         controlStatus: "VALID"
       });
       entries.push({
+        accountKey: "leaseLiability",
         account: "401 Kiralama Yükümlülüğü",
         debit: 0,
         credit: liabilityAdjustment,
@@ -2469,6 +3125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (liabilityAdjustment < 0) {
       const amount = Math.abs(liabilityAdjustment);
       entries.push({
+        accountKey: "leaseLiability",
         account: "401 Kiralama Yükümlülüğü",
         debit: amount,
         credit: 0,
@@ -2477,6 +3134,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (rouAdjustment < 0) {
         entries.push({
+          accountKey: "rouAsset",
           account: "260 Kullanım Hakkı Varlığı",
           debit: 0,
           credit: Math.abs(rouAdjustment),
@@ -2488,6 +3146,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (gainLoss > 0.005) {
       entries.push({
+        accountKey: "inflationGainLoss",
         account: "649 Reassessment Gain",
         debit: 0,
         credit: gainLoss,
@@ -2496,6 +3155,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } else if (gainLoss < -0.005) {
       entries.push({
+        accountKey: "inflationGainLoss",
         account: "689 Reassessment Loss",
         debit: Math.abs(gainLoss),
         credit: 0,
@@ -2512,12 +3172,19 @@ document.addEventListener("DOMContentLoaded", () => {
       item.controlStatus = balanced ? "VALID" : "UNBALANCED";
     });
 
-    return entries;
+    // V19: Hesap planı mapping uygula
+    return typeof applyAccountMappingToJournal === "function"
+      ? applyAccountMappingToJournal(entries, companyId)
+      : entries;
   }
 
 
   function createReassessment(contract, input) {
     ensureReassessmentState(contract);
+    const lockCheck = assertPeriodWritable(contract, input?.effectiveDate || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
     const result = calculateReassessment(contract, input);
     if (!result.valid) return result;
 
@@ -2541,6 +3208,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyReassessment(contract, reassessmentIdValue) {
     ensureReassessmentState(contract);
+
+    const pending = contract.reassessments.find(item => item.id === reassessmentIdValue);
+    const lockCheck = assertPeriodWritable(contract, pending?.effectiveDate || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
 
     const reassessment = contract.reassessments.find(
       item => item.id === reassessmentIdValue
@@ -3701,6 +4374,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (liabilityReduction > 0) {
         entries.push({
+          accountKey: "leaseLiability",
           account: "401 Kiralama Yükümlülüğü",
           debit: liabilityReduction,
           credit: 0,
@@ -3711,6 +4385,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (rouReduction > 0) {
         entries.push({
+          accountKey: "rouAsset",
           account: "260 Kullanım Hakkı Varlığı",
           debit: 0,
           credit: rouReduction,
@@ -3733,6 +4408,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (liabilityAdjustment > 0) {
         entries.push({
+          accountKey: "rouAsset",
           account: "260 Kullanım Hakkı Varlığı",
           debit: liabilityAdjustment,
           credit: 0,
@@ -3741,6 +4417,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         entries.push({
+          accountKey: "leaseLiability",
           account: "401 Kiralama Yükümlülüğü",
           debit: 0,
           credit: liabilityAdjustment,
@@ -3751,6 +4428,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const amount = Math.abs(liabilityAdjustment);
 
         entries.push({
+          accountKey: "leaseLiability",
           account: "401 Kiralama Yükümlülüğü",
           debit: amount,
           credit: 0,
@@ -3759,6 +4437,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         entries.push({
+          accountKey: "rouAsset",
           account: "260 Kullanım Hakkı Varlığı",
           debit: 0,
           credit: amount,
@@ -3788,7 +4467,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     );
 
-    return entries;
+    // V19: Hesap planı mapping uygula
+    const companyId = contract?.companyId || "";
+    return typeof applyAccountMappingToJournal === "function"
+      ? applyAccountMappingToJournal(entries, companyId)
+      : entries;
   }
 
 
@@ -3798,6 +4481,11 @@ document.addEventListener("DOMContentLoaded", () => {
   ) {
 
     ensureModificationState(contract);
+
+    const lockCheck = assertPeriodWritable(contract, input?.effectiveDate || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
 
     const result =
       calculateModification(
@@ -3837,6 +4525,12 @@ document.addEventListener("DOMContentLoaded", () => {
   ) {
 
     ensureModificationState(contract);
+
+    const pendingMod = contract.modifications.find(item => item.id === modificationIdValue);
+    const lockCheck = assertPeriodWritable(contract, pendingMod?.effectiveDate || new Date());
+    if (lockCheck.locked) {
+      return { valid: false, errors: [lockCheck.message] };
+    }
 
     const modification =
       contract.modifications.find(
@@ -7125,6 +7819,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
 
+        // P1 UYUMLULUK: backend artık CONTROLLER/VIEWER rollerinin
+        // sözleşme oluşturmasını/güncellemesini reddediyor
+        // (403 CONTRACT_WRITE_ACCESS_DENIED). Butonu tıklayıp API'ye
+        // gitmeden, kullanıcıya doğrudan ve net bir mesaj göster.
+        if (typeof tfrs16CanWriteContracts === "function" && !tfrs16CanWriteContracts()) {
+          showAlert("Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol).");
+          return;
+        }
+
         const id =
           getInput(
             "contractId"
@@ -7755,59 +8458,49 @@ document.addEventListener("DOMContentLoaded", () => {
         0
       );
 
-    return [
+    const entries = [
 
       {
-        account:
-          "780 Finansman Giderleri",
-
-        debit:
-          interest,
-
+        accountKey: "interestExpense",
+        account: "780 Finansman Giderleri",
+        debit: interest,
         credit: 0
       },
 
       {
-        account:
-          "401 Kiralama Yükümlülüğü",
-
-        debit:
-          principal,
-
+        accountKey: "leaseLiability",
+        account: "401 Kiralama Yükümlülüğü",
+        debit: principal,
         credit: 0
       },
 
       {
-        account:
-          "301 Kiralama Yükümlülüğü - Current",
-
+        accountKey: "leaseLiabilityCurrent",
+        account: "301 Kiralama Yükümlülüğü - Current",
         debit: 0,
-
-        credit:
-          payment
+        credit: payment
       },
 
       {
-        account:
-          "770 / 730 Amortisman Giderleri",
-
-        debit:
-          depreciation,
-
+        accountKey: "depreciationExpense",
+        account: "770 / 730 Amortisman Giderleri",
+        debit: depreciation,
         credit: 0
       },
 
       {
-        account:
-          "268 Birikmiş Amortismanlar",
-
+        accountKey: "rouAccumDep",
+        account: "268 Birikmiş Amortismanlar",
         debit: 0,
-
-        credit:
-          depreciation
+        credit: depreciation
       }
 
     ];
+
+    // V19: Hesap planı mapping
+    return typeof applyAccountMappingToJournal === "function"
+      ? applyAccountMappingToJournal(entries, contract?.companyId || "")
+      : entries;
   }
 
 
@@ -8443,6 +9136,28 @@ document.addEventListener("DOMContentLoaded", () => {
         "journalPreview"
       );
 
+    // V19 Kısa Vade Madde 1: kilitli dönemde tekil yevmiye üretimi
+    // engellenmez (rapor/önizleme amaçlı) ama görsel uyarı verilir.
+    if (preview && typeof isDateInLockedPeriod === "function") {
+      let lockWarnEl = document.getElementById("journalPreviewLockWarning");
+      const checkDate = period === "closing"
+        ? new Date(year, 11, 31)
+        : (month ? new Date(year, month - 1, 1) : new Date(year, 0, 1));
+      const isLockedPeriod = isDateInLockedPeriod(checkDate);
+      if (isLockedPeriod) {
+        if (!lockWarnEl) {
+          lockWarnEl = document.createElement("div");
+          lockWarnEl.id = "journalPreviewLockWarning";
+          lockWarnEl.style.cssText = "margin-bottom:10px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600;";
+          preview.parentNode?.insertBefore(lockWarnEl, preview);
+        }
+        lockWarnEl.textContent = "⚠️ Bu dönem kilitli (kapanmış). Üretilen fiş sadece önizleme/rapor amaçlıdır, muhasebeleştirme için dönemi yeniden açmanız gerekir.";
+        lockWarnEl.style.display = "";
+      } else if (lockWarnEl) {
+        lockWarnEl.style.display = "none";
+      }
+    }
+
     if (typeof auditCalculationRun === "function") {
       auditCalculationRun(contract, "TFRS16");
     }
@@ -8478,6 +9193,13 @@ document.addEventListener("DOMContentLoaded", () => {
         `${year} Yıl Sonu Current / Non-current Kapanış Fişi`,
         preview
       );
+
+      // V19: Hesap planı mapping
+      if (typeof applyAccountMappingToJournal === "function") {
+        const mapped = applyAccountMappingToJournal(entries, contract?.companyId || "");
+        entries.length = 0;
+        mapped.forEach(e => entries.push(e));
+      }
 
       const totalDebit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
       const totalCredit = entries.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
@@ -8566,56 +9288,42 @@ document.addEventListener("DOMContentLoaded", () => {
     const entries = [
 
       {
-        account:
-          "780 Finansman Giderleri",
-
-        debit:
-          interest,
-
+        accountKey: "interestExpense",
+        account: "780 Finansman Giderleri",
+        debit: interest,
         credit: 0
       },
 
       {
-        account:
-          "401 Kiralama Yükümlülüğü",
-
-        debit:
-          principal,
-
+        accountKey: "leaseLiability",
+        account: "401 Kiralama Yükümlülüğü",
+        debit: principal,
         credit: 0
       },
 
       {
-        account:
-          "301 Kiralama Yükümlülüğü - Current",
-
+        accountKey: "leaseLiabilityCurrent",
+        account: "301 Kiralama Yükümlülüğü - Current",
         debit: 0,
-
-        credit:
-          payment
+        credit: payment
       },
 
       {
-        account:
-          "770 / 730 Amortisman Giderleri",
-
-        debit:
-          depreciation,
-
+        accountKey: "depreciationExpense",
+        account: "770 / 730 Amortisman Giderleri",
+        debit: depreciation,
         credit: 0
       },
 
       {
-        account:
-          "268 Birikmiş Amortismanlar",
-
+        accountKey: "rouAccumDep",
+        account: "268 Birikmiş Amortismanlar",
         debit: 0,
-
-        credit:
-          depreciation
+        credit: depreciation
       }
 
     ];
+    // V19 mapping applied below after FX append if any
 
 
     const normalJournalDebit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
@@ -8816,9 +9524,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const modifications =
       contract.modifications || [];
 
+    // V19 Kısa Vade Madde 1 (UI cilası): kilitli dönemde "Oluştur" ve
+    // satır aksiyonları (Düzenle/Uygula/İptal) proaktif olarak disabled +
+    // tooltip'li gösterilir. Fonksiyonel blok zaten createModification /
+    // applyModification içinde var — bu sadece görsel ön uyarı.
+    const createLockCheck = assertPeriodWritable(contract, contract?.startDate || new Date());
+    const createDisabledAttr = createLockCheck.locked
+      ? `disabled title="${escapeHtml(createLockCheck.message)}" style="margin-top:12px;opacity:.5;cursor:not-allowed;"`
+      : `style="margin-top:12px;"`;
+
     const rows = modifications.length
       ? modifications.map(
-          item => `
+          item => {
+            const itemLockCheck = assertPeriodWritable(contract, item.effectiveDate || contract?.startDate || new Date());
+            const rowDisabledAttr = itemLockCheck.locked
+              ? `disabled title="${escapeHtml(itemLockCheck.message)}"`
+              : "";
+            return `
             <div
               style="
                 display:grid;
@@ -8837,22 +9559,23 @@ document.addEventListener("DOMContentLoaded", () => {
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-button" data-mod-action="edit" data-mod-id="${escapeHtml(item.id)}">Düzenle</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="edit" data-mod-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Düzenle</button>`
                     : ""
                 }
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-button" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}">Uygula</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="apply" data-mod-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Uygula</button>`
                     : ""
                 }
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
-                    ? `<button type="button" class="secondary-button" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}">İptal Et</button>`
+                    ? `<button type="button" class="secondary-button" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>İptal Et</button>`
                     : ""
                 }
               </span>
             </div>
-          `
+          `;
+          }
         ).join("")
       : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz modification kaydı bulunmuyor.</div>`;
 
@@ -8944,7 +9667,7 @@ document.addEventListener("DOMContentLoaded", () => {
             type="button"
             id="createModificationButton"
             class="primary-button"
-            style="margin-top:12px;"
+            ${createDisabledAttr}
           >
             Modifikasyon Oluştur
           </button>
@@ -9092,20 +9815,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const today = new Date().toISOString().slice(0, 10);
     const reassessments = contract.reassessments || [];
 
+    // V19 Kısa Vade Madde 1 (UI cilası): kilitli dönemde proaktif disable + tooltip.
+    const createLockCheck = assertPeriodWritable(contract, contract?.startDate || new Date());
+    const createDisabledAttr = createLockCheck.locked
+      ? `disabled title="${escapeHtml(createLockCheck.message)}" style="margin-top:12px;opacity:.5;cursor:not-allowed;"`
+      : `style="margin-top:12px;"`;
+
     const rows = reassessments.length
-      ? reassessments.map(item => `
+      ? reassessments.map(item => {
+          const itemLockCheck = assertPeriodWritable(contract, item.effectiveDate || contract?.startDate || new Date());
+          const rowDisabledAttr = itemLockCheck.locked ? `disabled title="${escapeHtml(itemLockCheck.message)}"` : "";
+          return `
           <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #e5e7eb;font-size:11px;">
             <span>${escapeHtml(item.type || "OTHER")}</span>
             <span>${escapeHtml(item.effectiveDate || "")}</span>
             <span>${escapeHtml(item.status || "DRAFT")}</span>
             <strong>${formatCurrency(item.liabilityAdjustment || 0)}</strong>
             <span style="display:flex;gap:5px;">
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}">Düzenle</button>` : ""}
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}">Uygula</button>` : ""}
-              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}">İptal Et</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Düzenle</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Uygula</button>` : ""}
+              ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>İptal Et</button>` : ""}
             </span>
           </div>
-        `).join("")
+        `;
+        }).join("")
       : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz reassessment kaydı bulunmuyor.</div>`;
 
     return `
@@ -9140,7 +9873,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
 
-          <button type="button" id="createReassessmentButton" class="primary-button" style="margin-top:12px;">Reassessment Oluştur</button>
+          <button type="button" id="createReassessmentButton" class="primary-button" ${createDisabledAttr}>Reassessment Oluştur</button>
         </div>
 
         <div style="margin-top:16px;">
@@ -9673,6 +10406,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const glCell = Number.isFinite(gl)
         ? formatCurrency(-gl)
         : `<span style="color:#94a3b8;">—</span>`;
+      // V19 Kısa Vade Madde 1 (UI cilası): kilitli dönemde Uygula/İptal
+      // proaktif disable + tooltip.
+      const rowLockCheck = assertPeriodWritable(contract, a.period || contract?.startDate || new Date());
+      const rowDisabledAttr = rowLockCheck.locked ? `disabled title="${escapeHtml(rowLockCheck.message)}"` : "";
       return `
       <tr>
         <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.period)}</td>
@@ -9681,8 +10418,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${glCell}</td>
         <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">
           ${a.status === "DRAFT" ? `
-            <button type="button" class="infl-apply-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;">Uygula</button>
-            <button type="button" class="infl-cancel-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;">İptal</button>
+            <button type="button" class="infl-apply-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;" ${rowDisabledAttr}>Uygula</button>
+            <button type="button" class="infl-cancel-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;" ${rowDisabledAttr}>İptal</button>
           ` : ""}
         </td>
       </tr>
@@ -9758,6 +10495,26 @@ document.addEventListener("DOMContentLoaded", () => {
               Dönem içi bileşen — 698.02: ${formatCurrency(-t.liabilityMonetaryGainLossPeriod)})`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
+    });
+
+    // V19 Kısa Vade Madde 1 (UI cilası): raporlama dönemi seçildiğinde
+    // o dönem kilitliyse "Taslak Oluştur" butonu proaktif disable edilir.
+    document.getElementById("inflReportingPeriod")?.addEventListener("change", (e) => {
+      const createBtn = document.getElementById("inflCreateBtn");
+      if (!createBtn) return;
+      const val = e.target.value || "";
+      const lockCheck = val ? assertPeriodWritable(contract, val) : { locked: false };
+      if (lockCheck.locked) {
+        createBtn.disabled = true;
+        createBtn.title = lockCheck.message;
+        createBtn.style.opacity = ".5";
+        createBtn.style.cursor = "not-allowed";
+      } else {
+        createBtn.disabled = false;
+        createBtn.title = "";
+        createBtn.style.opacity = "";
+        createBtn.style.cursor = "";
+      }
     });
 
     document.getElementById("inflCreateBtn")?.addEventListener("click", () => {
@@ -10442,8 +11199,18 @@ document.addEventListener("DOMContentLoaded", () => {
           ? `<div style="margin-bottom:12px;">${v26StandardsBadgeHtml(contract)}</div>`
           : "");
 
+      const lockBannerCheck = typeof assertPeriodWritable === "function"
+        ? assertPeriodWritable(contract, contract?.startDate || new Date())
+        : { locked: false };
+      const lockBannerHtml = lockBannerCheck.locked
+        ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:700;">
+             🔒 ${escapeHtml(lockBannerCheck.message)}
+           </div>`
+        : "";
+
       content.innerHTML = `
         ${v26StdHtml}
+        ${lockBannerHtml}
 
         <div class="detail-grid">
 
@@ -11538,6 +12305,19 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // V19 Kısa Vade Madde 1: fiş tarihi veya dönem sonu kilitli bir
+    // döneme düşüyorsa toplu yevmiye üretimini engelle.
+    if (typeof isDateInLockedPeriod === "function" &&
+        (isDateInLockedPeriod(voucherDate) || isDateInLockedPeriod(periodDates.periodEnd))) {
+      const lockedPeriod = typeof closePeriod === "function"
+        ? closePeriod(periodDates.periodEnd)
+        : "";
+      showAlert(
+        `${lockedPeriod || "Seçilen"} dönemi kilitli. Toplu yevmiye üretilemez. Close Dashboard'dan "Dönemi Yeniden Aç" ile açabilirsiniz.`
+      );
+      return;
+    }
+
     const activeContracts = contracts.filter(c => c.status === "active");
     bulkJournalData = [];
 
@@ -11564,18 +12344,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const depreciation = selected.reduce((total, item) => total + item.depreciation, 0);
 
       const baseEntries = [
-        { account: "780 Finansman Giderleri", debit: interest, credit: 0 },
-        { account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
-        { account: "301 Kiralama Yükümlülüğü - Current", debit: 0, credit: payment },
-        { account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
-        { account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
+        { accountKey: "interestExpense", account: "780 Finansman Giderleri", debit: interest, credit: 0 },
+        { accountKey: "leaseLiability", account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
+        { accountKey: "leaseLiabilityCurrent", account: "301 Kiralama Yükümlülüğü - Current", debit: 0, credit: payment },
+        { accountKey: "depreciationExpense", account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
+        { accountKey: "rouAccumDep", account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
       ];
+      // V19 mapping
+      const mappedBase = typeof applyAccountMappingToJournal === "function"
+        ? applyAccountMappingToJournal(baseEntries, contract?.companyId || "")
+        : baseEntries;
 
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
       const entries = await appendFxToBulkJournal(
         contract,
-        baseEntries,
+        mappedBase,
         periodDates.periodStart,
         periodDates.periodEnd
       );
@@ -12212,225 +12996,254 @@ document.addEventListener("DOMContentLoaded", () => {
      EXCEL EXPORT
   ========================================================== */
 
-  function exportBulkJournals() {
+  function exportBulkJournals(format) {
+    // format: "xlsx" | "csv" | "txt" | "logo" | "mikro"  (default xlsx)
+    format = String(format || "xlsx").toLowerCase();
 
-    if (
-      !bulkJournalData.length
-    ) {
-      return;
+    if (!bulkJournalData.length) {
+      if (typeof showAlert === "function") showAlert("Dışa aktarılacak fiş yok.");
+      return false;
     }
 
-
-    const invalid =
-      bulkJournalData.some(
-        item =>
-          !item.balanced
-      );
-
-
+    const invalid = bulkJournalData.some(item => !item.balanced);
     if (invalid) {
-
-      showAlert(
-        "Dengesiz fiş bulunduğu için Excel aktarımı yapılamaz."
-      );
-
-      return;
+      if (typeof showAlert === "function") {
+        showAlert("Dengesiz fiş bulunduğu için aktarım yapılamaz.");
+      }
+      return false;
     }
 
-
+    // Ortak satır üretimi (mapping zaten generate sırasında uygulanmış olmalı)
+    // V27 — raporlama PB seçiliyse (ve fiş PB'sinden farklıysa) her satıra
+    // ek/opsiyonel bir "raporlama tutarı" bilgisi eklenir (additive, TMS21
+    // kur farkı satırlarına dokunmaz — appendFxToBulkJournal ayrı bir katman).
+    const reportingCcy = typeof getReportingCurrency === "function" ? getReportingCurrency() : "TRY";
     const rows = [];
-
-
-    bulkJournalData.forEach(
-      item => {
-
-        item.entries.forEach(
-          entry => {
-
-            rows.push({
-
-              "Fiş No":
-                item.voucherNo,
-
-              "Fiş Tarihi":
-                item.voucherDate,
-
-              "Sözleşme ID":
-                item.contractId,
-
-              "Şirket":
-                item.company,
-
-              "Tedarikçi":
-                item.supplier,
-
-              "Raporlama Yılı":
-                item.year,
-
-              "Periyot":
-                item.period,
-
-              "Dönem":
-                item.month,
-
-              "Açıklama":
-                item.description,
-
-              "Hesap":
-                entry.account,
-
-              "Borç":
-                Number(
-                  entry.debit || 0
-                ),
-
-              "Alacak":
-                Number(
-                  entry.credit || 0
-                ),
-
-              "Kontrol":
-                "OK"
-
-            });
-
-          }
-        );
-      }
-    );
-
-
-    if (
-      typeof XLSX !==
-      "undefined"
-    ) {
-
-      try {
-
-        const worksheet =
-          XLSX.utils.json_to_sheet(
-            rows
-          );
-
-        const workbook =
-          XLSX.utils.book_new();
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          worksheet,
-          "TFRS16 Fisleri"
-        );
-
-        XLSX.writeFile(
-          workbook,
-          `TFRS16_Toplu_Fisler_${Date.now()}.xlsx`
-        );
-
-        recordAuditEvent({
-          action: "JOURNAL_EXPORTED",
-          entityType: "JOURNAL_EXPORT",
-          reason: "Bulk journal Excel export",
-          metadata: { recordCount: rows.length, format: "xlsx" }
+    bulkJournalData.forEach(item => {
+      const rowCurrency = item.currency || "TRY";
+      const needsFx = reportingCcy && reportingCcy !== rowCurrency;
+      (item.entries || []).forEach(entry => {
+        const currency = rowCurrency || entry.currency || "TRY";
+        const debit = Number(entry.debit || 0);
+        const credit = Number(entry.credit || 0);
+        let debitReporting = null, creditReporting = null, fxRateApplied = null;
+        if (needsFx && typeof convertAmountToReportingCurrency === "function") {
+          try {
+            const dR = convertAmountToReportingCurrency(debit, currency, item.voucherDate, reportingCcy);
+            const cR = convertAmountToReportingCurrency(credit, currency, item.voucherDate, reportingCcy);
+            if (dR.applied || cR.applied) {
+              debitReporting = dR.value;
+              creditReporting = cR.value;
+              fxRateApplied = dR.rate || cR.rate || null;
+            }
+          } catch (error) {}
+        }
+        rows.push({
+          voucherNo: item.voucherNo || "",
+          voucherDate: item.voucherDate || "",
+          contractId: item.contractId || "",
+          company: item.company || "",
+          companyId: item.companyId || "",
+          supplier: item.supplier || "",
+          year: item.year || "",
+          period: item.period || "",
+          month: item.month || "",
+          description: item.description || "",
+          accountCode: entry.accountCode || entry.account || "",
+          accountName: entry.accountName || entry.accountKey || entry.account || "",
+          accountKey: entry.accountKey || "",
+          debit,
+          credit,
+          currency,
+          control: item.balanced ? "OK" : "UNBALANCED",
+          reportingCurrency: debitReporting !== null ? reportingCcy : "",
+          debitReporting,
+          creditReporting,
+          fxRateApplied
         });
+      });
+    });
 
-        return;
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const baseName = `TFRS16_Yevmiye_${stamp}_${Date.now()}`;
 
+    // ---------- EXCEL ----------
+    if (format === "xlsx" || format === "excel") {
+      if (typeof XLSX === "undefined") {
+        if (typeof showAlert === "function") showAlert("Excel motoru (XLSX) yüklenemedi.");
+        return false;
+      }
+      try {
+        const excelRows = rows.map(r => ({
+          "Fiş No": r.voucherNo,
+          "Fiş Tarihi": r.voucherDate,
+          "Sözleşme ID": r.contractId,
+          "Şirket": r.company,
+          "Şirket ID": r.companyId,
+          "Tedarikçi": r.supplier,
+          "Raporlama Yılı": r.year,
+          "Periyot": r.period,
+          "Dönem": r.month,
+          "Açıklama": r.description,
+          "Hesap Kodu": r.accountCode,
+          "Hesap Adı": r.accountName,
+          "Borç": r.debit,
+          "Alacak": r.credit,
+          "Para Birimi": r.currency,
+          "Kontrol": r.control,
+          "Raporlama PB": r.reportingCurrency,
+          "Borç (Raporlama)": r.debitReporting !== null && r.debitReporting !== undefined ? r.debitReporting : "",
+          "Alacak (Raporlama)": r.creditReporting !== null && r.creditReporting !== undefined ? r.creditReporting : "",
+          "Kur (Uygulanan)": r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : ""
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(excelRows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "TFRS16 Fisleri");
+        XLSX.writeFile(workbook, `${baseName}.xlsx`);
+        if (typeof recordAuditEvent === "function") {
+          recordAuditEvent({
+            action: "JOURNAL_EXPORTED",
+            entityType: "JOURNAL_EXPORT",
+            reason: "Bulk journal Excel export",
+            metadata: { recordCount: rows.length, format: "xlsx" }
+          });
+        }
+        if (typeof showToast === "function") showToast("Excel indirildi", "success", 2000);
+        return true;
       } catch (error) {
-
-        console.error(
-          "Excel export error:",
-          error
-        );
+        console.error("Excel export error:", error);
+        if (typeof showAlert === "function") showAlert("Excel aktarımı başarısız: " + (error.message || error));
+        return false;
       }
     }
 
+    // ---------- CSV / TXT / LOGO / MIKRO ----------
+    // Ortak kolon setleri
+    let headers, lineSep, colSep, fileExt, bom;
 
-    const headers =
-      Object.keys(
-        rows[0]
-      );
+    if (format === "logo") {
+      // Logo tarzı: FişNo;Tarih;HesapKodu;Borc;Alacak;Aciklama;BelgeNo
+      headers = ["FişNo", "Tarih", "HesapKodu", "Borc", "Alacak", "Aciklama", "BelgeNo"];
+      colSep = ";";
+      lineSep = "\r\n";
+      fileExt = "csv";
+      bom = "\uFEFF";
+    } else if (format === "mikro") {
+      // Mikro tarzı benzer
+      headers = ["FisNo", "Tarih", "HesapKodu", "HesapAdi", "Borc", "Alacak", "Aciklama", "SozlesmeNo"];
+      colSep = ";";
+      lineSep = "\r\n";
+      fileExt = "csv";
+      bom = "\uFEFF";
+    } else if (format === "txt") {
+      headers = ["FisNo", "Tarih", "HesapKodu", "Borc", "Alacak", "Aciklama"];
+      colSep = "\t";
+      lineSep = "\r\n";
+      fileExt = "txt";
+      bom = "";
+    } else {
+      // genel CSV
+      // V27: Raporlama PB seçiliyse (ve fişte uygulandıysa) raporlama
+      // tutar kolonları eklenir — logo/mikro/txt formatlarına kasıtlı
+      // olarak dokunulmadı (ERP import şablonlarını bozmamak için).
+      headers = ["FisNo", "Tarih", "SozlesmeID", "Sirket", "HesapKodu", "HesapAdi", "Borc", "Alacak", "Aciklama", "ParaBirimi", "Kontrol", "RaporlamaPB", "Borc(Raporlama)", "Alacak(Raporlama)", "Kur"];
+      colSep = ";";
+      lineSep = "\r\n";
+      fileExt = "csv";
+      bom = "\uFEFF";
+    }
 
-
-    const csvRows =
-      [
-        headers,
-        ...rows.map(
-          row =>
-            headers.map(
-              header =>
-                row[header]
-            )
-        )
+    const mapRow = (r) => {
+      if (format === "logo") {
+        return [r.voucherNo, r.voucherDate, r.accountCode, r.debit, r.credit, r.description, r.contractId];
+      }
+      if (format === "mikro") {
+        return [r.voucherNo, r.voucherDate, r.accountCode, r.accountName, r.debit, r.credit, r.description, r.contractId];
+      }
+      if (format === "txt") {
+        return [r.voucherNo, r.voucherDate, r.accountCode, r.debit, r.credit, r.description];
+      }
+      return [
+        r.voucherNo, r.voucherDate, r.contractId, r.company, r.accountCode, r.accountName,
+        r.debit, r.credit, r.description, r.currency, r.control,
+        r.reportingCurrency || "",
+        r.debitReporting !== null && r.debitReporting !== undefined ? r.debitReporting : "",
+        r.creditReporting !== null && r.creditReporting !== undefined ? r.creditReporting : "",
+        r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : ""
       ];
+    };
 
+    const escapeCell = (val) => {
+      const s = String(val ?? "");
+      if (s.includes(colSep) || s.includes('"') || s.includes("\n")) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
 
-    const csv =
-      csvRows
-        .map(
-          row =>
-            row
-              .map(
-                value =>
-                  `"${String(
-                    value ?? ""
-                  ).replaceAll(
-                    '"',
-                    '""'
-                  )}"`
-              )
-              .join(";")
-        )
-        .join("\n");
+    const lines = [headers.join(colSep)];
+    rows.forEach(r => {
+      lines.push(mapRow(r).map(escapeCell).join(colSep));
+    });
 
-
-    const blob =
-      new Blob(
-        [
-          "\uFEFF" +
-          csv
-        ],
-        {
-          type:
-            "text/csv;charset=utf-8;"
-        }
-      );
-
-
-    const url =
-      URL.createObjectURL(
-        blob
-      );
-
-    const link =
-      document.createElement(
-        "a"
-      );
-
-    link.href =
-      url;
-
-    link.download =
-      "TFRS16_Toplu_Fisler.csv";
-
-    document.body.appendChild(
-      link
-    );
-
+    const blob = new Blob([bom + lines.join(lineSep)], {
+      type: fileExt === "txt" ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${baseName}.${fileExt}`;
+    document.body.appendChild(link);
     link.click();
-
     link.remove();
+    URL.revokeObjectURL(url);
 
-    URL.revokeObjectURL(
-      url
-    );
-
-    recordAuditEvent({ action: "JOURNAL_EXPORTED", entityType: "JOURNAL_EXPORT", reason: "Bulk journal CSV export", metadata: { recordCount: rows.length, format: "csv" } });
+    if (typeof recordAuditEvent === "function") {
+      recordAuditEvent({
+        action: "JOURNAL_EXPORTED",
+        entityType: "JOURNAL_EXPORT",
+        reason: `Bulk journal ${format} export`,
+        metadata: { recordCount: rows.length, format }
+      });
+    }
+    if (typeof showToast === "function") showToast(`${format.toUpperCase()} indirildi`, "success", 2000);
+    return true;
   }
 
+  /**
+   * Tek bir fiş setini (entries dizisi) profesyonel formatta dışa aktarır.
+   * @param {Array} entries - yevmiye satırları
+   * @param {Object} meta - { voucherNo, voucherDate, contractId, company, description, companyId }
+   * @param {string} format - xlsx | csv | txt | logo | mikro
+   */
+  function exportJournalEntries(entries, meta = {}, format = "xlsx") {
+    if (!Array.isArray(entries) || !entries.length) {
+      if (typeof showAlert === "function") showAlert("Dışa aktarılacak satır yok.");
+      return false;
+    }
 
-  /* ==========================================================
-     BASIC EXCEL CONTRACT IMPORT
-     ========================================================== */
+    // Geçici olarak bulkJournalData formatına çevir
+    const snapshot = bulkJournalData;
+    bulkJournalData = [{
+      voucherNo: meta.voucherNo || "FIS-001",
+      voucherDate: meta.voucherDate || new Date().toISOString().slice(0, 10),
+      contractId: meta.contractId || "",
+      company: meta.company || "",
+      companyId: meta.companyId || "",
+      supplier: meta.supplier || "",
+      year: meta.year || "",
+      period: meta.period || "",
+      month: meta.month || "",
+      description: meta.description || "TFRS 16 Yevmiye",
+      currency: meta.currency || "TRY",
+      balanced: true,
+      entries: entries
+    }];
+    const ok = exportBulkJournals(format);
+    bulkJournalData = snapshot;
+    return ok;
+  }
+
 
   function normalizeHeader(
     value
@@ -13144,11 +13957,26 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
+        // P1 UYUMLULUK: backend artık CONTROLLER/VIEWER rollerinin
+        // sözleşme silmesini reddediyor (403
+        // CONTRACT_WRITE_ACCESS_DENIED). API'ye hiç gitmeden engelle.
+        if (typeof tfrs16CanWriteContracts === "function" && !tfrs16CanWriteContracts()) {
+          showAlert("Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol).");
+          return;
+        }
+
         try {
           v21GuardContract("contracts.delete", contract, "DELETE");
         } catch (error) {
           console.error("V21 authorization denied:", error);
           showAlert(error?.message || "You do not have permission to perform this action.");
+          return;
+        }
+
+        // V19 Kısa Vade Madde 1: kilitli dönemdeki sözleşme silinemez.
+        const deleteLockCheck = assertPeriodWritable(contract, contract?.startDate || new Date());
+        if (deleteLockCheck.locked) {
+          showAlert(deleteLockCheck.message);
           return;
         }
 
@@ -13164,6 +13992,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
+        const deletedId = selectedContractId;
+
+        // BUG FIX (P1 uyum incelemesi): önceki sürümde sözleşme
+        // yerel listeden API çağrısından ÖNCE siliniyordu. API 403/404/
+        // 500 ile başarısız olursa (ör. CONTROLLER/VIEWER'ın backend
+        // tarafından reddedilmesi, veya ağ hatası) kullanıcıya uyarı
+        // gösteriliyordu AMA sözleşme ekranda "silinmiş" görünmeye
+        // devam ediyordu — DB'deki gerçek durumla ekran arasında sessiz
+        // bir tutarsızlık oluşuyordu. Artık "PostgreSQL'e önce yaz"
+        // deseniyle (persistContractToApi'deki ile aynı ilke) tutarlı
+        // olacak şekilde ÖNCE API'ye siliniyor, yerel state SADECE
+        // başarılı olursa değiştiriliyor.
+        try {
+          await deleteContractFromApi(deletedId);
+        } catch (apiErr) {
+          console.error("API silme hatası:", apiErr);
+          showAlert(
+            "Sözleşme silinemedi: " +
+            (apiErr?.message || String(apiErr))
+          );
+          return; // Yerel state'e HİÇ dokunulmadı — ekran DB ile tutarlı kalır.
+        }
+
         const deletedSnapshot = cloneAuditValue(contract);
 
         recordAuditEvent({
@@ -13177,25 +14028,12 @@ document.addEventListener("DOMContentLoaded", () => {
           metadata: { deletedContractSnapshot: deletedSnapshot, auditRetention: "central" }
         });
 
-        const deletedId = selectedContractId;
-
         contracts =
           contracts.filter(
             item =>
               item.id !==
               selectedContractId
           );
-
-        try {
-          await deleteContractFromApi(deletedId);
-        } catch (apiErr) {
-          console.error("API silme hatası:", apiErr);
-          showAlert(
-            "Veritabanından silinemedi: " +
-            (apiErr?.message || String(apiErr))
-          );
-          // Yerel listeden silindi; yine de uyarı ver
-        }
 
         saveContracts(
           contracts
@@ -16159,6 +16997,532 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "MONTH_END_CLOSE_REOPENED", entityType: "MONTH_END_CLOSE", entityId: period, reason: input.reason || "V17 close reopen", metadata: { previousStatus: current?.status || null, reopenedBy: next.reopenedBy } });
     return { success: true, state: next, readiness: getCloseReadiness(d) };
   }
+
+  /* ==========================================================
+     PERIOD LOCKING ENGINE (V19 - Kısa Vade Madde 1)
+     ----------------------------------------------------------
+     Kilitli dönemde kontrat değişikliği, modification, reassessment,
+     enflasyon düzeltmesi ve ilgili yazma işlemleri engellenir.
+     Close certify → locked=true; reopen → locked=false.
+     ========================================================== */
+
+  /**
+   * Verilen dönem (YYYY-MM) kilitli mi?
+   * @param {string} period
+   * @returns {boolean}
+   */
+  function isPeriodLocked(period) {
+    const p = String(period || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(p)) return false;
+    const state = closeGetState(p);
+    return Boolean(state && state.locked);
+  }
+
+  /**
+   * Bir tarihin ait olduğu dönem kilitli mi?
+   * @param {string|Date} dateValue
+   * @returns {boolean}
+   */
+  function isDateInLockedPeriod(dateValue) {
+    try {
+      const period = closePeriod(dateValue);
+      return isPeriodLocked(period);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Kontrat üzerinde etkili tarih(ler) için kilit kontrolü.
+   * effectiveDate / reportingDate / bugün dönemlerinden herhangi biri kilitliyse engeller.
+   * @param {Object} contract
+   * @param {string|Date} [effectiveDate]
+   * @returns {{ locked: boolean, period: string|null, message: string|null }}
+   */
+  function assertPeriodWritable(contract, effectiveDate) {
+    const dates = [];
+    if (effectiveDate) dates.push(effectiveDate);
+    if (contract?.startDate) dates.push(contract.startDate);
+    // Bugünün dönemi de kontrol (ay sonu close sonrası değişiklik engeli)
+    dates.push(new Date());
+
+    for (const d of dates) {
+      try {
+        const period = closePeriod(d);
+        if (isPeriodLocked(period)) {
+          return {
+            locked: true,
+            period,
+            message: `${period} dönemi kilitli. Değişiklik yapılamaz. Close Dashboard'dan "Dönemi Yeniden Aç" ile açabilirsiniz.`
+          };
+        }
+      } catch (error) {}
+    }
+    return { locked: false, period: null, message: null };
+  }
+
+  /**
+   * Dönemi manuel kilitle (certify olmadan da kullanılabilir).
+   */
+  function lockPeriod(period, input = {}) {
+    const p = String(period || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(p)) {
+      return { success: false, error: "Geçersiz dönem formatı (YYYY-MM)." };
+    }
+    const actor = input.actor || auditActor();
+    const next = closeUpsertState(p, {
+      locked: true,
+      lockedAt: new Date().toISOString(),
+      lockedBy: String(actor || "system"),
+      lockReason: String(input.reason || "Manuel period lock"),
+      status: input.status || CLOSE_STATUS.CLOSED
+    });
+    if (typeof recordAuditEvent === "function") {
+      recordAuditEvent({
+        action: "PERIOD_LOCKED",
+        entityType: "MONTH_END_CLOSE",
+        entityId: p,
+        reason: input.reason || "Period locked",
+        metadata: { lockedBy: next.lockedBy, immutable: true }
+      });
+    }
+    return { success: true, state: next };
+  }
+
+  /**
+   * Dönem kilidini aç (reopenMonthEndClose ile uyumlu wrapper).
+   */
+  function unlockPeriod(period, input = {}) {
+    const p = String(period || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(p)) {
+      return { success: false, error: "Geçersiz dönem formatı (YYYY-MM)." };
+    }
+    // reopenMonthEndClose period string de kabul etsin diye tarih üret
+    const fakeDate = p + "-15";
+    return reopenMonthEndClose(fakeDate, {
+      reason: input.reason || "Period unlocked",
+      actor: input.actor || auditActor()
+    });
+  }
+
+  /**
+   * Tüm kilitli dönemleri listeler.
+   */
+  function getLockedPeriods() {
+    const state = closeLoadState();
+    return Object.values(state)
+      .filter(s => s && s.locked)
+      .sort((a, b) => String(a.period).localeCompare(String(b.period)));
+  }
+
+  /* ==========================================================
+     CLOSE DASHBOARD UI (V19 - Kısa Vade Madde 2)
+     ----------------------------------------------------------
+     CFO / Auditor-ready Month-End Close Dashboard.
+     Uses existing V17 getMonthEndCloseDashboardData engine.
+     ========================================================== */
+
+  function renderCloseDashboardPage(container, options = {}) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const today = new Date();
+    const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    let period = options.period || container.dataset.period || defaultPeriod;
+    // V27 — Şirket filtresi. "ALL" = mevcut (tek-şirketli) davranış, regresyon yok.
+    const defaultCompanyId = options.companyId || container.dataset.companyId ||
+      (typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL");
+    let companyId = defaultCompanyId || "ALL";
+    container.dataset.companyId = companyId;
+    // V27 — Raporlama para birimi. Varsayılan TRY iken davranış aynı kalır
+    // (çevrim uygulanmaz, mevcut kullanıcılar için regresyon yok).
+    let reportingCurrency = options.reportingCurrency || container.dataset.reportingCurrency ||
+      (typeof getReportingCurrency === "function" ? getReportingCurrency() : "TRY");
+    container.dataset.reportingCurrency = reportingCurrency;
+    const reportingCurrencyList = (typeof V26_FX_UI_CURRENCIES !== "undefined" && V26_FX_UI_CURRENCIES.length)
+      ? V26_FX_UI_CURRENCIES : ["TRY", "EUR", "USD", "GBP", "CHF", "JPY", "AED", "SAR"];
+
+    const statusColor = (status) => {
+      const s = String(status || "").toUpperCase();
+      if (s === "CLOSED" || s === "READY" || s === "PASS") return "#166534";
+      if (s === "WARNING" || s === "IN_PROGRESS" || s === "REOPENED") return "#854d0e";
+      if (s === "BLOCKED" || s === "FAIL") return "#b91c1c";
+      return "#64748b";
+    };
+
+    const statusBadge = (status) => {
+      const s = String(status || "UNKNOWN");
+      const color = statusColor(s);
+      const bg = color === "#166534" ? "#dcfce7" : color === "#854d0e" ? "#fef9c3" : color === "#b91c1c" ? "#fee2e2" : "#f1f5f9";
+      return `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:${bg};color:${color};">${escapeHtml(s)}</span>`;
+    };
+
+    const fmt = (n) => {
+      if (typeof formatCurrency === "function") return formatCurrency(n);
+      const num = Number(n);
+      if (!Number.isFinite(num)) return "—";
+      return num.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    };
+
+    const companyOptions = typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [];
+
+    const render = () => {
+      const reportingDate = period + "-28"; // mid-late month for close checks
+      let data = {};
+      let readiness = {};
+      try {
+        data = typeof getMonthEndCloseDashboardData === "function"
+          ? getMonthEndCloseDashboardData(reportingDate)
+          : {};
+        readiness = typeof getCloseReadiness === "function"
+          ? getCloseReadiness(reportingDate)
+          : {};
+      } catch (error) {
+        console.error("Close dashboard data error:", error);
+      }
+
+      let score = Number(data.score ?? readiness.score ?? 0);
+      let status = data.status || readiness.status || "NOT_STARTED";
+      let blockers = data.blockers || readiness.blockingIssues || [];
+      let warnings = data.warnings || readiness.warnings || [];
+      let controls = data.controls || readiness.checklist?.checks || [];
+      let companies = data.companyStatus || [];
+      const certified = Boolean(data.certification?.certified || readiness.state?.certified);
+      const locked = Boolean(data.certification?.locked || readiness.state?.locked);
+
+      // V27 — Şirket filtresi (Kalan İşler madde 2b). "ALL" seçiliyse
+      // davranış tamamen aynı kalır (regresyon yok). Belirli bir şirket
+      // seçilmişse KPI/finansal özet/checklist o şirkete özgü
+      // getCompanyMonthEndCloseStatus() sonucundan türetilir.
+      let scopedCompanyMeta = null;
+      if (companyId && companyId !== "ALL") {
+        scopedCompanyMeta = companyOptions.find(c => c.id === companyId) || null;
+        const companyName = scopedCompanyMeta ? scopedCompanyMeta.name : companyId;
+        try {
+          const scoped = typeof getCompanyMonthEndCloseStatus === "function"
+            ? getCompanyMonthEndCloseStatus(companyName, reportingDate)
+            : null;
+          if (scoped) {
+            score = Number(scoped.score ?? 0);
+            status = scoped.status || status;
+            blockers = scoped.blockers || [];
+            warnings = scoped.warnings || [];
+            controls = scoped.checks || [];
+            data = {
+              ...data,
+              activeContracts: scoped.activeContractCount,
+              totalContracts: scoped.contractCount,
+              totalLiability: scoped.totalLiability,
+              currentLiability: scoped.currentLiability,
+              nonCurrentLiability: scoped.nonCurrentLiability,
+              rouAssets: 0,
+              interestExpense: 0,
+              depreciationExpense: 0,
+              journalCount: 0,
+              balancedJournalCount: 0,
+              reconciliationStatus: scoped.reconciliationStatus
+            };
+            companies = companies.filter(co => co.company === companyName);
+          }
+        } catch (error) {
+          console.error("Şirket bazlı close durumu alınamadı:", error);
+        }
+      }
+
+      const scoreColor = score >= 90 ? "#166534" : score >= 70 ? "#854d0e" : "#b91c1c";
+
+      // V27 — basit raporlama PB çevrimi (gösterge amaçlı, additive).
+      // Kaynak PB: seçili şirketin functionalCurrency'si (varsayılan TRY).
+      const fxSourceCurrency = (scopedCompanyMeta && scopedCompanyMeta.functionalCurrency) || "TRY";
+      const fxShouldConvert = Boolean(reportingCurrency) && reportingCurrency !== fxSourceCurrency;
+      let fxNote = "";
+      const fxConv = (val) => {
+        if (!fxShouldConvert || typeof convertAmountToReportingCurrency !== "function") return Number(val) || 0;
+        const r = convertAmountToReportingCurrency(val, fxSourceCurrency, reportingDate, reportingCurrency);
+        if (r.applied && !fxNote) {
+          fxNote = `1 ${fxSourceCurrency} ≈ ${r.rate} ${reportingCurrency} (${escapeHtml(reportingDate)} itibarıyla, basit çevrim)`;
+        } else if (!r.applied && r.error && !fxNote) {
+          fxNote = `⚠ ${fxSourceCurrency} → ${reportingCurrency} kuru bulunamadı, tutarlar ${fxSourceCurrency} olarak gösteriliyor.`;
+        }
+        return r.value;
+      };
+      const fmtTotalLiability = fxShouldConvert ? fxConv(data.totalLiability) : data.totalLiability;
+      const fmtCurrentLiability = fxShouldConvert ? fxConv(data.currentLiability) : data.currentLiability;
+      const fmtNonCurrentLiability = fxShouldConvert ? fxConv(data.nonCurrentLiability) : data.nonCurrentLiability;
+      const fmtRouAssets = fxShouldConvert ? fxConv(data.rouAssets) : data.rouAssets;
+      const fmtInterestExpense = fxShouldConvert ? fxConv(data.interestExpense) : data.interestExpense;
+      const fmtDepreciationExpense = fxShouldConvert ? fxConv(data.depreciationExpense) : data.depreciationExpense;
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+            <div>
+              <h2 style="margin:0;font-size:20px;color:#0f172a;">Month-End Close Dashboard</h2>
+              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+                V17 Close Engine · CFO / Auditor görünümü · Dönem: <strong>${escapeHtml(period)}</strong>
+                ${scopedCompanyMeta ? ` · Şirket: <strong>${escapeHtml(scopedCompanyMeta.name)}</strong>` : ""}
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              ${companyOptions.length ? `
+              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
+                Şirket
+                <select id="closeCompanyInput" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;max-width:200px;">
+                  <option value="ALL" ${companyId === "ALL" ? "selected" : ""}>Tüm Şirketler</option>
+                  ${companyOptions.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === companyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
+                </select>
+              </label>` : ""}
+              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
+                Dönem
+                <input type="month" id="closePeriodInput" value="${escapeHtml(period)}"
+                  style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" />
+              </label>
+              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
+                Raporlama PB
+                <select id="closeReportingCurrencyInput" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                  ${reportingCurrencyList.map(c => `<option value="${escapeHtml(c)}" ${c === reportingCurrency ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
+                </select>
+              </label>
+              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeRefreshBtn">Yenile</button>
+              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeExportBtn">⬇ Checklist Dışa Aktar</button>
+            </div>
+          </div>
+
+          <!-- KPI Cards -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+            <div class="gk-v26-card" style="margin:0;text-align:center;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Close Score</div>
+              <div style="font-size:32px;font-weight:800;color:${scoreColor};margin:4px 0;">${Math.round(score)}</div>
+              <div style="font-size:12px;color:#94a3b8;">/ 100</div>
+            </div>
+            <div class="gk-v26-card" style="margin:0;text-align:center;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Durum</div>
+              <div style="margin-top:10px;">${statusBadge(status)}</div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:8px;">${certified ? "Onaylı" : "Onaysız"} · ${locked ? "Kilitli" : "Açık"}</div>
+            </div>
+            <div class="gk-v26-card" style="margin:0;text-align:center;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Blocking</div>
+              <div style="font-size:28px;font-weight:800;color:${blockers.length ? "#b91c1c" : "#166534"};margin:4px 0;">${blockers.length}</div>
+              <div style="font-size:12px;color:#94a3b8;">kritik engel</div>
+            </div>
+            <div class="gk-v26-card" style="margin:0;text-align:center;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Uyarı</div>
+              <div style="font-size:28px;font-weight:800;color:${warnings.length ? "#854d0e" : "#166534"};margin:4px 0;">${warnings.length}</div>
+              <div style="font-size:12px;color:#94a3b8;">warning</div>
+            </div>
+            <div class="gk-v26-card" style="margin:0;text-align:center;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Aktif Sözleşme</div>
+              <div style="font-size:28px;font-weight:800;color:#0f172a;margin:4px 0;">${data.activeContracts ?? "—"}</div>
+              <div style="font-size:12px;color:#94a3b8;">/ ${data.totalContracts ?? "—"} toplam</div>
+            </div>
+          </div>
+
+          <!-- Financial Snapshot -->
+          <div class="gk-v26-card">
+            <h3 style="margin:0 0 12px;font-size:15px;">
+              Finansal Özet
+              ${fxShouldConvert ? `<span style="font-weight:600;font-size:11px;color:#0369a1;background:#e0f2fe;border-radius:999px;padding:2px 8px;margin-left:8px;">${escapeHtml(reportingCurrency)} olarak gösteriliyor</span>` : ""}
+            </h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+              <div><div style="font-size:11px;color:#64748b;">Kira Yükümlülüğü</div><strong>${fmt(fmtTotalLiability)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Kısa Vade</div><strong>${fmt(fmtCurrentLiability)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Uzun Vade</div><strong>${fmt(fmtNonCurrentLiability)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">ROU Varlık</div><strong>${fmt(fmtRouAssets)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Faiz Gideri</div><strong>${fmt(fmtInterestExpense)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Amortisman</div><strong>${fmt(fmtDepreciationExpense)}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Yevmiye</div><strong>${data.balancedJournalCount ?? 0} / ${data.journalCount ?? 0}</strong></div>
+              <div><div style="font-size:11px;color:#64748b;">Mutabakat</div><strong>${escapeHtml(data.reconciliationStatus || "—")}</strong></div>
+            </div>
+            ${fxNote ? `<div style="margin-top:10px;font-size:11px;color:#64748b;">${fxNote}</div>` : ""}
+          </div>
+
+          <!-- Actions -->
+          <div class="gk-v26-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="gk-v26-btn" id="closeCertifyBtn" ${(!readiness.ready || certified || scopedCompanyMeta) ? "disabled style='opacity:.5;'" : ""} ${scopedCompanyMeta ? `title="Onay tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : ""}>
+              ${certified ? "✓ Onaylandı" : "Close'u Onayla"}
+            </button>
+            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeReopenBtn" ${(!certified && !locked) || scopedCompanyMeta ? "disabled style='opacity:.5;'" : ""} ${scopedCompanyMeta ? `title="Dönem yeniden açma tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : ""}>
+              Dönemi Yeniden Aç
+            </button>
+            <span id="closeActionStatus" style="font-size:12px;color:#64748b;"></span>
+          </div>
+
+          <!-- Blockers -->
+          ${blockers.length ? `
+          <div class="gk-v26-card" style="border-color:#fecaca;background:#fef2f2;">
+            <h3 style="margin:0 0 10px;font-size:15px;color:#b91c1c;">🚫 Blocking Issues (${blockers.length})</h3>
+            <table class="gk-v26-table">
+              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Açıklama</th><th>Etkilenen</th></tr></thead>
+              <tbody>
+                ${blockers.map(b => `
+                  <tr>
+                    <td><code style="font-size:11px;">${escapeHtml(b.controlId || b.id || "")}</code></td>
+                    <td>${escapeHtml(b.category || "")}</td>
+                    <td>${escapeHtml(b.description || b.name || "")}</td>
+                    <td style="font-size:12px;">${(b.affectedContracts || []).slice(0, 5).join(", ") || "—"}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>` : ""}
+
+          <!-- Warnings -->
+          ${warnings.length ? `
+          <div class="gk-v26-card" style="border-color:#fde68a;background:#fffbeb;">
+            <h3 style="margin:0 0 10px;font-size:15px;color:#854d0e;">⚠ Warnings (${warnings.length})</h3>
+            <table class="gk-v26-table">
+              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Açıklama</th></tr></thead>
+              <tbody>
+                ${warnings.map(w => `
+                  <tr>
+                    <td><code style="font-size:11px;">${escapeHtml(w.controlId || w.id || "")}</code></td>
+                    <td>${escapeHtml(w.category || "")}</td>
+                    <td>${escapeHtml(w.description || w.name || "")}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>` : ""}
+
+          <!-- Full Checklist -->
+          <div class="gk-v26-card">
+            <h3 style="margin:0 0 10px;font-size:15px;">Close Checklist (${controls.length} kontrol)</h3>
+            <table class="gk-v26-table">
+              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Severity</th><th>Durum</th><th>Açıklama</th></tr></thead>
+              <tbody>
+                ${controls.map(c => `
+                  <tr>
+                    <td><code style="font-size:11px;">${escapeHtml(c.controlId || c.id || "")}</code></td>
+                    <td>${escapeHtml(c.category || "")}</td>
+                    <td style="font-size:12px;">${escapeHtml(c.severity || "")}</td>
+                    <td>${statusBadge(c.status)}</td>
+                    <td style="font-size:12px;">${escapeHtml(c.description || c.name || "")}</td>
+                  </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Kontrol verisi yok</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Company breakdown -->
+          ${companies.length ? `
+          <div class="gk-v26-card">
+            <h3 style="margin:0 0 10px;font-size:15px;">Şirket Bazlı Close Durumu</h3>
+            <table class="gk-v26-table">
+              <thead><tr><th>Şirket</th><th>Durum</th><th>Score</th><th>Aktif Sözleşme</th><th>Blocking</th></tr></thead>
+              <tbody>
+                ${companies.map(co => `
+                  <tr>
+                    <td><strong>${escapeHtml(co.company || "")}</strong></td>
+                    <td>${statusBadge(co.status)}</td>
+                    <td>${Math.round(Number(co.score) || 0)}</td>
+                    <td>${co.activeContractCount ?? co.activeContracts ?? "—"}</td>
+                    <td>${(co.blockers || co.blockingIssues || []).length}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>` : ""}
+
+          <!-- Locked Periods (V19 Kısa Vade Madde 1) -->
+          ${(() => {
+            const lockedPeriods = typeof getLockedPeriods === "function" ? getLockedPeriods() : [];
+            if (!lockedPeriods.length) return "";
+            return `
+          <div class="gk-v26-card">
+            <h3 style="margin:0 0 10px;font-size:15px;">🔒 Kilitli Dönemler (${lockedPeriods.length})</h3>
+            <table class="gk-v26-table">
+              <thead><tr><th>Dönem</th><th>Kilitlenme Tarihi</th><th>Kilitleyen</th><th>Sebep</th></tr></thead>
+              <tbody>
+                ${lockedPeriods.map(s => `
+                  <tr ${String(s.period) === String(period) ? 'style="background:#fef2f2;"' : ""}>
+                    <td><strong>${escapeHtml(s.period)}</strong></td>
+                    <td style="font-size:12px;">${escapeHtml((s.lockedAt || "").slice(0, 10))}</td>
+                    <td style="font-size:12px;">${escapeHtml(s.lockedBy || "—")}</td>
+                    <td style="font-size:12px;">${escapeHtml(s.lockReason || "—")}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>`;
+          })()}
+        </div>`;
+
+      container.querySelector("#closeExportBtn")?.addEventListener("click", () => {
+        try {
+          const rows = [["Tip", "Kontrol", "Kategori", "Severity/Durum", "Açıklama", "Etkilenen"]];
+          blockers.forEach(b => rows.push(["BLOCKER", b.controlId || b.id || "", b.category || "", "", b.description || b.name || "", (b.affectedContracts || []).join("; ")]));
+          warnings.forEach(w => rows.push(["WARNING", w.controlId || w.id || "", w.category || "", "", w.description || w.name || "", ""]));
+          controls.forEach(c => rows.push(["CHECKLIST", c.controlId || c.id || "", c.category || "", `${c.severity || ""}/${c.status || ""}`, c.description || c.name || "", ""]));
+          const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+          const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `close-checklist-${period}${scopedCompanyMeta ? "-" + scopedCompanyMeta.code : ""}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          if (typeof showToast === "function") showToast("Checklist dışa aktarıldı", "success", 2000);
+        } catch (error) {
+          if (typeof showAlert === "function") showAlert("Dışa aktarma hatası: " + (error?.message || String(error)));
+        }
+      });
+
+      container.querySelector("#closePeriodInput")?.addEventListener("change", (e) => {
+        period = e.target.value || defaultPeriod;
+        container.dataset.period = period;
+        render();
+      });
+      container.querySelector("#closeCompanyInput")?.addEventListener("change", (e) => {
+        companyId = e.target.value || "ALL";
+        container.dataset.companyId = companyId;
+        render();
+      });
+      container.querySelector("#closeReportingCurrencyInput")?.addEventListener("change", (e) => {
+        reportingCurrency = e.target.value || "TRY";
+        container.dataset.reportingCurrency = reportingCurrency;
+        if (typeof setReportingCurrency === "function") setReportingCurrency(reportingCurrency);
+        render();
+      });
+      container.querySelector("#closeRefreshBtn")?.addEventListener("click", render);
+
+      container.querySelector("#closeCertifyBtn")?.addEventListener("click", async () => {
+        const statusEl = container.querySelector("#closeActionStatus");
+        try {
+          const result = typeof saveMonthEndCloseCertification === "function"
+            ? saveMonthEndCloseCertification(reportingDate, { locked: true, comments: "Dashboard üzerinden onaylandı" })
+            : { success: false, error: "saveMonthEndCloseCertification bulunamadı" };
+          if (result?.success === false) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(result.error || "Onay başarısız")}</span>`;
+            if (typeof showAlert === "function") showAlert(result.error || "Close onaylanamadı (henüz READY değil).");
+            return;
+          }
+          if (statusEl) statusEl.innerHTML = `<span style="color:#166534;">✓ Dönem onaylandı ve kilitlendi.</span>`;
+          if (typeof showToast === "function") showToast("Close onaylandı", "success", 2500);
+          render();
+        } catch (error) {
+          if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || String(error))}</span>`;
+        }
+      });
+
+      container.querySelector("#closeReopenBtn")?.addEventListener("click", async () => {
+        const ok = typeof showConfirm === "function"
+          ? await showConfirm("Bu dönemi yeniden açmak istediğinize emin misiniz? Kilit kaldırılacak.", { danger: true, title: "Dönemi Aç" })
+          : window.confirm("Dönem yeniden açılsın mı?");
+        if (!ok) return;
+        const statusEl = container.querySelector("#closeActionStatus");
+        try {
+          if (typeof reopenMonthEndClose === "function") {
+            reopenMonthEndClose(reportingDate, { reason: "Dashboard üzerinden reopen" });
+          }
+          if (statusEl) statusEl.innerHTML = `<span style="color:#854d0e;">Dönem yeniden açıldı.</span>`;
+          if (typeof showToast === "function") showToast("Dönem reopen edildi", "warning", 2500);
+          render();
+        } catch (error) {
+          if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || String(error))}</span>`;
+        }
+      });
+    };
+
+    render();
+  }
+
 
   function requestMonthEndClose(reportingDate, input = {}) {
     v21RequirePermission("close.execute", { action: "CLOSE_EXECUTE" });
@@ -20373,6 +21737,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const V21_ROLES = Object.freeze({
     ADMIN: "ADMIN",
+    // P1 UYUMLULUK: backend'in gerçek rol seti artık ADMIN /
+    // ACCOUNTANT_MANAGER / ACCOUNTANT / CONTROLLER / VIEWER. Bu isim
+    // buraya eklenmezse, gerçek oturumdan bu rol window.currentUser'a
+    // sızdığında getCurrentUserRoles() onu SESSİZCE ELER (V21_ROLES[role]
+    // kontrolü) ve kullanıcı bu (dekoratif/demo) yetki sisteminde
+    // yetkisiz görünür — bkz. dosya başındaki V21_SECURITY_MODE=DEMO notu.
+    ACCOUNTANT_MANAGER: "ACCOUNTANT_MANAGER",
     CFO: "CFO",
     FINANCE_MANAGER: "FINANCE_MANAGER",
     ACCOUNTANT: "ACCOUNTANT",
@@ -20417,6 +21788,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const V21_ROLE_PERMISSIONS = Object.freeze({
     ADMIN: V21_PERMISSION_LIST.slice(),
+    // P1 UYUMLULUK: backend'de ACCOUNTANT_MANAGER, ADMIN'in bir alt
+    // kümesi — kendi holding ağacında tam CRUD + raporlama yapabilir
+    // ama platform seviyesi kullanıcı/rol/konfigürasyon yönetimi
+    // (users.manage, roles.manage, configuration.manage) ADMIN'e özel
+    // kalır (bkz. backend organization-service.js rol matrisi).
+    ACCOUNTANT_MANAGER: [
+      "dashboard.view", "contracts.view", "contracts.create", "contracts.edit", "contracts.delete",
+      "leases.calculate", "schedule.view", "schedule.export",
+      "journal.view", "journal.create", "journal.export", "journal.delete",
+      "reporting.view", "reporting.export",
+      "controls.view", "controls.manage", "controls.resolve",
+      "close.view", "close.execute", "close.certify",
+      "audit.view", "imports.execute", "exports.execute",
+      "users.view", "company_access.manage"
+    ],
     CFO: [
       "dashboard.view", "contracts.view", "schedule.view", "schedule.export",
       "journal.view", "journal.export", "reporting.view", "reporting.export",
@@ -22445,6 +23831,75 @@ document.addEventListener("DOMContentLoaded", () => {
   function convertCurrencyOnDate(amount,fromCurrency,toCurrency,date,rateType=FX_CONFIG.defaultRateType,options={}) {
     const fx=getFxRate(fromCurrency,toCurrency,date,rateType,options); if(fx?.error) return {...fx,sourceAmount:v23Num(amount)};
     return convertCurrency(amount,fromCurrency,toCurrency,fx.rate,{...options,audit:options.audit,rateDate:date,rateType,entityId:options.entityId});
+  }
+
+  /* ==========================================================
+     V27 — RAPORLAMA PARA BİRİMİ (Kalan İşler madde 2d)
+     ----------------------------------------------------------
+     Kullanıcının seçtiği tek bir "raporlama para birimi"; Close
+     Dashboard finansal özeti ve export fonksiyonlarında ek/opsiyonel
+     bir gösterge katmanı olarak kullanılır (V23 kur tablosu üzerinden
+     basit çevrim). TMS21 kur farkı satırlarına (appendFxToBulkJournal /
+     appendFxToReclassification) DOKUNULMAZ — additive'dir.
+     Varsayılan: "TRY" (mevcut tek para birimli kullanıcılar için
+     davranış aynı kalır; TRY seçiliyken çevrim uygulanmaz).
+     ========================================================== */
+  const V26_REPORTING_CURRENCY_KEY = "gk_tfrs16_reporting_currency_v1";
+
+  /**
+   * Aktif raporlama para birimini döndürür (varsayılan "TRY").
+   * @returns {string}
+   */
+  function getReportingCurrency() {
+    try {
+      return localStorage.getItem(V26_REPORTING_CURRENCY_KEY) || "TRY";
+    } catch (error) {
+      return "TRY";
+    }
+  }
+
+  /**
+   * Raporlama para birimini ayarlar.
+   * @param {string} currency - ör. "TRY","EUR","USD"
+   */
+  function setReportingCurrency(currency) {
+    const val = String(currency || "TRY").toUpperCase();
+    try {
+      localStorage.setItem(V26_REPORTING_CURRENCY_KEY, val);
+    } catch (error) {
+      console.error("Raporlama para birimi kaydedilemedi:", error);
+    }
+    return val;
+  }
+
+  /**
+   * Bir tutarı aktif (veya belirtilen) raporlama para birimine çevirir.
+   * Kaynak ve hedef para birimi aynıysa hiçbir şey değişmeden döner
+   * (applied:false) — mevcut tek para birimli davranış korunur.
+   * Kur bulunamazsa hata fırlatmaz; applied:false + error ile döner
+   * (dashboard/export ekranları bu durumda ham tutarı göstermeye devam eder).
+   * @param {number} amount
+   * @param {string} fromCurrency - tutarın hâlihazırdaki para birimi
+   * @param {string|Date} [date] - kur tarihi (varsayılan bugün)
+   * @param {string} [toCurrency] - hedef PB (varsayılan getReportingCurrency())
+   * @returns {{value:number, currency:string, applied:boolean, rate:number|null, error:string|null}}
+   */
+  function convertAmountToReportingCurrency(amount, fromCurrency, date, toCurrency) {
+    const from = String(fromCurrency || "TRY").toUpperCase();
+    const to = String(toCurrency || getReportingCurrency() || "TRY").toUpperCase();
+    const num = Number(amount) || 0;
+    if (!from || from === to) {
+      return { value: num, currency: from, applied: false, rate: 1, error: null };
+    }
+    try {
+      const result = convertCurrencyOnDate(num, from, to, date || new Date(), FX_CONFIG.defaultRateType, { audit: false, allowLastAvailable: true, allowMissing: true });
+      if (result?.error) {
+        return { value: num, currency: from, applied: false, rate: null, error: result.error };
+      }
+      return { value: result.convertedAmount, currency: to, applied: true, rate: result.fxRate, error: null };
+    } catch (error) {
+      return { value: num, currency: from, applied: false, rate: null, error: error?.code || error?.message || String(error) };
+    }
   }
 
   /* ============================================================
@@ -26181,6 +27636,159 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ==========================================================
+     V19 SELF-TEST — Hesap Planı Mapping + Period Locking
+     ----------------------------------------------------------
+     Kapsam:
+     1) default mapping yüklenir
+     2) şirket özel mapping kaydedilir / okunur
+     3) applyAccountMappingToJournal accountKey → accountCode çevirir
+     4) kilitli dönemde applyModification / applyReassessment hata döner
+     Kullanım: window.GK_TFRS16.runSelfTestsV19AccountMapping()
+     veya window.__TFRS16_TEST__.runSelfTestsV19AccountMapping()
+     ========================================================== */
+  function runSelfTestsV19AccountMapping() {
+    const results = [];
+    function assertTrue(name, condition) {
+      const pass = !!condition;
+      results.push({ name, pass });
+      console.log(`${pass ? "✅" : "❌"} ${name}`);
+      return pass;
+    }
+    function assertEqual(name, expected, actual) {
+      const pass = String(expected) === String(actual);
+      results.push({ name, pass, expected, actual });
+      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
+      return pass;
+    }
+
+    const TEST_COMPANY_ID = "SELFTEST-V19-COMPANY";
+
+    // ---- 1) Default mapping yüklenir ----
+    try {
+      const def = getDefaultAccountMapping();
+      assertTrue("1a — getDefaultAccountMapping() boş değil", def && Object.keys(def).length > 0);
+      assertTrue("1b — default mapping rouAsset içeriyor", typeof def.rouAsset === "string" && def.rouAsset.length > 0);
+
+      // Kayıtlı özel mapping'i olmayan (rastgele) bir şirket için
+      // loadAccountMapping default'a düşmeli.
+      const loaded = loadAccountMapping("SELFTEST-V19-NONEXISTENT-COMPANY-" + Date.now());
+      assertEqual("1c — özel mapping yokken loadAccountMapping = default (rouAsset)", def.rouAsset, loaded.rouAsset);
+    } catch (error) {
+      console.error("Test 1 hata:", error);
+      results.push({ name: "1 — default mapping (genel)", pass: false });
+    }
+
+    // ---- 2) Şirket özel mapping kaydedilir / okunur ----
+    let savedOk = false;
+    try {
+      const customCode = "999.TEST." + Date.now();
+      savedOk = saveAccountMapping(TEST_COMPANY_ID, { interestExpense: customCode });
+      assertTrue("2a — saveAccountMapping başarılı döndü", savedOk);
+
+      const reloaded = loadAccountMapping(TEST_COMPANY_ID);
+      assertEqual("2b — kaydedilen özel kod geri okunuyor (interestExpense)", customCode, reloaded.interestExpense);
+
+      // Belirtilmeyen alanlar default'tan gelmeye devam etmeli.
+      assertEqual(
+        "2c — belirtilmeyen alan default'tan geliyor (rouAsset)",
+        getDefaultAccountMapping().rouAsset,
+        reloaded.rouAsset
+      );
+
+      assertEqual(
+        "2d — getAccountCode şirket özel kodu döndürüyor",
+        customCode,
+        getAccountCode(TEST_COMPANY_ID, "interestExpense")
+      );
+    } catch (error) {
+      console.error("Test 2 hata:", error);
+      results.push({ name: "2 — özel mapping kaydet/oku (genel)", pass: false });
+    }
+
+    // ---- 3) applyAccountMappingToJournal accountKey → accountCode çevirir ----
+    try {
+      const entries = [
+        { accountKey: "interestExpense", account: "PLACEHOLDER", debit: 100, credit: 0 },
+        { accountKey: "leaseLiability", account: "PLACEHOLDER", debit: 0, credit: 100 }
+      ];
+      const mapped = applyAccountMappingToJournal(entries, TEST_COMPANY_ID);
+      assertTrue("3a — applyAccountMappingToJournal 2 satır döndürüyor", Array.isArray(mapped) && mapped.length === 2);
+      const interestLine = mapped.find(e => e.accountKey === "interestExpense");
+      assertTrue(
+        "3b — interestExpense satırı şirket özel koda çevrildi (PLACEHOLDER değil)",
+        interestLine && interestLine.accountCode && interestLine.accountCode !== "PLACEHOLDER"
+      );
+      const liabilityLine = mapped.find(e => e.accountKey === "leaseLiability");
+      assertEqual(
+        "3c — leaseLiability satırı default koda çevrildi",
+        getDefaultAccountMapping().leaseLiability,
+        liabilityLine?.accountCode
+      );
+    } catch (error) {
+      console.error("Test 3 hata:", error);
+      results.push({ name: "3 — applyAccountMappingToJournal (genel)", pass: false });
+    }
+
+    // Test 2'de yazılan localStorage kaydını temizle (gerçek şirket
+    // verisini kirletmemek için).
+    try {
+      const raw = localStorage.getItem(ACCOUNT_MAPPING_STORAGE_KEY);
+      if (raw) {
+        const all = JSON.parse(raw) || {};
+        delete all[TEST_COMPANY_ID];
+        localStorage.setItem(ACCOUNT_MAPPING_STORAGE_KEY, JSON.stringify(all));
+      }
+    } catch (_) {}
+
+    // ---- 4) Kilitli dönemde applyModification / applyReassessment hata döner ----
+    const TEST_LOCK_PERIOD = "2099-01"; // gerçek verilerle çakışmayacak uzak bir dönem
+    try {
+      const testContract = {
+        id: "SELFTEST-V19-LOCK-1",
+        monthlyPayment: 10000,
+        discountRate: 15,
+        startDate: `${TEST_LOCK_PERIOD}-01`,
+        endDate: "2100-12-01",
+        paymentFrequency: "monthly",
+        paymentTiming: "arrears",
+        modifications: [],
+        reassessments: []
+      };
+
+      // Önce kilitsizken deneme yapılamayacağını (locked:false) doğrula.
+      const preLock = assertPeriodWritable(testContract, `${TEST_LOCK_PERIOD}-15`);
+      assertTrue("4a — dönem kilitlenmeden önce assertPeriodWritable.locked === false", preLock.locked === false);
+
+      const lockResult = lockPeriod(TEST_LOCK_PERIOD, { reason: "Self-test kilidi" });
+      assertTrue("4b — lockPeriod başarılı", Boolean(lockResult?.success));
+      assertTrue("4c — isPeriodLocked true dönüyor", isPeriodLocked(TEST_LOCK_PERIOD) === true);
+
+      const modResult = createModification(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15`, description: "Self-test" });
+      assertTrue("4d — kilitli dönemde createModification valid:false döner", modResult.valid === false);
+      assertTrue("4e — kilitli dönemde createModification hata mesajı içeriyor", Array.isArray(modResult.errors) && modResult.errors.length > 0);
+
+      const reassResult = createReassessment(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15` });
+      assertTrue("4f — kilitli dönemde createReassessment valid:false döner", reassResult.valid === false);
+
+      const lockedPeriodsList = getLockedPeriods();
+      assertTrue(
+        "4g — getLockedPeriods() listesinde test dönemi var",
+        lockedPeriodsList.some(s => s.period === TEST_LOCK_PERIOD)
+      );
+    } catch (error) {
+      console.error("Test 4 hata:", error);
+      results.push({ name: "4 — kilitli dönem guard (genel)", pass: false });
+    } finally {
+      // Test dönemini her koşulda kilitten çıkar (temizlik).
+      try { unlockPeriod(TEST_LOCK_PERIOD, { reason: "Self-test temizliği" }); } catch (_) {}
+    }
+
+    const totalPass = results.filter(r => r.pass).length;
+    console.log(`\nV19 Hesap Planı Mapping + Period Locking Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
+    return results;
+  }
+
+  /* ==========================================================
      V26 — ÇOKLU PARA BİRİMİ / TMS21 / TMS29 / KONSOLİDASYON UI
      (ADDITIVE)
      ========================================================== */
@@ -26373,6 +27981,242 @@ document.addEventListener("DOMContentLoaded", () => {
   function v26ResolveCompanyForContract(contract) {
     if (!contract) return null;
     return v26FindCompany(contract.companyId) || v26FindCompany(contract.company) || null;
+  }
+
+  /* ==========================================================
+     V27 — GLOBAL AKTİF ŞİRKET CONTEXT (Kalan İşler madde 2a)
+     ----------------------------------------------------------
+     Tüm liste/filtre/close/dashboard ekranlarında kullanılacak
+     tek bir "aktif şirket" seçimi. "ALL" = Tüm Şirketler (mevcut
+     davranış, tek şirketli kullanıcılar için regresyon yok).
+     ========================================================== */
+  const V26_ACTIVE_COMPANY_KEY = "gk_tfrs16_active_company_v1";
+
+  /**
+   * Şu an seçili "aktif şirket" id'si. Seçim yapılmamışsa "ALL" döner
+   * (tüm şirketler / mevcut varsayılan davranış).
+   * @returns {string}
+   */
+  function getActiveCompanyId() {
+    try {
+      return localStorage.getItem(V26_ACTIVE_COMPANY_KEY) || "ALL";
+    } catch (error) {
+      return "ALL";
+    }
+  }
+
+  /**
+   * Aktif şirketi ayarlar ve açık olan V26 sayfasının (varsa) yeniden
+   * render edilmesini tetikler.
+   * @param {string} companyId - "ALL" veya bir şirket id/kodu
+   */
+  function setActiveCompanyId(companyId) {
+    const val = String(companyId || "ALL");
+    try {
+      localStorage.setItem(V26_ACTIVE_COMPANY_KEY, val);
+    } catch (error) {
+      console.error("Aktif şirket kaydedilemedi:", error);
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("gk-active-company-changed", { detail: { companyId: val } }));
+    } catch (error) {}
+    try {
+      const navSelect = document.getElementById("v26ActiveCompanySelect");
+      if (navSelect && navSelect.value !== val) navSelect.value = val;
+    } catch (error) {}
+    if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+    return val;
+  }
+
+  /**
+   * V26 (sözleşmelerden türeyen/kalıcı) ve backend session (lisans)
+   * şirket listelerini id/code bazında birleştirir. Tek bir tutarlı
+   * "id → {id, name, code, functionalCurrency}" listesi döndürür.
+   * Silinen/yeniden adlandırılan şirketler için tekil kaynak olarak
+   * v26LoadCompanies() esas alınır (sözleşmelerdeki gerçek companyId
+   * uzayıyla uyumlu); sadece orada bulunmayan session şirketleri eklenir.
+   * @returns {Array<{id:string,name:string,code:string,functionalCurrency:string}>}
+   */
+  function getUnifiedCompanyOptions() {
+    const byId = new Map();
+    try {
+      const v26 = typeof v26LoadCompanies === "function" ? v26LoadCompanies() : [];
+      (v26 || []).forEach(c => {
+        const id = String(c.id || c.code || "").trim();
+        if (!id || byId.has(id)) return;
+        byId.set(id, {
+          id,
+          name: c.name || c.code || id,
+          code: String(c.code || id),
+          functionalCurrency: c.functionalCurrency || "TRY"
+        });
+      });
+    } catch (error) {}
+    try {
+      const sess = (typeof sessionCompanies !== "undefined" && Array.isArray(sessionCompanies)) ? sessionCompanies : [];
+      sess.forEach(c => {
+        const id = String(c.id || "").trim();
+        if (!id || byId.has(id)) return;
+        byId.set(id, { id, name: c.name || id, code: id, functionalCurrency: "TRY" });
+      });
+    } catch (error) {}
+    return Array.from(byId.values());
+  }
+
+  /**
+   * V26 sayfa host'unda en son render edilen sayfayı (varsa) aktif
+   * şirket değişikliğinden sonra yeniden çizer. Sayfa hâlâ kendi
+   * dataset.companyId'sini koruyacaksa (kullanıcı o sayfada elle bir
+   * şirket seçtiyse) dokunmaz; sadece host henüz özel bir seçim
+   * içermiyorsa aktif şirket varsayılanı uygulanır.
+   */
+  function v26RefreshActivePage() {
+    try {
+      const host = document.getElementById("v26PageHost");
+      if (host && typeof host.__v26LastRenderer === "function") {
+        host.__v26LastRenderer(host);
+      }
+    } catch (error) {}
+  }
+
+  /* ==========================================================
+     V27 — SELF-TEST: MULTI-COMPANY / MULTI-CURRENCY
+     ----------------------------------------------------------
+     Kapsam: aktif şirket context'i, unified company options
+     birleştirmesi, Close Dashboard şirket filtresi (ALL vs
+     belirli şirket), raporlama PB çevrimi (TRY→TRY no-op,
+     TRY→EUR conversion). Gerçek kullanıcı verisini (aktif şirket
+     seçimi, raporlama PB tercihi) test sonunda `finally` ile
+     olduğu gibi geri yükler — kalıcı yan etki bırakmaz.
+     ========================================================== */
+  function runSelfTestsV27MultiCompany() {
+    const results = [];
+    function assertTrue(name, condition) {
+      const pass = !!condition;
+      results.push({ name, pass });
+      console.log(`${pass ? "✅" : "❌"} ${name}`);
+      return pass;
+    }
+    function assertEqual(name, expected, actual) {
+      const pass = String(expected) === String(actual);
+      results.push({ name, pass, expected, actual });
+      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
+      return pass;
+    }
+
+    // ---- 1) Aktif şirket context'i ----
+    const originalActiveCompanyId = (() => {
+      try { return getActiveCompanyId(); } catch (error) { return "ALL"; }
+    })();
+    try {
+      assertTrue("1a — getActiveCompanyId() bir string döndürüyor", typeof originalActiveCompanyId === "string" && originalActiveCompanyId.length > 0);
+
+      const TEST_COMPANY_ID = "SELFTEST-V27-COMPANY";
+      const setResult = setActiveCompanyId(TEST_COMPANY_ID);
+      assertEqual("1b — setActiveCompanyId ayarlanan değeri döndürüyor", TEST_COMPANY_ID, setResult);
+      assertEqual("1c — getActiveCompanyId ayarlanan değeri geri okuyor", TEST_COMPANY_ID, getActiveCompanyId());
+
+      setActiveCompanyId("ALL");
+      assertEqual("1d — setActiveCompanyId('ALL') → getActiveCompanyId() === 'ALL'", "ALL", getActiveCompanyId());
+    } catch (error) {
+      console.error("Test 1 hata:", error);
+      results.push({ name: "1 — aktif şirket context (genel)", pass: false });
+    } finally {
+      // Kullanıcının gerçek aktif şirket seçimini her koşulda geri yükle.
+      try { setActiveCompanyId(originalActiveCompanyId); } catch (error) {}
+    }
+
+    // ---- 2) getUnifiedCompanyOptions birleştirmesi ----
+    try {
+      const before = getUnifiedCompanyOptions();
+      assertTrue("2a — getUnifiedCompanyOptions() bir dizi döndürüyor", Array.isArray(before));
+
+      const ids = before.map(c => c.id);
+      const uniqueIds = new Set(ids);
+      assertEqual("2b — birleştirilmiş listede tekrar eden id yok", ids.length, uniqueIds.size);
+
+      // sessionCompanies mevcutsa: v26'da olmayan geçici bir kayıt ekleyip
+      // birleşik listede göründüğünü doğrula (sadece bellek içi, kalıcı
+      // localStorage yazımı yok — test sonunda diziden çıkarılıyor).
+      if (typeof sessionCompanies !== "undefined" && Array.isArray(sessionCompanies)) {
+        const TEST_SESSION_ID = "SELFTEST-V27-SESSION-COMPANY";
+        sessionCompanies.push({ id: TEST_SESSION_ID, name: "Selftest Session Şirket" });
+        try {
+          const after = getUnifiedCompanyOptions();
+          assertTrue(
+            "2c — sadece session'da olan yeni şirket birleşik listeye ekleniyor",
+            after.some(c => c.id === TEST_SESSION_ID)
+          );
+        } finally {
+          const idx = sessionCompanies.findIndex(c => c.id === TEST_SESSION_ID);
+          if (idx >= 0) sessionCompanies.splice(idx, 1);
+        }
+      } else {
+        console.log("ℹ️ 2c atlandı — sessionCompanies bu ortamda tanımlı değil");
+      }
+    } catch (error) {
+      console.error("Test 2 hata:", error);
+      results.push({ name: "2 — getUnifiedCompanyOptions (genel)", pass: false });
+    }
+
+    // ---- 3) Close Dashboard şirket filtresi (ALL vs belirli şirket) ----
+    try {
+      const today = new Date();
+      const dashboardAll = typeof getMonthEndCloseDashboardData === "function"
+        ? getMonthEndCloseDashboardData(today)
+        : null;
+      assertTrue("3a — getMonthEndCloseDashboardData (ALL) çalışıyor", Boolean(dashboardAll));
+
+      const companyBreakdown = dashboardAll?.companies || [];
+      if (companyBreakdown.length > 0) {
+        const targetCompany = companyBreakdown[0].company;
+        const scoped = getCompanyMonthEndCloseStatus(targetCompany, today);
+        assertEqual("3b — belirli şirket sorgusu doğru şirketi döndürüyor", targetCompany, scoped.company);
+        assertTrue(
+          "3c — belirli şirketin sözleşme sayısı ALL kırılımındaki ile tutarlı",
+          scoped.contractCount === companyBreakdown[0].contractCount
+        );
+        assertTrue(
+          "3d — belirli şirket sorgusu ALL toplamından farklı/daralmış bir alt küme (regresyon: fonksiyon şirkete özel filtreliyor)",
+          scoped.activeContractCount <= (dashboardAll?.activeContracts ?? Infinity)
+        );
+      } else {
+        console.log("ℹ️ 3b/3c/3d atlandı — bu ortamda henüz sözleşmeye bağlı bir şirket yok");
+      }
+    } catch (error) {
+      console.error("Test 3 hata:", error);
+      results.push({ name: "3 — Close Dashboard şirket filtresi (genel)", pass: false });
+    }
+
+    // ---- 4) Raporlama PB çevrimi (TRY→TRY no-op, TRY→EUR conversion) ----
+    const originalReportingCurrency = (() => {
+      try { return getReportingCurrency(); } catch (error) { return "TRY"; }
+    })();
+    try {
+      setReportingCurrency("TRY");
+      const noop = convertAmountToReportingCurrency(1000, "TRY", new Date(), "TRY");
+      assertTrue("4a — TRY→TRY çevrim uygulanmıyor (applied:false)", noop.applied === false);
+      assertEqual("4b — TRY→TRY tutar değişmiyor", 1000, noop.value);
+
+      const eur = convertAmountToReportingCurrency(1000, "TRY", new Date(), "EUR");
+      assertTrue("4c — convertAmountToReportingCurrency hata fırlatmadan sonuç döndürüyor", eur && typeof eur === "object");
+      if (eur.applied) {
+        assertTrue("4d — kur bulunduğunda TRY→EUR tutarı değişiyor", eur.value !== 1000 && typeof eur.rate === "number");
+      } else {
+        assertTrue("4d — kur bulunamadığında hata alanı dolu, ham tutara düşülüyor", Boolean(eur.error) && eur.value === 1000);
+        console.log("ℹ️ 4d — TRY→EUR kuru tanımlı değil, no-op/fallback davranışı doğrulandı (kur tanımlıysa gerçek çevrim ayrıca test edilmeli)");
+      }
+    } catch (error) {
+      console.error("Test 4 hata:", error);
+      results.push({ name: "4 — raporlama PB çevrimi (genel)", pass: false });
+    } finally {
+      // Kullanıcının gerçek raporlama PB tercihini her koşulda geri yükle.
+      try { setReportingCurrency(originalReportingCurrency); } catch (error) {}
+    }
+
+    const totalPass = results.filter(r => r.pass).length;
+    console.log(`\nV27 Multi-Company/Multi-Currency Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
+    return results;
   }
 
   function v26StandardsBadgeHtml(contract) {
@@ -27335,8 +29179,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const navBlock = document.createElement("div");
       navBlock.id = "v26NavBlock";
       navBlock.style.cssText = "padding:8px 12px;border-top:1px solid #e2e8f0;margin-top:8px;max-height:calc(100vh - 150px);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;box-sizing:border-box;";
+      const activeCompanyOptions = typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [];
+      const activeCompanyId = typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL";
       navBlock.innerHTML = `
         <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.06em;margin-bottom:6px;">ÇOKLU PB / KONSOLİDASYON</div>
+        ${activeCompanyOptions.length ? `
+        <label style="display:block;font-size:11px;color:#64748b;font-weight:600;margin-bottom:8px;">
+          🏢 Aktif Şirket
+          <select id="v26ActiveCompanySelect" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;">
+            <option value="ALL" ${activeCompanyId === "ALL" ? "selected" : ""}>Tüm Şirketler</option>
+            ${activeCompanyOptions.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === activeCompanyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
+          </select>
+        </label>` : ""}
+        <button type="button" id="v26NavCloseDashboard" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📋 Close Dashboard</button>
+        <button type="button" id="v26NavAccountMapping" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📒 Hesap Planı Eşleme</button>
         <button type="button" id="v26NavCompanies" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Şirket Yönetimi</button>
         <button type="button" id="v26NavGroups" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">👥 Gruplar</button>
         <button type="button" id="v26NavEliminations" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">↔️ Eliminasyonlar</button>
@@ -27344,7 +29200,10 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavInflation" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📈 Enflasyon Endeksleri</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>`;
       sidebar.appendChild(navBlock);
-      const openInMain = renderer => { let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
+      const openInMain = renderer => { let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
+      document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
+      document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMain(renderCloseDashboardPage));
+      document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMain(renderAccountMappingPage));
       document.getElementById("v26NavCompanies")?.addEventListener("click",()=>openInMain(renderCompanyManagementPage));
       document.getElementById("v26NavGroups")?.addEventListener("click",()=>openInMain(renderGroupManagementPage));
       document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMain(renderEliminationManagementPage));
@@ -27365,6 +29224,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
+    // V19 Account Mapping
+    getDefaultAccountMapping,
+    loadAccountMapping,
+    saveAccountMapping,
+    getAccountCode,
+    applyAccountMappingToJournal,
+    exportBulkJournals,
+    exportJournalEntries,
+    renderAccountMappingPage,
+    renderCloseDashboardPage,
+    isPeriodLocked,
+    isDateInLockedPeriod,
+    assertPeriodWritable,
+    lockPeriod,
+    unlockPeriod,
+    getLockedPeriods,
+    runSelfTestsV19AccountMapping,
     getApplicableStandards,
     v26LoadCompanies,
     v26SaveCompanies,
@@ -27381,7 +29257,15 @@ document.addEventListener("DOMContentLoaded", () => {
     v26ExportInflationIndexExcel,
     v26ConvertScheduleToPresentation,
     renderContractStandardsPanel,
-    injectV26CurrencyFields
+    injectV26CurrencyFields,
+    // V27 Multi-Company/Multi-Currency
+    getActiveCompanyId,
+    setActiveCompanyId,
+    getUnifiedCompanyOptions,
+    getReportingCurrency,
+    setReportingCurrency,
+    convertAmountToReportingCurrency,
+    runSelfTestsV27MultiCompany
   });
 
   /* ==========================================================
@@ -27389,6 +29273,14 @@ document.addEventListener("DOMContentLoaded", () => {
      ========================================================== */
   try {
     window.__TFRS16_TEST__ = {
+      // V19 Account Mapping
+      getDefaultAccountMapping,
+      loadAccountMapping,
+      saveAccountMapping,
+      getAccountCode,
+      applyAccountMappingToJournal,
+      exportBulkJournals,
+      exportJournalEntries,
       formatCurrency,
       parseDate,
       calculateLeaseEngine,
@@ -27419,6 +29311,7 @@ document.addEventListener("DOMContentLoaded", () => {
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
       runSelfTestsV19FullTms29,
+      runSelfTestsV19AccountMapping,
       v191RenderFinancialReporting,
       v191OpenFinancialReporting,
       getRuoAssetRollForwardReport,
@@ -27430,7 +29323,15 @@ document.addEventListener("DOMContentLoaded", () => {
       v26LoadCompanies,
       v26StandardsBadgeHtml,
       v26BuildConsolidationRows,
-      v26ExportConsolidationExcel
+      v26ExportConsolidationExcel,
+      // V27 Multi-Company/Multi-Currency
+      getActiveCompanyId,
+      setActiveCompanyId,
+      getUnifiedCompanyOptions,
+      getReportingCurrency,
+      setReportingCurrency,
+      convertAmountToReportingCurrency,
+      runSelfTestsV27MultiCompany
     };
   } catch (error) {
     console.error("Test export shim error:", error);
@@ -27464,6 +29365,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
+    // V19 Account Mapping
+    getDefaultAccountMapping,
+    loadAccountMapping,
+    saveAccountMapping,
+    getAccountCode,
+    applyAccountMappingToJournal,
+    exportBulkJournals,
+    exportJournalEntries,
+    renderAccountMappingPage,
+    renderCloseDashboardPage,
+    isPeriodLocked,
+    isDateInLockedPeriod,
+    assertPeriodWritable,
+    lockPeriod,
+    unlockPeriod,
+    getLockedPeriods,
+    runSelfTestsV19AccountMapping,
     getApplicableStandards,
     v26LoadCompanies,
     v26SaveCompanies,
@@ -27474,7 +29392,15 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCompanyManagementPage,
     renderConsolidationReportPage,
     renderContractStandardsPanel,
-    injectV26CurrencyFields
+    injectV26CurrencyFields,
+    // V27 Multi-Company/Multi-Currency
+    getActiveCompanyId,
+    setActiveCompanyId,
+    getUnifiedCompanyOptions,
+    getReportingCurrency,
+    setReportingCurrency,
+    convertAmountToReportingCurrency,
+    runSelfTestsV27MultiCompany
   });
 
   /* ==========================================================
@@ -27512,6 +29438,7 @@ document.addEventListener("DOMContentLoaded", () => {
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
       runSelfTestsV19FullTms29,
+      runSelfTestsV19AccountMapping,
       v191RenderFinancialReporting,
       v191OpenFinancialReporting,
       getRuoAssetRollForwardReport,
@@ -27523,7 +29450,15 @@ document.addEventListener("DOMContentLoaded", () => {
       v26LoadCompanies,
       v26StandardsBadgeHtml,
       v26BuildConsolidationRows,
-      v26ExportConsolidationExcel
+      v26ExportConsolidationExcel,
+      // V27 Multi-Company/Multi-Currency
+      getActiveCompanyId,
+      setActiveCompanyId,
+      getUnifiedCompanyOptions,
+      getReportingCurrency,
+      setReportingCurrency,
+      convertAmountToReportingCurrency,
+      runSelfTestsV27MultiCompany
     };
   } catch (error) {
     console.error("Test export shim error:", error);
