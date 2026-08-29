@@ -1576,7 +1576,7 @@ router.get('/companies', requireStaffAccess, async (req, res) => {
 router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (req, res) => {
 
     const unknownErr = rejectUnknownFields(req.body, [
-        'name', 'code', 'tax_number', 'address', 'phone', 'email', 'parent_company_id'
+        'name', 'code', 'parent_company_id'
     ]);
     if (unknownErr) {
         return res.status(400).json({
@@ -1588,10 +1588,6 @@ router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (r
     const {
         name: rawName,
         code: rawCode,
-        tax_number,
-        address,
-        phone,
-        email,
         parent_company_id: rawParentCompanyId
     } = req.body;
 
@@ -1629,40 +1625,6 @@ router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (r
             success: false,
             error: 'Code is required and must be 1-50 characters'
         });
-    }
-
-    // Optional field length / basic format guards
-    if (tax_number !== undefined && tax_number !== null) {
-        if (typeof tax_number !== 'string' || tax_number.length > 50) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid tax_number'
-            });
-        }
-    }
-    if (email !== undefined && email !== null && email !== '') {
-        if (typeof email !== 'string' || email.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid email format'
-            });
-        }
-    }
-    if (phone !== undefined && phone !== null) {
-        if (typeof phone !== 'string' || phone.length > 50) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid phone'
-            });
-        }
-    }
-    if (address !== undefined && address !== null) {
-        if (typeof address !== 'string' || address.length > 500) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid address'
-            });
-        }
     }
 
     // P1 — HOLDİNG AĞACI SCOPE KONTROLÜ (madde 5 — IDOR/BOLA):
