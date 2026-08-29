@@ -1,5 +1,11 @@
 const pool = require("../db/pool");
 
+const {
+  getCompanyAncestryChain,
+  getRootCompanyId,
+  getDescendantCompanyIds
+} = require("./organization-service");
+
 /**
  * ============================================================
  * LICENSE SERVICE
@@ -14,16 +20,48 @@ const pool = require("../db/pool");
  * - Enterprise planında max_users = NULL => sınırsız kullanıcı.
  * - Lisans geçerliliği status + tarih birlikte kontrol edilerek
  *   belirlenir.
- */
-
-/**
- * Aktif ve tarih açısından geçerli şirket lisansını getirir.
+ *
+ * P1 — HOLDİNG AĞACI LİSANS MİRASI:
+ * Lisans her zaman ağacın KÖKÜNE (root — parent_company_id IS NULL
+ * olan en üst ata) bağlıdır ve tüm alt şirketlere miras kalır
+ * (bkz. db/init.sql P0 yorumu). getActiveCompanyLicense(companyId)
+ * artık, companyId hangi düzeyde olursa olsun, önce ağacın kökünü
+ * bulur ve lisansı kökün company_licenses satırından okur.
+ *
+ * GERİYE DÖNÜK UYUMLULUK: parent_company_id NULL olan (P0 öncesi
+ * dahil tüm mevcut) düz şirketler için root === companyId'nin
+ * kendisi olduğundan, bu fonksiyonun sonucu ESKİ davranışla BİREBİR
+ * AYNIDIR — hiçbir mevcut müşteri için sonuç değişmez (P1 kabul
+ * kriteri #13).
+ *
+ * companyId'nin KENDİ status'ü de ayrıca kontrol edilir: bir alt
+ * şirket, kökün lisansı aktif olsa bile kendisi INACTIVE
+ * yapılmışsa erişemez (bkz. admin.js PATCH /companies/:id/status —
+ * bu davranış P0'daki tekil-şirket INACTIVE kuralının holding
+ * ağacına genişletilmiş halidir).
  *
  * @param {string} companyId
  * @param {object} db - pool veya transaction client
  * @returns {Promise<object|null>}
  */
 async function getActiveCompanyLicense(companyId, db = pool) {
+  const chain = await getCompanyAncestryChain(companyId, db);
+
+  if (chain.length === 0) {
+    // Şirket hiç yok.
+    return null;
+  }
+
+  const requestedCompany = chain[0];
+
+  if (requestedCompany.status !== "ACTIVE") {
+    // İstenen şirketin kendisi pasifleştirilmiş — kökün lisansı
+    // aktif olsa bile bu şirket erişemez.
+    return null;
+  }
+
+  const rootCompanyId = chain[chain.length - 1].id;
+
   const result = await db.query(
     `
       SELECT
@@ -50,11 +88,11 @@ async function getActiveCompanyLicense(companyId, db = pool) {
       FROM company_licenses cl
       INNER JOIN plans p
         ON p.id = cl.plan_id
-      -- DÜZELTME: şirket admin panelinden INACTIVE yapıldığında bu
+      -- DÜZELTME (P0): şirket admin panelinden INACTIVE yapıldığında bu
       -- gerçekten erişimi kesmeliydi, sadece bir bayrak olarak kalmamalıydı.
-      -- companies.status = 'ACTIVE' şartı olmadan, pasifleştirilmiş bir
-      -- şirketin kullanıcıları company_licenses satırı hâlâ 'active' ve
-      -- süresi dolmamış olduğu için sisteme erişmeye devam ederdi.
+      -- (P1: artık kökün — lisansın gerçek sahibinin — status'ü kontrol
+      -- ediliyor; istenen alt şirketin kendi status'ü yukarıda ayrıca
+      -- kontrol edildi.)
       INNER JOIN companies c
         ON c.id = cl.company_id
        AND c.status = 'ACTIVE'
@@ -68,7 +106,7 @@ async function getActiveCompanyLicense(companyId, db = pool) {
       ORDER BY cl.starts_at DESC, cl.id DESC
       LIMIT 1
     `,
-    [companyId]
+    [rootCompanyId]
   );
 
   return result.rows[0] || null;
@@ -76,10 +114,13 @@ async function getActiveCompanyLicense(companyId, db = pool) {
 
 
 /**
- * Şirketin mevcut kullanıcı sayısını döndürür.
+ * Tek bir şirketin (ağaç dikkate alınmadan) mevcut kullanıcı
+ * sayısını döndürür. Admin panelindeki şirket detayı gibi salt
+ * GÖRÜNTÜLEME amaçlı yerlerde hâlâ kullanılabilir.
  *
- * user_companies tablosu ilişki tablosu olduğu için
- * COUNT(*) üzerinden hesaplanır.
+ * ENFORCEMENT için değil — enforcement artık ağaç-bazlı ve
+ * yalnızca ACTIVE kullanıcıları sayan getTreeActiveUserCount()
+ * kullanır (bkz. aşağı).
  *
  * @param {string} companyId
  * @param {object} db
@@ -100,7 +141,54 @@ async function getCompanyUserCount(companyId, db = pool) {
 
 
 /**
- * Şirket yeni kullanıcı kabul edebilir mi?
+ * Bir holding AĞACININ (rootCompanyId + tüm alt şirketleri)
+ * toplam ACTIVE kullanıcı sayısını döndürür.
+ *
+ * DÜZELTME (P1): P0'daki getCompanyUserCount status'e bakmadan
+ * user_companies satırlarını sayıyordu — INACTIVE kullanıcılar da
+ * limite dahil oluyordu. P1 kabul kriteri #6 gereği yalnızca
+ * ACTIVE kullanıcılar sayılır; bir kullanıcı INACTIVE yapılırsa
+ * kapasite gerçekten açılır.
+ *
+ * DISTINCT: aynı kullanıcı ağaçtaki birden fazla şirkete atanmış
+ * olsa bile yalnızca BİR kez sayılır (bir kişi iki alt şirkete
+ * bağlıysa iki koltuk harcamaz).
+ *
+ * @param {string} rootCompanyId
+ * @param {object} db
+ * @returns {Promise<number>}
+ */
+async function getTreeActiveUserCount(rootCompanyId, db = pool) {
+  const treeIds = await getDescendantCompanyIds(rootCompanyId, db);
+
+  if (treeIds.length === 0) {
+    return 0;
+  }
+
+  const result = await db.query(
+    `
+      SELECT COUNT(DISTINCT uc.user_id)::INTEGER AS user_count
+      FROM user_companies uc
+      INNER JOIN users u
+        ON u.id = uc.user_id
+      WHERE uc.company_id = ANY($1)
+        AND u.status = 'ACTIVE'
+    `,
+    [treeIds]
+  );
+
+  return result.rows[0]?.user_count || 0;
+}
+
+
+/**
+ * Şirket (ağacı) yeni kullanıcı kabul edebilir mi?
+ *
+ * P1: companyId'nin ait olduğu AĞACIN KÖKÜNE bağlı lisans ve o
+ * ağaçtaki TOPLAM ACTIVE kullanıcı sayısı üzerinden karar verir
+ * (bkz. dosya başı — lisans mirası). parent_company_id NULL olan
+ * (tek başına) şirketler için ağaç = [companyId] olduğundan
+ * davranış P0 ile birebir aynıdır.
  *
  * Enterprise:
  * max_users = NULL => sınırsız
@@ -115,17 +203,22 @@ async function getCompanyUserCount(companyId, db = pool) {
 async function canAddUserToCompany(companyId, db = pool) {
   const license = await getActiveCompanyLicense(companyId, db);
 
+  const rootCompanyId =
+    (license && license.company_id) ||
+    (await getRootCompanyId(companyId, db)) ||
+    companyId;
+
+  const currentUsers = await getTreeActiveUserCount(rootCompanyId, db);
+
   if (!license) {
     return {
       allowed: false,
       reason: "NO_ACTIVE_LICENSE",
       message: "Şirketin geçerli bir lisansı bulunmamaktadır.",
       license: null,
-      currentUsers: await getCompanyUserCount(companyId, db)
+      currentUsers
     };
   }
-
-  const currentUsers = await getCompanyUserCount(companyId, db);
 
   // Enterprise / sınırsız
   if (license.max_users === null) {
@@ -160,7 +253,8 @@ async function canAddUserToCompany(companyId, db = pool) {
 
 
 /**
- * Şirketin mevcut sözleşme (kontrat) sayısını döndürür.
+ * Tek bir şirketin (ağaç dikkate alınmadan) mevcut sözleşme
+ * sayısını döndürür. Enforcement dışı, görüntüleme amaçlı.
  *
  * @param {string} companyId
  * @param {object} db
@@ -181,10 +275,39 @@ async function getCompanyContractCount(companyId, db = pool) {
 
 
 /**
- * Şirket yeni bir sözleşme (kontrat) ekleyebilir mi?
+ * Bir holding AĞACININ toplam sözleşme (kontrat) sayısını
+ * döndürür (P1 kabul kriteri: "ilgili lisansın kapsamındaki
+ * ağaçta toplam sözleşme limiti uygulanır").
  *
- * canAddUserToCompany ile birebir aynı mantık, kullanıcı yerine
- * kontrat sayısı üzerinden çalışır:
+ * @param {string} rootCompanyId
+ * @param {object} db
+ * @returns {Promise<number>}
+ */
+async function getTreeContractCount(rootCompanyId, db = pool) {
+  const treeIds = await getDescendantCompanyIds(rootCompanyId, db);
+
+  if (treeIds.length === 0) {
+    return 0;
+  }
+
+  const result = await db.query(
+    `
+      SELECT COUNT(*)::INTEGER AS contract_count
+      FROM contracts
+      WHERE company_id = ANY($1)
+    `,
+    [treeIds]
+  );
+
+  return result.rows[0]?.contract_count || 0;
+}
+
+
+/**
+ * Şirket (ağacı) yeni bir sözleşme (kontrat) ekleyebilir mi?
+ *
+ * canAddUserToCompany ile birebir aynı mantık, ağaç-bazlı kontrat
+ * sayısı üzerinden çalışır:
  *
  * Enterprise:
  * max_contracts = NULL => sınırsız
@@ -199,17 +322,22 @@ async function getCompanyContractCount(companyId, db = pool) {
 async function canAddContractToCompany(companyId, db = pool) {
   const license = await getActiveCompanyLicense(companyId, db);
 
+  const rootCompanyId =
+    (license && license.company_id) ||
+    (await getRootCompanyId(companyId, db)) ||
+    companyId;
+
+  const currentContracts = await getTreeContractCount(rootCompanyId, db);
+
   if (!license) {
     return {
       allowed: false,
       reason: "NO_ACTIVE_LICENSE",
       message: "Şirketin geçerli bir lisansı bulunmamaktadır.",
       license: null,
-      currentContracts: await getCompanyContractCount(companyId, db)
+      currentContracts
     };
   }
-
-  const currentContracts = await getCompanyContractCount(companyId, db);
 
   // Enterprise / sınırsız
   if (license.max_contracts === null) {
@@ -237,6 +365,102 @@ async function canAddContractToCompany(companyId, db = pool) {
     maxContracts: license.max_contracts,
     remainingContracts: Math.max(
       license.max_contracts - currentContracts,
+      0
+    )
+  };
+}
+
+
+/**
+ * Bir holding ağacı, YENİ bir alt şirket daha kabul edebilir mi?
+ *
+ * parentCompanyId, oluşturulacak yeni şirketin parent_company_id'si
+ * olarak verilecek şirkettir. Ağacın kökü bu parent'tan yukarı
+ * doğru bulunur ve kökün lisansındaki max_companies (ana şirket
+ * DAHİL toplam şirket sayısı) ile ağacın MEVCUT büyüklüğü
+ * karşılaştırılır — yeni şirket henüz eklenmeden yapılan bu
+ * kontrol sayesinde "max_companies=5 → ana+4 alt=OK, 5. alt=RED"
+ * kuralı doğru uygulanır (mevcut boyut zaten 5'e ulaşmışsa yeni
+ * ekleme reddedilir).
+ *
+ * parentCompanyId verilmemişse (yeni, bağımsız bir ANA şirket
+ * oluşturuluyorsa) bu fonksiyon her zaman allowed=true döner —
+ * yeni bağımsız bir ağacın henüz hiçbir lisansı yoktur, dolayısıyla
+ * ağaç büyüklüğü limiti bu aşamada anlamsızdır. (Kimin yeni bağımsız
+ * ana şirket oluşturabileceği — ör. yalnızca ADMIN — bu fonksiyonun
+ * değil, route/authorization katmanının sorumluluğundadır.)
+ *
+ * ÖNEMLİ — RACE CONDITION: çağıran taraf (routes/admin.js), bu
+ * fonksiyonu çağırmadan ÖNCE kök şirket satırını aynı transaction
+ * içinde `FOR UPDATE` ile kilitlemelidir (auth.js/register'daki
+ * lockCompaniesForUserCreation deseniyle aynı) — aksi halde eşzamanlı
+ * iki istek limiti aynı anda "geçti" görüp limiti aşabilir.
+ *
+ * @param {string|null} parentCompanyId
+ * @param {object} db
+ * @returns {Promise<object>}
+ */
+async function canAddCompanyToTree(parentCompanyId, db = pool) {
+  if (!parentCompanyId) {
+    return {
+      allowed: true,
+      reason: "NEW_ROOT",
+      message:
+        "Yeni bağımsız ana şirket oluşturuluyor; ağaç büyüklüğü limiti bu aşamada uygulanmaz."
+    };
+  }
+
+  const rootCompanyId = await getRootCompanyId(parentCompanyId, db);
+
+  if (!rootCompanyId) {
+    return {
+      allowed: false,
+      reason: "PARENT_NOT_FOUND",
+      message: "Üst şirket (parent_company_id) bulunamadı."
+    };
+  }
+
+  const license = await getActiveCompanyLicense(rootCompanyId, db);
+
+  const treeIds = await getDescendantCompanyIds(rootCompanyId, db);
+  const currentCompanies = treeIds.length;
+
+  if (!license) {
+    return {
+      allowed: false,
+      reason: "NO_ACTIVE_LICENSE",
+      message: "Şirket ağacının geçerli bir lisansı bulunmamaktadır.",
+      license: null,
+      currentCompanies
+    };
+  }
+
+  // Enterprise / sınırsız
+  if (license.max_companies === null) {
+    return {
+      allowed: true,
+      reason: "UNLIMITED",
+      message: "Sınırsız şirket sayısına izin veren lisans.",
+      license,
+      currentCompanies,
+      maxCompanies: null,
+      remainingCompanies: null
+    };
+  }
+
+  const allowed = currentCompanies < license.max_companies;
+
+  return {
+    allowed,
+    reason: allowed ? "AVAILABLE" : "LIMIT_REACHED",
+    message: allowed
+      ? "Yeni şirket eklenebilir."
+      : "Holding ağacı şirket limitine ulaşmıştır.",
+    license,
+    currentCompanies,
+    maxCompanies: license.max_companies,
+    remainingCompanies: Math.max(
+      license.max_companies - currentCompanies,
       0
     )
   };
@@ -474,9 +698,12 @@ async function getUserHighestPlan(userId, db = pool) {
 module.exports = {
   getActiveCompanyLicense,
   getCompanyUserCount,
+  getTreeActiveUserCount,
   canAddUserToCompany,
   getCompanyContractCount,
+  getTreeContractCount,
   canAddContractToCompany,
+  canAddCompanyToTree,
   getUserLicenses,
   getUserLicensedCompanies,
   hasActiveCompanyLicense,
