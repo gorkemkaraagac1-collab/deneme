@@ -343,15 +343,65 @@ async updatePlan(planId, data) {
         return { success: false, error: result.error || "Plan güncellenemedi" };
     }
     return { success: true, data: result };
+},
+/*
+ * ========================================================
+ * LICENSE LIMITS (P2 — Custom plan override düzenleme)
+ * ------------------------------------------------------
+ * PATCH /api/admin/licenses/:licenseId/limits
+ * Body: { maxUsersOverride, maxContractsOverride, maxCompaniesOverride }
+ * Her alan: undefined = dokunma, null = override'ı temizle
+ * (plan'ın kendi değerine dön), number = yeni override.
+ * ========================================================
+ */
+async updateLicenseLimits(licenseId, data) {
+    const response =
+        await fetch(
+            `${this.baseURL}/licenses/${encodeURIComponent(licenseId)}/limits`,
+            {
+                method: "PATCH",
+                headers: this.getHeaders(),
+                body: JSON.stringify(data)
+            }
+        );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Lisans limitleri güncellenemedi" };
+    }
+    return { success: true, data: result.license, message: result.message };
 }
 
 };
 
 // ============================================================
 // ADMIN AUTH CHECK
+// ------------------------------------------------------------
+// P2 DÜZELTMESİ: Önceden bu fonksiyon SADECE role === "ADMIN"
+// kabul ediyordu — P1 backend'de requireStaffAccess (users/
+// companies route'ları) ADMIN'in yanı sıra ACCOUNTANT_MANAGER'a
+// da izin verdiği hâlde, frontend bu rolü admin panelinin
+// KAPISINDA reddediyordu. Yani ACCOUNTANT_MANAGER, backend'in
+// zaten yetkili olduğu users.html/companies.html sayfalarına HİÇ
+// giremiyordu.
+//
+// Artık her sayfa, kendisine hangi rollerin izinli olduğunu
+// allowedRoles parametresiyle bildirir (varsayılan: yalnızca
+// ADMIN — Licenses/Plans/Audit/Dashboard/TFRS16-Customers gibi
+// requireAdmin ile korunan sayfalar için mevcut davranış aynen
+// korunur, hiçbir şey değişmez).
+//
+// GÜVENLİK NOTU (mevcut): bu hâlâ yalnızca bir UX/görünürlük
+// katmanıdır. Gerçek yetki sınırı backend'deki requireAdmin/
+// requireStaffAccess'tir — buradaki kontrol sadece yanlış role
+// sahip bir kullanıcıyı, zaten 403 alacağı bir sayfada
+// "Loading..." ekranında sonsuza kadar bekletmemek içindir.
 // ============================================================
 
-async function checkAdminAuth() {
+async function checkAdminAuth(allowedRoles) {
+
+const roles = Array.isArray(allowedRoles) && allowedRoles.length > 0
+    ? allowedRoles
+    : ["ADMIN"];
 
 const token =
     localStorage.getItem(
@@ -402,34 +452,105 @@ try {
      *
      * Öncelik:
      *
-     * result.user
+     * result.data (GET /me gerçek formatı)
      *
      * fallback:
      *
-     * result.data
+     * result.user
      */
     const user =
-        result.user ||
-        result.data;
-    if (
-        !user ||
-        user.role !== "ADMIN"
-    ) {
+        result.data ||
+        result.user;
+
+    if (!user) {
         window.location.href =
-            "../dashboard.html";
+            "../login.html";
         return false;
     }
+
     /*
-     * Header kullanıcı adı
+     * P1-D — MUST CHANGE PASSWORD: kullanıcı normal admin
+     * panelini kullanamadan önce parolasını değiştirmek
+     * zorunda. change-password.html kendisi checkAdminAuth
+     * ÇAĞIRMAZ (aksi halde sonsuz yönlendirme döngüsü olur) —
+     * bkz. o dosyadaki ayrı, hafif auth kontrolü.
+     */
+    if (user.mustChangePassword) {
+        window.location.href =
+            "change-password.html";
+        return false;
+    }
+
+    if (!roles.includes(user.role)) {
+        /*
+         * ACCOUNTANT_MANAGER: kendi erişebildiği bir sayfaya
+         * (Users) yönlendir. Diğer roller (ACCOUNTANT/
+         * CONTROLLER/VIEWER) zaten admin panelinde hiçbir
+         * sayfaya erişemez — müşteri dashboard'una gönderilir.
+         */
+        window.location.href =
+            user.role === "ACCOUNTANT_MANAGER"
+                ? "users.html"
+                : "../dashboard.html";
+        return false;
+    }
+
+    /*
+     * Header kullanıcı adı — Ad + Soyad varsa onu, yoksa
+     * güvenli fallback olarak username'i göster (P0: legacy
+     * kullanıcılarda first_name/last_name NULL olabilir).
      */
     const usernameElement =
         document.getElementById(
             "adminUsername"
         );
     if (usernameElement) {
+        const fullName = [user.firstName, user.lastName]
+            .filter(part => typeof part === "string" && part.trim())
+            .join(" ");
         usernameElement.textContent =
-            user.username || "";
+            fullName || user.username || "";
     }
+
+    /*
+     * Sayfada "Hoş geldiniz, ..." metni göstermek isteyen bir
+     * element varsa (id="adminWelcome") doldur. Yoksa sessizce
+     * atlanır — sayfa yapısını değiştirmeye gerek yok.
+     */
+    const welcomeElement =
+        document.getElementById("adminWelcome");
+    if (welcomeElement) {
+        const fullName = [user.firstName, user.lastName]
+            .filter(part => typeof part === "string" && part.trim())
+            .join(" ");
+        welcomeElement.textContent = fullName
+            ? `Hoş geldiniz, ${fullName}`
+            : "Hoş geldiniz";
+    }
+
+    /*
+     * Rol rozeti — önceden HTML'de sabit "ADMIN" yazıyordu;
+     * artık gerçek role göre dinamik.
+     */
+    const roleBadgeElement =
+        document.querySelector(".role-badge");
+    if (roleBadgeElement) {
+        roleBadgeElement.textContent = user.role || "";
+    }
+
+    /*
+     * P2: ACCOUNTANT_MANAGER, backend'de requireAdmin (ADMIN-only)
+     * ile korunan sayfalara (Licenses/Plans/Audit/Dashboard/
+     * TFRS16 Customers) erişemez — bu linkleri sidebar'dan
+     * gizliyoruz ki tıklayıp 403 ile karşılaşmasın. data-admin-only
+     * attribute'u olan linkler bu kapsamdadır (bkz. sidebar HTML).
+     */
+    if (user.role !== "ADMIN") {
+        document
+            .querySelectorAll("[data-admin-only]")
+            .forEach(el => { el.style.display = "none"; });
+    }
+
     /*
      * Local user cache
      */
@@ -454,6 +575,42 @@ try {
     return false;
 }
 
+}
+
+// ============================================================
+// STANDART BACKEND HATA KODLARI → KULLANICI DOSTU MESAJ
+// ------------------------------------------------------------
+// admin.js'in çeşitli endpoint'leri {error, code} formatında
+// hata döndürür (bkz. routes/admin.js, admin-licenses.js).
+// Önceden frontend her yerde ham result.error metnini
+// gösteriyordu — bu genelde İngilizce/teknik bir cümleydi.
+// Bilinen code'lar için daha anlaşılır bir Türkçe karşılık
+// veriyoruz; bilinmeyen code'larda backend'in kendi error
+// metnine (fallback) düşüyoruz — mesaj UYDURULMUYOR.
+// ============================================================
+
+const ADMIN_ERROR_CODE_MESSAGES = {
+    LICENSE_EXPIRED: "Şirketin aktif lisansı bulunmuyor veya süresi dolmuş.",
+    COMPANY_LICENSE_INACTIVE: "Şirketin aktif lisansı bulunmuyor veya süresi dolmuş.",
+    FORBIDDEN: "Bu işlem için yetkiniz bulunmuyor.",
+    STAFF_ACCESS_REQUIRED: "Bu işlem için ADMIN veya ACCOUNTANT_MANAGER yetkisi gereklidir.",
+    ADMIN_REQUIRED: "Bu işlem için ADMIN yetkisi gereklidir.",
+    ROLE_ASSIGNMENT_FORBIDDEN: "Bu role sahip bir kullanıcı, seçtiğiniz rolü oluşturamaz.",
+    COMPANY_ACCESS_DENIED: "Bu şirkete erişim/işlem yetkiniz bulunmuyor.",
+    PARENT_COMPANY_REQUIRED: "Kendi holding ağacınıza alt şirket eklerken üst şirket (parent) seçmeniz zorunludur.",
+    MUST_CHANGE_PASSWORD: "Devam etmeden önce parolanızı değiştirmeniz gerekiyor.",
+    MAX_USERS_REACHED: "Şirket, lisansının izin verdiği maksimum kullanıcı sayısına ulaşmış.",
+    MAX_CONTRACTS_REACHED: "Şirket, lisansının izin verdiği maksimum sözleşme sayısına ulaşmış.",
+    MAX_COMPANIES_REACHED: "Holding ağacı, lisansının izin verdiği maksimum şirket sayısına ulaşmış.",
+    NO_ACTIVE_LICENSE: "Bu holding ağacının aktif bir lisansı yok."
+};
+
+function describeApiError(result, fallback) {
+    if (!result) return fallback || "Bilinmeyen bir hata oluştu.";
+    if (result.code && ADMIN_ERROR_CODE_MESSAGES[result.code]) {
+        return ADMIN_ERROR_CODE_MESSAGES[result.code];
+    }
+    return result.error || fallback || "Bilinmeyen bir hata oluştu.";
 }
 
 // ============================================================
@@ -720,6 +877,17 @@ function buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId) {
 
     const today = new Date().toISOString().slice(0, 10);
 
+    /*
+     * P2 — CUSTOM PLAN: Custom plan'ın kendi limitleri yoktur
+     * (plans.custom satırı bilinçli olarak NULL/NULL/NULL) — gerçek
+     * limitler bu lisansa özel override alanlarına yazılır (bkz.
+     * db/init.sql P0 yorumu, admin-licenses.js POST .../license).
+     * "Custom" seçildiğinde bu alanları göster; diğer planlarda
+     * (Starter/Professional/Enterprise) gizli kalır — onlarda limit
+     * zaten plandan gelir, override GENELDE gerekmez ama backend
+     * yine de kabul eder (advanced kullanım — burada UI'yı sade
+     * tutmak için sadece Custom'da gösteriyoruz).
+     */
     return `
         <form id="assignLicenseForm" onsubmit="submitAssignLicense(event)">
             <div class="form-group">
@@ -728,7 +896,7 @@ function buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId) {
             </div>
             <div class="form-group">
                 <label>Plan *</label>
-                <select name="plan_id" required>${planOptions}</select>
+                <select name="plan_id" required onchange="onAssignLicensePlanChange(this.value)">${planOptions}</select>
             </div>
             <div class="form-group">
                 <label>Start Date</label>
@@ -739,6 +907,23 @@ function buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId) {
                 <input type="date" name="expires_at">
                 <small style="color:var(--text-light);">Boş bırakılırsa süresiz lisans oluşturulur.</small>
             </div>
+            <div id="assignLicenseCustomLimits" style="display:none; border-top:1px solid var(--border); margin-top:8px; padding-top:8px;">
+                <p style="font-size:13px; color:var(--text-light); margin-bottom:8px;">
+                    Custom plan — limitleri buradan tanımlayın. Boş bırakmak <strong>sınırsız</strong> anlamına gelir.
+                </p>
+                <div class="form-group">
+                    <label>Max Users</label>
+                    <input type="number" name="max_users_override" min="1" step="1" placeholder="sınırsız">
+                </div>
+                <div class="form-group">
+                    <label>Max Contracts</label>
+                    <input type="number" name="max_contracts_override" min="1" step="1" placeholder="sınırsız">
+                </div>
+                <div class="form-group">
+                    <label>Max Companies</label>
+                    <input type="number" name="max_companies_override" min="1" step="1" placeholder="sınırsız">
+                </div>
+            </div>
             <div id="assignLicenseError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -746,6 +931,20 @@ function buildAssignLicenseFormHtml(companies, plans, preselectedCompanyId) {
             </div>
         </form>
     `;
+}
+
+function onAssignLicensePlanChange(planId) {
+    const box = document.getElementById("assignLicenseCustomLimits");
+    if (box) {
+        box.style.display = planId === "custom" ? "block" : "none";
+    }
+}
+
+function parseOptionalPositiveInt(rawValue) {
+    const trimmed = (rawValue || "").trim();
+    if (trimmed === "") return undefined;
+    const parsed = parseInt(trimmed, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 function showAssignLicenseModal(companies, plans, preselectedCompanyId, onSuccess) {
@@ -781,11 +980,25 @@ async function submitAssignLicense(event) {
     errorDiv.style.display = "none";
 
     const companyId = form.company_id.value;
+    const planId = form.plan_id.value;
     const data = {
-        planId: form.plan_id.value,
+        planId,
         startsAt: form.starts_at.value || undefined,
         expiresAt: form.expires_at.value || null
     };
+
+    /*
+     * Custom plan seçiliyse override alanlarını da gönder. Diğer
+     * planlarda bu alanlar formda gizli/etkisiz olduğundan
+     * gönderilmiyor (backend zaten undefined = "dokunma" olarak
+     * yorumluyor, ama Custom dışı bir planda override göndermek
+     * kafa karıştırıcı olur).
+     */
+    if (planId === "custom") {
+        data.maxUsersOverride = parseOptionalPositiveInt(form.max_users_override?.value);
+        data.maxContractsOverride = parseOptionalPositiveInt(form.max_contracts_override?.value);
+        data.maxCompaniesOverride = parseOptionalPositiveInt(form.max_companies_override?.value);
+    }
 
     try {
         const result = await AdminAPI.assignLicense(companyId, data);
@@ -795,7 +1008,7 @@ async function submitAssignLicense(event) {
                 window._onLicenseAssigned();
             }
         } else {
-            errorDiv.textContent = "Hata: " + (result.error || "Bilinmeyen bir hata oluştu.");
+            errorDiv.textContent = "Hata: " + describeApiError(result);
             errorDiv.style.display = "block";
         }
     } catch (error) {
