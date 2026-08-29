@@ -17,7 +17,7 @@
 .login-side{background:var(--paper-2);display:flex;align-items:center;justify-content:center;padding:30px}.login-card{width:min(430px,100%);background:#fff;border:1px solid var(--paper-line);border-radius:16px;padding:34px;box-shadow:0 18px 55px rgba(11,19,38,.12)}
 .login-card h2{font:600 28px var(--display);margin:0 0 7px}.subtitle{font-size:13px;color:var(--ink-soft);margin:0 0 26px}.form-group{margin-bottom:17px}.form-group label{display:block;font-size:12px;font-weight:600;margin-bottom:7px;color:var(--ink)}.form-group input{width:100%;padding:12px 13px;border:1px solid var(--paper-line);border-radius:9px;background:#fff;font:13px var(--body);color:var(--ink)}.form-group input:focus{outline:none;border-color:var(--bronze);box-shadow:0 0 0 3px rgba(176,141,87,.12)}
 .btn-login{width:100%;padding:12px;background:var(--seal);color:#fff;border:0;border-radius:9px;font:600 13px var(--body);cursor:pointer;transition:.15s}.btn-login:hover{background:#752219}.btn-login:disabled{opacity:.6;cursor:not-allowed}
-.error-msg{display:none;background:var(--seal-soft);color:var(--seal);padding:12px;border-radius:9px;margin-bottom:16px;font-size:12px}.footer{text-align:center;margin-top:22px;color:#8B93A8;font:10px var(--mono)}
+.back-home{display:inline-flex;align-items:center;gap:7px;margin-bottom:20px;color:var(--ink-soft);font:500 12px var(--body);text-decoration:none;transition:.15s}.back-home:hover{color:var(--seal);transform:translateX(-2px)}.error-msg{display:none;background:var(--seal-soft);color:var(--seal);padding:12px;border-radius:9px;margin-bottom:16px;font-size:12px}.footer{text-align:center;margin-top:22px;color:#8B93A8;font:10px var(--mono)}
 @media(max-width:820px){body{display:block;background:var(--paper-2)}.brand-side{min-height:220px;padding:30px}.brand-copy{margin-top:30px}.brand-copy h1{font-size:34px}.brand-copy p{display:none}.brand-foot{display:none}.login-side{padding:22px;min-height:calc(100vh - 220px)}.login-card{padding:28px}}
 </style>
 </head>
@@ -29,6 +29,7 @@
 </section>
 <section class="login-side">
 <div class="login-card">
+<a href="../index.html" class="back-home" aria-label="Anasayfaya dön">← Anasayfaya Dön</a>
 <h2>Giriş yapın</h2>
 <p class="subtitle">Finansal Zeka Platformu hesabınızla devam edin.</p>
 <div id="errorMsg" class="error-msg"></div>
