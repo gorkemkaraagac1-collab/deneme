@@ -695,6 +695,44 @@ async function getUserHighestPlan(userId, db = pool) {
 }
 
 
+/**
+ * ============================================================
+ * P5-A — USER / CONTRACT LIMIT CONCURRENCY HELPER
+ * ============================================================
+ *
+ * Tree-level limit kontrollerinden ÖNCE çağrılmalıdır.
+ * Verilen companyId'nin kök şirket satırını FOR UPDATE ile
+ * kilitler. Böylece aynı holding ağacında eşzamanlı
+ * user/contract create istekleri sıraya girer ve
+ * canAddUserToCompany / canAddContractToCompany
+ * aynı snapshot'ı görür (TOCTOU race kapanır).
+ *
+ * companyId yoksa / kök bulunamazsa null döner.
+ * Çağıran taraf transaction içinde olmalıdır.
+ *
+ * @param {string} companyId
+ * @param {object} db - transaction client
+ * @returns {Promise<string|null>} rootCompanyId
+ */
+async function lockRootCompanyForLimit(companyId, db) {
+  if (!companyId) {
+    return null;
+  }
+
+  const rootCompanyId = await getRootCompanyId(companyId, db);
+
+  if (!rootCompanyId) {
+    return null;
+  }
+
+  await db.query(
+    `SELECT id FROM companies WHERE id = $1 FOR UPDATE`,
+    [rootCompanyId]
+  );
+
+  return rootCompanyId;
+}
+
 module.exports = {
   getActiveCompanyLicense,
   getCompanyUserCount,
@@ -708,5 +746,7 @@ module.exports = {
   getUserLicensedCompanies,
   hasActiveCompanyLicense,
   hasPlanAccess,
-  getUserHighestPlan
+  getUserHighestPlan,
+  lockRootCompanyForLimit
 };
+
