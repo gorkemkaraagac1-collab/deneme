@@ -4,9 +4,22 @@ const crypto = require('crypto');
 
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/admin');
+const { requireAdmin, requireStaffAccess } = require('../middleware/admin');
 const { createRateLimiter } = require('../middleware/rate-limit');
-const { canAddUserToCompany } = require('../services/license-service');
+const { canAddUserToCompany, canAddCompanyToTree } = require('../services/license-service');
+const {
+    isCompanyInScope,
+    canAssignRole,
+    ALL_ROLES
+} = require('../services/organization-service');
+
+// P1: admin panelinden atanabilir roller. ADMIN/ACCOUNTANT_MANAGER
+// dışındakiler (ACCOUNTANT, CONTROLLER) P0'da yalnızca DB/servis
+// katmanında hazırlanmıştı; P1 ile birlikte admin panelinden de
+// atanabilir hale geliyorlar. Kimin HANGİ rolü atayabileceği ayrıca
+// canAssignRole() ile kontrol edilir (P1 madde 4 — rol yaratma
+// matrisi).
+const ASSIGNABLE_ROLES = ALL_ROLES; // ['ADMIN','ACCOUNTANT_MANAGER','ACCOUNTANT','CONTROLLER','VIEWER']
 
 // ============================================================
 // ADMIN ROUTES
@@ -56,7 +69,7 @@ function rejectUnknownFields(body, allowedKeys) {
 // üzerinde, case-insensitive, kısmi eşleşme) ve ?limit=/?offset= eklendi.
 // Geriye dönük uyumluluk için parametreler opsiyoneldir; hiçbiri
 // verilmezse önceki davranışla aynı şekilde (limit=50) tüm liste döner.
-router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+router.get('/users', requireStaffAccess, async (req, res) => {
     const { search, limit = 50, offset = 0 } = req.query;
 
     const parsedLimit = Number.parseInt(limit, 10);
@@ -78,14 +91,40 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 
     const searchTerm = typeof search === 'string' ? search.trim() : '';
 
+    // P1: ACCOUNTANT_MANAGER yalnızca kendi holding ağacındaki
+    // şirketlere bağlı kullanıcıları görebilir (requireStaffAccess
+    // req.accessScope'u zaten hesapladı). ADMIN için isGlobalAdmin=true
+    // olduğundan bu filtre uygulanmaz — mevcut (kısıtlamasız) davranış
+    // korunur.
+    const scope = req.accessScope;
+
     try {
-        const whereClause = searchTerm
-            ? `WHERE u.username ILIKE $3`
+        const conditions = [];
+        const params = [];
+
+        if (searchTerm) {
+            params.push(`%${searchTerm}%`);
+            conditions.push(`u.username ILIKE $${params.length}`);
+        }
+
+        if (!scope.isGlobalAdmin) {
+            params.push(scope.allowedCompanyIds);
+            conditions.push(
+                `EXISTS (
+                    SELECT 1 FROM user_companies uc_scope
+                    WHERE uc_scope.user_id = u.id
+                      AND uc_scope.company_id = ANY($${params.length})
+                )`
+            );
+        }
+
+        const whereClause = conditions.length > 0
+            ? `WHERE ${conditions.join(' AND ')}`
             : '';
 
-        const params = searchTerm
-            ? [parsedLimit, parsedOffset, `%${searchTerm}%`]
-            : [parsedLimit, parsedOffset];
+        const listParams = [...params, parsedLimit, parsedOffset];
+        const limitPlaceholder = `$${listParams.length - 1}`;
+        const offsetPlaceholder = `$${listParams.length}`;
 
         const result = await pool.query(`
             SELECT
@@ -116,14 +155,12 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
             ${whereClause}
             GROUP BY u.id
             ORDER BY u.created_at DESC
-            LIMIT $1 OFFSET $2
-        `, params);
+            LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
+        `, listParams);
 
         const countResult = await pool.query(
-            searchTerm
-                ? `SELECT COUNT(*) AS count FROM users u WHERE u.username ILIKE $1`
-                : `SELECT COUNT(*) AS count FROM users u`,
-            searchTerm ? [`%${searchTerm}%`] : []
+            `SELECT COUNT(*) AS count FROM users u ${whereClause}`,
+            params
         );
 
         return res.json({
@@ -151,7 +188,7 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/admin/users
 // ============================================================
 
-router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+router.post('/users', requireStaffAccess, adminMutationRateLimiter, async (req, res) => {
     const unknownErr = rejectUnknownFields(req.body, [
         'username', 'password', 'role', 'status', 'company_ids',
         'email', 'first_name', 'last_name'
@@ -257,12 +294,11 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
         });
     }
 
-    // P0: ACCOUNTANT_MANAGER eklendi. Bu rolün gerçek yetki
-    // kapsamı (kendi holding ağacını yönetme, alt şirket oluşturma)
-    // henüz uygulanmıyor — JWT/erişim ağacı enforcement'ı P1/P3
-    // kapsamındadır (bkz. middleware/admin.js tasarım notu). Burada
-    // sadece rolün admin panelinden atanabilir olması sağlanıyor.
-    if (role !== undefined && !['ADMIN', 'ACCOUNTANT_MANAGER', 'VIEWER'].includes(role)) {
+    // P1: ACCOUNTANT_MANAGER eklendi ve gerçek yetki kapsamı artık
+    // uygulanıyor — bkz. aşağıdaki canAssignRole() kontrolü (P1
+    // madde 4: ACCOUNTANT_MANAGER yalnızca ACCOUNTANT/CONTROLLER/
+    // VIEWER oluşturabilir; ADMIN veya ACCOUNTANT_MANAGER OLUŞTURAMAZ).
+    if (role !== undefined && !ASSIGNABLE_ROLES.includes(role)) {
         return res.status(400).json({
             success: false,
             error: 'Invalid role'
@@ -281,6 +317,45 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
             success: false,
             error: 'company_ids must be an array'
         });
+    }
+
+    // --------------------------------------------------------
+    // P1 — ROL YARATMA MATRİSİ (madde 4)
+    // --------------------------------------------------------
+    // Bu kontrol SERVER-SIDE zorunludur — yalnızca UI'da gizlemek
+    // yeterli değildir (onaylı plan madde 4). ADMIN her rolü
+    // oluşturabilir; ACCOUNTANT_MANAGER yalnızca ACCOUNTANT/
+    // CONTROLLER/VIEWER oluşturabilir.
+    const requestedRole = role || 'VIEWER';
+
+    if (!canAssignRole(req.user.role, requestedRole)) {
+        return res.status(403).json({
+            success: false,
+            error: `${req.user.role} rolündeki bir kullanıcı ${requestedRole} rolünde kullanıcı oluşturamaz`,
+            code: 'ROLE_ASSIGNMENT_FORBIDDEN'
+        });
+    }
+
+    // --------------------------------------------------------
+    // P1 — HOLDİNG AĞACI SCOPE KONTROLÜ (madde 5 — IDOR/BOLA)
+    // --------------------------------------------------------
+    // ACCOUNTANT_MANAGER yalnızca KENDİ erişim kapsamındaki (kendi
+    // holding alt ağacındaki) şirketlere kullanıcı ekleyebilir.
+    // ADMIN için req.accessScope.isGlobalAdmin=true olduğundan bu
+    // kontrol atlanır (mevcut davranış korunur).
+    if (!req.accessScope.isGlobalAdmin && Array.isArray(company_ids)) {
+        const outOfScopeIds = company_ids
+            .map(String)
+            .filter(id => !isCompanyInScope(id, req.accessScope));
+
+        if (outOfScopeIds.length > 0) {
+            return res.status(403).json({
+                success: false,
+                error: 'Bu şirketlerden birine kullanıcı ekleme yetkiniz bulunmamaktadır.',
+                code: 'COMPANY_ACCESS_DENIED',
+                companyIds: outOfScopeIds
+            });
+        }
     }
 
     const bcrypt = require('bcryptjs');
@@ -388,7 +463,7 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
 
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        const userRole = role || 'VIEWER';
+        const userRole = requestedRole;
         const userStatus = status || 'ACTIVE';
         const newUserId = generateEntityId('USER');
 
@@ -529,7 +604,7 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
 // PATCH /api/admin/users/:id
 // ============================================================
 
-router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (req, res) => {
     const userId = String(req.params.id || '').trim();
     const requestingUserId = String(req.user.id);
 
@@ -601,11 +676,14 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
         });
     }
 
-    // P0: ACCOUNTANT_MANAGER eklendi (bkz. POST /users'taki aynı not —
-    // yetki kapsamı henüz uygulanmıyor, sadece atanabilir hale geldi).
+    // P1: ACCOUNTANT_MANAGER eklendi ve gerçek yetki kapsamı artık
+    // uygulanıyor (bkz. POST /users'taki aynı not — canAssignRole()
+    // kontrolü aşağıda, mevcut kullanıcının bulunmasından SONRA
+    // yapılır çünkü hem hedef kullanıcının MEVCUT rolü hem de
+    // atanacak YENİ rol matrise tabidir).
     if (
         role !== undefined &&
-        !['ADMIN', 'ACCOUNTANT_MANAGER', 'VIEWER'].includes(role)
+        !ASSIGNABLE_ROLES.includes(role)
     ) {
         return res.status(400).json({
             success: false,
@@ -706,6 +784,80 @@ router.patch('/users/:id', requireAuth, requireAdmin, adminMutationRateLimiter, 
             currentCompaniesResult.rows.map(
                 row => String(row.company_id)
             );
+
+        // ----------------------------------------------------
+        // P1 — HOLDİNG AĞACI SCOPE + ROL MATRİSİ KONTROLÜ
+        // ----------------------------------------------------
+        // ADMIN için req.accessScope.isGlobalAdmin=true olduğundan
+        // bu blok tamamen atlanır (mevcut davranış korunur).
+        if (!req.accessScope.isGlobalAdmin) {
+
+            // (a) Hedef kullanıcının MEVCUT rolü, aktörün
+            // yönetebileceği roller arasında değilse (ör. hedef
+            // zaten ADMIN veya başka bir ACCOUNTANT_MANAGER ise)
+            // ACCOUNTANT_MANAGER bu kullanıcıya HİÇBİR alanda
+            // dokunamaz — lateral privilege / tamper koruması
+            // (madde 5).
+            if (!canAssignRole(req.user.role, currentUser.role)) {
+                await client.query('ROLLBACK');
+
+                return res.status(403).json({
+                    success: false,
+                    error: 'Bu kullanıcıyı düzenleme yetkiniz bulunmamaktadır.',
+                    code: 'ROLE_ASSIGNMENT_FORBIDDEN'
+                });
+            }
+
+            // (b) Hedef kullanıcının MEVCUT şirketlerinden hiçbiri
+            // aktörün erişim kapsamında değilse (başka bir holding/
+            // ağaçtaki bir kullanıcı) — kullanıcı bulunamadı gibi
+            // davranılır (404), var olduğu bile sızdırılmaz.
+            const targetInScope =
+                currentCompanyIds.length === 0 ||
+                currentCompanyIds.some(id => isCompanyInScope(id, req.accessScope));
+
+            if (!targetInScope) {
+                await client.query('ROLLBACK');
+
+                return res.status(404).json({
+                    success: false,
+                    error: 'User not found'
+                });
+            }
+
+            // (c) Yeni bir rol atanmak isteniyorsa, o rol de matrise
+            // uygun olmalı.
+            if (role !== undefined && !canAssignRole(req.user.role, role)) {
+                await client.query('ROLLBACK');
+
+                return res.status(403).json({
+                    success: false,
+                    error: `${req.user.role} rolündeki bir kullanıcı ${role} rolünü atayamaz`,
+                    code: 'ROLE_ASSIGNMENT_FORBIDDEN'
+                });
+            }
+
+            // (d) company_ids güncelleniyorsa, YENİ listedeki tüm
+            // şirketler de aktörün erişim kapsamında olmalı — başka
+            // bir holdinge kullanıcı "taşınamaz".
+            if (company_ids !== undefined) {
+                const requestedIds = company_ids.map(String);
+                const outOfScopeIds = requestedIds.filter(
+                    id => !isCompanyInScope(id, req.accessScope)
+                );
+
+                if (outOfScopeIds.length > 0) {
+                    await client.query('ROLLBACK');
+
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Bu şirketlerden birine kullanıcı ekleme yetkiniz bulunmamaktadır.',
+                        code: 'COMPANY_ACCESS_DENIED',
+                        companyIds: outOfScopeIds
+                    });
+                }
+            }
+        }
 
         // ----------------------------------------------------
         // Normalize requested companies
@@ -1200,7 +1352,7 @@ router.patch('/users/:id/password', requireAuth, requireAdmin, adminMutationRate
 // "TFRS16 Customers" kutusunun drill-down eksikliğini gidermek için her
 // satıra aktif TFRS16 kontrat sayısı eklendi (tam detay için bkz.
 // GET /companies/:id ve GET /tfrs16/customers).
-router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
+router.get('/companies', requireStaffAccess, async (req, res) => {
     const { search, limit = 50, offset = 0 } = req.query;
 
     const parsedLimit = Number.parseInt(limit, 10);
@@ -1221,16 +1373,33 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
     }
 
     const searchTerm = typeof search === 'string' ? search.trim() : '';
+    const scope = req.accessScope;
 
     try {
 
-        const whereClause = searchTerm
-            ? `WHERE c.name ILIKE $3 OR c.code ILIKE $3`
+        const conditions = [];
+        const params = [];
+
+        if (searchTerm) {
+            params.push(`%${searchTerm}%`);
+            conditions.push(`(c.name ILIKE $${params.length} OR c.code ILIKE $${params.length})`);
+        }
+
+        // P1: ACCOUNTANT_MANAGER yalnızca kendi holding alt ağacındaki
+        // şirketleri görebilir (madde 1/2). ADMIN için isGlobalAdmin=true
+        // olduğundan bu filtre uygulanmaz.
+        if (!scope.isGlobalAdmin) {
+            params.push(scope.allowedCompanyIds);
+            conditions.push(`c.id = ANY($${params.length})`);
+        }
+
+        const whereClause = conditions.length > 0
+            ? `WHERE ${conditions.join(' AND ')}`
             : '';
 
-        const params = searchTerm
-            ? [parsedLimit, parsedOffset, `%${searchTerm}%`]
-            : [parsedLimit, parsedOffset];
+        const listParams = [...params, parsedLimit, parsedOffset];
+        const limitPlaceholder = `$${listParams.length - 1}`;
+        const offsetPlaceholder = `$${listParams.length}`;
 
         const result = await pool.query(`
             SELECT
@@ -1279,14 +1448,12 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
             GROUP BY c.id
 
             ORDER BY c.created_at DESC
-            LIMIT $1 OFFSET $2
-        `, params);
+            LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
+        `, listParams);
 
         const countResult = await pool.query(
-            searchTerm
-                ? `SELECT COUNT(*) AS count FROM companies c WHERE c.name ILIKE $1 OR c.code ILIKE $1`
-                : `SELECT COUNT(*) AS count FROM companies c`,
-            searchTerm ? [`%${searchTerm}%`] : []
+            `SELECT COUNT(*) AS count FROM companies c ${whereClause}`,
+            params
         );
 
         return res.json({
@@ -1318,7 +1485,7 @@ router.get('/companies', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/admin/companies
 // ============================================================
 
-router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (req, res) => {
 
     const unknownErr = rejectUnknownFields(req.body, [
         'name', 'code', 'tax_number', 'address', 'phone', 'email', 'parent_company_id'
@@ -1343,13 +1510,13 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
     const name = typeof rawName === 'string' ? rawName.trim() : '';
     const code = typeof rawCode === 'string' ? rawCode.trim() : '';
 
-    // P0 — HOLDİNG HİYERARŞİSİ: parent_company_id opsiyonel.
+    // P0/P1 — HOLDİNG HİYERARŞİSİ: parent_company_id opsiyonel.
     // Belirtilmezse/null ise şirket bir ANA şirkettir (mevcut düz
     // şirket davranışı — plan madde 4, Senaryo A: "Hiyerarşi zorunlu
     // değildir. parent yoksa sistem tek şirket gibi çalışır").
-    // Ağaç büyüklüğü/limit (max_companies) enforcement'ı BURADA
-    // YAPILMIYOR — P1/P3 kapsamı (bkz. onaylı not: "P1'de yapılacak
-    // enforcement/counting mantığını bu aşamada kapsam dışı bırak").
+    // Ağaç büyüklüğü/limit (max_companies) enforcement'ı P1 ile
+    // birlikte aşağıda (transaction içinde, parent satırı kilitlenerek)
+    // uygulanıyor — bkz. canAddCompanyToTree çağrısı.
     const parentCompanyId =
         rawParentCompanyId === undefined || rawParentCompanyId === null || rawParentCompanyId === ''
             ? null
@@ -1410,6 +1577,39 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
         }
     }
 
+    // P1 — HOLDİNG AĞACI SCOPE KONTROLÜ (madde 5 — IDOR/BOLA):
+    // "ACCOUNTANT_MANAGER: POST /companies ile başka bir holdingin
+    // şirketini parent gösterememeli." ADMIN için isGlobalAdmin=true
+    // olduğundan bu blok atlanır (mevcut davranış korunur — ADMIN
+    // istediği parent'ı (veya hiç parent'sız yeni bir ana şirket)
+    // gösterebilir).
+    //
+    // TASARIM KARARI: ACCOUNTANT_MANAGER için parent_company_id
+    // ZORUNLUDUR ve kendi erişim kapsamı (kendi holding alt ağacı)
+    // içinde olmalıdır. Yeni, BAĞIMSIZ bir ana şirket (parent=null,
+    // yani yeni bir tenant/holding yaratmak) platform seviyesinde bir
+    // işlemdir ve yalnızca ADMIN yapabilir — bir ACCOUNTANT_MANAGER'ın
+    // işi kendi ağacına alt şirket eklemektir, yeni bir holding
+    // kurmak değildir.
+    if (!req.accessScope.isGlobalAdmin) {
+
+        if (parentCompanyId === null) {
+            return res.status(403).json({
+                success: false,
+                error: 'ACCOUNTANT_MANAGER yalnızca kendi holding ağacına alt şirket ekleyebilir; parent_company_id zorunludur.',
+                code: 'PARENT_COMPANY_REQUIRED'
+            });
+        }
+
+        if (!isCompanyInScope(parentCompanyId, req.accessScope)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Bu şirketi üst şirket (parent) olarak gösterme yetkiniz bulunmamaktadır.',
+                code: 'COMPANY_ACCESS_DENIED'
+            });
+        }
+    }
+
     const client = await pool.connect();
 
     try {
@@ -1435,15 +1635,19 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
         }
 
         // P0: parent_company_id belirtilmişse gerçekten var olan bir
-        // şirketi göstermeli. FOR UPDATE gerekmiyor — burada sadece
-        // referans bütünlüğü kontrol ediliyor, parent şirketin kendi
-        // satırı değiştirilmiyor (max_companies sayımı P1/P3'te, o
-        // zaman kilitlenecek).
+        // şirketi göstermeli.
+        //
+        // P1: artık ayrıca — FOR UPDATE ile kilitlenir (aşağıdaki
+        // max_companies sayımı ile aynı transaction içinde race
+        // condition'ı önlemek için — bkz. license-service.js
+        // canAddCompanyToTree dosya başı notu) ve ağacın KÖKÜNE göre
+        // max_companies limiti kontrol edilir.
         if (parentCompanyId !== null) {
             const parentCheck = await client.query(
                 `SELECT id
                  FROM companies
-                 WHERE id = $1`,
+                 WHERE id = $1
+                 FOR UPDATE`,
                 [parentCompanyId]
             );
 
@@ -1453,6 +1657,23 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
                 return res.status(400).json({
                     success: false,
                     error: 'parent_company_id references a company that does not exist'
+                });
+            }
+
+            // P1-C — max_companies enforcement (ana şirket dahil
+            // toplam şirket sayısı ağacın kökündeki lisansa göre
+            // kontrol edilir).
+            const capacity = await canAddCompanyToTree(parentCompanyId, client);
+
+            if (!capacity.allowed) {
+                await client.query('ROLLBACK');
+
+                return res.status(capacity.reason === 'NO_ACTIVE_LICENSE' ? 403 : 409).json({
+                    success: false,
+                    error: capacity.message,
+                    code: capacity.reason,
+                    currentCompanies: capacity.currentCompanies,
+                    maxCompanies: capacity.maxCompanies
                 });
             }
         }
@@ -1555,7 +1776,7 @@ router.post('/companies', requireAuth, requireAdmin, adminMutationRateLimiter, a
 // GET /api/admin/companies/:id
 // ============================================================
 
-router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
+router.get('/companies/:id', requireStaffAccess, async (req, res) => {
 
     const companyId = String(req.params.id || '').trim();
 
@@ -1563,6 +1784,16 @@ router.get('/companies/:id', requireAuth, requireAdmin, async (req, res) => {
         return res.status(400).json({
             success: false,
             error: 'Invalid company ID'
+        });
+    }
+
+    // P1: ACCOUNTANT_MANAGER yalnızca kendi holding alt ağacındaki
+    // bir şirketin detayını görebilir. Kapsam dışı bir id için "var
+    // olduğu" bile sızdırılmaz — 404 döner (madde 5 — IDOR/BOLA).
+    if (!isCompanyInScope(companyId, req.accessScope)) {
+        return res.status(404).json({
+            success: false,
+            error: 'Company not found'
         });
     }
 
