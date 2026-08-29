@@ -1,4 +1,10 @@
 /**
+ * @jest-environment node
+ *
+ * bkz. test/license-security.test.js başındaki aynı not — bu dosya
+ * da app.js (dolayısıyla admin.js) yüklüyor, jsdom'un
+ * setInterval(...).unref() eksikliğiyle çöküyordu. Test-only
+ * override, üretim kodu etkilenmiyor.
  * ============================================================
  * INFLATION INDICES ROUTE TESTS
  * ============================================================

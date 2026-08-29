@@ -1,4 +1,10 @@
 /**
+ * @jest-environment node
+ *
+ * bkz. test/license-security.test.js başındaki aynı not — bu dosya
+ * da app.js (dolayısıyla admin.js) yüklüyor, jsdom'un
+ * setInterval(...).unref() eksikliğiyle çöküyordu. Test-only
+ * override, üretim kodu etkilenmiyor.
  * ============================================================
  * SECURITY HARDENING TESTS
  * ============================================================
@@ -77,8 +83,14 @@ describe("Audit trail — actor spoofing engellenir", () => {
 
   test("POST /api/audit — body.actor gönderilse bile INSERT'e her zaman JWT'deki kullanıcı adı yazılır", async () => {
     poolQueryMock.mockImplementation((sql, params) => {
-      if (sql.includes("SELECT 1 FROM contracts")) {
-        return Promise.resolve({ rows: [{ "?column?": 1 }] });
+      // P3 DÜZELTMESİ (test regresyonu — kod DEĞİL): audit.js artık
+      // sahiplik kontrolünü accessScope üzerinden yapmak için
+      // kontratın company_id'sini ÇEKİYOR ("SELECT company_id FROM
+      // contracts WHERE id = $1"), eskisi gibi "SELECT 1 ... AND
+      // company_id = ANY($2)" ile boolean dönmüyor — bkz.
+      // license-security.test.js'teki aynı düzeltme notu.
+      if (sql.includes("SELECT company_id FROM contracts")) {
+        return Promise.resolve({ rows: [{ company_id: CONTRACT_A.company_id }] });
       }
       if (sql.includes("INSERT INTO audit_events")) {
         // actor, INSERT parametre listesinde 2. sırada
