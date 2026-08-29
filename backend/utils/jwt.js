@@ -24,27 +24,6 @@ if (!SECRET) {
  * Bir kullanıcı için imzalı JWT üretir. Token'a yalnızca yetkilendirme
  * için gereken minimum bilgi konur — parola hash'i asla token'a
  * girmez.
- *
- * P1-A: JWT'ye organizasyon/holding ağacının TAMAMI gömülmez (bkz.
- * services/organization-service.js — ağaç erişimi ihtiyaç anında
- * DB'den hesaplanır). Token'da yalnızca minimum gerekli context
- * tutulur: userId, role, companyIds (kullanıcının DOĞRUDAN bağlı
- * olduğu şirket(ler) — ACCOUNTANT_MANAGER için "primary company
- * context", ağaç bu id(ler)den yukarı ÇIKILMADAN aşağı doğru
- * hesaplanır) ve mustChangePassword (P1-D — normal uygulama
- * erişimini DB'ye her istekte gitmeden engelleyebilmek için token'a
- * konan tek ek, küçük bir bayrak).
- *
- * STALE TOKEN NOTU: mustChangePassword token'a login/parola
- * değişikliği ANINDA yazılan bir STOKTUR — sonradan (ör. admin bir
- * kullanıcının parolasını sıfırlayıp must_change_password'ü tekrar
- * TRUE yaparsa) DB'deki değer değişse bile, o kullanıcının o anda
- * elindeki ESKİ token süresi dolana kadar (JWT_EXPIRES_IN, varsayılan
- * 8s) eski (stale) bayrağı taşımaya devam eder. Bu, kısa token
- * ömrüyle sınırlı, bilinçli bir tasarım tercihidir (token
- * iptali/blacklist altyapısı bu projede yok); admin tarafından
- * parola sıfırlanan bir kullanıcı için ekstra güvence isteniyorsa
- * (ör. oturumu anında sonlandırma) bu P1 kapsamının dışındadır.
  * @param {{id:string, username:string, role:string, companyIds:string[], mustChangePassword?:boolean}} user
  * @returns {string}
  */
@@ -55,6 +34,21 @@ function signUserToken(user) {
       username: user.username,
       role: user.role,
       companyIds: user.companyIds || [],
+      // P4 KRİTİK DÜZELTME: bu alan önceden burada HİÇ
+      // yazılmıyordu — routes/auth.js (login ve change-password)
+      // signUserToken()'ı her zaman { ..., mustChangePassword }
+      // ile çağırıyordu ve bunun token'a gireceğini varsayıyordu
+      // (bkz. o dosyadaki P1-D yorumu), ama bu fonksiyon yalnızca
+      // sub/username/role/companyIds'i payload'a koyuyordu — değer
+      // SESSİZCE DÜŞÜYORDU. Sonuç: middleware/auth.js'teki
+      // requireAuth, jwt.verify()'dan dönen payload.mustChangePassword'ü
+      // her zaman undefined (Boolean(undefined)=false) olarak
+      // okuyordu — yani must_change_password=TRUE ile oluşturulan
+      // HİÇBİR kullanıcı gerçekte parola değiştirmeye ASLA
+      // zorlanamıyordu; P1-D'den beri (P1/P2/P3 boyunca) bu güvenlik
+      // kapısı FİİLEN ÇALIŞMIYORDU. Bu, P4'te npm test çalıştırılıp
+      // gerçek bir uçtan-uca mustChangePassword testi yazılırken
+      // ortaya çıktı (bkz. P4 Kod Raporu madde 8 — CRITICAL).
       mustChangePassword: Boolean(user.mustChangePassword)
     },
     SECRET,
