@@ -258,7 +258,8 @@ router.post(
         startDate,
         endDate,
         discountRate,
-        currency
+        currency,
+        details
       } = req.body;
 
 
@@ -348,7 +349,8 @@ router.post(
             start_date,
             end_date,
             discount_rate,
-            currency
+            currency,
+            details
           )
           VALUES (
             $1,
@@ -359,7 +361,8 @@ router.post(
             $6,
             $7,
             $8,
-            $9
+            $9,
+            $10
           )
           RETURNING *
         `,
@@ -372,7 +375,8 @@ router.post(
           startDate,
           endDate,
           discountRate || 0,
-          currency || "TRY"
+          currency || "TRY",
+          JSON.stringify(details && typeof details === "object" ? details : {})
         ]
       );
 
@@ -439,7 +443,8 @@ router.put(
         discountRate,
         currency,
         status,
-        companyId
+        companyId,
+        details
       } = req.body;
 
 
@@ -582,9 +587,10 @@ router.put(
             discount_rate = COALESCE($6, discount_rate),
             currency = COALESCE($7, currency),
             status = COALESCE($8, status),
+            details = COALESCE($9, details),
             updated_at = NOW()
-          WHERE id = $9
-            AND company_id = $10
+          WHERE id = $10
+            AND company_id = $11
           RETURNING *
         `,
         [
@@ -596,6 +602,17 @@ router.put(
           discountRate,
           currency,
           status,
+          /**
+           * DÜZELTME (birlikte): details client tarafından
+           * gönderilmediyse (undefined) mevcut satırdaki değeri
+           * KORUYORUZ (COALESCE ile null geçip eski değeri bırakıyoruz).
+           * pg, JS 'undefined' parametresini kabul etmediği için
+           * null'a çeviriyoruz — COALESCE($9, details) null'ı da
+           * "değiştirme" olarak yorumlar.
+           */
+          details !== undefined && details !== null
+            ? JSON.stringify(details)
+            : null,
           req.params.id,
           contractCompanyId
         ]
