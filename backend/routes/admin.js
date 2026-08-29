@@ -2056,6 +2056,20 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
 
     try {
 
+        /**
+         * DÜZELTME (P2 — kabul kriteri #12: "Lisans detayında efektif
+         * limitler gösteriliyor"): Bu sorgu önceden yalnızca p.max_users
+         * (planın HAM değeri) dönüyordu — cl.max_users_override /
+         * max_contracts_override / max_companies_override hiç
+         * seçilmiyordu. Sonuç: Custom bir lisansa override ile özel bir
+         * limit atansa bile (örn. max_users_override=10), bu endpoint
+         * hâlâ planın kendi (genelde NULL/sınırsız) değerini
+         * döndürüyordu — frontend'in efektif limiti doğru göstermesi
+         * MÜMKÜN DEĞİLDİ (kaynak veri eksikti). Artık hem plan
+         * değerleri hem override'lar hem de COALESCE(override, plan)
+         * ile hesaplanmış efektif değerler dönüyor; hangisinin
+         * kullanılacağına frontend karar verir.
+         */
         const result = await pool.query(`
             SELECT
                 cl.id,
@@ -2065,6 +2079,14 @@ router.get('/licenses', requireAuth, requireAdmin, async (req, res) => {
                 cl.plan_id,
                 p.name AS plan_name,
                 p.max_users,
+                p.max_contracts,
+                p.max_companies,
+                cl.max_users_override,
+                cl.max_contracts_override,
+                cl.max_companies_override,
+                COALESCE(cl.max_users_override, p.max_users) AS effective_max_users,
+                COALESCE(cl.max_contracts_override, p.max_contracts) AS effective_max_contracts,
+                COALESCE(cl.max_companies_override, p.max_companies) AS effective_max_companies,
                 cl.status,
                 cl.starts_at,
                 cl.expires_at,
@@ -2138,6 +2160,8 @@ router.get('/licenses/expiring', requireAuth, requireAdmin, async (req, res) => 
                 cl.plan_id,
                 p.name AS plan_name,
                 p.max_users,
+                cl.max_users_override,
+                COALESCE(cl.max_users_override, p.max_users) AS effective_max_users,
                 cl.status,
                 cl.starts_at,
                 cl.expires_at,
