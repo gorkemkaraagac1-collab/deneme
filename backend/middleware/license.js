@@ -3,6 +3,11 @@ const {
   getActiveCompanyLicense
 } = require("../services/license-service");
 
+const {
+  resolveAccessScope,
+  isCompanyInScope
+} = require("../services/organization-service");
+
 
 /**
  * ============================================================
@@ -454,19 +459,20 @@ async function requireCompanyLicense(
       String(companyId);
 
 
-    const userCompanyIds =
-      Array.isArray(req.user.companyIds)
-        ? req.user.companyIds.map(String)
-        : [];
+    /**
+     * P1: erişim artık yalnızca req.user.companyIds (kullanıcının
+     * DOĞRUDAN bağlı olduğu şirketler) ile değil, role'e göre
+     * hesaplanan erişim kapsamı ile kontrol edilir — ADMIN için
+     * global, ACCOUNTANT_MANAGER için kendi holding alt ağacı,
+     * diğer roller için ESKİ davranışla (req.user.companyIds)
+     * BİREBİR AYNI (bkz. organization-service.js: resolveAccessScope).
+     */
+    const accessScope =
+      req.accessScope ||
+      await resolveAccessScope(req.user);
 
 
-    const hasCompanyAccess =
-      userCompanyIds.includes(
-        normalizedCompanyId
-      );
-
-
-    if (!hasCompanyAccess) {
+    if (!isCompanyInScope(normalizedCompanyId, accessScope)) {
 
       return res.status(403).json({
 
