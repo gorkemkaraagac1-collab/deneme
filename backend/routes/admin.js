@@ -467,6 +467,9 @@ router.post('/users', requireAuth, requireAdmin, adminMutationRateLimiter, async
                     username,
                     role: userRole,
                     status: userStatus,
+                    email: email || null,
+                    first_name: firstName || null,
+                    last_name: lastName || null,
                     company_ids: uniqueCompanyIds
                 })
             ]

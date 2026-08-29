@@ -1002,6 +1002,241 @@ router.post(
 
 /**
  * ============================================================
+ * 4B. LİSANS LİMİTLERİNİ GÜNCELLE (CUSTOM OVERRIDE) — P0
+ * ============================================================
+ *
+ * PATCH
+ * /api/admin/licenses/:licenseId/limits
+ *
+ * Body (tüm alanlar opsiyonel):
+ *
+ * {
+ *   "maxUsersOverride": 25,
+ *   "maxContractsOverride": null,
+ *   "maxCompaniesOverride": 10
+ * }
+ *
+ * Alan gönderilmezse (undefined) o override DEĞİŞTİRİLMEZ.
+ * Alan açıkça null gönderilirse override TEMİZLENİR (= plan'ın
+ * paylaşımlı değerine geri döner).
+ *
+ * Bu endpoint yalnızca company_licenses.*_override kolonlarını
+ * günceller — plan/company/tarih değiştirmez (bunlar için sırasıyla
+ * yeni lisans oluşturma / extend / cancel akışları kullanılır).
+ * Sayım/enforcement (max_companies vb.) burada YAPILMAZ, P1/P3
+ * kapsamıdır — bu sadece admin'in Custom lisans için elle girdiği
+ * limit değerini saklar (bkz. onaylı plan madde 2: "Admin elle
+ * girer").
+ */
+router.patch(
+  "/licenses/:licenseId/limits",
+  requireAdmin,
+  async (req, res) => {
+
+    const client =
+      await pool.connect();
+
+    try {
+
+      const {
+        licenseId
+      } = req.params;
+
+      const {
+        maxUsersOverride,
+        maxContractsOverride,
+        maxCompaniesOverride
+      } = req.body;
+
+
+      function isValidOverride(value) {
+        return (
+          value === null ||
+          value === undefined ||
+          (
+            Number.isInteger(value) &&
+            value > 0
+          )
+        );
+      }
+
+      if (
+        !isValidOverride(maxUsersOverride) ||
+        !isValidOverride(maxContractsOverride) ||
+        !isValidOverride(maxCompaniesOverride)
+      ) {
+
+        return res.status(400).json({
+          error:
+            "maxUsersOverride, maxContractsOverride ve maxCompaniesOverride null (override'ı temizle) veya pozitif bir tam sayı olmalıdır"
+        });
+      }
+
+      if (
+        maxUsersOverride === undefined &&
+        maxContractsOverride === undefined &&
+        maxCompaniesOverride === undefined
+      ) {
+
+        return res.status(400).json({
+          error:
+            "Güncellenecek en az bir alan (maxUsersOverride, maxContractsOverride, maxCompaniesOverride) belirtilmelidir"
+        });
+      }
+
+
+      await client.query(
+        "BEGIN"
+      );
+
+
+      const licenseResult =
+        await client.query(
+          `
+            SELECT
+              id,
+              company_id,
+              plan_id,
+              max_users_override,
+              max_contracts_override,
+              max_companies_override
+            FROM company_licenses
+            WHERE id = $1
+            FOR UPDATE
+          `,
+          [licenseId]
+        );
+
+
+      if (licenseResult.rows.length === 0) {
+
+        await client.query(
+          "ROLLBACK"
+        );
+
+        return res.status(404).json({
+          error:
+            "Lisans bulunamadı"
+        });
+      }
+
+
+      const existingLicense =
+        licenseResult.rows[0];
+
+
+      const nextMaxUsersOverride =
+        maxUsersOverride !== undefined
+          ? maxUsersOverride
+          : existingLicense.max_users_override;
+
+      const nextMaxContractsOverride =
+        maxContractsOverride !== undefined
+          ? maxContractsOverride
+          : existingLicense.max_contracts_override;
+
+      const nextMaxCompaniesOverride =
+        maxCompaniesOverride !== undefined
+          ? maxCompaniesOverride
+          : existingLicense.max_companies_override;
+
+
+      const updateResult =
+        await client.query(
+          `
+            UPDATE company_licenses
+            SET
+              max_users_override = $1,
+              max_contracts_override = $2,
+              max_companies_override = $3
+            WHERE id = $4
+            RETURNING
+              id,
+              company_id,
+              plan_id,
+              max_users_override,
+              max_contracts_override,
+              max_companies_override,
+              starts_at,
+              expires_at,
+              status
+          `,
+          [
+            nextMaxUsersOverride,
+            nextMaxContractsOverride,
+            nextMaxCompaniesOverride,
+            licenseId
+          ]
+        );
+
+      const updatedLicense =
+        updateResult.rows[0];
+
+
+      await logLicenseAudit(client, {
+        actor: req.user.id,
+        action: "UPDATE_LICENSE_LIMITS",
+        entityId: updatedLicense.id,
+        oldValue: {
+          max_users_override: existingLicense.max_users_override,
+          max_contracts_override: existingLicense.max_contracts_override,
+          max_companies_override: existingLicense.max_companies_override
+        },
+        newValue: {
+          max_users_override: updatedLicense.max_users_override,
+          max_contracts_override: updatedLicense.max_contracts_override,
+          max_companies_override: updatedLicense.max_companies_override
+        }
+      });
+
+
+      await client.query(
+        "COMMIT"
+      );
+
+
+      return res.json({
+
+        message:
+          "Lisans limitleri güncellendi",
+
+        license:
+          updatedLicense
+      });
+
+
+    } catch (error) {
+
+      try {
+        await client.query(
+          "ROLLBACK"
+        );
+      } catch (rollbackError) {
+        console.error(
+          "Lisans limit güncelleme rollback hatası:",
+          rollbackError
+        );
+      }
+
+      console.error(
+        "Lisans limit güncelleme hatası:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "Lisans limitleri güncellenirken bir hata oluştu"
+      });
+
+    } finally {
+      client.release();
+    }
+  }
+);
+
+
+/**
+ * ============================================================
  * 5. PLANLARI LİSTELE
  * ============================================================
  *
