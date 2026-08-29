@@ -1,80 +1,809 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GK Financial Intelligence Platform</title>
-  <link rel="stylesheet" href="css/global.css">
-  <link rel="stylesheet" href="css/components.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TFRS16 Motoru — TFRS 16 · TMS 29 · TMS 21 Kiralama Muhasebesi</title>
+<meta name="description" content="TFRS 16 kiralama hesaplamalarından TMS 29 enflasyon düzeltmesine, çoklu şirket konsolidasyonundan Logo/Mikro'ya hazır yevmiye çıktısına kadar tek dosyada çalışan muhasebe motoru.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+  /* ============================================================
+     TOKENS
+     ============================================================ */
+  :root{
+    --navy-900:#0B1326;
+    --navy-800:#101A33;
+    --navy-700:#1B2A4A;
+    --navy-600:#2A3C63;
+    --paper:#EFE9D8;
+    --paper-dim:#E5DFCC;
+    --paper-line:#D9D0B6;
+    --seal:#8F2A20;
+    --seal-dark:#6E1F18;
+    --bronze:#B08D57;
+    --bronze-soft:#C9AD7C;
+    --ink:#1B2A4A;
+    --ink-soft:#41527A;
+    --cream-text:#EDE7D3;
+    --cream-text-dim:#B9B39E;
+    --ok:#2F6B3F;
+    --warn:#8F2A20;
+
+    --display: "Fraunces", Georgia, serif;
+    --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+
+    --container: 1180px;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    *{animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important;}
+  }
+
+  body{
+    margin:0;
+    font-family:var(--body);
+    color:var(--ink);
+    background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.55;
+  }
+
+  a{color:inherit;}
+  img,svg{display:block; max-width:100%;}
+  .container{max-width:var(--container); margin:0 auto; padding:0 28px;}
+
+  .skip-link{
+    position:absolute; left:-999px; top:0; z-index:200;
+    background:var(--seal); color:#fff; padding:12px 18px; border-radius:0 0 8px 0;
+    font-family:var(--body); font-weight:600; text-decoration:none;
+  }
+  .skip-link:focus{left:0;}
+
+  :focus-visible{outline:2.5px solid var(--bronze); outline-offset:3px;}
+
+  h1,h2,h3,h4{font-family:var(--display); font-weight:600; margin:0; letter-spacing:-0.01em;}
+
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; font-weight:500;
+    letter-spacing:0.14em; text-transform:uppercase;
+  }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--body); font-weight:600; font-size:15px;
+    padding:13px 24px; border-radius:999px; border:1.5px solid transparent;
+    cursor:pointer; text-decoration:none; transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--seal); color:#F7EFE4; box-shadow:0 6px 18px -6px rgba(143,42,32,0.55);}
+  .btn-primary:hover{background:var(--seal-dark); box-shadow:0 10px 24px -8px rgba(143,42,32,0.65);}
+  .btn-ghost-dark{border-color:rgba(237,231,211,0.35); color:var(--cream-text); background:transparent;}
+  .btn-ghost-dark:hover{border-color:var(--bronze-soft); background:rgba(237,231,211,0.06);}
+  .btn-ghost-light{border-color:rgba(27,42,74,0.25); color:var(--ink); background:transparent;}
+  .btn-ghost-light:hover{border-color:var(--seal); color:var(--seal);}
+
+  /* ============================================================
+     NAV
+     ============================================================ */
+  .nav{
+    position:sticky; top:0; z-index:100;
+    background:var(--navy-900);
+    border-bottom:1px solid rgba(176,141,87,0.22);
+  }
+  .nav-inner{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 28px; max-width:var(--container); margin:0 auto;
+  }
+  .nav-brand{display:flex; align-items:center; gap:10px; text-decoration:none;}
+  .nav-mark{
+    width:34px; height:34px; border-radius:50%;
+    border:1.5px solid var(--bronze-soft);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:12px; font-weight:600; color:var(--bronze-soft);
+    flex-shrink:0;
+  }
+  .nav-word{font-family:var(--display); font-size:19px; font-weight:600; color:var(--cream-text);}
+  .nav-links{display:flex; align-items:center; gap:30px; list-style:none; margin:0; padding:0;}
+  .nav-links a{
+    font-size:14px; font-weight:500; color:var(--cream-text-dim); text-decoration:none;
+    transition:color .15s ease;
+  }
+  .nav-links a:hover{color:var(--cream-text);}
+  .nav-cta{display:flex; align-items:center; gap:18px;}
+  .nav-toggle{display:none;}
+
+  @media (max-width:900px){
+    .nav-links{display:none;}
+    .nav-cta .btn{padding:10px 18px; font-size:14px;}
+  }
+
+  /* ============================================================
+     HERO
+     ============================================================ */
+  .hero{
+    background:
+      radial-gradient(ellipse 900px 500px at 82% -10%, rgba(176,141,87,0.14), transparent 60%),
+      var(--navy-900);
+    position:relative; overflow:hidden;
+    padding:88px 0 40px;
+  }
+  .hero-grid{
+    position:absolute; inset:0; pointer-events:none; opacity:0.5;
+    background-image:
+      linear-gradient(rgba(176,141,87,0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(176,141,87,0.055) 1px, transparent 1px);
+    background-size:64px 64px;
+    mask-image:linear-gradient(to bottom, black, transparent 85%);
+  }
+  .hero-inner{
+    position:relative; display:grid; grid-template-columns:1.05fr 0.85fr; gap:40px; align-items:center;
+  }
+  .hero-eyebrow{color:var(--bronze-soft); margin-bottom:18px;}
+  .hero h1{
+    font-size:clamp(34px, 4.6vw, 58px); line-height:1.06; color:var(--cream-text);
+    max-width:15ch;
+  }
+  .hero h1 em{font-style:normal; color:var(--bronze-soft);}
+  .hero p.lead{
+    margin-top:22px; font-size:17px; line-height:1.65; color:var(--cream-text-dim);
+    max-width:46ch;
+  }
+  .hero-actions{display:flex; gap:14px; margin-top:32px; flex-wrap:wrap;}
+  .hero-stats{
+    margin-top:44px; padding-top:22px; border-top:1px solid rgba(176,141,87,0.22);
+    font-family:var(--mono); font-size:12.5px; color:var(--cream-text-dim);
+    display:flex; flex-wrap:wrap; gap:10px 0;
+  }
+  .hero-stats span{padding:0 14px; border-right:1px solid rgba(176,141,87,0.22);}
+  .hero-stats span:first-child{padding-left:0;}
+  .hero-stats span:last-child{border-right:none;}
+
+  /* seal */
+  .seal-wrap{
+    position:relative; display:flex; align-items:center; justify-content:center;
+    min-height:340px;
+  }
+  .seal{
+    width:min(360px, 100%); transform:rotate(-9deg); filter:drop-shadow(0 22px 40px rgba(0,0,0,0.45));
+    animation:sealSettle 900ms cubic-bezier(.2,.9,.25,1) 200ms both;
+  }
+  @keyframes sealSettle{
+    0%{transform:rotate(-9deg) scale(1.22); opacity:0;}
+    60%{opacity:1;}
+    100%{transform:rotate(-9deg) scale(1);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .seal{animation:none;}
+  }
+  .seal-ledger{
+    position:absolute; left:6%; right:6%; bottom:10%; height:1px;
+    background:repeating-linear-gradient(90deg, rgba(176,141,87,0.35) 0 22px, transparent 22px 30px);
+  }
+
+  @media (max-width:980px){
+    .hero-inner{grid-template-columns:1fr; text-align:left;}
+    .seal-wrap{min-height:220px; margin-top:8px;}
+    .seal{width:220px;}
+  }
+
+  /* ============================================================
+     STANDARDS STRIP
+     ============================================================ */
+  .standards{padding:76px 0 68px; border-bottom:1px solid var(--paper-line);}
+  .section-head{max-width:640px; margin-bottom:44px;}
+  .section-head .eyebrow{color:var(--seal); margin-bottom:12px;}
+  .section-head h2{font-size:clamp(26px,3vw,36px); color:var(--ink);}
+  .section-head p{margin-top:14px; font-size:15.5px; color:var(--ink-soft); max-width:56ch;}
+
+  .std-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:22px;}
+  .std-card{
+    background:#fff; border:1px solid var(--paper-line); border-radius:var(--radius);
+    padding:26px 24px; position:relative;
+  }
+  .std-card::before{
+    content:attr(data-code);
+    font-family:var(--mono); font-size:12px; font-weight:600; color:var(--bronze);
+    letter-spacing:0.08em;
+  }
+  .std-card h3{font-size:20px; margin-top:14px; color:var(--ink);}
+  .std-card p{margin-top:10px; font-size:14.5px; color:var(--ink-soft); line-height:1.6;}
+
+  @media (max-width:820px){
+    .std-grid{grid-template-columns:1fr;}
+  }
+
+  /* ============================================================
+     DASHBOARD MOCKUP
+     ============================================================ */
+  .dashboard{padding:80px 0; background:var(--paper-dim); border-bottom:1px solid var(--paper-line);}
+  .dash-card{
+    background:#fff; border:1px solid var(--paper-line); border-radius:var(--radius);
+    overflow:hidden; box-shadow:0 24px 60px -30px rgba(27,42,74,0.35);
+  }
+  .dash-top{
+    display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;
+    padding:22px 26px; border-bottom:1px solid var(--paper-line); background:#FBF9F2;
+  }
+  .dash-top h4{font-size:17px; color:var(--ink);}
+  .dash-top .sub{font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-top:6px;}
+  .dash-controls{display:flex; gap:10px; flex-wrap:wrap;}
+  .dash-pill{
+    font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);
+    border:1px solid var(--paper-line); border-radius:999px; padding:7px 13px; background:#fff;
+  }
+  .dash-kpis{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--paper-line);
+  }
+  .dash-kpi{background:#fff; padding:20px 24px;}
+  .dash-kpi .num{font-family:var(--mono); font-size:24px; font-weight:600; color:var(--ink);}
+  .dash-kpi .num.ok{color:var(--ok);}
+  .dash-kpi .lab{font-size:12px; color:var(--ink-soft); margin-top:4px;}
+  .dash-lock{padding:24px 26px 28px;}
+  .dash-lock h5{
+    font-family:var(--body); font-size:13px; font-weight:600; color:var(--ink);
+    display:flex; align-items:center; gap:8px; margin-bottom:14px;
+  }
+  table.dash-table{width:100%; border-collapse:collapse; font-size:13px;}
+  table.dash-table th{
+    text-align:left; font-family:var(--mono); font-weight:500; font-size:11px; letter-spacing:0.04em;
+    text-transform:uppercase; color:var(--ink-soft); padding:9px 12px; border-bottom:1.5px solid var(--paper-line);
+  }
+  table.dash-table td{padding:11px 12px; border-bottom:1px solid var(--paper-line); font-family:var(--mono); color:var(--ink);}
+  table.dash-table tr.locked-row td{background:rgba(143,42,32,0.06); color:var(--seal);}
+  .tag-locked{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10.5px;
+    background:rgba(143,42,32,0.1); color:var(--seal); padding:3px 8px; border-radius:999px; font-weight:600;
+  }
+  .dash-caption{margin-top:18px; font-size:13px; color:var(--ink-soft);}
+
+  @media (max-width:760px){
+    .dash-kpis{grid-template-columns:repeat(2,1fr);}
+    table.dash-table{display:block; overflow-x:auto;}
+  }
+
+  /* ============================================================
+     FEATURES
+     ============================================================ */
+  .features{padding:84px 0; background:var(--navy-900); border-bottom:1px solid rgba(176,141,87,0.22);}
+  .features .section-head .eyebrow{color:var(--bronze-soft);}
+  .features .section-head h2{color:var(--cream-text);}
+  .features .section-head p{color:var(--cream-text-dim);}
+  .feat-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:20px;}
+  .feat-card{
+    background:var(--navy-800); border:1px solid rgba(176,141,87,0.2); border-radius:var(--radius);
+    padding:28px 26px;
+  }
+  .feat-card .idx{font-family:var(--mono); font-size:12px; color:var(--bronze-soft); letter-spacing:0.08em;}
+  .feat-card h3{font-size:20px; color:var(--cream-text); margin-top:12px;}
+  .feat-card p{font-size:14.5px; color:var(--cream-text-dim); margin-top:10px; line-height:1.65;}
+  .feat-tags{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px;}
+  .feat-tags span{
+    font-family:var(--mono); font-size:11px; color:var(--bronze-soft);
+    border:1px solid rgba(176,141,87,0.35); padding:4px 10px; border-radius:999px;
+  }
+  @media (max-width:820px){
+    .feat-grid{grid-template-columns:1fr;}
+  }
+
+  /* ============================================================
+     WHY
+     ============================================================ */
+  .why{padding:80px 0; border-bottom:1px solid var(--paper-line);}
+  .why-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:20px;}
+  .why-card{padding:4px 0;}
+  .why-mark{
+    width:38px; height:38px; border-radius:50%; border:1.5px solid var(--seal);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono);
+    font-size:13px; font-weight:600; color:var(--seal); margin-bottom:16px;
+  }
+  .why-card h3{font-size:16.5px; color:var(--ink);}
+  .why-card p{font-size:13.5px; color:var(--ink-soft); margin-top:8px; line-height:1.6;}
+  @media (max-width:980px){.why-grid{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.why-grid{grid-template-columns:1fr;}}
+
+  /* ============================================================
+     TERMINAL
+     ============================================================ */
+  .terminal-section{padding:80px 0; background:var(--navy-900);}
+  .terminal-head{max-width:600px; margin-bottom:32px;}
+  .terminal-head .eyebrow{color:var(--bronze-soft); margin-bottom:12px;}
+  .terminal-head h2{color:var(--cream-text); font-size:clamp(24px,2.8vw,32px);}
+  .terminal-head p{color:var(--cream-text-dim); margin-top:12px; font-size:15px;}
+  .term{
+    background:#080D1A; border:1px solid rgba(176,141,87,0.28); border-radius:var(--radius);
+    padding:0; overflow:hidden; box-shadow:0 30px 70px -30px rgba(0,0,0,0.6);
+  }
+  .term-bar{
+    display:flex; align-items:center; gap:8px; padding:12px 16px;
+    border-bottom:1px solid rgba(176,141,87,0.18); background:#0D1424;
+  }
+  .term-dot{width:10px; height:10px; border-radius:50%; background:#3A2E22;}
+  .term-title{font-family:var(--mono); font-size:11.5px; color:var(--cream-text-dim); margin-left:8px;}
+  .term-body{padding:22px 24px; font-family:var(--mono); font-size:13px; line-height:1.9;}
+  .term-cmd{color:var(--bronze-soft);}
+  .term-pass{color:#7FBF8A;}
+  .term-fail{color:#D97C74;}
+  .term-summary{color:var(--cream-text); margin-top:6px; display:block;}
+  .term-muted{color:var(--cream-text-dim);}
+
+  /* ============================================================
+     FAQ
+     ============================================================ */
+  .faq{padding:84px 0; border-bottom:1px solid var(--paper-line);}
+  .faq-list{max-width:800px;}
+  .faq-item{border-bottom:1px solid var(--paper-line);}
+  .faq-item summary{
+    list-style:none; cursor:pointer; padding:22px 4px; display:flex; justify-content:space-between;
+    align-items:center; gap:16px; font-family:var(--display); font-size:17px; font-weight:600; color:var(--ink);
+  }
+  .faq-item summary::-webkit-details-marker{display:none;}
+  .faq-item summary .plus{
+    font-family:var(--mono); font-size:18px; color:var(--seal); flex-shrink:0; transition:transform .2s ease;
+  }
+  .faq-item[open] summary .plus{transform:rotate(45deg);}
+  .faq-item .faq-a{padding:0 4px 24px; font-size:14.5px; color:var(--ink-soft); max-width:68ch; line-height:1.7;}
+
+  /* ============================================================
+     CTA BANNER
+     ============================================================ */
+  .cta-banner{
+    padding:78px 0; background:var(--navy-900); text-align:center; position:relative; overflow:hidden;
+  }
+  .cta-banner::before{
+    content:""; position:absolute; inset:0;
+    background:radial-gradient(ellipse 700px 320px at 50% 0%, rgba(176,141,87,0.14), transparent 65%);
+  }
+  .cta-inner{position:relative;}
+  .cta-lock{
+    width:44px; height:44px; margin:0 auto 22px; border:1.5px solid var(--bronze-soft); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .cta-banner h2{color:var(--cream-text); font-size:clamp(26px,3.4vw,40px); max-width:16ch; margin:0 auto;}
+  .cta-banner p{color:var(--cream-text-dim); margin:16px auto 30px; max-width:48ch; font-size:15.5px;}
+
+  /* ============================================================
+     FOOTER
+     ============================================================ */
+  .footer{background:var(--navy-900); border-top:1px solid rgba(176,141,87,0.2); padding:60px 0 30px;}
+  .footer-top{display:grid; grid-template-columns:1.4fr repeat(3, 1fr); gap:36px; padding-bottom:40px;}
+  .footer-brand .nav-word{display:block; margin-top:10px;}
+  .footer-brand p{color:var(--cream-text-dim); font-size:13.5px; margin-top:14px; max-width:32ch; line-height:1.6;}
+  .footer-col h4{font-family:var(--mono); font-size:11.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--bronze-soft); margin-bottom:14px;}
+  .footer-col ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .footer-col a{font-size:13.5px; color:var(--cream-text-dim); text-decoration:none;}
+  .footer-col a:hover{color:var(--cream-text);}
+  .footer-bottom{
+    border-top:1px solid rgba(176,141,87,0.18); padding-top:22px;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px;
+    font-size:12.5px; color:var(--cream-text-dim);
+  }
+  @media (max-width:900px){
+    .footer-top{grid-template-columns:1fr 1fr; gap:32px 20px;}
+  }
+  @media (max-width:560px){
+    .footer-top{grid-template-columns:1fr;}
+  }
+
+  /* reveal-on-scroll */
+  .reveal{opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s ease;}
+  .reveal.is-visible{opacity:1; transform:translateY(0);}
+</style>
 </head>
 <body>
 
-  <header class="cfo-navbar">
-    <div class="cfo-nav-container">
-      <a href="index.html" class="cfo-brand">
-        <span class="brand-logo">GK</span>
-        <div class="brand-text">
-          <span class="brand-name">Financial Intelligence</span>
-          <span class="brand-sub">Decision Cockpit</span>
+<a href="#main" class="skip-link">İçeriğe geç</a>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <span class="nav-mark">16</span>
+      <span class="nav-word">TFRS16 Motoru</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#standartlar">Standartlar</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#ozellikler">Özellikler</a></li>
+      <li><a href="#kontrol">Kontrol &amp; Denetim</a></li>
+      <li><a href="#sss">SSS</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="#dashboard" class="btn btn-ghost-dark">Dashboard'u Aç</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="container hero-inner">
+      <div>
+        <div class="eyebrow hero-eyebrow">TFRS 16 · TMS 29 · TMS 21 MUHASEBE MOTORU</div>
+        <h1>Kiralama muhasebesinde <em>kapanışı gerçekten kilitleyin.</em></h1>
+        <p class="lead">TFRS 16 hesaplamalarından TMS 29 enflasyon düzeltmesine, çoklu şirket
+          konsolidasyonundan Logo / Mikro'ya hazır yevmiye çıktısına kadar — tek dosyada
+          çalışan, kendi kendini test eden bir muhasebe motoru.</p>
+        <div class="hero-actions">
+          <a href="#dashboard" class="btn btn-primary">Close Dashboard'u İncele</a>
+          <a href="#standartlar" class="btn btn-ghost-dark">Kapsamı Gör →</a>
         </div>
-      </a>
-      <nav class="cfo-nav-menu">
-        <a href="financial-decision-cockpit.html" class="nav-link">Executive Cockpit</a>
-        <a href="working-capital.html" class="nav-link">Working Capital</a>
-        <a href="dcf.html" class="nav-link">DCF & Valuation</a>
-        <a href="tms29.html" class="nav-link">TMS 29 Enflasyon</a>
-        <div class="nav-dropdown">
-          <span class="dropdown-title">IFRS / TFRS Modülleri ▾</span>
-          <div class="dropdown-content">
-            <a href="tfrs16.html">TFRS 16 Kiralama</a>
-            <a href="tms19.html">TMS 19 Çalışan Hakları</a>
-            <a href="ecl.html">IFRS 9 Beklenen Kredi Zararları (ECL)</a>
-            <a href="hedge-accounting.html">Hedge Accounting</a>
+        <div class="hero-stats">
+          <span>~29.800 satır kod</span>
+          <span>5 dışa aktarım formatı</span>
+          <span>6 self-test paketi</span>
+          <span>node -c ile doğrulanmış</span>
+        </div>
+      </div>
+      <div class="seal-wrap" aria-hidden="true">
+        <svg class="seal" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="grain">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>
+              <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0"/>
+              <feComposite operator="over" in2="SourceGraphic"/>
+            </filter>
+            <path id="ringTop" d="M 40,150 A 110,110 0 1,1 260,150" fill="none"/>
+          </defs>
+          <circle cx="150" cy="150" r="132" fill="none" stroke="#B08D57" stroke-width="1.5" opacity="0.55"/>
+          <circle cx="150" cy="150" r="112" fill="#8F2A20" filter="url(#grain)"/>
+          <circle cx="150" cy="150" r="112" fill="none" stroke="#C9AD7C" stroke-width="2"/>
+          <circle cx="150" cy="150" r="96" fill="none" stroke="#C9AD7C" stroke-width="1" stroke-dasharray="2 4" opacity="0.8"/>
+          <text font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="#EFE3CE" letter-spacing="2.5">
+            <textPath href="#ringTop" startOffset="6%">DÖNEM KİLİTLENDİ · ONAYLANDI · DÖNEM KİLİTLENDİ</textPath>
+          </text>
+          <g transform="translate(150,150)">
+            <rect x="-26" y="-6" width="52" height="40" rx="4" fill="none" stroke="#EFE3CE" stroke-width="3"/>
+            <path d="M -16,-6 v-14 a16,16 0 0 1 32,0 v14" fill="none" stroke="#EFE3CE" stroke-width="3"/>
+            <circle cx="0" cy="14" r="4.5" fill="#EFE3CE"/>
+          </g>
+          <text x="150" y="196" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#EFE3CE" letter-spacing="1.5" opacity="0.85">TFRS16 · PERIOD LOCK</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STANDARDS ============ -->
+  <section class="standards" id="standartlar">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Desteklenen Standartlar</div>
+        <h2>Üç standart, tek sözleşme üzerinde</h2>
+        <p>Motor, bir kiralama sözleşmesinin işlem para birimi, fonksiyonel para birimi ve
+          raporlama para birimi farklılaştığında hangi standartların devreye girdiğini
+          otomatik tespit eder (<code>getApplicableStandards</code>).</p>
+      </div>
+      <div class="std-grid">
+        <article class="std-card reveal" data-code="TFRS 16">
+          <h3>Kiralamalar</h3>
+          <p>Kullanım hakkı varlığı ve kira yükümlülüğü; modifikasyon, reassessment,
+            endeks bazlı (CPI) yeniden değerleme, erken ödeme ve eskale kira
+            senaryolarıyla uçtan uca hesaplanır.</p>
+        </article>
+        <article class="std-card reveal" data-code="TMS 29">
+          <h3>Yüksek Enflasyon</h3>
+          <p>Restatement, CPI endeks tablosu ve enflasyon düzeltme taslakları —
+            Türkiye'nin fiilen içinde bulunduğu yüksek enflasyonlu ekonomi koşullarına
+            göre çalışır.</p>
+        </article>
+        <article class="std-card reveal" data-code="TMS 21">
+          <h3>Kur Değişimleri</h3>
+          <p>Fonksiyonel para birimi dışındaki kiralamalarda kur çevrimi ve kur farkı
+            satırları, TCMB entegrasyonuyla otomatik işlenir.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD MOCKUP ============ -->
+  <section class="dashboard" id="dashboard">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Close Dashboard</div>
+        <h2>CFO ve denetçi görünümü, aynı sayfada</h2>
+        <p>Şirket bazlı filtreleme, kilitli dönemler tablosu ve raporlama para birimi
+          çevrimi — gerçek motor ekranının birebir yapısı.</p>
+      </div>
+
+      <div class="dash-card reveal">
+        <div class="dash-top">
+          <div>
+            <h4>Month-End Close Dashboard</h4>
+            <div class="sub">V17 Close Engine · CFO / Auditor görünümü · Dönem: 2026-08</div>
+          </div>
+          <div class="dash-controls">
+            <span class="dash-pill">Şirket: Tüm Şirketler ▾</span>
+            <span class="dash-pill">Raporlama PB: TRY ▾</span>
+            <span class="dash-pill">Dönem: 2026-08</span>
           </div>
         </div>
-      </nav>
-      <div class="cfo-nav-actions">
-        <span class="system-status"><span class="status-dot"></span> V11 Engine Active</span>
-        <a href="dashboard.html" class="btn-dashboard">Dashboard</a>
+        <div class="dash-kpis">
+          <div class="dash-kpi"><div class="num">92</div><div class="lab">Kapanış Skoru</div></div>
+          <div class="dash-kpi"><div class="num">184</div><div class="lab">Aktif Sözleşme</div></div>
+          <div class="dash-kpi"><div class="num">₺48,2M</div><div class="lab">Toplam Yükümlülük</div></div>
+          <div class="dash-kpi"><div class="num ok">READY</div><div class="lab">Mutabakat Durumu</div></div>
+        </div>
+        <div class="dash-lock">
+          <h5>🔒 Kilitli Dönemler</h5>
+          <table class="dash-table">
+            <thead>
+              <tr><th>Dönem</th><th>Durum</th><th>Kilitleyen</th><th>Tarih</th></tr>
+            </thead>
+            <tbody>
+              <tr class="locked-row">
+                <td>2026-06</td>
+                <td><span class="tag-locked">🔒 Görüntülenen dönem</span></td>
+                <td>M.Demir</td>
+                <td>2026-07-04</td>
+              </tr>
+              <tr>
+                <td>2026-05</td>
+                <td><span class="tag-locked">🔒 Kilitli</span></td>
+                <td>M.Demir</td>
+                <td>2026-06-03</td>
+              </tr>
+              <tr>
+                <td>2026-04</td>
+                <td><span class="tag-locked">🔒 Kilitli</span></td>
+                <td>A.Kaya</td>
+                <td>2026-05-02</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="dash-caption">Kilitli dönemde sözleşme oluşturma/silme, modifikasyon,
+            reassessment, enflasyon düzeltmesi ve toplu yevmiye üretimi engellenir.</p>
+        </div>
       </div>
     </div>
-  </header>
+  </section>
 
-  <main style="max-width: 1400px; margin: 40px auto; padding: 0 24px;">
-    <section style="margin-bottom: 40px; text-align: center;">
-      <h1 style="font-size: 2.5rem; margin-bottom: 12px; color: var(--text-primary);">Enterprise Financial Decision Intelligence</h1>
-      <p style="color: var(--text-secondary); max-width: 700px; margin: 0 auto; font-size: 1.1rem;">
-        P&amp;L, Çalışma Sermayesi, TMS 29 ve DCF değerleme süreçlerinizi yönetin. Karar destek mekanizmaları ile finansal analizlerinizi hızlandırın.
-      </p>
-    </section>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
-      <div class="kpi-card" style="cursor: pointer;" onclick="window.location.href='financial-decision-cockpit.html'">
-        <span class="kpi-title">Executive Overview</span>
-        <div class="kpi-value" style="color: var(--accent-blue);">Decision Cockpit</div>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">CFO düzeyinde P&amp;L, Nakit Akışı, Risk ve Fırsat analizleri.</p>
+  <!-- ============ FEATURES ============ -->
+  <section class="features" id="ozellikler">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Kapsam</div>
+        <h2>Bir kiralama motorunun taşıması gereken her katman</h2>
+        <p>Hesaplamadan raporlamaya, çoklu şirkete ve kontrole kadar — dört katman,
+          tek dosyada.</p>
       </div>
-
-      <div class="kpi-card" style="cursor: pointer;" onclick="window.location.href='working-capital.html'">
-        <span class="kpi-title">Liquidity &amp; Efficiency</span>
-        <div class="kpi-value">Working Capital</div>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">DSO, DIO, DPO ve Nakit Dönüşüm Döngüsü (CCC) yönetimi.</p>
-      </div>
-
-      <div class="kpi-card" style="cursor: pointer;" onclick="window.location.href='dcf.html'">
-        <span class="kpi-title">Valuation Engine</span>
-        <div class="kpi-value">DCF Model</div>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">WACC, İndirgenmiş Nakit Akışları ve Duyarlılık Analizleri.</p>
-      </div>
-
-      <div class="kpi-card" style="cursor: pointer;" onclick="window.location.href='tms29.html'">
-        <span class="kpi-title">IFRS / Inflation</span>
-        <div class="kpi-value">TMS 29 Engine</div>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">Yüksek Enflasyon Muhasebesi ve parasal kazanç/kayıp hesaplama.</p>
+      <div class="feat-grid">
+        <article class="feat-card reveal">
+          <div class="idx">01 — HESAPLAMA</div>
+          <h3>Hesaplama &amp; Yeniden Ölçüm</h3>
+          <p>Modifikasyon, reassessment, endeks bazlı (CPI) yeniden değerleme, erken
+            ödeme ve eskale kira senaryolarını standart formülle işler.</p>
+          <div class="feat-tags">
+            <span>Modifikasyon</span><span>Reassessment</span><span>CPI Endeksleme</span><span>Erken Ödeme</span>
+          </div>
+        </article>
+        <article class="feat-card reveal">
+          <div class="idx">02 — RAPORLAMA</div>
+          <h3>Raporlama, Yevmiye &amp; Dipnot</h3>
+          <p>Tek tık toplu yevmiye üretimi; xlsx, CSV, TXT, Logo ve Mikro formatlarında
+            ERP'ye hazır çıktı. ROU varlık ve kira yükümlülüğü roll-forward raporları,
+            TMS 29 enflasyon dipnotu.</p>
+          <div class="feat-tags">
+            <span>xlsx / CSV / Logo / Mikro</span><span>Roll-Forward</span><span>Enflasyon Dipnotu</span>
+          </div>
+        </article>
+        <article class="feat-card reveal">
+          <div class="idx">03 — GRUP</div>
+          <h3>Çoklu Şirket &amp; Çoklu Para Birimi</h3>
+          <p>Grup genelinde tek bir aktif şirket bağlamı, birleşik şirket listesi,
+            TCMB kur entegrasyonu ve raporlama para birimine anlık çevrim.</p>
+          <div class="feat-tags">
+            <span>Konsolidasyon</span><span>TCMB</span><span>Raporlama PB</span><span>Eliminasyon</span>
+          </div>
+        </article>
+        <article class="feat-card reveal" id="kontrol">
+          <div class="idx">04 — KONTROL</div>
+          <h3>Kontrol, Denetim &amp; Period Locking</h3>
+          <p>Kilitli dönemde sözleşme, modifikasyon, toplu yevmiye ve silme işlemleri
+            sert kurallarla engellenir; her audit event donmuş (immutable) nesne
+            olarak saklanır.</p>
+          <div class="feat-tags">
+            <span>Period Locking</span><span>Audit Trail</span><span>Immutable Events</span>
+          </div>
+        </article>
       </div>
     </div>
-  </main>
+  </section>
 
-  <script src="js/main.js"></script>
+  <!-- ============ WHY ============ -->
+  <section class="why">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Neden Bu Motor</div>
+        <h2>Türkiye'nin gerçek koşullarına göre kurulu</h2>
+      </div>
+      <div class="why-grid">
+        <div class="why-card reveal">
+          <div class="why-mark">01</div>
+          <h3>Tek Dosya, Sıfır Bağımlılık</h3>
+          <p>Tüm motor tek bir JS dosyasında; kurulum, harici servis ya da lisans
+            sunucusu gerektirmez.</p>
+        </div>
+        <div class="why-card reveal">
+          <div class="why-mark">02</div>
+          <h3>Gerçek Enflasyon Muhasebesi</h3>
+          <p>TMS 29 restatement ve TCMB entegrasyonu, uluslararası çözümlerin çoğunun
+            kapsam dışı bıraktığı bir alanı doğrudan çözer.</p>
+        </div>
+        <div class="why-card reveal">
+          <div class="why-mark">03</div>
+          <h3>Kapanışı Fiilen Kilitler</h3>
+          <p>Period Locking; kilitli dönemde ne bir sözleşme silinir ne bir yevmiye
+            üretilir — arayüzde değil, fonksiyon seviyesinde.</p>
+        </div>
+        <div class="why-card reveal">
+          <div class="why-mark">04</div>
+          <h3>Kendi Kendini Test Eder</h3>
+          <p>6 ayrı self-test paketi motorun içine gömülü; her değişiklikten sonra
+            konsoldan çalıştırılır.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TERMINAL ============ -->
+  <section class="terminal-section">
+    <div class="container">
+      <div class="terminal-head reveal">
+        <div class="eyebrow">Doğrulama</div>
+        <h2>Motor kendi kendini doğruluyor</h2>
+        <p>Her sürümden önce <code>node -c</code> ile sözdizimi, tarayıcı konsolunda
+          self-test paketleriyle davranış doğrulanır.</p>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar">
+          <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+          <span class="term-title">tarayıcı konsolu</span>
+        </div>
+        <div class="term-body">
+<span class="term-cmd">&gt; window.GK_TFRS16.runSelfTestsV27MultiCompany()</span>
+<span class="term-pass">✅ 1a — getActiveCompanyId() bir string döndürüyor</span>
+<span class="term-pass">✅ 2b — birleştirilmiş listede tekrar eden id yok</span>
+<span class="term-pass">✅ 3b — belirli şirket sorgusu doğru şirketi döndürüyor</span>
+<span class="term-pass">✅ 4a — TRY→TRY çevrim uygulanmıyor (applied:false)</span>
+<span class="term-summary term-muted">V27 Multi-Company/Multi-Currency Self-Test Özeti: 12/12 geçti.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="faq" id="sss">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Sık Sorulanlar</div>
+        <h2>Bilinmesi gerekenler</h2>
+      </div>
+      <div class="faq-list reveal">
+        <details class="faq-item">
+          <summary>Bu motor hangi standartları kapsıyor? <span class="plus">＋</span></summary>
+          <div class="faq-a">TFRS 16 (Kiralamalar), TMS 29 (Yüksek Enflasyonlu Ekonomiler) ve
+            TMS 21 (Kur Değişiminin Etkileri) — aynı sözleşme üzerinde birlikte çalışır.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Çoklu şirket ve çoklu para birimi destekleniyor mu? <span class="plus">＋</span></summary>
+          <div class="faq-a">Evet. Global bir aktif şirket bağlamı, birleşik şirket listesi,
+            TCMB kur entegrasyonu ve raporlama para birimine anlık çevrim mevcuttur; tek
+            şirketli kullanıcılar için mevcut davranış değişmez.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Kilitli bir dönemde ne olur? <span class="plus">＋</span></summary>
+          <div class="faq-a">Sözleşme oluşturma/silme, modifikasyon, reassessment, enflasyon
+            düzeltmesi ve toplu yevmiye üretimi engellenir; sadece tekil yevmiye önizlemesi
+            kırmızı uyarı banner'ıyla birlikte açık kalır.</div>
+        </details>
+        <details class="faq-item">
+          <summary>ERP'ye aktarım nasıl çalışıyor? <span class="plus">＋</span></summary>
+          <div class="faq-a">Toplu yevmiye çıktısı xlsx, genel CSV, TXT, Logo ve Mikro
+            formatlarında üretilir; hesap planı eşlemesi şirket bazlı özelleştirilebilir.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Denetim izi (audit trail) güvenilir mi? <span class="plus">＋</span></summary>
+          <div class="faq-a">Her audit event oluşturulduğu anda dondurulur
+            (<code>Object.freeze</code>) — sonradan hiçbir kod alanlarını değiştiremez.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA BANNER ============ -->
+  <section class="cta-banner">
+    <div class="container cta-inner">
+      <div class="cta-lock" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="10" width="16" height="11" rx="2" stroke="#EDE7D3" stroke-width="2"/>
+          <path d="M7 10V7a5 5 0 0 1 10 0v3" stroke="#EDE7D3" stroke-width="2"/>
+        </svg>
+      </div>
+      <h2>Kapanışı bir daha asla açık bırakmayın.</h2>
+      <p>Motorun tamamını incelemek için Close Dashboard'dan başlayın.</p>
+      <a href="#dashboard" class="btn btn-primary">Dashboard'u Aç</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <span class="nav-mark" style="display:inline-flex;">16</span>
+        <span class="nav-word">TFRS16 Motoru</span>
+        <p>TFRS 16 · TMS 29 · TMS 21 kiralama muhasebesi için tek dosyalık, kendi
+          kendini test eden bir motor.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Ürün</h4>
+        <ul>
+          <li><a href="#standartlar">Standartlar</a></li>
+          <li><a href="#dashboard">Close Dashboard</a></li>
+          <li><a href="#ozellikler">Özellikler</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Kontrol</h4>
+        <ul>
+          <li><a href="#kontrol">Period Locking</a></li>
+          <li><a href="#kontrol">Audit Trail</a></li>
+          <li><a href="#sss">SSS</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Motor</h4>
+        <ul>
+          <li><a href="#">Değişiklik Notları</a></li>
+          <li><a href="#">Test Checklist</a></li>
+          <li><a href="#">Self-Testler</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 TFRS16 Motoru — dahili muhasebe motoru arayüzü.</span>
+      <span>TFRS/TMS metinleri KGK'nin resmi yayınları esas alınarak yorumlanmıştır; resmi danışmanlık yerine geçmez.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Reveal-on-scroll
+  if ('IntersectionObserver' in window) {
+    const els = document.querySelectorAll('.reveal');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    els.forEach(el => io.observe(el));
+  } else {
+    document.querySelectorAll('.reveal').forEach(el => el.classList.add('is-visible'));
+  }
+
+  // Sticky nav shadow on scroll
+  const nav = document.querySelector('.nav');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 8) {
+      nav.style.boxShadow = '0 8px 24px -14px rgba(0,0,0,0.5)';
+    } else {
+      nav.style.boxShadow = 'none';
+    }
+  }, { passive: true });
+</script>
+
 </body>
 </html>
