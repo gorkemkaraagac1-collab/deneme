@@ -6,7 +6,8 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin, requireStaffAccess } = require('../middleware/admin');
 const { createRateLimiter } = require('../middleware/rate-limit');
-const { canAddUserToCompany, canAddCompanyToTree } = require('../services/license-service');
+const { canAddUserToCompany, canAddCompanyToTree, lockRootCompanyForLimit } = require('../services/license-service');
+
 const {
     isCompanyInScope,
     canAssignRole,
@@ -444,7 +445,18 @@ router.post('/users', requireStaffAccess, adminMutationRateLimiter, async (req, 
             // eklenebiliyordu (bu kontrol yalnızca auth.js'deki
             // self-service /register akışında vardı). Aynı kontrolü
             // (canAddUserToCompany) burada da uyguluyoruz.
+            //
+            // P5-A: Race condition (TOCTOU) önlemi — limit kontrolü
+            // öncesi ağacın kök şirket satırını FOR UPDATE ile
+            // kilitliyoruz. Aynı holding'de eşzamanlı iki create
+            // isteği sıraya girer; ikisi de "9 < 10" görüp geçemez.
             // --------------------------------------------------
+            const lockedRoots = new Set();
+            for (const companyId of uniqueCompanyIds) {
+                const rootId = await lockRootCompanyForLimit(companyId, client);
+                if (rootId) lockedRoots.add(rootId);
+            }
+
             for (const companyId of uniqueCompanyIds) {
                 const capacity = await canAddUserToCompany(companyId, client);
 
@@ -459,6 +471,7 @@ router.post('/users', requireStaffAccess, adminMutationRateLimiter, async (req, 
                     });
                 }
             }
+
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
@@ -913,10 +926,16 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
             // bağlı olduğu şirketler için tekrar kontrol
             // gerekmiyor (o kullanıcı zaten sayılıyor) — yalnızca
             // company_ids içinde YENİ eklenen id'ler kontrol edilir.
+            //
+            // P5-A: Root lock (TOCTOU).
             // ------------------------------------------------
             newlyAddedCompanyIds = uniqueCompanyIds.filter(
                 id => !currentCompanyIds.includes(id)
             );
+
+            for (const companyId of newlyAddedCompanyIds) {
+                await lockRootCompanyForLimit(companyId, client);
+            }
 
             for (const companyId of newlyAddedCompanyIds) {
                 const capacity = await canAddUserToCompany(companyId, client);
@@ -954,6 +973,8 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
         // İÇERMİYOR — yani "currentUsers < maxUsers" testi doğru
         // şekilde "bu kullanıcı eklenirse sığar mı" sorusuna cevap
         // veriyor.
+        //
+        // P5-A: Root lock eklendi.
         // ----------------------------------------------------
 
         const isReactivating =
@@ -968,6 +989,13 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
 
             const alreadyCheckedCompanyIds =
                 new Set(newlyAddedCompanyIds);
+
+            for (const companyId of finalCompanyIds) {
+                if (alreadyCheckedCompanyIds.has(companyId)) {
+                    continue;
+                }
+                await lockRootCompanyForLimit(companyId, client);
+            }
 
             for (const companyId of finalCompanyIds) {
                 if (alreadyCheckedCompanyIds.has(companyId)) {
@@ -991,6 +1019,7 @@ router.patch('/users/:id', requireStaffAccess, adminMutationRateLimiter, async (
                 }
             }
         }
+
 
         // ----------------------------------------------------
         // Prevent admin self-lockout
@@ -1701,12 +1730,13 @@ router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (r
         // condition'ı önlemek için — bkz. license-service.js
         // canAddCompanyToTree dosya başı notu) ve ağacın KÖKÜNE göre
         // max_companies limiti kontrol edilir.
+        //
+        // P5-C: Root kilidi eklendi (tree-level TOCTOU).
         if (parentCompanyId !== null) {
             const parentCheck = await client.query(
                 `SELECT id
                  FROM companies
-                 WHERE id = $1
-                 FOR UPDATE`,
+                 WHERE id = $1`,
                 [parentCompanyId]
             );
 
@@ -1719,10 +1749,13 @@ router.post('/companies', requireStaffAccess, adminMutationRateLimiter, async (r
                 });
             }
 
+            await lockRootCompanyForLimit(parentCompanyId, client);
+
             // P1-C — max_companies enforcement (ana şirket dahil
             // toplam şirket sayısı ağacın kökündeki lisansa göre
             // kontrol edilir).
             const capacity = await canAddCompanyToTree(parentCompanyId, client);
+
 
             if (!capacity.allowed) {
                 await client.query('ROLLBACK');
