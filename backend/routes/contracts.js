@@ -11,18 +11,68 @@ const {
   canAddContractToCompany
 } = require("../services/license-service");
 
+const {
+  resolveAccessScope,
+  isCompanyInScope,
+  isContractWriteRole
+} = require("../services/organization-service");
+
 const router = express.Router();
 
 
 /**
  * ============================================================
- * AUTHENTICATION
+ * AUTHENTICATION + ACCESS SCOPE
  * ============================================================
  *
  * Bu router'daki bütün endpoint'ler JWT authentication
  * gerektirir.
+ *
+ * P1: erişim artık yalnızca JWT'deki ham companyIds ile değil,
+ * role'e göre hesaplanan ERİŞİM KAPSAMI (access scope) ile
+ * belirlenir:
+ *   - ADMIN               → global (tüm şirketlerin kontratları)
+ *   - ACCOUNTANT_MANAGER  → kendi holding alt ağacı
+ *   - ACCOUNTANT/CONTROLLER/VIEWER
+ *                         → ESKİ davranışla birebir aynı
+ *                           (req.user.companyIds)
+ *
+ * req.accessScope her istekte burada hesaplanıp sonraki tüm route
+ * handler'larına aktarılır (bkz. services/organization-service.js).
  */
 router.use(requireAuth);
+
+router.use(async (req, res, next) => {
+  try {
+    req.accessScope = await resolveAccessScope(req.user);
+    return next();
+  } catch (error) {
+    console.error(
+      "contracts.js erişim kapsamı hesaplama hatası:",
+      error
+    );
+    return res.status(500).json({
+      error: "Yetki kapsamı hesaplanırken beklenmeyen bir hata oluştu"
+    });
+  }
+});
+
+
+/**
+ * P1-B: CONTROLLER (izleme/raporlama, yazma yetkisi yok) ve VIEWER
+ * (salt okunur) sözleşme oluşturamaz/güncelleyemez/silemez. Bu
+ * middleware yalnızca POST/PUT/DELETE route'larına eklenir — GET
+ * route'ları tüm rollere (okuma yetkisi olan herkese) açıktır.
+ */
+function requireContractWriteRole(req, res, next) {
+  if (!isContractWriteRole(req.user.role)) {
+    return res.status(403).json({
+      error: "Bu işlem için yazma yetkiniz bulunmamaktadır",
+      code: "CONTRACT_WRITE_ACCESS_DENIED"
+    });
+  }
+  return next();
+}
 
 
 /**
@@ -30,23 +80,31 @@ router.use(requireAuth);
  * GET /api/contracts
  * ============================================================
  *
- * Kullanıcının bağlı olduğu şirketlerin kontratlarını getirir.
+ * Kullanıcının erişim kapsamındaki (bkz. yukarı — accessScope)
+ * şirketlerin kontratlarını getirir.
  *
  * ÖNEMLİ:
- * - companyIds JWT'den gelir.
- * - Client tarafından gönderilen companyIds kullanılmaz.
- * - DB seviyesinde company_id filtresi uygulanır.
+ * - companyIds/erişim kapsamı JWT + role'den hesaplanır.
+ * - Client tarafından gönderilen hiçbir company_id/companyIds
+ *   değerine güvenilmez (bu endpoint zaten query/body'den company
+ *   id almıyor).
  *
- * Aktif lisans kontrolü şirket bazlı olarak yapılır.
+ * P1 — "License expired: read = OK, write = 403": bu endpoint bir
+ * OKUMA (read) endpoint'idir, bu yüzden BURADA lisans durumuna
+ * BAKILMAZ — süresi dolmuş/pasif lisanslı bir şirketin kontratları
+ * da listelenir (yazma endpoint'lerinde — POST/PUT/DELETE — lisans
+ * hâlâ zorunludur). Önceki sürümde burada bir aktif-lisans EXISTS
+ * kontrolü vardı; bu, süresi dolan bir şirketin kontratlarının
+ * OKUNMASINI da tamamen engelliyordu — kabul kriterine aykırıydı,
+ * kaldırıldı.
  */
 router.get("/", async (req, res) => {
 
   try {
 
-    if (
-      !Array.isArray(req.user.companyIds) ||
-      req.user.companyIds.length === 0
-    ) {
+    const scope = req.accessScope;
+
+    if (!scope.isGlobalAdmin && (!Array.isArray(scope.allowedCompanyIds) || scope.allowedCompanyIds.length === 0)) {
 
       return res.status(403).json({
         error: "Kullanıcının erişebildiği şirket bulunmamaktadır",
@@ -56,27 +114,25 @@ router.get("/", async (req, res) => {
     }
 
 
-    const result = await pool.query(
-      `
-        SELECT
-          c.*
-        FROM contracts c
-        WHERE c.company_id = ANY($1)
-          AND EXISTS (
-            SELECT 1
-            FROM company_licenses cl
-            WHERE cl.company_id = c.company_id
-              AND cl.status = 'active'
-              AND cl.starts_at <= NOW()
-              AND (
-                cl.expires_at IS NULL
-                OR cl.expires_at > NOW()
-              )
-          )
-        ORDER BY c.created_at DESC
-      `,
-      [req.user.companyIds]
-    );
+    const result = scope.isGlobalAdmin
+      ? await pool.query(
+          `
+            SELECT
+              c.*
+            FROM contracts c
+            ORDER BY c.created_at DESC
+          `
+        )
+      : await pool.query(
+          `
+            SELECT
+              c.*
+            FROM contracts c
+            WHERE c.company_id = ANY($1)
+            ORDER BY c.created_at DESC
+          `,
+          [scope.allowedCompanyIds]
+        );
 
 
     return res.json(result.rows);
@@ -105,39 +161,45 @@ router.get("/", async (req, res) => {
  * Tek kontrat getirir.
  *
  * Güvenlik:
- * - Kullanıcı şirkete bağlı olmalı.
- * - Şirketin aktif lisansı olmalı.
+ * - Kullanıcının erişim kapsamında olmalı (ADMIN: global,
+ *   ACCOUNTANT_MANAGER: kendi holding alt ağacı, diğerleri: kendi
+ *   şirketleri).
  * - Başka şirketin kontratı 404 döner.
+ *
+ * P1: bu da bir OKUMA endpoint'i olduğundan aktif lisans şartı
+ * ARANMAZ (bkz. GET / üzerindeki not — "License expired: read=OK").
  */
 router.get("/:id", async (req, res) => {
 
   try {
 
-    const result = await pool.query(
-      `
-        SELECT
-          c.*
-        FROM contracts c
-        WHERE c.id = $1
-          AND c.company_id = ANY($2)
-          AND EXISTS (
-            SELECT 1
-            FROM company_licenses cl
-            WHERE cl.company_id = c.company_id
-              AND cl.status = 'active'
-              AND cl.starts_at <= NOW()
-              AND (
-                cl.expires_at IS NULL
-                OR cl.expires_at > NOW()
-              )
-          )
-        LIMIT 1
-      `,
-      [
-        req.params.id,
-        req.user.companyIds
-      ]
-    );
+    const scope = req.accessScope;
+
+    const result = scope.isGlobalAdmin
+      ? await pool.query(
+          `
+            SELECT
+              c.*
+            FROM contracts c
+            WHERE c.id = $1
+            LIMIT 1
+          `,
+          [req.params.id]
+        )
+      : await pool.query(
+          `
+            SELECT
+              c.*
+            FROM contracts c
+            WHERE c.id = $1
+              AND c.company_id = ANY($2)
+            LIMIT 1
+          `,
+          [
+            req.params.id,
+            scope.allowedCompanyIds
+          ]
+        );
 
 
     if (result.rows.length === 0) {
@@ -181,6 +243,7 @@ router.get("/:id", async (req, res) => {
  */
 router.post(
   "/",
+  requireContractWriteRole,
   requireCompanyLicense,
   async (req, res) => {
 
@@ -362,6 +425,7 @@ router.post(
  */
 router.put(
   "/:id",
+  requireContractWriteRole,
   async (req, res) => {
 
     try {
@@ -379,23 +443,38 @@ router.put(
       } = req.body;
 
 
+      const scope = req.accessScope;
+
       /**
-       * Önce kontratın sahibini buluyoruz.
+       * Önce kontratın sahibini buluyoruz — erişim kapsamı
+       * dışındaki bir kontrat için "var olduğu" bile sızdırılmaz
+       * (404).
        */
-      const contractResult = await pool.query(
-        `
-          SELECT
-            company_id
-          FROM contracts
-          WHERE id = $1
-            AND company_id = ANY($2)
-          LIMIT 1
-        `,
-        [
-          req.params.id,
-          req.user.companyIds
-        ]
-      );
+      const contractResult = scope.isGlobalAdmin
+        ? await pool.query(
+            `
+              SELECT
+                company_id
+              FROM contracts
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [req.params.id]
+          )
+        : await pool.query(
+            `
+              SELECT
+                company_id
+              FROM contracts
+              WHERE id = $1
+                AND company_id = ANY($2)
+              LIMIT 1
+            `,
+            [
+              req.params.id,
+              scope.allowedCompanyIds
+            ]
+          );
 
 
       if (
@@ -416,13 +495,14 @@ router.put(
 
 
       /**
-       * Aktif lisans kontrolü.
+       * P1: erişim kontrolü artık accessScope üzerinden yapılır
+       * (ADMIN: global, ACCOUNTANT_MANAGER: kendi holding alt
+       * ağacı, diğerleri: req.user.companyIds ile birebir aynı).
+       * SELECT sorgusu zaten scope'a göre filtrelendiği için bu
+       * ikinci kontrol normalde hep true döner — savunma amaçlı
+       * (defense in depth) korunuyor.
        */
-      if (
-        !req.user.companyIds
-          .map(String)
-          .includes(contractCompanyId)
-      ) {
+      if (!isCompanyInScope(contractCompanyId, scope)) {
 
         return res.status(403).json({
           error:
@@ -434,6 +514,11 @@ router.put(
       }
 
 
+      /**
+       * Aktif lisans kontrolü — bu bir YAZMA (write) işlemi
+       * olduğundan lisans şartı burada AYNEN KORUNUR ("License
+       * expired: write = 403" — yalnızca GET'lerden kaldırıldı).
+       */
       const licenseResult =
         await pool.query(
           `
@@ -550,24 +635,38 @@ router.put(
  */
 router.delete(
   "/:id",
+  requireContractWriteRole,
   async (req, res) => {
 
     try {
 
-      const contractResult = await pool.query(
-        `
-          SELECT
-            company_id
-          FROM contracts
-          WHERE id = $1
-            AND company_id = ANY($2)
-          LIMIT 1
-        `,
-        [
-          req.params.id,
-          req.user.companyIds
-        ]
-      );
+      const scope = req.accessScope;
+
+      const contractResult = scope.isGlobalAdmin
+        ? await pool.query(
+            `
+              SELECT
+                company_id
+              FROM contracts
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [req.params.id]
+          )
+        : await pool.query(
+            `
+              SELECT
+                company_id
+              FROM contracts
+              WHERE id = $1
+                AND company_id = ANY($2)
+              LIMIT 1
+            `,
+            [
+              req.params.id,
+              scope.allowedCompanyIds
+            ]
+          );
 
 
       if (

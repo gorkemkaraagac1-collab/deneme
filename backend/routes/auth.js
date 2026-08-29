@@ -914,7 +914,17 @@ router.post(
           role:
             user.role,
 
-          companyIds
+          companyIds,
+
+          // P1-D: normal uygulama erişimini parola değiştirilene
+          // kadar engellemek için (bkz. middleware/auth.js
+          // requireAuth). Lisans bilgisinin aksine bu alan sonradan
+          // sık sık değişmez ve DB'ye ekstra sorgu atmadan her
+          // istekte kontrol edilebilmesi gerektiği için (performans)
+          // bilinçli olarak token'a konuyor — staleness riski
+          // utils/jwt.js'teki notta açıklanmıştır.
+          mustChangePassword:
+            user.must_change_password
         });
 
 
@@ -1119,6 +1129,200 @@ router.get(
           "Kullanıcı bilgileri alınırken bir hata oluştu"
       });
     }
+  }
+);
+
+
+/**
+ * ============================================================
+ * POST /api/auth/change-password
+ * ============================================================
+ *
+ * P1-D — MUST CHANGE PASSWORD akışının tamamlanma adımı.
+ *
+ * requireAuth kullanılır (middleware/auth.js) — bu endpoint,
+ * requireAuth'un mustChangePassword=true olan kullanıcıları normal
+ * uygulamadan engellerken İSTİSNA olarak bıraktığı iki endpoint'ten
+ * biridir (diğeri GET /me). Yani mustChangePassword=true olan bir
+ * kullanıcı BAŞKA HİÇBİR endpoint'e erişemezken, buraya erişebilir
+ * — akışın kendisini tamamlayabilmesi için gereken "minimum
+ * authenticated context" budur.
+ *
+ * GÜVENLİK:
+ * - currentPassword doğrulanır (çalınmış/ele geçirilmiş bir token
+ *   ile bile, mevcut parolayı bilmeyen biri parolayı DEĞİŞTİREMEZ).
+ * - newPassword aynı politika ile doğrulanır (>=10 karakter — bkz.
+ *   /register ve admin.js POST /users ile aynı kural).
+ * - Başarılı değişiklikten sonra must_change_password=false yapılır
+ *   ve YENİ bir token imzalanıp döndürülür (client eski token'ı bu
+ *   yenisiyle değiştirmelidir) — böylece kullanıcı tekrar login
+ *   olmak zorunda kalmadan normal erişime kavuşur.
+ */
+router.post(
+  "/change-password",
+  requireAuth,
+  async (req, res) => {
+
+    try {
+
+      const {
+        currentPassword,
+        newPassword
+      } = req.body;
+
+      if (
+        !currentPassword ||
+        typeof currentPassword !== "string" ||
+        !newPassword ||
+        typeof newPassword !== "string"
+      ) {
+        return res.status(400).json({
+          error:
+            "currentPassword ve newPassword zorunludur"
+        });
+      }
+
+      if (newPassword.trim().length === 0) {
+        return res.status(400).json({
+          error:
+            "newPassword boş veya yalnızca boşluk olamaz"
+        });
+      }
+
+      if (newPassword.length < 10) {
+        return res.status(400).json({
+          error:
+            "Yeni parola en az 10 karakter olmalıdır"
+        });
+      }
+
+      if (newPassword.length > 128) {
+        return res.status(400).json({
+          error:
+            "Yeni parola çok uzun"
+        });
+      }
+
+      const userResult =
+        await pool.query(
+          `
+            SELECT *
+            FROM users
+            WHERE id = $1
+              AND status = 'ACTIVE'
+          `,
+          [req.user.id]
+        );
+
+      const user =
+        userResult.rows[0];
+
+      // requireAuth zaten geçerli bir token'ı doğruladı, ama
+      // kullanıcı bu sırada INACTIVE yapılmış olabilir — token
+      // süresi dolana kadar geçerli kalır (bkz. utils/jwt.js
+      // staleness notu), bu yüzden burada DB'den tazeden kontrol
+      // ediliyor.
+      if (!user) {
+        return res.status(401).json({
+          error:
+            "Kullanıcı bulunamadı veya pasif"
+        });
+      }
+
+      let isCurrentPasswordValid;
+
+      try {
+
+        isCurrentPasswordValid =
+          await bcrypt.compare(
+            currentPassword,
+            user.password_hash
+          );
+
+      } catch (bcryptError) {
+
+        console.error(
+          `change-password: kullanıcı '${user.username}' için password_hash geçersiz/bozuk:`,
+          bcryptError
+        );
+
+        return res.status(401).json({
+          error:
+            "Mevcut parola hatalı"
+        });
+      }
+
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({
+          error:
+            "Mevcut parola hatalı"
+        });
+      }
+
+      const newPasswordHash =
+        await bcrypt.hash(
+          newPassword,
+          BCRYPT_ROUNDS
+        );
+
+      await pool.query(
+        `
+          UPDATE users
+          SET
+            password_hash = $1,
+            must_change_password = FALSE
+          WHERE id = $2
+        `,
+        [
+          newPasswordHash,
+          user.id
+        ]
+      );
+
+      const companyIds =
+        await getUserCompanyIds(
+          user.id
+        );
+
+      const newToken =
+        signUserToken({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          companyIds,
+          mustChangePassword: false
+        });
+
+      return res.json({
+        message:
+          "Parola başarıyla değiştirildi",
+        token: newToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          mustChangePassword: false,
+          companyIds
+        }
+      });
+
+    } catch (error) {
+
+      console.error(
+        "POST /api/auth/change-password hatası:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "Parola değiştirilirken beklenmeyen bir hata oluştu"
+      });
+
+    }
+
   }
 );
 
