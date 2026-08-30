@@ -713,6 +713,7 @@ Repository incelemesi sonucunda blocker listesi güncellenmelidir.
 10. Backup + gerçek restore
 11. Monitoring
 12. TFRS16 UAT
+13. UX Konsolidasyonu — tek shell, sözleşme detayı tab'ları, breadcrumb, bilgi mimarisi, progressive disclosure (bkz. bölüm 32 — AĞUSTOS 2026'da release kriterine eklendi, backend-only değil, frontend-only bir blocker)
 
 Bu maddeler repository/cloud üzerinden doğrulanmadan "production-ready" iddiasında bulunulmaz.
 
@@ -1025,12 +1026,13 @@ Başarı sırası:
 TFRS16
 → Production
 → UAT
+→ UX Konsolidasyonu (bkz. bölüm 32 — Faz 0-2 ve revize Faz 3, frontend-only, backend'e dokunmadan)
 → Release
 → First Customer
 → First Revenue
 → Customer Feedback
 → Stabilization
-→ TFRS16 Refactor / Scale
+→ TFRS16.js İç Modülerleştirme / Scale (bölüm 26 — teknik borç, release sonrası)
 → Next Module
 
 Sonraki modüller ancak TFRS16'nın production ve ticari başarısından sonra önceliklendirilecektir.
@@ -1048,6 +1050,18 @@ TÜİK entegrasyonu yalnızca TFRS16'nın mevcut TMS29 restatement motorunu besl
 
 Mevcut TFRS16 hesaplama motoru korunacaktır.
 
+---
+
+## GÜNCELLEME — AĞUSTOS 2026: RELEASE KRİTERİNE UX KONSOLİDASYONU EKLENDİ
+
+Önceki karar, "release önce, cilalama sonra" idi. Bu KASITLI OLARAK DEĞİŞTİRİLDİ:
+
+> Release, yalnızca hesaplama doğruluğu ve güvenlik açısından değil, **kullanılabilirlik açısından da** hazır olduğunda yapılacaktır.
+
+Sebep: mevcut üründe iki ayrı, örtüşen navigasyon kabuğu (dashboard.html ve tfrs16.html'in kendi gömülü sidebar'ı) ve sözleşme detayında 7'den fazla farklı işlevin (modifikasyon, reassessment, ödeme planı, enflasyon düzeltmesi, SLB, alt kiralama, muhasebe fiş merkezi) tek bir kesintisiz kaydırmalı sayfada birleştirilmesi, ürünü "kopuk" ve satışa hazır olmayan bir izlenim veriyor. Bkz. bölüm 32.
+
+Bu, TFRS16 dışına scope genişletmek DEĞİLDİR — aynı TFRS16 modülünün DAHA KULLANILABİLİR bir sunumudur. Golden Rule'un "önce TFRS16, sonra sat" ilkesi bozulmuyor; sadece "TFRS16 release-ready" tanımına UX konsolidasyonu da dahil edildi.
+
 Amaç:
 
 FINANCIAL-GRADE
@@ -1058,8 +1072,54 @@ SECURE
 +
 MAINTAINABLE
 +
+**KULLANILABİLİR / TUTARLI (yeni)**
++
 PRODUCTION-READY
 +
 SELLABLE
 
 bir TFRS16 ürünü ortaya çıkarmaktır.
+
+---
+
+# 32. PRE-RELEASE UX CONSOLIDATION (RELEASE BLOCKER — YENİ KARAR)
+
+## KAPSAM
+
+Bu iş **VARSAYILAN OLARAK FRONTEND-ONLY**'dir. Aşağıdakilere GEREKSİZ YERE dokunulmayacaktır:
+
+- `backend/` klasöründeki dosyalar
+- API sözleşmesi/endpoint (request/response şekli, status code'lar, route path'leri)
+- DB şeması, migration, query
+- `js/tfrs16.js` içindeki DOKUNULMAZ 9 hesaplama fonksiyonu (bkz. bölüm 5) ve genel hesaplama mantığı
+- Authentication/authorization/license enforcement zinciri
+
+**İSTİSNA — "asla" değil, "gerekmedikçe değil":** Eğer Faz 0-3'ün gerçekten UX konsolidasyonu için (ör. tek shell'e geçiş sırasında bir endpoint'in response şeklinin frontend'in yeni yapısına uymaması, ya da breadcrumb/tab yapısının ihtiyaç duyduğu bir veri backend'de hiç yoksa) backend'de bir değişiklik gerektirdiği ortaya çıkarsa, bu YAPILABİLİR. Şart: (1) değişiklik gerekçesi açıkça belgelenir — "neden sadece frontend'le çözülemedi", (2) mevcut API sözleşmelerini kıran (breaking) değil, katkı sağlayan (additive) bir değişiklik tercih edilir, (3) DOKUNULMAZ 9 hesaplama fonksiyonuna ve mevcut auth/license zincirine yine kesinlikle dokunulmaz, (4) değişiklik sonrası tam test suite'i (`npx jest --runInBand`) çalıştırılıp mevcut testlerin PASS durumu korunduğu doğrulanır.
+
+Varsayılan yaklaşım hâlâ: MEVCUT ekranların (dashboard.html, tfrs16.html) dış kabuğunu (shell/navigasyon/sayfa düzeni) DOM/CSS/UI-render katmanında yeniden organize etmek, backend'e hiç dokunmadan. Backend değişikliği yalnızca gerçekten kaçınılmazsa, yukarıdaki şartlarla yapılır.
+
+Her değişiklikten sonra: `npx jest --runInBand` ile backend/servis test suite'i (bu konuşmada zaten kapsanan `inflation-manual-entry`, `inflation-indices-admin-authorization`, `index-validation`, `tuik-index-service`, `tfrs16-inflation-backend-cache` dahil) PASS durumunu KORUMALI — bu, backend'in bozulmadığının kanıtı olarak her adımda çalıştırılacaktır.
+
+## FAZ SIRASI (release öncesi, sırayla)
+
+**Faz 0 — Shell kararı:** `dashboard.html` tek kabuk olur. `tfrs16.html` kendi sidebar/topbar'ını render etmeyi bırakır, yalnızca içerik üretir.
+
+**Faz 1:**
+- Tek kabuk + tutarlı navigasyon
+- Sözleşme detayı tab'lara bölünür: Özet | Ödeme Planı | Modifikasyon & Reassessment | Enflasyon | SLB/Alt Kiralama | Muhasebe Fişleri (CSS ile bölüm gizleme/gösterme — DOM yapısı ve hesaplama mantığı değişmez)
+- Breadcrumb: Şirket > Sözleşme > Tab
+
+**Faz 2:**
+- İki menünün (dashboard.html + tfrs16.html) tam envanteri çıkarılır, tekrarlar (Close Dashboard, Hesap Planı Eşleme, Denetim İzi, Konsolidasyon) birleştirilir
+- Role göre (muhasebeci/CFO/admin) tek, tutarlı bilgi mimarisi
+
+**Faz 3 (revize — yalnızca kullanıcıya görünen UX maddeleri):**
+- Progressive disclosure: az kullanılan formlar (SLB, Alt Kiralama) varsayılan kapalı/accordion
+- Tutarlı boş/yükleniyor/hata durumları
+- (Opsiyonel) yeni sözleşme için adım-adım sihirbaz
+
+## AYRILAN — RELEASE SONRASINA BIRAKILDI
+
+`js/tfrs16.js`'in iç modülerleştirilmesi (bölüm 26'daki `tfrs16-core.js`/`tfrs16-calculation.js`/... yapısı) **release sonrasında** kalır. Bu saf teknik borçtur — kullanıcıya görünmez, "kullanılabilirlik" hedefine hizmet etmez, 30.000+ satırlık dosyayı bölerken regresyon riski taşır. Faz 0-3 ile KARIŞTIRILMAMALIDIR; bölüm 26'daki "release öncesi kapsamlı refactor yapılmayacak" kuralı bu madde için AYNEN GEÇERLİ kalmaya devam eder.
+
+
