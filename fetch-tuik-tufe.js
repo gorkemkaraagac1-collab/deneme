@@ -3,7 +3,7 @@
  * TÜİK SDMX servisinden TÜFE Genel Endeksi'ni çekip JSON olarak kaydeder.
  *
  * KULLANIM:
- *   TUIK_API_KEY=xxxxx node fetch-tuik-tufe.js
+ *   TUIK_API_KEY=01a05248-dc54-727a-b5cc-c2ebc22dc83b node fetch-tuik-tufe.js
  *   veya (Türkiye telefon hattı olmayan kullanıcılar için)
  *   TUIK_CLIENT_ID=xxx TUIK_CLIENT_SECRET=yyy node fetch-tuik-tufe.js
  *
