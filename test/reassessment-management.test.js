@@ -2,17 +2,11 @@
  * @jest-environment jsdom
  *
  * ============================================================
- * KİRA REASSESSMENT — MODÜL TESTLERİ
+ * KİRA REASSESSMENT — MODÜL TESTLERİ (backend-persist sürümü)
  * ============================================================
  *
- * Kapsam: createReassessment / applyReassessment / updateReassessment /
- * cancelReassessment fonksiyonlarının (js/tfrs16.js) mantığını VE
- * backend'e (PostgreSQL) kayıt DAVRANIŞINI doğrular.
- *
- * Aynı yapı ve aynı ÖNEMLİ BULGU test/modification-management.test.js
- * dosyasındaki gibi: "Backend persistence" bloğundaki testler PASS
- * olur ama bu "her şey yolunda" değil, "backend'e hiç yazılmadığı"
- * anlamına gelir — bkz. konuşma raporu.
+ * Bkz. test/modification-management.test.js başlığı — aynı yapı ve
+ * aynı düzeltme geçmişi (backend-first + rollback) burada da geçerli.
  */
 
 const { loadTfrs16 } = require("./helpers/loadTfrs16");
@@ -35,16 +29,28 @@ function baseContract(overrides = {}) {
   };
 }
 
-describe("createReassessment", () => {
-  let tfrs16;
+function mockOkResponse(data = {}) {
+  return { ok: true, status: 200, text: async () => JSON.stringify(data) };
+}
+function mockFailResponse(status = 500, error = "Sunucu hatası") {
+  return { ok: false, status, text: async () => JSON.stringify({ error }) };
+}
+
+describe("createReassessment — mutlu yol + backend kaydı", () => {
+  let tfrs16, fetchSpy;
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
     tfrs16 = loadTfrs16();
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockOkResponse({ success: true }));
   });
 
-  test("geçerli input ile DRAFT durumunda bir reassessment oluşturur", () => {
+  afterEach(() => fetchSpy.mockRestore());
+
+  test("geçerli input ile DRAFT durumunda bir reassessment oluşturur", async () => {
     const contract = baseContract();
-    const result = tfrs16.createReassessment(contract, {
+    const result = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
@@ -55,12 +61,29 @@ describe("createReassessment", () => {
     expect(result.valid).toBe(true);
     expect(contract.reassessments.length).toBe(1);
     expect(contract.reassessments[0].status).toBe("DRAFT");
-    expect(contract.reassessments[0].type).toBe("LEASE_TERM_CHANGE");
   });
 
-  test("sözleşmenin GERÇEK alanlarını DEĞİŞTİRMEZ — yalnızca APPLIED anında değişir", () => {
+  test("backend'e PUT /api/contracts/:id ile, details.reassessments içinde yeni kayıtla çağrı yapılır", async () => {
+    const contract = baseContract();
+    await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "LEASE_TERM_CHANGE",
+      newLeaseEndDate: "2028-12-01"
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toMatch(new RegExp(`/api/contracts/${contract.id}$`));
+    expect(options.method).toBe("PUT");
+    const body = JSON.parse(options.body);
+    expect(body.details.reassessments.length).toBe(1);
+    expect(body.details.reassessments[0].type).toBe("LEASE_TERM_CHANGE");
+  });
+
+  test("sözleşmenin GERÇEK alanlarını DEĞİŞTİRMEZ — yalnızca APPLIED anında değişir", async () => {
     const contract = baseContract({ endDate: "2027-12-01" });
-    tfrs16.createReassessment(contract, {
+    await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
@@ -69,21 +92,20 @@ describe("createReassessment", () => {
     expect(contract.endDate).toBe("2027-12-01");
   });
 
-  test("geçersiz/eksik input reddedilir, sözleşmeye kayıt eklenmez", () => {
+  test("geçersiz/eksik input reddedilir, sözleşmeye kayıt eklenmez, backend'e hiç gidilmez", async () => {
     const contract = baseContract();
-    const result = tfrs16.createReassessment(contract, {
-      // reassessmentDate ve effectiveDate eksik
+    const result = await tfrs16.createReassessment(contract, {
       type: "LEASE_TERM_CHANGE"
+      // reassessmentDate/effectiveDate eksik
     });
     expect(result.valid).toBe(false);
-    expect(Array.isArray(result.errors)).toBe(true);
-    expect(result.errors.length).toBeGreaterThan(0);
     expect(contract.reassessments || []).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  test("effectiveDate, reassessmentDate'ten önce olamaz (validasyon)", () => {
+  test("effectiveDate, reassessmentDate'ten önce olamaz (validasyon)", async () => {
     const contract = baseContract();
-    const result = tfrs16.createReassessment(contract, {
+    const result = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-08-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
@@ -93,16 +115,49 @@ describe("createReassessment", () => {
   });
 });
 
-describe("applyReassessment", () => {
-  let tfrs16;
+describe("createReassessment — backend hatası → ROLLBACK", () => {
+  let tfrs16, fetchSpy;
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
     tfrs16 = loadTfrs16();
   });
 
-  test("APPLIED sonrası sözleşmenin endDate/discountRate alanları GERÇEKTEN güncellenir (LEASE_TERM_CHANGE)", () => {
+  afterEach(() => fetchSpy && fetchSpy.mockRestore());
+
+  test("backend 500 dönerse valid:false, HATA MESAJI verilir VE contract.reassessments BOŞ kalır", async () => {
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockFailResponse(500, "DB bağlantı hatası"));
+    const contract = baseContract();
+
+    const result = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "LEASE_TERM_CHANGE",
+      newLeaseEndDate: "2030-12-01"
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/Backend'e kaydedilemedi/);
+    expect(contract.reassessments).toEqual([]);
+  });
+});
+
+describe("applyReassessment — mutlu yol + backend kaydı", () => {
+  let tfrs16, fetchSpy;
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
+    tfrs16 = loadTfrs16();
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockOkResponse({ success: true }));
+  });
+
+  afterEach(() => fetchSpy.mockRestore());
+
+  test("APPLIED sonrası sözleşmenin endDate/discountRate alanları GERÇEKTEN güncellenir (LEASE_TERM_CHANGE)", async () => {
     const contract = baseContract({ endDate: "2027-12-01", discountRate: 18 });
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
@@ -111,29 +166,48 @@ describe("applyReassessment", () => {
     });
     expect(created.valid).toBe(true);
 
-    const applied = tfrs16.applyReassessment(contract, created.reassessment.id);
+    const applied = await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(applied.valid).toBe(true);
     expect(contract.endDate).toBe("2030-12-01");
     expect(contract.discountRate).toBe(21);
     expect(contract.reassessments[0].status).toBe("APPLIED");
   });
 
-  test("LEASE_TERM_CHANGE tipinde monthlyPayment KASITLI OLARAK korunur (newPayment gönderilse bile yok sayılır — iş kuralı)", () => {
+  test("APPLY sırasında backend'e ikinci bir PUT çağrısı (güncel endDate ile) yapılır", async () => {
+    const contract = baseContract({ endDate: "2027-12-01" });
+    const created = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "LEASE_TERM_CHANGE",
+      newLeaseEndDate: "2030-12-01"
+    });
+    fetchSpy.mockClear();
+
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, options] = fetchSpy.mock.calls[0];
+    const body = JSON.parse(options.body);
+    expect(body.endDate).toBe("2030-12-01");
+    expect(body.details.reassessments[0].status).toBe("APPLIED");
+  });
+
+  test("LEASE_TERM_CHANGE tipinde monthlyPayment KASITLI OLARAK korunur (newPayment gönderilse bile yok sayılır — iş kuralı)", async () => {
     const contract = baseContract({ monthlyPayment: 100000 });
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01",
       newPayment: 999999
     });
-    tfrs16.applyReassessment(contract, created.reassessment.id);
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(contract.monthlyPayment).toBe(100000);
   });
 
-  test("FIXED_PAYMENT_CHANGE tipinde monthlyPayment APPLIED sonrası GERÇEKTEN güncellenir", () => {
+  test("FIXED_PAYMENT_CHANGE tipinde monthlyPayment APPLIED sonrası GERÇEKTEN güncellenir", async () => {
     const contract = baseContract({ monthlyPayment: 100000 });
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "FIXED_PAYMENT_CHANGE",
@@ -141,14 +215,14 @@ describe("applyReassessment", () => {
       newLeaseEndDate: contract.endDate
     });
     expect(created.valid).toBe(true);
-    const applied = tfrs16.applyReassessment(contract, created.reassessment.id);
+    const applied = await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(applied.valid).toBe(true);
     expect(contract.monthlyPayment).toBe(140000);
   });
 
-  test("opsiyon (renewal/termination/purchase) reassessment'i APPLIED sonrası contract flag'lerini günceller", () => {
+  test("opsiyon (renewal/termination/purchase) reassessment'i APPLIED sonrası contract flag'lerini günceller", async () => {
     const contract = baseContract({ renewalOption: false });
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "RENEWAL_OPTION_CHANGE",
@@ -156,110 +230,174 @@ describe("applyReassessment", () => {
       newLeaseEndDate: contract.endDate
     });
     expect(created.valid).toBe(true);
-    tfrs16.applyReassessment(contract, created.reassessment.id);
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(contract.renewalOption).toBe(true);
   });
 
-  test("APPLIED reassessment için journal (yevmiye) üretilir", () => {
+  test("APPLIED reassessment için journal (yevmiye) üretilir", async () => {
     const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    tfrs16.applyReassessment(contract, created.reassessment.id);
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(Array.isArray(contract.reassessments[0].journal)).toBe(true);
   });
 
-  test("zaten APPLIED olan bir reassessment tekrar apply edilirse aynı sonucu döner (idempotent)", () => {
+  test("zaten APPLIED olan bir reassessment tekrar apply edilirse aynı sonucu döner (idempotent), backend'e tekrar gitmez", async () => {
     const contract = baseContract({ endDate: "2027-12-01" });
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    tfrs16.applyReassessment(contract, created.reassessment.id);
-    expect(contract.endDate).toBe("2030-12-01");
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
+    fetchSpy.mockClear();
 
-    const second = tfrs16.applyReassessment(contract, created.reassessment.id);
+    const second = await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(second.valid).toBe(true);
     expect(contract.endDate).toBe("2030-12-01");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  test("var olmayan bir reassessment id'si için açık hata döner", () => {
+  test("var olmayan bir reassessment id'si için açık hata döner", async () => {
     const contract = baseContract();
-    const result = tfrs16.applyReassessment(contract, "NON-EXISTENT-ID");
+    const result = await tfrs16.applyReassessment(contract, "NON-EXISTENT-ID");
     expect(result.valid).toBe(false);
     expect(result.errors.join(" ")).toMatch(/bulunamadı/);
   });
 
-  test("CANCELLED bir reassessment apply edilemez", () => {
+  test("CANCELLED bir reassessment apply edilemez", async () => {
     const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    tfrs16.cancelReassessment(contract, created.reassessment.id);
-    const result = tfrs16.applyReassessment(contract, created.reassessment.id);
+    await tfrs16.cancelReassessment(contract, created.reassessment.id);
+    const result = await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(result.valid).toBe(false);
     expect(result.errors.join(" ")).toMatch(/CANCELLED/);
   });
 });
 
-describe("cancelReassessment", () => {
+describe("applyReassessment — backend hatası → TAM ROLLBACK", () => {
   let tfrs16;
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
     tfrs16 = loadTfrs16();
   });
 
-  test("DRAFT bir reassessment iptal edilebilir (status: CANCELLED)", () => {
+  test("APPLY sırasında backend hata verirse hem contract alanları hem reassessment objesi APPLY ÖNCESİ haline TAM olarak döner", async () => {
+    let callCount = 0;
+    const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(async () => {
+      callCount += 1;
+      return callCount === 1 ? mockOkResponse({ success: true }) : mockFailResponse(500, "Zaman aşımı");
+    });
+
+    const contract = baseContract({ endDate: "2027-12-01", discountRate: 18 });
+    const created = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "LEASE_TERM_CHANGE",
+      newLeaseEndDate: "2030-12-01",
+      newDiscountRate: 25
+    });
+    expect(created.valid).toBe(true);
+
+    const applied = await tfrs16.applyReassessment(contract, created.reassessment.id);
+
+    expect(applied.valid).toBe(false);
+    expect(applied.errors.join(" ")).toMatch(/Backend'e kaydedilemedi/);
+    expect(contract.endDate).toBe("2027-12-01");
+    expect(contract.discountRate).toBe(18);
+    expect(contract.reassessments[0].status).toBe("DRAFT");
+    expect(contract.reassessments[0].journal).toBeUndefined();
+
+    fetchSpy.mockRestore();
+  });
+});
+
+describe("cancelReassessment", () => {
+  let tfrs16, fetchSpy;
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
+    tfrs16 = loadTfrs16();
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockOkResponse({ success: true }));
+  });
+
+  afterEach(() => fetchSpy.mockRestore());
+
+  test("DRAFT bir reassessment iptal edilebilir (status: CANCELLED)", async () => {
     const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    const cancelled = tfrs16.cancelReassessment(contract, created.reassessment.id);
+    const cancelled = await tfrs16.cancelReassessment(contract, created.reassessment.id);
     expect(cancelled.valid).toBe(true);
     expect(contract.reassessments[0].status).toBe("CANCELLED");
   });
 
-  test("APPLIED bir reassessment iptal EDİLEMEZ (fail-closed)", () => {
+  test("APPLIED bir reassessment iptal EDİLEMEZ (fail-closed)", async () => {
     const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    tfrs16.applyReassessment(contract, created.reassessment.id);
-    const result = tfrs16.cancelReassessment(contract, created.reassessment.id);
+    await tfrs16.applyReassessment(contract, created.reassessment.id);
+    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id);
     expect(result.valid).toBe(false);
+  });
+
+  test("backend hata verirse status DRAFT'a geri döner", async () => {
+    const contract = baseContract();
+    const created = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "LEASE_TERM_CHANGE",
+      newLeaseEndDate: "2030-12-01"
+    });
+    fetchSpy.mockResolvedValueOnce(mockFailResponse(500));
+    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id);
+    expect(result.valid).toBe(false);
+    expect(contract.reassessments[0].status).toBe("DRAFT");
   });
 });
 
 describe("updateReassessment", () => {
-  let tfrs16;
+  let tfrs16, fetchSpy;
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
     tfrs16 = loadTfrs16();
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockOkResponse({ success: true }));
   });
 
-  test("DRAFT bir reassessment'in alanları güncellenebilir", () => {
+  afterEach(() => fetchSpy.mockRestore());
+
+  test("DRAFT bir reassessment'in alanları güncellenebilir ve backend'e yazılır", async () => {
     const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
+    const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
       newLeaseEndDate: "2030-12-01"
     });
-    const updated = tfrs16.updateReassessment(contract, created.reassessment.id, {
+    const updated = await tfrs16.updateReassessment(contract, created.reassessment.id, {
       reassessmentDate: "2026-06-01",
       effectiveDate: "2026-07-01",
       type: "LEASE_TERM_CHANGE",
@@ -270,19 +408,24 @@ describe("updateReassessment", () => {
   });
 });
 
-describe("Kilitli dönem koruması (assertPeriodWritable)", () => {
-  let tfrs16;
+describe("Kilitli dönem koruması (assertPeriodWritable) — backend'e hiç gidilmez", () => {
+  let tfrs16, fetchSpy;
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
     tfrs16 = loadTfrs16();
+    fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(mockOkResponse({ success: true }));
   });
 
-  test("kilitli bir döneme düşen effectiveDate ile createReassessment reddedilir", () => {
+  afterEach(() => fetchSpy.mockRestore());
+
+  test("kilitli bir döneme düşen effectiveDate ile createReassessment reddedilir, fetch hiç çağrılmaz", async () => {
     const lockResult = tfrs16.lockPeriod("2026-04", { reason: "test lock" });
     expect(lockResult.success).toBe(true);
 
     const contract = baseContract();
-    const result = tfrs16.createReassessment(contract, {
+    const result = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-04-10",
       effectiveDate: "2026-04-15",
       type: "LEASE_TERM_CHANGE",
@@ -290,59 +433,6 @@ describe("Kilitli dönem koruması (assertPeriodWritable)", () => {
     });
     expect(result.valid).toBe(false);
     expect(result.errors.join(" ")).toMatch(/kilitli/);
-  });
-});
-
-describe("Backend persistence — createReassessment/applyReassessment/cancelReassessment BACKEND'E YAZMIYOR", () => {
-  let tfrs16;
-  let fetchSpy;
-
-  beforeEach(() => {
-    localStorage.clear();
-    tfrs16 = loadTfrs16();
-    fetchSpy = jest.spyOn(global, "fetch").mockImplementation(() => {
-      throw new Error("fetch ÇAĞRILDI — bu test bunu YAKALAMAK için var");
-    });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
-
-  test("createReassessment sırasında hiçbir backend çağrısı yapılmaz", () => {
-    const contract = baseContract();
-    const result = tfrs16.createReassessment(contract, {
-      reassessmentDate: "2026-06-01",
-      effectiveDate: "2026-07-01",
-      type: "LEASE_TERM_CHANGE",
-      newLeaseEndDate: "2030-12-01"
-    });
-    expect(result.valid).toBe(true);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  test("applyReassessment sırasında hiçbir backend çağrısı yapılmaz — APPLIED sonrası yeni kira bitiş/ödeme/iskonto SADECE localStorage'da kalır", () => {
-    const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
-      reassessmentDate: "2026-06-01",
-      effectiveDate: "2026-07-01",
-      type: "LEASE_TERM_CHANGE",
-      newLeaseEndDate: "2030-12-01"
-    });
-    const applied = tfrs16.applyReassessment(contract, created.reassessment.id);
-    expect(applied.valid).toBe(true);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  test("cancelReassessment sırasında hiçbir backend çağrısı yapılmaz", () => {
-    const contract = baseContract();
-    const created = tfrs16.createReassessment(contract, {
-      reassessmentDate: "2026-06-01",
-      effectiveDate: "2026-07-01",
-      type: "LEASE_TERM_CHANGE",
-      newLeaseEndDate: "2030-12-01"
-    });
-    tfrs16.cancelReassessment(contract, created.reassessment.id);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
