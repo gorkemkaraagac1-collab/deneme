@@ -7278,6 +7278,40 @@ document.addEventListener("DOMContentLoaded", () => {
   // write-blocked kontrolünü (yukarı bakınız) DE TEK YERDEN uygulamayı
   // sağlıyor.
 
+  /* ==========================================================
+     CONTRACT MODAL — TAB SWITCHING (Yeni Sözleşme formu, onaylı plan)
+     ----------------------------------------------------------
+     SADECE görsel: [data-tab] elemanlarına gk-tab-active class'ı
+     ekleyip/kaldırıyor, hiçbir input'u DOM'dan kaldırmıyor —
+     form submit / FormData okuma davranışı DEĞİŞMEZ.
+  ========================================================== */
+
+  function gkSwitchContractTab(tabNumber) {
+    const target = String(tabNumber);
+
+    document.querySelectorAll("#contractForm .form-grid [data-tab]").forEach(el => {
+      el.classList.toggle("gk-tab-active", el.dataset.tab === target);
+    });
+
+    document.querySelectorAll("#contractForm .gk-contract-tab").forEach(btn => {
+      const isActive = btn.dataset.tabTarget === target;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+  }
+
+  // Event delegation — tab-bar DOM'da statik (bkz. tfrs16.html), bu
+  // yüzden tek seferlik bir listener yeterli; openContractModal her
+  // çağrıldığında yeniden eklenmiyor (duplicate listener riski yok).
+  if (!window.__GK_CONTRACT_TABS_WIRED__) {
+    window.__GK_CONTRACT_TABS_WIRED__ = true;
+    document.getElementById("contractModal")?.addEventListener("click", event => {
+      const tabButton = event.target?.closest?.(".gk-contract-tab");
+      if (!tabButton) return;
+      gkSwitchContractTab(tabButton.dataset.tabTarget);
+    });
+  }
+
   function openContractModal(
     contract = null
   ) {
@@ -7496,6 +7530,14 @@ document.addEventListener("DOMContentLoaded", () => {
       "hidden"
     );
 
+    // Modal görünür olduktan hemen önce Tab 1'e senkronize et — bu,
+    // injectAssetClassField/injectV26CurrencyFields tarafından SONRADAN
+    // eklenen [data-tab] elemanlarının da (Varlık Sınıfı, V26 paneli)
+    // doğru şekilde gösterilip gizlenmesini garanti eder. Kullanıcı bir
+    // önceki açılışta başka bir tab'da kalmış olabilir; her yeni
+    // açılış Tab 1'den başlar.
+    gkSwitchContractTab(1);
+
     } catch (error) {
       // ÖNEMLİ DÜZELTME: önceden bu fonksiyonda ARA bir adım (setInput/
       // applySessionCompanyToForm/injectAssetClassField/vb.) hata
@@ -7542,6 +7584,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!select) {
       const group = document.createElement("div");
       group.className = "form-group";
+      group.dataset.tab = "1"; // Tab 1 — Sözleşme (onaylı plan: Varlık Sınıfı ana tab'da)
       group.innerHTML = `
         <label>Varlık Sınıfı</label>
         <select id="assetClass"></select>
@@ -7595,6 +7638,7 @@ document.addEventListener("DOMContentLoaded", () => {
       panel = document.createElement("div");
       panel.id = "v26CurrencyPanel";
       panel.className = "form-group";
+      panel.dataset.tab = "4"; // Tab 4 — Para Birimi & Standartlar (V26)
       panel.style.cssText = "grid-column:1/-1;border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#f8fafc;margin-top:8px;";
       panel.innerHTML = `
         <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px;">Para Birimi & Standartlar (V26)</div>
