@@ -19,7 +19,7 @@
 
 const { loadTfrs16 } = require("./helpers/loadTfrs16");
 
-describe("loadInflationIndexTable — backend cache boşken localStorage'a düşer", () => {
+describe("loadInflationIndexTable — backend cache boşken BOŞ döner (fail-closed, localStorage'a DÜŞMEZ)", () => {
   let tfrs16;
 
   beforeEach(() => {
@@ -27,17 +27,17 @@ describe("loadInflationIndexTable — backend cache boşken localStorage'a düş
     tfrs16 = loadTfrs16();
   });
 
-  test("backend hiç sorulmadıysa (varsayılan durum) localStorage'daki manuel tablo döner", () => {
-    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 3500);
-    tfrs16.addOrUpdateInflationIndexEntry("2025-02", 3550);
+  test("backend hiç sorulmadıysa (varsayılan durum) boş dizi döner — localStorage'daki manuel tablo ARTIK KULLANILMAZ", () => {
+    // Bu tablo artık admin kontrolü olmayan bir formdan yazılamıyor
+    // (renderInflationIndexManagementPage kapatıldı), ama eski/kalıntı
+    // bir localStorage verisi olsa bile hesaplamaya asla karışmamalı —
+    // bu testin asıl amacı budur.
+    localStorage.setItem("gk_tfrs16_inflation_index_v1", JSON.stringify([
+      { month: "2025-01", index: 9999 }
+    ]));
 
     const table = tfrs16.loadInflationIndexTable();
-    expect(table).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ month: "2025-01", index: 3500 }),
-        expect.objectContaining({ month: "2025-02", index: 3550 })
-      ])
-    );
+    expect(table).toEqual([]);
   });
 
   test("getInflationIndex hâlâ eksik ay için Error fırlatır (sessiz varsayılan YOK)", () => {
@@ -53,7 +53,7 @@ describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle ge
     tfrs16 = loadTfrs16();
   });
 
-  test("gk_backend_jwt yoksa fetch hiç denenmez, false döner, cache boş kalır", async () => {
+  test("ne access_token ne gk_backend_jwt varsa fetch hiç denenmez, false döner, cache boş kalır (localStorage'a DÜŞMEZ)", async () => {
     const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(() => {
       throw new Error("fetch çağrılmamalıydı");
     });
@@ -63,11 +63,28 @@ describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle ge
     expect(result).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    // Cache dolmadığı için loadInflationIndexTable yine localStorage'a düşer.
-    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 3500);
+    // Cache dolmadığı için loadInflationIndexTable artık BOŞ döner —
+    // eski davranışta olduğu gibi localStorage'a düşmez (fail-closed).
+    localStorage.setItem("gk_tfrs16_inflation_index_v1", JSON.stringify([
+      { month: "2025-01", index: 3500 }
+    ]));
     const table = tfrs16.loadInflationIndexTable();
-    expect(table.some(e => e.month === "2025-01" && e.index === 3500)).toBe(true);
+    expect(table).toEqual([]);
 
+    fetchSpy.mockRestore();
+  });
+
+  test("access_token doluysa (gerçek login akışı) token bulunur ve fetch DENENIR", async () => {
+    localStorage.setItem("access_token", "real-session-token");
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: [] })
+    });
+
+    const result = await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(result).toBe(true);
     fetchSpy.mockRestore();
   });
 
@@ -83,8 +100,11 @@ describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle ge
 
   test("backend başarılı yanıt verirse cache dolar ve loadInflationIndexTable ARTIK localStorage'ı DEĞİL cache'i döner", async () => {
     localStorage.setItem("gk_backend_jwt", "fake-token-for-test");
-    // localStorage'da FARKLI bir değer var — cache doluysa bu görmezden gelinmeli.
-    tfrs16.addOrUpdateInflationIndexEntry("2025-01", 1111);
+    // localStorage'da FARKLI bir değer var — cache doluysa bu görmezden gelinmeli
+    // (ve zaten artık hiç okunmuyor).
+    localStorage.setItem("gk_tfrs16_inflation_index_v1", JSON.stringify([
+      { month: "2025-01", index: 1111 }
+    ]));
 
     const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
@@ -102,6 +122,22 @@ describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle ge
     // getInflationIndex de artık backend'den gelen değeri kullanır.
     expect(tfrs16.getInflationIndex("2025-01")).toBe(3500);
 
+    fetchSpy.mockRestore();
+  });
+
+  test("fetch mutlak backend URL'ine (TFRS16_API_BASE) gider, relative path'e DEĞİL", async () => {
+    localStorage.setItem("access_token", "real-session-token");
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: [] })
+    });
+
+    await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/.*\/api\/inflation-indices/),
+      expect.any(Object)
+    );
     fetchSpy.mockRestore();
   });
 });
