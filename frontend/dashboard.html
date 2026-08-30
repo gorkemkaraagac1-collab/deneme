@@ -82,16 +82,14 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 <a href="#" class="side-link active"><span class="side-ic">⌂</span>Genel Bakış</a>
 <a href="../tfrs16.html" class="side-link"><span class="side-ic">▤</span>Sözleşmeler<span class="badge-count" id="contractCount">—</span></a>
 <a href="../tfrs16.html" class="side-link"><span class="side-ic">⌁</span>Hesaplama &amp; Yeniden Ölçüm</a>
-<a href="#" class="side-link"><span class="side-ic">⌁</span>Enflasyon Düzeltmesi</a>
+<a href="../tfrs16.html?open=inflation" class="side-link"><span class="side-ic">⌁</span>Enflasyon Düzeltmesi</a>
 <div class="side-group-label">Kapanış &amp; Kontrol</div>
-<a href="#" class="side-link"><span class="side-ic">▣</span>Close Dashboard</a>
-<a href="#" class="side-link"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
-<a href="#" class="side-link"><span class="side-ic">◷</span>Denetim İzi</a>
+<a href="../tfrs16.html?open=close" class="side-link"><span class="side-ic">▣</span>Close Dashboard</a>
+<a href="../tfrs16.html?open=accountMapping" class="side-link"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
+<a href="../tfrs16.html?open=audit" class="side-link"><span class="side-ic">◷</span>Denetim İzi</a>
 <div class="side-group-label">Grup</div>
-<a href="#" class="side-link"><span class="side-ic">◎</span>Konsolidasyon</a>
-<a href="#" class="side-link"><span class="side-ic">◉</span>Kur Yönetimi (TCMB)</a>
-<div class="side-group-label">Sistem</div>
-<a href="#" class="side-link"><span class="side-ic">⚙</span>Ayarlar</a>
+<a href="../tfrs16.html?open=consolidation" class="side-link"><span class="side-ic">◎</span>Konsolidasyon</a>
+<a href="../tfrs16.html?open=fxRates" class="side-link"><span class="side-ic">◉</span>Kur Yönetimi (TCMB)</a>
 </nav>
 <div class="side-foot"><div class="side-user"><span class="avatar" id="sideAvatar">--</span><div class="side-user-meta"><div class="name" id="userDisplay">Yükleniyor...</div><div class="role" id="userRole">Finans Kullanıcısı</div></div></div></div>
 </aside>
@@ -101,7 +99,6 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 <div class="topbar-right">
 <div class="search-box"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="searchInput" placeholder="Sözleşme, tedarikçi ara…" aria-label="Sözleşme ara"></div>
 <select class="company-select" id="companySelect"><option value="ALL">Şirket seçimi</option></select>
-<button class="icon-btn" aria-label="Bildirimler"><svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6"/></svg><span class="dot"></span></button>
 <span class="avatar" id="topAvatar">--</span><button class="logout" onclick="logout()">Çıkış</button>
 </div></header>
 <main class="content">
@@ -118,10 +115,10 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 <div class="qa-row">
 <button class="qa-btn" onclick="openTFRS16()"><span class="qa-ic">16</span><span class="lab">TFRS 16 Motorunu Aç</span></button>
 <button class="qa-btn" onclick="openTFRS16()"><span class="qa-ic">＋</span><span class="lab">Yeni Hesaplama</span></button>
-<button class="qa-btn"><span class="qa-ic">▣</span><span class="lab">Close Dashboard</span></button>
-<button class="qa-btn"><span class="qa-ic">⌁</span><span class="lab">Enflasyon Düzeltmesi</span></button>
-<button class="qa-btn"><span class="qa-ic">◎</span><span class="lab">Konsolidasyon</span></button>
-<button class="qa-btn"><span class="qa-ic">▤</span><span class="lab">Raporlar</span></button>
+<button class="qa-btn" onclick="window.location.href='../tfrs16.html?open=close'"><span class="qa-ic">▣</span><span class="lab">Close Dashboard</span></button>
+<button class="qa-btn" onclick="window.location.href='../tfrs16.html?open=inflation'"><span class="qa-ic">⌁</span><span class="lab">Enflasyon Düzeltmesi</span></button>
+<button class="qa-btn" onclick="window.location.href='../tfrs16.html?open=consolidation'"><span class="qa-ic">◎</span><span class="lab">Konsolidasyon</span></button>
+<button class="qa-btn" disabled title="Motor yok — genel bir 'Raporlar' sayfa render fonksiyonu mevcut değil, sadece Konsolidasyon Raporu var" style="opacity:.45;cursor:not-allowed"><span class="qa-ic">▤</span><span class="lab">Raporlar</span></button>
 </div>
 
 <div class="company-strip">
@@ -195,7 +192,7 @@ async function loadLicenseInfo(){
  }catch(e){loading.style.display="none";err.textContent="Lisans yükleme hatası: "+e.message;err.style.display="block"}
 }
 function loadModuleGrid(){
- const modules=[["📊","TFRS 16","Kullanılabilir",true,"../tfrs16.html"],["🔒","TMS 19","Yakında",false],["🔒","TMS 21","Yakında",false],["🔒","TMS 29","Yakında",false],["🔒","DCF","Yakında",false],["🔒","Hedge Muhasebesi","Yakında",false]];
+ const modules=[["📊","TFRS 16","Kullanılabilir",true,"../tfrs16.html"]];
  document.getElementById("activeModuleCount").textContent=modules.filter(x=>x[3]).length;
  document.getElementById("moduleGrid").innerHTML=modules.map(x=>x[3]?`<a href="${x[4]}" class="module-item unlocked"><span class="icon">${x[0]}</span><div class="name">${x[1]}</div><div class="status">✓ ${x[2]}</div></a>`:`<div class="module-item locked" title="Yakında"><span class="icon">${x[0]}</span><div class="name">${x[1]}</div><div class="status">${x[2]}</div></div>`).join("");
 }
