@@ -25,6 +25,20 @@
      * artık tıklanabilir kalıyor; stil sadece görsel bir ipucu.
      */
     .write-blocked { opacity: 0.55; cursor: not-allowed; }
+
+    /*
+     * Yeni Sözleşme formu tab'ları (bkz. PROJECT_CONTEXT.md bölüm 32,
+     * Faz 1). SADECE görsel gruplama — form-group elemanları DOM'da
+     * kalmaya devam eder, submit'e giren FormData/id-bazlı okuma
+     * DEĞİŞMEZ. data-tab olmayan .form-group'lar (varsa) her zaman
+     * görünür kalır (güvenli varsayılan).
+     */
+    .gk-contract-tabs { display:flex; gap:4px; flex-wrap:wrap; margin:-4px 0 16px; border-bottom:1px solid #e5e7eb; padding-bottom:0; }
+    .gk-contract-tab { border:0; background:transparent; padding:9px 14px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+    .gk-contract-tab:hover { color:#0f172a; }
+    .gk-contract-tab.active { color:#0f172a; border-bottom-color:#0f172a; }
+    .form-grid [data-tab]:not(.gk-tab-active) { display:none !important; }
+    .form-grid [data-tab].gk-tab-active { display:block; }
   </style>
   <script>
     /*
@@ -254,21 +268,27 @@
       <button id="closeModal" class="close-button" type="button">×</button>
     </div>
     <form id="contractForm">
+      <div class="gk-contract-tabs" role="tablist">
+        <button type="button" class="gk-contract-tab active" data-tab-target="1" role="tab" aria-selected="true">Sözleşme</button>
+        <button type="button" class="gk-contract-tab" data-tab-target="2" role="tab" aria-selected="false">İleri TFRS 16 Parametreleri</button>
+        <button type="button" class="gk-contract-tab" data-tab-target="3" role="tab" aria-selected="false">Opsiyonlar &amp; İstisnalar</button>
+        <button type="button" class="gk-contract-tab" data-tab-target="4" role="tab" aria-selected="false">Para Birimi &amp; Standartlar</button>
+      </div>
       <div class="form-grid">
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="contractId">Sözleşme ID</label>
           <input id="contractId" name="contractId" required placeholder="LEASE-004">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="company">Şirket</label>
           <input id="company" name="company" required placeholder="Şirket adı" value="">
           <input type="hidden" id="companyId" name="companyId" value="">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="supplier">Tedarikçi / Kiralayan</label>
           <input id="supplier" name="supplier" required placeholder="Tedarikçi adı">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="currency">Para Birimi</label>
           <select id="currency" name="currency">
             <option value="TRY" selected>TRY (₺)</option>
@@ -276,58 +296,55 @@
             <option value="EUR">EUR (€)</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="monthlyPayment">Dönemsel Kira Tutarı</label>
           <input id="monthlyPayment" name="monthlyPayment" type="number" min="0" step="0.01" required placeholder="0.00">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="discountRate">Yıllık İskonto Oranı (%)</label>
           <input id="discountRate" name="discountRate" type="number" min="0" step="0.01" value="18" required placeholder="18.00">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="startDate">Başlangıç Tarihi</label>
           <input id="startDate" name="startDate" type="date" required>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="endDate">Bitiş Tarihi</label>
           <input id="endDate" name="endDate" type="date" required>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="paymentTiming">Ödeme Zamanı</label>
           <select id="paymentTiming" name="paymentTiming">
             <option value="advance">Dönem Başı (Advance)</option>
             <option value="arrears" selected>Dönem Sonu (Arrears)</option>
           </select>
         </div>
-        <div class="form-group">
-          <label for="paymentFrequency">Ödeme Frekansı</label>
+        <div class="form-group" data-tab="1">
+          <label for="paymentFrequency">Ödeme Sıklığı</label>
           <select id="paymentFrequency" name="paymentFrequency">
             <option value="1" selected>Aylık</option>
             <option value="3">3 Aylık</option>
             <option value="12">Yıllık</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="initialDirectCost">Doğrudan İlk Maliyetler (₺)</label>
           <input id="initialDirectCost" name="initialDirectCost" type="number" min="0" step="0.01" value="0" placeholder="0.00">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="1">
           <label for="restorationCost">Sökme / Restorasyon Karşılığı (₺)</label>
           <input id="restorationCost" name="restorationCost" type="number" min="0" step="0.01" value="0" placeholder="0.00">
         </div>
 
-        <div class="form-group" style="grid-column: span 2; margin-top:8px; padding-top:14px; border-top:1px solid #e5e7eb;">
-          <label style="font-size:11px;font-weight:800;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;">İleri TFRS 16 Parametreleri (opsiyonel)</label>
-        </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="prepayments">Peşin Ödemeler (₺)</label>
           <input id="prepayments" name="prepayments" type="number" min="0" step="0.01" value="0" placeholder="0.00">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="leaseIncentives">Kiralayan Teşvikleri (₺)</label>
           <input id="leaseIncentives" name="leaseIncentives" type="number" min="0" step="0.01" value="0" placeholder="0.00">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="leaseIncreaseType">Kira Artış Tipi</label>
           <select id="leaseIncreaseType" name="leaseIncreaseType">
             <option value="none" selected>Artış Yok</option>
@@ -336,17 +353,17 @@
             <option value="index">Endekse Bağlı (TÜFE vb.)</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="leaseIncreaseRate">Yıllık Artış Oranı (%)</label>
           <input id="leaseIncreaseRate" name="leaseIncreaseRate" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Oran' seçiliyse">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="fixedIncrease">Sabit Artış Tutarı (₺/yıl)</label>
           <input id="fixedIncrease" name="fixedIncrease" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Tutar' seçiliyse">
         </div>
         <!-- V18 Parça 1 — yalnızca leaseIncreaseType "Sabit Oran"/"Endekse Bağlı"
              iken görünür (bkz. init bloğundaki change listener). -->
-        <div id="escalationV18Fields" style="display:none; grid-column: span 2; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px;">
+        <div id="escalationV18Fields" data-tab="2" style="display:none; grid-column: span 2; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px;">
           <label style="display:block;margin-bottom:6px;font-size:11px;font-weight:800;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;">Kira Artışı — Gelişmiş (V18)</label>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px;">
             <div class="form-group">
@@ -366,31 +383,31 @@
             </div>
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="variablePayment">Değişken Ödeme (₺/ay)</label>
           <input id="variablePayment" name="variablePayment" type="number" min="0" step="0.01" value="0" placeholder="Yükümlülüğe dahil edilmez">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="usefulLifeMonths">Varlığın Faydalı Ömrü (Ay)</label>
           <input id="usefulLifeMonths" name="usefulLifeMonths" type="number" min="0" step="1" placeholder="Mülkiyet devri / kesin satın alma opsiyonunda">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="indexBaseRate">Baz Endeks Oranı</label>
           <input id="indexBaseRate" name="indexBaseRate" type="number" step="0.01" placeholder="Sadece 'Endekse Bağlı' seçiliyse">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="indexCurrentRate">Güncel Endeks Oranı</label>
           <input id="indexCurrentRate" name="indexCurrentRate" type="number" step="0.01" placeholder="Manuel güncellenir">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="indexReviewMonth">Endeks Güncelleme Ayı</label>
           <input id="indexReviewMonth" name="indexReviewMonth" type="number" min="1" max="12" placeholder="Boş=başlangıç ayı">
         </div>
-        <div class="form-group">
+        <div class="form-group" data-tab="2">
           <label for="indexReviewDay">Endeks Güncelleme Günü</label>
           <input id="indexReviewDay" name="indexReviewDay" type="number" min="1" max="31" placeholder="Boş=başlangıç günü">
         </div>
-        <div class="form-group" style="grid-column: span 2;">
+        <div class="form-group" data-tab="3" style="grid-column: span 2;">
           <label style="display:block;margin-bottom:6px;">Opsiyonlar &amp; İstisnalar</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;">
             <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="renewalOption" name="renewalOption" type="checkbox"> Yenileme opsiyonu makul ölçüde kesin</label>
@@ -403,7 +420,7 @@
           <p style="margin:8px 0 0;font-size:10px;color:#64748b;line-height:1.5;">Kısa vadeli veya düşük değerli olarak işaretlenen sözleşmeler TFRS 16.5-8 uyarınca aktifleştirilmez; kira gideri olarak (genellikle doğrusal esasa göre) muhasebeleştirilir.</p>
         </div>
 
-        <div class="form-group" style="grid-column: span 2;">
+        <div class="form-group" data-tab="3" style="grid-column: span 2;">
           <label for="renewalDate">Yenileme / Opsiyon Tarihi</label>
           <input id="renewalDate" name="renewalDate" type="date">
         </div>
