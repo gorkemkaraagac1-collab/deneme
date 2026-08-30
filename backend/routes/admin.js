@@ -2690,6 +2690,203 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
 
 
 // ============================================================
+// 6. INFLATION INDICES (MANUAL ENTRY) — TFRS16 / TMS29 destek verisi
+// ============================================================
+//
+// KAPSAM: Bu bölüm bağımsız bir "/api/tms29" ürünü DEĞİLDİR. TÜİK
+// otomatik entegrasyonu bu release kapsamından çıkarıldığı için
+// (bkz. PROJECT_CONTEXT.md), admin TÜİK'ten aldığı aylık TÜFE
+// endekslerini burada elle girer. Yazılan veri, mevcut
+// backend/services/tuik-index-service.js üzerinden AYNI
+// inflation_indices tablosuna, aynı immutable/supersede modeliyle
+// yazılır — TFRS16 hesaplama motoru (js/tfrs16.js) bu dosyadan
+// tamamen habersizdir ve GET /api/inflation-indices (VERIFIED+aktif
+// filtresiyle) üzerinden veri okumaya devam eder.
+//
+// Tüm endpoint'ler platform-level ADMIN gerektirir (requireAdmin) —
+// normal kullanıcı manuel kayıt giremez/doğrulayamaz.
+
+const {
+    createManualIndexEntry,
+    createBulkManualIndexEntries,
+    verifyIndexRecord,
+    rejectIndexRecord,
+    listIndexRecords,
+    BulkInputParseError
+} = require('../services/tuik-index-service');
+
+// GET /api/admin/inflation-indices?status=PENDING&months=2025-01,2025-02
+router.get('/inflation-indices', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const status = req.query.status ? String(req.query.status).toUpperCase() : undefined;
+        if (status && !['PENDING', 'VERIFIED', 'REJECTED'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Geçersiz status parametresi (PENDING, VERIFIED veya REJECTED bekleniyor).'
+            });
+        }
+
+        const months = req.query.months
+            ? String(req.query.months).split(',').map(s => s.trim()).filter(Boolean)
+            : undefined;
+
+        const records = await listIndexRecords({ status, months });
+
+        return res.json({
+            success: true,
+            data: records.map(r => ({
+                id: r.id,
+                month: r.index_month,
+                value: Number(r.index_value),
+                source: r.source,
+                verificationStatus: r.verification_status,
+                retrievedBy: r.retrieved_by,
+                verifiedBy: r.verified_by,
+                verifiedAt: r.verified_at,
+                createdAt: r.created_at
+            }))
+        });
+    } catch (error) {
+        console.error('Admin get inflation indices error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// POST /api/admin/inflation-indices  { month: "2026-07", value: 3500.25 }
+// Tek kayıt oluşturur — her zaman PENDING olarak başlar.
+router.post('/inflation-indices', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    try {
+        const fieldError = rejectUnknownFields(req.body, ['month', 'value']);
+        if (fieldError) {
+            return res.status(400).json({ success: false, error: fieldError });
+        }
+
+        const { month, value } = req.body || {};
+        const actor = req.user.username || req.user.id;
+
+        const result = await createManualIndexEntry({ month, value, actor });
+
+        return res.status(201).json({
+            success: true,
+            data: {
+                id: result.record.id,
+                month: result.record.index_month,
+                value: Number(result.record.index_value),
+                verificationStatus: result.record.verification_status,
+                action: result.action
+            }
+        });
+    } catch (error) {
+        if (error.code === 'INVALID_INFLATION_INDEX_INPUT') {
+            return res.status(400).json({ success: false, error: error.message });
+        }
+        console.error('Admin create manual inflation index error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// POST /api/admin/inflation-indices/bulk  { text: "2025-01\t2648.12\n2025-02\t2701.34" }
+// Toplu yapıştırma girişi — her satır "YYYY-MM <boşluk/tab> değer".
+// TÜM satırlar geçerli değilse (format/duplicate) HİÇBİR şey yazılmaz;
+// hatalı satırlar 400 ile birlikte tek tek raporlanır (sessizce
+// atlanmaz, kullanıcı düzeltip tekrar dener).
+router.post('/inflation-indices/bulk', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    try {
+        const fieldError = rejectUnknownFields(req.body, ['text']);
+        if (fieldError) {
+            return res.status(400).json({ success: false, error: fieldError });
+        }
+
+        const text = req.body && typeof req.body.text === 'string' ? req.body.text : '';
+        if (!text.trim()) {
+            return res.status(400).json({ success: false, error: 'text alanı zorunludur ve boş olamaz.' });
+        }
+
+        const actor = req.user.username || req.user.id;
+        const result = await createBulkManualIndexEntries(text, actor);
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        if (error instanceof BulkInputParseError) {
+            return res.status(400).json({
+                success: false,
+                error: error.message,
+                invalid: error.invalid,
+                duplicateMonthsInInput: error.duplicateMonthsInInput
+            });
+        }
+        console.error('Admin bulk create manual inflation indices error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// PATCH /api/admin/inflation-indices/:id/verify
+router.patch('/inflation-indices/:id/verify', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    try {
+        const actor = req.user.username || req.user.id;
+        const record = await verifyIndexRecord({ id: req.params.id, actor });
+
+        return res.json({
+            success: true,
+            data: {
+                id: record.id,
+                month: record.index_month,
+                value: Number(record.index_value),
+                verificationStatus: record.verification_status,
+                verifiedBy: record.verified_by,
+                verifiedAt: record.verified_at
+            }
+        });
+    } catch (error) {
+        if (error.code === 'INFLATION_INDEX_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.code === 'INFLATION_INDEX_NOT_ACTIVE' || error.code === 'INFLATION_INDEX_NOT_PENDING') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
+        console.error('Admin verify inflation index error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// PATCH /api/admin/inflation-indices/:id/reject  { reason?: string }
+router.patch('/inflation-indices/:id/reject', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
+    try {
+        const fieldError = rejectUnknownFields(req.body, ['reason']);
+        if (fieldError) {
+            return res.status(400).json({ success: false, error: fieldError });
+        }
+
+        const actor = req.user.username || req.user.id;
+        const reason = req.body && typeof req.body.reason === 'string' ? req.body.reason : null;
+
+        const record = await rejectIndexRecord({ id: req.params.id, actor, reason });
+
+        return res.json({
+            success: true,
+            data: {
+                id: record.id,
+                month: record.index_month,
+                value: Number(record.index_value),
+                verificationStatus: record.verification_status,
+                verifiedBy: record.verified_by,
+                verifiedAt: record.verified_at
+            }
+        });
+    } catch (error) {
+        if (error.code === 'INFLATION_INDEX_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.code === 'INFLATION_INDEX_NOT_ACTIVE' || error.code === 'INFLATION_INDEX_NOT_PENDING') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
+        console.error('Admin reject inflation index error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+
+// ============================================================
 // EXPORT
 // ============================================================
 
