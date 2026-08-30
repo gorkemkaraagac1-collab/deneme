@@ -809,12 +809,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let contracts = loadContracts();
 
   // PostgreSQL'den sözleşmeleri yükle (kaynak gerçek DB)
+  // AYNI ANDA: backend'deki VERIFIED enflasyon endeks cache'ini de
+  // doldur. Önceden refreshInflationIndexCacheFromBackend() hiçbir
+  // yerden ÇAĞRILMIYORDU (ölü kod) — backendInflationIndexCache hep
+  // null kalıyor, loadInflationIndexTable() hep localStorage'a
+  // düşüyordu. Artık admin panelinden VERIFIED yapılan kayıtlar bu
+  // çağrıyla TFRS16 hesaplamasına gerçekten ulaşıyor.
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       hydrateContractsFromApi();
+      refreshInflationIndexCacheFromBackend();
     });
   } else {
     setTimeout(() => hydrateContractsFromApi(), 0);
+    setTimeout(() => refreshInflationIndexCacheFromBackend(), 0);
   }
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
@@ -1913,11 +1921,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let backendInflationIndexCache = null; // null = backend henüz sorulmadı
 
   function getInflationIndexAuthToken() {
-    // Gerçek JWT wiring tamamlanana kadar olası bir token
-    // anahtarını best-effort okur; yoksa null döner (fetch zaten
-    // 401 ile başarısız olur ve aşağıda güvenle ele alınır).
+    // P1 UYUMLULUK: gerçek login akışı token'ı "access_token" anahtarında
+    // saklar (bkz. dashboard.html/js/admin.js) — "gk_backend_jwt" yalnızca
+    // eski/test senaryoları için bir fallback'tir. Önceden bu fonksiyon
+    // SADECE "gk_backend_jwt"a bakıyordu, dolayısıyla gerçek bir oturumda
+    // (access_token doluyken) BİLE token bulunamıyor, cache hiç dolmuyor
+    // ve loadInflationIndexTable() sessizce localStorage'a düşüyordu. Artık
+    // dosyanın kendi tfrs16GetToken() yardımcısıyla AYNI sırayı kullanır.
     try {
-      return localStorage.getItem("gk_backend_jwt") || null;
+      return tfrs16GetToken();
     } catch (error) {
       return null;
     }
@@ -1932,7 +1944,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const query = Array.isArray(months) && months.length ? `?months=${encodeURIComponent(months.join(","))}` : "";
-      const response = await fetch(`/api/inflation-indices${query}`, {
+      // ÖNEMLİ DÜZELTME: relative "/api/inflation-indices" GitHub Pages'ten
+      // (frontend origin) sunulduğunda backend'e DEĞİL, GitHub Pages'in
+      // kendisine gider (404) — TFRS16_API_BASE (Cloud Run) ile aynı mutlak
+      // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
+      // kullanımıyla tutarlı hale getirildi.
+      const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store"
       });
@@ -1961,20 +1978,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function loadInflationIndexTable() {
-    if (Array.isArray(backendInflationIndexCache)) {
-      return backendInflationIndexCache;
-    }
-
-    try {
-      const raw = localStorage.getItem(INFLATION_INDEX_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed)
-        ? parsed.filter(e => e && typeof e.month === "string" && Number.isFinite(Number(e.index)))
-        : [];
-    } catch (error) {
-      console.error("Enflasyon endeks tablosu okunamadı:", error);
-      return [];
-    }
+    // FAIL-CLOSED (bilinçli karar — admin panelinden VERIFIED gelen
+    // veri dışında hiçbir kaynak hesaplamaya girmemeli): önceden bu
+    // fonksiyon backendInflationIndexCache boşsa localStorage'daki
+    // ("gk_tfrs16_inflation_index_v1") manuel tabloya düşüyordu — bu
+    // tablo, admin kontrolü OLMAYAN bir ekrandan (bkz.
+    // renderInflationIndexManagementPage — artık kapatıldı) herhangi
+    // bir kullanıcı tarafından doldurulabiliyordu. Artık backend cache
+    // dolu değilse (henüz sorulmadı veya erişilemedi) BOŞ dizi
+    // döndürülür — getInflationIndex() bunu "eksik ay" olarak görüp
+    // zaten kendi kuralına göre açık bir hata fırlatır; asla sessizce
+    // doğrulanmamış bir değere düşülmez.
+    return Array.isArray(backendInflationIndexCache) ? backendInflationIndexCache : [];
   }
 
   function saveInflationIndexTable(entries) {
@@ -2035,6 +2050,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const entries = loadInflationIndexTable();
     const filtered = entries.filter(e => e.month !== month);
     saveInflationIndexTable(filtered);
+    // entries === backendInflationIndexCache (aynı referans, bkz.
+    // loadInflationIndexTable) olabileceği için, filter() sonucu YENİ bir
+    // dizi olduğundan referansı in-place güncelliyoruz — aksi halde silme
+    // işlemi backendInflationIndexCache'e hiç yansımaz (push/sort ile
+    // AYNI referans paylaşımına dayanan addOrUpdateInflationIndexEntry'nin
+    // aksine, filter burada "sessiz" bir tutarsızlık yaratıyordu).
+    if (Array.isArray(backendInflationIndexCache)) {
+      backendInflationIndexCache.length = 0;
+      backendInflationIndexCache.push(...filtered);
+    }
     recordAuditEvent({
       action: "INFLATION_INDEX_DELETED",
       entityType: "INFLATION_INDEX",
@@ -27402,6 +27427,26 @@ document.addEventListener("DOMContentLoaded", () => {
      gerekir (bkz. panel içi SINIR notu).
      ========================================================== */
   function runSelfTestsV19FullTms29() {
+    // İZOLASYON SARMALAYICISI (fonksiyonun İÇ MANTIĞINA dokunulmadı):
+    // Bu self-test, kendi test verisini addOrUpdateInflationIndexEntry()
+    // ile (tarihsel olarak localStorage'a) yazıyordu. loadInflationIndexTable()
+    // artık fail-closed olduğu için (bkz. yukarısı — admin panelinden
+    // VERIFIED gelmeyen hiçbir veri hesaplamaya girmiyor) bu iç test verisi
+    // artık motor tarafından GÖRÜLMÜYORDU. Çözüm: self-test SIRASINDA
+    // backendInflationIndexCache'i geçici olarak devreye alıp (addOrUpdate/
+    // deleteInflationIndexEntry çağrılarının ADRESLEDİĞİ kaynağı buraya
+    // yönlendirerek), test bitince GERÇEK production cache'ini (varsa)
+    // aynen geri yüklüyoruz — gerçek backend verisi asla kaybolmaz/ezilmez.
+    const __savedBackendInflationIndexCache = backendInflationIndexCache;
+    backendInflationIndexCache = [];
+    try {
+      return runSelfTestsV19FullTms29Body();
+    } finally {
+      backendInflationIndexCache = __savedBackendInflationIndexCache;
+    }
+  }
+
+  function runSelfTestsV19FullTms29Body() {
     const results = [];
     function check(name, expected, actual, tolerance = 0.01) {
       const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
@@ -30051,6 +30096,56 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
+    // KAPATILDI (bilinçli karar): bu ekran, admin kontrolü OLMAYAN
+    // herhangi bir kullanıcının localStorage'a manuel endeks
+    // yazabilmesine izin veriyordu — TFRS16 hesaplama motoru artık bu
+    // veriyi HİÇ okumuyor (bkz. loadInflationIndexTable, fail-closed).
+    // Enflasyon endeksleri artık YALNIZCA Admin Panel'den
+    // (backend, PENDING→admin verify/reject akışı) yönetiliyor. Bu
+    // fonksiyon kasıtlı olarak silinmedi (sidebar nav handler'ı hâlâ
+    // buna referans veriyor) — yerine bilgilendirici, salt-okunur bir
+    // ekran gösteriyor; hiçbir yazma işlemi (ekle/toplu ekle/sil)
+    // tetiklenmiyor.
+    const backendRows = (typeof loadInflationIndexTable === "function" ? loadInflationIndexTable() : [])
+      .slice()
+      .sort((a, b) => String(a.month).localeCompare(String(b.month)));
+
+    container.innerHTML = `
+      <div class="gk-v26-page">
+        <div class="gk-v26-card" style="background:#eff6ff;border-color:#bfdbfe;">
+          <h2 style="margin:0 0 8px;font-size:18px;color:#0f172a;">Enflasyon Endeksleri artık Admin Panel'den yönetiliyor</h2>
+          <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">
+            TÜİK otomatik senkronizasyonu bu release kapsamında devre dışı. Aylık TÜFE endeksleri
+            artık yalnızca yetkili bir admin tarafından, Admin Panel &rarr; Enflasyon Endeksleri
+            ekranından girilip doğrulanabiliyor (PENDING &rarr; VERIFIED). Bu sayfadan manuel giriş
+            kaldırıldı — aşağıda TFRS16 hesaplamasının şu anda kullandığı (backend'den VERIFIED
+            olarak onaylanmış) endeksler salt-okunur şekilde listeleniyor.
+          </p>
+        </div>
+
+        <div class="gk-v26-card">
+          <h3 style="margin:0 0 8px;font-size:15px;">Hesaplamada Kullanılan Endeksler <span style="font-size:12px;color:#94a3b8;">(${backendRows.length} kayıt, salt-okunur)</span></h3>
+          <div style="overflow:auto;">
+            <table class="gk-v26-table">
+              <thead><tr><th>Ay</th><th>Endeks Değeri</th></tr></thead>
+              <tbody>
+                ${backendRows.map(row => `
+                  <tr>
+                    <td><strong>${v26InflationEscape(row.month)}</strong></td>
+                    <td>${Number(row.index).toFixed(6)}</td>
+                  </tr>`).join("") ||
+                  `<tr><td colspan="2" style="text-align:center;color:#94a3b8;padding:24px;">Henüz backend'den doğrulanmış endeks yüklenmedi (sayfa yeni açıldıysa birkaç saniye bekleyip yenileyin, veya Admin Panel'den kontrol edin).</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    return;
+
+    // ------------------------------------------------------------
+    // AŞAĞISI ARTIK ÇALIŞTIRILMIYOR (yukarıdaki return ile atlanıyor).
+    // Kod, olası bir geri dönüş/karşılaştırma ihtiyacı için silinmedi.
+    // ------------------------------------------------------------
     const render = () => {
       const all = typeof loadInflationIndexTable === "function"
         ? loadInflationIndexTable().slice().sort((a,b) => String(a.month).localeCompare(String(b.month)))
