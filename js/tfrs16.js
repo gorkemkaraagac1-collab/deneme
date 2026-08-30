@@ -943,10 +943,14 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("TFRS 16 storage error:", error);
     }
 
-    const defaults = getDefaultContracts();
-    saveContracts(defaults);
-
-    return defaults;
+    // DÜZELTME (kullanıcı talebi — backend'e bağlandık, demo veri
+    // artık istenmiyor): önceden burada getDefaultContracts() (LEASE-001/
+    // 002/003, "GK Holding"/"GK Teknoloji") döndürülüp HEMEN localStorage'a
+    // YAZILIYORDU — kullanıcı gerçek backend'e hiç bağlanmasa/erişemese
+    // bile sahte sözleşmeler kalıcı olarak görünüyordu. getDefaultContracts()
+    // fonksiyonu (aşağıda) BİLEREK SİLİNMEDİ ama artık BURADAN ÇAĞRILMIYOR
+    // — fail-closed: veri yoksa boş liste, sahte veri YOK.
+    return [];
   }
 
 
@@ -28402,14 +28406,15 @@ document.addEventListener("DOMContentLoaded", () => {
       return liveFromContracts;
     }
 
-    const defaults = [
-      { id: "TR-001", code: "TR-001", name: "Teknoloji A.Ş.", country: "TR", functionalCurrency: "TRY", groupId: "GRP-1", status: "ACTIVE" },
-      { id: "DE-001", code: "DE-001", name: "GmbH", country: "DE", functionalCurrency: "EUR", groupId: "GRP-1", status: "ACTIVE" },
-      { id: "US-001", code: "US-001", name: "LLC", country: "US", functionalCurrency: "USD", groupId: "GRP-1", status: "ACTIVE" },
-      { id: "TR-002", code: "TR-002", name: "Lojistik Ltd.", country: "TR", functionalCurrency: "TRY", groupId: "GRP-1", status: "ACTIVE" }
-    ];
-    v26SaveCompanies(defaults);
-    return defaults;
+    // DÜZELTME (kullanıcı talebi — backend'e bağlandık, demo veri
+    // artık istenmiyor): önceden burada 4 demo şirket (TR-001
+    // "Teknoloji A.Ş.", DE-001 "GmbH", US-001 "LLC", TR-002
+    // "Lojistik Ltd.") üretilip HEMEN localStorage'a YAZILIYORDU —
+    // hiç sözleşme yokken (ya da henüz backend'den çekilmemişken) bu
+    // sahte şirketler Şirket Yönetimi/Konsolidasyon ekranlarında
+    // kalıcı olarak görünüyordu. Fail-closed: veri yoksa boş liste.
+    v26SaveCompanies([]);
+    return [];
   }
 
   function v26SaveCompanies(list) {
