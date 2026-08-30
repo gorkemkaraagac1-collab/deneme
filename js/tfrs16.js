@@ -20,6 +20,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (id === "newContractButton") {
           event.preventDefault();
           event.stopImmediatePropagation();
+          if (button.dataset.writeBlocked === "true") {
+            (typeof showToast === "function" ? showToast : alert)(
+              "Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol)."
+            );
+            return;
+          }
           if (typeof openContractModal === "function") openContractModal();
           else document.getElementById("contractModal")?.classList.remove("hidden");
           return;
@@ -549,10 +555,20 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function tfrs16ApplyWriteRoleUiGates() {
     if (tfrs16CanWriteContracts()) return;
+    // DEĞİŞİKLİK: native `disabled` KULLANILMIYOR. Bir `disabled` HTML
+    // butonuna tıklandığında tarayıcı click event'i HİÇ ÜRETMEZ — bu,
+    // emergency bridge'in (aşağıda) hiç tetiklenmemesine, dolayısıyla
+    // kullanıcının "tıklıyorum, hiçbir şey olmuyor" diye HİÇBİR AÇIKLAMA
+    // GÖRMEDEN takılmasına yol açıyordu (bkz. bu konuşmadaki bug raporu).
+    // Bunun yerine buton TIKLANABİLİR kalır; emergency bridge bu
+    // data-attribute'u görüp AÇIK bir uyarı gösterir ve modalı açmaz.
+    // Backend zaten gerçek yetkilendirmeyi 403 ile sağlıyor — bu hâlâ
+    // yalnızca bir UX katmanı.
     ["newContractButton", "deleteContract"].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.disabled = true;
+      el.dataset.writeBlocked = "true";
+      el.classList.add("write-blocked");
       el.title = "Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol).";
     });
   }
@@ -7253,11 +7269,14 @@ document.addEventListener("DOMContentLoaded", () => {
      CONTRACT MODAL
   ========================================================== */
 
-  const newContractButton = document.getElementById("newContractButton");
-  if (newContractButton) {
-    newContractButton.onclick = () => openContractModal();
-  }
-
+  // NOT: newContractButton.onclick ataması BİLEREK KALDIRILDI —
+  // yukarıdaki EMERGENCY UI BRIDGE V2 zaten AYNI butonu dinliyordu.
+  // İkisi birden aktifken tıklama başına openContractModal() İKİ KEZ
+  // çağrılıyordu (target-phase onclick, sonra bubble-phase document
+  // listener) — zararsız görünse de gereksiz çift render'a yol
+  // açıyordu ve tek bir merkezi noktadan (emergency bridge) yönetmek
+  // write-blocked kontrolünü (yukarı bakınız) DE TEK YERDEN uygulamayı
+  // sağlıyor.
 
   function openContractModal(
     contract = null
@@ -7269,6 +7288,8 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
     if (!modal) return;
+
+    try {
 
     document
       .getElementById(
@@ -7474,6 +7495,27 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.classList.remove(
       "hidden"
     );
+
+    } catch (error) {
+      // ÖNEMLİ DÜZELTME: önceden bu fonksiyonda ARA bir adım (setInput/
+      // applySessionCompanyToForm/injectAssetClassField/vb.) hata
+      // fırlatırsa, modal.classList.remove("hidden") satırına HİÇ
+      // ULAŞILMIYOR ve modal SESSİZCE açılmıyordu — kullanıcı "yeni
+      // sözleşme" butonuna tıklıyor, hiçbir şey olmuyor, hiçbir hata
+      // görmüyordu. Artık: gerçek hata konsola AÇIKÇA loglanıyor,
+      // kullanıcıya görünür bir uyarı gösteriliyor, VE modal (form
+      // eksik/hatalı doldurulmuş olsa bile) yine de AÇILMAYA çalışılıyor
+      // — kullanıcı en azından "bir şeyin yanlış gittiğini" görüyor,
+      // sessiz bir hiçlik yerine.
+      console.error("[TFRS16] openContractModal hata:", error);
+      if (typeof showToast === "function") {
+        showToast(
+          "Sözleşme formu açılırken bir sorun oluştu: " + (error?.message || String(error)),
+          "error"
+        );
+      }
+      modal.classList.remove("hidden");
+    }
   }
 
 
