@@ -11,7 +11,8 @@ const {
   isValidMonthFormat,
   isValidIndexValue,
   isWithinExpectedRange,
-  validateInflationIndexEntry
+  validateInflationIndexEntry,
+  parseBulkIndexInput
 } = require("../backend/utils/index-validation");
 
 describe("isValidMonthFormat", () => {
@@ -90,5 +91,74 @@ describe("validateInflationIndexEntry", () => {
   test("anormal sıçrama -> valid: false", () => {
     const result = validateInflationIndexEntry({ month: "2025-01", value: 10000 }, 3400);
     expect(result.valid).toBe(false);
+  });
+});
+
+describe("parseBulkIndexInput", () => {
+  test("tab ile ayrılmış geçerli satırlar doğru ayrıştırılır", () => {
+    const result = parseBulkIndexInput("2025-01\t2648.12\n2025-02\t2701.34\n2025-03\t2756.81");
+    expect(result.valid).toEqual([
+      { month: "2025-01", value: 2648.12, line: 1 },
+      { month: "2025-02", value: 2701.34, line: 2 },
+      { month: "2025-03", value: 2756.81, line: 3 }
+    ]);
+    expect(result.invalid).toEqual([]);
+    expect(result.duplicateMonthsInInput).toEqual([]);
+  });
+
+  test("boşluk ile ayrılmış satırlar da desteklenir (yalnızca tab zorunlu değil)", () => {
+    const result = parseBulkIndexInput("2025-01   2648.12\n2025-02 2701.34");
+    expect(result.valid.length).toBe(2);
+    expect(result.invalid).toEqual([]);
+  });
+
+  test("boş satırlar sessizce atlanır (hata değildir)", () => {
+    const result = parseBulkIndexInput("2025-01\t2648.12\n\n\n2025-02\t2701.34\n");
+    expect(result.valid.length).toBe(2);
+    expect(result.invalid).toEqual([]);
+  });
+
+  test("geçersiz ay formatı olan satır invalid listesine düşer, sessizce atlanmaz", () => {
+    const result = parseBulkIndexInput("2025-13\t2648.12\n2025-02\t2701.34");
+    expect(result.valid).toEqual([{ month: "2025-02", value: 2701.34, line: 2 }]);
+    expect(result.invalid.length).toBe(1);
+    expect(result.invalid[0].line).toBe(1);
+    expect(result.invalid[0].errors.length).toBeGreaterThan(0);
+  });
+
+  test("geçersiz/negatif değer olan satır invalid listesine düşer", () => {
+    const result = parseBulkIndexInput("2025-01\t-5\n2025-02\tabc");
+    expect(result.valid).toEqual([]);
+    expect(result.invalid.length).toBe(2);
+  });
+
+  test("iki alan içermeyen satır (eksik/fazla) invalid sayılır", () => {
+    const result = parseBulkIndexInput("2025-01\n2025-02\t2701.34\t3");
+    expect(result.invalid.length).toBe(2);
+    expect(result.valid).toEqual([]);
+  });
+
+  test("aynı ay birden fazla kez geçiyorsa duplicateMonthsInInput içinde raporlanır", () => {
+    const result = parseBulkIndexInput("2025-01\t2648.12\n2025-01\t2650.00\n2025-02\t2701.34");
+    expect(result.duplicateMonthsInInput).toEqual(["2025-01"]);
+    // duplicate ay yine de valid listesinde görünür (hangisinin kullanılacağına
+    // üst katman/route karar verir — parse aşaması bunu sessizce çözmez).
+    expect(result.valid.filter(v => v.month === "2025-01").length).toBe(2);
+  });
+
+  test("tamamen boş girdi -> valid ve invalid boş, hata fırlatmaz", () => {
+    const result = parseBulkIndexInput("");
+    expect(result.valid).toEqual([]);
+    expect(result.invalid).toEqual([]);
+    expect(result.duplicateMonthsInInput).toEqual([]);
+  });
+
+  test("anormal sıçrama gösteren satır (önceki ayla karşılaştırma yapılmaz, çünkü satır-bazlı karşılaştırma referansı yok) -> reddedilmez", () => {
+    // parseBulkIndexInput satır başına validateInflationIndexEntry'yi
+    // previousActiveValue OLMADAN çağırır (aralık kontrolü DB'den önceki
+    // aktif değeri gerektirir, parse aşaması DB'ye dokunmaz) — bu kasıtlıdır.
+    const result = parseBulkIndexInput("2025-01\t100000");
+    expect(result.valid).toEqual([{ month: "2025-01", value: 100000, line: 1 }]);
+    expect(result.invalid).toEqual([]);
   });
 });
