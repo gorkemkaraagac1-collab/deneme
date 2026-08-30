@@ -34,10 +34,10 @@ describe("v191RenderFinancialReporting — extraction sonrası regresyon yok", (
     expect(html).toMatch(/Dipnot: Kiralama Yükümlülükleri — Likidite Riski/);
   });
 
-  test("Financial Reporting Snapshot / KPI bölümü hâlâ üretiliyor (extraction bunu bozmadı)", () => {
+  test("'Financial Reporting Snapshot' bölümü KALDIRILDI (bkz. PROJECT_CONTEXT.md — data.byCurrency hiçbir zaman dolu değildi, gerçek bir bug'dı, kullanıcı talebiyle kaldırıldı)", () => {
     const html = tfrs16.v191RenderFinancialReporting(new Date("2026-12-31"));
-    expect(html).toMatch(/Financial Reporting Snapshot/);
-    expect(html).toMatch(/Lease Liability/);
+    expect(html).not.toMatch(/Financial Reporting Snapshot/);
+    expect(html).toMatch(/Lease Liability/); // KPI kartı hâlâ duruyor, bu ayrı
   });
 });
 
@@ -172,5 +172,36 @@ describe("renderFootnotesPage — 3 tab arası geçiş (Varlık/Yükümlülük/L
 
     // Dönem başı görünen metni güncellenmiş olmalı (2025 1 Ocak).
     expect(host.innerHTML).toMatch(/01\.01\.2025|1\.1\.2025/);
+  });
+
+  test("tüm içerik TEK bir beyaz kart (gk-v26-card) içinde — dashboard'un krem arka planı araya sızmıyor", () => {
+    const host = document.getElementById("footnotesPageHost");
+    tfrs16.renderFootnotesPage(host);
+
+    const cards = host.querySelectorAll(".gk-v26-card");
+    expect(cards.length).toBe(1);
+    // Tab butonları da bu kartın İÇİNDE olmalı.
+    expect(cards[0].querySelector('[data-footnote-tab="asset"]')).toBeTruthy();
+  });
+
+  test("DÜZELTME: Varlık sınıfı drill-down linkine tıklanınca Dipnotlar sayfasının KENDİSİ yenilenir (Finansal Raporlama ekranına gitmeye çalışmaz)", () => {
+    const host = document.getElementById("footnotesPageHost");
+    tfrs16.renderFootnotesPage(host);
+
+    const drillLink = host.querySelector('a[onclick*="v191FilterDetail"]');
+    expect(drillLink).toBeTruthy();
+
+    // onclick inline handler'ı gerçek DOM'da window.GK_TFRS16 nesnesine
+    // bağımlı — burada doğrudan fonksiyonu (aynı mantığı) tetikleyerek
+    // Dipnotlar sayfasının render'ının GERÇEKTEN kaydolduğunu ve
+    // tıklama sonrası detay tablosunun genişlediğini doğruluyoruz.
+    const before = host.innerHTML;
+    tfrs16.v191FilterDetail("rou", "Sınıflandırılmamış");
+    const after = host.innerHTML;
+
+    // Detay tablosu açılmış olmalı — "Detayı Göster" yerine artık
+    // sözleşme satırları (ya da en azından değişmiş bir DOM) beklenir.
+    expect(after).not.toBe(before);
+    expect(host.innerHTML).toMatch(/Kullanım Hakkı Varlığı/); // hâlâ asset tab'ındayız (default), sayfa BOZULMADI
   });
 });
