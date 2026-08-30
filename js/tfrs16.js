@@ -29999,7 +29999,11 @@ document.addEventListener("DOMContentLoaded", () => {
       renderSubleaseSection,
       calculateSaleAndLeaseback,
       calculateSublease,
+      v26SelectedContractBanner,
       renderFootnotesPage,
+      renderModificationReassessmentPage,
+      renderSlbManagementPage,
+      renderSubleaseManagementPage,
       v191PrepareFinancialReportingData,
       v191RenderAssetNoteHtml,
       v191RenderLiabilityNoteHtml,
@@ -30589,6 +30593,25 @@ const V26_FX_UI_PAGE_SIZE = 50;
   ========================================================== */
   let v26SelectedModReassContractId = null;
 
+  /**
+   * Seçili sözleşmeyi belirgin şekilde gösteren banner — Modifikasyon
+   * & Reassessment / SLB / Sublease sayfalarının ortak sorunu:
+   * kullanıcı yukarıdaki <select>'ten bir sözleşme seçtikten sonra
+   * aşağı kaydırınca (form/dipnot içeriği hiçbir yerde sözleşme
+   * kimliği göstermediği için) "hangi sözleşme için işlem yapıyorum"
+   * bilgisini kaybediyordu. Bu banner, form içeriğinin HEMEN ÜSTÜNE,
+   * select'in altına ekleniyor — kullanıcı form üzerindeyken de görünür.
+   */
+  function v26SelectedContractBanner(contract) {
+    if (!contract) return "";
+    const parts = [contract.id, contract.company, contract.supplier].filter(Boolean);
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin:12px 0 0;font-size:13px;color:#1e3a8a;">
+        <span style="font-size:16px;">📄</span>
+        <span>İşlem uygulanacak sözleşme: <strong>${escapeHtml(parts.join(" — "))}</strong></span>
+      </div>`;
+  }
+
   function renderModificationReassessmentPage(container) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
@@ -30629,6 +30652,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
             <select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
               ${optionsHtml}
             </select>
+            ${v26SelectedContractBanner(selectedContract)}
           </div>
 
           ${bodyHtml}
@@ -30691,6 +30715,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
             <select id="v26SlbContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
               ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
             </select>
+            ${v26SelectedContractBanner(selectedContract)}
           </div>
 
           <div id="slbSectionContainer"></div>
@@ -30748,6 +30773,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
             <select id="v26SubleaseContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
               ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
             </select>
+            ${v26SelectedContractBanner(selectedContract)}
           </div>
 
           <div id="subleaseSectionContainer"></div>
