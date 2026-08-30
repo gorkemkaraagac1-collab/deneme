@@ -14,6 +14,17 @@
      */
     body { visibility: hidden; }
     body.gk-license-ok { visibility: visible; }
+
+    /*
+     * write-blocked: salt-okunur rol (CONTROLLER/VIEWER) için
+     * newContractButton/deleteContract görsel olarak "yasak" görünsün.
+     * Önceden native `disabled` kullanılıyordu, ama disabled bir HTML
+     * butonu click event'i hiç ÜRETMEDİĞİ için kullanıcı hiçbir açıklama
+     * göremiyordu (bkz. js/tfrs16.js — emergency bridge artık bu
+     * durumda tıklamaya AÇIK bir toast ile yanıt veriyor). Bu buton
+     * artık tıklanabilir kalıyor; stil sadece görsel bir ipucu.
+     */
+    .write-blocked { opacity: 0.55; cursor: not-allowed; }
   </style>
   <script>
     /*
