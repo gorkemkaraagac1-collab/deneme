@@ -185,8 +185,11 @@ describe("applyTMS29Restatement — motor davranışı DEĞİŞMEDİ (regresyon)
     expect(Math.abs(restatement.totals.liabilityMonetaryGainLoss)).toBeLessThanOrEqual(0.01);
   });
 
-  test("runSelfTestsV19FullTms29 (mevcut TMS 29 self-test paketi) hâlâ tamamen geçiyor", () => {
-    const results = tfrs16.runSelfTestsV19FullTms29();
+  test("runSelfTestsV19FullTms29 (mevcut TMS 29 self-test paketi) hâlâ tamamen geçiyor", async () => {
+    // Bu fonksiyon artık async (createModification/createReassessment
+    // backend'e yazmayı beklediği için) — bkz. PROJECT_CONTEXT.md
+    // bölüm 23 madde 14/15.
+    const results = await tfrs16.runSelfTestsV19FullTms29();
     const failed = results.filter(r => !r.pass);
     expect(failed).toEqual([]);
   });
