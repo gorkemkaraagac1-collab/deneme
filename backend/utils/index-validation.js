@@ -134,9 +134,91 @@ function validateInflationIndexEntry(input, previousActiveValue = null) {
   return { valid: errors.length === 0, errors };
 }
 
+/**
+ * Admin panelindeki "toplu endeks girişi" textarea'sından yapıştırılan
+ * ham metni satır satır ayrıştırır. Her satır "YYYY-MM <boşluk/tab> değer"
+ * biçiminde beklenir (ör. "2025-01    2648.12"). Delimiter olarak bir
+ * veya daha fazla boşluk/tab karakteri kabul edilir.
+ *
+ * SAF FONKSİYON — DB/network bağımlılığı yok, tahmin/interpolation
+ * yapmaz. Ayrıştırılamayan veya format/değer olarak geçersiz olan her
+ * satır, kendi hata mesajıyla birlikte `invalid` listesine düşer;
+ * sessizce atlanmaz. Boş satırlar ve satır başı/sonu boşluklar
+ * yok sayılır.
+ *
+ * Aynı ay birden fazla kez geçiyorsa (yapıştırılan metin içinde
+ * duplicate), bu fonksiyon bunu reddetmez — DB'ye yazma aşamasında
+ * (aynı transaction içinde, aktif kayıt kontrolüyle) ele alınması
+ * gerekir, çünkü "hangisi doğru" kararı iş mantığına aittir, parse
+ * aşamasına değil. Ancak pratik bir güvenlik ağı olarak, aynı metin
+ * bloğu içinde tekrar eden ay `duplicateMonthsInInput` içinde ayrıca
+ * raporlanır ki çağıran taraf isterse bunu da reddedebilsin.
+ *
+ * @param {string} rawText
+ * @returns {{
+ *   valid: Array<{ month: string, value: number, line: number }>,
+ *   invalid: Array<{ line: number, raw: string, errors: string[] }>,
+ *   duplicateMonthsInInput: string[]
+ * }}
+ */
+function parseBulkIndexInput(rawText) {
+  const lines = String(rawText || "").split(/\r\n|\r|\n/);
+
+  const valid = [];
+  const invalid = [];
+  const seenMonths = new Map(); // month -> first line number seen
+
+  lines.forEach((rawLine, idx) => {
+    const lineNumber = idx + 1;
+    const trimmed = rawLine.trim();
+
+    if (trimmed === "") {
+      return; // boş satır sessizce atlanır (hata değil)
+    }
+
+    // Bir veya daha fazla boşluk/tab ile ayrılmış tam olarak 2 alan bekleniyor.
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+
+    if (parts.length !== 2) {
+      invalid.push({
+        line: lineNumber,
+        raw: rawLine,
+        errors: [`Satır "period değer" biçiminde iki alan içermeli, ${parts.length} alan bulundu.`]
+      });
+      return;
+    }
+
+    const [monthRaw, valueRaw] = parts;
+    const validation = validateInflationIndexEntry({ month: monthRaw, value: valueRaw });
+
+    if (!validation.valid) {
+      invalid.push({ line: lineNumber, raw: rawLine, errors: validation.errors });
+      return;
+    }
+
+    const month = monthRaw.trim();
+    if (seenMonths.has(month)) {
+      // İlk görülen kaydı valid listesinde tutuyoruz, ama tekrarı da
+      // ayrıca işaretliyoruz ki üst katman (route) bunu reddetsin.
+      seenMonths.set(month, [...(seenMonths.get(month) || []), lineNumber]);
+    } else {
+      seenMonths.set(month, [lineNumber]);
+    }
+
+    valid.push({ month, value: Number(valueRaw), line: lineNumber });
+  });
+
+  const duplicateMonthsInInput = [...seenMonths.entries()]
+    .filter(([, lineNumbers]) => lineNumbers.length > 1)
+    .map(([month]) => month);
+
+  return { valid, invalid, duplicateMonthsInInput };
+}
+
 module.exports = {
   isValidMonthFormat,
   isValidIndexValue,
   isWithinExpectedRange,
-  validateInflationIndexEntry
+  validateInflationIndexEntry,
+  parseBulkIndexInput
 };
