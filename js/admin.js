@@ -369,6 +369,96 @@ async updateLicenseLimits(licenseId, data) {
         return { success: false, error: result.error || "Lisans limitleri güncellenemedi" };
     }
     return { success: true, data: result.license, message: result.message };
+},
+/*
+ * ========================================================
+ * INFLATION INDICES (Manuel Endeks Girişi — TÜİK yerine)
+ * ------------------------------------------------------
+ * GET    /api/admin/inflation-indices?status=&months=
+ * POST   /api/admin/inflation-indices          { month, value }
+ * POST   /api/admin/inflation-indices/bulk     { text }
+ * PATCH  /api/admin/inflation-indices/:id/verify
+ * PATCH  /api/admin/inflation-indices/:id/reject { reason? }
+ * ========================================================
+ */
+async getInflationIndices(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const url = query
+        ? `${this.baseURL}/inflation-indices?${query}`
+        : `${this.baseURL}/inflation-indices`;
+    const response = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders()
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Endeks kayıtları alınamadı" };
+    }
+    return result;
+},
+async createInflationIndex(month, value) {
+    const response = await fetch(
+        `${this.baseURL}/inflation-indices`,
+        {
+            method: "POST",
+            headers: this.getHeaders(),
+            body: JSON.stringify({ month, value })
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Endeks kaydı oluşturulamadı" };
+    }
+    return result;
+},
+async createInflationIndicesBulk(text) {
+    const response = await fetch(
+        `${this.baseURL}/inflation-indices/bulk`,
+        {
+            method: "POST",
+            headers: this.getHeaders(),
+            body: JSON.stringify({ text })
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return {
+            success: false,
+            error: result.error || "Toplu endeks girişi başarısız",
+            invalid: result.invalid,
+            duplicateMonthsInInput: result.duplicateMonthsInInput
+        };
+    }
+    return result;
+},
+async verifyInflationIndex(id) {
+    const response = await fetch(
+        `${this.baseURL}/inflation-indices/${encodeURIComponent(id)}/verify`,
+        {
+            method: "PATCH",
+            headers: this.getHeaders()
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Endeks doğrulanamadı" };
+    }
+    return result;
+},
+async rejectInflationIndex(id, reason) {
+    const response = await fetch(
+        `${this.baseURL}/inflation-indices/${encodeURIComponent(id)}/reject`,
+        {
+            method: "PATCH",
+            headers: this.getHeaders(),
+            body: JSON.stringify(reason ? { reason } : {})
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "Endeks reddedilemedi" };
+    }
+    return result;
 }
 
 };
