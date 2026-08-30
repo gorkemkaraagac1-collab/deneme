@@ -29564,6 +29564,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const tryInject = () => {
       const sidebar = document.querySelector(".sidebar, #sidebar, nav, #mobileSidebar");
       if (!sidebar) return false;
+
+      // DASHBOARD SHELL GUARD (Faz 0 — bkz. PROJECT_CONTEXT.md bölüm
+      // 32): dashboard.html artık kendi native sidebar linklerine
+      // (Modifikasyon & Reassessment, SLB, Sublease, Enflasyon
+      // Düzeltmesi, Close Dashboard vb.) sahip. Bu fonksiyon normalde
+      // (tfrs16.html'de) KENDİ ekstra buton setini sidebar'a
+      // ekliyordu — dashboard.html'de bu ATLANIYOR (aksi halde aynı
+      // linkler İKİ KEZ görünür). openInMain/deepLinkMap/deep-link
+      // açma mekanizması YİNE DE kuruluyor, çünkü dashboard.html'in
+      // kendi linkleri bunu kullanıyor (bkz. window.__gkOpenInMainByKey).
+      const isDashboardShell = window.__GK_DASHBOARD_SHELL__ === true;
+
+      if (!isDashboardShell) {
       if (document.getElementById("v26NavGroups")) return true;
       const navBlock = document.createElement("div");
       navBlock.id = "v26NavBlock";
@@ -29593,6 +29606,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
+      }
+
       const openInMain = renderer => { let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
       document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
       document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMain(renderCloseDashboardPage));
@@ -29623,6 +29638,13 @@ document.addEventListener("DOMContentLoaded", () => {
           slb: renderSlbManagementPage,
           sublease: renderSubleaseManagementPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
+        };
+        // dashboard.html'in NATİVE linkleri (JS click handler'ları)
+        // bu fonksiyonu kullanıyor: window.__gkOpenInMainByKey("modification")
+        // gibi bir çağrıyla, renderer fonksiyonuna doğrudan erişimi
+        // olmadan (o closure-scope'ta) aynı sayfayı açabiliyorlar.
+        window.__gkOpenInMainByKey = key => {
+          if (deepLinkMap[key]) openInMain(deepLinkMap[key]);
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
           window.__gkDeepLinkOpened = true;
