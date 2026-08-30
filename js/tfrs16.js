@@ -3220,7 +3220,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function createReassessment(contract, input) {
+  async function createReassessment(contract, input) {
     ensureReassessmentState(contract);
     const lockCheck = assertPeriodWritable(contract, input?.effectiveDate || new Date());
     if (lockCheck.locked) {
@@ -3239,6 +3239,21 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     saveContracts(contracts);
 
+    // BACKEND KAYDI (kritik düzeltme — bkz. PROJECT_CONTEXT.md bölüm 23
+    // madde 14). Başarısız olursa yerel değişiklik geri alınır.
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      contract.reassessments = contract.reassessments.filter(
+        r => r.id !== result.reassessment.id
+      );
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     return {
       valid: true,
       reassessment: result.reassessment,
@@ -3247,7 +3262,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function applyReassessment(contract, reassessmentIdValue) {
+  async function applyReassessment(contract, reassessmentIdValue) {
     ensureReassessmentState(contract);
 
     const pending = contract.reassessments.find(item => item.id === reassessmentIdValue);
@@ -3280,6 +3295,10 @@ document.addEventListener("DOMContentLoaded", () => {
       terminationOption: contract.terminationOption === true,
       purchaseOption: contract.purchaseOption === true
     };
+
+    // Rollback için reassessment objesinin TAM kopyası.
+    const reassessmentSnapshotForRollback =
+      cloneModificationValue(reassessment);
 
     const next = reassessment.newTerms || {};
 
@@ -3329,6 +3348,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveContracts(contracts);
 
+    // BACKEND KAYDI. APPLY işlemi sözleşmenin finansal alanlarını
+    // (endDate/monthlyPayment/discountRate/opsiyon flag'leri) değiştiriyor
+    // — başarısız olursa hem contract'ı hem reassessment objesinin
+    // kendisini TAM olarak geri alıyoruz.
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      contract.endDate = snapshot.endDate;
+      contract.monthlyPayment = snapshot.monthlyPayment;
+      contract.discountRate = snapshot.discountRate;
+      contract.renewalOption = snapshot.renewalOption;
+      contract.terminationOption = snapshot.terminationOption;
+      contract.purchaseOption = snapshot.purchaseOption;
+
+      Object.keys(reassessment).forEach(key => delete reassessment[key]);
+      Object.assign(reassessment, reassessmentSnapshotForRollback);
+
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     auditScheduleEvent(contract, "SCHEDULE_UPDATED", "REASSESSMENT", reassessment.id, reassessment.effectiveDate, buildReassessedSchedule(contract, reassessment).length);
 
     return {
@@ -3339,7 +3382,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function cancelReassessment(contract, reassessmentIdValue) {
+  async function cancelReassessment(contract, reassessmentIdValue) {
     ensureReassessmentState(contract);
 
     const reassessment = contract.reassessments.find(
@@ -3368,11 +3411,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveContracts(contracts);
 
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      reassessment.status = oldStatus;
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     return { valid: true, reassessment };
   }
 
 
-  function updateReassessment(contract, reassessmentIdValue, input) {
+  async function updateReassessment(contract, reassessmentIdValue, input) {
     ensureReassessmentState(contract);
 
     const existing = contract.reassessments.find(
@@ -3408,6 +3462,18 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     saveContracts(contracts);
+
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      Object.keys(existing).forEach(key => delete existing[key]);
+      Object.assign(existing, oldValue);
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
 
     return {
       valid: true,
@@ -4516,7 +4582,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function createModification(
+  async function createModification(
     contract,
     input
   ) {
@@ -4552,6 +4618,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveContracts(contracts);
 
+    // BACKEND KAYDI (kritik düzeltme — bkz. PROJECT_CONTEXT.md bölüm 23
+    // madde 14): önceden bu fonksiyon SADECE localStorage'a yazıyordu,
+    // backend'e HİÇ senkronize olmuyordu. Artık backend'e yazmayı
+    // bekliyoruz; BAŞARISIZ olursa yerel değişikliği GERİ ALIYORUZ
+    // (rollback) ve açık bir hata döndürüyoruz — "yerelde var, backend'de
+    // yok" sessiz tutarsızlığı artık oluşamaz.
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      contract.modifications = contract.modifications.filter(
+        m => m.id !== result.modification.id
+      );
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     return {
       valid: true,
       modification: result.modification,
@@ -4560,7 +4645,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function applyModification(
+  async function applyModification(
     contract,
     modificationIdValue
   ) {
@@ -4613,6 +4698,12 @@ document.addEventListener("DOMContentLoaded", () => {
         leaseIncreaseRate: contract.leaseIncreaseRate,
         fixedIncrease: contract.fixedIncrease
       });
+
+    // Rollback için modification objesinin TAM kopyası — backend
+    // yazma başarısız olursa bu satırdan sonraki TÜM mutasyonlar
+    // (status, journal, appliedFromTerms/ToTerms) geri alınacak.
+    const modificationSnapshotForRollback =
+      cloneModificationValue(modification);
 
     if (!contract.originalContractSnapshot) {
       contract.originalContractSnapshot =
@@ -4683,6 +4774,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveContracts(contracts);
 
+    // BACKEND KAYDI (kritik düzeltme). Bu APPLY işlemi sözleşmenin
+    // finansal olarak önemli alanlarını (monthlyPayment/endDate/
+    // discountRate) değiştiriyor — backend'e yazma başarısız olursa
+    // hem contract'ın bu alanlarını (snapshot) hem de modification
+    // objesinin kendisini (status/journal/appliedFromTerms/ToTerms,
+    // modificationSnapshotForRollback) TAM olarak geri alıyoruz.
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      contract.monthlyPayment = snapshot.monthlyPayment;
+      contract.startDate = snapshot.startDate;
+      contract.endDate = snapshot.endDate;
+      contract.discountRate = snapshot.discountRate;
+      contract.leaseIncreaseType = snapshot.leaseIncreaseType;
+      contract.leaseIncreaseRate = snapshot.leaseIncreaseRate;
+      contract.fixedIncrease = snapshot.fixedIncrease;
+
+      Object.keys(modification).forEach(key => delete modification[key]);
+      Object.assign(modification, modificationSnapshotForRollback);
+
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     return {
       valid: true,
       modification,
@@ -4695,7 +4813,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function cancelModification(
+  async function cancelModification(
     contract,
     modificationIdValue
   ) {
@@ -4735,6 +4853,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveContracts(contracts);
 
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      modification.status = oldStatus;
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
+
     return {
       valid: true,
       modification
@@ -4742,7 +4871,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function updateModification(
+  async function updateModification(
     contract,
     modificationIdValue,
     input
@@ -4801,6 +4930,18 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     saveContracts(contracts);
+
+    try {
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      Object.keys(existing).forEach(key => delete existing[key]);
+      Object.assign(existing, oldValue);
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e kaydedilemedi: ${error?.message || error}`]
+      };
+    }
 
     return {
       valid: true,
@@ -5681,7 +5822,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * yazar, ardından mevcut checkIndexReassessment(contract) ile aynen
    * kontrol ettirir. Eksik ay için {ok:false} döner (interpolasyon yok).
    */
-  function syncIndexCurrentRateFromCpiTable(contract, asOfMonth) {
+  async function syncIndexCurrentRateFromCpiTable(contract, asOfMonth) {
     if (!contract || contract.leaseIncreaseType !== "index") {
       return { ok: false, error: "Sözleşme endeks bazlı (index) tipinde değil." };
     }
@@ -5692,7 +5833,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const oldValue = contract.indexCurrentRate;
     contract.indexCurrentRate = currentIndex;
-    const checkResult = checkIndexReassessment(contract);
+    const checkResult = await checkIndexReassessment(contract);
     return { ok: true, month, currentIndex, oldValue, checkResult };
   }
 
@@ -9799,7 +9940,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function initModificationEvents(contract) {
+  function initModificationEvents(contract, onChanged) {
+
+    // onChanged verilmezse eski davranış korunur (contract detail
+    // modal'ı kendini yeniden çizer). Yeni "Modifikasyon & Reassessment"
+    // sayfası (bkz. renderModificationReassessmentPage) kendi re-render
+    // fonksiyonunu geçirir — böylece bu fonksiyonun MANTIĞI değişmeden,
+    // yalnızca "işlem sonrası hangi ekran yenilenir" davranışı çağıran
+    // tarafa bırakılmış olur.
+    const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
 
     let editingModificationId = null;
     const createButton = document.getElementById("createModificationButton");
@@ -9827,7 +9976,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     createButton?.addEventListener(
         "click",
-        () => {
+        async () => {
 
           const input = {
             modificationDate:
@@ -9851,10 +10000,21 @@ document.addEventListener("DOMContentLoaded", () => {
             status: "DRAFT"
           };
 
+          // createModification/updateModification artık backend'e
+          // yazmayı BEKLİYOR (async) — buton çift tıklamayı önlemek
+          // ve kullanıcıya bekleme durumunu göstermek için geçici
+          // olarak devre dışı bırakılır.
+          const originalLabel = createButton.textContent;
+          createButton.disabled = true;
+          createButton.textContent = "Kaydediliyor...";
+
           const result =
             editingModificationId
-              ? updateModification(contract, editingModificationId, input)
-              : createModification(contract, input);
+              ? await updateModification(contract, editingModificationId, input)
+              : await createModification(contract, input);
+
+          createButton.disabled = false;
+          createButton.textContent = originalLabel;
 
           if (!result.valid) {
             showAlert(result.errors.join("\n"));
@@ -9862,7 +10022,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           resetModificationFormMode();
-          openDetail(contract.id);
+          refreshHost();
         }
       );
 
@@ -9872,7 +10032,7 @@ document.addEventListener("DOMContentLoaded", () => {
         button => {
           button.addEventListener(
             "click",
-            () => {
+            async () => {
               const action = button.dataset.modAction;
               const id = button.dataset.modId;
 
@@ -9889,8 +10049,10 @@ document.addEventListener("DOMContentLoaded", () => {
               }
 
               if (action === "apply") {
+                button.disabled = true;
                 const result =
-                  applyModification(contract, id);
+                  await applyModification(contract, id);
+                button.disabled = false;
 
                 if (!result.valid) {
                   showAlert(result.errors.join("\n"));
@@ -9898,20 +10060,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 refresh();
-                openDetail(contract.id);
+                refreshHost();
                 return;
               }
 
               if (action === "cancel") {
+                button.disabled = true;
                 const result =
-                  cancelModification(contract, id);
+                  await cancelModification(contract, id);
+                button.disabled = false;
 
                 if (!result.valid) {
                   showAlert(result.errors.join("\n"));
                   return;
                 }
 
-                openDetail(contract.id);
+                refreshHost();
               }
             }
           );
@@ -9998,7 +10162,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function initReassessmentEvents(contract) {
+  function initReassessmentEvents(contract, onChanged) {
+    const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
+
     let editingReassessmentId = null;
     const createButton = document.getElementById("createReassessmentButton");
 
@@ -10024,7 +10190,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setValue("reassessmentReason", item.reason || "");
     }
 
-    createButton?.addEventListener("click", () => {
+    createButton?.addEventListener("click", async () => {
       const input = {
         reassessmentDate: document.getElementById("reassessmentDate")?.value,
         effectiveDate: document.getElementById("reassessmentEffectiveDate")?.value,
@@ -10039,20 +10205,27 @@ document.addEventListener("DOMContentLoaded", () => {
         status: "DRAFT"
       };
 
+      const originalLabel = createButton.textContent;
+      createButton.disabled = true;
+      createButton.textContent = "Kaydediliyor...";
+
       const result = editingReassessmentId
-        ? updateReassessment(contract, editingReassessmentId, input)
-        : createReassessment(contract, input);
+        ? await updateReassessment(contract, editingReassessmentId, input)
+        : await createReassessment(contract, input);
+
+      createButton.disabled = false;
+      createButton.textContent = originalLabel;
 
       if (!result.valid) {
         showAlert(result.errors.join("\n"));
         return;
       }
       resetReassessmentFormMode();
-      openDetail(contract.id);
+      refreshHost();
     });
 
     document.querySelectorAll("[data-reass-action]").forEach(button => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const action = button.dataset.reassAction;
         const id = button.dataset.reassId;
 
@@ -10069,23 +10242,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (action === "apply") {
-          const result = applyReassessment(contract, id);
+          button.disabled = true;
+          const result = await applyReassessment(contract, id);
+          button.disabled = false;
           if (!result.valid) {
             showAlert(result.errors.join("\n"));
             return;
           }
           refresh();
-          openDetail(contract.id);
+          refreshHost();
           return;
         }
 
         if (action === "cancel") {
-          const result = cancelReassessment(contract, id);
+          button.disabled = true;
+          const result = await cancelReassessment(contract, id);
+          button.disabled = false;
           if (!result.valid) {
             showAlert(result.errors.join("\n"));
             return;
           }
-          openDetail(contract.id);
+          refreshHost();
         }
       });
     });
@@ -11418,14 +11595,10 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
-        ${renderModificationManagementSection(
-          contract
-        )}
-
-
-        ${renderReassessmentManagementSection(
-          contract
-        )}
+        <!-- Modifikasyon & Reassessment BURADAN KALDIRILDI (onaylı plan):
+             artık ayrı bir "Modifikasyon & Reassessment" sayfasında,
+             sözleşme seçici ile yönetiliyor. Bkz. renderModificationReassessmentPage
+             ve dashboard.html'deki "Hesaplama & Yeniden Ölçüm" linki. -->
 
 
         <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
@@ -11508,16 +11681,6 @@ document.addEventListener("DOMContentLoaded", () => {
               .then(ok => { if (!ok) showAlert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı."); })
               .catch(error => showAlert(`Denetim izi dışa aktarılamadı: ${error?.message || error}`));
           });
-
-
-        initModificationEvents(
-          contract
-        );
-
-
-        initReassessmentEvents(
-          contract
-        );
 
 
         initPaymentScheduleEvents(
@@ -25842,7 +26005,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Object} contract - Kiralama sözleşmesi
    * @returns {Object} result - { applicable, changePercent, thresholdExceeded, reassessmentCreated, ... }
    */
-  function checkIndexReassessment(contract) {
+  async function checkIndexReassessment(contract) {
     try {
       if (!contract || contract.leaseIncreaseType !== "index") {
         return { applicable: false, reason: "Endeks bazlı artış tipi tanımlı değil." };
@@ -25892,7 +26055,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (result.thresholdExceeded) {
         const newPayment = Math.round((Number(contract.monthlyPayment) || 0) * (1 + changePercent / 100) * 100) / 100;
 
-        const created = createReassessment(contract, {
+        // NOT: createReassessment artık backend'e yazmayı BEKLİYOR
+        // (async). Bu fonksiyon (checkIndexReassessment) otomatik/
+        // periyodik bir kontroldür — refresh() içine monkey-patch
+        // edilmiş, çok sık ve SENKRON çağrılan bir yoldan tetikleniyor.
+        // refresh()'in TÜMÜNÜ async yapmak (yüzlerce çağrı yerini
+        // etkiler) bu düzeltmenin kapsamı dışında; bu yüzden burada
+        // await ediyoruz VE bu fonksiyonun kendisini async yaptık —
+        // asıl senkron kalan, onu ÇAĞIRAN checkAllIndexReassessments/
+        // refresh() zinciridir (aşağıda fire-and-forget olarak ele
+        // alınıyor, kullanıcıya doğrudan tıklanan Reassessment
+        // formundaki gibi tam bekleme+rollback UYGULANMIYOR — otomatik
+        // tetiklenen bir arka plan kontrolü için makul bir ödünleşim).
+        const created = await createReassessment(contract, {
           // FIX (V18 Parça 1 — Vaka 4 hatası): reassessmentDate önceden
           // bugünün gerçek tarihiydi; effectiveDate (reviewDate) neredeyse
           // her zaman ondan önce kaldığı için createReassessment'taki
@@ -25943,11 +26118,13 @@ document.addEventListener("DOMContentLoaded", () => {
    * Tüm sözleşmeler için checkIndexReassessment() çalıştırır.
    * @returns {Array<Object>} Her sözleşme için sonuç listesi
    */
-  function checkAllIndexReassessments() {
-    return safeArray(contracts).map(contract => ({
-      contractId: contract.id,
-      ...checkIndexReassessment(contract)
-    }));
+  async function checkAllIndexReassessments() {
+    return Promise.all(
+      safeArray(contracts).map(async contract => ({
+        contractId: contract.id,
+        ...(await checkIndexReassessment(contract))
+      }))
+    );
   }
 
 
@@ -26426,7 +26603,9 @@ document.addEventListener("DOMContentLoaded", () => {
     __gkOriginalRefreshV25();
     try { updateFutureLeaseKPI(); } catch (error) { console.error("updateFutureLeaseKPI error:", error); }
     try { checkAllLeaseTermWarnings(); } catch (error) { console.error("checkAllLeaseTermWarnings error:", error); }
-    try { checkAllIndexReassessments(); } catch (error) { console.error("checkAllIndexReassessments error:", error); }
+    try {
+      checkAllIndexReassessments().catch(error => console.error("checkAllIndexReassessments error:", error));
+    } catch (error) { console.error("checkAllIndexReassessments error:", error); }
   };
 
 
@@ -27289,7 +27468,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ==========================================================
      V18 Parça 1 — SELF-TEST SUITE
      ========================================================== */
-  function runSelfTestsV18Part1() {
+  async function runSelfTestsV18Part1() {
     const results = [];
     function check(name, expected, actual, tolerance = 0.01) {
       const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
@@ -27356,7 +27535,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       ensureReassessmentState(contract4);
       addOrUpdateCpiIndexEntry("2026-01", 1200); // %20 artış → %5 eşiği aşılır
-      const sync = syncIndexCurrentRateFromCpiTable(contract4, "2026-01");
+      const sync = await syncIndexCurrentRateFromCpiTable(contract4, "2026-01");
       vaka4Pass =
         sync.ok === true &&
         sync.checkResult?.reassessmentCreated === true &&
@@ -27512,7 +27691,7 @@ document.addEventListener("DOMContentLoaded", () => {
      dışındadır — tam finansal tablo TMS 29 için ayrı bir çalışma
      gerekir (bkz. panel içi SINIR notu).
      ========================================================== */
-  function runSelfTestsV19FullTms29() {
+  async function runSelfTestsV19FullTms29() {
     // İZOLASYON SARMALAYICISI (fonksiyonun İÇ MANTIĞINA dokunulmadı):
     // Bu self-test, kendi test verisini addOrUpdateInflationIndexEntry()
     // ile (tarihsel olarak localStorage'a) yazıyordu. loadInflationIndexTable()
@@ -27523,16 +27702,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // deleteInflationIndexEntry çağrılarının ADRESLEDİĞİ kaynağı buraya
     // yönlendirerek), test bitince GERÇEK production cache'ini (varsa)
     // aynen geri yüklüyoruz — gerçek backend verisi asla kaybolmaz/ezilmez.
+    //
+    // async'e çevrildi (kritik düzeltme, bkz. PROJECT_CONTEXT.md bölüm 23
+    // madde 14): createModification/createReassessment artık backend'e
+    // yazmayı bekliyor.
     const __savedBackendInflationIndexCache = backendInflationIndexCache;
     backendInflationIndexCache = [];
     try {
-      return runSelfTestsV19FullTms29Body();
+      return await runSelfTestsV19FullTms29Body();
     } finally {
       backendInflationIndexCache = __savedBackendInflationIndexCache;
     }
   }
 
-  function runSelfTestsV19FullTms29Body() {
+  async function runSelfTestsV19FullTms29Body() {
     const results = [];
     function check(name, expected, actual, tolerance = 0.01) {
       const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
@@ -27777,7 +27960,7 @@ document.addEventListener("DOMContentLoaded", () => {
      Kullanım: window.GK_TFRS16.runSelfTestsV19AccountMapping()
      veya window.__TFRS16_TEST__.runSelfTestsV19AccountMapping()
      ========================================================== */
-  function runSelfTestsV19AccountMapping() {
+  async function runSelfTestsV19AccountMapping() {
     const results = [];
     function assertTrue(name, condition) {
       const pass = !!condition;
@@ -27894,11 +28077,11 @@ document.addEventListener("DOMContentLoaded", () => {
       assertTrue("4b — lockPeriod başarılı", Boolean(lockResult?.success));
       assertTrue("4c — isPeriodLocked true dönüyor", isPeriodLocked(TEST_LOCK_PERIOD) === true);
 
-      const modResult = createModification(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15`, description: "Self-test" });
+      const modResult = await createModification(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15`, description: "Self-test" });
       assertTrue("4d — kilitli dönemde createModification valid:false döner", modResult.valid === false);
       assertTrue("4e — kilitli dönemde createModification hata mesajı içeriyor", Array.isArray(modResult.errors) && modResult.errors.length > 0);
 
-      const reassResult = createReassessment(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15` });
+      const reassResult = await createReassessment(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15` });
       assertTrue("4f — kilitli dönemde createReassessment valid:false döner", reassResult.valid === false);
 
       const lockedPeriodsList = getLockedPeriods();
@@ -29329,6 +29512,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavEliminations" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">↔️ Eliminasyonlar</button>
         <button type="button" id="v26NavFxRates" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">💱 Döviz Kurları</button>
         <button type="button" id="v26NavInflation" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📈 Enflasyon Endeksleri</button>
+        <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
@@ -29341,6 +29525,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMain(renderEliminationManagementPage));
       document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMain(renderFxRateManagementPage));
       document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMain(renderInflationIndexManagementPage));
+      document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -29355,6 +29540,7 @@ document.addEventListener("DOMContentLoaded", () => {
           fxRates: renderFxRateManagementPage,
           audit: renderAuditTrailPage,
           inflation: renderInflationIndexManagementPage,
+          modification: renderModificationReassessmentPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
@@ -29407,6 +29593,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderFxRateManagementPage,
     renderAuditTrailPage,
     renderInflationIndexManagementPage,
+    renderModificationReassessmentPage,
     v26ExportInflationIndexExcel,
     v26ConvertScheduleToPresentation,
     renderContractStandardsPanel,
@@ -29614,10 +29801,10 @@ document.addEventListener("DOMContentLoaded", () => {
       runSelfTestsV27MultiCompany,
       // Modifikasyon & Reassessment (test kapsamı genişletildi — bu 8
       // fonksiyon önceden BU shim'de export edilmiyordu; İKİ AYRI
-      // window.__TFRS16_TEST__ ataması var (bkz. ~29428 ve ~29563),
-      // ikincisi birincisini sessizce eziyordu ve createModification/
-      // applyModification/createReassessment/applyReassessment gibi
-      // fonksiyonlar test-erişilebilir DEĞİLDİ. Ayrıca raporlanıyor.
+      // window.__TFRS16_TEST__ ataması var, ikincisi birincisini
+      // sessizce eziyordu ve createModification/applyModification/
+      // createReassessment/applyReassessment gibi fonksiyonlar
+      // test-erişilebilir DEĞİLDİ.
       createModification,
       applyModification,
       updateModification,
@@ -30196,6 +30383,78 @@ const V26_FX_UI_PAGE_SIZE = 50;
       console.error("V26 TMS29 inflation index Excel export error:", error);
       v26InflationUiToast(`Excel export tamamlanamadı: ${error?.message || String(error)}`, "error");
     }
+  }
+
+  /* ==========================================================
+     MODİFİKASYON & REASSESSMENT — ORTAK SAYFA (onaylı plan)
+     ----------------------------------------------------------
+     Önceden renderModificationManagementSection/renderReassessmentManagementSection
+     sözleşme detay ekranının (openDetail) İÇİNDE, tek bir uzun kaydırmalı
+     sayfada gösteriliyordu. Bu fonksiyon onları AYRI, kendi başına bir
+     ekrana taşır — sözleşme seçimi native bir <select> ile yapılır
+     (kullanıcının native picker beklentisiyle uyumlu). Render/iş mantığı
+     fonksiyonlarının (renderModificationManagementSection vb.) KENDİSİNE
+     dokunulmadı — yalnızca NEREDE render edildikleri değişti.
+  ========================================================== */
+  let v26SelectedModReassContractId = null;
+
+  function renderModificationReassessmentPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const activeContracts = (Array.isArray(contracts) ? contracts : [])
+        .slice()
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      if (!v26SelectedModReassContractId && activeContracts.length) {
+        v26SelectedModReassContractId = activeContracts[0].id;
+      }
+
+      const selectedContract = activeContracts.find(c => c.id === v26SelectedModReassContractId) || null;
+
+      const optionsHtml = activeContracts.map(c => {
+        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
+        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedModReassContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      const bodyHtml = !activeContracts.length
+        ? `<div class="gk-v26-card"><div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div></div>`
+        : !selectedContract
+          ? `<div class="gk-v26-card"><div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div></div>`
+          : `${renderModificationManagementSection(selectedContract)}${renderReassessmentManagementSection(selectedContract)}`;
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
+            </p>
+          </div>
+
+          <div class="gk-v26-card" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
+            <select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              ${optionsHtml}
+            </select>
+          </div>
+
+          ${bodyHtml}
+        </div>`;
+
+      container.querySelector("#v26ModReassContractSelect")?.addEventListener("change", event => {
+        v26SelectedModReassContractId = event.target.value;
+        render();
+      });
+
+      if (selectedContract) {
+        initModificationEvents(selectedContract, render);
+        initReassessmentEvents(selectedContract, render);
+      }
+    };
+
+    render();
   }
 
   function renderInflationIndexManagementPage(container) {
