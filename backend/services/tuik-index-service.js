@@ -1,5 +1,5 @@
 const pool = require("../db/pool");
-const { validateInflationIndexEntry } = require("../utils/index-validation");
+const { validateInflationIndexEntry, parseBulkIndexInput } = require("../utils/index-validation");
 
 /**
  * ============================================================
@@ -543,11 +543,323 @@ async function overrideIndexValue({ month, value, actor }) {
   }
 }
 
+/**
+ * ============================================================
+ * ADMIN PANEL — MANUEL ENDEKS GİRİŞİ (PENDING → VERIFIED/REJECTED)
+ * ============================================================
+ *
+ * TÜİK otomatik entegrasyonu bu release kapsamından çıkarıldığı için
+ * (bkz. PROJECT_CONTEXT.md — TÜİK API artık release blocker değil),
+ * admin, TÜİK'ten aldığı endeksleri Admin Panel üzerinden elle girer.
+ *
+ * TASARIM KARARI — overrideIndexValue()'DAN FARKI: yukarıdaki
+ * overrideIndexValue() kasıtlı olarak manuel girişi doğrudan VERIFIED
+ * yapıyordu ("bir insan zaten elle girdi, ek doğrulama gereksiz").
+ * Bu fonksiyon AİLESİ (createManualIndexEntry / verifyIndexRecord /
+ * rejectIndexRecord) ise BİLİNÇLİ OLARAK farklı bir akış izler: her
+ * manuel giriş PENDING başlar ve yalnızca ayrı, yetkili bir
+ * admin verify işleminden sonra VERIFIED olur — TÜİK'ten otomatik
+ * gelen veriyle AYNI governance modeli. Bu, admin panelinden
+ * beklenen açık talebe dayanır (bkz. PROJECT_CONTEXT.md — VERIFICATION
+ * bölümü: "Yeni manuel kayıtlar otomatik olarak PENDING olmalı").
+ * overrideIndexValue() hâlâ mevcut/test edilmiş durumda ama hiçbir
+ * route tarafından çağrılmıyor; bu yeni akış onun yerine kullanılır.
+ */
+
+/**
+ * Admin panelinden TEK bir manuel endeks kaydı oluşturur.
+ * Her zaman PENDING olarak başlar — TFRS16 hesaplamasına girmesi için
+ * ayrıca verifyIndexRecord() ile onaylanması gerekir.
+ *
+ * Anomali/aralık kontrolü BİLİNÇLİ OLARAK BURADA DA UYGULANMAZ (bkz.
+ * overrideIndexValue üstündeki not) — ama PENDING başladığı için asıl
+ * güvenlik ağı burada "insan zaten kontrol etti" değil, "ikinci bir
+ * insan (verifier) VERIFIED yapmadan hesaplamaya giremez" prensibidir.
+ *
+ * @param {{ month: string, value: number, actor: string }} input
+ * @returns {Promise<{ action: string, record: object, previous: object|null }>}
+ */
+async function createManualIndexEntry({ month, value, actor }) {
+  const validation = validateInflationIndexEntry({ month, value });
+  if (!validation.valid) {
+    const error = new Error(validation.errors.join(" "));
+    error.code = "INVALID_INFLATION_INDEX_INPUT";
+    throw error;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const result = await upsertIndexRecord(client, {
+      indexType: INDEX_TYPE_TUFE_GENEL,
+      month,
+      value: Number(value),
+      source: "MANUAL_OVERRIDE",
+      sourceUrl: null,
+      retrievedBy: actor,
+      verificationStatus: "PENDING"
+    });
+
+    if (result.action !== "unchanged") {
+      await recordAuditEvent(client, {
+        action: "INFLATION_INDEX_MANUAL_ENTRY_CREATED",
+        entityId: month,
+        actor,
+        oldValue: result.previous ? { month, index: Number(result.previous.index_value) } : null,
+        newValue: { month, index: Number(value), source: "MANUAL_OVERRIDE" },
+        metadata: { indexType: INDEX_TYPE_TUFE_GENEL, action: result.action, verificationStatus: "PENDING" }
+      });
+    }
+
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+class BulkInputParseError extends Error {
+  constructor(invalid, duplicateMonthsInInput) {
+    super("Toplu girişte geçersiz satır(lar) ve/veya tekrar eden ay(lar) var.");
+    this.name = "BulkInputParseError";
+    this.code = "BULK_INPUT_PARSE_ERROR";
+    this.invalid = invalid;
+    this.duplicateMonthsInInput = duplicateMonthsInInput;
+  }
+}
+
+/**
+ * Admin panelindeki "toplu endeks girişi" textarea'sından gelen ham
+ * metni ayrıştırır ve HER SATIRI kendi transaction'ı içinde
+ * createManualIndexEntry ile aynı PENDING akışına yazar.
+ *
+ * TASARIM KARARI — TEK BİR BÜYÜK TRANSACTION DEĞİL, SATIR BAŞINA
+ * TRANSACTION: syncFromTuik()'in aksine (orada kısmi bir
+ * senkronizasyonun yarıda kalması istenmiyordu, çünkü TÜİK'ten gelen
+ * veri tek bir tutarlı "anlık görüntü" olarak düşünülüyor), burada
+ * kullanıcı onlarca satır yapıştırabilir ve bir satırdaki (ör. tek bir
+ * yazım hatası) sorunun DİĞER GEÇERLİ SATIRLARIN hepsini iptal etmesi
+ * kullanıcı deneyimi açısından kötü olur. Bunun yerine: format/değer
+ * olarak geçersiz satırlar hiç DB'ye yazılmadan (parseBulkIndexInput
+ * aşamasında) elenir; aynı ay birden fazla kez geçiyorsa bu da baştan
+ * reddedilir (hangi satırın "doğru" olduğu belirsiz olduğu için) —
+ * yalnızca temiz, tekil kalan satırlar tek tek yazılır.
+ *
+ * @param {string} rawText
+ * @param {string} actor
+ * @returns {Promise<{ created: Array<{month:string, action:string}>, skipped: Array<{line:number, month?:string, reason:string}> }>}
+ */
+async function createBulkManualIndexEntries(rawText, actor) {
+  const parsed = parseBulkIndexInput(rawText);
+
+  if (parsed.invalid.length > 0 || parsed.duplicateMonthsInInput.length > 0) {
+    throw new BulkInputParseError(parsed.invalid, parsed.duplicateMonthsInInput);
+  }
+
+  const created = [];
+  const skipped = [];
+
+  for (const entry of parsed.valid) {
+    try {
+      const result = await createManualIndexEntry({ month: entry.month, value: entry.value, actor });
+      if (result.action === "unchanged") {
+        skipped.push({ line: entry.line, month: entry.month, reason: "Mevcut aktif kayıtla aynı değer — değişiklik yapılmadı." });
+      } else {
+        created.push({ month: entry.month, action: result.action });
+      }
+    } catch (error) {
+      skipped.push({ line: entry.line, month: entry.month, reason: error.message });
+    }
+  }
+
+  return { created, skipped };
+}
+
+/**
+ * PENDING durumundaki bir kaydı VERIFIED yapar. Yalnızca hâlâ AKTİF
+ * (superseded_by IS NULL) ve PENDING durumundaki bir kayıt
+ * doğrulanabilir — zaten VERIFIED/REJECTED olan veya supersede
+ * edilmiş (artık aktif olmayan) bir kayıt için açık bir hata döner
+ * (sessizce no-op yapmaz).
+ *
+ * @param {{ id: number|string, actor: string }} input
+ * @returns {Promise<object>} güncellenmiş kayıt
+ */
+async function verifyIndexRecord({ id, actor }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const current = await client.query(
+      `SELECT * FROM inflation_indices WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    const record = current.rows[0];
+
+    if (!record) {
+      const error = new Error(`Endeks kaydı bulunamadı: ${id}`);
+      error.code = "INFLATION_INDEX_NOT_FOUND";
+      throw error;
+    }
+    if (record.superseded_by !== null) {
+      const error = new Error("Bu kayıt artık aktif değil (supersede edilmiş), doğrulanamaz.");
+      error.code = "INFLATION_INDEX_NOT_ACTIVE";
+      throw error;
+    }
+    if (record.verification_status !== "PENDING") {
+      const error = new Error(`Yalnızca PENDING kayıtlar doğrulanabilir (mevcut durum: ${record.verification_status}).`);
+      error.code = "INFLATION_INDEX_NOT_PENDING";
+      throw error;
+    }
+
+    const updated = await client.query(
+      `UPDATE inflation_indices
+       SET verification_status = 'VERIFIED', verified_at = NOW(), verified_by = $1
+       WHERE id = $2
+       RETURNING *`,
+      [actor, id]
+    );
+
+    await recordAuditEvent(client, {
+      action: "INFLATION_INDEX_VERIFIED",
+      entityId: record.index_month,
+      actor,
+      oldValue: { month: record.index_month, verificationStatus: "PENDING" },
+      newValue: { month: record.index_month, verificationStatus: "VERIFIED", index: Number(record.index_value) },
+      metadata: { indexType: record.index_type, recordId: String(id) }
+    });
+
+    await client.query("COMMIT");
+    return updated.rows[0];
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * PENDING durumundaki bir kaydı REJECTED yapar. verifyIndexRecord ile
+ * aynı ön koşulları uygular (yalnızca aktif + PENDING kayıt).
+ * REJECTED bir kayıt superseded_by IS NULL kalmaya devam eder (yani
+ * "aktif" sayılır) ama TFRS16 API'si zaten yalnızca VERIFIED filtresi
+ * uyguladığı için hesaplamaya giremez (bkz. GET /api/inflation-indices).
+ *
+ * @param {{ id: number|string, actor: string, reason: string }} input
+ * @returns {Promise<object>} güncellenmiş kayıt
+ */
+async function rejectIndexRecord({ id, actor, reason }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const current = await client.query(
+      `SELECT * FROM inflation_indices WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    const record = current.rows[0];
+
+    if (!record) {
+      const error = new Error(`Endeks kaydı bulunamadı: ${id}`);
+      error.code = "INFLATION_INDEX_NOT_FOUND";
+      throw error;
+    }
+    if (record.superseded_by !== null) {
+      const error = new Error("Bu kayıt artık aktif değil (supersede edilmiş), reddedilemez.");
+      error.code = "INFLATION_INDEX_NOT_ACTIVE";
+      throw error;
+    }
+    if (record.verification_status !== "PENDING") {
+      const error = new Error(`Yalnızca PENDING kayıtlar reddedilebilir (mevcut durum: ${record.verification_status}).`);
+      error.code = "INFLATION_INDEX_NOT_PENDING";
+      throw error;
+    }
+
+    const updated = await client.query(
+      `UPDATE inflation_indices
+       SET verification_status = 'REJECTED', verified_at = NOW(), verified_by = $1
+       WHERE id = $2
+       RETURNING *`,
+      [actor, id]
+    );
+
+    await recordAuditEvent(client, {
+      action: "INFLATION_INDEX_REJECTED",
+      entityId: record.index_month,
+      actor,
+      oldValue: { month: record.index_month, verificationStatus: "PENDING" },
+      newValue: { month: record.index_month, verificationStatus: "REJECTED", index: Number(record.index_value) },
+      metadata: { indexType: record.index_type, recordId: String(id), reason: reason || null }
+    });
+
+    await client.query("COMMIT");
+    return updated.rows[0];
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Admin panelindeki liste ekranı için endeks kayıtlarını getirir.
+ * GET /api/inflation-indices'in aksine (TFRS16 tüketimi için sadece
+ * VERIFIED+aktif), bu fonksiyon admin görünürlüğü için TÜM statüleri
+ * ve (varsayılan olarak) supersede edilmiş geçmiş kayıtları da
+ * döndürebilir — audit/izlenebilirlik amacıyla.
+ *
+ * @param {{ status?: string, months?: string[], includeSuperseded?: boolean, limit?: number }} filters
+ * @returns {Promise<object[]>}
+ */
+async function listIndexRecords(filters = {}) {
+  const { status, months, includeSuperseded = false, limit = 200 } = filters;
+
+  const conditions = ["index_type = $1"];
+  const params = [INDEX_TYPE_TUFE_GENEL];
+
+  if (!includeSuperseded) {
+    conditions.push("superseded_by IS NULL");
+  }
+  if (status) {
+    params.push(status);
+    conditions.push(`verification_status = $${params.length}`);
+  }
+  if (Array.isArray(months) && months.length > 0) {
+    params.push(months);
+    conditions.push(`index_month = ANY($${params.length})`);
+  }
+
+  params.push(Math.min(Number(limit) || 200, 1000));
+
+  const result = await pool.query(
+    `SELECT * FROM inflation_indices
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY index_month DESC, created_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return result.rows;
+}
+
 module.exports = {
   INDEX_TYPE_TUFE_GENEL,
   TuikSourceNotConfiguredError,
   TuikSourceUnreachableError,
   TuikResponseShapeError,
+  BulkInputParseError,
   normalizeMonthLabel,
   normalizeTuikRecord,
   fetchFromTuik,
@@ -555,5 +867,10 @@ module.exports = {
   getNearestPriorActiveRecord,
   upsertIndexRecord,
   syncFromTuik,
-  overrideIndexValue
+  overrideIndexValue,
+  createManualIndexEntry,
+  createBulkManualIndexEntries,
+  verifyIndexRecord,
+  rejectIndexRecord,
+  listIndexRecords
 };
