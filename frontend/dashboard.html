@@ -83,17 +83,17 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 <div class="side-group-label">Genel</div>
 <a href="#" class="side-link active"><span class="side-ic">⌂</span>Genel Bakış</a>
 <a href="../tfrs16.html" class="side-link"><span class="side-ic">▤</span>Sözleşmeler<span class="badge-count" id="contractCount">—</span></a>
-<a href="../tfrs16.html?open=modification" class="side-link"><span class="side-ic">⌁</span>Modifikasyon &amp; Reassessment</a>
-<a href="../tfrs16.html?open=slb" class="side-link"><span class="side-ic">⌁</span>Satış ve Geri Kiralama (SLB)</a>
-<a href="../tfrs16.html?open=sublease" class="side-link"><span class="side-ic">⌁</span>Alt Kiralama (Sublease)</a>
-<a href="../tfrs16.html?open=inflation" class="side-link"><span class="side-ic">⌁</span>Enflasyon Düzeltmesi</a>
+<a href="#" data-v26-open="modification" class="side-link"><span class="side-ic">⌁</span>Modifikasyon &amp; Reassessment</a>
+<a href="#" data-v26-open="slb" class="side-link"><span class="side-ic">⌁</span>Satış ve Geri Kiralama (SLB)</a>
+<a href="#" data-v26-open="sublease" class="side-link"><span class="side-ic">⌁</span>Alt Kiralama (Sublease)</a>
+<a href="#" data-v26-open="inflation" class="side-link"><span class="side-ic">⌁</span>Enflasyon Düzeltmesi</a>
 <div class="side-group-label">Kapanış &amp; Kontrol</div>
-<a href="../tfrs16.html?open=close" class="side-link"><span class="side-ic">▣</span>Close Dashboard</a>
-<a href="../tfrs16.html?open=accountMapping" class="side-link"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
-<a href="../tfrs16.html?open=audit" class="side-link"><span class="side-ic">◷</span>Denetim İzi</a>
+<a href="#" data-v26-open="close" class="side-link"><span class="side-ic">▣</span>Close Dashboard</a>
+<a href="#" data-v26-open="accountMapping" class="side-link"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
+<a href="#" data-v26-open="audit" class="side-link"><span class="side-ic">◷</span>Denetim İzi</a>
 <div class="side-group-label">Grup</div>
-<a href="../tfrs16.html?open=consolidation" class="side-link"><span class="side-ic">◎</span>Konsolidasyon</a>
-<a href="../tfrs16.html?open=fxRates" class="side-link"><span class="side-ic">◉</span>Kur Yönetimi (TCMB)</a>
+<a href="#" data-v26-open="consolidation" class="side-link"><span class="side-ic">◎</span>Konsolidasyon</a>
+<a href="#" data-v26-open="fxRates" class="side-link"><span class="side-ic">◉</span>Kur Yönetimi (TCMB)</a>
 </nav>
 <div class="side-foot"><div class="side-user"><span class="avatar" id="sideAvatar">--</span><div class="side-user-meta"><div class="name" id="userDisplay">Yükleniyor...</div><div class="role" id="userRole">Finans Kullanıcısı</div></div></div><button type="button" class="side-logout" onclick="logout()">Çıkış Yap</button></div>
 </aside>
@@ -158,6 +158,15 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 </div></div>
 
 <script>
+// Faz 0 (bkz. PROJECT_CONTEXT.md bölüm 32): bu flag, js/tfrs16.js'in
+// içindeki injectV26Navigation()'a KENDİ ekstra sidebar butonlarını
+// EKLEMEMESİNİ söylüyor — dashboard.html zaten native HTML linklerine
+// sahip, aksi halde aynı linkler iki kez görünürdü. js/tfrs16.js'den
+// ÖNCE tanımlanmalı (script sırası önemli).
+window.__GK_DASHBOARD_SHELL__ = true;
+</script>
+<script src="../js/tfrs16.js"></script>
+<script>
 const API_BASE_URL="https://deneme-git-285469227510.europe-west1.run.app";
 function getToken(){return localStorage.getItem("access_token")}
 async function fetchAPI(url,options={}){
@@ -166,6 +175,36 @@ async function fetchAPI(url,options={}){
  return response.json();
 }
 function logout(){localStorage.removeItem("access_token");localStorage.removeItem("current_user");window.location.href="./login.html"}
+
+// Faz 0 — "bypass tfrs16.html": sidebar'daki data-v26-open linkleri
+// artık tam sayfa navigasyonu yapmıyor; js/tfrs16.js'in KENDİ
+// openInMain mekanizmasını (window.__gkOpenInMainByKey) kullanarak
+// içeriği doğrudan bu sayfanın <main class="content"> alanına render
+// ediyor. window.__gkOpenInMainByKey, js/tfrs16.js'in DOMContentLoaded
+// handler'ı çalışınca kurulur (script sırası nedeniyle bu, dashboard'un
+// kendi DOMContentLoaded'ından ÖNCE olur) — yine de savunmacı olmak
+// için birkaç kez yeniden dener (script yükleme gecikirse diye).
+function gkOpenV26PageByKey(key, attempt) {
+  attempt = attempt || 0;
+  if (typeof window.__gkOpenInMainByKey === "function") {
+    window.__gkOpenInMainByKey(key);
+    return;
+  }
+  if (attempt < 20) {
+    setTimeout(() => gkOpenV26PageByKey(key, attempt + 1), 150);
+  } else {
+    console.error("[Dashboard] gkOpenV26PageByKey: js/tfrs16.js yüklenemedi veya hazır değil.");
+  }
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("[data-v26-open]").forEach(link => {
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      gkOpenV26PageByKey(link.dataset.v26Open);
+    });
+  });
+});
+
 function formatDateShort(v){if(!v)return"-";const d=new Date(v);return d.toLocaleDateString("tr-TR")}
 function escapeHtml(t){if(t===null||t===undefined)return"";const d=document.createElement("div");d.textContent=String(t);return d.innerHTML}
 function getStatusBadge(status){
