@@ -19877,6 +19877,25 @@ document.addEventListener("DOMContentLoaded", () => {
   let v191LiabDetailExpanded = false;
   let v191LiabDetailAssetClassFilter = null;
 
+  // DÜZELTME: drill-down/detay-toggle butonları (v191AssetClassDrillLink,
+  // v191ContractDetailBlock) her zaman v191OpenFinancialReporting()'i
+  // çağırıyordu — bu, SADECE "Finansal Raporlama" ekranı açıkken doğru
+  // çalışır. "Dipnotlar" sayfası (renderFootnotesPage) aynı paylaşılan
+  // fonksiyonları (v191RenderAssetNoteHtml vb.) kullandığı için, o
+  // sayfadayken tıklamalar SESSİZCE HİÇBİR ŞEY YAPMIYORDU (yanlış ekranı
+  // açmaya çalışıyordu). Çözüm: hangi ekranın aktif olduğunu bilen bir
+  // callback — renderFootnotesPage kendi render()'ını buraya kaydediyor,
+  // openInMain başka bir sayfaya geçildiğinde bunu temizliyor. Boşsa
+  // (Finansal Raporlama ekranındaysak) eski davranış AYNEN korunuyor.
+  let v191ActiveScreenRefreshCallback = null;
+  function v191TriggerActiveScreenRefresh() {
+    if (typeof v191ActiveScreenRefreshCallback === "function") {
+      v191ActiveScreenRefreshCallback();
+    } else if (typeof v191OpenFinancialReporting === "function") {
+      v191OpenFinancialReporting();
+    }
+  }
+
   function v191Escape(value) {
     return escapeHtml(value == null ? "" : String(value));
   }
@@ -20275,13 +20294,8 @@ document.addEventListener("DOMContentLoaded", () => {
       { label: "ROU Assets", value: v191Value(bs.rouAssets), description: "Right-of-use assets" },
       { label: "Interest", value: v191Value(pnl.interestExpense), description: "Lease-related P&L" },
       { label: "Depreciation", value: v191Value(pnl.depreciationExpense), description: "Lease-related P&L" }
-    ]) + `<h3>Financial Reporting Snapshot</h3>${v191Table(data.byCurrency || [], [
-      { key: "currency", label: "Currency" },
-      { key: "leaseLiability", label: "Lease Liability" },
-      { key: "currentLiability", label: "Current" },
-      { key: "nonCurrentLiability", label: "Non-current" },
-      { key: "rouAssets", label: "ROU" }
-    ])}
+    ])
+    + `
     ${v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel })}
     ${v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 })}
     ${v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd })}`;
@@ -20430,13 +20444,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function v191ToggleRouDetail() {
     v191RouDetailExpanded = !v191RouDetailExpanded;
     if (!v191RouDetailExpanded) v191RouDetailAssetClassFilter = null;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191ToggleLiabDetail() {
     v191LiabDetailExpanded = !v191LiabDetailExpanded;
     if (!v191LiabDetailExpanded) v191LiabDetailAssetClassFilter = null;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191FilterDetail(kind, assetClass) {
@@ -20447,17 +20461,17 @@ document.addEventListener("DOMContentLoaded", () => {
       v191LiabDetailAssetClassFilter = assetClass;
       v191LiabDetailExpanded = true;
     }
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191ClearRouFilter() {
     v191RouDetailAssetClassFilter = null;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191ClearLiabFilter() {
     v191LiabDetailAssetClassFilter = null;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191RenderRiskControls(date) {
@@ -28707,7 +28721,17 @@ document.addEventListener("DOMContentLoaded", () => {
       .gk-v26-card { min-width:0; max-width:100%; box-sizing:border-box; overflow-x:auto; }
       .gk-v26-table-wrap { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
       .gk-v26-table { min-width:760px; }
-      @media (max-width:768px) { .gk-v26-page { padding:12px; } .gk-v26-form-grid { grid-template-columns:1fr; } #v26NavBlock { max-height:calc(100vh - 110px); } .gk-v26-table-wrap { scrollbar-width:thin; } }
+      /* DÜZELTME: v191Table() (Finansal Raporlama / Dipnotlar ortak
+         tablo üreticisi) "gk-v26-table" DEĞİL, "table-wrapper" class'lı
+         çıplak bir <table> üretiyor — bu class'a kadar hiç CSS
+         tanımlı değildi, tablo mobilde container'ı taşırıyordu.
+         v191Table()'ın KENDİSİNE dokunulmadı, sadece eksik CSS eklendi. */
+      .table-wrapper { width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box; }
+      .table-wrapper table { min-width:600px; width:100%; border-collapse:collapse; font-size:12px; }
+      .table-wrapper th { text-align:left; padding:8px 10px; background:#f8fafc; border-bottom:2px solid #e2e8f0; font-weight:600; color:#334155; white-space:nowrap; }
+      .table-wrapper td { padding:8px 10px; border-bottom:1px solid #f1f5f9; color:#1e293b; white-space:nowrap; }
+      .table-wrapper tr:hover td { background:#f8fafc; }
+      @media (max-width:768px) { .gk-v26-page { padding:12px; } .gk-v26-form-grid { grid-template-columns:1fr; } #v26NavBlock { max-height:calc(100vh - 110px); } .gk-v26-table-wrap { scrollbar-width:thin; } .table-wrapper { scrollbar-width:thin; } }
     `;
     document.head.appendChild(style);
   }
@@ -29656,7 +29680,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sidebar.appendChild(navBlock);
       }
 
-      const openInMain = renderer => { let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
+      const openInMain = renderer => { if (typeof v191ActiveScreenRefreshCallback !== "undefined") v191ActiveScreenRefreshCallback = null; let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
       document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
       document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMain(renderCloseDashboardPage));
       document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMain(renderAccountMappingPage));
@@ -29980,6 +30004,11 @@ document.addEventListener("DOMContentLoaded", () => {
       v191RenderAssetNoteHtml,
       v191RenderLiabilityNoteHtml,
       v191RenderLiquidityNoteHtml,
+      v191FilterDetail,
+      v191ToggleRouDetail,
+      v191ToggleLiabDetail,
+      v191ClearRouFilter,
+      v191ClearLiabFilter,
       contracts
     };
   } catch (error) {
@@ -30758,6 +30787,11 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
     const render = () => {
+      // Bu sayfa aktifken drill-down/detay-toggle tıklamalarının
+      // (v191FilterDetail vb.) DOĞRU ekranı (bu sayfayı) yenilemesi
+      // için kendi render'ımızı kaydediyoruz — bkz. yukarıdaki not.
+      v191ActiveScreenRefreshCallback = render;
+
       const effectivePeriodEnd = v26FootnotesPeriodEndOverride ? parseDate(v26FootnotesPeriodEndOverride) : new Date();
       const effectivePeriodStart = new Date(effectivePeriodEnd.getFullYear(), 0, 1);
 
@@ -30786,7 +30820,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
           });
         }
       } catch (error) {
-        tabContentHtml = `<div class="gk-v26-card" style="color:#991b1b;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
+        tabContentHtml = `<div style="color:#991b1b;padding:12px 0;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
       }
 
       const tabBtn = (key, label) => {
@@ -30794,6 +30828,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
         return `<button type="button" data-footnote-tab="${key}" class="gk-v26-btn ${active ? "" : "gk-v26-btn-secondary"}" style="margin-right:8px;">${escapeHtml(label)}</button>`;
       };
 
+      // DÜZELTME (görsel tutarlılık): önceden tab butonları hiçbir
+      // "kart" içinde değildi, dashboard'un krem-rengi arka planı
+      // (--paper-2) araya sızıyordu — diğer sayfalardan (Modifikasyon,
+      // SLB, Sublease) farklı görünüyordu. Artık period picker, tab
+      // butonları ve dipnot içeriğinin TAMAMI TEK bir beyaz kart
+      // içinde; dashboard'un genel arka planı yalnızca kartın DIŞINDA
+      // görünür (diğer sayfalarla tutarlı).
       container.innerHTML = `
         <div class="gk-v26-page">
           <div style="margin-bottom:16px;">
@@ -30803,20 +30844,20 @@ const V26_FX_UI_PAGE_SIZE = 50;
             </p>
           </div>
 
-          <div class="gk-v26-card" style="margin-bottom:16px;">
+          <div class="gk-v26-card">
             <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label>
             <input type="date" id="v26FootnotesPeriodEndInput" value="${effectivePeriodEnd.toISOString().slice(0,10)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
             <button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button>
             <span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${effectivePeriodStart.toLocaleDateString("tr-TR")}</span>
-          </div>
 
-          <div style="margin-bottom:0;">
-            ${tabBtn("asset", "Varlık")}
-            ${tabBtn("liability", "Yükümlülük")}
-            ${tabBtn("liquidity", "Likidite")}
-          </div>
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
+              ${tabBtn("asset", "Varlık")}
+              ${tabBtn("liability", "Yükümlülük")}
+              ${tabBtn("liquidity", "Likidite")}
+            </div>
 
-          ${tabContentHtml}
+            ${tabContentHtml}
+          </div>
         </div>`;
 
       container.querySelectorAll("[data-footnote-tab]").forEach(btn => {
