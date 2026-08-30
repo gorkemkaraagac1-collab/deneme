@@ -11713,10 +11713,11 @@ document.addEventListener("DOMContentLoaded", () => {
           )
         )}
 
-
-        ${renderAccountingCenter(
-          contract
-        )}
+        <!-- Muhasebe Fiş Merkezi (renderAccountingCenter) BURADAN
+             KALDIRILDI (onaylı plan, aynı desen): artık ayrı bir
+             "Toplu Fiş Merkezi" sayfasında, sözleşme seçici ile
+             yönetiliyor. Bkz. renderAccountingCenterPage ve
+             dashboard.html'deki link. -->
 
       `;
     }
@@ -11729,29 +11730,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setTimeout(
       () => {
-
-        document
-          .getElementById(
-            "generateJournal"
-          )
-          ?.addEventListener(
-            "click",
-            () =>
-              generateSelectedJournal(
-                contract
-              )
-          );
-
-
-        document
-          .getElementById(
-            "openBulkJournalButton"
-          )
-          ?.addEventListener(
-            "click",
-            openBulkJournalModal
-          );
-
 
         document
           .getElementById("exportContractAuditTrailButton")
@@ -29679,6 +29657,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
         <button type="button" id="v26NavSlb" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Satış ve Geri Kiralama (SLB)</button>
         <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt Kiralama (Sublease)</button>
+        <button type="button" id="v26NavAccountingCenter" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🧾 Toplu Fiş Merkezi</button>
         <button type="button" id="v26NavFootnotes" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📝 Dipnotlar</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
@@ -29697,6 +29676,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
       document.getElementById("v26NavSlb")?.addEventListener("click",()=>openInMain(renderSlbManagementPage));
       document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMain(renderSubleaseManagementPage));
+      document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMain(renderAccountingCenterPage));
       document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMain(renderFootnotesPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
@@ -29715,6 +29695,7 @@ document.addEventListener("DOMContentLoaded", () => {
           modification: renderModificationReassessmentPage,
           slb: renderSlbManagementPage,
           sublease: renderSubleaseManagementPage,
+          accountingCenter: renderAccountingCenterPage,
           footnotes: renderFootnotesPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
@@ -30009,6 +29990,10 @@ document.addEventListener("DOMContentLoaded", () => {
       renderModificationReassessmentPage,
       renderSlbManagementPage,
       renderSubleaseManagementPage,
+      renderAccountingCenterPage,
+      renderAccountingCenter,
+      generateSelectedJournal,
+      openBulkJournalModal,
       v191PrepareFinancialReportingData,
       v191RenderAssetNoteHtml,
       v191RenderLiabilityNoteHtml,
@@ -30791,6 +30776,83 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
       if (selectedContract) {
         renderSubleaseSection(selectedContract);
+      }
+    };
+
+    render();
+  }
+
+  /* ==========================================================
+     TOPLU FİŞ MERKEZİ — AYRI SAYFA (onaylı plan)
+     ----------------------------------------------------------
+     renderAccountingCenter'ın KENDİSİNE dokunulmadı — hâlâ aynı DOM
+     ID'lerini (accountingYear/accountingPeriod/accountingMonth/
+     generateJournal/journalPreview/openBulkJournalButton) üretiyor.
+     Bu sayfa sadece o HTML'i kendi içinde render edip, event
+     listener'ları (generateJournal → generateSelectedJournal,
+     openBulkJournalButton → openBulkJournalModal — ikincisi zaten
+     tüm portföy için çalışıyor, sözleşmeye bağımlı değil) bağlıyor.
+     generateSelectedJournal SADECE bir önizleme/rapor üretiyor —
+     sözleşmenin kendisini değiştirmiyor, bu yüzden Modification/SLB/
+     Sublease'te bulunan "backend'e yazmıyor" sorunu BURADA GEÇERLİ
+     DEĞİL (yazılacak bir state değişikliği yok).
+  ========================================================== */
+  let v26SelectedAccountingContractId = null;
+
+  function renderAccountingCenterPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const activeContracts = (Array.isArray(contracts) ? contracts : [])
+        .slice()
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      if (!v26SelectedAccountingContractId && activeContracts.length) {
+        v26SelectedAccountingContractId = activeContracts[0].id;
+      }
+
+      const selectedContract = activeContracts.find(c => c.id === v26SelectedAccountingContractId) || null;
+
+      const optionsHtml = activeContracts.map(c => {
+        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
+        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedAccountingContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      const bodyHtml = !activeContracts.length
+        ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div>`
+        : !selectedContract
+          ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div>`
+          : renderAccountingCenter(selectedContract);
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Toplu Fiş Merkezi</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              Tek sözleşme veya portföydeki tüm aktif sözleşmeler için muhasebe fişi üretimi artık tek bir ekranda yönetiliyor.
+            </p>
+          </div>
+
+          <div class="gk-v26-card">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (tekil fiş için)</label>
+            <select id="v26AccountingContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
+            </select>
+            ${v26SelectedContractBanner(selectedContract)}
+
+            ${bodyHtml}
+          </div>
+        </div>`;
+
+      container.querySelector("#v26AccountingContractSelect")?.addEventListener("change", event => {
+        v26SelectedAccountingContractId = event.target.value;
+        render();
+      });
+
+      if (selectedContract) {
+        container.querySelector("#generateJournal")?.addEventListener("click", () => generateSelectedJournal(selectedContract));
+        container.querySelector("#openBulkJournalButton")?.addEventListener("click", openBulkJournalModal);
       }
     };
 
