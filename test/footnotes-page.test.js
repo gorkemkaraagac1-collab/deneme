@@ -185,6 +185,15 @@ describe("renderFootnotesPage — 3 tab arası geçiş (Varlık/Yükümlülük/L
   });
 
   test("DÜZELTME: Varlık sınıfı drill-down linkine tıklanınca Dipnotlar sayfasının KENDİSİ yenilenir (Finansal Raporlama ekranına gitmeye çalışmaz)", () => {
+    // Demo veri artık YOK (kullanıcı talebiyle kaldırıldı — bkz.
+    // loadContracts/v26LoadCompanies değişiklikleri), bu yüzden drill
+    // link'in DOM'da oluşabilmesi için kendi test sözleşmemizi ekliyoruz.
+    tfrs16.contracts.push({
+      id: "DRILL-TEST-1", company: "Test A.Ş.", companyId: "C-1", supplier: "Test Tedarikçi",
+      monthlyPayment: 10000, discountRate: 18, startDate: "2026-01-01", endDate: "2027-12-01",
+      currency: "TRY", status: "active"
+    });
+
     const host = document.getElementById("footnotesPageHost");
     tfrs16.renderFootnotesPage(host);
 
