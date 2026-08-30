@@ -9799,7 +9799,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function initModificationEvents(contract) {
+  function initModificationEvents(contract, onChanged) {
+
+    // onChanged verilmezse eski davranış korunur (contract detail
+    // modal'ı kendini yeniden çizer). Yeni "Modifikasyon & Reassessment"
+    // sayfası (bkz. renderModificationReassessmentPage) kendi re-render
+    // fonksiyonunu geçirir — böylece bu fonksiyonun MANTIĞI değişmeden,
+    // yalnızca "işlem sonrası hangi ekran yenilenir" davranışı çağıran
+    // tarafa bırakılmış olur.
+    const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
 
     let editingModificationId = null;
     const createButton = document.getElementById("createModificationButton");
@@ -9862,7 +9870,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           resetModificationFormMode();
-          openDetail(contract.id);
+          refreshHost();
         }
       );
 
@@ -9898,7 +9906,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 refresh();
-                openDetail(contract.id);
+                refreshHost();
                 return;
               }
 
@@ -9911,7 +9919,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   return;
                 }
 
-                openDetail(contract.id);
+                refreshHost();
               }
             }
           );
@@ -9998,7 +10006,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function initReassessmentEvents(contract) {
+  function initReassessmentEvents(contract, onChanged) {
+    const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
+
     let editingReassessmentId = null;
     const createButton = document.getElementById("createReassessmentButton");
 
@@ -10048,7 +10058,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       resetReassessmentFormMode();
-      openDetail(contract.id);
+      refreshHost();
     });
 
     document.querySelectorAll("[data-reass-action]").forEach(button => {
@@ -10075,7 +10085,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           refresh();
-          openDetail(contract.id);
+          refreshHost();
           return;
         }
 
@@ -10085,7 +10095,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showAlert(result.errors.join("\n"));
             return;
           }
-          openDetail(contract.id);
+          refreshHost();
         }
       });
     });
@@ -11418,14 +11428,10 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
-        ${renderModificationManagementSection(
-          contract
-        )}
-
-
-        ${renderReassessmentManagementSection(
-          contract
-        )}
+        <!-- Modifikasyon & Reassessment BURADAN KALDIRILDI (onaylı plan):
+             artık ayrı bir "Modifikasyon & Reassessment" sayfasında,
+             sözleşme seçici ile yönetiliyor. Bkz. renderModificationReassessmentPage
+             ve dashboard.html'deki "Hesaplama & Yeniden Ölçüm" linki. -->
 
 
         <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
@@ -11508,16 +11514,6 @@ document.addEventListener("DOMContentLoaded", () => {
               .then(ok => { if (!ok) showAlert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı."); })
               .catch(error => showAlert(`Denetim izi dışa aktarılamadı: ${error?.message || error}`));
           });
-
-
-        initModificationEvents(
-          contract
-        );
-
-
-        initReassessmentEvents(
-          contract
-        );
 
 
         initPaymentScheduleEvents(
@@ -29329,6 +29325,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavEliminations" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">↔️ Eliminasyonlar</button>
         <button type="button" id="v26NavFxRates" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">💱 Döviz Kurları</button>
         <button type="button" id="v26NavInflation" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📈 Enflasyon Endeksleri</button>
+        <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
@@ -29341,6 +29338,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMain(renderEliminationManagementPage));
       document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMain(renderFxRateManagementPage));
       document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMain(renderInflationIndexManagementPage));
+      document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -29355,6 +29353,7 @@ document.addEventListener("DOMContentLoaded", () => {
           fxRates: renderFxRateManagementPage,
           audit: renderAuditTrailPage,
           inflation: renderInflationIndexManagementPage,
+          modification: renderModificationReassessmentPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
@@ -29407,6 +29406,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderFxRateManagementPage,
     renderAuditTrailPage,
     renderInflationIndexManagementPage,
+    renderModificationReassessmentPage,
     v26ExportInflationIndexExcel,
     v26ConvertScheduleToPresentation,
     renderContractStandardsPanel,
@@ -30176,6 +30176,78 @@ const V26_FX_UI_PAGE_SIZE = 50;
       console.error("V26 TMS29 inflation index Excel export error:", error);
       v26InflationUiToast(`Excel export tamamlanamadı: ${error?.message || String(error)}`, "error");
     }
+  }
+
+  /* ==========================================================
+     MODİFİKASYON & REASSESSMENT — ORTAK SAYFA (onaylı plan)
+     ----------------------------------------------------------
+     Önceden renderModificationManagementSection/renderReassessmentManagementSection
+     sözleşme detay ekranının (openDetail) İÇİNDE, tek bir uzun kaydırmalı
+     sayfada gösteriliyordu. Bu fonksiyon onları AYRI, kendi başına bir
+     ekrana taşır — sözleşme seçimi native bir <select> ile yapılır
+     (kullanıcının native picker beklentisiyle uyumlu). Render/iş mantığı
+     fonksiyonlarının (renderModificationManagementSection vb.) KENDİSİNE
+     dokunulmadı — yalnızca NEREDE render edildikleri değişti.
+  ========================================================== */
+  let v26SelectedModReassContractId = null;
+
+  function renderModificationReassessmentPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const activeContracts = (Array.isArray(contracts) ? contracts : [])
+        .slice()
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      if (!v26SelectedModReassContractId && activeContracts.length) {
+        v26SelectedModReassContractId = activeContracts[0].id;
+      }
+
+      const selectedContract = activeContracts.find(c => c.id === v26SelectedModReassContractId) || null;
+
+      const optionsHtml = activeContracts.map(c => {
+        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
+        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedModReassContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      const bodyHtml = !activeContracts.length
+        ? `<div class="gk-v26-card"><div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div></div>`
+        : !selectedContract
+          ? `<div class="gk-v26-card"><div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div></div>`
+          : `${renderModificationManagementSection(selectedContract)}${renderReassessmentManagementSection(selectedContract)}`;
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
+            </p>
+          </div>
+
+          <div class="gk-v26-card" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
+            <select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              ${optionsHtml}
+            </select>
+          </div>
+
+          ${bodyHtml}
+        </div>`;
+
+      container.querySelector("#v26ModReassContractSelect")?.addEventListener("change", event => {
+        v26SelectedModReassContractId = event.target.value;
+        render();
+      });
+
+      if (selectedContract) {
+        initModificationEvents(selectedContract, render);
+        initReassessmentEvents(selectedContract, render);
+      }
+    };
+
+    render();
   }
 
   function renderInflationIndexManagementPage(container) {
