@@ -20115,6 +20115,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
   }
 
+  // ARTIK ÇAĞRILMIYOR (bkz. aşağıdaki v191Tms29RouSummaryHtml/
+  // v191Tms29LiabilitySummaryHtml — bölünmüş hali). Bilinçli olarak
+  // SİLİNMEDİ (minimal risk), sadece hiçbir yerden referans verilmiyor.
   function v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
     const t = tms29.totals;
     const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
@@ -20162,6 +20165,79 @@ document.addEventListener("DOMContentLoaded", () => {
 
       <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
       <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır. Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
+    </div>`;
+  }
+
+  /**
+   * DÜZELTME (kullanıcı geri bildirimi): önceden v191Tms29SummaryHtml
+   * TEK bir fonksiyonda HEM "Kullanım Hakkı Varlığı (ROU) — Restated"
+   * HEM "Kira Yükümlülüğü — Restated" tablolarını üretiyordu ve bu
+   * TEK blok Yükümlülük dipnotunun SONUNA ekleniyordu — yani ROU
+   * (varlık) tablosu yanlışlıkla Yükümlülük tab'ında görünüyordu.
+   * İkiye ayrıldı: v191Tms29RouSummaryHtml → Varlık dipnotunun sonuna,
+   * v191Tms29LiabilitySummaryHtml → Yükümlülük dipnotunun sonuna
+   * (eski konumunda kalıyor, alt notlar/mutabakat uyarısı da burada).
+   */
+  function v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const t = tms29.totals;
+    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
+    const rouRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
+    const rouTms29Columns = [
+      { key: "assetClass", label: "Varlık Sınıfı" },
+      { key: "contractCount", label: "Sözleşme Sayısı" },
+      { key: "rouOpeningRestated", label: "Açılış" },
+      { key: "rouEntriesRestated", label: "Girişler" },
+      { key: "rouDepreciationRestated", label: "Amortisman", render: row => v191Value(-row.rouDepreciationRestated) },
+      { key: "rouClosingRestatedPeriod", label: "Kapanış (Restated)" },
+      { key: "rouClosingNominalPeriod", label: "Kapanış (Nominal)" }
+    ];
+
+    return `<div style="margin-top:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (ROU)</h4>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportTms29InflationNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
+
+      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
+      ${v191Table(rouRowsWithTotal, rouTms29Columns)}
+      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır.</p>
+    </div>`;
+  }
+
+  function v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const t = tms29.totals;
+    const liabRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
+    const liabTms29Columns = [
+      { key: "assetClass", label: "Varlık Sınıfı" },
+      { key: "contractCount", label: "Sözleşme Sayısı" },
+      { key: "liabilityOpeningRestated", label: "Açılış" },
+      { key: "liabilityEntriesRestated", label: "Girişler" },
+      { key: "liabilityInterestRestated", label: "Faiz" },
+      { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
+      { key: "liabilityMonetaryGainLossOpening", label: "Parasal K/Z — Açılış (580)", render: row => v191Value(-(row.liabilityMonetaryGainLossOpening || 0)) },
+      { key: "liabilityMonetaryGainLossPeriod", label: "Parasal K/Z — Dönem İçi (698.02)", render: row => v191Value(-(row.liabilityMonetaryGainLossPeriod || 0)) },
+      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
+      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
+    ];
+
+    return `<div style="margin-top:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (Kira Yükümlülüğü)</h4>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
+        </div>
+        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportTms29InflationNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
+      </div>
+
+      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
+      ${v191Table(liabRowsWithTotal, liabTms29Columns)}
+
+      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
     </div>`;
   }
 
@@ -20278,7 +20354,7 @@ document.addEventListener("DOMContentLoaded", () => {
       { label: "Depreciation", value: v191Value(pnl.depreciationExpense), description: "Lease-related P&L" }
     ])
     + `
-    ${v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel })}
+    ${v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 })}
     ${v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 })}
     ${v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd })}`;
   }
@@ -20297,7 +20373,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * kısmında var (rouReport/liabReport/tms29/liquidityDisclosure
    * hesaplama çağrıları), HTML üretimi PAYLAŞILIYOR.
    */
-  function v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel }) {
+  function v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 }) {
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -20331,6 +20407,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ])}
       ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
       ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
+      ${tms29 ? v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) : ""}
     </div>`;
   }
 
@@ -20370,7 +20447,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ])}
       ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
-      ${v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
+      ${v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
     </div>`;
   }
 
@@ -29998,6 +30075,8 @@ document.addEventListener("DOMContentLoaded", () => {
       v191RenderAssetNoteHtml,
       v191RenderLiabilityNoteHtml,
       v191RenderLiquidityNoteHtml,
+      v191Tms29RouSummaryHtml,
+      v191Tms29LiabilitySummaryHtml,
       v191FilterDetail,
       v191ToggleRouDetail,
       v191ToggleLiabDetail,
@@ -30896,7 +30975,8 @@ const V26_FX_UI_PAGE_SIZE = 50;
             rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
             rouByAssetClass: prepared.rouByAssetClass, rouByCurrency: prepared.rouByCurrency,
             rouDetailColumns: prepared.rouDetailColumns, rouReport: prepared.rouReport,
-            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel
+            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
+            tms29: prepared.tms29
           });
         } else if (v26FootnotesActiveTab === "liability") {
           tabContentHtml = v191RenderLiabilityNoteHtml({
