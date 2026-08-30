@@ -22,6 +22,36 @@
         .filter-bar select{padding:7px 10px;border:1px solid #d4d0c8;border-radius:4px}
         .row-errors{list-style:none;margin:0;padding:0;font-size:12px;color:var(--danger,#9d453b)}
         .row-errors li{padding:3px 0;border-bottom:1px dashed #eee}
+
+        /* ------------------------------------------------------
+         * MOBİL KART GÖRÜNÜMÜ — 8 kolonlu tablo dar ekranlarda
+         * (ör. iPhone) .table-container'ın overflow-x:auto scroll'u
+         * sayfayı SAĞA kaymış halde açılışa neden oluyordu (başlık ve
+         * ilk kolonlar viewport dışında kalıyordu). 680px altında
+         * tabloyu klasik yatay-scroll yerine dikey kart listesine
+         * çeviriyoruz — her satır bir kart, her hücre kendi etiketiyle
+         * (data-label) alt alta gösterilir. thead görsel olarak
+         * gizlenir (erişilebilirlik için DOM'da kalır).
+         * ------------------------------------------------------ */
+        @media (max-width: 680px) {
+            #inflationIndicesTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+            #inflationIndicesTable, #inflationIndicesTable tbody, #inflationIndicesTable tr, #inflationIndicesTable td {
+                display: block; width: 100%;
+            }
+            #inflationIndicesTable { min-width: 0; }
+            #inflationIndicesTable tr {
+                border: 1px solid #e5e0d8; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px;
+            }
+            #inflationIndicesTable td {
+                border: 0; padding: 6px 0; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+            }
+            #inflationIndicesTable td::before {
+                content: attr(data-label); font: 500 10px 'JetBrains Mono', monospace; text-transform: uppercase;
+                color: var(--text-light, #68717f); letter-spacing: .05em; flex-shrink: 0;
+            }
+            #inflationIndicesTable td[data-label="Actions"] { justify-content: flex-end; gap: 8px; }
+            .table-container { overflow-x: hidden; }
+        }
     </style>
 </head>
 <body>
@@ -101,7 +131,7 @@
                         <button class="btn btn-sm btn-outline" onclick="loadIndices()">Yenile</button>
                     </div>
                 </div>
-                <table>
+                <table id="inflationIndicesTable">
                     <thead>
                         <tr>
                             <th>Ay</th>
@@ -183,14 +213,14 @@
 
                 return `
                     <tr>
-                        <td><strong>${escapeHtml(r.month)}</strong></td>
-                        <td>${Number(r.value).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</td>
-                        <td>${escapeHtml(r.source)}</td>
-                        <td>${inflationStatusBadge(r.verificationStatus)}</td>
-                        <td>${escapeHtml(r.retrievedBy || '-')}</td>
-                        <td>${escapeHtml(r.verifiedBy || '-')}</td>
-                        <td>${formatDateTime(r.createdAt)}</td>
-                        <td>${actions}</td>
+                        <td data-label="Ay"><strong>${escapeHtml(r.month)}</strong></td>
+                        <td data-label="Endeks Değeri">${Number(r.value).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</td>
+                        <td data-label="Kaynak">${escapeHtml(r.source)}</td>
+                        <td data-label="Durum">${inflationStatusBadge(r.verificationStatus)}</td>
+                        <td data-label="Giren">${escapeHtml(r.retrievedBy || '-')}</td>
+                        <td data-label="Doğrulayan">${escapeHtml(r.verifiedBy || '-')}</td>
+                        <td data-label="Oluşturulma">${formatDateTime(r.createdAt)}</td>
+                        <td data-label="Actions">${actions}</td>
                     </tr>
                 `;
             }).join('');
@@ -306,6 +336,8 @@
             if (authenticated) {
                 loadIndices();
             }
+            const tc = document.querySelector('.table-container');
+            if (tc) tc.scrollLeft = 0;
         });
     </script>
 </body>
