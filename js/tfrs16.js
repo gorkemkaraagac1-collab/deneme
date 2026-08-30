@@ -10506,9 +10506,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div id="inflationAdjustmentContainer"></div>
 
-        <div id="slbSectionContainer"></div>
-
-        <div id="subleaseSectionContainer"></div>
+        <!-- SLB & Sublease BURADAN KALDIRILDI (onaylı plan, Modifikasyon
+             & Reassessment ile aynı desen): artık ayrı "Satış ve Geri
+             Kiralama" ve "Alt Kiralama" sayfalarında, sözleşme seçici
+             ile yönetiliyor. Bkz. renderSlbManagementPage /
+             renderSubleaseManagementPage ve dashboard.html'deki linkler. -->
 
       </div>
 
@@ -10879,7 +10881,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     container.innerHTML = formHtml;
 
-    function runAndRenderSlb(persist) {
+    async function runAndRenderSlb(persist) {
       const resultBox = document.getElementById("slbResultContainer");
       const input = {
         previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
@@ -10890,7 +10892,16 @@ document.addEventListener("DOMContentLoaded", () => {
         leasebackContract: contract
       };
 
+      const calcButton = document.getElementById("slbCalculateButton");
+
       if (persist) {
+        // Rollback için ÖNCEKİ değeri sakla (backend yazma başarısız
+        // olursa geri yüklenecek — bkz. PROJECT_CONTEXT.md bölüm 23
+        // madde 14/16, Modification/Reassessment ile AYNI desen).
+        const previousSaleAndLeaseback = contract.saleAndLeaseback
+          ? cloneModificationValue(contract.saleAndLeaseback)
+          : null;
+
         contract.saleAndLeaseback = {
           previousCarryingAmount: input.previousCarryingAmount,
           fairValueOfAsset: input.fairValueOfAsset,
@@ -10902,6 +10913,35 @@ document.addEventListener("DOMContentLoaded", () => {
         const idx = contracts.findIndex(c => c.id === contract.id);
         if (idx >= 0) contracts[idx] = contract;
         saveContracts(contracts);
+
+        if (calcButton) {
+          calcButton.disabled = true;
+          calcButton.textContent = "Kaydediliyor...";
+        }
+
+        try {
+          await persistContractToApi(contract, true);
+        } catch (error) {
+          contract.saleAndLeaseback = previousSaleAndLeaseback;
+          saveContracts(contracts);
+          if (calcButton) {
+            calcButton.disabled = false;
+            calcButton.textContent = "Hesapla ve Kaydet";
+          }
+          if (resultBox) {
+            resultBox.innerHTML = `
+              <div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
+                Backend'e kaydedilemedi: ${escapeHtml(error?.message || String(error))}
+              </div>
+            `;
+          }
+          return;
+        }
+
+        if (calcButton) {
+          calcButton.disabled = false;
+          calcButton.textContent = "Hesapla ve Kaydet";
+        }
       }
 
       if (!resultBox) return;
@@ -11044,7 +11084,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     container.innerHTML = formHtml;
 
-    function runAndRenderSublease(persist) {
+    async function runAndRenderSublease(persist) {
       const resultBox = document.getElementById("subleaseResultContainer");
       const subleaseContract = {
         monthlyPayment: Number(document.getElementById("subleaseMonthlyPayment")?.value),
@@ -11057,11 +11097,46 @@ document.addEventListener("DOMContentLoaded", () => {
       const rouAllocationRatio = Number(document.getElementById("subleaseRouRatio")?.value) || 1;
       const professionalJudgmentNote = document.getElementById("subleaseNote")?.value || "";
 
+      const calcButton = document.getElementById("subleaseCalculateButton");
+
       if (persist) {
+        const previousSublease = contract.sublease
+          ? cloneModificationValue(contract.sublease)
+          : null;
+
         contract.sublease = { ...subleaseContract, classification, rouAllocationRatio, professionalJudgmentNote, savedAt: new Date().toISOString() };
         const idx = contracts.findIndex(c => c.id === contract.id);
         if (idx >= 0) contracts[idx] = contract;
         saveContracts(contracts);
+
+        if (calcButton) {
+          calcButton.disabled = true;
+          calcButton.textContent = "Kaydediliyor...";
+        }
+
+        try {
+          await persistContractToApi(contract, true);
+        } catch (error) {
+          contract.sublease = previousSublease;
+          saveContracts(contracts);
+          if (calcButton) {
+            calcButton.disabled = false;
+            calcButton.textContent = "Hesapla ve Kaydet";
+          }
+          if (resultBox) {
+            resultBox.innerHTML = `
+              <div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
+                Backend'e kaydedilemedi: ${escapeHtml(error?.message || String(error))}
+              </div>
+            `;
+          }
+          return;
+        }
+
+        if (calcButton) {
+          calcButton.disabled = false;
+          calcButton.textContent = "Hesapla ve Kaydet";
+        }
       }
 
       if (!resultBox) return;
@@ -11173,8 +11248,8 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPaymentScheduleTable(contract);
     renderFxTranslationSection(contract);
     renderInflationAdjustmentSection(contract);
-    renderSlbSection(contract);
-    renderSubleaseSection(contract);
+    // renderSlbSection/renderSubleaseSection BURADAN KALDIRILDI —
+    // artık ayrı sayfalarda (bkz. yukarıdaki not).
 
     document
       .getElementById(
@@ -29513,6 +29588,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavFxRates" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">💱 Döviz Kurları</button>
         <button type="button" id="v26NavInflation" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📈 Enflasyon Endeksleri</button>
         <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
+        <button type="button" id="v26NavSlb" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Satış ve Geri Kiralama (SLB)</button>
+        <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt Kiralama (Sublease)</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
@@ -29526,6 +29603,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMain(renderFxRateManagementPage));
       document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMain(renderInflationIndexManagementPage));
       document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
+      document.getElementById("v26NavSlb")?.addEventListener("click",()=>openInMain(renderSlbManagementPage));
+      document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMain(renderSubleaseManagementPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -29541,6 +29620,8 @@ document.addEventListener("DOMContentLoaded", () => {
           audit: renderAuditTrailPage,
           inflation: renderInflationIndexManagementPage,
           modification: renderModificationReassessmentPage,
+          slb: renderSlbManagementPage,
+          sublease: renderSubleaseManagementPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
@@ -29818,6 +29899,10 @@ document.addEventListener("DOMContentLoaded", () => {
       saveContracts,
       persistContractToApi,
       lockPeriod,
+      renderSlbSection,
+      renderSubleaseSection,
+      calculateSaleAndLeaseback,
+      calculateSublease,
       contracts
     };
   } catch (error) {
@@ -30451,6 +30536,124 @@ const V26_FX_UI_PAGE_SIZE = 50;
       if (selectedContract) {
         initModificationEvents(selectedContract, render);
         initReassessmentEvents(selectedContract, render);
+      }
+    };
+
+    render();
+  }
+
+  /* ==========================================================
+     SATIŞ VE GERİ KİRALAMA (SLB) — AYRI SAYFA (onaylı plan)
+     ----------------------------------------------------------
+     renderSlbSection'ın KENDİSİNE dokunulmadı — o hâlâ
+     document.getElementById("slbSectionContainer") arıyor. Bu sayfa
+     sadece o container'ı KENDİ İÇİNDE oluşturup fonksiyonu çağırıyor.
+  ========================================================== */
+  let v26SelectedSlbContractId = null;
+
+  function renderSlbManagementPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const activeContracts = (Array.isArray(contracts) ? contracts : [])
+        .slice()
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      if (!v26SelectedSlbContractId && activeContracts.length) {
+        v26SelectedSlbContractId = activeContracts[0].id;
+      }
+
+      const selectedContract = activeContracts.find(c => c.id === v26SelectedSlbContractId) || null;
+
+      const optionsHtml = activeContracts.map(c => {
+        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
+        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedSlbContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Satış ve Geri Kiralama (SLB)</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              TFRS 16.98-103 kapsamındaki satış-ve-geri-kiralama işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
+            </p>
+          </div>
+
+          <div class="gk-v26-card" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
+            <select id="v26SlbContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
+            </select>
+          </div>
+
+          <div id="slbSectionContainer"></div>
+        </div>`;
+
+      container.querySelector("#v26SlbContractSelect")?.addEventListener("change", event => {
+        v26SelectedSlbContractId = event.target.value;
+        render();
+      });
+
+      if (selectedContract) {
+        renderSlbSection(selectedContract);
+      }
+    };
+
+    render();
+  }
+
+  /* ==========================================================
+     ALT KİRALAMA (SUBLEASE) — AYRI SAYFA (onaylı plan)
+  ========================================================== */
+  let v26SelectedSubleaseContractId = null;
+
+  function renderSubleaseManagementPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const activeContracts = (Array.isArray(contracts) ? contracts : [])
+        .slice()
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      if (!v26SelectedSubleaseContractId && activeContracts.length) {
+        v26SelectedSubleaseContractId = activeContracts[0].id;
+      }
+
+      const selectedContract = activeContracts.find(c => c.id === v26SelectedSubleaseContractId) || null;
+
+      const optionsHtml = activeContracts.map(c => {
+        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
+        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedSubleaseContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Alt Kiralama (Sublease)</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              TFRS 16.B58 kapsamındaki alt kiralama işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
+            </p>
+          </div>
+
+          <div class="gk-v26-card" style="margin-bottom:0;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (Ana Kira)</label>
+            <select id="v26SubleaseContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
+            </select>
+          </div>
+
+          <div id="subleaseSectionContainer"></div>
+        </div>`;
+
+      container.querySelector("#v26SubleaseContractSelect")?.addEventListener("change", event => {
+        v26SelectedSubleaseContractId = event.target.value;
+        render();
+      });
+
+      if (selectedContract) {
+        renderSubleaseSection(selectedContract);
       }
     };
 
