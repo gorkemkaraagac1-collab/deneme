@@ -1108,6 +1108,7 @@ Her değişiklikten sonra: `npx jest --runInBand` ile backend/servis test suite'
 - Tek kabuk + tutarlı navigasyon
 - Sözleşme detayı tab'lara bölünür: Özet | Ödeme Planı | Modifikasyon & Reassessment | Enflasyon | SLB/Alt Kiralama | Muhasebe Fişleri (CSS ile bölüm gizleme/gösterme — DOM yapısı ve hesaplama mantığı değişmez)
 - Breadcrumb: Şirket > Sözleşme > Tab
+- **[TAMAMLANDI]** Yeni Sözleşme formu (`contractModal`) 4 tab'a bölündü: (1) Sözleşme — temel alanlar + Varlık Sınıfı, (2) İleri TFRS 16 Parametreleri (opsiyonel), (3) Opsiyonlar & İstisnalar, (4) Para Birimi & Standartlar (V26). Aynı `[data-tab]` + CSS gösterme/gizleme deseni kullanıldı — form submit/FormData davranışı değişmedi. "Ödeme Frekansı" etiketi "Ödeme Sıklığı" olarak düzeltildi (yalnızca metin, `id`/`name="paymentFrequency"` aynı kaldı).
 
 **Faz 2:**
 - İki menünün (dashboard.html + tfrs16.html) tam envanteri çıkarılır, tekrarlar (Close Dashboard, Hesap Planı Eşleme, Denetim İzi, Konsolidasyon) birleştirilir
