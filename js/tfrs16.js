@@ -20164,12 +20164,14 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>`;
   }
 
-  function v191RenderFinancialReporting(date) {
-    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
-    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
-
-    // Balance sheet KPI snapshot'ı seçili dönem sonu itibarıyla alınır
-    // (kullanıcı geçmiş bir dönem seçtiyse KPI'lar da o tarihi yansıtmalı).
+  /**
+   * Financial Reporting / Dipnotlar için PAYLAŞILAN veri hazırlama.
+   * v191RenderFinancialReporting'in ÖNCEDEN kendi içinde yaptığı
+   * hesaplamaların BİREBİR AYNISI (extract, davranış değişmedi) —
+   * hem o fonksiyon hem yeni "Dipnotlar" sayfası (renderFootnotesPage)
+   * bunu kullanıyor.
+   */
+  function v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd) {
     const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
@@ -20195,10 +20197,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const rouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
     const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
 
-    // TMS 29 — seçili dönem (periodStart→periodEnd) için portföy
-    // enflasyon düzeltmesi. ROU ve yükümlülük satırları aynı sözleşme
-    // kümesini paylaştığından tek geçişte hesaplanır. Totals satırlarından
-    // ÖNCE hesaplanmalı (toplam satırında da kullanılıyor).
     const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
     const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
     const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
@@ -20247,6 +20245,29 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "status", label: "Durum" }
     ];
 
+    return {
+      data, bs, pnl, liquidityDisclosure, liquidityRows,
+      periodStart, periodEnd, periodLabel,
+      rouReport, liabReport, rouRows, liabRows, tms29,
+      rouTotalsRow, rouByCurrency, rouByAssetClass,
+      liabTotalsRow, liabByCurrency, liabByAssetClass,
+      rouDetailColumns, liabDetailColumns
+    };
+  }
+
+  function v191RenderFinancialReporting(date) {
+    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
+    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
+
+    const {
+      data, bs, pnl, liquidityDisclosure, liquidityRows,
+      periodStart, periodEnd, periodLabel,
+      rouReport, liabReport, rouRows, liabRows, tms29,
+      rouTotalsRow, rouByCurrency, rouByAssetClass,
+      liabTotalsRow, liabByCurrency, liabByAssetClass,
+      rouDetailColumns, liabDetailColumns
+    } = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
+
     return v191PeriodPickerHtml(effectivePeriodStart, effectivePeriodEnd) + v191Kpis([
       { label: "Lease Liability", value: v191Value(bs.leaseLiability), description: "Financial reporting balance sheet" },
       { label: "Current Liability", value: v191Value(bs.currentLiability), description: "Reporting-date classification" },
@@ -20261,7 +20282,27 @@ document.addEventListener("DOMContentLoaded", () => {
       { key: "nonCurrentLiability", label: "Non-current" },
       { key: "rouAssets", label: "ROU" }
     ])}
+    ${v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel })}
+    ${v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 })}
+    ${v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd })}`;
+  }
 
+  /**
+   * DİPNOTLAR — AYRIŞTIRILMIŞ RENDER FONKSİYONLARI (onaylı plan,
+   * bkz. PROJECT_CONTEXT.md bölüm 32 Faz 1)
+   * ------------------------------------------------------------
+   * Bu üç fonksiyon, önceden v191RenderFinancialReporting'in TEK BİR
+   * return string'inin İÇİNE gömülü olan HTML üretimini BİREBİR AYNI
+   * (davranış değişmeden) buraya taşır. v191RenderFinancialReporting
+   * hâlâ bunları çağırarak AYNI çıktıyı üretir — Financial Reporting
+   * ekranı DEĞİŞMEDİ. Yeni "Dipnotlar" sayfası (renderFootnotesPage)
+   * da AYNI üç fonksiyonu, kendi veri hazırlama akışıyla, tab
+   * mantığıyla kullanıyor — kod TEKRARI sadece veri hazırlama
+   * kısmında var (rouReport/liabReport/tms29/liquidityDisclosure
+   * hesaplama çağrıları), HTML üretimi PAYLAŞILIYOR.
+   */
+  function v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel }) {
+    return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
@@ -20294,8 +20335,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ])}
       ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
       ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
-    </div>
+    </div>`;
+  }
 
+  function v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
+    return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
@@ -20331,8 +20375,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
       ${v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
-    </div>
+    </div>`;
+  }
 
+  function v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd }) {
+    return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
@@ -29603,6 +29650,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
         <button type="button" id="v26NavSlb" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Satış ve Geri Kiralama (SLB)</button>
         <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt Kiralama (Sublease)</button>
+        <button type="button" id="v26NavFootnotes" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📝 Dipnotlar</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
@@ -29620,6 +29668,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
       document.getElementById("v26NavSlb")?.addEventListener("click",()=>openInMain(renderSlbManagementPage));
       document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMain(renderSubleaseManagementPage));
+      document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMain(renderFootnotesPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -29637,6 +29686,7 @@ document.addEventListener("DOMContentLoaded", () => {
           modification: renderModificationReassessmentPage,
           slb: renderSlbManagementPage,
           sublease: renderSubleaseManagementPage,
+          footnotes: renderFootnotesPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         // dashboard.html'in NATİVE linkleri (JS click handler'ları)
@@ -29925,6 +29975,11 @@ document.addEventListener("DOMContentLoaded", () => {
       renderSubleaseSection,
       calculateSaleAndLeaseback,
       calculateSublease,
+      renderFootnotesPage,
+      v191PrepareFinancialReportingData,
+      v191RenderAssetNoteHtml,
+      v191RenderLiabilityNoteHtml,
+      v191RenderLiquidityNoteHtml,
       contracts
     };
   } catch (error) {
@@ -30677,6 +30732,105 @@ const V26_FX_UI_PAGE_SIZE = 50;
       if (selectedContract) {
         renderSubleaseSection(selectedContract);
       }
+    };
+
+    render();
+  }
+
+  /* ==========================================================
+     DİPNOTLAR — AYRI SAYFA, 3 TAB (Varlık / Yükümlülük / Likidite)
+     ----------------------------------------------------------
+     Mevcut Finansal Raporlama ekranındaki (v191RenderFinancialReporting)
+     dipnot bloklarıyla AYNI render fonksiyonlarını (v191RenderAssetNoteHtml/
+     v191RenderLiabilityNoteHtml/v191RenderLiquidityNoteHtml) ve AYNI veri
+     hazırlama mantığını (v191PrepareFinancialReportingData) kullanır —
+     kod tekrarı yok, hesaplama/HTML üretimi PAYLAŞILIYOR. Sözleşme
+     seçici GEREKMİYOR — bu raporlar tüm portföyü (contracts) tarıyor,
+     tek bir sözleşmeye özgü değil. Sadece dönem sonu (raporlama
+     tarihi) seçilebiliyor; dönem başı, Finansal Raporlama ekranıyla
+     TUTARLI şekilde o yılın 1 Ocak'ı olarak sabitlendi.
+  ========================================================== */
+  let v26FootnotesActiveTab = "asset"; // asset | liability | liquidity
+  let v26FootnotesPeriodEndOverride = null; // null => bugün
+
+  function renderFootnotesPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      const effectivePeriodEnd = v26FootnotesPeriodEndOverride ? parseDate(v26FootnotesPeriodEndOverride) : new Date();
+      const effectivePeriodStart = new Date(effectivePeriodEnd.getFullYear(), 0, 1);
+
+      let tabContentHtml = "";
+      try {
+        const prepared = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
+        if (v26FootnotesActiveTab === "asset") {
+          tabContentHtml = v191RenderAssetNoteHtml({
+            rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
+            rouByAssetClass: prepared.rouByAssetClass, rouByCurrency: prepared.rouByCurrency,
+            rouDetailColumns: prepared.rouDetailColumns, rouReport: prepared.rouReport,
+            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel
+          });
+        } else if (v26FootnotesActiveTab === "liability") {
+          tabContentHtml = v191RenderLiabilityNoteHtml({
+            liabRows: prepared.liabRows, liabTotalsRow: prepared.liabTotalsRow,
+            liabByAssetClass: prepared.liabByAssetClass, liabByCurrency: prepared.liabByCurrency,
+            liabDetailColumns: prepared.liabDetailColumns, liabReport: prepared.liabReport,
+            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
+            tms29: prepared.tms29
+          });
+        } else {
+          tabContentHtml = v191RenderLiquidityNoteHtml({
+            liquidityRows: prepared.liquidityRows, liquidityDisclosure: prepared.liquidityDisclosure,
+            effectivePeriodEnd
+          });
+        }
+      } catch (error) {
+        tabContentHtml = `<div class="gk-v26-card" style="color:#991b1b;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
+      }
+
+      const tabBtn = (key, label) => {
+        const active = v26FootnotesActiveTab === key;
+        return `<button type="button" data-footnote-tab="${key}" class="gk-v26-btn ${active ? "" : "gk-v26-btn-secondary"}" style="margin-right:8px;">${escapeHtml(label)}</button>`;
+      };
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Dipnotlar</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              TFRS 16 finansal raporlama dipnotları — varlık, yükümlülük ve likidite riski. Tüm portföy için, dönem sonuna göre hesaplanır.
+            </p>
+          </div>
+
+          <div class="gk-v26-card" style="margin-bottom:16px;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label>
+            <input type="date" id="v26FootnotesPeriodEndInput" value="${effectivePeriodEnd.toISOString().slice(0,10)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+            <button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button>
+            <span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${effectivePeriodStart.toLocaleDateString("tr-TR")}</span>
+          </div>
+
+          <div style="margin-bottom:0;">
+            ${tabBtn("asset", "Varlık")}
+            ${tabBtn("liability", "Yükümlülük")}
+            ${tabBtn("liquidity", "Likidite")}
+          </div>
+
+          ${tabContentHtml}
+        </div>`;
+
+      container.querySelectorAll("[data-footnote-tab]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          v26FootnotesActiveTab = btn.dataset.footnoteTab;
+          render();
+        });
+      });
+
+      container.querySelector("#v26FootnotesApplyPeriod")?.addEventListener("click", () => {
+        const val = container.querySelector("#v26FootnotesPeriodEndInput")?.value;
+        if (val) v26FootnotesPeriodEndOverride = val;
+        render();
+      });
     };
 
     render();
