@@ -36,6 +36,13 @@ button{font-family:var(--body);cursor:pointer}.mono{font-family:var(--mono)}
 .side-link.active .side-ic{color:var(--bronze-soft)}
 .side-ic{width:16px;height:16px;flex-shrink:0;color:var(--ink-faint);display:flex;align-items:center;justify-content:center}
 .side-ic svg{width:15px;height:15px}.badge-count{margin-left:auto;font-family:var(--mono);font-size:10px;background:rgba(176,141,87,.2);color:var(--bronze-soft);padding:1px 6px;border-radius:999px}
+/* Faz A: "Yeni Sözleşme" artık ayrı bir sidebar linki değil — Sözleşmeler
+   satırının içinde bir "+" aksiyon butonu (SaaS'ta standart desen: liste +
+   o listeye ekleme aksiyonu aynı satırda). Böylece "Genel" grubu 8 linkten
+   2'ye indi. */
+.side-inline-add{margin-left:8px;width:20px;height:20px;flex-shrink:0;border:1px solid rgba(176,141,87,.35);background:transparent;color:var(--bronze-soft);border-radius:6px;font-size:13px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;transition:.15s}
+.side-inline-add:hover{background:var(--bronze-soft);color:var(--navy-900);border-color:var(--bronze-soft)}
+.badge-count + .side-inline-add{margin-left:6px}
 .side-foot{border-top:1px solid rgba(176,141,87,.18);padding:14px 16px 18px}.side-user{display:flex;align-items:center;gap:10px}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--seal);color:var(--cream-text);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0}
 .side-user-meta{min-width:0}.side-user-meta .name{font-size:13px;font-weight:600;color:var(--cream-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.side-user-meta .role{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -81,27 +88,32 @@ table.contracts td{padding:13px 20px;border-bottom:1px solid var(--paper-line);v
 <div class="side-brand"><span class="side-mark">16</span><span class="side-word">TFRS16 Motoru</span></div>
 <nav class="side-nav">
 <div class="side-group-label">Genel</div>
-<a href="#" class="side-link active"><span class="side-ic">⌂</span>Genel Bakış</a>
-<a href="../tfrs16.html" class="side-link"><span class="side-ic">▤</span>Sözleşmeler<span class="badge-count" id="contractCount">—</span></a>
-<button id="newContractButton" type="button" class="side-link" style="border:0;background:transparent;width:100%;text-align:left;cursor:pointer;font-family:inherit;"><span class="side-ic">➕</span>Yeni Sözleşme</button>
-<a href="#" data-v26-open="modification" class="side-link"><span class="side-ic">⌁</span>Modifikasyon &amp; Reassessment</a>
-<a href="#" data-v26-open="slb" class="side-link"><span class="side-ic">⌁</span>Satış ve Geri Kiralama (SLB)</a>
-<a href="#" data-v26-open="sublease" class="side-link"><span class="side-ic">⌁</span>Alt Kiralama (Sublease)</a>
-<a href="#" data-v26-open="accountingCenter" class="side-link"><span class="side-ic">⌁</span>Toplu Fiş Merkezi</a>
-<a href="#" data-v26-open="footnotes" class="side-link"><span class="side-ic">⌁</span>Dipnotlar</a>
-<a href="#" data-v26-open="inflation" class="side-link"><span class="side-ic">⌁</span>Enflasyon Düzeltmesi</a>
+<a href="#" class="side-link active" data-nav-key="overview"><span class="side-ic">⌂</span>Genel Bakış</a>
+<a href="../tfrs16.html" class="side-link" data-nav-key="contracts"><span class="side-ic">▤</span>Sözleşmeler<span class="badge-count" id="contractCount">—</span><button id="newContractButton" type="button" class="side-inline-add" title="Yeni Sözleşme">+</button></a>
+
+<div class="side-group-label">Sözleşme İşlemleri</div>
+<a href="#" data-v26-open="modification" class="side-link" data-nav-key="modification"><span class="side-ic">✎</span>Modifikasyon &amp; Reassessment</a>
+<a href="#" data-v26-open="slb" class="side-link" data-nav-key="slb"><span class="side-ic">⇄</span>Satış ve Geri Kiralama</a>
+<a href="#" data-v26-open="sublease" class="side-link" data-nav-key="sublease"><span class="side-ic">⑂</span>Alt Kiralama</a>
+
+<div class="side-group-label">Raporlama</div>
+<a href="#" data-v26-open="financialReporting" class="side-link" data-nav-key="financialReporting"><span class="side-ic">▦</span>Finansal Raporlama</a>
+<a href="#" data-v26-open="footnotes" class="side-link" data-nav-key="footnotes"><span class="side-ic">✎</span>Dipnotlar</a>
+<a href="#" data-v26-open="consolidation" class="side-link" data-nav-key="consolidation"><span class="side-ic">◎</span>Konsolidasyon</a>
+
 <div class="side-group-label">Kapanış &amp; Kontrol</div>
-<a href="#" data-v26-open="close" class="side-link"><span class="side-ic">▣</span>Close Dashboard</a>
-<a href="#" data-v26-open="accountMapping" class="side-link"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
-<a href="#" data-v26-open="riskControls" class="side-link"><span class="side-ic">⚠</span>Risk &amp; Kontroller</a>
-<a href="#" data-v26-open="financialReporting" class="side-link"><span class="side-ic">▤</span>Finansal Raporlama</a>
-<a href="#" data-v26-open="audit" class="side-link"><span class="side-ic">◷</span>Denetim İzi</a>
-<div class="side-group-label">Grup</div>
-<a href="#" data-v26-open="companies" class="side-link"><span class="side-ic">🏢</span>Şirket Yönetimi</a>
-<a href="#" data-v26-open="groups" class="side-link"><span class="side-ic">👥</span>Gruplar</a>
-<a href="#" data-v26-open="eliminations" class="side-link"><span class="side-ic">↔</span>Eliminasyonlar</a>
-<a href="#" data-v26-open="consolidation" class="side-link"><span class="side-ic">◎</span>Konsolidasyon</a>
-<a href="#" data-v26-open="fxRates" class="side-link"><span class="side-ic">◉</span>Kur Yönetimi (TCMB)</a>
+<a href="#" data-v26-open="close" class="side-link" data-nav-key="close"><span class="side-ic">▣</span>Ay Sonu Kapanış</a>
+<a href="#" data-v26-open="accountingCenter" class="side-link" data-nav-key="accountingCenter"><span class="side-ic">🧾</span>Toplu Fiş Merkezi</a>
+<a href="#" data-v26-open="accountMapping" class="side-link" data-nav-key="accountMapping"><span class="side-ic">≡</span>Hesap Planı Eşleme</a>
+<a href="#" data-v26-open="riskControls" class="side-link" data-nav-key="riskControls"><span class="side-ic">⚠</span>Risk &amp; Kontroller</a>
+<a href="#" data-v26-open="audit" class="side-link" data-nav-key="audit"><span class="side-ic">◷</span>Denetim İzi</a>
+
+<div class="side-group-label">Tanımlar</div>
+<a href="#" data-v26-open="companies" class="side-link" data-nav-key="companies"><span class="side-ic">⌸</span>Şirket Yönetimi</a>
+<a href="#" data-v26-open="groups" class="side-link" data-nav-key="groups"><span class="side-ic">⚯</span>Gruplar</a>
+<a href="#" data-v26-open="eliminations" class="side-link" data-nav-key="eliminations"><span class="side-ic">↔</span>Eliminasyonlar</a>
+<a href="#" data-v26-open="fxRates" class="side-link" data-nav-key="fxRates"><span class="side-ic">$</span>Döviz Kurları (TCMB)</a>
+<a href="#" data-v26-open="inflation" class="side-link" data-nav-key="inflation"><span class="side-ic">%</span>Enflasyon Endeksleri</a>
 </nav>
 <div class="side-foot"><div class="side-user"><span class="avatar" id="sideAvatar">--</span><div class="side-user-meta"><div class="name" id="userDisplay">Yükleniyor...</div><div class="role" id="userRole">Finans Kullanıcısı</div></div></div><button type="button" class="side-logout" onclick="logout()">Çıkış Yap</button></div>
 </aside>
@@ -205,12 +217,47 @@ function gkOpenV26PageByKey(key, attempt) {
   }
 }
 document.addEventListener("DOMContentLoaded", () => {
+  // Faz A: aktif sayfa vurgusu. Önceden "Genel Bakış" linkinde .active
+  // class'ı STATİK olarak duruyordu — kullanıcı başka bir sayfaya
+  // geçse bile sidebar hep "Genel Bakış"ı aktif gösteriyordu, yani
+  // "neredeyim" bilgisi hiç yoktu.
+  function gkSetActiveNav(el) {
+    document.querySelectorAll(".side-nav .side-link").forEach(x => x.classList.remove("active"));
+    if (el) el.classList.add("active");
+  }
+
   document.querySelectorAll("[data-v26-open]").forEach(link => {
     link.addEventListener("click", event => {
       event.preventDefault();
+      gkSetActiveNav(link);
       gkOpenV26PageByKey(link.dataset.v26Open);
+      // Mobilde: sayfa açılınca sidebar'ı kapat (aksi halde açılan
+      // içeriğin üzerini kapatıyordu).
+      document.getElementById("sidebar")?.classList.remove("open");
+      document.getElementById("overlay")?.classList.remove("open");
     });
   });
+
+  // "Genel Bakış" linki: v26PageHost'u gizleyip dashboard'un kendi
+  // içeriğini geri getirir (önceden href="#" idi, hiçbir şey yapmıyordu).
+  const overviewLink = document.querySelector('[data-nav-key="overview"]');
+  overviewLink?.addEventListener("click", event => {
+    event.preventDefault();
+    gkSetActiveNav(overviewLink);
+    const host = document.getElementById("v26PageHost");
+    if (host) host.style.display = "none";
+    document.getElementById("sidebar")?.classList.remove("open");
+    document.getElementById("overlay")?.classList.remove("open");
+  });
+
+  // NOT: "Yeni Sözleşme" (+) butonu için burada AYRI bir click
+  // handler'a gerek YOK — js/tfrs16.js'in emergency bridge'i (dosya
+  // başındaki document-level listener) #newContractButton'u zaten
+  // yakalayıp openContractModal()'ı açıyor ve event.preventDefault()
+  // çağırıyor. Buraya stopPropagation ekleseydik bridge'e HİÇ
+  // ulaşamazdı (bridge bubble fazında document'te dinliyor) ve buton
+  // çalışmazdı. Butonun <a> içinde olmasından doğan "linke de gider
+  // mi" riski, bridge'in kendi preventDefault'u ile zaten kapalı.
 });
 
 function formatDateShort(v){if(!v)return"-";const d=new Date(v);return d.toLocaleDateString("tr-TR")}
