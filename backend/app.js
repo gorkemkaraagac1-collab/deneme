@@ -8,6 +8,19 @@ const app = express();
 // ============================================================
 // Middleware
 // ============================================================
+
+// GÜVENLİK DÜZELTMESİ: securityHeaders middleware'i (OWASP temel
+// header'ları — X-Content-Type-Options, X-Frame-Options,
+// Referrer-Policy, Content-Security-Policy, Permissions-Policy)
+// backend/middleware/security-headers.js içinde YAZILMIŞTI ama
+// app.js'e HİÇ BAĞLANMAMIŞTI — yani hiçbir response'ta bu
+// header'lar gönderilmiyordu. test/security-hardening.test.js
+// bunu zaten test ediyordu ve bu yüzden fail veriyordu.
+// EN ÜSTTE (tüm route'lardan ve static'ten ÖNCE) bağlanır ki
+// /health dahil HER response'a uygulansın.
+const { securityHeaders } = require('./middleware/security-headers');
+app.use(securityHeaders);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
