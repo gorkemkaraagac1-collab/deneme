@@ -28792,6 +28792,46 @@ document.addEventListener("DOMContentLoaded", () => {
       .table-wrapper td { padding:8px 10px; border-bottom:1px solid #f1f5f9; color:#1e293b; white-space:nowrap; }
       .table-wrapper tr:hover td { background:#f8fafc; }
       @media (max-width:768px) { .gk-v26-page { padding:12px; } .gk-v26-form-grid { grid-template-columns:1fr; } #v26NavBlock { max-height:calc(100vh - 110px); } .gk-v26-table-wrap { scrollbar-width:thin; } .table-wrapper { scrollbar-width:thin; } }
+
+      /* DÜZELTME (Yeni Sözleşme formu dashboard'a taşındı): contractModal
+         ("Yeni Sözleşme" statik HTML modalı, tfrs16.html'de tanımlı) artık
+         dashboard.html'e de kopyalandı, ama .modal/.form-grid gibi
+         class'lar css/tfrs16.css'te tanımlıydı — dashboard.html o dosyayı
+         hiç yüklemiyordu. TÜM css/tfrs16.css'i yüklemek yerine (dashboard'un
+         kendi tasarımıyla çakışma riski taşırdı), yalnızca bu modalın
+         ihtiyaç duyduğu class'lar css/tfrs16.css'ten (satır ~547 civarı)
+         BİREBİR kopyalanıp buraya (dashboard'da zaten çalışan izole
+         injectV26Styles mekanizmasına) eklendi. CSS değişkenleri
+         (var(--muted) vb.) dashboard'da tanımlı olmadığı için SABİT
+         renk değerleriyle değiştirildi.
+         css/tfrs16.css'in KENDİSİNE hiç dokunulmadı — tfrs16.html hâlâ
+         normal şekilde çalışıyor. */
+      .modal { position:fixed; inset:0; background:rgba(15,23,42,.55); display:grid; place-items:center; padding:20px; z-index:1000; overflow-y:auto; }
+      .modal.hidden { display:none !important; }
+      .modal-content { background:white; width:min(720px,100%); max-height:calc(100vh - 40px); overflow-y:auto; border-radius:15px; padding:22px; box-shadow:0 25px 60px rgba(0,0,0,.18); }
+      .modal-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; gap:20px; }
+      .modal-header h2 { margin:5px 0 0; font-size:20px; }
+      .modal-header .eyebrow { font-size:10px; font-weight:700; color:#64748b; letter-spacing:.05em; text-transform:uppercase; }
+      .close-button { border:none; background:#f1f5f9; width:32px; height:32px; border-radius:7px; cursor:pointer; font-size:20px; color:#64748b; flex-shrink:0; }
+      .close-button:hover { background:#e2e8f0; }
+      .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .form-group { display:flex; flex-direction:column; gap:6px; }
+      .form-group label { font-size:10px; font-weight:700; color:#64748b; }
+      .form-group input, .form-group select { border:1px solid #e5e7eb; border-radius:8px; padding:10px; outline:none; font-size:12px; background:white; font-family:inherit; }
+      .form-group input:focus, .form-group select:focus { border-color:#94a3b8; box-shadow:0 0 0 3px rgba(148,163,184,0.15); }
+      .modal-footer { display:flex; justify-content:flex-end; gap:9px; margin-top:22px; }
+      .primary-button, .secondary-button, .danger-button { border-radius:8px; padding:10px 14px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:6px; transition:background .15s ease,border-color .15s ease,transform .05s ease; white-space:nowrap; }
+      .primary-button { border:1px solid #334155; background:#334155; color:white; }
+      .primary-button:hover { background:#1e293b; border-color:#1e293b; }
+      .secondary-button { background:white; color:#172033; border:1px solid #e5e7eb; }
+      .secondary-button:hover { background:#f8fafc; border-color:#cbd5e1; }
+      .primary-button:active, .secondary-button:active { transform:translateY(1px); }
+      .gk-contract-tabs { display:flex; gap:4px; flex-wrap:wrap; margin:-4px 0 16px; border-bottom:1px solid #e5e7eb; padding-bottom:0; }
+      .gk-contract-tab { border:0; background:transparent; padding:9px 14px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+      .gk-contract-tab:hover { color:#0f172a; }
+      .gk-contract-tab.active { color:#0f172a; border-bottom-color:#0f172a; }
+      .form-grid [data-tab]:not(.gk-tab-active) { display:none !important; }
+      .form-grid [data-tab].gk-tab-active { display:block; }
     `;
     document.head.appendChild(style);
   }
