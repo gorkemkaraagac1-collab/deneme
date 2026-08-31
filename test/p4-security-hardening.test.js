@@ -118,6 +118,31 @@ describe("P4 — A: Company tree integrity", () => {
       if (sql.includes("SELECT id") && sql.includes("FROM companies") && sql.includes("code = $1")) {
         return Promise.resolve({ rows: [] });
       }
+      // DÜZELTME: admin.js POST /companies, parent_company_id verilmişse
+      // önce `SELECT id FROM companies WHERE id = $1` ile parent'ın VAR
+      // OLDUĞUNU doğruluyor. Bu mock o deseni tanımıyordu (yalnızca
+      // `code = $1` ve `FOR UPDATE` desenlerini biliyordu), boş rows
+      // dönüyor ve route INSERT'e HİÇ ULAŞMADAN "parent does not exist"
+      // (400) ile çıkıyordu — bu yüzden testin asıl doğrulamak istediği
+      // 23514 (self-parent CHECK) → 400 dönüşümü hiç test edilemiyordu.
+      // Üretim kodu DOĞRU; eksik olan mock'tu.
+      // NOT: desen DAR tutulur (FOR UPDATE / code = $1 / WITH RECURSIVE
+      // içermemeli) ki license-service'in kendi sorgularını yanlışlıkla
+      // yakalamasın. Özellikle getCompanyAncestryChain'in SQL'i de
+      // "WHERE id = $1" içeriyor ama "WITH RECURSIVE ancestry" ile
+      // başlıyor — o kural bu mock'tan ÖNCE eşleşmeli, aksi halde
+      // canAddCompanyToTree kökü bulamayıp NO_ACTIVE_LICENSE (403)
+      // dönüyordu.
+      if (
+        sql.includes("SELECT id") &&
+        sql.includes("FROM companies") &&
+        sql.includes("WHERE id = $1") &&
+        !sql.includes("FOR UPDATE") &&
+        !sql.includes("code = $1") &&
+        !sql.includes("WITH RECURSIVE")
+      ) {
+        return Promise.resolve({ rows: [{ id: COMPANY_ROOT }] });
+      }
       if (sql.includes("FOR UPDATE")) {
         return Promise.resolve({ rows: [{ id: COMPANY_ROOT }] });
       }
