@@ -37,6 +37,28 @@ const adminMutationRateLimiter = createRateLimiter({
     message: 'Çok fazla admin işlem isteği. Lütfen daha sonra tekrar deneyin.'
 });
 
+// GÜVENLİK DÜZELTMESİ: yukarıdaki adminMutationRateLimiter YALNIZCA
+// tek tek yazma (POST/PATCH/DELETE) endpoint'lerine bağlıydı — GET
+// dahil TÜM admin yüzeyini IP bazında koruyan bir limiter YOKTU.
+// Yani kimliği doğrulanmamış bir saldırgan /api/admin/* üzerinde
+// sınırsız istek atabiliyordu (her biri 401 dönse de, brute-force /
+// kaynak tüketimi açısından korumasız). Bu limiter router'ın EN
+// BAŞINA (requireAuth/requireAdmin'den ÖNCE) bağlanır ki 401 dönen
+// istekler de sayılsın. test/security-hardening.test.js bunu zaten
+// test ediyordu ve bu yüzden fail veriyordu.
+const adminGlobalRateLimiter = createRateLimiter({
+    windowMs: Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    // Aynı ADMIN_RATE_LIMIT_MAX değişkenine bağlı (ayrı bir env
+    // değişkeni eklemek yerine) — admin yüzeyinin limiti tek yerden
+    // yönetilsin. Varsayılan mutation limitinden daha yüksek tutulur
+    // çünkü bu limiter GET dahil tüm istekleri sayar.
+    max: Number(process.env.ADMIN_RATE_LIMIT_MAX) || 300,
+    keyGenerator: req => `admin-global:${req.ip}`,
+    message: 'Çok fazla admin isteği. Lütfen daha sonra tekrar deneyin.'
+});
+
+router.use(adminGlobalRateLimiter);
+
 /**
  * Generate a unique string ID compatible with VARCHAR(50) schema.
  * Used because users/companies tables require an explicit id (no DEFAULT/SERIAL).
