@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * ============================================================
  * P1 — ACCESS CONTROL / ROLE MATRIX / MUST-CHANGE-PASSWORD TESTS
  * ============================================================
@@ -19,6 +21,21 @@
 
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || "test-only-secret-do-not-use-in-prod";
+
+// DÜZELTME: dosya başlığı "backend/db/pool.js mock'lanır" diyor ama
+// bu, describe blokları İÇİNDEKİ jest.doMock çağrılarıyla yapılıyordu.
+// Aşağıdaki (dosya seviyesindeki) `require("../backend/services/
+// organization-service")` ise o mock'lardan ÖNCE, modül yüklenirken
+// çalışıyor — gerçek db/pool.js'i tetikleyip "Eksik veritabanı ortam
+// değişken(ler)i" hatasıyla TÜM SUITE'i düşürüyordu. jest.mock
+// (hoisted) ile dosya seviyesinde de mock'luyoruz.
+jest.mock("../backend/db/pool", () => ({
+  query: jest.fn().mockResolvedValue({ rows: [] }),
+  connect: jest.fn().mockResolvedValue({
+    query: jest.fn().mockResolvedValue({ rows: [] }),
+    release: jest.fn()
+  })
+}));
 
 const request = require("supertest");
 

@@ -35,6 +35,22 @@
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || "test-only-secret-do-not-use-in-prod";
 
+// DÜZELTME: bu dosya "DB katmanı (pool / pg client) sahte bir query
+// fonksiyonu ile beslenir" diyor ama bunu describe blokları İÇİNDE
+// jest.doMock ile yapıyordu. Aşağıdaki dosya seviyesindeki require
+// zinciri (backend/utils/jwt → ... → backend/db/pool) o mock'lardan
+// ÖNCE çalışıp "Eksik veritabanı ortam değişken(ler)i" hatasıyla tüm
+// suite'i düşürüyordu. jest.mock (hoisted) ile dosya seviyesinde de
+// mock'luyoruz — describe içindeki jest.doMock'lar bunu ezmeye devam
+// eder, yani mevcut test mantığı DEĞİŞMEZ.
+jest.mock("../backend/db/pool", () => ({
+  query: jest.fn().mockResolvedValue({ rows: [] }),
+  connect: jest.fn().mockResolvedValue({
+    query: jest.fn().mockResolvedValue({ rows: [] }),
+    release: jest.fn()
+  })
+}));
+
 const request = require("supertest");
 
 const { signUserToken } = require("../backend/utils/jwt");

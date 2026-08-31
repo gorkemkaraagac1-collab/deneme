@@ -88,7 +88,15 @@ describe("P3 — GET /api/org/limits", () => {
     jest.doMock("../backend/services/license-service", () => ({
       canAddUserToCompany: canAddUserToCompanyMock,
       canAddContractToCompany: canAddContractToCompanyMock,
-      canAddCompanyToTree: canAddCompanyToTreeMock
+      canAddCompanyToTree: canAddCompanyToTreeMock,
+      // DÜZELTME: org.js POST /companies akışı, kapasite kontrolünden
+      // ÖNCE lockRootCompanyForLimit() çağırarak root şirketi kilitliyor
+      // (TOCTOU/race koruması). Bu mock'ta o fonksiyon TANIMLI DEĞİLDİ —
+      // "TypeError: lockRootCompanyForLimit is not a function" ile route
+      // 500 dönüyor, testler 201/409 yerine 500 alıyordu. Bu bir ÜRETİM
+      // bug'ı DEĞİL (fonksiyon license-service.js'te gerçekten var ve
+      // export ediliyor), mock'un eksikliğiydi.
+      lockRootCompanyForLimit: jest.fn().mockResolvedValue("ROOT-COMP-1")
     }));
 
     app = buildApp();
@@ -279,7 +287,8 @@ describe("P3 — POST /api/org/companies", () => {
     jest.doMock("../backend/services/license-service", () => ({
       canAddUserToCompany: jest.fn(),
       canAddContractToCompany: jest.fn(),
-      canAddCompanyToTree: canAddCompanyToTreeMock
+      canAddCompanyToTree: canAddCompanyToTreeMock,
+      lockRootCompanyForLimit: jest.fn().mockResolvedValue("ROOT-COMP-1")
     }));
 
     app = buildApp();
