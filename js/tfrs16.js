@@ -20491,13 +20491,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     v191PeriodStartOverride = startVal;
     v191PeriodEndOverride = endVal;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191ResetPeriod() {
     v191PeriodStartOverride = null;
     v191PeriodEndOverride = null;
-    if (typeof v191OpenFinancialReporting === "function") v191OpenFinancialReporting();
+    v191TriggerActiveScreenRefresh();
   }
 
   function v191ToggleRouDetail() {
@@ -29776,6 +29776,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt Kiralama (Sublease)</button>
         <button type="button" id="v26NavAccountingCenter" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🧾 Toplu Fiş Merkezi</button>
         <button type="button" id="v26NavFootnotes" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📝 Dipnotlar</button>
+        <button type="button" id="v26NavRiskControls" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">⚠️ Risk &amp; Kontroller</button>
+        <button type="button" id="v26NavFinancialReporting" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📑 Finansal Raporlama</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
       sidebar.appendChild(navBlock);
@@ -29795,6 +29797,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMain(renderSubleaseManagementPage));
       document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMain(renderAccountingCenterPage));
       document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMain(renderFootnotesPage));
+      document.getElementById("v26NavRiskControls")?.addEventListener("click",()=>openInMain(renderRiskControlsPage));
+      document.getElementById("v26NavFinancialReporting")?.addEventListener("click",()=>openInMain(renderFinancialReportingPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -29814,6 +29818,8 @@ document.addEventListener("DOMContentLoaded", () => {
           sublease: renderSubleaseManagementPage,
           accountingCenter: renderAccountingCenterPage,
           footnotes: renderFootnotesPage,
+          riskControls: renderRiskControlsPage,
+          financialReporting: renderFinancialReportingPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         // dashboard.html'in NATİVE linkleri (JS click handler'ları)
@@ -30010,6 +30016,8 @@ document.addEventListener("DOMContentLoaded", () => {
     v26BuildConsolidationRows,
     v26ExportConsolidationExcel,
     renderCompanyManagementPage,
+    renderGroupManagementPage,
+    renderEliminationManagementPage,
     renderConsolidationReportPage,
     renderContractStandardsPanel,
     injectV26CurrencyFields,
@@ -30104,6 +30112,8 @@ document.addEventListener("DOMContentLoaded", () => {
       calculateSublease,
       v26SelectedContractBanner,
       renderFootnotesPage,
+      renderRiskControlsPage,
+      v191RenderRiskControls,
       renderModificationReassessmentPage,
       renderSlbManagementPage,
       renderSubleaseManagementPage,
@@ -30122,6 +30132,12 @@ document.addEventListener("DOMContentLoaded", () => {
       v191ToggleLiabDetail,
       v191ClearRouFilter,
       v191ClearLiabFilter,
+      renderCompanyManagementPage,
+      renderGroupManagementPage,
+      renderEliminationManagementPage,
+      renderFinancialReportingPage,
+      v191ApplyPeriod,
+      v191ResetPeriod,
       contracts
     };
   } catch (error) {
@@ -30993,6 +31009,85 @@ const V26_FX_UI_PAGE_SIZE = 50;
   ========================================================== */
   let v26FootnotesActiveTab = "asset"; // asset | liability | liquidity
   let v26FootnotesPeriodEndOverride = null; // null => bugün
+
+  /* ==========================================================
+     RİSK & KONTROLLER — AYRI SAYFA (onaylı plan)
+     ----------------------------------------------------------
+     v191RenderRiskControls'ün KENDİSİNE dokunulmadı — o hâlâ
+     getControlSummary/getRiskSummary/getOpenExceptions'ı çağırıp
+     bir HTML string döndürüyor. Önceden bu SADECE v191Show (ayrı,
+     kendi kendine yeten bir modal sistemi — v191EnsureModal) ile
+     açılabiliyordu; openInMain/#v26PageHost mekanizmasından
+     TAMAMEN BAĞIMSIZDI. Bu sayfa sadece aynı render fonksiyonunu
+     çağırıp normal sayfa akışına (diğer tüm dashboard sayfaları
+     gibi) sokuyor.
+  ========================================================== */
+  /* ==========================================================
+     FİNANSAL RAPORLAMA — AYRI SAYFA (onaylı plan, CFO Cockpit/
+     Ay Sonu Kapanış/Integration/Reconciliation/Contract Financial
+     Tools KAPSAM DIŞI BIRAKILDI, taşınmıyor)
+     ----------------------------------------------------------
+     v191RenderFinancialReporting'in KENDİSİNE dokunulmadı. Önceden
+     sadece v191Show (v191EnsureModal, ayrı modal sistemi) üzerinden
+     açılabiliyordu VE içindeki period picker (v191ApplyPeriod/
+     v191ResetPeriod) her zaman v191OpenFinancialReporting()'i (o
+     modalı) çağırıyordu — Dipnotlar sayfasında çözdüğümüz AYNI
+     sorun. v191TriggerActiveScreenRefresh callback'i (zaten kurulu)
+     burada da kullanılıyor — bu sayfa render()'ını kaydediyor,
+     period "Uygula"/"Reset" butonları artık DOĞRU ekranı (bu
+     sayfayı) yeniliyor.
+  ========================================================== */
+  function renderFinancialReportingPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    const render = () => {
+      v191ActiveScreenRefreshCallback = render;
+
+      let bodyHtml = "";
+      try {
+        bodyHtml = v191RenderFinancialReporting(new Date());
+      } catch (error) {
+        bodyHtml = `<div style="color:#991b1b;padding:12px 0;">Finansal Raporlama yüklenemedi: ${escapeHtml(error?.message || String(error))}</div>`;
+      }
+
+      container.innerHTML = `
+        <div class="gk-v26-page">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:20px;color:#0f172a;">Finansal Raporlama</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+              Portföy genelinde bilanço/gelir tablosu KPI'ları ve dipnot hareket tabloları.
+            </p>
+          </div>
+          <div class="gk-v26-card">${bodyHtml}</div>
+        </div>`;
+    };
+
+    render();
+  }
+
+  function renderRiskControlsPage(container) {
+    if (!container) return;
+    if (typeof injectV26Styles === "function") injectV26Styles();
+
+    let bodyHtml = "";
+    try {
+      bodyHtml = v191RenderRiskControls(new Date());
+    } catch (error) {
+      bodyHtml = `<div style="color:#991b1b;padding:12px 0;">Risk &amp; Kontroller yüklenemedi: ${escapeHtml(error?.message || String(error))}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="gk-v26-page">
+        <div style="margin-bottom:16px;">
+          <h2 style="margin:0;font-size:20px;color:#0f172a;">Risk &amp; Kontroller</h2>
+          <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
+            Portföy genelinde çalışan sözleşme kontrolleri ve açık istisnalar.
+          </p>
+        </div>
+        <div class="gk-v26-card">${bodyHtml}</div>
+      </div>`;
+  }
 
   function renderFootnotesPage(container) {
     if (!container) return;
