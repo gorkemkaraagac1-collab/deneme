@@ -1,0 +1,927 @@
+[
+  {
+    "error": null,
+    "fixtureId": "SUB-01",
+    "label": "OPERATING alt kiralama (TFRS 16.B58) — doğrusal gelir",
+    "output": {
+      "classification": "OPERATING",
+      "headLeaseRouCarryingAmount": 5218590.896184156,
+      "note": "TFRS 16.B58: Alt kiralama OPERATING sınıflandırıldığından ana kiradan doğan ROU defterden çıkarılmaz; ROU kendi itfa planına göre (bu modülün ana kira motorunda, DEĞİŞTİRİLMEDEN) itfa edilmeye devam eder. Alt kiralama geliri doğrusal (straight-line) esasla tanınır.",
+      "periodicJournalNote": "Her dönem: Dr 102 Banka (tahsilat) / Cr 649 Diğer Olağan Gelir (Alt Kiralama Geliri, doğrusal) — nakit ile doğrusal gelir farkı '380 Ertelenmiş Gelir' veya '181 Gelir Tahakkukları' hesabında izlenir.",
+      "rouAllocationRatio": 1,
+      "schedule": [
+        {
+          "cashReceived": 190000,
+          "date": "2027-01-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 1
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-02-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 2
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-03-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 3
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-04-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 4
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-05-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 5
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-06-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 6
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-07-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 7
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-08-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 8
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-09-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 9
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-10-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 10
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-11-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 11
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2027-12-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 12
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-01-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 13
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-02-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 14
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-03-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 15
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-04-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 16
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-05-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 17
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-06-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 18
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-07-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 19
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-08-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 20
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-09-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 21
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-10-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 22
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-11-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 23
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2028-12-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 24
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-01-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 25
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-02-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 26
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-03-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 27
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-04-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 28
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-05-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 29
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-06-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 30
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-07-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 31
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-08-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 32
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-09-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 33
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-10-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 34
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-11-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 35
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2029-12-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 36
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-01-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 37
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-02-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 38
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-03-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 39
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-04-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 40
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-05-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 41
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-06-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 42
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-07-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 43
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-08-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 44
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-09-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 45
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-10-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 46
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-11-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 47
+        },
+        {
+          "cashReceived": 190000,
+          "date": "2030-12-01T00:00:00.000Z",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 48
+        }
+      ],
+      "straightLineMonthlyIncome": 190000,
+      "totalContractualIncome": 9120000
+    }
+  },
+  {
+    "error": null,
+    "fixtureId": "SUB-02",
+    "label": "FINANCE alt kiralama — ROU türetilmesi + kısmi tahsis (%60)",
+    "output": {
+      "allocatedRouCarryingAmount": 3131154.54,
+      "classification": "FINANCE",
+      "headLeaseRouCarryingAmount": 5218590.896184156,
+      "inceptionJournal": [
+        {
+          "account": "Alt Kiralamada Net Yatırım (Kira Alacağı)",
+          "credit": 0,
+          "debit": 4344848.91535072
+        },
+        {
+          "account": "ROU - Kullanım Hakkı Varlığı (Devredilen Kısım)",
+          "credit": 3131154.54,
+          "debit": 0
+        },
+        {
+          "account": "679 Diğer Olağandışı Gelir (Alt Kiralama Satış Karı)",
+          "credit": 1213694.38,
+          "debit": 0
+        }
+      ],
+      "netInvestment": 4344848.91535072,
+      "note": "TFRS 16.B58: Alt kiralama FINANCE sınıflandırıldığından ana kiradan doğan ROU'nun devredilen kısmı defterden çıkarılır; yerine alt kiralamada net yatırım (kira alacağı) tanınır. Ana kira yükümlülüğü/ROU'su (kalan kısmı varsa) bu işlemden ETKİLENMEZ, ara kiracı için normal kiracı muhasebesiyle değişmeden devam eder.",
+      "rouAllocationRatio": 0.6,
+      "schedule": [
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4304504.48,
+          "date": "2027-01-01T00:00:00.000Z",
+          "interestIncome": 79655.56,
+          "openingNetInvestment": 4344848.91535072,
+          "period": 1,
+          "principalReduction": 40344.44
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4263420.4,
+          "date": "2027-02-01T00:00:00.000Z",
+          "interestIncome": 78915.92,
+          "openingNetInvestment": 4304504.48,
+          "period": 2,
+          "principalReduction": 41084.08
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4221583.11,
+          "date": "2027-03-01T00:00:00.000Z",
+          "interestIncome": 78162.71,
+          "openingNetInvestment": 4263420.4,
+          "period": 3,
+          "principalReduction": 41837.29
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4178978.8,
+          "date": "2027-04-01T00:00:00.000Z",
+          "interestIncome": 77395.69,
+          "openingNetInvestment": 4221583.11,
+          "period": 4,
+          "principalReduction": 42604.31
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4135593.41,
+          "date": "2027-05-01T00:00:00.000Z",
+          "interestIncome": 76614.61,
+          "openingNetInvestment": 4178978.8,
+          "period": 5,
+          "principalReduction": 43385.39
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4091412.62,
+          "date": "2027-06-01T00:00:00.000Z",
+          "interestIncome": 75819.21,
+          "openingNetInvestment": 4135593.41,
+          "period": 6,
+          "principalReduction": 44180.79
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4046421.85,
+          "date": "2027-07-01T00:00:00.000Z",
+          "interestIncome": 75009.23,
+          "openingNetInvestment": 4091412.62,
+          "period": 7,
+          "principalReduction": 44990.77
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4000606.25,
+          "date": "2027-08-01T00:00:00.000Z",
+          "interestIncome": 74184.4,
+          "openingNetInvestment": 4046421.85,
+          "period": 8,
+          "principalReduction": 45815.6
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3953950.7,
+          "date": "2027-09-01T00:00:00.000Z",
+          "interestIncome": 73344.45,
+          "openingNetInvestment": 4000606.25,
+          "period": 9,
+          "principalReduction": 46655.55
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3906439.8,
+          "date": "2027-10-01T00:00:00.000Z",
+          "interestIncome": 72489.1,
+          "openingNetInvestment": 3953950.7,
+          "period": 10,
+          "principalReduction": 47510.9
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3858057.86,
+          "date": "2027-11-01T00:00:00.000Z",
+          "interestIncome": 71618.06,
+          "openingNetInvestment": 3906439.8,
+          "period": 11,
+          "principalReduction": 48381.94
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3808788.92,
+          "date": "2027-12-01T00:00:00.000Z",
+          "interestIncome": 70731.06,
+          "openingNetInvestment": 3858057.86,
+          "period": 12,
+          "principalReduction": 49268.94
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3758616.72,
+          "date": "2028-01-01T00:00:00.000Z",
+          "interestIncome": 69827.8,
+          "openingNetInvestment": 3808788.92,
+          "period": 13,
+          "principalReduction": 50172.2
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3707524.69,
+          "date": "2028-02-01T00:00:00.000Z",
+          "interestIncome": 68907.97,
+          "openingNetInvestment": 3758616.72,
+          "period": 14,
+          "principalReduction": 51092.03
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3655495.98,
+          "date": "2028-03-01T00:00:00.000Z",
+          "interestIncome": 67971.29,
+          "openingNetInvestment": 3707524.69,
+          "period": 15,
+          "principalReduction": 52028.71
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3602513.41,
+          "date": "2028-04-01T00:00:00.000Z",
+          "interestIncome": 67017.43,
+          "openingNetInvestment": 3655495.98,
+          "period": 16,
+          "principalReduction": 52982.57
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3548559.49,
+          "date": "2028-05-01T00:00:00.000Z",
+          "interestIncome": 66046.08,
+          "openingNetInvestment": 3602513.41,
+          "period": 17,
+          "principalReduction": 53953.92
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3493616.41,
+          "date": "2028-06-01T00:00:00.000Z",
+          "interestIncome": 65056.92,
+          "openingNetInvestment": 3548559.49,
+          "period": 18,
+          "principalReduction": 54943.08
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3437666.04,
+          "date": "2028-07-01T00:00:00.000Z",
+          "interestIncome": 64049.63,
+          "openingNetInvestment": 3493616.41,
+          "period": 19,
+          "principalReduction": 55950.37
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3380689.92,
+          "date": "2028-08-01T00:00:00.000Z",
+          "interestIncome": 63023.88,
+          "openingNetInvestment": 3437666.04,
+          "period": 20,
+          "principalReduction": 56976.12
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3322669.24,
+          "date": "2028-09-01T00:00:00.000Z",
+          "interestIncome": 61979.32,
+          "openingNetInvestment": 3380689.92,
+          "period": 21,
+          "principalReduction": 58020.68
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3263584.84,
+          "date": "2028-10-01T00:00:00.000Z",
+          "interestIncome": 60915.6,
+          "openingNetInvestment": 3322669.24,
+          "period": 22,
+          "principalReduction": 59084.4
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3203417.23,
+          "date": "2028-11-01T00:00:00.000Z",
+          "interestIncome": 59832.39,
+          "openingNetInvestment": 3263584.84,
+          "period": 23,
+          "principalReduction": 60167.61
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3142146.55,
+          "date": "2028-12-01T00:00:00.000Z",
+          "interestIncome": 58729.32,
+          "openingNetInvestment": 3203417.23,
+          "period": 24,
+          "principalReduction": 61270.68
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3079752.57,
+          "date": "2029-01-01T00:00:00.000Z",
+          "interestIncome": 57606.02,
+          "openingNetInvestment": 3142146.55,
+          "period": 25,
+          "principalReduction": 62393.98
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3016214.7,
+          "date": "2029-02-01T00:00:00.000Z",
+          "interestIncome": 56462.13,
+          "openingNetInvestment": 3079752.57,
+          "period": 26,
+          "principalReduction": 63537.87
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2951511.97,
+          "date": "2029-03-01T00:00:00.000Z",
+          "interestIncome": 55297.27,
+          "openingNetInvestment": 3016214.7,
+          "period": 27,
+          "principalReduction": 64702.73
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2885623.02,
+          "date": "2029-04-01T00:00:00.000Z",
+          "interestIncome": 54111.05,
+          "openingNetInvestment": 2951511.97,
+          "period": 28,
+          "principalReduction": 65888.95
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2818526.11,
+          "date": "2029-05-01T00:00:00.000Z",
+          "interestIncome": 52903.09,
+          "openingNetInvestment": 2885623.02,
+          "period": 29,
+          "principalReduction": 67096.91
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2750199.09,
+          "date": "2029-06-01T00:00:00.000Z",
+          "interestIncome": 51672.98,
+          "openingNetInvestment": 2818526.11,
+          "period": 30,
+          "principalReduction": 68327.02
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2680619.41,
+          "date": "2029-07-01T00:00:00.000Z",
+          "interestIncome": 50420.32,
+          "openingNetInvestment": 2750199.09,
+          "period": 31,
+          "principalReduction": 69579.68
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2609764.1,
+          "date": "2029-08-01T00:00:00.000Z",
+          "interestIncome": 49144.69,
+          "openingNetInvestment": 2680619.41,
+          "period": 32,
+          "principalReduction": 70855.31
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2537609.78,
+          "date": "2029-09-01T00:00:00.000Z",
+          "interestIncome": 47845.68,
+          "openingNetInvestment": 2609764.1,
+          "period": 33,
+          "principalReduction": 72154.32
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2464132.63,
+          "date": "2029-10-01T00:00:00.000Z",
+          "interestIncome": 46522.85,
+          "openingNetInvestment": 2537609.78,
+          "period": 34,
+          "principalReduction": 73477.15
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2389308.39,
+          "date": "2029-11-01T00:00:00.000Z",
+          "interestIncome": 45175.76,
+          "openingNetInvestment": 2464132.63,
+          "period": 35,
+          "principalReduction": 74824.24
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2313112.38,
+          "date": "2029-12-01T00:00:00.000Z",
+          "interestIncome": 43803.99,
+          "openingNetInvestment": 2389308.39,
+          "period": 36,
+          "principalReduction": 76196.01
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2235519.44,
+          "date": "2030-01-01T00:00:00.000Z",
+          "interestIncome": 42407.06,
+          "openingNetInvestment": 2313112.38,
+          "period": 37,
+          "principalReduction": 77592.94
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2156503.96,
+          "date": "2030-02-01T00:00:00.000Z",
+          "interestIncome": 40984.52,
+          "openingNetInvestment": 2235519.44,
+          "period": 38,
+          "principalReduction": 79015.48
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2076039.87,
+          "date": "2030-03-01T00:00:00.000Z",
+          "interestIncome": 39535.91,
+          "openingNetInvestment": 2156503.96,
+          "period": 39,
+          "principalReduction": 80464.09
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1994100.6,
+          "date": "2030-04-01T00:00:00.000Z",
+          "interestIncome": 38060.73,
+          "openingNetInvestment": 2076039.87,
+          "period": 40,
+          "principalReduction": 81939.27
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1910659.11,
+          "date": "2030-05-01T00:00:00.000Z",
+          "interestIncome": 36558.51,
+          "openingNetInvestment": 1994100.6,
+          "period": 41,
+          "principalReduction": 83441.49
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1825687.86,
+          "date": "2030-06-01T00:00:00.000Z",
+          "interestIncome": 35028.75,
+          "openingNetInvestment": 1910659.11,
+          "period": 42,
+          "principalReduction": 84971.25
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1739158.8,
+          "date": "2030-07-01T00:00:00.000Z",
+          "interestIncome": 33470.94,
+          "openingNetInvestment": 1825687.86,
+          "period": 43,
+          "principalReduction": 86529.06
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1651043.38,
+          "date": "2030-08-01T00:00:00.000Z",
+          "interestIncome": 31884.58,
+          "openingNetInvestment": 1739158.8,
+          "period": 44,
+          "principalReduction": 88115.42
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1561312.51,
+          "date": "2030-09-01T00:00:00.000Z",
+          "interestIncome": 30269.13,
+          "openingNetInvestment": 1651043.38,
+          "period": 45,
+          "principalReduction": 89730.87
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1469936.57,
+          "date": "2030-10-01T00:00:00.000Z",
+          "interestIncome": 28624.06,
+          "openingNetInvestment": 1561312.51,
+          "period": 46,
+          "principalReduction": 91375.94
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1376885.41,
+          "date": "2030-11-01T00:00:00.000Z",
+          "interestIncome": 26948.84,
+          "openingNetInvestment": 1469936.57,
+          "period": 47,
+          "principalReduction": 93051.16
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1282128.31,
+          "date": "2030-12-01T00:00:00.000Z",
+          "interestIncome": 25242.9,
+          "openingNetInvestment": 1376885.41,
+          "period": 48,
+          "principalReduction": 94757.1
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1185634,
+          "date": "2031-01-01T00:00:00.000Z",
+          "interestIncome": 23505.69,
+          "openingNetInvestment": 1282128.31,
+          "period": 49,
+          "principalReduction": 96494.31
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1087370.62,
+          "date": "2031-02-01T00:00:00.000Z",
+          "interestIncome": 21736.62,
+          "openingNetInvestment": 1185634,
+          "period": 50,
+          "principalReduction": 98263.38
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 987305.75,
+          "date": "2031-03-01T00:00:00.000Z",
+          "interestIncome": 19935.13,
+          "openingNetInvestment": 1087370.62,
+          "period": 51,
+          "principalReduction": 100064.87
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 885406.36,
+          "date": "2031-04-01T00:00:00.000Z",
+          "interestIncome": 18100.61,
+          "openingNetInvestment": 987305.75,
+          "period": 52,
+          "principalReduction": 101899.39
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 781638.81,
+          "date": "2031-05-01T00:00:00.000Z",
+          "interestIncome": 16232.45,
+          "openingNetInvestment": 885406.36,
+          "period": 53,
+          "principalReduction": 103767.55
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 675968.85,
+          "date": "2031-06-01T00:00:00.000Z",
+          "interestIncome": 14330.04,
+          "openingNetInvestment": 781638.81,
+          "period": 54,
+          "principalReduction": 105669.96
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 568361.61,
+          "date": "2031-07-01T00:00:00.000Z",
+          "interestIncome": 12392.76,
+          "openingNetInvestment": 675968.85,
+          "period": 55,
+          "principalReduction": 107607.24
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 458781.57,
+          "date": "2031-08-01T00:00:00.000Z",
+          "interestIncome": 10419.96,
+          "openingNetInvestment": 568361.61,
+          "period": 56,
+          "principalReduction": 109580.04
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 347192.57,
+          "date": "2031-09-01T00:00:00.000Z",
+          "interestIncome": 8411,
+          "openingNetInvestment": 458781.57,
+          "period": 57,
+          "principalReduction": 111589
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 233557.77,
+          "date": "2031-10-01T00:00:00.000Z",
+          "interestIncome": 6365.2,
+          "openingNetInvestment": 347192.57,
+          "period": 58,
+          "principalReduction": 113634.8
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 117839.66,
+          "date": "2031-11-01T00:00:00.000Z",
+          "interestIncome": 4281.89,
+          "openingNetInvestment": 233557.77,
+          "period": 59,
+          "principalReduction": 115718.11
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 0.05,
+          "date": "2031-12-01T00:00:00.000Z",
+          "interestIncome": 2160.39,
+          "openingNetInvestment": 117839.66,
+          "period": 60,
+          "principalReduction": 117839.61
+        }
+      ],
+      "sellingProfitLoss": 1213694.38
+    }
+  }
+]
