@@ -1184,8 +1184,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const AUDIT_MIGRATION_KEY = "gk_tfrs16_audit_trail_migrated_v1";
 
   function cloneAuditValue(value) {
-    try { return JSON.parse(JSON.stringify(value)); }
-    catch (error) { return null; }
+    return coreClone(value);
   }
 
   function loadAuditEvents() {
@@ -3139,6 +3138,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /**
+   * buildJournalLine — modification/reassessment fiş üreticilerinde
+   * tekrarlanan {accountKey, account, debit, credit, source,
+   * controlStatus} kalıbının kanonik kaynağı (Faz 1 — DRY).
+   *
+   * controlStatus parametresi "VALID" varsayılanla çağrılıyor çünkü
+   * orijinal kodda HER push sitesinde bu değer hardcode'lanmıştı —
+   * ki zaten çağıran fonksiyon sonunda `entries.forEach(item =>
+   * item.controlStatus = balanced ? "VALID" : "UNBALANCED")` ile HER
+   * satırı YENİDEN yazıyor. Yani bu alan pratikte her zaman
+   * ezileceği için hangi değerle başladığı sonucu etkilemez; orijinal
+   * davranışı harfiyen korumak için yine de "VALID" ile başlatılıyor.
+   *
+   * NOT: generateModificationJournal'daki TEK bir push sitesi
+   * (SCOPE_DECREASE dalındaki kazanç/kayıp satırı) accountKey alanını
+   * HİÇ içermiyor — orada bu helper KULLANILMADI (kasıtlı, aşağıya
+   * bakınız), çünkü buildJournalLine(undefined, ...) çağırmak
+   * `accountKey: undefined` anahtarını EKLERDİ; orijinalde bu anahtar
+   * hiç YOKTU. `'accountKey' in entry` gibi bir kontrol varsa bu
+   * sessiz bir davranış farkı yaratırdı.
+   */
+  function buildJournalLine(accountKey, account, debit, credit, source, controlStatus = "VALID") {
+    return { accountKey, account, debit, credit, source, controlStatus };
+  }
+
   function generateReassessmentJournal(contract, reassessment) {
     if (!reassessment || reassessment.status !== "APPLIED") {
       return [];
@@ -3151,62 +3175,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const companyId = contract?.companyId || "";
 
     if (liabilityAdjustment > 0) {
-      entries.push({
-        accountKey: "rouAsset",
-        account: "260 Kullanım Hakkı Varlığı",
-        debit: liabilityAdjustment,
-        credit: 0,
-        source: "REASSESSMENT",
-        controlStatus: "VALID"
-      });
-      entries.push({
-        accountKey: "leaseLiability",
-        account: "401 Kiralama Yükümlülüğü",
-        debit: 0,
-        credit: liabilityAdjustment,
-        source: "REASSESSMENT",
-        controlStatus: "VALID"
-      });
+      entries.push(buildJournalLine("rouAsset", "260 Kullanım Hakkı Varlığı", liabilityAdjustment, 0, "REASSESSMENT"));
+      entries.push(buildJournalLine("leaseLiability", "401 Kiralama Yükümlülüğü", 0, liabilityAdjustment, "REASSESSMENT"));
     } else if (liabilityAdjustment < 0) {
       const amount = Math.abs(liabilityAdjustment);
-      entries.push({
-        accountKey: "leaseLiability",
-        account: "401 Kiralama Yükümlülüğü",
-        debit: amount,
-        credit: 0,
-        source: "REASSESSMENT",
-        controlStatus: "VALID"
-      });
+      entries.push(buildJournalLine("leaseLiability", "401 Kiralama Yükümlülüğü", amount, 0, "REASSESSMENT"));
       if (rouAdjustment < 0) {
-        entries.push({
-          accountKey: "rouAsset",
-          account: "260 Kullanım Hakkı Varlığı",
-          debit: 0,
-          credit: Math.abs(rouAdjustment),
-          source: "REASSESSMENT",
-          controlStatus: "VALID"
-        });
+        entries.push(buildJournalLine("rouAsset", "260 Kullanım Hakkı Varlığı", 0, Math.abs(rouAdjustment), "REASSESSMENT"));
       }
     }
 
     if (gainLoss > 0.005) {
-      entries.push({
-        accountKey: "inflationGainLoss",
-        account: "649 Reassessment Gain",
-        debit: 0,
-        credit: gainLoss,
-        source: "REASSESSMENT",
-        controlStatus: "VALID"
-      });
+      entries.push(buildJournalLine("inflationGainLoss", "649 Reassessment Gain", 0, gainLoss, "REASSESSMENT"));
     } else if (gainLoss < -0.005) {
-      entries.push({
-        accountKey: "inflationGainLoss",
-        account: "689 Reassessment Loss",
-        debit: Math.abs(gainLoss),
-        credit: 0,
-        source: "REASSESSMENT",
-        controlStatus: "VALID"
-      });
+      entries.push(buildJournalLine("inflationGainLoss", "689 Reassessment Loss", Math.abs(gainLoss), 0, "REASSESSMENT"));
     }
 
     const debit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
@@ -3516,11 +3498,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function cloneModificationValue(value) {
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (error) {
-      return value;
-    }
+    return coreCloneOrOriginal(value);
   }
 
 
@@ -4484,28 +4462,20 @@ document.addEventListener("DOMContentLoaded", () => {
         Math.max(0, -rouAdjustment);
 
       if (liabilityReduction > 0) {
-        entries.push({
-          accountKey: "leaseLiability",
-          account: "401 Kiralama Yükümlülüğü",
-          debit: liabilityReduction,
-          credit: 0,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
+        entries.push(buildJournalLine("leaseLiability", "401 Kiralama Yükümlülüğü", liabilityReduction, 0, "MODIFICATION"));
       }
 
       if (rouReduction > 0) {
-        entries.push({
-          accountKey: "rouAsset",
-          account: "260 Kullanım Hakkı Varlığı",
-          debit: 0,
-          credit: rouReduction,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
+        entries.push(buildJournalLine("rouAsset", "260 Kullanım Hakkı Varlığı", 0, rouReduction, "MODIFICATION"));
       }
 
       if (Math.abs(gainLoss) > 0.005) {
+        // NOT: bu satır KASITLI OLARAK buildJournalLine KULLANMIYOR —
+        // orijinalde accountKey alanı HİÇ YOK (diğer tüm satırlardan
+        // farklı olarak). buildJournalLine(undefined, ...) çağırmak
+        // `accountKey: undefined` anahtarını EKLERDİ; bu, anahtarın
+        // TAMAMEN YOK olmasından farklıdır (bkz. buildJournalLine
+        // yorumu, satır ~4432 civarı).
         entries.push({
           account: "649 / 689 Modification Gain / Loss",
           debit: gainLoss < 0 ? Math.abs(gainLoss) : 0,
@@ -4518,43 +4488,13 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
 
       if (liabilityAdjustment > 0) {
-        entries.push({
-          accountKey: "rouAsset",
-          account: "260 Kullanım Hakkı Varlığı",
-          debit: liabilityAdjustment,
-          credit: 0,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
-
-        entries.push({
-          accountKey: "leaseLiability",
-          account: "401 Kiralama Yükümlülüğü",
-          debit: 0,
-          credit: liabilityAdjustment,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
+        entries.push(buildJournalLine("rouAsset", "260 Kullanım Hakkı Varlığı", liabilityAdjustment, 0, "MODIFICATION"));
+        entries.push(buildJournalLine("leaseLiability", "401 Kiralama Yükümlülüğü", 0, liabilityAdjustment, "MODIFICATION"));
       } else if (liabilityAdjustment < 0) {
         const amount = Math.abs(liabilityAdjustment);
 
-        entries.push({
-          accountKey: "leaseLiability",
-          account: "401 Kiralama Yükümlülüğü",
-          debit: amount,
-          credit: 0,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
-
-        entries.push({
-          accountKey: "rouAsset",
-          account: "260 Kullanım Hakkı Varlığı",
-          debit: 0,
-          credit: amount,
-          source: "MODIFICATION",
-          controlStatus: "VALID"
-        });
+        entries.push(buildJournalLine("leaseLiability", "401 Kiralama Yükümlülüğü", amount, 0, "MODIFICATION"));
+        entries.push(buildJournalLine("rouAsset", "260 Kullanım Hakkı Varlığı", 0, amount, "MODIFICATION"));
       }
     }
 
@@ -14550,8 +14490,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ]);
 
   function safeNumber(value, fallback = 0) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
+    return coreNumber(value, fallback);
   }
 
   function isFiniteNumber(value) {
@@ -14559,16 +14498,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function controlDate(value) {
-    return parseDate(value);
+    return coreDate(value);
   }
 
   function controlDaysBetween(a, b) {
-    const da = controlDate(a);
-    const db = controlDate(b);
-    if (!da || !db) return null;
-    return Math.round((db.getTime() - da.getTime()) / 86400000);
+    return coreDaysBetween(controlDate(a), controlDate(b));
   }
 
+  // controlMonthsBetween KASITLI OLARAK dokunulmadı — coreMonthsBetween/
+  // rptMonthsBetween'den FARKLI bir semantiğe sahip: global monthsBetween()
+  // (satır ~5457) "elapsed months" değil "inclusive ay sayısı" hesaplıyor
+  // (+1 offset, min 1 clamp, gün bileşenini yok sayıyor). Konsolide etmek
+  // davranış değişikliği olurdu.
   function controlMonthsBetween(a, b) {
     const da = controlDate(a);
     const db = controlDate(b);
@@ -14605,11 +14546,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function controlJson(value) {
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (error) {
-      return null;
-    }
+    return coreClone(value);
   }
 
   function controlResult(config, contract, status, result, message, expected, actual, recommendation, extra = {}) {
@@ -15330,41 +15267,215 @@ document.addEventListener("DOMContentLoaded", () => {
     NEXT12M_INTEREST: { id: "NEXT12M_INTEREST", name: "Next 12 Month Interest", description: "Interest in the twelve months after reporting date.", unit: "currency", source: "LEASE_SCHEDULE", calculationBasis: "Schedule interest" }
   });
 
-  function cfoNumber(value, fallback = 0) {
+  /* ==========================================================
+     FAZ 1 — DRY KONSOLİDASYONU: KANONİK "core*" YARDIMCILARI
+     ----------------------------------------------------------
+     Aşağıdaki fonksiyonlar, dosya genelinde cfo/rpt/v18/v19/v20/
+     v21/v22/v23/v24 önekleriyle ~20 kez neredeyse aynı mantıkla
+     kopyalanmış numeric/date/clone yardımcılarının TEK kanonik
+     kaynağıdır (bkz. PROJECT_CONTEXT.md bölüm 33, "Faz 1 — DRY").
+
+     KRİTİK: Bu tek bir "hepsi aynı" konsolidasyon DEĞİL. İnceleme,
+     aynı isim kalıbını taşıyan fonksiyonların HER ZAMAN aynı
+     davranmadığını ortaya çıkardı (ör. v20Clone hata durumunda
+     orijinal değeri döndürüyor, diğerleri null; cfoAddMonths ay
+     değerini coerce etmiyor, rpt/v18 ediyor; v19/v23/v24'ün tarih
+     ayrıştırıcıları parseDate() KULLANMIYOR — Türkçe DD.MM.YYYY
+     formatını desteklemiyorlar). Her orijinal fonksiyon, kendi tam
+     eski davranışını KORUYAN ince bir sarmalayıcıya (thin wrapper)
+     çevrildi; davranışı farklı olanlar (v19IsoDate, v20Clone,
+     v23Date, v24Date, cloneModificationValue'nun kendi mantığı vb.)
+     BİLEREK konsolide EDİLMEDİ — aşağıda her core fonksiyonunun
+     yorumunda hangi orijinallerin ona eşlendiği ve hangilerinin
+     KASITLI OLARAK dışarıda bırakıldığı belirtiliyor.
+
+     Bu blok saf EKLEME'dir; hiçbir mevcut fonksiyonun GÖVDESİ bu
+     noktada değişmedi (onlar birazdan, her biri ayrı ayrı, ince
+     sarmalayıcıya çevrilecek — orijinal davranışları test edilip
+     doğrulanarak).
+     ========================================================== */
+
+  /**
+   * coreNumber — güvenli sayı ayrıştırma.
+   * Eşlenen orijinaller (hepsi byte-birebir aynı mantık): safeNumber,
+   * cfoNumber, rptNumber, v18Number, v20Amount, v22Amount (fallback
+   * her zaman 0 idi — coreNumber(value) ile eşdeğer), v23Num,
+   * v24Number.
+   * KASITLI OLARAK DIŞARIDA: integrationNumber — bu fonksiyon önce
+   * biçimlendirilmiş sayı string'lerini (binlik ayraç/ondalık virgül)
+   * normalize ediyor, farklı/daha zengin bir davranış; sadece SON
+   * doğrulama adımı bu kalıba benziyor, konsolide edilmedi.
+   */
+  function coreNumber(value, fallback = 0) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   }
 
-  function cfoRound(value, digits = 2) {
-    const n = cfoNumber(value);
+  /**
+   * coreRound — kuruş hassasiyetinde yuvarlama.
+   * Eşlenen orijinaller: cfoRound, rptRound, v18Round — ÜÇÜ DE
+   * `digits` değerini OLDUĞU GİBİ Math.pow(10, digits)'e geçiriyordu
+   * (negatif değer kelepçelenmiyordu). Bu core fonksiyon da AYNI
+   * şekilde kelepçelemez — v23Round'un kelepçeleme davranışı kendi
+   * sarmalayıcısında (çağrı ÖNCESİNDE) korunacak.
+   */
+  function coreRound(value, digits = 2) {
+    const n = coreNumber(value);
     const factor = Math.pow(10, digits);
     return Math.round((n + Number.EPSILON) * factor) / factor;
   }
 
-  function cfoClone(value) {
+  /**
+   * coreClone — JSON round-trip ile derin kopya; ayrıştırılamayan
+   * (döngüsel referans, undefined vb.) değerlerde NULL döner.
+   * Eşlenen orijinaller (hepsi hata durumunda null dönüyordu):
+   * cfoClone, rptClone, v18Clone, v21Clone, v22Clone, v23Clone,
+   * v24Clone, cloneAuditValue, controlJson, integrationClone.
+   * KASITLI OLARAK DIŞARIDA (bkz. coreCloneOrOriginal): v20Clone,
+   * cloneModificationValue — bunlar hata durumunda ORİJİNAL değeri
+   * döndürüyor, null DEĞİL.
+   */
+  function coreClone(value) {
     try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
   }
 
-  function cfoDate(value) {
+  /**
+   * coreCloneOrOriginal — coreClone ile AYNI mantık, tek fark: hata
+   * durumunda orijinal (ayrıştırılamayan) değeri döndürür, null değil.
+   * Eşlenen orijinaller: v20Clone, cloneModificationValue.
+   */
+  function coreCloneOrOriginal(value) {
+    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return value; }
+  }
+
+  /**
+   * coreDate — parseDate() üzerinden tarih ayrıştırma (ISO
+   * "YYYY-MM-DD" + Türkçe "DD.MM.YYYY" / "DD/MM/YYYY" formatlarını
+   * destekler, bkz. parseDate tanımı ~satır 5288). Bu fonksiyonun
+   * KENDİSİ try/catch İÇERMEZ — cfoDate'in orijinal (kelepçesiz)
+   * davranışıyla birebir eşleşir; rptDate/v18Date kendi
+   * sarmalayıcılarında try/catch EKLEYEREK orijinal davranışlarını
+   * korur.
+   * Eşlenen orijinaller: cfoDate, rptDate, v18Date.
+   * KASITLI OLARAK DIŞARIDA: v19IsoDate (kendi inline `new Date(date)`
+   * ayrıştırması, parseDate KULLANMIYOR), v23Date (`new Date(value)`
+   * — Türkçe format desteği yok, ISO tarih-only string'leri UTC
+   * gece yarısı olarak yorumluyor; parseDate ise YEREL gece yarısı
+   * zorluyor — bu, saat dilimine bağlı olarak FARKLI takvim günü
+   * üretebilir), v24Date (değer falsy ise ŞİMDİKİ zamana düşüyor,
+   * null'a değil — genuinely farklı davranış).
+   */
+  function coreDate(value) {
     return typeof parseDate === "function" ? parseDate(value) : null;
   }
 
+  /**
+   * coreIsoDate — ZATEN AYRIŞTIRILMIŞ bir Date nesnesini
+   * "YYYY-MM-DD" metnine çevirir (ayrıştırma sorumluluğu çağırana
+   * ait — her sarmalayıcı kendi xDate() fonksiyonunu önce çağırır,
+   * böylece coreDate'in yukarıdaki davranış farkları korunur).
+   * Eşlenen orijinaller: cfoIsoDate, rptIsoDate, v18IsoDate.
+   * KASITLI OLARAK DIŞARIDA: v19IsoDate (coreDate kullanmıyor).
+   */
+  function coreIsoDate(parsedDate) {
+    return parsedDate ? parsedDate.toISOString().slice(0, 10) : null;
+  }
+
+  /**
+   * coreNormalizeDate — gevşek tarih normalize edici (native
+   * `new Date(value)`, parseDate DEĞİL — Türkçe format desteklemez).
+   * Eşlenen orijinaller (byte-birebir aynı): v20NormalizeDate,
+   * v22NormalizeDate.
+   */
+  function coreNormalizeDate(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  /**
+   * coreAddDays — ZATEN AYRIŞTIRILMIŞ bir Date'e gün ekler.
+   * Eşlenen orijinaller (byte-birebir aynı): rptAddDays, v18AddDays.
+   */
+  function coreAddDays(parsedDate, days) {
+    if (!parsedDate) return null;
+    const out = new Date(parsedDate.getTime());
+    out.setDate(out.getDate() + Number(days || 0));
+    return out;
+  }
+
+  /**
+   * coreAddMonths — ZATEN AYRIŞTIRILMIŞ bir Date'e ay ekler
+   * (ayın günü korunur — `new Date(y, m+months, d)` taşma
+   * davranışıyla). `months` parametresi OLDUĞU GİBİ geçirilir,
+   * coerce EDİLMEZ — cfoAddMonths'un orijinal davranışı buydu
+   * (undefined geçilirse NaN üretir). rptAddMonths/v18AddMonths
+   * kendi sarmalayıcılarında `Number(months || 0)` coercion'ını
+   * ÇAĞRI ÖNCESİNDE uygulayarak kendi orijinal davranışlarını korur.
+   * Eşlenen orijinaller: cfoAddMonths, rptAddMonths, v18AddMonths.
+   */
+  function coreAddMonths(parsedDate, months) {
+    if (!parsedDate) return null;
+    return new Date(parsedDate.getFullYear(), parsedDate.getMonth() + months, parsedDate.getDate());
+  }
+
+  /**
+   * coreDaysBetween — ZATEN AYRIŞTIRILMIŞ iki Date arasındaki tam
+   * gün farkı.
+   * Eşlenen orijinaller (byte-birebir aynı): cfoDaysBetween,
+   * v18DaysBetween.
+   */
+  function coreDaysBetween(parsedFrom, parsedTo) {
+    if (!parsedFrom || !parsedTo) return null;
+    return Math.round((parsedTo.getTime() - parsedFrom.getTime()) / 86400000);
+  }
+
+  /**
+   * coreMonthsBetween — ZATEN AYRIŞTIRILMIŞ iki Date arasındaki tam
+   * ay farkı (kısmi ay, hedef günün henüz gelmediği durumda aşağı
+   * yuvarlanır). Konsolidasyon öncesi yalnızca TEK bir uygulaması
+   * vardı (rptMonthsBetween); plan listesinde adı geçtiği ve
+   * gelecekteki yeniden kullanım için buraya taşındı — davranış
+   * BİREBİR aynı, sadece yer değiştirdi.
+   * Eşlenen orijinal: rptMonthsBetween.
+   */
+  function coreMonthsBetween(parsedFrom, parsedTo) {
+    if (!parsedFrom || !parsedTo) return null;
+    return Math.max(
+      0,
+      (parsedTo.getFullYear() - parsedFrom.getFullYear()) * 12 +
+        (parsedTo.getMonth() - parsedFrom.getMonth()) +
+        (parsedTo.getDate() >= parsedFrom.getDate() ? 0 : -1)
+    );
+  }
+
+  function cfoNumber(value, fallback = 0) {
+    return coreNumber(value, fallback);
+  }
+
+  function cfoRound(value, digits = 2) {
+    return coreRound(value, digits);
+  }
+
+  function cfoClone(value) {
+    return coreClone(value);
+  }
+
+  function cfoDate(value) {
+    return coreDate(value);
+  }
+
   function cfoIsoDate(value) {
-    const d = cfoDate(value);
-    if (!d) return null;
-    return d.toISOString().slice(0, 10);
+    return coreIsoDate(cfoDate(value));
   }
 
   function cfoAddMonths(date, months) {
-    const d = cfoDate(date);
-    if (!d) return null;
-    return new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
+    return coreAddMonths(cfoDate(date), months);
   }
 
   function cfoDaysBetween(from, to) {
-    const a = cfoDate(from), b = cfoDate(to);
-    if (!a || !b) return null;
-    return Math.round((b.getTime() - a.getTime()) / 86400000);
+    return coreDaysBetween(cfoDate(from), cfoDate(to));
   }
 
   function cfoIsActive(contract, reportingDate) {
@@ -15806,43 +15917,31 @@ document.addEventListener("DOMContentLoaded", () => {
   ]);
 
   function rptNumber(value, fallback = 0) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
+    return coreNumber(value, fallback);
   }
 
   function rptRound(value, digits = 2) {
-    const n = rptNumber(value);
-    const factor = Math.pow(10, digits);
-    return Math.round((n + Number.EPSILON) * factor) / factor;
+    return coreRound(value, digits);
   }
 
   function rptDate(value) {
-    try { return typeof parseDate === "function" ? parseDate(value) : null; } catch (error) { return null; }
+    try { return coreDate(value); } catch (error) { return null; }
   }
 
   function rptIsoDate(value) {
-    const d = rptDate(value);
-    return d ? d.toISOString().slice(0, 10) : null;
+    return coreIsoDate(rptDate(value));
   }
 
   function rptAddDays(value, days) {
-    const d = rptDate(value);
-    if (!d) return null;
-    const out = new Date(d.getTime());
-    out.setDate(out.getDate() + Number(days || 0));
-    return out;
+    return coreAddDays(rptDate(value), days);
   }
 
   function rptAddMonths(value, months) {
-    const d = rptDate(value);
-    if (!d) return null;
-    return new Date(d.getFullYear(), d.getMonth() + Number(months || 0), d.getDate());
+    return coreAddMonths(rptDate(value), Number(months || 0));
   }
 
   function rptMonthsBetween(from, to) {
-    const a = rptDate(from), b = rptDate(to);
-    if (!a || !b) return null;
-    return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + (b.getDate() >= a.getDate() ? 0 : -1));
+    return coreMonthsBetween(rptDate(from), rptDate(to));
   }
 
   function rptResolveDate(value) {
@@ -15851,7 +15950,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function rptClone(value) {
-    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
+    return coreClone(value);
   }
 
   function rptEmptyReport(reportName, reportingDate, source = "V16.9_DATA_LAYER") {
@@ -16844,8 +16943,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function closeIsoDate(value) {
-    const d = closeResolveDate(value);
-    return d.toISOString().slice(0, 10);
+    return coreIsoDate(closeResolveDate(value));
   }
 
   function closePeriod(value) {
@@ -18092,27 +18190,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function v18Number(value, fallback = 0) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
+    return coreNumber(value, fallback);
   }
 
   function v18Round(value, digits = 2) {
-    const n = v18Number(value);
-    const factor = Math.pow(10, digits);
-    return Math.round((n + Number.EPSILON) * factor) / factor;
+    return coreRound(value, digits);
   }
 
   function v18Clone(value) {
-    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
+    return coreClone(value);
   }
 
   function v18Date(value) {
-    try { return typeof parseDate === "function" ? parseDate(value) : null; } catch (error) { return null; }
+    try { return coreDate(value); } catch (error) { return null; }
   }
 
   function v18IsoDate(value) {
-    const d = v18Date(value);
-    return d ? d.toISOString().slice(0, 10) : null;
+    return coreIsoDate(v18Date(value));
   }
 
   function v18ResolveDate(value) {
@@ -18124,23 +18218,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v18AddDays(value, days) {
-    const d = v18Date(value);
-    if (!d) return null;
-    const out = new Date(d.getTime());
-    out.setDate(out.getDate() + Number(days || 0));
-    return out;
+    return coreAddDays(v18Date(value), days);
   }
 
   function v18AddMonths(value, months) {
-    const d = v18Date(value);
-    if (!d) return null;
-    return new Date(d.getFullYear(), d.getMonth() + Number(months || 0), d.getDate());
+    return coreAddMonths(v18Date(value), Number(months || 0));
   }
 
   function v18DaysBetween(from, to) {
-    const a = v18Date(from), b = v18Date(to);
-    if (!a || !b) return null;
-    return Math.round((b.getTime() - a.getTime()) / 86400000);
+    return coreDaysBetween(v18Date(from), v18Date(to));
   }
 
   function v18SafeContracts() {
@@ -18946,7 +19032,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function integrationClone(value) {
-    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
+    return coreClone(value);
   }
 
   function integrationNow() {
@@ -20927,11 +21013,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   function v20Clone(value) {
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (error) {
-      return value;
-    }
+    return coreCloneOrOriginal(value);
   }
 
   function v20Now() {
@@ -20951,10 +21033,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v20NormalizeDate(value) {
-    if (value === null || value === undefined || value === "") return null;
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toISOString().slice(0, 10);
+    return coreNormalizeDate(value);
   }
 
   function v20NormalizeCurrency(value, fallback = "TRY") {
@@ -20963,8 +21042,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v20Amount(value, fallback = 0) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
+    return coreNumber(value, fallback);
   }
 
   function v20VersionedEntity(entity, type) {
@@ -22450,7 +22528,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function v21Clone(value) {
-    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
+    return coreClone(value);
   }
 
   function v21Now() { return new Date().toISOString(); }
@@ -23021,7 +23099,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v22Clone(value) {
-    try { return JSON.parse(JSON.stringify(value)); } catch (error) { return null; }
+    return coreClone(value);
   }
 
   function v22Now() { return new Date().toISOString(); }
@@ -23031,10 +23109,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v22NormalizeDate(value) {
-    if (value === null || value === undefined || value === "") return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toISOString().slice(0, 10);
+    return coreNormalizeDate(value);
   }
 
   function v22Currency(value, fallback = "TRY") {
@@ -23043,8 +23118,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function v22Amount(value) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : 0;
+    return coreNumber(value);
   }
 
   function v22Storage(key) {
@@ -24281,16 +24355,19 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   });
 
-  function v23Clone(value) { try { return JSON.parse(JSON.stringify(value)); } catch (e) { return null; } }
+  function v23Clone(value) { return coreClone(value); }
   function v23Array(value) { return Array.isArray(value) ? value : []; }
   function v23Object(value) { return value && typeof value === "object" ? value : {}; }
   function v23Now() { return new Date().toISOString(); }
   function v23Id(prefix="V23") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`; }
+  // v23Date/v23DateKey KASITLI OLARAK dokunulmadı — parseDate() yerine
+  // native `new Date(value)` kullanıyor (bkz. coreDate yorumu, PROJECT_
+  // CONTEXT.md bölüm 33). Konsolide etmek davranış değişikliği olurdu.
   function v23Date(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? null : d; }
   function v23DateKey(value) { const d=v23Date(value); return d ? d.toISOString().slice(0,10) : null; }
-  function v23Num(value, fallback=0) { const n=Number(value); return Number.isFinite(n) ? n : fallback; }
+  function v23Num(value, fallback=0) { return coreNumber(value, fallback); }
   function v23CurrencyCode(value) { return String(value || "").trim().toUpperCase(); }
-  function v23Round(value, decimalPlaces=2) { const n=v23Num(value); const p=Math.pow(10, Math.max(0, decimalPlaces)); return Math.round((n + Number.EPSILON) * p) / p; }
+  function v23Round(value, decimalPlaces=2) { return coreRound(value, Math.max(0, decimalPlaces)); }
   function v23Actor() { try { return String(window.currentUser?.id || window.currentUser?.username || "system"); } catch(e) { return "system"; } }
   function v23Audit(action, entityType, entityId, metadata={}) {
     try { if (typeof recordAuditEvent === "function") return recordAuditEvent({ action, entityType, entityId:entityId || null, actor:v23Actor(), reason:`${V23_FX_EVENT_SOURCE}:${action}`, metadata:{...v23Object(metadata), source:V23_FX_EVENT_SOURCE, schemaVersion:V23_SCHEMA_VERSION} }); } catch(e) {}
@@ -26011,13 +26088,17 @@ document.addEventListener("DOMContentLoaded", () => {
     NET_INCOME:{direction:"PROFIT",favorableWhen:"POSITIVE"}
   });
 
-  function v24Number(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+  function v24Number(value, fallback = 0) { return coreNumber(value, fallback); }
   function v24Text(value, fallback = "") { return value == null ? fallback : String(value); }
+  // v24Date/v24DateKey KASITLI OLARAK dokunulmadı — falsy değerde
+  // ŞİMDİKİ zamana düşüyor (null'a değil) ve DateKey YEREL tarih
+  // bileşenlerini kullanıyor (toISOString UTC'sini değil). Bkz.
+  // coreDate yorumu, PROJECT_CONTEXT.md bölüm 33.
   function v24Date(value) { const d = value ? new Date(value) : new Date(); return Number.isNaN(d.getTime()) ? null : d; }
   function v24DateKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : null; }
   function v24MonthKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` : null; }
   function v24Year(value) { const d = v24Date(value); return d ? d.getFullYear() : Number(value); }
-  function v24Clone(value) { try { return JSON.parse(JSON.stringify(value)); } catch(e) { return null; } }
+  function v24Clone(value) { return coreClone(value); }
   function v24Now() { return new Date().toISOString(); }
   function v24Id(prefix = "V24") { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`.toUpperCase(); }
   function v24Array(value) { return Array.isArray(value) ? value : []; }

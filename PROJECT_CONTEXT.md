@@ -1428,6 +1428,121 @@ yeşil (golden dahil). Playwright smoke suite 5/5 yeşil.
 **FAZ 0 TAMAMLANDI.** Faz 1'e (DRY — `core*` yardımcı birleştirmesi)
 geçilebilir.
 
+---
+
+# 34. tfrs16.js REFAKTÖRÜ — FAZ 1: DRY KONSOLİDASYONU (TAMAMLANDI)
+
+## ÖZET
+
+Plan Faz 1'in "risk sıfıra yakın: mantık aynı" iddiası **kısmen
+yanlış çıktı**. İnceleme, aynı isim kalıbını (`cfo*`/`rpt*`/`v18-24*`)
+taşıyan fonksiyonların bazı durumlarda **farklı davrandığını** ortaya
+çıkardı. Her fonksiyon çifti tek tek karşılaştırıldı; yalnızca
+**gerçekten birebir aynı** olanlar birleştirildi, davranışça farklı
+olanlar kasıtlı olarak dışarıda bırakılıp gövdelerinde nedeni
+yorumlandı. Bu ayrım yapılmasaydı "davranış sıfır değişiklik" ilkesi
+sessizce ihlal edilirdi.
+
+## BULUNAN DAVRANIŞ FARKLARI (konsolide EDİLMEYENLER)
+
+| Fonksiyon(lar) | Fark |
+|---|---|
+| `v20Clone`, `cloneModificationValue` | Hata durumunda **orijinal değeri** döner, diğer 10 clone fonksiyonu `null` döner |
+| `cfoAddMonths` vs `rptAddMonths`/`v18AddMonths` | `months` parametresi cfo'da coerce edilmiyor (undefined→NaN), rpt/v18'de `Number(months\|\|0)` ile 0'a düşüyor |
+| `cfoDate` vs `rptDate`/`v18Date` | cfoDate try/catch içermiyor, rpt/v18 içeriyor |
+| `v23Round` vs `cfoRound`/`rptRound`/`v18Round` | v23 negatif `decimalPlaces`'i `Math.max(0,...)` ile kelepçeliyor, diğerleri kelepçelemiyor |
+| `v19IsoDate`, `v23Date`/`v23DateKey`, `v24Date`/`v24DateKey` | **`parseDate()` KULLANMIYORLAR** — native `new Date(value)`; Türkçe `DD.MM.YYYY`/`DD/MM/YYYY` formatını desteklemiyorlar; ISO tarih-only string'leri UTC/yerel farkıyla farklı yorumlanabilir; `v24Date` ayrıca falsy girdide **şimdiki zamana** düşüyor (null'a değil) |
+| `controlMonthsBetween` (→ global `monthsBetween()`) | `rptMonthsBetween`'den FARKLI semantik: "elapsed months" değil "inclusive ay sayısı" (+1 offset, min 1 clamp, gün bileşeni yok sayılıyor) |
+| `integrationNumber` | Basit `Number()` değil, önce Türkçe biçimli sayı string'lerini (binlik ayraç/ondalık virgül) normalize ediyor |
+
+Bunların HİÇBİRİNE dokunulmadı — kod tabanında oldukları gibi
+kaldılar, yalnızca `js/tfrs16.js` içinde neden konsolide
+edilmediklerini açıklayan yorumlar eklendi.
+
+## KONSOLİDE EDİLENLER
+
+Yeni kanonik blok (`js/tfrs16.js`, `cfoNumber` tanımından hemen önce,
+~satır 15310): `coreNumber`, `coreRound`, `coreClone`,
+`coreCloneOrOriginal` (hata durumunda orijinal değeri döndüren ayrı
+varyant), `coreDate`, `coreIsoDate`, `coreNormalizeDate`,
+`coreAddDays`, `coreAddMonths`, `coreDaysBetween`, `coreMonthsBetween`.
+
+İnce sarmalayıcıya çevrilen **29 fonksiyon** (davranışları test
+edilip doğrulanarak, orijinal imzaları BİREBİR korunarak):
+
+`safeNumber`, `cfoNumber/Round/Clone/Date/IsoDate/AddMonths/DaysBetween`
+(7), `rptNumber/Round/Date/IsoDate/AddDays/AddMonths/MonthsBetween/Clone`
+(8), `v18Number/Round/Clone/Date/IsoDate/AddDays/AddMonths/DaysBetween`
+(8), `v20Clone/NormalizeDate/Amount` (3), `v21Clone` (1),
+`v22Clone/NormalizeDate/Amount` (3), `v23Clone/Num/Round` (3),
+`v24Number/Clone` (2), `cloneAuditValue`, `cloneModificationValue`,
+`controlJson`, `integrationClone`, `controlDate`, `controlDaysBetween`,
+`closeIsoDate`.
+
+Plandaki örnekte olmayıp inceleme sırasında bulunan ek tekrarlar da
+dahil edildi: `safeNumber` (zaten 25 yerde kullanılan, isimsiz "core"
+rolü oynayan bir fonksiyondu), `v20Amount`/`v22Amount`,
+`cloneAuditValue`/`cloneModificationValue`/`controlJson`/
+`integrationClone` (4 tekil clone fonksiyonu), `controlDate`/
+`controlDaysBetween`, `closeIsoDate`.
+
+## buildJournalLine — ORTAK FİŞ SATIRI ÜRETİCİSİ
+
+`generateModificationJournal` (satır ~4432) ve
+`generateReassessmentJournal` (satır ~3141)'daki tekrarlanan
+`{accountKey, account, debit, credit, source, controlStatus}` push
+kalıbı `buildJournalLine()` helper'ına çekildi — **12 çağrı
+sitesinden 11'i** dönüştürüldü.
+
+**1 istisna, kasıtlı olarak dokunulmadı:** `generateModificationJournal`
+içindeki SCOPE_DECREASE dalının kazanç/kayıp satırı `accountKey`
+alanını HİÇ içermiyordu (diğer tüm satırlardan farklı olarak).
+`buildJournalLine(undefined, ...)` çağırmak `accountKey: undefined`
+anahtarını EKLERDİ — bu, anahtarın TAMAMEN YOK olmasından farklıdır
+(`'accountKey' in entry` gibi bir kontrol varsa sessiz bir davranış
+farkı yaratırdı). Bu satır orijinal inline haliyle bırakıldı.
+
+## mapImportedContract / mapDbContractToUi — İNCELENDİ, KONSOLİDE EDİLMEDİ
+
+Plan bunları "muhtemelen tekrarlı, incelenecek" olarak işaretlemişti.
+İnceleme sonucu: **DRY ihlali değiller.** `mapImportedContract`,
+Excel/CSV toplu içe aktarımdan bulanık Türkçe/İngilizce kolon adı
+eşleştirmesiyle (`findImportValue`) ve Türkçe biçimli sayı
+ayrıştırmasıyla (`"1.234,56"` → `.replace(/\./g,"").replace(",",".")`)
+çalışıyor; `mapDbContractToUi` ise backend DB satırından
+(camelCase/snake_case varyantları) çok daha zengin bir alan kümesi
+(modificationJournals, saleAndLeaseback, sublease, earlyPayments,
+auditTrail...) dolduruyor. Girdi formatları, alan kapsamları ve
+doğrulama mantıkları temelden farklı — paylaşılan kod yok, yalnızca
+isim benzerliği var. Dokunulmadı.
+
+## getTotalLeaseLiability ailesi — Faz 4'e ertelendi (plan gereği)
+
+`getTotalLeaseLiability`/`getCurrentLeaseLiability`/
+`getNonCurrentLeaseLiability`/`getTotalRuoAssets` planın kendisinde
+"Faz 4'te tek geçişe indirilecek" olarak işaretli — Faz 1
+kapsamına alınmadı, dokunulmadı.
+
+## DOĞRULAMA
+
+- Her fonksiyon grubu (7 grup: cfo/rpt/v18 → v20/21/22 → v23/24 →
+  dağınık tekiller → controlDate ailesi → buildJournalLine ×2)
+  dönüştürüldükten hemen sonra `node --check` + tam Jest suite (golden
+  + invariants dahil) koşuldu, hepsi yeşil.
+- Final `git diff` gözden geçirmesi: değişen HER hunk tek tek
+  incelendi, hiçbir dönüşümün amaçlanan fonksiyon gövdesi dışına
+  taştığı görülmedi.
+- Tam suite: **396/396 yeşil** (golden dahil — 30 kontratın hiçbiri
+  sapma göstermedi, `buildJournalLine`'ın modification/reassessment
+  fişlerini birebir aynı ürettiğinin kanıtı).
+- Dosya satır sayısı: 31.726 → 31.806 (+80 net — büyük ölçüde
+  yorum/dokümantasyon; ~20 fonksiyon gövdesi 1-3 satıra indi ama
+  core blok + kapsamlı "neden dokunulmadı" yorumları bunu dengeledi).
+
+## FAZ 1 KAPANIŞ DURUMU
+
+✅ TAMAMLANDI. Faz 2'ye (İsimlendirme) geçilebilir.
+
 ### 0.4 tarayıcı notu
 
 Bu ortamda `cdn.playwright.dev` ağ allowlist dışında olduğu için
