@@ -68,13 +68,14 @@ function buildApp() {
   }));
 
   const adminRouter = require("../backend/routes/admin");
+  const inflationService = require("../backend/services/tuik-index-service");
   const { signUserToken } = require("../backend/utils/jwt");
 
   const app = express();
   app.use(express.json());
   app.use("/api/admin", adminRouter);
 
-  return { app, signUserToken };
+  return { app, signUserToken, inflationService };
 }
 
 function authHeader(signUserToken, payload) {
@@ -83,6 +84,12 @@ function authHeader(signUserToken, payload) {
 }
 
 const ADMIN_USER = { id: "u-admin", username: "admin-1", role: "ADMIN", companyIds: [] };
+const LONG_USERNAME_ADMIN = {
+  id: "u-stable-id",
+  username: "admin-with-a-username-that-is-deliberately-longer-than-fifty-characters@example.com",
+  role: "ADMIN",
+  companyIds: []
+};
 const NORMAL_USER = { id: "u-normal", username: "normal-1", role: "ACCOUNTANT", companyIds: ["C-1"] };
 
 describe("GET /api/admin/inflation-indices", () => {
@@ -144,6 +151,21 @@ describe("POST /api/admin/inflation-indices", () => {
     expect(res.body.data.verificationStatus).toBe("PENDING");
   });
 
+  test("uzun username ile manuel kayıtta stabil user id actor olarak kullanılır", async () => {
+    const { app, signUserToken, inflationService } = buildApp();
+    const res = await request(app)
+      .post("/api/admin/inflation-indices")
+      .set(authHeader(signUserToken, LONG_USERNAME_ADMIN))
+      .send({ month: "2026-07", value: 132.31 });
+
+    expect(res.status).toBe(201);
+    expect(inflationService.createManualIndexEntry).toHaveBeenCalledWith({
+      month: "2026-07",
+      value: 132.31,
+      actor: LONG_USERNAME_ADMIN.id
+    });
+  });
+
   test("bilinmeyen alan içeren body 400 ile reddedilir (mass-assignment koruması)", async () => {
     const { app, signUserToken } = buildApp();
     const res = await request(app)
@@ -181,6 +203,28 @@ describe("POST /api/admin/inflation-indices/bulk", () => {
       .send({ text: "2025-01\t2648.12" });
     expect(res.status).toBe(201);
   });
+
+  test("uzun username ile 19 satır bulk giriş user id ile servise iletilir", async () => {
+    const { app, signUserToken, inflationService } = buildApp();
+    const text = [
+      "2025-01 88.58", "2025-02 90.59", "2025-03 92.82", "2025-04 95.60",
+      "2025-05 97.06", "2025-06 98.40", "2025-07 100.42", "2025-08 102.47",
+      "2025-09 105.78", "2025-10 108.48", "2025-11 109.42", "2025-12 110.39",
+      "2026-01 115.73", "2026-02 119.16", "2026-03 121.47", "2026-04 126.55",
+      "2026-05 128.72", "2026-06 129.99", "2026-07 132.31"
+    ].join("\n");
+
+    const res = await request(app)
+      .post("/api/admin/inflation-indices/bulk")
+      .set(authHeader(signUserToken, LONG_USERNAME_ADMIN))
+      .send({ text });
+
+    expect(res.status).toBe(201);
+    expect(inflationService.createBulkManualIndexEntries).toHaveBeenCalledWith(
+      text,
+      LONG_USERNAME_ADMIN.id
+    );
+  });
 });
 
 describe("PATCH /api/admin/inflation-indices/:id/verify ve /reject", () => {
@@ -217,5 +261,30 @@ describe("PATCH /api/admin/inflation-indices/:id/verify ve /reject", () => {
       .send({ reason: "Yanlış girildi" });
     expect(res.status).toBe(200);
     expect(res.body.data.verificationStatus).toBe("REJECTED");
+  });
+
+  test("verify ve reject işlemleri uzun username yerine user id kullanır", async () => {
+    const { app, signUserToken, inflationService } = buildApp();
+    const headers = authHeader(signUserToken, LONG_USERNAME_ADMIN);
+
+    const verifyRes = await request(app)
+      .patch("/api/admin/inflation-indices/1/verify")
+      .set(headers);
+    const rejectRes = await request(app)
+      .patch("/api/admin/inflation-indices/2/reject")
+      .set(headers)
+      .send({ reason: "Yanlış girildi" });
+
+    expect(verifyRes.status).toBe(200);
+    expect(rejectRes.status).toBe(200);
+    expect(inflationService.verifyIndexRecord).toHaveBeenCalledWith({
+      id: "1",
+      actor: LONG_USERNAME_ADMIN.id
+    });
+    expect(inflationService.rejectIndexRecord).toHaveBeenCalledWith({
+      id: "2",
+      actor: LONG_USERNAME_ADMIN.id,
+      reason: "Yanlış girildi"
+    });
   });
 });
