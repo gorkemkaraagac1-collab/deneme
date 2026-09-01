@@ -6317,11 +6317,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const periodPayment =
         paymentAmounts[i];
 
+      // ANNUITY-DUE (ADVANCE) 1. ÖDEME DÜZELTMESİ (Görkem onayı,
+      // PROJECT_CONTEXT.md bölüm 33) — TFRS 16 başlangıç ölçümü
+      // (initialLiability/PV) advance ödemeyi zaten t=0'da,
+      // İSKONTOSUZ saymıştı (yukarıda: advance ⇒ exponent = index*
+      // stepMonths, ilk ödeme exponent=0). Üzerine bu dönem için de
+      // faiz işletmek zaman değerini ÇİFT SAYAR — advance'de 1.
+      // ödeme öncesi faiz TAHAKKUK ETMEZ, ödeme doğrudan anaparadan
+      // düşer. 2. ödemeden itibaren mevcut arrears formülü AYNEN
+      // doğrudur: annuity-due PV'den ilk (iskontosuz) ödeme
+      // çıkarıldığında kalan bakiye, matematiksel olarak kalan
+      // (n-1) ödemelik SIRADAN bir anüitenin PV'sine eşittir — bu
+      // yüzden son satır kendiliğinden ~0'a yakınsar (GC-01
+      // arrears'taki float toleransı ile aynı mertebede; ayrıca
+      // bkz. bölüm 33'teki empirik doğrulama). Arrears yolu
+      // (advance=false) bu dalı hiç görmez — davranışı BİREBİR
+      // korunur.
+      const isFirstAdvancePayment =
+        advance && i === 0;
+
       const interest =
-        openingLiability * periodRate;
+        isFirstAdvancePayment
+          ? 0
+          : openingLiability * periodRate;
 
       let principal =
-        periodPayment - interest;
+        isFirstAdvancePayment
+          ? Math.min(periodPayment, openingLiability)
+          : periodPayment - interest;
 
       if (principal < 0) {
         principal = 0;

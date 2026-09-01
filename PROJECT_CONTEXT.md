@@ -1261,26 +1261,22 @@ versiyon açar; `LATEST` işaretçisi hangisinin referans olduğunu tutar.
 Eski versiyonlar SİLİNMEZ. Kasıtlı bir davranış değişikliği yapıldığında
 yeni baseline yazılır ve gerekçesi BU BÖLÜME işlenir.
 
-## FAZ 0'IN ORTAYA ÇIKARDIĞI MEVCUT DAVRANIŞLAR (DÜZELTİLMEDİ)
+## FAZ 0'IN ORTAYA ÇIKARDIĞI DAVRANIŞLAR — DURUM
 
-Faz 0 kuralı gereği hiçbir production logic değiştirilmedi. Aşağıdakiler
-**refaktörün yarattığı sorunlar DEĞİL**, eski kodda hâlihazırda var olan ve
-şimdi görünür hale gelen davranışlardır. Golden baseline bunları OLDUĞU GİBİ
-dondurmuştur; refaktör sırasında bunların DEĞİŞMEMESİ beklenir.
+Faz 0 kuralı gereği başlangıçta hiçbir production logic değiştirilmedi.
+Aşağıdakiler refaktörün yarattığı sorunlar DEĞİLDİ, eski kodda hâlihazırda
+var olan ve golden baseline ile görünür hale gelen davranışlardı. (1) ve
+(2) o zamandan beri DÜZELTİLDİ (aşağıdaki "ADVANCE ÖDEME TIMING'İ" maddesi);
+(3) kasıtlı olarak Faz 4'e ertelendi; (4) hâlâ açık bir gözlem.
 
-**(1) Advance (peşin) ödemeli kontratlarda amortisman tablosu kapanmıyor**
-`INV-03` ihlali — GC-02, GC-04, GC-19. Son dönem kapanış yükümlülüğü sıfır
-değil (GC-02: 70.914 TL / 3,6 M TL kontrat; GC-19: 7,02 M TL).
-Gözlem [Kesin]: başlangıç yükümlülüğü (PV) advance konvansiyonuna göre DOĞRU
-hesaplanıyor (GC-01 arrears PV × (1+r) = GC-02 advance PV), ancak schedule
-faizi ödeme ÖNCESİ bakiye üzerinden işletiyor — yani PV advance, amortisman
-arrears varsayıyor. Kök neden hipotezi [Muhtemel]; düzeltmeden önce
-`calculateLeaseEngineImpl` içindeki faiz baz seçimi doğrulanmalı.
+**(1) ✅ DÜZELTİLDİ — Advance (peşin) ödemeli kontratlarda amortisman
+tablosu kapanmıyordu.** `INV-03` ihlali — GC-02, GC-04, GC-19. Ayrıntılı
+kök neden ve düzeltme için bkz. aşağıdaki "ADVANCE (PEŞİN) ÖDEME TIMING'İ"
+maddesi.
 
-**(2) GC-19: yıllık + advance kontratta dönem 1 roll-forward kimliği bozuk**
-`INV-01` ihlali, sapma 406.198 TL. Dönem 1'de `principal: 0` ve
-`closingLiability = openingLiability`; 12 aylık faiz satıra yazılıyor ama
-bakiyeye yansımıyor. (1) ile aynı aile olması muhtemel.
+**(2) ✅ DÜZELTİLDİ — GC-19: yıllık + advance kontratta dönem 1
+roll-forward kimliği bozuktu.** (1) ile aynı kök nedendi; aynı düzeltmeyle
+kapandı.
 
 **(3) Modification VE reassessment birlikte uygulanan kontratta iki kod yolu
 farklı yükümlülük veriyor** — `INV-11` ihlali, GC-18: 7.130.698 vs 8.364.857
@@ -1291,9 +1287,88 @@ sırası REASSESSED_SCHEDULE > MODIFIED_SCHEDULE > LEASE_SCHEDULE kullanırken,
 reassessment olan 7 kontratta iki yol BİREBİR aynı sonucu veriyor; sapma
 SADECE ikisi birlikte olduğunda çıkıyor. Hipotez [Muhtemel]:
 `buildReassessedSchedule()` önceki uygulanmış modification'ı yok sayıp
-orijinal kontrat şartlarından yeniden kuruyor. Faz 4'te bu iki yol
-birleştirilecek — birleştirmeden ÖNCE hangisinin doğru olduğuna karar
-verilmelidir.
+orijinal kontrat şartlarından yeniden kuruyor. **KASITLI OLARAK AÇIK
+BIRAKILDI — Faz 4.1'de düzeltilecek.**
+
+**KARAR (Görkem, Eylül 2026) — DOĞRU OLAN YOL:** `cfoBuildSchedule` /
+`buildReassessedSchedule`.
+
+Gerekçe (TFRS 16 / IFRS 16):
+- Modification (16.44–46) ve reassessment (16.39–43) SONRAKİ ÖLÇÜM
+  olaylarıdır; yükümlülük, olay tarihindeki taşıma tutarı üzerinden,
+  kalan ödemelerin PV'si ile revize edilir.
+- Geçmiş dönemler yeniden yazılmaz; sanki yeni ödeme/vade/oran baştan beri
+  varmış gibi tüm schedule'ı inception'dan yeniden kurmak (mevcut
+  `calculateLiabilitySplitAsOf` → `calculateLeaseEngine` yolunun yaptığı)
+  standarda aykırıdır — hata düzeltmesi/retrospektif restatement durumu
+  DEĞİLDİR.
+
+**ZAMANLAMA KARARI — FAZ 4.1'DE KALIYOR.** Gerekçe: (a) davranış
+değişikliği saf mekanik fazlarla (1-3) karıştırılmamalı; (b) Faz 3'ün 10
+hedef fonksiyonundan hiçbiri `cfoBuildSchedule`/`calculateLiabilitySplitAsOf`'a
+dokunmuyor — erteleme hiçbir fazı bloklamıyor; (c) Faz 4.1 zaten aynı
+bölgeyi (`cfoGetContractMetricsInternal` → `cfoBuildSchedule`) yeniden
+yazacak, tek atomik değişiklikte hem doğru yolu seçip hem konsolide etmek
+daha az riskli; (d) golden baseline GC-18'in YANLIŞ davranışını
+dondurduğu için Faz 1-3 sırasında kazara bir değişiklik olursa golden
+testi zaten kırmızı olur.
+
+**Faz 4.1 kapsamına eklenen iş:** `calculateLiabilitySplitAsOf` /
+`getScheduleAsOfReportingDate`'in, `cfoBuildSchedule` ile AYNI önceliği
+(REASSESSED_SCHEDULE > MODIFIED_SCHEDULE > LEASE_SCHEDULE) kullanacak
+şekilde düzeltilmesi. Düzeltme sonrası: (1) GC-18 için yeni baseline
+kaydı — bu maddenin referansıyla; (2) `INV-11` invariant'ının GC-18'de
+artık GEÇMESİ beklenir; miras listesinden çıkarılacak. **Kalan tek
+miras ihlali budur** (bkz. aşağıdaki "FAZ 0'IN ORTAYA ÇIKARDIĞI"
+bölümünün güncellenmiş durumu).
+
+---
+
+## ADVANCE (PEŞİN) ÖDEME TIMING'İ — DÜZELTİLDİ (Eylül 2026)
+
+**Bu madde (1) ve (2) numaralı bulguların GC-18'den FARKLI muamele
+görme gerekçesidir** — GC-18 Faz 4'e ertelenirken bu düzeltme **Faz 1
+başlamadan, Faz 0 kapanışında** yapıldı.
+
+**Neden farklı zamanlama:** GC-18'in bulunduğu kod Faz 1-3'ün hiçbir
+hedef fonksiyonunda değildi (erteleme bedelsizdi). Bu bug ise
+`calculateLeaseEngineImpl`'in TAM İÇİNDE — Faz 3'ün planlanan İLK ve EN
+DÜŞÜK RİSKLİ hedefi ("1. Saf hesaplama fonksiyonları önce"), ayrıca
+planın önerdiği bölünme şeklinde tam olarak `calculateAmortizationTable`
+adını alacak parçanın içinde. Faz 4'e ertelenseydi: Faz 3'te bu hatalı
+döngü extract-and-delegate ile aynen yeni bir fonksiyona taşınacak,
+sonra Faz 4'te YENİDEN bulunup düzeltilecekti — aynı satırı iki kez açma
+riski. Ayrıca kapsam GC-18'den çok daha geniş: GC-18 iki özelliğin nadir
+kesişimiyken, bu bug HER advance-timing kontratını (Türkiye'de sık
+kullanılan bir konvansiyon) etkiliyordu.
+
+**Kök neden [Kesin, doğrulandı]:** `calculateLeaseEngineImpl` schedule
+döngüsü (o zamanki satır ~6318), advance/arrears ayrımını YALNIZCA PV
+hesabında (`exponent` seçiminde) yapıyordu; amortisman döngüsünde
+(`interest = openingLiability * periodRate`) advance/arrears farkı
+YOKTU. Advance'de PV ilk ödemeyi t=0'da iskontosuz saymışken, döngü 1.
+dönemde de bu ödeme öncesi bir dönem faiz işletiyordu — zaman değerini
+çift sayıyordu. Yıllık advance'te (`periodRate` = 12 aylık bileşik oran)
+bu, 1. satırda büyük bir faiz tutarının bakiyeye hiç yansımadan
+(`principal` 0'a clamp'lenerek) kaybolmasına, dolayısıyla tüm zincirin
+şişmesine yol açıyordu (GC-19: son bakiye ~7,02 M TL, kapanmıyordu).
+
+**Düzeltme (annuity-due konvansiyonu):** Yalnızca `advance && i===0`
+durumunda: `interest=0`, `principal=min(payment, opening)`. 2. ödemeden
+itibaren MEVCUT arrears formülü değiştirilmeden kullanılıyor — çünkü
+annuity-due PV'den ilk (iskontosuz) ödeme çıkarıldığında kalan bakiye,
+matematiksel olarak kalan (n-1) ödemelik SIRADAN bir anüitenin PV'sine
+eşittir (kimlik doğrulandı). Bu yüzden **"son satırı zorla sıfırla"
+band-aid'i gerekmedi** — GC-02 son bakiye 6,46e-9 TL'ye (float
+toleransı, GC-01 arrears'la aynı mertebe), GC-19 son bakiye tam 0'a
+kendiliğinden yakınsadı. Arrears yolu (`advance===false`) bu dala hiç
+girmiyor — davranışı BİREBİR korundu (27/30 fixture golden'da hiç
+değişmedi).
+
+**Doğrulama:** Baseline invariant ihlalleri 5 → 1'e düştü (GC-02
+`INV-03`, GC-04 `INV-03`, GC-19 `INV-01`+`INV-03`, hepsi kapandı; yalnızca
+yukarıdaki GC-18 kaldı, o da kasıtlı erteleme). Tam Jest suite 396/396
+yeşil. Yeni baseline versiyonu yazıldı, gerekçesi burada.
 
 **KARAR (Görkem, Eylül 2026) — DOĞRU OLAN YOL:** `cfoBuildSchedule` /
 `buildReassessedSchedule`.
@@ -1344,8 +1419,11 @@ bu riski `calculateLeaseEngineImpl`'i doğrudan çağırarak baypas eder.
 |---|---|---|
 | 0.1 regresyon matrisi | ✅ | `matrix-coverage.test.js` 8/8 |
 | 0.2 golden-output baseline | ✅ | `golden-output.test.js` 5/5, baseline yazıldı |
-| 0.3 accounting invariants | ✅ | 379 kontrolden 374 geçer, 5 miras ihlali yukarıda |
+| 0.3 accounting invariants | ✅ | 379 kontrolden **378 geçer, 1 miras ihlali** (GC-18, kasıtlı Faz 4 ertelemesi) |
 | 0.4 Playwright smoke | ⚠️ KISMİ | config + stub + spec yazıldı, **gerçek tarayıcıda henüz koşulmadı** |
+
+Advance ödeme timing düzeltmesiyle birlikte tam Jest suite **396/396**
+yeşil (golden dahil).
 
 **Faz 1'e geçiş koşulu:** 0.4'ün `npx playwright install chromium` sonrası
 `npm run test:e2e` ile YEŞİL koşması. Spec dosyasının var olması yeterli
