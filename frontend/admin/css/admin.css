@@ -2,6 +2,21 @@
    Replaces the old blue admin skin while preserving every existing HTML class.
    No API, auth, AdminAPI, modal or business logic is changed.
 */
+/* DÜZELTME — admin panelinde "Save Changes" ve TÜM diğer birincil
+   butonlar GÖRÜNMÜYORDU.
+   `.btn-primary{background:var(--seal);color:#fff}` kuralı --seal
+   değişkenini kullanıyordu ama --seal :root'ta HİÇ TANIMLI DEĞİLDİ
+   (yalnızca açık tonu --seal-soft vardı). Tanımsız CSS değişkeni
+   geçersiz sayıldığı için background hiç uygulanmıyor (şeffaf
+   kalıyor), color:#fff ise uygulanıyordu — sonuç: BEYAZ modal
+   üzerinde BEYAZ yazı. Buton DOM'da vardı, yer kaplıyordu (bu yüzden
+   "Cancel" sola itilmiş görünüyordu) ve tıklanabilirdi; sadece
+   tamamen görünmezdi. 17 ayrı yerdeki .btn-primary kullanımının
+   tamamı etkileniyordu.
+   Değer mevcut paletten türetildi: --seal-soft:#F4DFDA açık tonu,
+   .btn-primary:hover{background:#752219} koyu tonu — ikisinin
+   arasındaki temel mühür kırmızısı.
+   Regresyon koruması: test/admin-css-variables.test.js */
 :root{
   --primary:#0B1326;
   --primary-light:#1B2A4A;
@@ -21,6 +36,7 @@
   --sidebar-width:252px;
   --header-height:66px;
   --paper:#EFE9D8;
+  --seal:#8F2A20;
   --seal-soft:#F4DFDA;
   --ok-soft:#E1EEE3;
   --warn-soft:#F5ECD6;
@@ -272,24 +288,13 @@ a{color:inherit}
 .status.failed{color:var(--danger);background:var(--seal-soft);border-radius:999px;padding:3px 7px}
 
 /* Prevent newly added wide content from breaking the page */
-.table-container{overflow-x:auto}
+.table-container,.modal{overflow-x:auto}
 .table-container table{max-width:none}
 
-/* DÜZELTME (Edit User modalında "Save Changes" görünmüyordu):
-   Buraya önceden `.modal{overflow-x:auto}` yazılmıştı. Bu, modalın
-   YATAY olarak kaydırılabilir olmasına yol açıyordu; `.modal-footer`
-   ise `justify-content:flex-end` kullandığı için butonları GÖRÜNÜR
-   alanın değil, TAŞAN İÇERİK genişliğinin sağına hizalıyordu.
-   Sonuç: "Cancel" ekranın ortasında görünüyor, ondan sonra gelen
-   "Save Changes" ise sağda, görünür alanın DIŞINDA kalıyordu —
-   kullanıcı kaydet butonunu hiç göremiyordu (özellikle dar/mobil
-   ekranlarda). Taşmanın kaynağı genellikle `<select multiple>`in
-   uzun option metinlerine göre genişlemesiydi.
-   Çözüm: modal yatayda taşmasın; içindeki form kontrolleri kendi
-   genişliğini aşmasın; footer gerekirse alt satıra sarsın (buton
-   asla görünmez olmasın). Gerçekten geniş içerik (tablolar) zaten
-   kendi `.table-container`ı içinde yatay kayabiliyor. */
-.modal{overflow-x:hidden}
+/* Savunma amaçlı (dar/mobil ekranlar): modal içindeki form
+   kontrolleri kendi genişliğini aşmasın, footer gerekirse alt
+   satıra sarsın — böylece aksiyon butonları asla erişilemez
+   duruma düşmez. */
 .modal input,.modal select,.modal textarea{max-width:100%}
 .modal-footer{flex-wrap:wrap}
 pre,code{font-family:var(--mono)}
