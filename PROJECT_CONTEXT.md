@@ -1420,11 +1420,85 @@ bu riski `calculateLeaseEngineImpl`'i doğrudan çağırarak baypas eder.
 | 0.1 regresyon matrisi | ✅ | `matrix-coverage.test.js` 8/8 |
 | 0.2 golden-output baseline | ✅ | `golden-output.test.js` 5/5, baseline yazıldı |
 | 0.3 accounting invariants | ✅ | 379 kontrolden **378 geçer, 1 miras ihlali** (GC-18, kasıtlı Faz 4 ertelemesi) |
-| 0.4 Playwright smoke | ⚠️ KISMİ | config + stub + spec yazıldı, **gerçek tarayıcıda henüz koşulmadı** |
+| 0.4 Playwright smoke | ✅ | `npm run test:e2e` 5/5, 3 ardışık koşumda kararlı (flaky değil) |
 
 Advance ödeme timing düzeltmesiyle birlikte tam Jest suite **396/396**
-yeşil (golden dahil).
+yeşil (golden dahil). Playwright smoke suite 5/5 yeşil.
 
-**Faz 1'e geçiş koşulu:** 0.4'ün `npx playwright install chromium` sonrası
-`npm run test:e2e` ile YEŞİL koşması. Spec dosyasının var olması yeterli
-değildir.
+**FAZ 0 TAMAMLANDI.** Faz 1'e (DRY — `core*` yardımcı birleştirmesi)
+geçilebilir.
+
+### 0.4 tarayıcı notu
+
+Bu ortamda `cdn.playwright.dev` ağ allowlist dışında olduğu için
+`playwright install` başarısız oluyor. `playwright.config.js`, sistemde
+hazır bulunan uyumlu bir Chromium ikilisini (`/opt/pw-browsers/chromium-1194`,
+Chromium 141.0.7390.37) `executablePath` ile kullanacak şekilde
+yapılandırıldı — `PLAYWRIGHT_CHROMIUM_PATH` env değişkeniyle geçersiz
+kılınabilir. Farklı bir makinede (`playwright install` çalışan) bu ayar
+gerekmez; `resolveLocalChromium()` hiçbir aday bulamazsa `undefined`
+döner ve Playwright kendi indirdiği tarayıcıyı kullanır.
+
+### 0.4'te düzeltilen selector/varsayım hataları (üretim kodu DEĞİL, yalnızca test)
+
+Gerçek tarayıcıda koşum, spec yazılırken yapılan birkaç yanlış varsayımı
+ortaya çıkardı — hepsi test tarafında düzeltildi:
+
+1. **`#company` bazen `<select>`** — `applySessionCompanyToForm()`
+   kullanıcının atanmış şirketleri varsa alanı select'e çeviriyor
+   (gerçek davranış, bkz. aşağıdaki "ÇOKLU ŞİRKET SEÇİCİSİ" maddesi).
+2. **`#contractId` ("Sözleşme ID") zorunlu bir alanmış**, ilk spec'te hiç
+   doldurulmuyordu — form `checkValidity()` sessizce false dönüyor,
+   submit hiçbir şey yapmıyordu.
+3. **Kayıt sonrası detay modalı OTOMATİK açılıyor** — spec'in "satıra
+   tıkla" adımı gereksizdi (ve `#detailModal` zaten açıkken satırı
+   engelliyordu).
+4. **`#detailTitle` görünür metni yalnızca "Şirket › SözleşmeID"** —
+   tedarikçi adı `title=""` HTML attribute'unda.
+5. **`#scheduleTableContainer` orfan/ölü bir statik div** — Faz B tab
+   konsolidasyonundan kalma, hiçbir kod onu hedeflemiyor (grep ile
+   doğrulandı). Gerçek ödeme planı `renderPaymentScheduleSection()`
+   tarafından `#scheduleTableBody` (tbody, "Ödeme Planı" tab paneli
+   içinde) içine render ediliyor — modal açılışında zaten DOM'da,
+   yalnızca CSS ile gizli.
+6. **`#exportReportHtmlButton` dosya İNDİRMİYOR** — `window.open()` ile
+   yeni sekme açıp HTML'i `document.write()` ile yazıyor (satır
+   ~26874). "download" event'i değil, "popup" event'i doğru beklenti.
+7. **`#downloadTemplateButton`, `#bulkImportModal` içinde** — önce
+   `#bulkImportButton` ile açılmalı.
+
+### ÇOKLU ŞİRKET SEÇİCİSİ — değerlendirme (Görkem sorusu, Eylül 2026)
+
+Soru: `#company`'nin bazen serbest metin input'u olması güvenlik açığı
+mı (kullanıcı atanmadığı bir şirket için veri girebilir mi)?
+
+**Değerlendirme [Kesin, `backend/routes/contracts.js` okunarak
+doğrulandı]: HAYIR, güvenlik açığı değil.** POST `/api/contracts`,
+body'deki `companyId`'yi `requireCompanyLicense` middleware'inin
+JWT'den türettiği `req.companyId` ile birebir karşılaştırıyor;
+uyuşmazsa `403 COMPANY_ACCESS_DENIED`. Frontend'de ne yapılırsa
+yapılsın, backend kullanıcının atanmadığı bir şirket için kayda izin
+vermiyor.
+
+Free-text input yalnızca `sessionCompanies.length === 0` durumunda
+(kullanıcıya hiç şirket atanmamış veya `/api/auth/me` başarısız olmuş)
+devreye giriyor. Bu durumda form dolduruluyormuş gibi görünüyor ama
+submit her zaman `companyId zorunludur` (400) ile reddediliyor —
+**veri sızıntısı değil, kötü UX**: kullanıcı formu eksiksiz
+doldurduğunu düşünüp anlamsız bir hatayla karşılaşıyor. Doğrusu, bu
+durumda formu hiç açmayıp "Hesabınıza atanmış şirket yok,
+yöneticinizle görüşün" mesajı göstermek. **Düzeltilmedi — düşük öncelik,
+Faz 2/UX iyileştirmesi adayı.**
+
+**Yan bulgu (bu soruyu araştırırken ortaya çıktı) — `id="companyId"`
+DOM'da İKİ KEZ var:** `applySessionCompanyToForm()`'un gizli input'u
+(satır ~584-589) ile V26 "Şirket (V26)" panelinin select'i
+(`injectV26CurrencyFields`, satır ~7798) aynı id'yi taşıyor. Gerçek
+tarayıcıda test edildi: gizli input doğru değeri tutuyor
+("E2E-CO-1"), V26 select'i hiç senkronize olmuyor, boş kalıyor.
+Etkisi kayıt yoluna DEĞİL (kaydetme doğru elemanı okuyor,
+`document.getElementById` DOM sırasına göre gizli input'u buluyor) —
+yalnızca V26 TMS21/TMS29 "otomatik tespit" önizleme paneli, muhtemelen
+sessizce yanlış (boş) companyId okuyor. **Düzeltilmedi — düşük önem
+(görüntüleme paneli, hesaplama/kayıt etkilenmiyor), Faz 2 (isimlendirme/
+duplicate-id temizliği) adayı.**

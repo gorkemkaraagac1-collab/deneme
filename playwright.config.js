@@ -21,9 +21,29 @@
  * dokunan bir test paketi güvenli değildir.
  */
 
+const fs = require("fs");
 const { defineConfig, devices } = require("@playwright/test");
 
 const PORT = Number(process.env.E2E_PORT || 4173);
+
+/**
+ * `playwright install` bu ortamda ağ allowlist'i nedeniyle başarısız
+ * oluyor (cdn.playwright.dev erişilemiyor). Sistemde hazır uyumlu bir
+ * Chromium ikilisi varsa onu kullanır. `PLAYWRIGHT_CHROMIUM_PATH` ile
+ * açıkça geçersiz kılınabilir. Hiçbiri yoksa `undefined` döner —
+ * Playwright kendi indirdiği tarayıcıyı kullanır (normal davranış).
+ */
+function resolveLocalChromium() {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  const candidates = [
+    "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+    "/opt/google/chrome/chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome"
+  ];
+  return candidates.find(p => fs.existsSync(p));
+}
 
 module.exports = defineConfig({
   testDir: "./e2e",
@@ -52,7 +72,19 @@ module.exports = defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] }
+      use: {
+        ...devices["Desktop Chrome"],
+        // Bu ortamda cdn.playwright.dev ağ allowlist dışında —
+        // `playwright install` başarısız olur. Sistemde hazır duran
+        // uyumlu bir Chromium ikilisi (141.0.7390.37) varsa onu
+        // kullan; yoksa (örn. CI/production makinesi) Playwright
+        // kendi indirdiği tarayıcıyı kullanır (executablePath undefined
+        // olur ve varsayılan davranışa döner).
+        launchOptions: {
+          executablePath: resolveLocalChromium(),
+          args: ["--no-sandbox"]
+        }
+      }
     }
   ],
 
