@@ -30295,7 +30295,44 @@ document.addEventListener("DOMContentLoaded", () => {
       gkApplyDetailTab,
       v191ApplyPeriod,
       v191ResetPeriod,
-      contracts
+      contracts,
+
+      /* ------------------------------------------------------
+         FAZ 0.2 — GOLDEN-OUTPUT BASELINE HEDEF FONKSİYONLARI
+         (ADDITIVE — yalnızca export listesine eklendi, hiçbir
+         fonksiyonun gövdesine dokunulmadı.)
+
+         Refaktör planının Faz 0.2 maddesi bu 6 fonksiyonun
+         çıktısını dondurmayı gerektiriyor; bunlar bugüne kadar
+         shim üzerinden test-erişilebilir DEĞİLDİ. calculateLease-
+         EngineImpl ayrıca cache'i bypass ederek ham (deterministik)
+         çıktı almayı mümkün kılar — calculateLeaseEngine cache
+         dönerse aynı referans geldiği için golden karşılaştırma
+         yanıltıcı olabilirdi.
+         ------------------------------------------------------ */
+      calculateLeaseEngineImpl,
+      calculateLiabilitySplitAsOf,
+      generateModificationJournal,
+      generateReassessmentJournal,
+      getCfoContractMetrics,
+      runContractControls,
+
+      // Faz 4 (performans) ölçümü ve invariant doğrulaması için
+      // gereken CFO toplayıcıları — yine yalnızca export.
+      getTotalLeaseLiability,
+      getCurrentLeaseLiability,
+      getNonCurrentLeaseLiability,
+      getTotalRuoAssets,
+
+      // Golden harness'in global `contracts` dizisini yerinde
+      // (in-place) tohumlayabilmesi için. Diziyi YENİDEN ATAMAZ —
+      // closure değişkenini bozmaz, sadece içeriğini değiştirir.
+      __seedContractsForTest(list) {
+        contracts.length = 0;
+        (Array.isArray(list) ? list : []).forEach(item => contracts.push(item));
+        try { clearCalculationCache(); } catch (_) {}
+        return contracts.length;
+      }
     };
   } catch (error) {
     console.error("Test export shim error:", error);
