@@ -1,7 +1,7 @@
 FROM node:18-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --only=production
-COPY . .
+RUN npm ci --omit=dev
+COPY backend ./backend
 EXPOSE 8080
-CMD ["node", "app.js"]
+CMD ["node", "backend/server.js"]

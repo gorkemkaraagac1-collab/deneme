@@ -70,3 +70,40 @@ CREATE TABLE IF NOT EXISTS user_companies (
     PRIMARY KEY (user_id, company_id)
 );
 CREATE INDEX IF NOT EXISTS idx_user_companies_user ON user_companies(user_id);
+
+-- ==========================================================
+-- TMS 29 — ENFLASYON ENDEKS TABLOSU
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS tms29_indices (
+    id VARCHAR(50) PRIMARY KEY,
+    index_type VARCHAR(30) NOT NULL DEFAULT 'CPI',
+    index_month VARCHAR(7) NOT NULL,
+    index_value DECIMAL(18,6) NOT NULL,
+    source VARCHAR(100) NOT NULL DEFAULT 'TÜİK',
+    source_url TEXT,
+    retrieved_at TIMESTAMP,
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by VARCHAR(50),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_tms29_index_value
+        CHECK (index_value > 0),
+
+    CONSTRAINT chk_tms29_index_month
+        CHECK (index_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_tms29_indices_type_month
+ON tms29_indices(index_type, index_month);
+
+CREATE INDEX IF NOT EXISTS
+    idx_tms29_indices_month
+ON tms29_indices(index_month);
+
+CREATE INDEX IF NOT EXISTS
+    idx_tms29_indices_verified
+ON tms29_indices(is_verified);
+
