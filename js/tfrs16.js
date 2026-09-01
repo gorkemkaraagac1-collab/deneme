@@ -11579,6 +11579,18 @@ document.addEventListener("DOMContentLoaded", () => {
         ${v26StdHtml}
         ${lockBannerHtml}
 
+        <div class="gk-detail-tabs" role="tablist">
+          <button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="schedule" role="tab">Ödeme Planı</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="modification" role="tab">Modifikasyon &amp; Reassessment</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="slb" role="tab">Satış ve Geri Kiralama</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="sublease" role="tab">Alt Kiralama</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="accounting" role="tab">Fişler</button>
+          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="audit" role="tab">Denetim İzi</button>
+        </div>
+
+        <div class="gk-detail-tab gk-detail-tab-active" data-detail-tab="summary">
+
         <div class="detail-grid">
 
           <div class="detail-item">
@@ -11674,50 +11686,70 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
 
-        <!-- Modifikasyon & Reassessment BURADAN KALDIRILDI (onaylı plan):
-             artık ayrı bir "Modifikasyon & Reassessment" sayfasında,
-             sözleşme seçici ile yönetiliyor. Bkz. renderModificationReassessmentPage
-             ve dashboard.html'deki "Hesaplama & Yeniden Ölçüm" linki. -->
+        <!-- FAZ B: sözleşme detayı artık TAB'lara bölünmüş. Yukarıdaki
+             .detail-grid "Özet" tab'ının içeriği; aşağıdaki her blok
+             kendi tab'ına ait. Modifikasyon & Reassessment / SLB /
+             Alt Kiralama, önceki fazlarda sidebar'a taşınmış AYRI
+             sayfalardan (her biri KENDİ sözleşme seçicisiyle) buraya
+             GERİ getirildi — dört ayrı, senkronize olmayan seçici
+             (v26SelectedModReassContractId, v26SelectedSlbContractId,
+             v26SelectedSubleaseContractId, v26SelectedAccountingContractId)
+             sorunu böylece kökünden çözüldü: TEK sözleşme seçimi
+             (openDetail'in id'si) tüm tab'lar için geçerli.
+             Render/iş mantığı fonksiyonlarının KENDİSİNE dokunulmadı. -->
+        </div><!-- /gk-detail-tab[summary] -->
 
+        <div class="gk-detail-tab" data-detail-tab="schedule">
+          ${renderPaymentScheduleSection(
+            contract
+          )}
 
-        <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
-          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div>
-          <h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3>
-          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p>
-          <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;">
-            <label style="font-size:11px;color:#64748b;font-weight:600;">Sunum Para Birimi<select id="auditPresentationCurrency" style="display:block;margin-top:4px;padding:7px;border:1px solid #d1d5db;border-radius:7px;">${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}</select></label>
-            <button type="button" id="exportContractAuditTrailButton" class="secondary-button">↓ Denetim İzini Dışa Aktar</button>
-          </div>
+          ${engine.exempt ? `
+            <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px 16px;">
+              <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
+              <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
+                Bu sözleşme kısa vadeli ve/veya düşük değerli varlık istisnası kapsamında işaretlenmiştir.
+                Kullanım hakkı varlığı ve kiralama yükümlülüğü tanınmaz; ödemeler kira süresi boyunca
+                genellikle doğrusal (straight-line) esasa göre gider olarak muhasebeleştirilir. Bu nedenle
+                bir "ilk muhasebeleştirme fişi" üretilmez.
+              </p>
+            </div>
+          ` : renderJournalEntry(
+            "İlk Muhasebeleştirme Fişi",
+            generateInitialEntry(
+              contract
+            )
+          )}
         </div>
 
+        <div class="gk-detail-tab" data-detail-tab="modification">
+          ${renderModificationManagementSection(contract)}
+          ${renderReassessmentManagementSection(contract)}
+        </div>
 
-        ${renderPaymentScheduleSection(
-          contract
-        )}
+        <div class="gk-detail-tab" data-detail-tab="slb">
+          <div id="slbSectionContainer"></div>
+        </div>
 
+        <div class="gk-detail-tab" data-detail-tab="sublease">
+          <div id="subleaseSectionContainer"></div>
+        </div>
 
-        ${engine.exempt ? `
-          <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px 16px;">
-            <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
-            <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
-              Bu sözleşme kısa vadeli ve/veya düşük değerli varlık istisnası kapsamında işaretlenmiştir.
-              Kullanım hakkı varlığı ve kiralama yükümlülüğü tanınmaz; ödemeler kira süresi boyunca
-              genellikle doğrusal (straight-line) esasa göre gider olarak muhasebeleştirilir. Bu nedenle
-              bir "ilk muhasebeleştirme fişi" üretilmez.
-            </p>
+        <div class="gk-detail-tab" data-detail-tab="accounting">
+          ${renderAccountingCenter(contract)}
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="audit">
+          <div style="margin-top:8px;">
+            <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div>
+            <h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3>
+            <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p>
+            <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;">
+              <label style="font-size:11px;color:#64748b;font-weight:600;">Sunum Para Birimi<select id="auditPresentationCurrency" style="display:block;margin-top:4px;padding:7px;border:1px solid #d1d5db;border-radius:7px;">${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}</select></label>
+              <button type="button" id="exportContractAuditTrailButton" class="secondary-button">↓ Denetim İzini Dışa Aktar</button>
+            </div>
           </div>
-        ` : renderJournalEntry(
-          "İlk Muhasebeleştirme Fişi",
-          generateInitialEntry(
-            contract
-          )
-        )}
-
-        <!-- Muhasebe Fiş Merkezi (renderAccountingCenter) BURADAN
-             KALDIRILDI (onaylı plan, aynı desen): artık ayrı bir
-             "Toplu Fiş Merkezi" sayfasında, sözleşme seçici ile
-             yönetiliyor. Bkz. renderAccountingCenterPage ve
-             dashboard.html'deki link. -->
+        </div>
 
       `;
     }
@@ -11744,9 +11776,75 @@ document.addEventListener("DOMContentLoaded", () => {
           contract
         );
 
+        // FAZ B: sözleşme detayına GERİ getirilen bölümlerin event
+        // wiring'i. Bu fonksiyonların KENDİSİNE dokunulmadı — yalnızca
+        // burada (tek sözleşme bağlamında) tekrar bağlanıyorlar.
+        // onChanged callback'i openDetail(contract.id) ile aynı
+        // sözleşmeyi yeniden açar; aktif tab korunur (aşağıdaki
+        // gkDetailActiveTab).
+        const reopenSameContract = () => openDetail(contract.id);
+
+        initModificationEvents(contract, reopenSameContract);
+        initReassessmentEvents(contract, reopenSameContract);
+
+        // SLB/Sublease kendi container'larını (slbSectionContainer /
+        // subleaseSectionContainer — yukarıda tab içine yerleştirildi)
+        // doldurur ve kendi event'lerini bağlar.
+        if (typeof renderSlbSection === "function") renderSlbSection(contract);
+        if (typeof renderSubleaseSection === "function") renderSubleaseSection(contract);
+
+        // Fişler tab'ı (renderAccountingCenter) — tekil fiş üretimi ve
+        // portföy geneli toplu fiş.
+        document.getElementById("generateJournal")
+          ?.addEventListener("click", () => generateSelectedJournal(contract));
+        document.getElementById("openBulkJournalButton")
+          ?.addEventListener("click", openBulkJournalModal);
+
+        // Tab geçişleri.
+        document.querySelectorAll("#detailContent .gk-detail-tab-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            gkDetailActiveTab = btn.dataset.detailTabTarget;
+            gkApplyDetailTab();
+          });
+        });
+
+        // Bir işlem sonrası openDetail tekrar çağrıldığında kullanıcının
+        // bulunduğu tab'a geri dön (yoksa Özet'te kalır).
+        gkApplyDetailTab();
+
       },
       0
     );
+  }
+
+  /* ==========================================================
+     FAZ B — SÖZLEŞME DETAYI TAB YÖNETİMİ
+     ----------------------------------------------------------
+     Modül seviyesinde tutulur (openDetail dışında) ki bir
+     modification/reassessment/SLB kaydedildikten sonra openDetail
+     yeniden çağrıldığında kullanıcı AYNI tab'da kalsın — aksi
+     halde her kayıtta "Özet"e geri fırlardı.
+  ========================================================== */
+  let gkDetailActiveTab = "summary";
+
+  function gkApplyDetailTab() {
+    const root = document.getElementById("detailContent");
+    if (!root) return;
+
+    const panels = root.querySelectorAll(".gk-detail-tab");
+    // Hedef tab DOM'da yoksa (ör. eski bir state) Özet'e düş.
+    const exists = Array.from(panels).some(p => p.dataset.detailTab === gkDetailActiveTab);
+    if (!exists) gkDetailActiveTab = "summary";
+
+    panels.forEach(panel => {
+      panel.classList.toggle("gk-detail-tab-active", panel.dataset.detailTab === gkDetailActiveTab);
+    });
+
+    root.querySelectorAll(".gk-detail-tab-btn").forEach(btn => {
+      const isActive = btn.dataset.detailTabTarget === gkDetailActiveTab;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
   }
 
 
@@ -28830,6 +28928,16 @@ document.addEventListener("DOMContentLoaded", () => {
       .gk-contract-tab { border:0; background:transparent; padding:9px 14px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
       .gk-contract-tab:hover { color:#0f172a; }
       .gk-contract-tab.active { color:#0f172a; border-bottom-color:#0f172a; }
+      /* FAZ B — sözleşme detay modalı tab'ları (Özet / Ödeme Planı /
+         Modifikasyon & Reassessment / SLB / Alt Kiralama / Fişler /
+         Denetim İzi). injectV26Styles hem tfrs16.html hem dashboard'da
+         çalıştığı için tek yerde tanımlanır. */
+      .gk-detail-tabs { display:flex; gap:2px; flex-wrap:wrap; margin:0 0 18px; border-bottom:1px solid #e5e7eb; }
+      .gk-detail-tab-btn { border:0; background:transparent; padding:9px 13px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; font-family:inherit; }
+      .gk-detail-tab-btn:hover { color:#0f172a; }
+      .gk-detail-tab-btn.active { color:#0f172a; border-bottom-color:#0f172a; }
+      .gk-detail-tab { display:none; }
+      .gk-detail-tab.gk-detail-tab-active { display:block; }
       .form-grid [data-tab]:not(.gk-tab-active) { display:none !important; }
       .form-grid [data-tab].gk-tab-active { display:block; }
     `;
@@ -30136,6 +30244,8 @@ document.addEventListener("DOMContentLoaded", () => {
       renderGroupManagementPage,
       renderEliminationManagementPage,
       renderFinancialReportingPage,
+      openDetail,
+      gkApplyDetailTab,
       v191ApplyPeriod,
       v191ResetPeriod,
       contracts
