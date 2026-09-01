@@ -171,6 +171,26 @@ describe("createBulkManualIndexEntries", () => {
     expect(Object.values(table).every(r => r.verification_status === "PENDING")).toBe(true);
   });
 
+  test("19 aylık bulk giriş PENDING oluşur ve retrieved_by stabil user id taşır", async () => {
+    const actorId = "u-stable-id";
+    const text = [
+      "2025-01 88.58", "2025-02 90.59", "2025-03 92.82", "2025-04 95.60",
+      "2025-05 97.06", "2025-06 98.40", "2025-07 100.42", "2025-08 102.47",
+      "2025-09 105.78", "2025-10 108.48", "2025-11 109.42", "2025-12 110.39",
+      "2026-01 115.73", "2026-02 119.16", "2026-03 121.47", "2026-04 126.55",
+      "2026-05 128.72", "2026-06 129.99", "2026-07 132.31"
+    ].join("\n");
+
+    const result = await service.createBulkManualIndexEntries(text, actorId);
+    const records = Object.values(table);
+
+    expect(result.created).toHaveLength(19);
+    expect(result.skipped).toEqual([]);
+    expect(records).toHaveLength(19);
+    expect(records.every(r => r.verification_status === "PENDING")).toBe(true);
+    expect(records.every(r => r.retrieved_by === actorId)).toBe(true);
+  });
+
   test("içinde geçersiz satır varsa (parse aşamasında) HİÇBİR şey DB'ye yazılmaz", async () => {
     const text = "2025-01\t2648.12\n2025-13\tabc";
     await expect(service.createBulkManualIndexEntries(text, "admin-1")).rejects.toThrow(service.BulkInputParseError);
