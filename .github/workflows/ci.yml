@@ -22,7 +22,7 @@ jobs:
         run: npm install
         
       - name: Lint check (ESLint)
-        run: npx eslint tfrs16.js --max-warnings=0
+        run: npm run lint
         
       - name: Run tests
         run: npm test
