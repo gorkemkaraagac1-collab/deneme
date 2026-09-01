@@ -205,31 +205,22 @@ describe("applyTMS29Restatement — motor davranışı DEĞİŞMEDİ (regresyon)
     expect(Math.abs(restatement.totals.liabilityMonetaryGainLoss)).toBeLessThanOrEqual(0.01);
   });
 
-  test("runSelfTestsV19FullTms29 (mevcut TMS 29 self-test paketi) — Vaka 5 dışındaki tüm vakalar geçiyor", async () => {
+  test("runSelfTestsV19FullTms29 (mevcut TMS 29 self-test paketi) hâlâ TAMAMEN geçiyor", async () => {
     // Bu fonksiyon artık async (createModification/createReassessment
     // backend'e yazmayı beklediği için) — bkz. PROJECT_CONTEXT.md
     // bölüm 23 madde 14/15.
+    //
+    // ÖNCEDEN burada "Vaka 5 hariç" istisnası vardı. Vaka 5 ÇÖZÜLDÜ:
+    // sorun motorda değil, self-test'in kendi karşılaştırmasındaydı —
+    // generateInflationAdjustmentJournal() sonda applyAccountMappingToJournal()
+    // çağırıp `account` alanını tam etiketten ("580 Geçmiş Yıllar
+    // Zararları") hesap koduna ("580") çeviriyor (hesap planı eşleme
+    // özelliği, DOĞRU davranış), ama test dönüşüm sonrası çıktıyı
+    // dönüşüm öncesi TFRS29_ACCOUNTS sabitleriyle karşılaştırıyordu.
+    // Karşılaştırma accountKey üzerinden yapılacak şekilde düzeltildi.
+    // Artık istisna YOK — paketin TAMAMI geçmeli.
     const results = await tfrs16.runSelfTestsV19FullTms29();
     const failed = results.filter(r => !r.pass);
-
-    // BİLİNEN, ÖNCEDEN VAR OLAN SORUN (bu oturumdaki değişikliklerden
-    // BAĞIMSIZ): "Vaka 5 — açılış/dönem içi ayrıştırması" alt vakaları
-    // fail ediyor. Bu, ORİJİNAL (hiç değiştirilmemiş) js/tfrs16.js ile
-    // de doğrulandı — git geçmişindeki sürüm çalıştırılıp aynı Vaka 5
-    // hatalarının çıktığı teyit edildi. Yani bir REGRESYON DEĞİL,
-    // motorda önceden beri var olan bir hesaplama/beklenti uyuşmazlığı.
-    //
-    // Test bunu SESSİZCE GEÇMİYOR: Vaka 5 DIŞINDAKİ her vakanın
-    // geçtiğini kesin olarak doğruluyor. Böylece bu dosya gerçek bir
-    // regresyonu (Vaka 1-4 veya başka bir vakanın bozulması) yakalamaya
-    // devam eder. Vaka 5'in kendisi ayrı bir iş olarak ele alınmalı
-    // (bkz. PROJECT_CONTEXT.md — açık teknik borç).
-    const nonVaka5Failures = failed.filter(r => !/Vaka 5/.test(r.name));
-    expect(nonVaka5Failures).toEqual([]);
-
-    // Vaka 5'in hâlâ bilinen durumda olduğunu da kayda geçiriyoruz —
-    // eğer bir gün düzeltilirse bu test kırılır ve yukarıdaki notun
-    // güncellenmesi gerektiği anlaşılır (kasıtlı "bilinçli kırılma").
-    expect(failed.length).toBeGreaterThan(0);
+    expect(failed).toEqual([]);
   });
 });
