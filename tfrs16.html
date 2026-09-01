@@ -463,9 +463,9 @@
     </div>
 
     <div class="detail-actions" style="margin-top: 20px;">
-      <button id="applyEarlyPaymentButton" class="secondary-button" type="button" onclick="const amt=prompt('Erken ödeme tutarı:'); if(amt===null)return; const dt=prompt('Ödeme tarihi (YYYY-MM-DD):', new Date().toISOString().slice(0,10)); if(dt===null)return; window.GK_TFRS16.applyEarlyPayment(selectedContractId, amt, dt);">⏱ Erken Ödeme Uygula</button>
-      <button id="exportReportPdfButton" class="secondary-button" type="button" onclick="window.GK_TFRS16.exportReport(selectedContractId, 'pdf');">↓ Raporu PDF İndir</button>
-      <button id="exportReportHtmlButton" class="secondary-button" type="button" onclick="window.GK_TFRS16.exportReport(selectedContractId, 'html');">↗ Raporu HTML Aç</button>
+      <button id="applyEarlyPaymentButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(!cid)return; const amt=prompt('Erken ödeme tutarı:'); if(amt===null)return; const dt=prompt('Ödeme tarihi (YYYY-MM-DD):', new Date().toISOString().slice(0,10)); if(dt===null)return; window.GK_TFRS16.applyEarlyPayment(cid, amt, dt);">⏱ Erken Ödeme Uygula</button>
+      <button id="exportReportPdfButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'pdf');">↓ Raporu PDF İndir</button>
+      <button id="exportReportHtmlButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'html');">↗ Raporu HTML Aç</button>
       <button id="deleteContract" class="danger-button" type="button">Sözleşmeyi Sil</button>
       <button id="detailCloseButton" class="secondary-button" type="button">Kapat</button>
     </div>
