@@ -11554,8 +11554,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     if (title) {
-      title.textContent =
-        contract.id;
+      // FAZ C: başlıkta sadece sözleşme ID'si vardı — kullanıcı hangi
+      // şirketin/tedarikçinin sözleşmesine baktığını göremiyordu.
+      // Artık "Şirket › Sözleşme ID" biçiminde bir bağlam satırı.
+      const contextParts = [contract.company, contract.id].filter(Boolean);
+      title.textContent = contextParts.join(" › ");
+      title.title = [contract.company, contract.supplier, contract.id]
+        .filter(Boolean).join(" — ");
     }
 
 
@@ -26918,7 +26923,16 @@ document.addEventListener("DOMContentLoaded", () => {
     exportReport,
     showLoading,
     hideLoading,
-    updateLoadingProgress
+    updateLoadingProgress,
+    // FAZ C DÜZELTMESİ: detay modalındaki inline onclick'ler
+    // (Erken Ödeme / PDF / HTML export) `selectedContractId`
+    // değişkenini ÇIPLAK bir global gibi kullanıyordu — ama o
+    // değişken bu IIFE closure'ının İÇİNDE, window'a hiç
+    // açılmamıştı. Yani o üç buton HER ZAMAN ReferenceError ile
+    // sessizce patlıyordu (tfrs16.html'de de). Artık
+    // GK_TFRS16.getSelectedContractId() üzerinden erişiliyor ve
+    // butonların onclick'leri buna göre güncellendi.
+    getSelectedContractId: () => selectedContractId
   });
 
 
@@ -28938,6 +28952,23 @@ document.addEventListener("DOMContentLoaded", () => {
       .gk-detail-tab-btn.active { color:#0f172a; border-bottom-color:#0f172a; }
       .gk-detail-tab { display:none; }
       .gk-detail-tab.gk-detail-tab-active { display:block; }
+      /* FAZ C: sözleşme detay modalı dashboard'a da eklendiği için
+         (önceden yalnızca tfrs16.html'de vardı) bu class'lar da
+         css/tfrs16.css'ten buraya kopyalandı — dashboard o dosyayı
+         yüklemiyor. css/tfrs16.css'e DOKUNULMADI. */
+      .detail-modal { width:min(900px,100%); }
+      .detail-content { font-size:13px; }
+      .detail-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+      .detail-item { background:#f8fafc; border-radius:9px; padding:12px; }
+      .detail-item span { display:block; color:#64748b; font-size:9px; }
+      .detail-item strong { display:block; margin-top:5px; font-size:14px; }
+      .detail-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:22px; flex-wrap:wrap; }
+      .danger-button { border:1px solid #fecaca; background:#fef2f2; color:#b91c1c; }
+      .danger-button:hover { background:#fecaca; }
+      .empty-state { text-align:center; padding:40px 20px; }
+      .empty-state h3 { font-size:15px; margin:0 0 6px; }
+      .empty-state p { color:#64748b; font-size:12px; margin:0; }
+      @media (max-width:768px) { .detail-grid { grid-template-columns:1fr; } }
       .form-grid [data-tab]:not(.gk-tab-active) { display:none !important; }
       .form-grid [data-tab].gk-tab-active { display:block; }
     `;
