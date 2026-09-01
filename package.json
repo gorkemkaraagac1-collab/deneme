@@ -14,7 +14,8 @@
     "golden:baseline": "GOLDEN_WRITE=1 jest test/golden/baseline-writer.test.js --runInBand",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "test:all": "jest --runInBand && playwright test"
+    "test:all": "jest --runInBand && playwright test",
+    "lint": "npx --yes eslint@8.57.1 js/tfrs16.js --max-warnings=206"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

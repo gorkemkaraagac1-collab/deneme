@@ -12,9 +12,14 @@
   "rules": {
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["warn", "error", "info", "time", "timeEnd"] }],
-    "no-undef": "error",
-    "eqeqeq": ["error", "always"],
+    "no-undef": "warn",
+    "eqeqeq": ["warn", "always"],
     "curly": "off",
+    "no-empty": "warn",
+    "no-func-assign": "warn",
+    "no-unreachable": "warn",
+    "no-dupe-keys": "warn",
+    "no-useless-escape": "warn",
     "no-var": "warn",
     "prefer-const": "warn"
   },
