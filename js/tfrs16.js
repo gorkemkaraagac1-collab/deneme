@@ -28228,20 +28228,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const openingLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING");
       const periodLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_PERIOD");
+
+      // DÜZELTME (Vaka 5 — uzun süredir başarısız olan self-test):
+      // generateInflationAdjustmentJournal() en sonda
+      // applyAccountMappingToJournal() çağırıyor ve bu, accountKey
+      // üzerinden `account` alanını TAM ETİKETTEN ("580 Geçmiş Yıllar
+      // Zararları") HESAP KODUNA ("580") dönüştürüyor — bu, hesap planı
+      // eşleme (V19) özelliğinin ta kendisi ve DOĞRU davranış
+      // (kullanıcı kendi hesap kodunu tanımlayabilsin diye).
+      // Test ise dönüşüm SONRASI çıktıyı, dönüşüm ÖNCESİ sabitlerle
+      // (TFRS29_ACCOUNTS.*) karşılaştırıyordu — bu karşılaştırma ASLA
+      // eşleşemezdi. Yani MOTOR DEĞİL, TESTİN KENDİSİ hatalıydı:
+      // matematik (kimlik + jurnal dengesi) ve çapraz-bulaşma
+      // kontrolleri zaten hep PASS veriyordu.
+      // Çözüm: karşılaştırma artık accountKey üzerinden yapılıyor —
+      // hesap KODU kullanıcı tarafından değiştirilse bile (mapping
+      // özelliği), semantik anlam (hangi hesaba gittiği) korunur.
       const openingHitsCorrectAccount = assertTrue(
         "Vaka 5 — açılış bileşeni yalnızca 580/590 hesaplarında",
         openingLines.length > 0 &&
-          openingLines.every(j => j.account === TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity || j.account === TFRS29_ACCOUNTS.monetaryPositionOffset)
+          openingLines.every(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity" || j.accountKey === "monetaryPositionOffset")
       );
       const periodHitsCorrectAccount = assertTrue(
         "Vaka 5 — dönem içi bileşen yalnızca 698.02/590 hesaplarında",
         periodLines.length > 0 &&
-          periodLines.every(j => j.account === TFRS29_ACCOUNTS.liabilityMonetaryGainLoss || j.account === TFRS29_ACCOUNTS.monetaryPositionOffset)
+          periodLines.every(j => j.accountKey === "liabilityMonetaryGainLoss" || j.accountKey === "monetaryPositionOffset")
       );
       const noCrossContamination = assertTrue(
         "Vaka 5 — 580 hesabı dönem içi satırlarında, 698.02 açılış satırlarında GEÇMİYOR",
-        !openingLines.some(j => j.account === TFRS29_ACCOUNTS.liabilityMonetaryGainLoss) &&
-          !periodLines.some(j => j.account === TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity)
+        !openingLines.some(j => j.accountKey === "liabilityMonetaryGainLoss") &&
+          !periodLines.some(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity")
       );
 
       vaka5Pass = identityOk && journalBalanced && openingHitsCorrectAccount && periodHitsCorrectAccount && noCrossContamination;
