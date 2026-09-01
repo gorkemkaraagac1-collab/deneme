@@ -2784,7 +2784,7 @@ router.post('/inflation-indices', requireAuth, requireAdmin, adminMutationRateLi
         }
 
         const { month, value } = req.body || {};
-        const actor = req.user.username || req.user.id;
+        const actor = String(req.user.id);
 
         const result = await createManualIndexEntry({ month, value, actor });
 
@@ -2824,7 +2824,7 @@ router.post('/inflation-indices/bulk', requireAuth, requireAdmin, adminMutationR
             return res.status(400).json({ success: false, error: 'text alanı zorunludur ve boş olamaz.' });
         }
 
-        const actor = req.user.username || req.user.id;
+        const actor = String(req.user.id);
         const result = await createBulkManualIndexEntries(text, actor);
 
         return res.status(201).json({ success: true, data: result });
@@ -2845,7 +2845,7 @@ router.post('/inflation-indices/bulk', requireAuth, requireAdmin, adminMutationR
 // PATCH /api/admin/inflation-indices/:id/verify
 router.patch('/inflation-indices/:id/verify', requireAuth, requireAdmin, adminMutationRateLimiter, async (req, res) => {
     try {
-        const actor = req.user.username || req.user.id;
+        const actor = String(req.user.id);
         const record = await verifyIndexRecord({ id: req.params.id, actor });
 
         return res.json({
@@ -2879,7 +2879,7 @@ router.patch('/inflation-indices/:id/reject', requireAuth, requireAdmin, adminMu
             return res.status(400).json({ success: false, error: fieldError });
         }
 
-        const actor = req.user.username || req.user.id;
+        const actor = String(req.user.id);
         const reason = req.body && typeof req.body.reason === 'string' ? req.body.reason : null;
 
         const record = await rejectIndexRecord({ id: req.params.id, actor, reason });
