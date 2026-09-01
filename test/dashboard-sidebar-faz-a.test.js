@@ -35,12 +35,16 @@ function sidebarSection() {
 }
 
 describe("Sidebar grup yapısı — 5 mantıksal grup", () => {
-  test("beş grup başlığı da mevcut ve doğru sırada", () => {
+  test("dört grup başlığı da mevcut ve doğru sırada", () => {
+    // FAZ B GÜNCELLEMESİ: "Sözleşme İşlemleri" grubu KALDIRILDI —
+    // içindeki üç modül (Modifikasyon & Reassessment / SLB / Alt
+    // Kiralama) sözleşme detay ekranına TAB olarak geri taşındı
+    // (bkz. test/contract-detail-tabs-faz-b.test.js). Bu, dört ayrı
+    // senkronize olmayan sözleşme seçici sorununu çözdü.
     const nav = sidebarSection();
     const labels = [...nav.matchAll(/<div class="side-group-label">(.*?)<\/div>/g)].map(m => m[1]);
     expect(labels).toEqual([
       "Genel",
-      "Sözleşme İşlemleri",
       "Raporlama",
       "Kapanış &amp; Kontrol",
       "Tanımlar"
@@ -55,14 +59,17 @@ describe("Sidebar grup yapısı — 5 mantıksal grup", () => {
     expect(linkCount).toBe(2);
   });
 
-  test("tüm 16 modül linki hâlâ mevcut (hiçbir modül kaybolmadı)", () => {
+  test("13 portföy-seviyesi modül linki mevcut (3'ü Faz B'de sözleşme detayına taşındı)", () => {
+    // FAZ B GÜNCELLEMESİ: modification/slb/sublease artık sidebar'da
+    // DEĞİL — sözleşme detay ekranında tab olarak. Fonksiyonları
+    // silinmedi (eski ?open=... deep-link'leri çalışmaya devam eder),
+    // yalnızca sidebar'dan kaldırıldılar.
     const nav = sidebarSection();
     const keys = [...nav.matchAll(/data-v26-open="([^"]+)"/g)].map(m => m[1]);
     expect(keys.sort()).toEqual([
       "accountMapping", "accountingCenter", "audit", "close", "companies",
       "consolidation", "eliminations", "financialReporting", "footnotes",
-      "fxRates", "groups", "inflation", "modification", "riskControls",
-      "slb", "sublease"
+      "fxRates", "groups", "inflation", "riskControls"
     ].sort());
   });
 });
