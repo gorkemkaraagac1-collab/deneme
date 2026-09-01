@@ -272,8 +272,26 @@ a{color:inherit}
 .status.failed{color:var(--danger);background:var(--seal-soft);border-radius:999px;padding:3px 7px}
 
 /* Prevent newly added wide content from breaking the page */
-.table-container,.modal{overflow-x:auto}
+.table-container{overflow-x:auto}
 .table-container table{max-width:none}
+
+/* DÜZELTME (Edit User modalında "Save Changes" görünmüyordu):
+   Buraya önceden `.modal{overflow-x:auto}` yazılmıştı. Bu, modalın
+   YATAY olarak kaydırılabilir olmasına yol açıyordu; `.modal-footer`
+   ise `justify-content:flex-end` kullandığı için butonları GÖRÜNÜR
+   alanın değil, TAŞAN İÇERİK genişliğinin sağına hizalıyordu.
+   Sonuç: "Cancel" ekranın ortasında görünüyor, ondan sonra gelen
+   "Save Changes" ise sağda, görünür alanın DIŞINDA kalıyordu —
+   kullanıcı kaydet butonunu hiç göremiyordu (özellikle dar/mobil
+   ekranlarda). Taşmanın kaynağı genellikle `<select multiple>`in
+   uzun option metinlerine göre genişlemesiydi.
+   Çözüm: modal yatayda taşmasın; içindeki form kontrolleri kendi
+   genişliğini aşmasın; footer gerekirse alt satıra sarsın (buton
+   asla görünmez olmasın). Gerçekten geniş içerik (tablolar) zaten
+   kendi `.table-container`ı içinde yatay kayabiliyor. */
+.modal{overflow-x:hidden}
+.modal input,.modal select,.modal textarea{max-width:100%}
+.modal-footer{flex-wrap:wrap}
 pre,code{font-family:var(--mono)}
 hr{border:0;border-top:1px solid var(--border)}
 
