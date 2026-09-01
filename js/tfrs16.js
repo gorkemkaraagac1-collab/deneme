@@ -1183,6 +1183,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const AUDIT_TRAIL_STORAGE_KEY = "gk_tfrs16_audit_trail_v1";
   const AUDIT_MIGRATION_KEY = "gk_tfrs16_audit_trail_migrated_v1";
 
+  /** @deprecated-name Kalıcı: cloneAuditValue — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function cloneAuditValue(value) {
     return coreClone(value);
   }
@@ -3497,6 +3498,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  /** @deprecated-name Kalıcı: cloneModificationValue — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreCloneOrOriginal. Hata durumunda ORİJİNAL değeri döner, null DEĞİL — v20Clone ile aynı aile. */
   function cloneModificationValue(value) {
     return coreCloneOrOriginal(value);
   }
@@ -14489,6 +14491,7 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "CTRL-LIFE-002", name: "Expiry and renewal risk", category: "LEASE_TERM", priority: "HIGH", enabled: true }
   ]);
 
+  /** @deprecated-name Kalıcı: safeNumber — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function safeNumber(value, fallback = 0) {
     return coreNumber(value, fallback);
   }
@@ -14497,10 +14500,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return typeof value === "number" && Number.isFinite(value);
   }
 
+  /** @deprecated-name Kalıcı: controlDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. */
   function controlDate(value) {
     return coreDate(value);
   }
 
+  /** @deprecated-name Kalıcı: controlDaysBetween — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDaysBetween. */
   function controlDaysBetween(a, b) {
     return coreDaysBetween(controlDate(a), controlDate(b));
   }
@@ -14545,6 +14550,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return `EXC-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  /** @deprecated-name Kalıcı: controlJson — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function controlJson(value) {
     return coreClone(value);
   }
@@ -15450,30 +15456,37 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
+  /** @deprecated-name Kalıcı: cfoNumber — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function cfoNumber(value, fallback = 0) {
     return coreNumber(value, fallback);
   }
 
+  /** @deprecated-name Kalıcı: cfoRound — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreRound. */
   function cfoRound(value, digits = 2) {
     return coreRound(value, digits);
   }
 
+  /** @deprecated-name Kalıcı: cfoClone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function cfoClone(value) {
     return coreClone(value);
   }
 
+  /** @deprecated-name Kalıcı: cfoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. */
   function cfoDate(value) {
     return coreDate(value);
   }
 
+  /** @deprecated-name Kalıcı: cfoIsoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreIsoDate. İçeride kendi cfoDate() çağrısını kullanır. */
   function cfoIsoDate(value) {
     return coreIsoDate(cfoDate(value));
   }
 
+  /** @deprecated-name Kalıcı: cfoAddMonths — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddMonths. months parametresi coerce EDİLMİYOR (orijinal davranış). */
   function cfoAddMonths(date, months) {
     return coreAddMonths(cfoDate(date), months);
   }
 
+  /** @deprecated-name Kalıcı: cfoDaysBetween — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDaysBetween. */
   function cfoDaysBetween(from, to) {
     return coreDaysBetween(cfoDate(from), cfoDate(to));
   }
@@ -15916,30 +15929,37 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "OVER_5_YEARS", name: "5 yıldan uzun", sources: ["MORE_THAN_5_YEARS"] }
   ]);
 
+  /** @deprecated-name Kalıcı: rptNumber — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function rptNumber(value, fallback = 0) {
     return coreNumber(value, fallback);
   }
 
+  /** @deprecated-name Kalıcı: rptRound — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreRound. */
   function rptRound(value, digits = 2) {
     return coreRound(value, digits);
   }
 
+  /** @deprecated-name Kalıcı: rptDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. try/catch orijinal davranışı korumak için eklendi. */
   function rptDate(value) {
     try { return coreDate(value); } catch (error) { return null; }
   }
 
+  /** @deprecated-name Kalıcı: rptIsoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreIsoDate. */
   function rptIsoDate(value) {
     return coreIsoDate(rptDate(value));
   }
 
+  /** @deprecated-name Kalıcı: rptAddDays — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddDays. */
   function rptAddDays(value, days) {
     return coreAddDays(rptDate(value), days);
   }
 
+  /** @deprecated-name Kalıcı: rptAddMonths — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddMonths. months Number(months||0) ile coerce ediliyor (orijinal davranış). */
   function rptAddMonths(value, months) {
     return coreAddMonths(rptDate(value), Number(months || 0));
   }
 
+  /** @deprecated-name Kalıcı: rptMonthsBetween — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreMonthsBetween. */
   function rptMonthsBetween(from, to) {
     return coreMonthsBetween(rptDate(from), rptDate(to));
   }
@@ -15949,6 +15969,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return rptDate(value) || new Date();
   }
 
+  /** @deprecated-name Kalıcı: rptClone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function rptClone(value) {
     return coreClone(value);
   }
@@ -16942,6 +16963,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isNaN(d.getTime()) ? new Date() : d;
   }
 
+  /** @deprecated-name Kalıcı: closeIsoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreIsoDate. closeResolveDate() hiçbir zaman null dönmez (her zaman bir Date verir). */
   function closeIsoDate(value) {
     return coreIsoDate(closeResolveDate(value));
   }
@@ -18189,22 +18211,27 @@ document.addEventListener("DOMContentLoaded", () => {
     dataQualityPenalty: Object.freeze({ CRITICAL: 30, HIGH: 20, MEDIUM: 10, LOW: 5 })
   });
 
+  /** @deprecated-name Kalıcı: v18Number — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function v18Number(value, fallback = 0) {
     return coreNumber(value, fallback);
   }
 
+  /** @deprecated-name Kalıcı: v18Round — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreRound. */
   function v18Round(value, digits = 2) {
     return coreRound(value, digits);
   }
 
+  /** @deprecated-name Kalıcı: v18Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v18Clone(value) {
     return coreClone(value);
   }
 
+  /** @deprecated-name Kalıcı: v18Date — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. try/catch orijinal davranışı korumak için eklendi. */
   function v18Date(value) {
     try { return coreDate(value); } catch (error) { return null; }
   }
 
+  /** @deprecated-name Kalıcı: v18IsoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreIsoDate. */
   function v18IsoDate(value) {
     return coreIsoDate(v18Date(value));
   }
@@ -18217,14 +18244,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return v18Date(value) || new Date();
   }
 
+  /** @deprecated-name Kalıcı: v18AddDays — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddDays. */
   function v18AddDays(value, days) {
     return coreAddDays(v18Date(value), days);
   }
 
+  /** @deprecated-name Kalıcı: v18AddMonths — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddMonths. months Number(months||0) ile coerce ediliyor (orijinal davranış). */
   function v18AddMonths(value, months) {
     return coreAddMonths(v18Date(value), Number(months || 0));
   }
 
+  /** @deprecated-name Kalıcı: v18DaysBetween — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDaysBetween. */
   function v18DaysBetween(from, to) {
     return coreDaysBetween(v18Date(from), v18Date(to));
   }
@@ -19031,6 +19061,7 @@ document.addEventListener("DOMContentLoaded", () => {
     DYNAMICS: Object.freeze({ id: "DYNAMICS", schemaVersion: INTEGRATION_SCHEMA_VERSION, fields: {} })
   });
 
+  /** @deprecated-name Kalıcı: integrationClone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function integrationClone(value) {
     return coreClone(value);
   }
@@ -21012,6 +21043,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "ExportJob"
   ];
 
+  /** @deprecated-name Kalıcı: v20Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreCloneOrOriginal. Hata durumunda ORİJİNAL değeri döner, null DEĞİL — diğer clone'lardan farklı. */
   function v20Clone(value) {
     return coreCloneOrOriginal(value);
   }
@@ -21032,6 +21064,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
 
+  /** @deprecated-name Kalıcı: v20NormalizeDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNormalizeDate. */
   function v20NormalizeDate(value) {
     return coreNormalizeDate(value);
   }
@@ -21041,6 +21074,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return /^[A-Z]{3}$/.test(currency) ? currency : String(fallback || "TRY").toUpperCase();
   }
 
+  /** @deprecated-name Kalıcı: v20Amount — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function v20Amount(value, fallback = 0) {
     return coreNumber(value, fallback);
   }
@@ -22527,6 +22561,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ]
   });
 
+  /** @deprecated-name Kalıcı: v21Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v21Clone(value) {
     return coreClone(value);
   }
@@ -23098,6 +23133,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
 
+  /** @deprecated-name Kalıcı: v22Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v22Clone(value) {
     return coreClone(value);
   }
@@ -23108,6 +23144,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  /** @deprecated-name Kalıcı: v22NormalizeDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNormalizeDate. */
   function v22NormalizeDate(value) {
     return coreNormalizeDate(value);
   }
@@ -23117,6 +23154,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return /^[A-Z]{3}$/.test(currency) ? currency : fallback;
   }
 
+  /** @deprecated-name Kalıcı: v22Amount — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. fallback her zaman 0 idi (parametre yok). */
   function v22Amount(value) {
     return coreNumber(value);
   }
@@ -24355,6 +24393,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   });
 
+  /** @deprecated-name Kalıcı: v23Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v23Clone(value) { return coreClone(value); }
   function v23Array(value) { return Array.isArray(value) ? value : []; }
   function v23Object(value) { return value && typeof value === "object" ? value : {}; }
@@ -24365,8 +24404,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // CONTEXT.md bölüm 33). Konsolide etmek davranış değişikliği olurdu.
   function v23Date(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? null : d; }
   function v23DateKey(value) { const d=v23Date(value); return d ? d.toISOString().slice(0,10) : null; }
+  /** @deprecated-name Kalıcı: v23Num — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function v23Num(value, fallback=0) { return coreNumber(value, fallback); }
   function v23CurrencyCode(value) { return String(value || "").trim().toUpperCase(); }
+  /** @deprecated-name Kalıcı: v23Round — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreRound. decimalPlaces çağrı ÖNCESİNDE Math.max(0,...) ile kelepçeleniyor (orijinal davranış). */
   function v23Round(value, decimalPlaces=2) { return coreRound(value, Math.max(0, decimalPlaces)); }
   function v23Actor() { try { return String(window.currentUser?.id || window.currentUser?.username || "system"); } catch(e) { return "system"; } }
   function v23Audit(action, entityType, entityId, metadata={}) {
@@ -26088,6 +26129,7 @@ document.addEventListener("DOMContentLoaded", () => {
     NET_INCOME:{direction:"PROFIT",favorableWhen:"POSITIVE"}
   });
 
+  /** @deprecated-name Kalıcı: v24Number — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function v24Number(value, fallback = 0) { return coreNumber(value, fallback); }
   function v24Text(value, fallback = "") { return value == null ? fallback : String(value); }
   // v24Date/v24DateKey KASITLI OLARAK dokunulmadı — falsy değerde
@@ -26098,6 +26140,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function v24DateKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : null; }
   function v24MonthKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` : null; }
   function v24Year(value) { const d = v24Date(value); return d ? d.getFullYear() : Number(value); }
+  /** @deprecated-name Kalıcı: v24Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v24Clone(value) { return coreClone(value); }
   function v24Now() { return new Date().toISOString(); }
   function v24Id(prefix = "V24") { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`.toUpperCase(); }
