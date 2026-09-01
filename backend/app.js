@@ -12,6 +12,8 @@ const contractsRouter = require("./routes/contracts");
 const auditRouter = require("./routes/audit");
 const reportsRouter = require("./routes/reports");
 const adminLicenseRouter = require("./routes/admin-licenses");
+const licenseTestRouter = require("./routes/license-test");
+const tms29IndicesRouter = require("./routes/tms29-indices");
 
 const app = express();
 
@@ -106,6 +108,17 @@ app.use(
   adminLicenseRouter
 );
 
+/**
+ * ============================================================
+ * LICENSE TEST ROUTES
+ * ============================================================
+ */
+
+app.use(
+  "/api/license-test",
+  licenseTestRouter
+);
+
 
 /**
  * ============================================================
@@ -126,6 +139,11 @@ app.use(
 app.use(
   "/api/reports",
   reportsRouter
+);
+
+app.use(
+  "/api/tms29",
+  tms29IndicesRouter
 );
 
 
@@ -171,17 +189,8 @@ app.use(
  * ============================================================
  */
 
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
 
-    console.log(
-      `🚀 TFRS16 Backend çalışıyor: port ${PORT}`
-    );
 
-  }
-);
 
 
 module.exports = app;

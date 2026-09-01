@@ -1,0 +1,37 @@
+[33mbfc6039[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Clean up .env.example file
+[33mec064ca[m Change JWT_SECRET in .env file
+[33m4624fea[m Change PORT from 3000 to 8080
+[33m21d5b0c[m Change port and update database configuration
+[33mb5084b4[m Create .env
+[33m7e44b83[m Refactor backend app.js with new routes and middleware
+[33m748605b[m Add admin authorization middleware
+[33m9a4e59a[m Implement admin license management routes
+[33m2d40f1c[m Update auth.js
+[33m991fd5f[m Add license middleware for user and company checks
+[33m398baeb[m Create license-service.js
+[33m4b7e055[m Add files via upload
+[33m41e3116[m Change server port to 8080 and update listen method
+[33m076c456[m Dockerfile eklendi ve backend hazırlandı
+[33m26febd3[m Fix file path for auth middleware
+[33m5d7c053[m Delete backend/midleware/A
+[33mc3b6b8e[m Update .env.example with JWT configuration
+[33m745ff7a[m Rename auth.middleware.js to auth.js
+[33m4e02c27[m Add files via upload
+[33m9812ae3[m Rename C to A
+[33md734d0f[m Add files via upload
+[33m263d6a7[m Create C
+[33m1de6365[m Add files via upload
+[33m233fbf2[m Add files via upload
+[33mb108911[m Add files via upload
+[33mb9476a1[m Rename reports.js to reports.js
+[33m57a0aaf[m Add contracts.js route file
+[33m6be7275[m Add audit.js route file
+[33mb70d87d[m Delete backend/db/routes/A
+[33m2bb7a05[m Add example environment configuration file
+[33m80d6d1f[m Add files via upload
+[33md7dcc36[m Add files via upload
+[33mc52538c[m Rename backend/db/A to backend/db/routes/A
+[33m83f8c32[m Add files via upload
+[33m05dfc0d[m Rename backend/A to backend/db/A
+[33mc46420a[m Add files via upload
+[33m8a5e09f[m Create A
