@@ -1543,6 +1543,95 @@ kapsamına alınmadı, dokunulmadı.
 
 ✅ TAMAMLANDI. Faz 2'ye (İsimlendirme) geçilebilir.
 
+---
+
+# 35. tfrs16.js REFAKTÖRÜ — FAZ 2: İSİMLENDİRME (TAMAMLANDI)
+
+## Kapsam kararı
+
+Plan iki ayrı iş istiyordu: (1) dış API yüzeyinin ("asla adı
+değişmeyecek" liste) çıkarılması, (2) versiyon önekli fonksiyonlara
+isim DEĞİŞTİRMEDEN JSDoc eklenmesi.
+
+**Ölçek gerçeği:** Dosyada toplam **329 versiyon önekli fonksiyon**
+var (`cfo/rpt/v18-24/control/close/integration` önekleri). Bunların
+TAMAMINA JSDoc eklemek "orta efor" değil, büyük bir iş olurdu ve
+planın kendisi bu adımın "düşük katma değer" taşıdığını belirtiyor.
+Bu yüzden kapsam **Faz 1'de gerçekten dokunulan 43 sarmalayıcı
+fonksiyonla** sınırlı tutuldu — geri kalan ~286 versiyon önekli
+fonksiyon (henüz `core*`'a delege etmeyen, kendi bağımsız mantığını
+koruyan fonksiyonlar) bu turda ellenmedi.
+
+## 1. Dış API yüzeyi çıkarıldı — `FAZ2_API_SURFACE.md` + `gk_tfrs16_api_surface.txt`
+
+`window.GK_TFRS16` üzerinden **7 ayrı** `Object.assign` bloğuyla
+(satır ~20858/25557/27016/27480/27833/30109/30252) **552 benzersiz
+isim** (fonksiyon + sabit) dışarı açılıyor — dosyanın TAMAMI bu.
+
+HTML `onclick=` taraması: 21 referans bulundu, **hiçbiri
+`js/tfrs16.js`'de tanımlı değil** (hepsi admin panel sayfalarına ait,
+başka bir JS dosyasında) — bu refaktörün kapsamı açısından onclick=
+kaynaklı bir kısıt yok.
+
+HTML'den doğrudan `GK_TFRS16.X()` çağrısı yapılan 3 kritik isim:
+`applyEarlyPayment`, `exportReport`, `getSelectedContractId` — bunlarda
+imza değişikliği HTML'i anında kırar.
+
+**Faz 3 için pratik sonuç:** SRP bölme sırasında ana fonksiyon adı
+552'lik listedeyse (çoğu ana motor fonksiyonu muhtemelen öyle)
+KESİNLİKLE değişmez; extract edilen YENİ iç yardımcılar bu listede
+olmadığı için serbestçe temiz isimlendirilebilir.
+
+## 2. JSDoc eklendi — 43 sarmalayıcı fonksiyon
+
+Faz 1'de `core*`'a delege eden TÜM fonksiyonlara (`safeNumber`,
+`cfoNumber/Round/Clone/Date/IsoDate/AddMonths/DaysBetween`, `rpt*` (8),
+`v18*` (8), `v20*` (3), `v21Clone`, `v22*` (3), `v23*` (3), `v24*` (2),
+4 tekil clone, `controlDate/DaysBetween`, `closeIsoDate`) planın
+önerdiği kalıpta JSDoc eklendi:
+
+```js
+/** @deprecated-name Kalıcı: v18Number — dış çağrılarla (window.GK_TFRS16,
+    olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
+function v18Number(value, fallback = 0) { return coreNumber(value, fallback); }
+```
+
+Davranış farkı taşıyan fonksiyonlarda (`v20Clone`,
+`cloneModificationValue`, `cfoAddMonths`, `rptAddMonths`/`v18AddMonths`,
+`v23Round`, `rptDate`/`v18Date`) JSDoc'a bu farkı özetleyen tek
+cümlelik not eklendi (tam gerekçe Faz 1 bölümünde).
+
+**Saf ekleme:** Bu adım hiçbir satırı silmedi/değiştirmedi — yalnızca
+43 yorum satırı eklendi. `git diff` ile doğrulandı (43 `+@deprecated-name`
+satırı, 0 yeni silme).
+
+## Dokunulmayanlar
+
+- `core*` fonksiyonlarının kendisi — zaten anlamlı isimlerle doğdu,
+  JSDoc'a ihtiyaçları yok (plan maddesi).
+- Kalan ~286 versiyon önekli fonksiyon — henüz `core*`'a delege
+  etmiyorlar, bu turun kapsamı dışında bırakıldı.
+- Faz 3'te SRP ile ortaya çıkacak yeni iç yardımcılar için
+  isimlendirme kuralı (fiil+nesne) — henüz uygulanacak bir şey yok,
+  Faz 3 başladığında devreye girecek.
+
+## DOĞRULAMA
+
+`node --check` + tam Jest suite (golden + invariants dahil):
+**396/396 yeşil.** `git diff` gözden geçirmesi: yalnızca JSDoc
+satırları eklendi, fonksiyon gövdelerinde hiçbir değişiklik yok.
+
+## FAZ 2 KAPANIŞ DURUMU
+
+✅ TAMAMLANDI. Faz 3'e (SRP — büyük fonksiyonları böl) geçilebilir.
+Faz 3, planın kendi risk sıralamasına göre şu 10 fonksiyonu hedefliyor
+(düşük riskliden yükseğe): `calculateLeaseEngineImpl`,
+`generateModificationJournal`, `generateReassessmentJournal`,
+`validateContract`, `downloadTemplate`,
+`renderPaymentScheduleSection`/`openContractModal`,
+`createBulkJournalModal`, `renderBulkJournalResults`,
+`renderCloseDashboardPage`, `renderAccountingCenter`.
+
 ### 0.4 tarayıcı notu
 
 Bu ortamda `cdn.playwright.dev` ağ allowlist dışında olduğu için
