@@ -1191,3 +1191,162 @@ Her değişiklikten sonra: `npx jest --runInBand` ile backend/servis test suite'
 `js/tfrs16.js`'in iç modülerleştirilmesi (bölüm 26'daki `tfrs16-core.js`/`tfrs16-calculation.js`/... yapısı) **release sonrasında** kalır. Bu saf teknik borçtur — kullanıcıya görünmez, "kullanılabilirlik" hedefine hizmet etmez, 30.000+ satırlık dosyayı bölerken regresyon riski taşır. Faz 0-3 ile KARIŞTIRILMAMALIDIR; bölüm 26'daki "release öncesi kapsamlı refactor yapılmayacak" kuralı bu madde için AYNEN GEÇERLİ kalmaya devam eder.
 
 
+---
+
+# 33. tfrs16.js REFAKTÖRÜ — FAZ 0: GÜVENLİK AĞI (TAMAMLANDI)
+
+## KARAR DEĞİŞİKLİĞİ
+
+Bölüm 32'nin sonundaki "AYRILAN — RELEASE SONRASINA BIRAKILDI" maddesi
+**Görkem tarafından geri alındı** (Eylül 2026): release tarihi ertelendi ve
+`js/tfrs16.js` refaktörü release ÖNCESİNE alındı. Bölüm 26 ve 32'deki
+"release öncesi kapsamlı refactor yapılmayacak" kuralı bu madde için ARTIK
+GEÇERLİ DEĞİLDİR. Diğer maddeler için aynen durur.
+
+## METODOLOJİ — "PUBLIC API DEĞİŞMEZ"
+
+Additive-only kuralı harfiyen değil ruhuna sadık uygulanır:
+
+> Public API (fonksiyon adı + imzası + dönüş değeri) hiçbir çağıran için
+> değişmeyecek. Fonksiyonun İÇİ ayrılabilir/yeniden adlandırılabilir —
+> dışarıdan görünmez olduğu sürece.
+
+Bu, Strangler Fig / Extract-and-Delegate desenidir. Hiçbir `onclick=`,
+`window.X` referansı veya test kırılmaz.
+
+**Her fonksiyon geçişinde zorunlu 6 adımlı doğrulama (sıralı, atlanamaz):**
+1. `node --check js/tfrs16.js`
+2. `npx jest --runInBand` (mevcut birim testleri)
+3. `npm run test:golden` (Faz 0.2 baseline karşılaştırması)
+4. Accounting invariants (Faz 0.3 — golden paketine dahil)
+5. `npm run test:e2e` (YALNIZCA DOM'a dokunan fonksiyonlar için)
+6. `git diff` gözden geçirme (fonksiyon dışı hiçbir satır değişmemeli)
+
+## FAZ 0 TESLİMİ
+
+```
+test/golden/
+  fixtures/contract-matrix.js     30 kontratlık risk bazlı regresyon matrisi
+  fixtures/slb-sublease.js        3 SLB + 2 sublease senaryosu
+  lib/normalize.js                non-determinizm temizleme + ID kanonikleştirme
+  lib/invariants.js               12 muhasebe invariant'ı
+  lib/harness.js                  6 hedef fonksiyonu koşan motor
+  lib/baseline-store.js           IMMUTABLE write-once baseline deposu
+  lib/compare.js                  yol bazlı derin diff
+  lib/run-golden.js               ortak koşucu (yazıcı ve test aynı kodu kullanır)
+  baseline/<timestamp>/           salt-okunur (chmod 444) baseline versiyonları
+  baseline/LATEST                 aktif karşılaştırma referansı
+  matrix-coverage.test.js         Faz 0.1 kapsama denetimi
+  determinism.test.js             harness'ın deterministik olduğunun kanıtı
+  golden-output.test.js           Faz 0.2 regresyon testi
+  invariants.test.js              Faz 0.3 — miras/yeni ihlal ayrımı
+  baseline-writer.test.js         GOLDEN_WRITE=1 olmadan ATLANIR
+e2e/
+  fixtures/api-stub.js            backend stub (gerçek Cloud Run'a BAĞLANMAZ)
+  fixtures/test-base.js           kimlik + stub fixture'ları
+  smoke.spec.js                   Faz 0.4 minimum akış
+playwright.config.js
+```
+
+**js/tfrs16.js'te yapılan TEK değişiklik:** ikinci test export shim'ine
+(satır ~30295) 11 fonksiyon adı + bir `__seedContractsForTest` yardımcısı
+eklendi. Hiçbir fonksiyon gövdesine dokunulmadı. Plandaki 6 hedef
+fonksiyonun HİÇBİRİ önceden export edilmiyordu.
+
+## IMMUTABILITY KURALI
+
+Baseline'lar `chmod 444` ile salt-okunur yazılır. `writeBaseline()` var olan
+bir versiyon klasörüne yazmayı REDDEDER. Her ölçüm yeni bir timestamp'li
+versiyon açar; `LATEST` işaretçisi hangisinin referans olduğunu tutar.
+Eski versiyonlar SİLİNMEZ. Kasıtlı bir davranış değişikliği yapıldığında
+yeni baseline yazılır ve gerekçesi BU BÖLÜME işlenir.
+
+## FAZ 0'IN ORTAYA ÇIKARDIĞI MEVCUT DAVRANIŞLAR (DÜZELTİLMEDİ)
+
+Faz 0 kuralı gereği hiçbir production logic değiştirilmedi. Aşağıdakiler
+**refaktörün yarattığı sorunlar DEĞİL**, eski kodda hâlihazırda var olan ve
+şimdi görünür hale gelen davranışlardır. Golden baseline bunları OLDUĞU GİBİ
+dondurmuştur; refaktör sırasında bunların DEĞİŞMEMESİ beklenir.
+
+**(1) Advance (peşin) ödemeli kontratlarda amortisman tablosu kapanmıyor**
+`INV-03` ihlali — GC-02, GC-04, GC-19. Son dönem kapanış yükümlülüğü sıfır
+değil (GC-02: 70.914 TL / 3,6 M TL kontrat; GC-19: 7,02 M TL).
+Gözlem [Kesin]: başlangıç yükümlülüğü (PV) advance konvansiyonuna göre DOĞRU
+hesaplanıyor (GC-01 arrears PV × (1+r) = GC-02 advance PV), ancak schedule
+faizi ödeme ÖNCESİ bakiye üzerinden işletiyor — yani PV advance, amortisman
+arrears varsayıyor. Kök neden hipotezi [Muhtemel]; düzeltmeden önce
+`calculateLeaseEngineImpl` içindeki faiz baz seçimi doğrulanmalı.
+
+**(2) GC-19: yıllık + advance kontratta dönem 1 roll-forward kimliği bozuk**
+`INV-01` ihlali, sapma 406.198 TL. Dönem 1'de `principal: 0` ve
+`closingLiability = openingLiability`; 12 aylık faiz satıra yazılıyor ama
+bakiyeye yansımıyor. (1) ile aynı aile olması muhtemel.
+
+**(3) Modification VE reassessment birlikte uygulanan kontratta iki kod yolu
+farklı yükümlülük veriyor** — `INV-11` ihlali, GC-18: 7.130.698 vs 8.364.857
+(%17 fark). Mekanizma [Kesin]: `cfoBuildSchedule()` (satır 15369) öncelik
+sırası REASSESSED_SCHEDULE > MODIFIED_SCHEDULE > LEASE_SCHEDULE kullanırken,
+`calculateLiabilitySplitAsOf()` → `getScheduleAsOfReportingDate()` yolu
+`calculateLeaseEngine()` üzerinden gider. Yalnızca modification VEYA yalnızca
+reassessment olan 7 kontratta iki yol BİREBİR aynı sonucu veriyor; sapma
+SADECE ikisi birlikte olduğunda çıkıyor. Hipotez [Muhtemel]:
+`buildReassessedSchedule()` önceki uygulanmış modification'ı yok sayıp
+orijinal kontrat şartlarından yeniden kuruyor. Faz 4'te bu iki yol
+birleştirilecek — birleştirmeden ÖNCE hangisinin doğru olduğuna karar
+verilmelidir.
+
+**KARAR (Görkem, Eylül 2026) — DOĞRU OLAN YOL:** `cfoBuildSchedule` /
+`buildReassessedSchedule`.
+
+Gerekçe (TFRS 16 / IFRS 16):
+- Modification (16.44–46) ve reassessment (16.39–43) SONRAKİ ÖLÇÜM
+  olaylarıdır; yükümlülük, olay tarihindeki taşıma tutarı üzerinden,
+  kalan ödemelerin PV'si ile revize edilir.
+- Geçmiş dönemler yeniden yazılmaz; sanki yeni ödeme/vade/oran baştan beri
+  varmış gibi tüm schedule'ı inception'dan yeniden kurmak (mevcut
+  `calculateLiabilitySplitAsOf` → `calculateLeaseEngine` yolunun yaptığı)
+  standarda aykırıdır — hata düzeltmesi/retrospektif restatement durumu
+  DEĞİLDİR.
+
+**ZAMANLAMA KARARI (Claude önerisi, Görkem'e bırakıldı → Faz 4 seçildi):**
+Düzeltme Faz 0/1/2/3 sırasında DEĞİL, **Faz 4.1'de**
+(`getCfoAggregateMetrics` konsolidasyonuyla birlikte, tek atomik değişiklik
+olarak) yapılacak. Gerekçe: (a) bu davranış değişikliği planın "davranış
+sıfır değişiklik" ilkesini ihlal eder, saf mekanik fazlarla (1-3)
+karıştırılmamalı; (b) Faz 3'ün 10 hedef fonksiyonundan hiçbiri
+`cfoBuildSchedule`/`calculateLiabilitySplitAsOf`'a dokunmuyor — erteleme
+hiçbir fazı bloklamıyor; (c) Faz 4.1 zaten aynı bölgeyi
+(`cfoGetContractMetricsInternal` → `cfoBuildSchedule`) yeniden yazacak,
+bölgeyi iki kez açmak yerine tek seferde hem doğru yolu seçip hem
+konsolide etmek daha az riskli; (d) mevcut golden baseline GC-18'in YANLIŞ
+davranışını donduruyor — Faz 1-3 sırasında biri bunu kazara değiştirirse
+golden testi kırmızı olur, yani erteleme sırasında da bir güvenlik açığı
+yok.
+
+**Faz 4.1 kapsamına eklenen iş:** `calculateLiabilitySplitAsOf` /
+`getScheduleAsOfReportingDate`'in, `cfoBuildSchedule` ile AYNI önceliği
+(REASSESSED_SCHEDULE > MODIFIED_SCHEDULE > LEASE_SCHEDULE) kullanacak
+şekilde düzeltilmesi. Düzeltme sonrası: (1) GC-18 için yeni baseline
+kaydı — bu maddenin referansıyla; (2) `INV-11` invariant'ının GC-18'de
+artık GEÇMESİ beklenir; miras listesinden çıkarılacak.
+
+**(4) Calculation cache imzası eksik alanlar içeriyor**
+`getCalculationCacheKey()` (satır ~980) imzasında `paymentTiming`,
+`variablePayment`, `usefulLifeMonths`, `ownershipTransfer`, `purchaseOption`,
+`shortTermLease`, `lowValueAsset`, `currency` YOK. Aynı `id` ile bu alanları
+farklı iki kontrat cache'te çakışabilir [Muhtemel — pratikte tetiklenmesi
+için aynı id'nin yeniden kullanılması gerekir]. Faz 4 adayı. Golden harness
+bu riski `calculateLeaseEngineImpl`'i doğrudan çağırarak baypas eder.
+
+## FAZ 0 KAPANIŞ DURUMU
+
+| Alt faz | Durum | Kanıt |
+|---|---|---|
+| 0.1 regresyon matrisi | ✅ | `matrix-coverage.test.js` 8/8 |
+| 0.2 golden-output baseline | ✅ | `golden-output.test.js` 5/5, baseline yazıldı |
+| 0.3 accounting invariants | ✅ | 379 kontrolden 374 geçer, 5 miras ihlali yukarıda |
+| 0.4 Playwright smoke | ⚠️ KISMİ | config + stub + spec yazıldı, **gerçek tarayıcıda henüz koşulmadı** |
+
+**Faz 1'e geçiş koşulu:** 0.4'ün `npx playwright install chromium` sonrası
+`npm run test:e2e` ile YEŞİL koşması. Spec dosyasının var olması yeterli
+değildir.
