@@ -326,6 +326,34 @@ document.addEventListener("DOMContentLoaded",loadDashboard);
      injectV26Styles() içine eklenen .modal/.form-grid/.gk-contract-tab*
      class'ları (css/tfrs16.css'ten kopyalandı, o dosya dashboard.html'e
      hiç yüklenmiyordu). -->
+<!-- Sözleşme Detay Modalı (FAZ C: dashboard'a eklendi).
+     FAZ B'de sözleşme detayı 7 tab'a bölündü (Özet / Ödeme Planı /
+     Modifikasyon & Reassessment / SLB / Alt Kiralama / Fişler /
+     Denetim İzi) ama bu modal SADECE tfrs16.html'de vardı — yani
+     dashboard'dan bir sözleşmeye tıklandığında openDetail() çalışsa
+     bile #detailModal bulunamadığı için HİÇBİR ŞEY açılmıyordu.
+     tfrs16.html'deki ile birebir aynı yapı; js/tfrs16.js zaten
+     yüklü olduğundan tüm event wiring otomatik çalışır. -->
+<div id="detailModal" class="modal hidden">
+  <div class="modal-content detail-modal" style="max-width: 900px;">
+    <div class="modal-header">
+      <div><div class="eyebrow">SÖZLEŞME DETAYI &amp; İTFA TABLOSU</div><h2 id="detailTitle">-</h2></div>
+      <button id="closeDetailModal" class="close-button" type="button">×</button>
+    </div>
+    <div id="detailContent" class="detail-content"></div>
+
+    <div id="scheduleTableContainer" class="table-wrapper" style="margin-top:20px; max-height: 350px; overflow-y: auto;"></div>
+
+    <div class="detail-actions" style="margin-top: 20px;">
+      <button id="applyEarlyPaymentButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(!cid)return; const amt=prompt('Erken ödeme tutarı:'); if(amt===null)return; const dt=prompt('Ödeme tarihi (YYYY-MM-DD):', new Date().toISOString().slice(0,10)); if(dt===null)return; window.GK_TFRS16.applyEarlyPayment(cid, amt, dt);">⏱ Erken Ödeme Uygula</button>
+      <button id="exportReportPdfButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'pdf');">↓ Raporu PDF İndir</button>
+      <button id="exportReportHtmlButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'html');">↗ Raporu HTML Aç</button>
+      <button id="deleteContract" class="danger-button" type="button">Sözleşmeyi Sil</button>
+      <button id="detailCloseButton" class="secondary-button" type="button">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <div id="contractModal" class="modal hidden">
   <div class="modal-content" style="max-width: 720px;">
     <div class="modal-header">
