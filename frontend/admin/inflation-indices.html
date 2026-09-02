@@ -88,14 +88,25 @@
 
         <div class="page-content">
             <p style="color:var(--text-light); font-size:13px; margin:-4px 0 16px;">
-                TÜİK otomatik senkronizasyonu bu release kapsamında devre dışıdır. TÜFE endeksleri
-                burada elle girilir. Her yeni kayıt <strong>PENDING</strong> olarak başlar; yalnızca
+                Resmî TÜİK SDMX kaynağından aylık toplam TÜFE endeksi çekilebilir veya gerektiğinde
+                manuel giriş yapılabilir. Her yeni kayıt <strong>PENDING</strong> olarak başlar; yalnızca
                 <strong>VERIFIED</strong> ve aktif (supersede edilmemiş) kayıtlar TFRS16/TMS29
                 restatement hesaplamasına girer. Aynı ay için yeni bir değer girmek, eski kaydı
                 overwrite etmez — eski kayıt supersede edilir ve yeni bir kayıt oluşturulur.
             </p>
 
             <div class="inflation-forms">
+                <div class="form-card">
+                    <h3>TÜİK'ten Otomatik Getir</h3>
+                    <p class="hint">Resmî aylık toplam TÜFE endeksi (2025=100). Sonuçlar PENDING oluşturulur.</p>
+                    <div class="form-row">
+                        <input id="syncStartMonth" type="month" aria-label="Başlangıç ayı">
+                        <input id="syncEndMonth" type="month" aria-label="Bitiş ayı">
+                        <button class="btn btn-primary" id="syncSubmit" onclick="syncFromTuik()">TÜİK'ten Getir</button>
+                    </div>
+                    <div id="syncMsg" class="form-msg"></div>
+                </div>
+
                 <div class="form-card">
                     <h3>Tek Endeks Girişi</h3>
                     <p class="hint">Örn. Period: 2026-07, Index: 3500.25</p>
@@ -264,6 +275,56 @@
             const el = document.getElementById(elId);
             el.textContent = message;
             el.className = 'form-msg ' + (isError ? 'err' : 'ok');
+        }
+
+        function monthsBetween(start, end) {
+            if (!MONTH_FORMAT.test(start) || !MONTH_FORMAT.test(end) || start > end) return null;
+            const months = [];
+            let year = Number(start.slice(0, 4));
+            let month = Number(start.slice(5, 7));
+            const endYear = Number(end.slice(0, 4));
+            const endMonth = Number(end.slice(5, 7));
+            while (year < endYear || (year === endYear && month <= endMonth)) {
+                months.push(`${year}-${String(month).padStart(2, '0')}`);
+                if (months.length > 36) return null;
+                month += 1;
+                if (month === 13) { month = 1; year += 1; }
+            }
+            return months;
+        }
+
+        async function syncFromTuik() {
+            const start = document.getElementById('syncStartMonth').value;
+            const end = document.getElementById('syncEndMonth').value;
+            const months = monthsBetween(start, end);
+            if (!months) {
+                setFormMsg('syncMsg', 'Geçerli bir başlangıç/bitiş aralığı seçin (en fazla 36 ay).', true);
+                return;
+            }
+            if (!confirm('TÜİK verileri PENDING oluşturulacak. Aynı aya ait aktif kayıt varsa supersede edilir ve yeni kayıt doğrulanana kadar hesaplamaya girmez. Devam edilsin mi?')) {
+                return;
+            }
+
+            const btn = document.getElementById('syncSubmit');
+            btn.disabled = true;
+            const result = await AdminAPI.syncInflationIndices(months);
+            btn.disabled = false;
+
+            if (!result.success) {
+                setFormMsg('syncMsg', result.error || 'TÜİK senkronizasyonu başarısız.', true);
+                return;
+            }
+
+            const synced = result.synced || [];
+            const unchanged = result.unchanged || [];
+            const skipped = result.skipped || [];
+            let message = `${synced.length} kayıt PENDING oluşturuldu; ${unchanged.length} kayıt değişmedi.`;
+            if (skipped.length) {
+                message += ` ${skipped.length} dönem atlandı: ` + skipped.map(item => `${item.month} (${item.reason})`).join('; ');
+            }
+            setFormMsg('syncMsg', message, skipped.length > 0 && synced.length === 0);
+            document.getElementById('statusFilter').value = 'PENDING';
+            loadIndices();
         }
 
         async function submitSingleEntry() {
