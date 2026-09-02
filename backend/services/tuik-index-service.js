@@ -17,54 +17,45 @@ const { validateInflationIndexEntry, parseBulkIndexInput } = require("../utils/i
  *
  * Şu an tek desteklenen endeks tipi: 'TUFE_GENEL'.
  *
- * ------------------------------------------------------------
- * ÖNEMLİ — TÜİK KAYNAK DURUMU (AÇIKÇA RAPORLANIYOR)
- * ------------------------------------------------------------
- * TÜİK'in TÜFE serisi için resmî, dokümante edilmiş, stabil bir
- * REST/JSON API'si YOKTUR:
+ * Resmî TÜİK SDMX akışı 2026-09-02 tarihinde production GCP
+ * ortamından gerçek API anahtarıyla doğrulandı:
  *
- *   - Eski SDMX servisi (nsiws.tuik.gov.tr) 2026-08 itibarıyla
- *     erişilemez durumdadır.
- *   - Yeni veri portalı (databrowser2.tuik.gov.tr) bir
- *     JSON-stat 2.0 API sunuyor, ANCAK bu API TÜİK tarafından
- *     resmî olarak dokümante edilmemiştir; üçüncü taraf
- *     araçlar (ör. topluluk tarafından geliştirilen R/Python
- *     paketleri) bu endpoint'leri tarayıcı davranışını
- *     gözlemleyerek (reverse-engineering) keşfetmiştir.
- *   - Bu sandbox ortamının dış ağ erişimi KAPALIDIR — bu
- *     endpoint'lerin gerçek şekli, kimlik doğrulama gereksinimi
- *     (varsa) veya yanıt formatı bu oturumda DOĞRULANAMADI.
+ *   API key -> kısa ömürlü Bearer token -> nsiws SDMX REST ->
+ *   DF_TUFE_SDMX_TT10 -> aylık, toplam CPI, Index, 2025 baz yılı.
  *
- * Bu nedenle bu dosya, TÜİK'e giden HTTP çağrısını sahte/mock bir
- * "başarılı" yanıtla DOLDURMAZ. Bunun yerine:
- *
- *   1. Gerçek kaynak URL'i bir ortam değişkeninden
- *      (TUIK_INDEX_SOURCE_URL) okunur — koda hard-code edilmiş,
- *      doğrulanmamış bir TÜİK URL'i YOKTUR.
- *   2. TUIK_INDEX_SOURCE_URL tanımlı değilse, fetchFromTuik()
- *      AÇIK ve ANLAMLI bir hata fırlatır (bkz. TuikSourceNotConfiguredError).
- *      Sessizce boş/varsayılan veri dönmez.
- *   3. Yanıt geldiğinde, beklenen şekle (aşağıdaki
- *      RAW_RESPONSE_SHAPE) uymuyorsa yine açık bir hata fırlatır
- *      — "büyük ihtimalle doğru" bir alanı tahmin ederek
- *      normalize ETMEZ.
- *
- * PRODUCTION ÖNCESİ YAPILMASI GEREKEN: Gerçek TÜİK
- * databrowser2 JSON-stat 2.0 endpoint'i (veya TÜİK ile
- * kurulacak resmî bir veri erişim anlaşması/API anahtarı) ağ
- * erişimi olan bir ortamda doğrulanmalı, RAW_RESPONSE_SHAPE ve
- * normalizeTuikRecord() buna göre kesinleştirilmelidir. Bu,
- * CHANGES.md'de "kalan risk" olarak ayrıca raporlanıyor.
+ * Dönen 2025-01..2025-12 ve 2026-01..2026-07 endeksleri resmî
+ * TÜİK tablosuyla birebir karşılaştırıldı. API anahtarı yalnızca
+ * TUIK_API_KEY ortam değişkeninden okunur; loglanmaz ve DB'ye
+ * yazılmaz. Yanıtın seri kimliği/boyutları doğrulanmadan hiçbir
+ * gözlem kabul edilmez. Eksik dönem tahmin/interpolasyonla
+ * doldurulmaz; syncFromTuik bunu açıkça skipped olarak raporlar.
  */
 
 const INDEX_TYPE_TUFE_GENEL = "TUFE_GENEL";
+const TUIK_TOKEN_URL = "https://giris.tuik.gov.tr/realms/web/protocol/openid-connect/token";
+const TUIK_SDMX_BASE_URL = "https://nsiws.tuik.gov.tr/rest";
+const TUIK_DATAFLOW_ID = "DF_TUFE_SDMX_TT10";
+const TUIK_DATAFLOW_VERSION = "1.0";
+const TUIK_SERIES_KEY = "TR.M.TUFE.1._Z.2025.2026_01._Z.0.F_TFE";
+const TUIK_SOURCE_URL = `${TUIK_SDMX_BASE_URL}/data/TR,${TUIK_DATAFLOW_ID},${TUIK_DATAFLOW_VERSION}/${TUIK_SERIES_KEY}`;
+const TUIK_EXPECTED_DIMENSIONS = Object.freeze({
+  REF_AREA: "TR",
+  FREQ: "M",
+  SINIFLAMA_DUZEYI: "TUFE",
+  DEGISIM: "1",
+  OZEL_KAPSAM_TUFE: "_Z",
+  BASE_PER: "2025",
+  YAYIM_DONEMI: "2026_01",
+  COICOP_1999: "_Z",
+  COICOP_2018: "0",
+  INDICATOR: "F_TFE"
+});
 
 class TuikSourceNotConfiguredError extends Error {
   constructor() {
     super(
-      "TUIK_INDEX_SOURCE_URL ortam değişkeni tanımlı değil. " +
-      "TÜİK kaynağı doğrulanmadan sahte/varsayılan veri üretilmez " +
-      "(bkz. backend/services/tuik-index-service.js dosya başı notu)."
+      "TUIK_API_KEY ortam değişkeni tanımlı değil. " +
+      "TÜİK kimlik doğrulaması olmadan sahte/varsayılan veri üretilmez."
     );
     this.name = "TuikSourceNotConfiguredError";
     this.code = "TUIK_SOURCE_NOT_CONFIGURED";
@@ -89,30 +80,28 @@ class TuikResponseShapeError extends Error {
 }
 
 /**
- * TÜİK kaynağından ham veriyi çeker.
+ * TÜİK token servisinden kısa ömürlü access token alır.
+ * API key veya token hiçbir hata mesajına/loga eklenmez.
  *
- * Beklenen ham yanıt şekli (RAW_RESPONSE_SHAPE) — bu, gerçek
- * TÜİK endpoint'i ağ erişimiyle doğrulanana kadar bir
- * VARSAYIMDIR ve normalizeTuikRecord() ile birlikte gözden
- * geçirilmelidir:
- *
- *   [{ period: "2025-01" | "2025M01" | ..., value: number|string }, ...]
- *
- * @param {string[]} months - 'YYYY-MM' formatında istenen aylar.
- * @returns {Promise<Array<{ period: string, value: number|string }>>}
+ * @returns {Promise<string>}
  */
-async function fetchFromTuik(months) {
-  const sourceUrl = process.env.TUIK_INDEX_SOURCE_URL;
-
-  if (!sourceUrl) {
+async function getTuikAccessToken() {
+  const apiKey = String(process.env.TUIK_API_KEY || "").trim();
+  if (!apiKey) {
     throw new TuikSourceNotConfiguredError();
   }
 
   let response;
   try {
-    response = await fetch(sourceUrl, {
-      method: "GET",
-      headers: { Accept: "application/json" }
+    response = await fetch(TUIK_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "password",
+        client_id: "nsi-ws-consumer",
+        api_key: apiKey
+      }),
+      signal: AbortSignal.timeout(30000)
     });
   } catch (error) {
     throw new TuikSourceUnreachableError(error);
@@ -120,8 +109,118 @@ async function fetchFromTuik(months) {
 
   if (!response.ok) {
     throw new TuikSourceUnreachableError(
-      new Error(`HTTP ${response.status} ${response.statusText}`)
+      new Error(`TÜİK token servisi HTTP ${response.status}`)
     );
+  }
+
+  let body;
+  try {
+    body = await response.json();
+  } catch (_) {
+    throw new TuikResponseShapeError("Token servisi geçerli JSON döndürmedi.");
+  }
+
+  if (!body || typeof body.access_token !== "string" || !body.access_token) {
+    throw new TuikResponseShapeError("Token yanıtında access_token bulunamadı.");
+  }
+
+  return body.access_token;
+}
+
+function validateTuikSeriesDimensions(body) {
+  const seriesDimensions = body?.structure?.dimensions?.series;
+  if (!Array.isArray(seriesDimensions)) {
+    throw new TuikResponseShapeError("SDMX series dimensions bulunamadı.");
+  }
+
+  for (const [dimensionId, expectedValue] of Object.entries(TUIK_EXPECTED_DIMENSIONS)) {
+    const dimension = seriesDimensions.find(item => item?.id === dimensionId);
+    const values = Array.isArray(dimension?.values) ? dimension.values : [];
+    if (values.length !== 1 || values[0]?.id !== expectedValue) {
+      throw new TuikResponseShapeError(
+        `${dimensionId} boyutu beklenen ${expectedValue} değerini taşımıyor.`
+      );
+    }
+  }
+}
+
+function parseTuikSdmxResponse(body) {
+  validateTuikSeriesDimensions(body);
+
+  const observationDimensions = body?.structure?.dimensions?.observation;
+  const timeDimension = Array.isArray(observationDimensions)
+    ? observationDimensions.find(item => item?.id === "TIME_PERIOD")
+    : null;
+  const timeValues = Array.isArray(timeDimension?.values) ? timeDimension.values : null;
+  const series = body?.dataSets?.[0]?.series;
+
+  if (!timeValues || !series || typeof series !== "object") {
+    throw new TuikResponseShapeError("SDMX dönem veya seri verisi bulunamadı.");
+  }
+
+  const seriesEntries = Object.entries(series);
+  if (seriesEntries.length !== 1) {
+    throw new TuikResponseShapeError("Tek bir toplam TÜFE serisi bekleniyordu.");
+  }
+
+  const observations = seriesEntries[0][1]?.observations;
+  if (!observations || typeof observations !== "object") {
+    throw new TuikResponseShapeError("SDMX observations alanı bulunamadı.");
+  }
+
+  const seenPeriods = new Set();
+  return Object.entries(observations).map(([observationKey, observation]) => {
+    const timeIndexText = observationKey.split(":")[0];
+    if (!/^\d+$/.test(timeIndexText)) {
+      throw new TuikResponseShapeError(`Geçersiz observation anahtarı: ${observationKey}`);
+    }
+
+    const period = timeValues[Number(timeIndexText)]?.id;
+    const value = Array.isArray(observation) ? observation[0] : undefined;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ""))) {
+      throw new TuikResponseShapeError(`Geçersiz TIME_PERIOD değeri: ${period}`);
+    }
+    if (seenPeriods.has(period)) {
+      throw new TuikResponseShapeError(`Mükerrer TIME_PERIOD değeri: ${period}`);
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      throw new TuikResponseShapeError(`${period} için geçersiz endeks değeri.`);
+    }
+
+    seenPeriods.add(period);
+    return { period, value };
+  });
+}
+
+/**
+ * TÜİK resmî SDMX kaynağından ham aylık endeksleri çeker.
+ *
+ * @param {string[]} months - 'YYYY-MM' formatında istenen aylar.
+ * @returns {Promise<Array<{ period: string, value: number|string }>>}
+ */
+async function fetchFromTuik(months) {
+  const accessToken = await getTuikAccessToken();
+  const sortedMonths = [...months].sort();
+  const url = new URL(TUIK_SOURCE_URL);
+  url.searchParams.set("startPeriod", sortedMonths[0]);
+  url.searchParams.set("endPeriod", sortedMonths[sortedMonths.length - 1]);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      signal: AbortSignal.timeout(120000)
+    });
+  } catch (error) {
+    throw new TuikSourceUnreachableError(error);
+  }
+
+  if (!response.ok) {
+    throw new TuikSourceUnreachableError(new Error(`TÜİK SDMX HTTP ${response.status}`));
   }
 
   let body;
@@ -131,16 +230,12 @@ async function fetchFromTuik(months) {
     throw new TuikResponseShapeError("Yanıt geçerli JSON değil.");
   }
 
-  if (!Array.isArray(body)) {
-    throw new TuikResponseShapeError(
-      "Kök seviyede bir dizi bekleniyordu (bkz. RAW_RESPONSE_SHAPE)."
-    );
-  }
+  const records = parseTuikSdmxResponse(body);
 
   // İstenen aylarla sınırla — kaynağın gereğinden fazla veri
   // döndürmesi durumunda gereksiz satır işlemeyi önler.
   const monthSet = new Set(months);
-  return body.filter(row => monthSet.has(normalizeMonthLabel(row?.period)));
+  return records.filter(row => monthSet.has(row.period));
 }
 
 /**
@@ -328,9 +423,6 @@ async function upsertIndexRecord(client, input) {
  * @param {{ action: string, entityId: string, actor: string, oldValue: object|null, newValue: object, metadata: object }} event
  */
 async function recordAuditEvent(client, event) {
-  // audit_events.id VARCHAR(50): action adını ID'ye eklemek manuel/bulk
-  // girişlerde 50 karakteri aşıyor ve tüm transaction'ı rollback ediyordu.
-  // Action zaten ayrı kolonda tutulur; ID yalnızca kısa ve benzersiz olmalıdır.
   const id = `INFL-${Date.now()}-${crypto.randomBytes(8).toString("hex")}`;
 
   await client.query(
@@ -368,6 +460,10 @@ async function syncFromTuik(months, actor) {
   const invalidMonths = months.filter(m => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(m)));
   if (invalidMonths.length > 0) {
     throw new Error(`Geçersiz ay formatı: ${invalidMonths.join(", ")} (YYYY-MM bekleniyor).`);
+  }
+
+  if (new Set(months).size !== months.length) {
+    throw new Error("months listesinde mükerrer ay bulunamaz.");
   }
 
   // fetchFromTuik ağ çağrısı içeriyor — transaction/DB bağlantısı
@@ -425,7 +521,7 @@ async function syncFromTuik(months, actor) {
         month: normalized.month,
         value: normalized.value,
         source: "TUIK_AUTO",
-        sourceUrl: process.env.TUIK_INDEX_SOURCE_URL,
+        sourceUrl: TUIK_SOURCE_URL,
         retrievedBy: null,
         // TÜİK'ten otomatik gelen veri PENDING başlar — hesaplamaya
         // girebilmesi için ayrı bir doğrulama adımından (verified_at/
@@ -860,12 +956,15 @@ async function listIndexRecords(filters = {}) {
 
 module.exports = {
   INDEX_TYPE_TUFE_GENEL,
+  TUIK_DATAFLOW_ID,
+  TUIK_SOURCE_URL,
   TuikSourceNotConfiguredError,
   TuikSourceUnreachableError,
   TuikResponseShapeError,
   BulkInputParseError,
   normalizeMonthLabel,
   normalizeTuikRecord,
+  parseTuikSdmxResponse,
   fetchFromTuik,
   getActiveIndexRecord,
   getNearestPriorActiveRecord,
