@@ -14521,7 +14521,7 @@ ${renderPaymentScheduleFooterContainers()}
       showLoading(`Excel kayıtları sisteme aktarılıyor... (${context.rows.length} kayıt)`, null);
       await new Promise(resolve => requestAnimationFrame(resolve));
 
-      const result = commitImport(context.jobId, context.rows, {
+      const result = await commitImport(context.jobId, context.rows, {
         profile: "GENERIC",
         sourceType: context.sourceType || INTEGRATION_SOURCE_TYPES.EXCEL,
         sourceId: context.sourceId || null,
@@ -14540,10 +14540,13 @@ ${renderPaymentScheduleFooterContainers()}
       closeBulkImportModal();
 
       const committed = Array.isArray(result.committed) ? result.committed : [];
-      const rejected = Number(result.preview?.rejectedRows) || 0;
+      const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+      const backendFailed = rejected.filter(r => (r.errors || []).some(e => e.errorCode === "BACKEND_PERSIST_FAILED")).length;
+      const otherRejected = rejected.length - backendFailed;
       const businessWarnings = committed.filter(c => Array.isArray(c.businessRuleWarnings) && c.businessRuleWarnings.length).length;
       updateLoadingProgress(100, `${committed.length} kayıt başarıyla aktarıldı.`);
-      showAlert(`${committed.length} kayıt aktarıldı${rejected ? `, ${rejected} kayıt reddedildi` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`, "success");
+      const alertType = backendFailed || otherRejected ? (committed.length ? "warning" : "error") : "success";
+      showAlert(`${committed.length} kayıt aktarıldı${otherRejected ? `, ${otherRejected} kayıt doğrulama hatasıyla reddedildi` : ""}${backendFailed ? `, ${backendFailed} kayıt backend'e YAZILAMADI (sadece bunlar sisteme girmedi)` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`, alertType);
     } catch (error) {
       console.error("V19.1 integration import commit error:", error);
       showAlert(`Import tamamlanamadı: ${error?.message || String(error)}`, "error");
@@ -20052,7 +20055,7 @@ ${renderPaymentScheduleFooterContainers()}
     return fields.filter(field => newData[field] !== undefined && String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
-  function commitImport(jobId, rows, options = {}) {
+  async function commitImport(jobId, rows, options = {}) {
     v21RequirePermission("imports.execute", { action: "IMPORT", entityId: jobId });
     const inputRows = Array.isArray(rows) ? rows : [];
     const existingJob = getImportJob(jobId);
@@ -20066,8 +20069,18 @@ ${renderPaymentScheduleFooterContainers()}
     }
     const working = Array.isArray(contracts) ? contracts.slice() : [];
     const committed = [], rejected = [], changes = [];
-    preview.validationResults.forEach(result => {
-      if (result.status === INTEGRATION_ROW_STATUS.INVALID) { rejected.push(result); return; }
+    // DÜZELTME (kritik veri kaybı — bkz. LEASE-030 / "30 kayıt aktarıldı"
+    // sonrası refresh'te 0 sözleşme bugı): önceden bu döngü sadece
+    // working[] ve localStorage'a yazıyordu, backend'e HİÇ POST/PUT
+    // atmıyordu. hydrateContractsFromApi() her sayfa yüklemesinde
+    // GET /api/contracts'ı gerçek kaynak kabul edip localStorage'ın
+    // üzerine yazdığı için, backend'de var olmayan bu satırlar bir
+    // sonraki refresh'te sessizce siliniyordu. Artık her satır için
+    // persistContractToApi() await ediliyor; backend'e yazılamayan
+    // satır working[]'e de girmiyor (yerel state backend'le tutarlı
+    // kalır) ve rejected listesine, hata sebebiyle birlikte düşüyor.
+    for (const result of preview.validationResults) {
+      if (result.status === INTEGRATION_ROW_STATUS.INVALID) { rejected.push(result); continue; }
       const id = String(result.normalizedData.id);
       const index = working.findIndex(c => String(c.id) === id);
       const oldContract = index >= 0 ? working[index] : null;
@@ -20085,6 +20098,24 @@ ${renderPaymentScheduleFooterContainers()}
       const businessRuleCheck = typeof validateImportedContract === "function"
         ? validateImportedContract(next)
         : { valid: true, errors: [] };
+
+      try {
+        await persistContractToApi(next, action === "UPDATE");
+      } catch (error) {
+        rejected.push({
+          ...result,
+          status: INTEGRATION_ROW_STATUS.INVALID,
+          errors: [
+            ...(result.errors || []),
+            { rowNumber: result.rowNumber, field: null, value: id, errorCode: "BACKEND_PERSIST_FAILED", message: `Backend'e kaydedilemedi: ${error?.message || String(error)}` }
+          ]
+        });
+        if (typeof recordAuditEvent === "function") {
+          recordAuditEvent({ action: "IMPORT_BACKEND_PERSIST_FAILED", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import — backend'e yazılamadı", metadata: { jobId, rowNumber: result.rowNumber, error: error?.message || String(error) } });
+        }
+        continue;
+      }
+
       if (index >= 0) working[index] = next; else working.push(next);
       committed.push({ rowNumber: result.rowNumber, contractId: id, action, status: result.status, warningCount: result.warnings.length, businessRuleWarnings: businessRuleCheck.valid ? [] : (businessRuleCheck.errors || []) });
       changes.push({ contractId: id, action, changes: fieldChanges });
@@ -20092,7 +20123,7 @@ ${renderPaymentScheduleFooterContainers()}
       if (!businessRuleCheck.valid && typeof recordAuditEvent === "function") {
         recordAuditEvent({ action: "IMPORT_BUSINESS_RULE_WARNING", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import business rule check (validateImportedContract)", metadata: { jobId, rowNumber: result.rowNumber, errors: businessRuleCheck.errors || [] } });
       }
-    });
+    }
     saveContracts(working);
     if (typeof refresh === "function") { try { refresh(); } catch (error) {} }
     rejected.forEach(result => {
