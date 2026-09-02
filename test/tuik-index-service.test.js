@@ -9,6 +9,51 @@
  * — gerçek bir dış ağ isteği ASLA atılmaz.
  */
 
+function makeSdmxResponse(records) {
+  const expected = [
+    ["REF_AREA", "TR"],
+    ["FREQ", "M"],
+    ["SINIFLAMA_DUZEYI", "TUFE"],
+    ["DEGISIM", "1"],
+    ["OZEL_KAPSAM_TUFE", "_Z"],
+    ["BASE_PER", "2025"],
+    ["YAYIM_DONEMI", "2026_01"],
+    ["COICOP_1999", "_Z"],
+    ["COICOP_2018", "0"],
+    ["INDICATOR", "F_TFE"]
+  ];
+
+  return {
+    structure: {
+      dimensions: {
+        series: expected.map(([id, value]) => ({ id, values: [{ id: value }] })),
+        observation: [{
+          id: "TIME_PERIOD",
+          values: records.map(record => ({ id: record.period }))
+        }]
+      }
+    },
+    dataSets: [{
+      series: {
+        "0:0:0:0:0:0:0:0:0:0": {
+          observations: Object.fromEntries(
+            records.map((record, index) => [String(index), [record.value]])
+          )
+        }
+      }
+    }]
+  };
+}
+
+function mockOfficialTuikFetch(records) {
+  global.fetch = jest.fn(async url => {
+    if (String(url).includes("giris.tuik.gov.tr")) {
+      return { ok: true, json: async () => ({ access_token: "test-token", expires_in: 300 }) };
+    }
+    return { ok: true, json: async () => makeSdmxResponse(records) };
+  });
+}
+
 describe("normalizeMonthLabel / normalizeTuikRecord", () => {
   let service;
 
@@ -49,43 +94,77 @@ describe("normalizeMonthLabel / normalizeTuikRecord", () => {
   });
 });
 
-describe("fetchFromTuik — kaynak yapılandırma", () => {
+describe("fetchFromTuik — resmî SDMX kaynağı", () => {
   let service;
-  const originalEnv = process.env.TUIK_INDEX_SOURCE_URL;
+  const originalApiKey = process.env.TUIK_API_KEY;
   const originalFetch = global.fetch;
 
   beforeEach(() => {
     jest.resetModules();
     jest.doMock("../backend/db/pool", () => ({ query: jest.fn(), connect: jest.fn() }));
+    process.env.TUIK_API_KEY = "test-api-key";
     service = require("../backend/services/tuik-index-service");
   });
 
   afterEach(() => {
-    process.env.TUIK_INDEX_SOURCE_URL = originalEnv;
+    if (originalApiKey === undefined) delete process.env.TUIK_API_KEY;
+    else process.env.TUIK_API_KEY = originalApiKey;
     global.fetch = originalFetch;
   });
 
-  test("TUIK_INDEX_SOURCE_URL tanımlı değilse TuikSourceNotConfiguredError fırlatılır (sahte veri ÜRETİLMEZ)", async () => {
-    delete process.env.TUIK_INDEX_SOURCE_URL;
+  test("TUIK_API_KEY tanımlı değilse açık hata verir ve ağa çıkmaz", async () => {
+    delete process.env.TUIK_API_KEY;
+    global.fetch = jest.fn();
     await expect(service.fetchFromTuik(["2025-01"])).rejects.toThrow(service.TuikSourceNotConfiguredError);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  test("kaynak yapılandırılmışsa ama fetch başarısız olursa TuikSourceUnreachableError fırlatılır", async () => {
-    process.env.TUIK_INDEX_SOURCE_URL = "https://example-not-real.invalid/tuik";
+  test("token servisine erişilemezse TuikSourceUnreachableError fırlatılır", async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error("network down"));
     await expect(service.fetchFromTuik(["2025-01"])).rejects.toThrow(service.TuikSourceUnreachableError);
   });
 
-  test("HTTP 500 dönerse TuikSourceUnreachableError fırlatılır", async () => {
-    process.env.TUIK_INDEX_SOURCE_URL = "https://example-not-real.invalid/tuik";
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, statusText: "Internal Error" });
+  test("token servisi HTTP 500 dönerse anahtar/yanıt sızdırmadan açık hata verir", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 });
     await expect(service.fetchFromTuik(["2025-01"])).rejects.toThrow(service.TuikSourceUnreachableError);
   });
 
-  test("geçersiz JSON şekli (dizi değil) -> TuikResponseShapeError", async () => {
-    process.env.TUIK_INDEX_SOURCE_URL = "https://example-not-real.invalid/tuik";
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ not: "an array" }) });
+  test("doğrulanmış SDMX toplam endeks serisini period/value kayıtlarına dönüştürür", async () => {
+    mockOfficialTuikFetch([
+      { period: "2025-01", value: 88.578291 },
+      { period: "2025-02", value: 90.59197 }
+    ]);
+
+    await expect(service.fetchFromTuik(["2025-02"])).resolves.toEqual([
+      { period: "2025-02", value: 90.59197 }
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const dataRequest = global.fetch.mock.calls[1];
+    expect(String(dataRequest[0])).toContain("DF_TUFE_SDMX_TT10");
+    expect(String(dataRequest[0])).toContain("startPeriod=2025-02");
+    expect(dataRequest[1].headers.Authorization).toBe("Bearer test-token");
+  });
+
+  test("baz yılı/seri boyutu beklenenden farklıysa fail-closed davranır", async () => {
+    const body = makeSdmxResponse([{ period: "2025-01", value: 88.578291 }]);
+    body.structure.dimensions.series.find(item => item.id === "BASE_PER").values[0].id = "2003";
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: "test-token" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => body });
+
     await expect(service.fetchFromTuik(["2025-01"])).rejects.toThrow(service.TuikResponseShapeError);
+  });
+
+  test("mükerrer dönem veya sayısal olmayan endeks kabul edilmez", () => {
+    const duplicate = makeSdmxResponse([
+      { period: "2025-01", value: 88.5 },
+      { period: "2025-01", value: 88.6 }
+    ]);
+    expect(() => service.parseTuikSdmxResponse(duplicate)).toThrow(service.TuikResponseShapeError);
+
+    const invalidValue = makeSdmxResponse([{ period: "2025-01", value: "88.5" }]);
+    expect(() => service.parseTuikSdmxResponse(invalidValue)).toThrow(service.TuikResponseShapeError);
   });
 });
 
@@ -197,19 +276,16 @@ describe("syncFromTuik", () => {
     jest.doMock("../backend/db/pool", () => mockPool);
     service = require("../backend/services/tuik-index-service");
 
-    process.env.TUIK_INDEX_SOURCE_URL = "https://example-not-real.invalid/tuik";
+    process.env.TUIK_API_KEY = "test-api-key";
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
-    delete process.env.TUIK_INDEX_SOURCE_URL;
+    delete process.env.TUIK_API_KEY;
   });
 
   test("ilk kez gelen ay -> insert, PENDING olarak işaretlenir, audit event yazılır", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [{ period: "2025-01", value: 3500 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-01", value: 3500 }]);
 
     const result = await service.syncFromTuik(["2025-01"], "test-admin");
 
@@ -228,10 +304,7 @@ describe("syncFromTuik", () => {
   });
 
   test("aynı değer tekrar gelirse -> unchanged, YENİ satır oluşmaz, audit event yazılmaz", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [{ period: "2025-01", value: 3500 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-01", value: 3500 }]);
 
     await service.syncFromTuik(["2025-01"], "test-admin");
     const rowCountAfterFirst = Object.keys(table).length;
@@ -244,18 +317,12 @@ describe("syncFromTuik", () => {
   });
 
   test("değer değişirse -> ESKİ satır UPDATE edilmez, yeni satır eklenir ve eski satır superseded_by ile bağlanır", async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => [{ period: "2025-01", value: 3500 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-01", value: 3500 }]);
     await service.syncFromTuik(["2025-01"], "test-admin");
     const firstRowId = Object.values(table)[0].id;
     const firstRowOriginalValue = Object.values(table)[0].index_value;
 
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => [{ period: "2025-01", value: 3600 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-01", value: 3600 }]);
     const result = await service.syncFromTuik(["2025-01"], "test-admin");
 
     expect(result.synced).toEqual(["2025-01"]);
@@ -272,10 +339,7 @@ describe("syncFromTuik", () => {
   });
 
   test("normalize edilemeyen kayıt skipped listesine düşer, senkronizasyonu durdurmaz", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [{ period: "garbage-period", value: 100 }]
-    });
+    mockOfficialTuikFetch([]);
 
     // months filtresi 'garbage-period'ı normalize edip 2025-01 ile
     // eşleştiremeyeceği için fetchFromTuik zaten filtreleyecek, bu
@@ -291,16 +355,10 @@ describe("syncFromTuik", () => {
     // 2025-01 = 3500 aktif kayıt olarak var. 2025-02 için gelen
     // değer (999999), BİR ÖNCEKİ AYIN (2025-01) aktif değeriyle
     // karşılaştırılır — aynı ayın kendisiyle değil.
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => [{ period: "2025-01", value: 3500 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-01", value: 3500 }]);
     await service.syncFromTuik(["2025-01"], "test-admin");
 
-    global.fetch = jest.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => [{ period: "2025-02", value: 999999 }]
-    });
+    mockOfficialTuikFetch([{ period: "2025-02", value: 999999 }]);
     const result = await service.syncFromTuik(["2025-02"], "test-admin");
 
     expect(result.synced).toEqual([]);

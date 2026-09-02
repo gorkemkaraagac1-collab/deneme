@@ -214,6 +214,16 @@ describe("POST /api/inflation-indices/sync", () => {
     expect(syncFromTuikMock).not.toHaveBeenCalled();
   });
 
+  test("ADMIN + mükerrer ay -> 400, syncFromTuik hiç çağrılmaz", async () => {
+    const res = await request(app)
+      .post("/api/inflation-indices/sync")
+      .set(authHeader(USER_ADMIN))
+      .send({ months: ["2025-01", "2025-01"] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("DUPLICATE_MONTHS");
+    expect(syncFromTuikMock).not.toHaveBeenCalled();
+  });
+
   test("ADMIN + geçerli istek + TÜİK kaynağı yapılandırılmamış -> 503, sahte veri dönmez", async () => {
     const { TuikSourceNotConfiguredError } = jest.requireActual("../backend/services/tuik-index-service");
     syncFromTuikMock.mockRejectedValue(new TuikSourceNotConfiguredError());
@@ -237,6 +247,6 @@ describe("POST /api/inflation-indices/sync", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.synced).toEqual(["2025-01"]);
-    expect(syncFromTuikMock).toHaveBeenCalledWith(["2025-01"], "adminUser");
+    expect(syncFromTuikMock).toHaveBeenCalledWith(["2025-01"], "USER-ADMIN");
   });
 });
