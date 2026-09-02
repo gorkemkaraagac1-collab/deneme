@@ -377,6 +377,7 @@ async updateLicenseLimits(licenseId, data) {
  * GET    /api/admin/inflation-indices?status=&months=
  * POST   /api/admin/inflation-indices          { month, value }
  * POST   /api/admin/inflation-indices/bulk     { text }
+ * POST   /api/inflation-indices/sync           { months }
  * PATCH  /api/admin/inflation-indices/:id/verify
  * PATCH  /api/admin/inflation-indices/:id/reject { reason? }
  * ========================================================
@@ -430,6 +431,21 @@ async createInflationIndicesBulk(text) {
         };
     }
     return result;
+},
+async syncInflationIndices(months) {
+    const response = await fetch(
+        "/api/inflation-indices/sync",
+        {
+            method: "POST",
+            headers: this.getHeaders(),
+            body: JSON.stringify({ months })
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "TÜİK senkronizasyonu başarısız" };
+    }
+    return { success: true, ...result };
 },
 async verifyInflationIndex(id) {
     const response = await fetch(
