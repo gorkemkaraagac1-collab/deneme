@@ -1632,6 +1632,570 @@ Faz 3, planın kendi risk sıralamasına göre şu 10 fonksiyonu hedefliyor
 `createBulkJournalModal`, `renderBulkJournalResults`,
 `renderCloseDashboardPage`, `renderAccountingCenter`.
 
+---
+
+# 36. tfrs16.js REFAKTÖRÜ — FAZ 3: SRP BÖLME (DEVAM EDİYOR)
+
+## Sıra kararı
+
+Görkem'e Faz 3 başlamadan önce `calculateLeaseEngineImpl`'in özel bir
+risk taşıdığı bildirildi (bkz. aşağıdaki risk notu) ve iki seçenek
+sunuldu: bu fonksiyonu izole ele almak, ya da planın kendi sırasına
+sadık kalmak. **Karar: plana sadık kalındı** — `calculateLeaseEngineImpl`
+Faz 3'ün ilk hedefi olarak, normal 6 adımlı doğrulama zinciriyle
+işlendi.
+
+## FAZ 3 SRP RİSKİ — calculateLeaseEngineImpl (bölme ÖNCESİ tespit edildi)
+
+`calculateLeaseEngineImpl` içinde üç kod bölgesi **aynı 0-tabanlı
+index'i** paylaşıyordu: eskalasyon (`paymentDates.map`), PV hesabı
+(`paymentDates.forEach`, advance için `exponent = index*stepMonths`)
+ve amortisman döngüsü (`paymentAmounts[i]`, `isFirstAdvancePayment =
+advance && i===0` — Faz 0'ın advance-timing düzeltmesi). Bu üçünün
+"index 0" tanımı aralarında hiçbir yeniden sıralama/filtreleme
+olmadığı için tutarlıydı. SRP bölmesinin bunu bozma riski: bölünmüş
+parçalardan biri diziyi yeniden dilimler/kaydırırsa, `i===0` kontrolü
+artık gerçek ilk ödemeyi işaret etmez ve Faz 0'da kapatılan bug SESSİCE
+geri açılır.
+
+**Önlem (uygulandı):** `paymentAmounts`/`paymentDates`/`advance`/
+`periodRate` bölünmüş fonksiyonlara (`applyLeaseEscalation` →
+`calculateAmortizationTable`) DOĞRUDAN parametre olarak, hiçbir ara
+dönüşüm olmadan geçirildi. `calculateAmortizationTable` bu diziyi
+KENDİSİ yeniden üretmiyor/dilimlemiyor — `applyLeaseEscalation`'ın
+ürettiği haliyle alıyor.
+
+## Bölme
+
+**Önce (tek fonksiyon, 537 satır, ~5851-6387):** `calculateLeaseEngineImpl`.
+
+**Sonra (7 fonksiyon, extract-and-delegate):**
+
+| Yeni fonksiyon | Sorumluluk |
+|---|---|
+| `buildLeaseEngineAssumptions(contract)` | Kontrat alanlarını normalize edilmiş `assumptions` objesine çevirir |
+| `buildExemptLeaseResult(contract, assumptions)` | TFRS 16.5-8 istisnası (kısa vadeli/düşük değerli) — uygulanamazsa `null` |
+| `resolveLeaseEngineCore(contract, assumptions)` | payment/rate/months/stepMonths/advance/periodRate + ödeme tarihleri; geçersiz girdide `{earlyReturn: ...}` |
+| `applyLeaseEscalation(contract, assumptions, core)` | `paymentAmounts` dizisini üretir (eskalasyon uygulanmış) |
+| `calculateInitialLeaseMeasurement(assumptions, core, esc)` | PV (initialLiability), initialROU, depreciation parametreleri |
+| `calculateAmortizationTable(assumptions, core, esc, measurement)` | Dönem dönem roll-forward tablosu — **advance-fix burada, satır satır aynı** |
+| `assembleLeaseEngineResult(assumptions, core, measurement, schedule)` | Nihai dönüş objesini paketler |
+
+`calculateLeaseEngineImpl` artık 7 fonksiyonu sırayla çağıran 12
+satırlık ince bir orkestratör. **Public API imzası
+(`calculateLeaseEngineImpl(contract)` → aynı dönüş şekli) değişmedi**
+— `window.GK_TFRS16` export'u ve test shim'i aynı isme işaret etmeye
+devam ediyor.
+
+## Uygulama yöntemi — satır-bazlı doğrulanmış değiştirme
+
+Bu ölçekteki bir değişiklik için `str_replace`'in metin eşleştirmesi
+yerine daha güvenli bir yöntem kullanıldı: orijinal 537 satır önce
+ayrı bir dosyaya alındı, dosyanın o an gerçekten o satırlarda o metni
+İÇERDİĞİ (Python ile satır satır) DOĞRULANDI, ancak o zaman yeni içerik
+yazıldı. Bu, "yanlış yeri değiştirme" riskini sıfırladı.
+
+## DOĞRULAMA
+
+- `node --check`: OK
+- Tam Jest suite (golden + invariants dahil): **396/396 yeşil** —
+  GC-02/GC-04/GC-19 (advance-timing) ve GC-18 dahil **hiçbir fixture
+  sapmadı**. Bu, yukarıdaki risk notunun endişe ettiği index kayması
+  senaryosunun GERÇEKLEŞMEDİĞİNİN doğrudan kanıtı.
+- `git diff` gözden geçirmesi: değişiklik yalnızca fonksiyon
+  sınırları içinde; dosyanın geri kalanı (14526'dan sonrası)
+  önceki fazlardan değişmeden duruyor.
+- Playwright: bu fonksiyon DOM'a dokunmuyor (saf hesaplama), Faz 0.4
+  kapsam kuralı gereği gerekmiyor.
+
+**Kalan Faz 3 hedefleri:** `generateModificationJournal`,
+`generateReassessmentJournal`, `validateContract`, `downloadTemplate`,
+`renderPaymentScheduleSection`/`openContractModal`,
+`createBulkJournalModal`, `renderBulkJournalResults`,
+`renderCloseDashboardPage`, `renderAccountingCenter`.
+
+## KRİTİK ÖLÇÜM DÜZELTMESİ — planın satır sayıları kısmen yanlış
+
+Kalan hedeflere geçmeden önce her birini **isimle** yeniden ölçtüm
+(planın verdiği satır numaralarına güvenmedim, çünkü
+`calculateLeaseEngineImpl` bittikten sonra dosya satırları kaymıştı).
+Sonuç, planın orijinal ölçümünün BİLE bazı fonksiyonlar için yanlış
+olduğunu gösterdi — bu benim Faz 1/2/3 değişikliklerimden değil,
+planın kendi ölçüm aracının hatasından kaynaklanıyor (muhtemelen
+template literal içindeki `{}` karakterlerine takılan naif bir
+brace-sayma yöntemi — aynı hatayı ben de ilk denememde yaptım).
+
+| Fonksiyon | Plan iddiası | Gerçek ölçüm |
+|---|---|---|
+| `renderAccountingCenter` | 618 | **264** |
+| `validateContract` | 599 | **111** |
+| `createBulkJournalModal` | 463 | **461** ✓ |
+| `renderBulkJournalResults` | 462 | **460** ✓ |
+| `renderCloseDashboardPage` | 402 | **400** ✓ |
+| `downloadTemplate` | 394 | **192** (bölme öncesi) |
+| `renderPaymentScheduleSection` | 249 | **247** ✓ |
+| `openContractModal` | 249 | **247** ✓ |
+
+`generateModificationJournal` (504→95) ve `generateReassessmentJournal`
+(348→41) içinse gerçek küçülme SEBEBİ biliniyor: Faz 1'in
+`buildJournalLine` konsolidasyonu bunları organik olarak küçülttü.
+
+**Sonuç — üç fonksiyon SRP bölmesi olmadan Faz 3 kapsamından çıkarıldı:**
+`validateContract` (111 satır, zaten 9 basit alan kontrolü — bölmek
+gereksiz dolaylama eklerdi), `generateModificationJournal` (95 satır),
+`generateReassessmentJournal` (41 satır) — üçü de zaten tek
+sorumluluğa sahip, okunabilir, makul boyutta.
+
+## downloadTemplate — TAMAMLANDI
+
+Plan önerisiyle birebir örtüştü: ~100 satırlık statik örnek satır
+verisi fonksiyondan çıkarılıp `LEASE_IMPORT_TEMPLATE_ROWS` sabitine
+taşındı; `downloadTemplate()` artık yalnızca XLSX/CSV yazma işini
+yapan ~65 satırlık bir fonksiyon.
+
+**Doğrulama:** `node --check` + tam Jest suite (golden dahil):
+396/396 yeşil. Ayrıca Playwright smoke testi (`şablon indirme çalışır`)
+gerçek tarayıcıda özel olarak koşuldu — indirme akışı bozulmadı.
+
+## FAZ 3 — KATEGORİ 1 (saf hesaplama) KAPANDI
+
+✅ `calculateLeaseEngineImpl` — 7 fonksiyona bölündü
+✅ `downloadTemplate` — veri/yazma ayrıldı
+⏭️ `validateContract`, `generateModificationJournal`,
+`generateReassessmentJournal` — zaten küçük, bölme gerekmedi
+
+**Sırada Kategori 2 (render fonksiyonları — DOM yan etkisi var,
+Playwright doğrulaması ŞART):** `renderPaymentScheduleSection` (247),
+`renderAccountingCenter` (264), `renderBulkJournalResults` (460),
+`renderCloseDashboardPage` (400).
+
+**En son Kategori 3 (modal/event wiring — en yüksek risk):**
+`openContractModal` (247), `createBulkJournalModal` (461).
+
+---
+
+## ⚠️ OTURUM İÇİ OLAY — `git checkout` neredeyse tüm işi sildi
+
+`renderPaymentScheduleSection` bölünmesi sırasında bir whitespace
+uyuşmazlığını "geri almak" için `git checkout -- js/tfrs16.js`
+çalıştırıldı. **Bu komut dosyayı orijinal commit'e (`d8ef6d2`)
+döndürdü — sadece o turun değil, Faz 0'dan itibaren TÜM oturumun
+değişikliklerini sildi** (advance-timing düzeltmesi, tüm Faz 1 DRY
+konsolidasyonu, Faz 2 JSDoc'ları, Faz 3'ün calculateLeaseEngineImpl
+ve downloadTemplate bölmeleri). Hiçbir şey commit edilmemişti, bu
+yüzden `git checkout` geri getirilemez bir silme işlemi oldu.
+
+**Kurtarma:** En son teslim edilen zip'ten (`tfrs16-faz3-kategori1-
+tamamlandi.zip`, bir önceki turun sonunda üretilmişti) `js/tfrs16.js`
+geri yüklendi. İçerik `grep`/`node --check`/tam Jest suite ile
+doğrulandı (396/396), kayıp yoktu — kurtarma tam başarılı oldu.
+
+**KURAL (bundan sonra geçerli): Bu oturumda hiçbir şey commit
+edilmediği için `git checkout`/`git reset --hard` gibi komutlar
+KULLANILMAYACAK.** Bir değişikliği geri almak gerekirse: (a) en son
+teslim edilen zip'ten ilgili dosya geri yüklenir, veya (b) `str_replace`
+ile nokta atışı düzeltme yapılır. Zip'ler artık yalnızca teslimat
+değil, aynı zamanda kurtarma noktası.
+
+**İkinci kök neden (whitespace hatasının kendisi):** İlk bölme
+denemesinde sınırları `grep -n "."` ile bulmuştum — bu komut BOŞ
+SATIRLARI ATLAR, bu yüzden gösterdiği satır numaraları dosyanın gerçek
+satır numaralarıyla ÖRTÜŞMÜYORDU (boş satırlar sayılmadığı için
+kayıyordu). Düzeltme: `cat -n` (tüm satırları numaralandırır) ile
+sınırlar yeniden bulundu, sonra Python'da ham metin parçaları
+CÜMLE/SATIR EKLEMEDEN yeniden birleştirilip **orijinalle byte-bazlı
+eşleştiği doğrulandıktan SONRA** dosyaya yazıldı.
+
+---
+
+## renderPaymentScheduleSection — TAMAMLANDI (Kategori 2'nin ilki)
+
+Saf template-string üreten bir fonksiyon olduğu tespit edildi (içinde
+`document.`/`addEventListener`/`querySelector` YOK) — DOM yan etkisi
+yok, risk profili aslında Kategori 1'e (saf hesaplama) daha yakın.
+Yine de plan sınıflandırmasına sadık kalınıp Playwright ile ayrıca
+doğrulandı.
+
+**Bölme:** 247 satırlık tek fonksiyon → 4 alt fonksiyon
+(`renderPaymentScheduleHeader`, `renderPaymentScheduleFilters`,
+`renderPaymentScheduleTableShell`, `renderPaymentScheduleFooterContainers`)
++ bunları `${}` interpolasyonuyla birleştiren ince ana fonksiyon.
+
+**Doğrulama yöntemi — bu bölme için özellikle güçlendirildi:**
+Satır-bazlı doğrulanmış değiştirmeye ek olarak, fonksiyonun ÇIKTISI
+(çağrılmış hali) bölünme öncesi ve sonrası ayrı ayrı yakalanıp
+**MD5 karşılaştırıldı: `183d7ca5eccb8e6b67b4ff0759e9e086` — birebir
+aynı, 7910 byte, sıfır fark.** Bu, template-literal bölmelerinde
+whitespace/satır sonu tutarlılığını kanıtlamanın en güvenilir yolu —
+elle akıl yürütmekten (yukarıdaki olayın gösterdiği gibi) çok daha
+sağlam.
+
+**Diğer doğrulama:** `node --check` OK, tam Jest suite (golden
+dahil) 396/396, Playwright smoke suite 5/5 (özellikle "kontrat
+oluştur → detay aç → ödeme planı gör" testi 36 satırlık tabloyu
+gerçek tarayıcıda doğruladı).
+
+## FAZ 3 — KATEGORİ 2 DURUMU
+
+✅ `renderPaymentScheduleSection`
+✅ `renderAccountingCenter`
+✅ `renderBulkJournalResults`
+⏭️ `renderCloseDashboardPage` — KASITLI OLARAK BÖLÜNMEDİ (aşağıya bakınız)
+
+---
+
+## ⚠️ İKİNCİ WHITESPACE HATASI VE DERSİ — renderBulkJournalResults
+
+`renderBulkJournalResults` bölmesi ilk denemede yine byte-bazlı fark
+verdi (10 byte). Bu kez neden farklıydı ve iki AYRI kök neden çıktı:
+
+**Kök neden 1:** Önceki iki bölmede (`renderPaymentScheduleSection`,
+`renderAccountingCenter`) orijinal `return \`...\`` yapısını KORUYUP
+içine `${helper()}` ile satır-içi substitution yapmıştım — bu güvenliydi
+çünkü dış template'in kendi satır sonları hiç değişmiyordu. Bu
+fonksiyonda ise `summary.innerHTML = \`...\`` atamasını TAMAMEN bir
+fonksiyon ÇAĞRISIYLA (`summary.innerHTML = renderBulkJournalSummaryCards(...)`)
+değiştirdim — bu durumda helper'ın DÖNÜŞ DEĞERİ, orijinal backtik'ler
+arasındaki İÇERİĞİN TAMAMINI kendi başına, eksiksiz üretmek zorunda.
+İlk denemede `summary.innerHTML = \`` satırının backtik'ten hemen
+sonraki kendi satır sonu karakterinin de string'in bir parçası
+olduğunu unutmuştum (extraction satır 96'dan başlıyordu, ama satır
+95'in kendi \n'i de içeri dahil edilmeliydi).
+
+**Kök neden 2 (daha incelikli):** Kapanış backtik satırı ("    \`;")
+üzerinde backtik'ten ÖNCE gelen girinti (4 boşluk) de string'in SON
+karakterleriymiş — bunu da atlamıştım. JS template literal'de kapanış
+backtik'i bir SINIRLAYICI; ondan hemen önceki, AYNI SATIRDAKİ her
+karakter (whitespace dahil) string'in parçasıdır.
+
+**Doğrulama yöntemi bu kez daha da güçlendirildi:** Önceki ikisinde
+saf string dönen fonksiyonların ÇIKTISINI doğrudan karşılaştırmıştım.
+Bu fonksiyon gerçek `innerHTML` ataması + global `bulkJournalData`
+state'i kullandığı için, `__seedBulkJournalDataForTest()` adında (Faz
+0'ın `__seedContractsForTest`'iyle AYNI desende) yeni bir test-shim
+yardımcısı eklendi, gerçek DOM elemanları oluşturulup fonksiyon
+çağrıldı, `summary.innerHTML`/`preview.innerHTML`/export butonunun
+durumu **MD5 ile** karşılaştırıldı: `d93b248e2c9b4637512d41d93ded4c0f`
+— birebir aynı.
+
+**Ayrıca bu turda bir kurtarma daha gerekti:** Önceki turun sonunda
+teslim edilen zip (`tfrs16-faz3-payment-schedule-split.zip`)
+`renderAccountingCenter` bölmesinden ÖNCE alınmış olduğu ortaya çıktı
+— geri yüklemede o bölme kayboldu, fark edilip yeniden uygulandı (aynı
+önceden doğrulanmış MD5 ile teyit edildi). **Ders: zip'leri HER
+fonksiyon bölmesi sonrası almak, sadece "kontrol noktası" hissedilen
+yerlerde değil.**
+
+## FAZ 3 — KATEGORİ 3 (modal/event wiring — en yüksek risk) DURUMU
+
+`openContractModal` incelendi: plan bu kategoriyi "event listener
+sırası/timing hassas" diye en riskli işaretlese de, bu fonksiyonun
+KENDİSİ **hiçbir `addEventListener` çağrısı içermiyor** (doğrulandı) —
+sadece form alanlarını `contract` nesnesinden dolduruyor (`setInput`/
+`setCheckbox` × 30+ çağrı) ve modalı gösteriyor. Gerçek risk profili
+`renderCloseDashboardPage`'den çok daha düşük.
+
+✅ `openContractModal` — form doldurma bloğu (187 satır, `setInput`/
+`setCheckbox`/`injectAssetClassField`/`injectV26CurrencyFields`)
+`populateContractFormFields(contract)`'a extract edildi. try/catch
+sınırı AYNI YERDE (`openContractModal` içinde) bırakıldı — extract
+edilen fonksiyon hata fırlatırsa hâlâ aynı catch tarafından
+yakalanıyor, mevcut hata-kurtarma davranışı (modal her durumda açılır)
+korunuyor.
+
+**Doğrulama:** Ham yeniden birleştirme byte-bazlı doğrulandı (kod
+VERBATIM taşındı, hiçbir koşul ifadesi değişmedi — `contract?.field`
+gibi ifadelerin mantığı aynı). Tam Jest suite 396/396, Playwright
+smoke suite 5/5 (yeni sözleşme yolu — `contract=null` — gerçek
+tarayıcıda doğrulandı). Düzenleme yolu (`contract≠null`) için ayrı bir
+e2e testi YAZILMADI çünkü extraction hiçbir koşullu ifadeyi
+değiştirmedi — `contract?.field` ifadelerinin `contract=null` dalı
+zaten test ediliyor, `contract≠null` dalı AYNI ifadenin diğer tarafı,
+farklı bir kod yolu değil.
+
+⏳ Kalan: `createBulkJournalModal` (461 satır)
+
+## `createBulkJournalModal` — TAMAMLANDI (en yüksek riskli hedef)
+
+461 satır, **6 gerçek `addEventListener`** — planın "en riskli"
+dediği kategorinin tam örneği. İnceleme sonucu: 6 listener'ın HEPSİ
+İSİMLİ, top-level fonksiyonlara işaret ediyor
+(`closeBulkJournalModal`, `exportBulkJournals`,
+`updateBulkVoucherDefaults`, `generateBulkJournals`) —
+`createBulkJournalModal`'ın KENDİ closure'ından yakalanan mutable
+state YOK (`renderCloseDashboardPage`'in aksine). Bu, gerçek riski
+plan kategorisinin ima ettiğinden düşük kılıyor.
+
+**Bölme:** 3 fonksiyon — `buildBulkJournalModalHtml()` (saf HTML
+üretimi), `wireBulkJournalModalEvents()` (6 listener bağlama),
+`createBulkJournalModal()` (idempotent kontrol + eleman oluşturma +
+body'ye ekleme + yukarıdaki ikisini çağıran ince orkestratör).
+
+**Doğrulama yöntemi:** Bir önceki `renderBulkJournalResults`
+hatasından çıkarılan İKİ dersin (backtik-sonrası satır sonu +
+backtik-öncesi girinti) İLK denemede doğru uygulanmasıyla,
+`outerHTML` MD5'i **ilk seferde** birebir eşleşti: `a54731e9...`.
+Doğrulama akışı: bölünmüş hali geçici olarak orijinaline döndür →
+"before" yakala → bölünmüş hale geri dön → "after" yakala → MD5
+karşılaştır.
+
+**Event-wiring'in FİİLEN çalıştığını kanıtlayan yeni Playwright
+testi eklendi** ("toplu fiş modalı açılır ve kapanır"): kontrat
+oluştur → "Fişler" tab'ına geç → "Toplu Fiş Üret" butonuna tıkla →
+modalın açıldığını doğrula → **`#closeBulkJournalModal`'a tıkla**
+(gerçek DOM'da gerçek bir click event'i, `wireBulkJournalModalEvents`
+tarafından bağlanan listener'ı tetikliyor) → modalın kapandığını
+doğrula. Bu, sadece DOM yapısını değil, event wiring'in gerçekten
+işlevsel olduğunu kanıtlıyor — bu fonksiyonun asıl risk kategorisiydi.
+
+**Sonuç:** Tam Jest suite 396/396, Playwright smoke suite **6/6**
+(yeni test dahil), 3 ardışık koşumda kararlı (18/18).
+
+## FAZ 3 — TÜM KATEGORİLER TAMAMLANDI
+
+| Kategori | Fonksiyon | Durum |
+|---|---|---|
+| 1 — saf hesaplama | `calculateLeaseEngineImpl` | ✅ 7 fonksiyona bölündü |
+| 1 — saf hesaplama | `downloadTemplate` | ✅ veri/yazma ayrıldı |
+| 1 — saf hesaplama | `validateContract` | ⏭️ zaten küçük (111 satır), atlandı |
+| 1 — saf hesaplama | `generateModificationJournal` | ⏭️ Faz 1'de zaten küçüldü (95 satır) |
+| 1 — saf hesaplama | `generateReassessmentJournal` | ⏭️ Faz 1'de zaten küçüldü (41 satır) |
+| 2 — render | `renderPaymentScheduleSection` | ✅ 4 fonksiyona bölündü |
+| 2 — render | `renderAccountingCenter` | ✅ 4 fonksiyona bölündü |
+| 2 — render | `renderBulkJournalResults` | ✅ 3 fonksiyona bölündü |
+| 2 — render | `renderCloseDashboardPage` | ⏭️ KASITLI bölünmedi (closure/re-render riski) |
+| 3 — modal/event | `openContractModal` | ✅ form doldurma extract edildi |
+| 3 — modal/event | `createBulkJournalModal` | ✅ 3 fonksiyona bölündü |
+
+**Faz 3 kapandı.** Sırada Faz 4 (Performans — `getTotalLeaseLiability`
+ailesinin konsolidasyonu + GC-18'in kasıtlı ertelenmiş düzeltmesi, bkz.
+bölüm 33) var.
+
+---
+
+# 37. tfrs16.js REFAKTÖRÜ — FAZ 4: PERFORMANS (TAMAMLANDI)
+
+## 4.1a — GC-18 DÜZELTMESİ (bölüm 33'ten devralınan karar, şimdi uygulandı)
+
+**Kök neden [Kesin, kod okunarak doğrulandı]:** `calculateLiabilitySplitAsOf`
+iki FARKLI şekilde çağrılıyordu:
+- **3 argümanlı** (`scheduleOverride` ile) — yalnızca `cfoGetLiabilitySplit`
+  (CFO Dashboard katmanı) tarafından, `cfoBuildSchedule`'ın seçtiği
+  DOĞRU (REASSESSED>MODIFIED>LEASE önceliğine sahip) schedule ile.
+- **2 argümanlı** (override'sız) — `getScheduleAsOfReportingDate`
+  üzerinden, bu da doğrudan `calculateLeaseEngine(contract)` çağırıyordu
+  — **modification/reassessment'ı TAMAMEN YOK SAYARAK.**
+
+**Etki alanı beklenenden GENİŞ çıktı** — yalnızca golden testindeki
+GC-18 değil, 2 argümanlı forma bağımlı ÜRETİM kod yolları da etkileniyordu:
+`calculateCurrentLiabilityAsOf`, `calculateNonCurrentLiabilityAsOf`,
+`calculateNext12Months`, **V23/TMS21 kapanış fişi üretimi (satır ~8712
+— gerçek muhasebe fişi kaydı!)**, `controlClassification` (bir doğrulama/
+kontrol fonksiyonu — ironik biçimde YANLIŞ değeri "doğru" kabul ediyordu).
+
+**Düzeltme öncesi doğrulama:** `buildReassessedSchedule` →
+`buildReassessmentHistorySchedule`'ın kodu okunarak, reassessment
+schedule'ının kendi İÇİNDE, reassessment'ın effectiveDate'inden ÖNCEKİ
+dönemler için modification'ı da (varsa) tarihsel taban olarak
+kapsadığı doğrulandı (`historical.concat(future)`, tüm sözleşme
+ömrünü kapsıyor) — yani "REASSESSED_SCHEDULE'ı seç" kararı, reassessment
+henüz yürürlüğe girmemiş raporlama tarihleri için de GÜVENLİ (o
+dönemler için otomatik olarak modification-düzeltilmiş rakamları
+veriyor, reassessment'ı YOK SAYMIYOR ama henüz UYGULAMIYOR da).
+
+**Düzeltme:** `resolveContractScheduleSource(contract)` adında YENİ bir
+CORE-katmanı fonksiyonu eklendi (`cfoBuildSchedule`'ın eski mantığının
+BİREBİR taşınmış hali). `cfoBuildSchedule` artık buna delege eden ince
+bir sarmalayıcı. `getScheduleAsOfReportingDate` artık
+`calculateLeaseEngine(contract)` yerine `resolveContractScheduleSource(contract)`
+kullanıyor — **TEK kaynak, iki farklı schedule-seçim mantığı kalmadı.**
+
+**Doğrulama:** Yeni golden baseline yazıldı (davranış KASITLI
+değişti — GC-18'in `split` değeri 8.364.857'den 7.130.697'ye düştü,
+`cfo` değeriyle ARTIK EŞLEŞİYOR). **Invariant sonucu: 379/379 — Faz
+0'dan beri açık kalan TEK miras ihlali (INV-11, GC-18) kapandı.** Tam
+Jest suite 396/396, Playwright 6/6.
+
+## 4.1b — `getCfoAggregateMetrics` konsolidasyonu (planın performans önerisi)
+
+`getTotalLeaseLiability`/`getCurrentLeaseLiability`/
+`getNonCurrentLeaseLiability`/`getTotalRuoAssets` her biri AYNI
+`cfoGetContracts().filter(...).map(cfoGetContractMetricsInternal)`
+zincirini bağımsız çalıştırıyordu. Bir CFO Dashboard bu 4 fonksiyonu
+art arda çağırırsa (tipik kullanım), reassessment/modification'lı
+kontratlarda pahalı olan bu zincir (control sonuçları, next-12-ay
+filtreleme, `buildReassessedSchedule` dahil) **4 kez** tekrarlanıyordu.
+
+**Bulgu:** `calculateLeaseEngine`'in KENDİ önbelleği
+(`CALCULATION_CACHE`, satır ~813) zaten var ve kullanılıyor — ama
+YALNIZCA `cfoBuildSchedule`'ın `LEASE_SCHEDULE` (ham motor) dalı için.
+`REASSESSED_SCHEDULE`/`MODIFIED_SCHEDULE` dalları
+(`buildReassessedSchedule`/`buildModifiedSchedule`) HİÇ önbelleğe
+alınmıyor — her çağrıda sıfırdan hesaplanıyor.
+
+**Çözüm:** `getCfoAggregateMetrics(reportingDate)` eklendi —
+`reportingDate` bazında `CFO_AGGREGATE_CACHE` (yeni `Map`) ile
+önbelleğe alınan, TEK GEÇİŞTE tüm 4 toplamı (`leaseLiability`,
+`currentLiability`, `nonCurrentLiability`, `rouAsset`) hesaplayan
+fonksiyon. Eski 4 fonksiyon buna delege eden ince sarmalayıcılara
+çevrildi (**public API değişmedi**, plan önerisiyle birebir).
+
+**Önbellek geçersiz kılma (kritik güvenlik kontrolü):**
+`CFO_AGGREGATE_CACHE`, `CALCULATION_CACHE` ile AYNI TDZ nedeniyle AYNI
+yerde tanımlandı; `clearCalculationCache()` artık İKİSİNİ birden
+temizliyor — tek bakım noktası. `saveContracts()`'ın (kontrat
+kalıcılaştırmanın TEK merkezi noktası) **koşulsuz** her çağrıda
+`clearCalculationCache()` çağırdığı doğrulandı (satır ~1184) — yani
+yeni cache, mevcut (zaten güvenilir) cache ile AYNI geçersiz kılma
+garantisini miras alıyor.
+
+**Doğrulama:** Özel bir test yazıldı — aynı `reportingDate` için art
+arda çağrılan 4 fonksiyonun tutarlı olduğu (`current+nonCurrent≈total`),
+CACHE'İN çalıştığı (2. çağrı aynı değeri döndürüyor) VE yeni bir
+kontrat eklendiğinde (`clearCalculationCache` tetiklenince) cache'in
+doğru şekilde BAYATLADIĞI (yeni toplamın arttığı) doğrulandı. Tam
+suite: 396/396.
+
+## 4.2 — Cache kapsamı incelendi, ek değişiklik gerekmedi
+
+`calculateLeaseEngine`'in `CALCULATION_CACHE`'i kullandığı doğrulandı
+(satır ~5801). `cfo*`/`rpt*` katmanlarının bunu KULLANDIĞI (dolaylı
+olarak, `calculateLeaseEngine` üzerinden) ama `buildReassessedSchedule`/
+`buildModifiedSchedule`'ın kendi önbelleği OLMADIĞI doğrulandı — 4.1b'nin
+`getCfoAggregateMetrics` önbelleği bunun EN ETKİLİ örneğini (CFO
+Dashboard'un 4 fonksiyonu art arda çağırması) zaten çözüyor.
+`buildReassessedSchedule`/`buildModifiedSchedule`'a AYRI bir önbellek
+katmanı eklemek daha invaziv bir değişiklik olurdu (modification/
+reassessment durumuna bağlı cache-key tasarımı gerektirir) — plan
+metninin kendisi de bu maddeyi "incelenecek" (yatırım kararı değil)
+diye çerçeveliyor. Ek değişiklik yapılmadı.
+
+## 4.3 — Gereksiz clone taraması yapıldı, hot-loop bulgusu YOK
+
+Kontrat listesi üzerinde döngü yapan TÜM yerler (`contracts.forEach`,
+`cfoGetContracts().map/forEach` — CFO Dashboard aggregation ailesi
+dahil, satır ~15970-16124) tarandı: **hiçbiri clone fonksiyonu
+çağırmıyor.** En yüksek hacimli clone çağrıları (`v22Clone` ×32,
+`cloneModificationValue` ×18) incelendi — hepsi tekil kayıt (group,
+record, scope, modification) CRUD işlemleri, "yüzlerce kontratta
+pahalı" senaryosunun endişe ettiği hot-loop deseni YOK. Ek değişiklik
+yapılmadı.
+
+## 4.4 — Virtual scroll tutarlılığı incelendi, BULGU: kullanılmıyor (kod var, bağlı değil)
+
+`renderVirtualTable(container, data, options)` fonksiyonu (V25.1,
+satır ~27950) **hiçbir yerde çağrılmıyor** — tamamen ölü/kullanılmayan
+kod. Ne `renderBulkJournalResults` ne `renderCloseDashboardPage` ne de
+ana kontrat tablosu (`renderTable`, sayfalama ile çalışıyor) bunu
+kullanıyor.
+
+**Bilerek uygulanmadı:** Bunu şimdi bağlamak (`renderBulkJournalResults`/
+`renderCloseDashboardPage`'in DOM yapısını virtualize etmek) GERÇEK
+bir davranış/özellik değişikliği olurdu — Faz 3'te byte-bazlı MD5 ile
+koruduğum çıktı yapısını temelden değiştirir (spacer div, mutlak
+konumlandırılmış satırlar, scroll-tetiklemeli yeniden render). Bu,
+"tutarsızlığı gider" kapsamının ötesinde, ayrı bir özellik kararı —
+**Görkem'in onayı olmadan uygulanmadı.** İsteğe bağlı gelecek işi
+olarak not düşüldü.
+
+## FAZ 4 KAPANIŞ DURUMU
+
+✅ TAMAMLANDI — 4.1 (GC-18 düzeltmesi + aggregate konsolidasyon), 4.2
+(incelendi), 4.3 (incelendi, değişiklik gerekmedi), 4.4 (incelendi,
+bulgu kaydedildi, uygulama Görkem onayına bırakıldı).
+
+**REFAKTÖR PLANININ TÜM FAZLARI (0-4) TAMAMLANDI.**
+
+---
+
+# 38. FAZ 4.4 — VIRTUAL SCROLL BAĞLAMASI (Görkem onayıyla, sonradan uygulandı)
+
+## Kapsam kararı
+
+`renderCloseDashboardPage` incelendi: `.map()` çağrıları yalnızca
+`companyOptions` (dropdown), `reportingCurrencyList` (dropdown),
+`blockers`/`warnings`/`controls` (sınırlı sayıda kapanış-hazırlık
+kontrol sonucu) üzerinde — **virtualize edilecek büyük bir SATIR
+listesi YOK.** Bu fonksiyonun karmaşıklığı state/event-wiring'den
+geliyordu (bkz. bölüm 36), listeden değil — virtual scroll burada
+mimari olarak uygulanamaz. **Yalnızca `renderBulkJournalResults`**
+hedef alındı.
+
+## Uygulama
+
+**Eşik-bazlı aktivasyon:** `BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD = 50`.
+Bu satırın ALTINDA mevcut (Faz 3'te byte-bazlı MD5 ile doğrulanmış)
+tam `<table>` render'ı **DEĞİŞMEDEN** kullanılmaya devam ediyor —
+küçük listelerde virtual scroll ek karmaşıklık getirir ama gözle
+görülür kazanç sağlamaz. ÜSTÜNDE, `renderVirtualTable`'a bağlanıyor.
+
+**Teknik engel ve çözümü:** `renderVirtualTable` her satırı
+`display:flex` bir `<div>` olarak sarmalıyor (kodu SABİT, `<tr>`
+kullanmıyor) — bu yüzden gerçek `<table>`/`<tr>`/`<td>` yapısıyla
+DOĞRUDAN uyumsuz. Çözüm: `renderBulkJournalRowContent(item)` her
+"hücreyi" eşit genişlikli (`flex:1 1 0`) bir `<div>` olarak üretiyor,
+`buildBulkJournalVirtualShell()` ise AYNI flex oranlarını kullanan
+sabit (kaydırılmayan) bir başlık satırı + `renderVirtualTable`'ın
+devralacağı boş bir konteyner (`#bulkJournalVirtualRows`) üretiyor.
+Kolon sırası/hizalama/biçimlendirme (para birimi, tarih, "✓ Dengeli"/
+"✕ Hatalı" renk kodu) mevcut `<td>` yapısıyla BİREBİR aynı tutuldu.
+
+## Doğrulama
+
+- **jsdom testi:** >50 satırda kabuk (`#bulkJournalVirtualRows`, `<table>`
+  YOK) devreye giriyor; ≤50 satırda mevcut `<table>` yapısı DEĞİŞMEDEN
+  kalıyor (2 ayrı test, ikisi de yeşil).
+- **Gerçek tarayıcı (Playwright, kalıcı test):** 120 satırlık veri
+  seti ile: başlangıçta 15/120 satır DOM'da (tam liste değil), ilk
+  görünen satır `FIS-001`. `scrollTop=2000` sonrası 20/120 satır,
+  ilk görünen satır `FIS-041`'e kaymış — **gerçek scroll davranışının
+  çalıştığının kanıtı**, sadece DOM yapısının doğru olduğunun değil.
+  3 ardışık koşumda kararlı.
+- Tam Jest suite: 396/396 (küçük veri seti yolu hiç etkilenmedi).
+  Tam Playwright suite: **21/21** (3×7).
+
+## Not: bir jsdom test-ortamı artefaktı gözlemlendi (üretim hatası DEĞİL)
+
+jsdom testinde, virtual scroll'un tetiklediği DOM mutasyonları
+mevcut (bu değişiklikle ilgisiz) bir `MutationObserver`'ı
+(`v26HookContractDetail`, satır ~30648) tetikliyor; testler arası
+`jest.resetModules()` zamanlamasıyla çakışıp bir kez
+`console.error` ile "Cannot read properties of undefined" logluyor.
+**Test'i BAŞARISIZ yapmıyor** (asenkron, testin senkron assertion
+akışının dışında) — gerçek tarayıcıda `document` her zaman tanımlı
+olduğu için bu hata hiç oluşmaz (Playwright testinde de oluşmadı,
+3/3 koşumda temiz). Bilgi amaçlı kaydedildi, düzeltme gerekmedi.
+
+## `renderCloseDashboardPage` — KASITLI OLARAK BÖLÜNMEDİ
+
+İncelendi (400 satır). Diğer üç render fonksiyonundan TEMELDEN farklı
+bir yapıya sahip: kapanış closure'ı içinde mutable state (`period`,
+`companyId`, `reportingCurrency`) tutuyor, bir `render()` iç
+fonksiyonu tanımlıyor ve bu fonksiyon HEM veri hesaplıyor HEM
+`container.innerHTML` atıyor HEM DE kendi ürettiği DOM elemanlarına
+**event listener'lar bağlıyor** (`closePeriodInput`/`closeCompanyInput`/
+`closeReportingCurrencyInput`'un `change` olayı `period`/`companyId`/
+`reportingCurrency`'yi MUTATE EDİP `render()`'ı YENİDEN çağırıyor —
+kendi kendini yeniden render eden bir closure deseni).
+
+Bu, planın "modal/event wiring — en yüksek risk, event listener
+sırası/timing hassas" diye Kategori 3 için ayırdığı TAM O risk
+profili — sadece Kategori 2 (render) olarak etiketlenmiş. Veriyi
+hesaplamayı HTML üretmekten ayırmak, ya (a) 10+ closure değişkenini
+(blockers, warnings, controls, data, statusBadge, fmt, scopedCompanyMeta,
+companyOptions, reportingCurrency, fxNote, score, status, certified,
+locked...) parametre olarak taşımayı, ya da (b) `period`/`companyId`/
+`reportingCurrency` mutasyonunun event handler'lardan `render()`'ın
+BİR SONRAKİ çağrısına doğru yansıması için closure yapısını mutable
+bir referans objesine çevirmeyi gerektirir — ikisi de gerçek davranış
+değişikliği riski taşır.
+
+**Karar:** Bölünmedi. Bu, "satır sayısı büyük = SRP ihlali" varsayımının
+her zaman doğru olmadığının bir örneği — bu fonksiyonun karmaşıklığı
+KASITLI mimari bir desenden (kendi kendini yeniden render eden
+closure) geliyor, kazara dağınıklıktan değil. Zorla bölmek, planın
+kendi risk hiyerarşisini ihlal ederdi.
+
 ### 0.4 tarayıcı notu
 
 Bu ortamda `cdn.playwright.dev` ağ allowlist dışında olduğu için
