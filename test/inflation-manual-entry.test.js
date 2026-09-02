@@ -130,7 +130,7 @@ describe("createManualIndexEntry", () => {
       sql.trim().startsWith("INSERT INTO audit_events")
     );
     expect(auditCall).toBeDefined();
-    expect(auditCall[1][0]).toMatch(/^INFL-\\d{13}-[0-9a-f]{16}$/);
+    expect(auditCall[1][0]).toMatch(/^INFL-\d{13}-[0-9a-f]{16}$/);
     expect(auditCall[1][0].length).toBeLessThanOrEqual(50);
   });
 
