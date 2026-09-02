@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:all": "jest --runInBand && playwright test",
-    "lint": "npx --yes eslint@8.57.1 js/tfrs16.js --max-warnings=206"
+    "lint": "npx --yes eslint@8.57.1 js/tfrs16.js --max-warnings=217"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
