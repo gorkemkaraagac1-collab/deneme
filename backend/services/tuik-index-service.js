@@ -210,7 +210,7 @@ async function fetchFromTuik(months) {
     response = await fetch(url, {
       method: "GET",
       headers: {
-        Accept: "application/json",
+        Accept: "application/json",        "Accept-Language": "tr-TR",
         Authorization: `Bearer ${accessToken}`
       },
       signal: AbortSignal.timeout(120000)
