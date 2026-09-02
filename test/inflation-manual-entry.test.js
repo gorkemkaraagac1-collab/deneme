@@ -74,7 +74,12 @@ function buildMockDb() {
         return { rows: [table[id]] };
       }
 
-      if (s.startsWith("INSERT INTO audit_events")) return { rows: [] };
+      if (s.startsWith("INSERT INTO audit_events")) {
+        if (String(params[0]).length > 50) {
+          throw new Error("value too long for type character varying(50)");
+        }
+        return { rows: [] };
+      }
 
       throw new Error(`Mock client beklenmeyen SQL gördü: ${s}`);
     }),
@@ -99,13 +104,14 @@ function buildMockDb() {
 }
 
 describe("createManualIndexEntry", () => {
-  let service, table, mockPool;
+  let service, table, mockPool, mockClient;
 
   beforeEach(() => {
     jest.resetModules();
     const mocks = buildMockDb();
     table = mocks.table;
     mockPool = mocks.mockPool;
+    mockClient = mocks.mockClient;
     jest.doMock("../backend/db/pool", () => mockPool);
     service = require("../backend/services/tuik-index-service");
   });
@@ -115,6 +121,17 @@ describe("createManualIndexEntry", () => {
     expect(result.action).toBe("inserted");
     expect(result.record.verification_status).toBe("PENDING");
     expect(result.record.source).toBe("MANUAL_OVERRIDE");
+  });
+
+  test("audit id VARCHAR(50) sınırını aşmaz", async () => {
+    await service.createManualIndexEntry({ month: "2026-07", value: 3500.25, actor: "admin-1" });
+
+    const auditCall = mockClient.query.mock.calls.find(([sql]) =>
+      sql.trim().startsWith("INSERT INTO audit_events")
+    );
+    expect(auditCall).toBeDefined();
+    expect(auditCall[1][0]).toMatch(/^INFL-\d{13}-[0-9a-f]{16}$/);
+    expect(auditCall[1][0].length).toBeLessThanOrEqual(50);
   });
 
   test("geçersiz ay formatı reddedilir, DB'ye hiçbir şey yazılmaz", async () => {
