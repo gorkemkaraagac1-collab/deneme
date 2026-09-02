@@ -357,9 +357,20 @@ document.addEventListener("DOMContentLoaded", () => {
       body = text;
     }
     if (!res.ok) {
-      const msg =
+      const baseMsg =
         (body && (body.error || body.message)) ||
         `API hatası (${res.status})`;
+      // DÜZELTME (kullanıcı talebi — teşhis edilebilirlik): backend
+      // artık 500'lerde SQLSTATE `code` ve `detail` (gerçek DB hata
+      // mesajı) da dönebiliyor (bkz. backend/routes/contracts.js).
+      // Bunları mesaja ekliyoruz ki Bulk Import'taki "Backend hatası
+      // detayı" alert'i jenerik "beklenmeyen bir hata oluştu" yerine
+      // gerçek sebebi (NOT NULL/FK/tip hatası vb.) göstersin.
+      const extra = [
+        body?.code ? `[${body.code}]` : null,
+        body?.detail ? body.detail : null
+      ].filter(Boolean).join(" ");
+      const msg = extra ? `${baseMsg} — ${extra}` : baseMsg;
       const err = new Error(msg);
       err.status = res.status;
       err.body = body;
