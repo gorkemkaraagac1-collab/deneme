@@ -1,4 +1,5 @@
 const pool = require("../db/pool");
+const crypto = require("crypto");
 const { validateInflationIndexEntry, parseBulkIndexInput } = require("../utils/index-validation");
 
 /**
@@ -327,7 +328,10 @@ async function upsertIndexRecord(client, input) {
  * @param {{ action: string, entityId: string, actor: string, oldValue: object|null, newValue: object, metadata: object }} event
  */
 async function recordAuditEvent(client, event) {
-  const id = `INFL-${event.action}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  // audit_events.id VARCHAR(50): action adını ID'ye eklemek manuel/bulk
+  // girişlerde 50 karakteri aşıyor ve tüm transaction'ı rollback ediyordu.
+  // Action zaten ayrı kolonda tutulur; ID yalnızca kısa ve benzersiz olmalıdır.
+  const id = `INFL-${Date.now()}-${crypto.randomBytes(8).toString("hex")}`;
 
   await client.query(
     `INSERT INTO audit_events
