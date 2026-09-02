@@ -421,9 +421,25 @@ router.post(
       }
 
 
+      /**
+       * DÜZELTME (kullanıcı talebi — best practice): önceden burada
+       * SADECE jenerik "beklenmeyen bir hata oluştu" dönüyordu; gerçek
+       * sebep (Postgres SQLSTATE kodu + mesajı: NOT NULL ihlali, FK
+       * ihlali, tip/uzunluk hatası vb.) sadece server log'unda kalıyordu
+       * ve client tarafı (bulk import ekranı dahil) hiçbir zaman teşhis
+       * edemiyordu. Bu erken/pre-production aşamada (tek operatör, gerçek
+       * müşteri verisi yok) DB hata kodunu ve mesajını response'a da
+       * ekliyoruz — teşhisi client tarafında (Bulk Import "Backend hatası
+       * detayı" alert'i dahil) mümkün kılmak için. Gerçek müşteri
+       * trafiğine açılmadan önce bu ayrıntı (en azından `detail`) DEBUG_
+       * ERRORS=false ile kapatılmalı; SQLSTATE `code` (23502, 23503 vb.)
+       * standart ve genel olarak zararsızdır, üretimde de kalabilir.
+       */
       return res.status(500).json({
         error:
-          "Kontrat oluşturulurken beklenmeyen bir hata oluştu"
+          "Kontrat oluşturulurken beklenmeyen bir hata oluştu",
+        code: error.code || null,
+        detail: process.env.DEBUG_ERRORS === "false" ? undefined : (error.message || String(error))
       });
 
     }
@@ -650,7 +666,9 @@ router.put(
 
       return res.status(500).json({
         error:
-          "Kontrat güncellenirken beklenmeyen bir hata oluştu"
+          "Kontrat güncellenirken beklenmeyen bir hata oluştu",
+        code: error.code || null,
+        detail: process.env.DEBUG_ERRORS === "false" ? undefined : (error.message || String(error))
       });
 
     }
