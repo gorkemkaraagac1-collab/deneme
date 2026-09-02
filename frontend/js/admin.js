@@ -434,7 +434,7 @@ async createInflationIndicesBulk(text) {
 },
 async syncInflationIndices(months) {
     const response = await fetch(
-        "/api/inflation-indices/sync",
+        `${API_BASE_URL}/api/inflation-indices/sync`,
         {
             method: "POST",
             headers: this.getHeaders(),
