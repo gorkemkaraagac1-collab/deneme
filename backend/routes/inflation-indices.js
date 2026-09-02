@@ -179,7 +179,7 @@ router.get(
  *
  * Body: { months: ["2025-01", "2025-02"] }
  *
- * TÜİK kaynağı yapılandırılmamışsa veya erişilemezse, bu
+ * TUIK_API_KEY yapılandırılmamışsa veya resmî SDMX kaynağı erişilemezse, bu
  * endpoint AÇIK bir hata döner — sessizce "başarılı" görünüp
  * hiçbir şey yazmaz (bkz. tuik-index-service.js dosya başı notu).
  */
@@ -207,7 +207,14 @@ router.post(
         });
       }
 
-      const actor = req.user.username || req.user.id || "system";
+      if (new Set(months).size !== months.length) {
+        return res.status(400).json({
+          error: "months listesinde mükerrer ay bulunamaz.",
+          code: "DUPLICATE_MONTHS"
+        });
+      }
+
+      const actor = String(req.user.id);
       const result = await syncFromTuik(months, actor);
 
       return res.json({
