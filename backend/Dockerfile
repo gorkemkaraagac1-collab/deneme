@@ -70,3 +70,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 # yanlış çalışma dizinini varsayıyordu. Gerçek HTTP server
 # backend/server.js içindedir.
 CMD ["node", "backend/server.js"]
+
+COPY frontend ./frontend
