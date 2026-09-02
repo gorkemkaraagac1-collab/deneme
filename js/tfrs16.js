@@ -19821,7 +19821,32 @@ ${renderPaymentScheduleFooterContainers()}
     const dateResultRenewal = normalizeIntegrationDate(integrationFindValue(row, fields.renewalDate || []));
     const rawCompanyId = String(integrationFindValue(row, fields.companyId || []) || "").trim();
     const rawCompanyName = String(integrationFindValue(row, fields.company || []) || "").trim();
-    let resolvedCompanyId = rawCompanyId || null;
+    let resolvedCompanyId = null;
+    // DÜZELTME (kritik — gerçek kök neden): companyId alan-eşleştirme
+    // listesi "şirket kodu"/"company code" başlıklarını da companyId
+    // sayıyor (bkz. INTEGRATION_PROFILES.GENERIC.fields.companyId).
+    // Ama "Şirket Kodu" bu uygulamada TMS21/TMS29 motor-içi şirket
+    // kaydının (Şirket Yönetimi ekranı) kodudur — backend'in gerçek,
+    // lisanslı multi-tenant companyId'siyle (sessionCompanies, /api/
+    // auth/me) AYNI NAMESPACE DEĞİLDİR. Önceden rawCompanyId bulunduğu
+    // an KÖRÜ KÖRÜNE kabul ediliyor, isim eşleştirmesine hiç bakılmıyordu
+    // — "Şirket Kodu" sütunundaki bir motor-içi kod, hiç doğrulanmadan
+    // backend'e companyId diye gidiyordu (ve orada "lisans yok"/"şirket
+    // eşleşmedi" ile reddediliyordu, sütunda ne yazarsa yazsın). Artık
+    // rawCompanyId ancak sessionCompanies'te GERÇEKTEN karşılığı varsa
+    // (id VEYA code eşleşirse) doğrudan kullanılıyor; yoksa isim bazlı
+    // eşleştirmeye (aşağıda) düşülüyor.
+    if (rawCompanyId && Array.isArray(sessionCompanies) && sessionCompanies.length) {
+      const idMatch = sessionCompanies.find(c => String(c.id || "").toLowerCase() === rawCompanyId.toLowerCase());
+      if (idMatch) resolvedCompanyId = idMatch.id;
+    }
+    if (!resolvedCompanyId && !rawCompanyName && rawCompanyId) {
+      // sessionCompanies henüz yüklenmemiş VEYA eşleşme yok, ama isim
+      // sütunu da boşsa (yalnızca companyId/kod verilmiş) — eski
+      // davranışa (rawCompanyId'yi doğrudan kullan) düş: en azından
+      // persistContractToApi'deki ayrı doğrulama yanlışsa yakalar.
+      resolvedCompanyId = rawCompanyId;
+    }
     // DÜZELTME (kritik — "Şirketin aktif lisansı bulunmamaktadır" hatası
     // her satırda backend'e gidip reddediliyordu, halbuki dashboard AYNI
     // kullanıcı için geçerli lisans gösteriyordu): önceden şirket adı
