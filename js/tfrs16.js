@@ -654,6 +654,21 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
+    // DÜZELTME (kritik — bkz. yukarıdaki mapExternalRecord notu): buraya
+    // kadar gelen companyId, kullanıcının GERÇEKTEN erişimi/lisansı olan
+    // bir şirkete ait olmayabilir (örn. eski/senkron olmayan bir local
+    // cache'ten gelmiş olabilir). Backend'e göndermeden ÖNCE
+    // sessionCompanies (gerçek kaynak, /api/auth/me) ile karşılaştırıyoruz.
+    // sessionCompanies henüz yüklenmemişse (boş dizi) kontrolü atlıyoruz —
+    // bu durumda karar zaten backend'e bırakılıyor, yanlış pozitif
+    // vermemek için.
+    if (Array.isArray(sessionCompanies) && sessionCompanies.length && !sessionCompanies.some(c => String(c.id) === String(companyId))) {
+      throw new Error(
+        `Şirket eşleşmedi: '${contract.company || companyId}' için oturumunuzda yetkili/lisanslı bir şirket bulunamadı. ` +
+        `Excel'deki "Şirket" sütunundaki adın, sisteme kayıtlı şirket adıyla (veya companyId sütununda gerçek şirket ID'siyle) birebir eşleştiğinden emin olun.`
+      );
+    }
+
     /**
      * DÜZELTME (veri kaybı): contracts tablosunda önceden yalnızca
      * 9 temel alan vardı — motorun ürettiği modifications/
@@ -19789,6 +19804,27 @@ ${renderPaymentScheduleFooterContainers()}
     const rawCompanyId = String(integrationFindValue(row, fields.companyId || []) || "").trim();
     const rawCompanyName = String(integrationFindValue(row, fields.company || []) || "").trim();
     let resolvedCompanyId = rawCompanyId || null;
+    // DÜZELTME (kritik — "Şirketin aktif lisansı bulunmamaktadır" hatası
+    // her satırda backend'e gidip reddediliyordu, halbuki dashboard AYNI
+    // kullanıcı için geçerli lisans gösteriyordu): önceden şirket adı
+    // SADECE v26LoadCompanies()'e karşı eşleştiriliyordu. v26LoadCompanies
+    // localStorage cache'i + (varsa) mevcut contracts[]'tan TÜRETİLMİŞ bir
+    // listedir; id alanı bulunamazsa "TR-001" gibi SENTETİK bir id üretir
+    // ve backend'deki gerçek company_id/lisans ile hiçbir garantili ilişkisi
+    // yoktur. Oysa sessionCompanies, /api/auth/me'den (licenses[] dahil)
+    // gelen, GERÇEKTEN lisanslı şirketlerin listesidir (bkz.
+    // loadSessionCompanies). Artık önce ORAYA bakılıyor; v26LoadCompanies
+    // sadece sessionCompanies henüz yüklenmemişse (örn. sayfa yeni açıldı)
+    // bir fallback olarak kullanılıyor — ki bu durumda da persistContractToApi
+    // içindeki ayrı doğrulama (aşağıda) yanlış id backend'e hiç gitmeden
+    // yakalar.
+    if (!resolvedCompanyId && rawCompanyName && Array.isArray(sessionCompanies) && sessionCompanies.length) {
+      const sessionMatch = sessionCompanies.find(c =>
+        String(c.id || "").toLowerCase() === rawCompanyName.toLowerCase() ||
+        String(c.name || "").toLowerCase() === rawCompanyName.toLowerCase()
+      );
+      if (sessionMatch) resolvedCompanyId = sessionMatch.id;
+    }
     if (!resolvedCompanyId && rawCompanyName && typeof v26LoadCompanies === "function") {
       try {
         const master = v26LoadCompanies();
