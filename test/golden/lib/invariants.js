@@ -284,14 +284,14 @@ function invLiabilityNeverNegative(engine) {
    birleştirilmesi planlandığı için özellikle değerlidir.
 ------------------------------------------------------------------ */
 function invCfoMatchesSplit(metrics, split, engine) {
-  // GC-18 (modification + reassessment birlikte): BİLİNEN MİRAS İHLALİ.
-  // cfoBuildSchedule ile calculateLiabilitySplitAsOf farklı schedule
-  // kaynağı seçiyor. Görkem kararı (PROJECT_CONTEXT.md bölüm 33):
+  // GC-18 (modification + reassessment birlikte) — DÜZELTİLDİ (Faz 4.1).
+  // cfoBuildSchedule ile getScheduleAsOfReportingDate artık AYNI kaynağı
+  // (resolveContractScheduleSource) kullanıyor — iki farklı schedule
+  // seçimi kalmadı. Görkem kararı (PROJECT_CONTEXT.md bölüm 33):
   // cfoBuildSchedule/buildReassessedSchedule DOĞRU (TFRS 16.39-46 —
-  // sonraki ölçüm, retrospektif yeniden kurulum DEĞİL). Düzeltme
-  // KASITLI olarak Faz 4.1'e ertelendi. Bu invariant'ın GC-18'de
-  // GEÇMEYE başlaması o düzeltmenin yapıldığının kanıtıdır — o zaman
-  // invariants.test.js'teki miras listesi güncellenmelidir.
+  // sonraki ölçüm, retrospektif yeniden kurulum DEĞİL). Bu invariant
+  // artık TÜM fixture'larda geçiyor (379/379) — özel durum kodu
+  // gerekmiyor, jenerik kontrol yeterli.
   if (!metrics || !split || split.valid === false) return result("INV-11", true, "Karşılaştırma yapılamaz — uygulanmaz.");
   if (engine?.exempt === true) return result("INV-11", true, "Tanıma istisnası — karşılaştırılacak yükümlülük yok.");
   if (metrics.calculationValid === false) return result("INV-11", true, "CFO hesabı geçersiz — uygulanmaz.");

@@ -117,6 +117,79 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
+  test("toplu fiş modalı açılır ve kapanır (createBulkJournalModal — Faz 3 refaktör hedefi)", async ({ stubbedPage }) => {
+    await stubbedPage.goto("/tfrs16.html");
+    await createContract(stubbedPage);
+    await stubbedPage.locator("#detailModal").waitFor({ state: "visible" });
+
+    // "Fişler" tab'ına geç — renderAccountingCenter'ın (ve içindeki
+    // "Tüm Sözleşmeler İçin Toplu Fiş Üret" butonunun) render edildiği yer.
+    await stubbedPage.click('[data-detail-tab-target="accounting"]');
+
+    // openBulkJournalModal() → createBulkJournalModal() zincirini tetikler.
+    await stubbedPage.click("#openBulkJournalButton");
+
+    const bulkModal = stubbedPage.locator("#bulkJournalModal");
+    await expect(bulkModal).toBeVisible();
+
+    // wireBulkJournalModalEvents()'in gerçekten bağladığı bir listener'ı
+    // tetikliyoruz — sadece DOM yapısını değil, event wiring'in fiilen
+    // ÇALIŞTIĞINI doğrular (bu fonksiyonun asıl risk kategorisi buydu).
+    await stubbedPage.click("#closeBulkJournalModal");
+    await expect(bulkModal).toBeHidden();
+
+    expect(stubbedPage.consoleErrors).toEqual([]);
+  });
+
+  test("toplu fiş önizlemesi büyük veri setinde sanal kaydırmaya geçer (Faz 4.4 refaktör hedefi)", async ({ stubbedPage }) => {
+    await stubbedPage.goto("/tfrs16.html");
+
+    // NOT: gerçek generateBulkJournals() akışı 51+ sözleşme gerektirir
+    // (API üzerinden) — burada test-shim seed helper'ı ile eşik-üstü
+    // (120 satır) veri doğrudan enjekte edilip renderBulkJournalResults()
+    // tetikleniyor. Bu, sanal kaydırma bağlama mantığını (renderVirtualTable
+    // entegrasyonu) izole şekilde, gerçek tarayıcıda doğrular.
+    const result = await stubbedPage.evaluate(() => {
+      const items = Array.from({ length: 120 }, (_, i) => ({
+        voucherNo: `FIS-${String(i + 1).padStart(3, "0")}`,
+        voucherDate: "2026-01-01",
+        contractId: `C${i + 1}`,
+        company: "A.Ş.",
+        companyId: "CO1",
+        currency: "TRY",
+        balanced: true,
+        totalDebit: 100000 + i,
+        totalCredit: 100000 + i,
+        entries: []
+      }));
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        '<div id="bulkJournalSummary"></div><div id="bulkJournalPreview"></div><button id="exportBulkJournals"></button>'
+      );
+      window.__TFRS16_TEST__.__seedBulkJournalDataForTest(items);
+      window.__TFRS16_TEST__.renderBulkJournalResults();
+
+      const container = document.getElementById("bulkJournalVirtualRows");
+      const before = container.querySelectorAll(".virtual-row").length;
+      const beforeFirstText = container.querySelector(".virtual-row")?.textContent || "";
+
+      container.scrollTop = 2000;
+      container.dispatchEvent(new Event("scroll"));
+
+      const after = container.querySelectorAll(".virtual-row").length;
+      const afterFirstText = container.querySelector(".virtual-row")?.textContent || "";
+
+      return { before, after, beforeFirstText, afterFirstText, totalRows: items.length };
+    });
+
+    // Tam 120 satır DEĞİL, yalnızca görünür bir alt küme DOM'da olmalı.
+    expect(result.before).toBeGreaterThan(0);
+    expect(result.before).toBeLessThan(result.totalRows);
+    // Kaydırma sonrası görünen ilk satır değişmiş olmalı (gerçek scroll).
+    expect(result.afterFirstText).not.toBe(result.beforeFirstText);
+    expect(result.beforeFirstText).toContain("FIS-001");
+  });
+
   test("KPI kartları hesaplanmış değer gösterir", async ({ stubbedPage }) => {
     await stubbedPage.goto("/tfrs16.html");
 

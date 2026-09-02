@@ -813,6 +813,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const CALCULATION_CACHE = new Map();
   const CALCULATION_CACHE_MAX_SIZE = 200;
 
+  // FAZ 4.1 — getCfoAggregateMetrics()'in reportingDate başına
+  // önbelleği. CALCULATION_CACHE ile AYNI TDZ nedeniyle burada
+  // (loadContracts()'tan önce) tanımlanmak zorunda. clearCalculationCache()
+  // tarafından da temizlenir (bkz. aşağısı) — kontrat mutasyonu olan HER
+  // yerde iki önbellek de birlikte geçersiz kılınır, tek bakım noktası.
+  const CFO_AGGREGATE_CACHE = new Map();
+
   // V26_COMPANIES_KEY de aynı TDZ nedeniyle buraya taşındı: ilk
   // refresh() çağrısı (aşağıda, sayfa açılışında) v26StandardsBadgeHtml
   // üzerinden v26LoadCompanies()'i tetikliyor ve bu sabit dosyanın
@@ -1010,6 +1017,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       CALCULATION_CACHE.clear();
     }
+    // FAZ 4.1 — aggregate önbellek reportingDate bazlı, TEK bir
+    // kontratın değişmesi bile o tarihteki toplamları geçersiz kılar
+    // (hangi kontrat olduğu önemli değil — güvenli taraf: tamamen
+    // temizle). Boyutu küçük (nadiren birkaç reportingDate anahtarı),
+    // bu yüzden granüler/kısmi temizlik gerekmiyor.
+    CFO_AGGREGATE_CACHE.clear();
   }
 
   function getCachedCalculation(contract) {
@@ -5848,9 +5861,16 @@ document.addEventListener("DOMContentLoaded", () => {
    * @returns {Object} result.assumptions - Hesaplamada kullanılan varsayımlar
    * @returns {boolean} result.exempt - Kısa vadeli/düşük değerli istisna uygulanıp uygulanmadığı
    */
-  function calculateLeaseEngineImpl(contract) {
-
-    const assumptions = {
+  /**
+   * buildLeaseEngineAssumptions — kontrat alanlarından motorun
+   * kullanacağı normalize edilmiş varsayımlar (assumptions) objesini
+   * üretir. Saf veri dönüşümüdür, yan etkisi yoktur.
+   *
+   * FAZ 3 — SRP BÖLMESİ (calculateLeaseEngineImpl'den extract edildi,
+   * davranış BİREBİR korunarak — bkz. PROJECT_CONTEXT.md bölüm 36).
+   */
+  function buildLeaseEngineAssumptions(contract) {
+    return {
 
       paymentFrequency:
         contract.paymentFrequency || "monthly",
@@ -5931,82 +5951,98 @@ document.addEventListener("DOMContentLoaded", () => {
           ? Number(contract.usefulLifeMonths)
           : null
     };
+  }
 
-
-    // TFRS 16.5-8 recognition exemption: short-term / low-value
-    // leases are expensed on a straight-line basis. No ROU asset
-    // or lease liability is recognized.
+  /**
+   * buildExemptLeaseResult — TFRS 16.5-8 tanıma istisnası (kısa vadeli /
+   * düşük değerli kira). Uygulanabilirse tam motor sonucunu (doğrusal
+   * gider planıyla) döner; uygulanamazsa `null` döner ve normal motor
+   * akışı (calculateLeaseEngineImpl içinde) devam eder.
+   */
+  function buildExemptLeaseResult(contract, assumptions) {
     if (
-      assumptions.shortTermLease ||
-      assumptions.lowValueAsset
+      !assumptions.shortTermLease &&
+      !assumptions.lowValueAsset
     ) {
-
-      const payment =
-        Number(contract.monthlyPayment) || 0;
-
-      const months =
-        monthsBetween(
-          contract.startDate,
-          contract.endDate
-        );
-
-      const contractStart =
-        parseDate(contract.startDate);
-
-      const schedule = [];
-
-      if (
-        payment > 0 &&
-        months > 0 &&
-        contractStart
-      ) {
-
-        for (
-          let i = 1;
-          i <= months;
-          i++
-        ) {
-
-          const periodDate =
-            new Date(
-              contractStart.getFullYear(),
-              contractStart.getMonth() +
-                i -
-                1,
-              1
-            );
-
-          schedule.push({
-            period: i,
-            date: periodDate,
-            year: periodDate.getFullYear(),
-            month: periodDate.getMonth() + 1,
-            openingLiability: 0,
-            payment,
-            interest: 0,
-            principal: 0,
-            closingLiability: 0,
-            rouOpening: 0,
-            depreciation: 0,
-            rouClosing: 0,
-            straightLineExpense: payment
-          });
-        }
-      }
-
-      return {
-        months,
-        liability: 0,
-        rouAssets: 0,
-        depreciation: 0,
-        monthlyInterest: 0,
-        schedule,
-        assumptions,
-        exempt: true
-      };
+      return null;
     }
 
+    const payment =
+      Number(contract.monthlyPayment) || 0;
 
+    const months =
+      monthsBetween(
+        contract.startDate,
+        contract.endDate
+      );
+
+    const contractStart =
+      parseDate(contract.startDate);
+
+    const schedule = [];
+
+    if (
+      payment > 0 &&
+      months > 0 &&
+      contractStart
+    ) {
+
+      for (
+        let i = 1;
+        i <= months;
+        i++
+      ) {
+
+        const periodDate =
+          new Date(
+            contractStart.getFullYear(),
+            contractStart.getMonth() +
+              i -
+              1,
+            1
+          );
+
+        schedule.push({
+          period: i,
+          date: periodDate,
+          year: periodDate.getFullYear(),
+          month: periodDate.getMonth() + 1,
+          openingLiability: 0,
+          payment,
+          interest: 0,
+          principal: 0,
+          closingLiability: 0,
+          rouOpening: 0,
+          depreciation: 0,
+          rouClosing: 0,
+          straightLineExpense: payment
+        });
+      }
+    }
+
+    return {
+      months,
+      liability: 0,
+      rouAssets: 0,
+      depreciation: 0,
+      monthlyInterest: 0,
+      schedule,
+      assumptions,
+      exempt: true
+    };
+  }
+
+  /**
+   * resolveLeaseEngineCore — istisna dışı kontratlar için temel motor
+   * parametrelerini (ödeme, oran, ay sayısı, sıklık, timing, dönem
+   * oranı) ve ödeme tarihleri dizisini çözer.
+   *
+   * Geçersiz girdi (ödeme<=0, ay<=0, veya boş tarih dizisi) durumunda
+   * `{ earlyReturn: <hazır sonuç objesi> }` döner — çağıran
+   * (`calculateLeaseEngineImpl`) bunu kontrol edip erken dönmelidir;
+   * aksi halde tüm çözülmüş alanları içeren obje döner.
+   */
+  function resolveLeaseEngineCore(contract, assumptions) {
     const payment =
       Number(contract.monthlyPayment) || 0;
 
@@ -6040,16 +6076,17 @@ document.addEventListener("DOMContentLoaded", () => {
       payment <= 0 ||
       months <= 0
     ) {
-
       return {
-        months: 0,
-        liability: 0,
-        rouAssets: 0,
-        depreciation: 0,
-        monthlyInterest: 0,
-        schedule: [],
-        assumptions,
-        exempt: false
+        earlyReturn: {
+          months: 0,
+          liability: 0,
+          rouAssets: 0,
+          depreciation: 0,
+          monthlyInterest: 0,
+          schedule: [],
+          assumptions,
+          exempt: false
+        }
       };
     }
 
@@ -6085,16 +6122,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!paymentDates.length) {
       return {
-        months,
-        liability: 0,
-        rouAssets: 0,
-        depreciation: 0,
-        monthlyInterest: 0,
-        schedule: [],
-        assumptions,
-        exempt: false
+        earlyReturn: {
+          months,
+          liability: 0,
+          rouAssets: 0,
+          depreciation: 0,
+          monthlyInterest: 0,
+          schedule: [],
+          assumptions,
+          exempt: false
+        }
       };
     }
+
+    // Period rate for interest between payment events.
+    // Monthly legacy: monthlyRate. Quarterly/annual: compound.
+    const periodRate =
+      stepMonths === 1
+        ? monthlyRate
+        : (monthlyRate === 0
+            ? 0
+            : Math.pow(1 + monthlyRate, stepMonths) - 1);
+
+    return {
+      payment,
+      annualRate,
+      monthlyRate,
+      months,
+      stepMonths,
+      advance,
+      paymentDates,
+      periodRate,
+      nPayments: paymentDates.length
+    };
+  }
+
+  /**
+   * applyLeaseEscalation — her ödeme tarihi için (varsa) eskalasyon
+   * uygulanmış ödeme tutarını hesaplar. `hasEscalation` bayrağı da
+   * döner çünkü `calculateInitialLeaseMeasurement` PV hesabında hangi
+   * yolun (kapalı form vs döngü) kullanılacağına karar vermek için
+   * buna ihtiyaç duyar.
+   */
+  function applyLeaseEscalation(contract, assumptions, core) {
+    const { payment, paymentDates, stepMonths } = core;
 
     const hasEscalation =
       assumptions.leaseIncreaseType === "fixedRate" ||
@@ -6146,6 +6217,18 @@ document.addEventListener("DOMContentLoaded", () => {
         periodsPerYear
       );
     });
+
+    return { paymentAmounts, hasEscalation };
+  }
+
+  /**
+   * calculateInitialLeaseMeasurement — TFRS 16.24 başlangıç ölçümü:
+   * kira yükümlülüğünün bugünkü değeri (initialLiability) ve buna
+   * bağlı ROU/amortisman parametreleri (initialROU, depreciation vb.)
+   */
+  function calculateInitialLeaseMeasurement(assumptions, core, esc) {
+    const { payment, monthlyRate, stepMonths, advance, paymentDates, months } = core;
+    const { paymentAmounts, hasEscalation } = esc;
 
     // Discount exponents in MONTHS from commencement:
     // - arrears legacy monthly: period i → exponent i (unchanged)
@@ -6228,6 +6311,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const depreciation =
       initialROU / depreciationMonths;
 
+    return {
+      initialLiability,
+      initialROU,
+      usesUsefulLife,
+      depreciationMonths,
+      depreciation
+    };
+  }
+
+  /**
+   * calculateAmortizationTable — dönem dönem yükümlülük/ROU
+   * roll-forward tablosu (schedule). `openingLiability`/`rouOpening`
+   * her satırda bir öncekinin kapanışından devralınır (sıralı/stateful
+   * fold) — bu fonksiyon SRP bölmesinde başka bir parçaya
+   * BÖLÜNMEDİ, çünkü bu roll-forward zinciri doğası gereği ayrılamaz.
+   *
+   * ADVANCE (peşin) ödeme timing'inde 1. dönem özel işlenir (annuity-
+   * due düzeltmesi — bkz. PROJECT_CONTEXT.md bölüm 33). Bu mantık ve
+   * yorumu, orijinal calculateLeaseEngineImpl'den BİREBİR (satır
+   * satır) buraya taşındı — hiçbir karakter değişmedi. `i===0`
+   * kontrolünün doğruluğu, `paymentAmounts`/`paymentDates`'in bu
+   * fonksiyona SIFIR yeniden sıralama/filtreleme/padding olmadan,
+   * `applyLeaseEscalation`'ın ürettiği HALİYLE geçirilmesine bağlıdır
+   * (bkz. PROJECT_CONTEXT.md bölüm 36 — Faz 3 SRP riski notu).
+   */
+  function calculateAmortizationTable(assumptions, core, esc, measurement) {
+    const { paymentDates, periodRate, advance, stepMonths, months, nPayments } = core;
+    const { paymentAmounts } = esc;
+    const { initialLiability, initialROU, depreciation } = measurement;
+
     const schedule = [];
 
     let openingLiability =
@@ -6236,20 +6349,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let rouOpening =
       initialROU;
 
-    // Period rate for interest between payment events.
-    // Monthly legacy: monthlyRate. Quarterly/annual: compound.
-    const periodRate =
-      stepMonths === 1
-        ? monthlyRate
-        : (monthlyRate === 0
-            ? 0
-            : Math.pow(1 + monthlyRate, stepMonths) - 1);
-
     // ROU is still depreciated over calendar months (lease term),
     // but schedule rows exist only on payment dates. Allocate
     // depreciation for the months covered by each payment interval.
-    const nPayments = paymentDates.length;
-
     for (
       let i = 0;
       i < nPayments;
@@ -6363,6 +6465,17 @@ document.addEventListener("DOMContentLoaded", () => {
         rouClosing;
     }
 
+    return schedule;
+  }
+
+  /**
+   * assembleLeaseEngineResult — motorun nihai dönüş objesini
+   * (liability, rouAssets, schedule, assumptions vb.) paketler.
+   */
+  function assembleLeaseEngineResult(assumptions, core, measurement, schedule) {
+    const { months, stepMonths } = core;
+    const { initialLiability, initialROU, depreciation, depreciationMonths, usesUsefulLife } = measurement;
+
     return {
       months,
       liability: initialLiability,
@@ -6384,6 +6497,30 @@ document.addEventListener("DOMContentLoaded", () => {
       assumptions,
       exempt: false
     };
+  }
+
+  /**
+   * calculateLeaseEngineImpl — TFRS 16 kiralama motorunun ana
+   * giriş noktası. PUBLIC API imzası (tek parametre: contract,
+   * dönüş şekli) HİÇ DEĞİŞMEDİ — yalnızca içi, her biri tek
+   * sorumluluğa sahip 6 fonksiyona bölündü (Faz 3 — SRP, bkz.
+   * PROJECT_CONTEXT.md bölüm 36). window.GK_TFRS16 üzerinden veya
+   * başka bir yerden bu isimle çağıran hiçbir kod fark etmez.
+   */
+  function calculateLeaseEngineImpl(contract) {
+    const assumptions = buildLeaseEngineAssumptions(contract);
+
+    const exemptResult = buildExemptLeaseResult(contract, assumptions);
+    if (exemptResult) return exemptResult;
+
+    const core = resolveLeaseEngineCore(contract, assumptions);
+    if (core.earlyReturn) return core.earlyReturn;
+
+    const esc = applyLeaseEscalation(contract, assumptions, core);
+    const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
+    const schedule = calculateAmortizationTable(assumptions, core, esc, measurement);
+
+    return assembleLeaseEngineResult(assumptions, core, measurement, schedule);
   }
 
 
@@ -6571,6 +6708,50 @@ document.addEventListener("DOMContentLoaded", () => {
      basis, independent of when the contract started.
   ========================================================== */
 
+  /**
+   * resolveContractScheduleSource — bir kontrat için HANGİ schedule'ın
+   * "doğru" olduğuna karar veren TEK kaynak. Öncelik: uygulanmış
+   * (APPLIED) bir reassessment varsa REASSESSED_SCHEDULE (bu, kendi
+   * içinde uygulanmış modification'ı da tarihsel taban olarak
+   * kapsar — bkz. buildReassessmentHistorySchedule); yoksa uygulanmış
+   * bir modification varsa MODIFIED_SCHEDULE; hiçbiri yoksa ham
+   * LEASE_SCHEDULE (calculateLeaseEngine).
+   *
+   * FAZ 4.1 DÜZELTMESİ (GC-18, Görkem onayı — bkz. PROJECT_CONTEXT.md
+   * bölüm 33 ve 37): Bu fonksiyon önceden yalnızca `cfoBuildSchedule`
+   * (CFO Dashboard katmanı) içinde vardı; `getScheduleAsOfReportingDate`
+   * (ve onun üzerinden `calculateLiabilitySplitAsOf`'un scheduleOverride
+   * VERİLMEDEN çağrıldığı TÜM yerler — calculateCurrentLiabilityAsOf,
+   * calculateNonCurrentLiabilityAsOf, calculateNext12Months, V23/TMS21
+   * kapanış fişi üretimi, controlClassification dahil) doğrudan
+   * `calculateLeaseEngine(contract)` çağırıyordu — modification VE
+   * reassessment birlikte uygulanmış kontratlarda REASSESSED/MODIFIED
+   * schedule'ı YOK SAYIYORDU. `cfoBuildSchedule` artık bu fonksiyona
+   * delege ediyor; TEK kaynak burası.
+   */
+  function resolveContractScheduleSource(contract) {
+    try {
+      if (typeof getCurrentReassessmentState === "function" && typeof buildReassessedSchedule === "function") {
+        const latest = getCurrentReassessmentState(contract);
+        if (latest && latest.status === "APPLIED") {
+          const reassessed = buildReassessedSchedule(contract, latest);
+          if (Array.isArray(reassessed) && reassessed.length) return { schedule: reassessed, engine: null, source: "REASSESSED_SCHEDULE" };
+        }
+      }
+      if (typeof getCurrentAppliedModification === "function" && typeof buildModifiedSchedule === "function") {
+        const latestModification = getCurrentAppliedModification(contract);
+        if (latestModification) {
+          const modified = buildModifiedSchedule(contract, latestModification);
+          if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
+        }
+      }
+      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
+      return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
+    } catch (error) {
+      return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
+    }
+  }
+
   function getScheduleAsOfReportingDate(
     contract,
     reportingDate
@@ -6579,10 +6760,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const normalizedReportingDate =
       parseDate(reportingDate);
 
+    const resolved =
+      resolveContractScheduleSource(contract);
+
+    // REASSESSED_SCHEDULE/MODIFIED_SCHEDULE dallarında resolved.engine
+    // null'dur (bkz. resolveContractScheduleSource) — outstandingLiability
+    // fallback'i (aşağıda, closedPeriods.length===0 durumunda) için HAM
+    // motor gerekiyor. Bu yalnızca raporlama tarihi kontrat başlangıcından
+    // ÖNCE olduğunda tetiklenir (nadir bir uç durum); o durumda hangi
+    // schedule kaynağı seçilmiş olursa olsun henüz hiçbir dönem
+    // kapanmamıştır, dolayısıyla ham başlangıç yükümlülüğü doğru
+    // fallback'tir.
     const engine =
-      calculateLeaseEngine(
-        contract
-      );
+      resolved.engine ||
+      calculateLeaseEngine(contract);
 
     if (!normalizedReportingDate) {
       return {
@@ -6597,9 +6788,10 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
       V16.4 REPORTING-DATE LOGIC
       --------------------------
-      The professional calculation engine remains the single
-      source of truth.  Its schedule dates represent accounting
-      periods and are the dates used by the existing schedule UI.
+      The schedule source is resolved via resolveContractScheduleSource()
+      (reassessed > modified > raw engine — bkz. yukarısı, Faz 4.1/GC-18
+      düzeltmesi). Schedule dates represent accounting periods and are
+      the dates used by the existing schedule UI.
 
       A schedule period is considered closed AS OF the reporting
       date when its period date is on or before the reporting date.
@@ -6620,12 +6812,12 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
     const closedPeriods =
-      engine.schedule.filter(
+      resolved.schedule.filter(
         isClosed
       );
 
     const futurePeriods =
-      engine.schedule.filter(
+      resolved.schedule.filter(
         item => !isClosed(item)
       );
 
@@ -6656,7 +6848,8 @@ document.addEventListener("DOMContentLoaded", () => {
       closedPeriods,
       futurePeriods,
       outstandingLiability,
-      valid: true
+      valid: true,
+      scheduleSource: resolved.source
     };
   }
 
@@ -7422,19 +7615,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function openContractModal(
-    contract = null
-  ) {
-
-    const modal =
-      document.getElementById(
-        "contractModal"
-      );
-
-    if (!modal) return;
-
-    try {
-
+  /**
+   * populateContractFormFields — kontrat modalındaki form
+   * alanlarını (metin/checkbox girdileri + Varlık Sınıfı/V26 para
+   * birimi enjeksiyonları) `contract` nesnesinden doldurur.
+   * `contract` null ise (yeni sözleşme) alanlar varsayılan/boş
+   * değerlere sıfırlanır. Bu fonksiyon KENDİSİ hata fırlatabilir —
+   * çağıran (`openContractModal`) onu try/catch içinde çağırmalı
+   * (mevcut hata kurtarma davranışını KORUMAK için, bkz. aşağıdaki
+   * ÖNEMLİ DÜZELTME yorumu).
+   *
+   * FAZ 3 — SRP BÖLMESİ (openContractModal'dan extract edildi,
+   * davranış BİREBİR korunarak — bkz. PROJECT_CONTEXT.md bölüm 36).
+   */
+  function populateContractFormFields(contract) {
     document
       .getElementById(
         "contractForm"
@@ -7622,6 +7816,30 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof injectV26CurrencyFields === "function") {
       injectV26CurrencyFields(contract);
     }
+  }
+
+  /**
+   * openContractModal — kontrat oluşturma/düzenleme modalını açar.
+   * PUBLIC API imzası HİÇ DEĞİŞMEDİ. Form doldurma mantığı
+   * `populateContractFormFields`'a taşındı (Faz 3 — SRP); try/catch
+   * sınırı AYNI YERDE kalıyor — extract edilen fonksiyon hata
+   * fırlatırsa hâlâ bu catch bloğu tarafından yakalanır, modal
+   * yine de açılır (mevcut davranış korunuyor).
+   */
+  function openContractModal(
+    contract = null
+  ) {
+
+    const modal =
+      document.getElementById(
+        "contractModal"
+      );
+
+    if (!modal) return;
+
+    try {
+
+    populateContractFormFields(contract);
 
     const title =
       document.getElementById(
@@ -9059,21 +9277,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function renderAccountingCenter(
-    contract
-  ) {
-
-    return `
-
-      <div
-        style="
-          margin-top:28px;
-          border-top:1px solid #e5e7eb;
-          padding-top:24px;
-        "
-      >
-
-        <div>
+  /**
+   * renderAccountingCenterHeader — Muhasebe Fiş Merkezi başlığı/
+   * açıklaması. Saf template-string, DOM'a dokunmaz. Çıktısı
+   * orijinalin bu bloğundan byte-bazlı birebir (extract + reassembly
+   * + MD5 çıktı karşılaştırmasıyla doğrulandı — bkz.
+   * PROJECT_CONTEXT.md bölüm 36).
+   * 
+   * FAZ 3 — SRP BÖLMESİ.
+   */
+  function renderAccountingCenterHeader() {
+    return `        <div>
 
           <div
             style="
@@ -9106,9 +9320,15 @@ document.addEventListener("DOMContentLoaded", () => {
           </p>
 
         </div>
+`;
+  }
 
-
-        <div
+  /**
+   * renderAccountingCenterFilters — yıl/periyot/dönem seçicileri ve
+   * "Fişi Oluştur" butonu.
+   */
+  function renderAccountingCenterFilters(contract) {
+    return `        <div
           style="
             display:grid;
             grid-template-columns:
@@ -9263,14 +9483,26 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
         </div>
+`;
+  }
 
-
-        <div
+  /**
+   * renderAccountingCenterPreviewContainer — üretilen fişin render
+   * edileceği boş konteyner (#journalPreview).
+   */
+  function renderAccountingCenterPreviewContainer() {
+    return `        <div
           id="journalPreview"
         ></div>
+`;
+  }
 
-
-        <div
+  /**
+   * renderAccountingCenterBulkPromo — "Toplu Muhasebe Merkezi"
+   * tanıtım kutusu ve toplu fiş üretim butonu.
+   */
+  function renderAccountingCenterBulkPromo() {
+    return `        <div
           style="
             margin-top:18px;
             padding:14px;
@@ -9318,7 +9550,38 @@ document.addEventListener("DOMContentLoaded", () => {
           </button>
 
         </div>
+`;
+  }
 
+  /**
+   * renderAccountingCenter — Muhasebe Fiş Merkezi bölümünün TAM
+   * HTML'ini üretir. PUBLIC API imzası HİÇ DEĞİŞMEDİ. İçi 4 alt
+   * fonksiyona bölündü (Faz 3 — SRP); ${} yerleştirmeleri
+   * orijinal metnin TAM O NOKTALARINI (programatik extract
+   * edilmiş, hiçbir karakter eklenmeden/çıkarılmadan) geri
+   * koyuyor — bkz. PROJECT_CONTEXT.md bölüm 36.
+   */
+  function renderAccountingCenter(
+    contract
+  ) {
+
+    return `
+
+      <div
+        style="
+          margin-top:28px;
+          border-top:1px solid #e5e7eb;
+          padding-top:24px;
+        "
+      >
+
+${renderAccountingCenterHeader()}
+
+${renderAccountingCenterFilters(contract)}
+
+${renderAccountingCenterPreviewContainer()}
+
+${renderAccountingCenterBulkPromo()}
       </div>
 
     `;
@@ -10238,19 +10501,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function renderPaymentScheduleSection(contract) {
-
-    return `
-
-      <div
-        style="
-          margin-top:28px;
-          border-top:1px solid #e5e7eb;
-          padding-top:24px;
-        "
-      >
-
-        <div>
+  /**
+   * renderPaymentScheduleHeader — ödeme planı başlığı/açıklaması.
+   * Saf template-string, DOM'a dokunmaz. Çıktısı orijinalin bu
+   * bloğundan byte-bazlı birebir (programatik extract + reassembly
+   * doğrulamasıyla kanıtlandı — bkz. PROJECT_CONTEXT.md bölüm 36).
+   * 
+   * FAZ 3 — SRP BÖLMESİ.
+   */
+  function renderPaymentScheduleHeader() {
+    return `        <div>
 
           <div
             style="
@@ -10283,9 +10543,15 @@ document.addEventListener("DOMContentLoaded", () => {
           </p>
 
         </div>
+`;
+  }
 
-
-        <div
+  /**
+   * renderPaymentScheduleFilters — periyot/yıl/ay/para birimi filtre
+   * kontrolleri ve "Excel'e Aktar" butonu.
+   */
+  function renderPaymentScheduleFilters(contract) {
+    return `        <div
           style="
             display:grid;
             grid-template-columns:
@@ -10424,9 +10690,15 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
         </div>
+`;
+  }
 
-
-        <div
+  /**
+   * renderPaymentScheduleTableShell — ödeme planı tablosunun sabit
+   * başlık satırı ve boş gövdesi.
+   */
+  function renderPaymentScheduleTableShell() {
+    return `        <div
           style="
             overflow:auto;
             margin-top:16px;
@@ -10457,8 +10729,15 @@ document.addEventListener("DOMContentLoaded", () => {
             <tbody id="scheduleTableBody"></tbody>
           </table>
         </div>
+`;
+  }
 
-        <div
+  /**
+   * renderPaymentScheduleFooterContainers — boş durum mesajı ve
+   * FX/enflasyon düzeltmesi konteynerleri.
+   */
+  function renderPaymentScheduleFooterContainers() {
+    return `        <div
           id="scheduleEmptyState"
           style="
             display:none;
@@ -10480,7 +10759,35 @@ document.addEventListener("DOMContentLoaded", () => {
              Kiralama" ve "Alt Kiralama" sayfalarında, sözleşme seçici
              ile yönetiliyor. Bkz. renderSlbManagementPage /
              renderSubleaseManagementPage ve dashboard.html'deki linkler. -->
+`;
+  }
 
+  /**
+   * renderPaymentScheduleSection — ödeme planı bölümünün TAM
+   * HTML'ini üretir. PUBLIC API imzası HİÇ DEĞİŞMEDİ. İçi 4 alt
+   * fonksiyona bölündü (Faz 3 — SRP); ${} yerleştirmeleri
+   * orijinal metnin TAM O NOKTALARINI (programatik extract
+   * edilmiş, hiçbir karakter eklenmeden/çıkarılmadan) geri
+   * koyuyor — bkz. PROJECT_CONTEXT.md bölüm 36.
+   */
+  function renderPaymentScheduleSection(contract) {
+
+    return `
+
+      <div
+        style="
+          margin-top:28px;
+          border-top:1px solid #e5e7eb;
+          padding-top:24px;
+        "
+      >
+
+${renderPaymentScheduleHeader()}
+
+${renderPaymentScheduleFilters(contract)}
+
+${renderPaymentScheduleTableShell()}
+${renderPaymentScheduleFooterContainers()}
       </div>
 
     `;
@@ -11910,41 +12217,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function createBulkJournalModal() {
-
-    if (
-      document.getElementById(
-        "bulkJournalModal"
-      )
-    ) {
-      return;
-    }
-
-
-    const modal =
-      document.createElement(
-        "div"
-      );
-
-    modal.id =
-      "bulkJournalModal";
-
-    modal.className =
-      "hidden";
-
-    modal.style.cssText = `
-      position:fixed;
-      inset:0;
-      z-index:99999;
-      background:rgba(15,23,42,.55);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:20px;
-    `;
-
-
-    modal.innerHTML = `
+  /**
+   * buildBulkJournalModalHtml — Toplu Muhasebe Fiş Merkezi modalının
+   * iç HTML'ini üretir. Saf template-string, DOM'a dokunmaz. Çıktısı
+   * orijinalin bu bloğundan byte-bazlı birebir (extract + reassembly
+   * doğrulamasıyla kanıtlandı — bkz. PROJECT_CONTEXT.md bölüm 36).
+   *
+   * FAZ 3 — SRP BÖLMESİ.
+   */
+  function buildBulkJournalModalHtml() {
+    return `
 
       <div
         style="
@@ -12289,12 +12571,17 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
     `;
+  }
 
-
-    document.body.appendChild(
-      modal
-    );
-
+  /**
+   * wireBulkJournalModalEvents — Toplu Muhasebe Fiş Merkezi modalının
+   * 6 event listener'ını bağlar. Hepsi İSİMLİ, top-level fonksiyonlara
+   * (closeBulkJournalModal, exportBulkJournals, updateBulkVoucherDefaults
+   * vb.) işaret ediyor — createBulkJournalModal'ın KENDİ closure'ından
+   * yakalanan mutable state YOK (renderCloseDashboardPage'in aksine),
+   * bu yüzden bu extraction davranışça güvenli.
+   */
+  function wireBulkJournalModalEvents() {
 
     document
       .getElementById(
@@ -12370,6 +12657,58 @@ document.addEventListener("DOMContentLoaded", () => {
         "change",
         updateBulkVoucherDefaults
       );
+  }
+
+  /**
+   * createBulkJournalModal — Toplu Muhasebe Fiş Merkezi modalını
+   * (bir kez) oluşturur, body'ye ekler, event'lerini bağlar. PUBLIC
+   * API imzası HİÇ DEĞİŞMEDİ. İçi 2 alt fonksiyona bölündü (Faz 3 —
+   * SRP) — bkz. PROJECT_CONTEXT.md bölüm 36.
+   */
+  function createBulkJournalModal() {
+
+    if (
+      document.getElementById(
+        "bulkJournalModal"
+      )
+    ) {
+      return;
+    }
+
+
+    const modal =
+      document.createElement(
+        "div"
+      );
+
+    modal.id =
+      "bulkJournalModal";
+
+    modal.className =
+      "hidden";
+
+    modal.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      background:rgba(15,23,42,.55);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    `;
+
+
+    modal.innerHTML = buildBulkJournalModalHtml();
+
+
+
+
+    document.body.appendChild(
+      modal
+    );
+
+    wireBulkJournalModalEvents();
   }
 
 
@@ -12889,84 +13228,31 @@ document.addEventListener("DOMContentLoaded", () => {
      BULK JOURNAL RESULT
   ========================================================== */
 
-  function renderBulkJournalResults() {
-
-    const summary =
-      document.getElementById(
-        "bulkJournalSummary"
-      );
-
-    const preview =
-      document.getElementById(
-        "bulkJournalPreview"
-      );
-
-    const exportButton =
-      document.getElementById(
-        "exportBulkJournals"
-      );
-
-
-    if (
-      !summary ||
-      !preview
-    ) {
-      return;
-    }
-
-
-    if (
-      !bulkJournalData.length
-    ) {
-
-      summary.innerHTML = `
-
-        <div
-          style="
-            padding:15px;
-            background:#fff7ed;
-            color:#9a3412;
-            border:1px solid #fed7aa;
-            border-radius:10px;
-          "
-        >
-          Seçilen dönemde aktif sözleşme kaydı bulunamadı.
-        </div>
-
-      `;
-
-      preview.innerHTML =
-        "";
-
-      if (exportButton) {
-
-        exportButton.disabled =
-          true;
-
-        exportButton.style.opacity =
-          ".5";
-      }
-
-      return;
-    }
-
-
+  /**
+   * computeBulkJournalSummary — toplu fiş verisinden özet
+   * istatistikleri (dengeli/hatalı sayısı, toplam borç/alacak)
+   * hesaplar. Saf fonksiyon, yan etkisi yok.
+   *
+   * FAZ 3 — SRP BÖLMESİ (renderBulkJournalResults'tan extract
+   * edildi — bkz. PROJECT_CONTEXT.md bölüm 36).
+   */
+  function computeBulkJournalSummary(data) {
     const balanced =
-      bulkJournalData.filter(
+      data.filter(
         item =>
           item.balanced
       );
 
 
     const unbalanced =
-      bulkJournalData.filter(
+      data.filter(
         item =>
           !item.balanced
       );
 
 
     const totalDebit =
-      bulkJournalData.reduce(
+      data.reduce(
         (total, item) =>
           total +
           item.totalDebit,
@@ -12975,15 +13261,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     const totalCredit =
-      bulkJournalData.reduce(
+      data.reduce(
         (total, item) =>
           total +
           item.totalCredit,
         0
       );
+    return { balanced, unbalanced, totalDebit, totalCredit };
+  }
 
-
-    summary.innerHTML = `
+  /**
+   * renderBulkJournalSummaryCards — toplu fiş özet KPI kartlarının
+   * HTML'ini üretir. Saf template-string, DOM'a dokunmaz. Çıktısı
+   * orijinalin bu bloğundan byte-bazlı birebir (extract + reassembly
+   * + gerçek DOM innerHTML round-trip karşılaştırmasıyla kanıtlandı).
+   */
+  function renderBulkJournalSummaryCards(data, stats) {
+    const { balanced, unbalanced, totalDebit, totalCredit } = stats;
+    return `
 
       <div
         style="
@@ -13137,9 +13432,88 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
     `;
+  }
 
+  /**
+   * renderBulkJournalPreviewTable — toplu fiş önizleme tablosunun
+   * HTML'ini üretir. Saf template-string, DOM'a dokunmaz.
+   */
+  /**
+   * BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD — bu satır sayısının ÜZERİNDE
+   * sanal kaydırmaya geçilir; altında mevcut (Faz 3'te byte-bazlı MD5
+   * ile doğrulanmış) tam tablo render'ı DEĞİŞMEDEN kullanılmaya devam
+   * eder. Küçük listelerde virtual scroll ek karmaşıklık getirir ama
+   * gözle görülür bir kazanç sağlamaz — bu yüzden eşiğin altı
+   * dokunulmadan bırakıldı.
+   *
+   * FAZ 4.4 (Görkem onayı — bkz. PROJECT_CONTEXT.md bölüm 37/38):
+   * `renderVirtualTable` (V25.1, satır ~27950) önceden HİÇBİR YERDE
+   * çağrılmıyordu. `renderCloseDashboardPage` incelendi — orada
+   * virtualize edilecek büyük bir SATIR listesi YOK (yalnızca
+   * dropdown'lar ve sınırlı sayıda kontrol sonucu), bu yüzden yalnızca
+   * `renderBulkJournalResults`'a bağlandı.
+   */
+  const BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD = 50;
 
-    preview.innerHTML = `
+  /**
+   * renderBulkJournalRowContent — `renderVirtualTable`'ın `renderRow`
+   * callback'i. `renderVirtualTable` her satırı `display:flex` bir
+   * `<div>` olarak sarmaladığı için (satır ~27987, değiştirilemez),
+   * hücreler gerçek `<td>` DEĞİL, eşit genişlikli `flex` `<div>`'ler —
+   * kolonlar mevcut `renderBulkJournalPreviewTable`'ın `<td>`
+   * sütunlarıyla AYNI sıra/hizalama/biçimlendirmeyi (para birimi,
+   * tarih, "Dengeli/Hatalı" renk kodu) korur.
+   */
+  function renderBulkJournalRowContent(item) {
+    const cell = (content, extra = "") =>
+      `<div style="flex:1 1 0; min-width:0; padding:0 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; ${extra}">${content}</div>`;
+
+    return (
+      cell(escapeHtml(item.voucherNo)) +
+      cell(formatDate(item.voucherDate)) +
+      cell(escapeHtml(item.contractId), "font-weight:700;") +
+      cell(escapeHtml(item.company)) +
+      cell(formatCurrency(item.totalDebit), "text-align:right;") +
+      cell(formatCurrency(item.totalCredit), "text-align:right;") +
+      cell(
+        item.balanced ? "✓ Dengeli" : "✕ Hatalı",
+        `font-weight:800; color:${item.balanced ? "#166534" : "#991b1b"};`
+      )
+    );
+  }
+
+  /**
+   * buildBulkJournalVirtualShell — sabit (kaydırılmayan) başlık satırı +
+   * `renderVirtualTable`'ın devralacağı boş bir kaydırma konteyneri
+   * (#bulkJournalVirtualRows) üretir. Başlıklar, `renderBulkJournalRowContent`
+   * ile AYNI flex oranlarını kullanarak kolonların hizalı kalmasını
+   * sağlar.
+   */
+  function buildBulkJournalVirtualShell(count) {
+    const headerCell = (label, extra = "") =>
+      `<div style="flex:1 1 0; min-width:0; padding:10px; ${extra}">${label}</div>`;
+
+    return `
+      <div style="border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+        <div style="display:flex; background:#f8fafc; border-bottom:1px solid #e5e7eb; font-size:11px; font-weight:700; color:#64748b;">
+          ${headerCell("Fiş No")}
+          ${headerCell("Tarih")}
+          ${headerCell("Sözleşme")}
+          ${headerCell("Şirket")}
+          ${headerCell("Borç", "text-align:right;")}
+          ${headerCell("Alacak", "text-align:right;")}
+          ${headerCell("Kontrol")}
+        </div>
+        <div id="bulkJournalVirtualRows"></div>
+        <div style="padding:6px 10px; font-size:10px; color:#94a3b8; border-top:1px solid #e5e7eb; background:#f8fafc;">
+          ${count} kayıt — performans için sanal kaydırma aktif (${BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD}+ satırda devreye girer).
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBulkJournalPreviewTable(data) {
+    return `
 
       <div
         style="
@@ -13333,6 +13707,96 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
     `;
+  }
+
+  /**
+   * renderBulkJournalResults — toplu fiş sonuçlarını (özet + önizleme
+   * tablosu) DOM'a yazar. PUBLIC API imzası HİÇ DEĞİŞMEDİ. İçi 3 alt
+   * fonksiyona bölündü (Faz 3 — SRP) — bkz. PROJECT_CONTEXT.md bölüm 36.
+   */
+  function renderBulkJournalResults() {
+
+    const summary =
+      document.getElementById(
+        "bulkJournalSummary"
+      );
+
+    const preview =
+      document.getElementById(
+        "bulkJournalPreview"
+      );
+
+    const exportButton =
+      document.getElementById(
+        "exportBulkJournals"
+      );
+
+
+    if (
+      !summary ||
+      !preview
+    ) {
+      return;
+    }
+
+
+    if (
+      !bulkJournalData.length
+    ) {
+
+      summary.innerHTML = `
+
+        <div
+          style="
+            padding:15px;
+            background:#fff7ed;
+            color:#9a3412;
+            border:1px solid #fed7aa;
+            border-radius:10px;
+          "
+        >
+          Seçilen dönemde aktif sözleşme kaydı bulunamadı.
+        </div>
+
+      `;
+
+      preview.innerHTML =
+        "";
+
+      if (exportButton) {
+
+        exportButton.disabled =
+          true;
+
+        exportButton.style.opacity =
+          ".5";
+      }
+
+      return;
+    }
+
+
+    const stats = computeBulkJournalSummary(bulkJournalData);
+    const { balanced, unbalanced, totalDebit, totalCredit } = stats;
+
+
+    summary.innerHTML = renderBulkJournalSummaryCards(bulkJournalData, stats);
+
+
+    if (bulkJournalData.length > BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD) {
+      // FAZ 4.4 — büyük listede sanal kaydırma. Mevcut sabit tablo yolu
+      // (aşağıdaki else) DEĞİŞMEDEN kalıyor; bu dal yalnızca eşik
+      // aşıldığında devreye giriyor.
+      preview.innerHTML = buildBulkJournalVirtualShell(bulkJournalData.length);
+      const rowsContainer = preview.querySelector("#bulkJournalVirtualRows");
+      renderVirtualTable(rowsContainer, bulkJournalData, {
+        rowHeight: 44,
+        containerHeight: 420,
+        renderRow: renderBulkJournalRowContent
+      });
+    } else {
+      preview.innerHTML = renderBulkJournalPreviewTable(bulkJournalData);
+    }
 
 
     if (exportButton) {
@@ -14097,197 +14561,85 @@ document.addEventListener("DOMContentLoaded", () => {
   if (downloadTemplateButton) downloadTemplateButton.onclick = downloadTemplate;
 
 
+  /**
+   * LEASE_IMPORT_TEMPLATE_ROWS — Excel/CSV şablon indirmesinde
+   * kullanıcıya gösterilen örnek satır(lar). Saf statik veri; hiçbir
+   * mantık içermez.
+   *
+   * FAZ 3 — SRP BÖLMESİ (downloadTemplate'den extract edildi, davranış
+   * BİREBİR korunarak — bkz. PROJECT_CONTEXT.md bölüm 36).
+   */
+  const LEASE_IMPORT_TEMPLATE_ROWS = [
+    {
+      "Sözleşme ID": "LEASE-004",
+      "Şirket": "GK Holding",
+      "Şirket Kodu": "COMP-GK-HOLDING",
+      "Tedarikçi": "Örnek Tedarikçi",
+      "Aylık Kira": 100000,
+      "Başlangıç Tarihi": "2026-01-01",
+      "Bitiş Tarihi": "2030-12-31",
+      "İskonto Oranı": 18,
+      "Para Birimi": "TRY",
+      "Ödeme Zamanı": "Dönem Sonu (Arrears)",
+      "Ödeme Frekansı": "Aylık",
+      "Doğrudan İlk Maliyetler": 0,
+      "Sökme / Restorasyon Karşılığı": 0,
+      "Yenileme Tarihi": "2030-09-30",
+      "Varlık Sınıfı": "Makine",
+      "Peşin Ödemeler": 0,
+      "Kiralayan Teşvikleri": 0,
+      "Kira Artış Tipi": "Artış Yok",
+      "Yıllık Artış Oranı": 0,
+      "Sabit Artış Tutarı": 0,
+      "Değişken Ödeme": 0,
+      "Varlığın Faydalı Ömrü": "",
+      "Baz Endeks Oranı": "",
+      "Güncel Endeks Oranı": "",
+      "Endeks Güncelleme Ayı": "",
+      "Endeks Güncelleme Günü": "",
+      "Yenileme Opsiyonu": "Hayır",
+      "Fesih Opsiyonu": "Hayır",
+      "Satın Alma Opsiyonu": "Hayır",
+      "Mülkiyet Devri": "Hayır",
+      "Kısa Vadeli Kiralama İstisnası": "Hayır",
+      "Düşük Değerli Varlık İstisnası": "Hayır"
+    }
+  ];
+
+  /**
+   * downloadTemplate — sözleşme içe aktarma şablonunu kullanıcıya
+   * indirir. XLSX kütüphanesi varsa .xlsx, yoksa .csv fallback'ine
+   * düşer. Şablon VERİSİ artık `LEASE_IMPORT_TEMPLATE_ROWS`'ta —
+   * bu fonksiyon yalnızca yazma işini yapar (plan Faz 3 önerisiyle
+   * birebir).
+   */
   function downloadTemplate() {
+    const rows = LEASE_IMPORT_TEMPLATE_ROWS;
 
-    const rows = [
-
-      {
-        "Sözleşme ID":
-          "LEASE-004",
-
-        "Şirket":
-          "GK Holding",
-
-        "Şirket Kodu":
-          "COMP-GK-HOLDING",
-
-        "Tedarikçi":
-          "Örnek Tedarikçi",
-
-        "Aylık Kira":
-          100000,
-
-        "Başlangıç Tarihi":
-          "2026-01-01",
-
-        "Bitiş Tarihi":
-          "2030-12-31",
-
-        "İskonto Oranı":
-          18,
-
-        "Para Birimi":
-          "TRY",
-
-        "Ödeme Zamanı":
-          "Dönem Sonu (Arrears)",
-
-        "Ödeme Frekansı":
-          "Aylık",
-
-        "Doğrudan İlk Maliyetler":
-          0,
-
-        "Sökme / Restorasyon Karşılığı":
-          0,
-
-        "Yenileme Tarihi":
-          "2030-09-30",
-
-        "Varlık Sınıfı":
-          "Makine",
-
-        "Peşin Ödemeler":
-          0,
-
-        "Kiralayan Teşvikleri":
-          0,
-
-        "Kira Artış Tipi":
-          "Artış Yok",
-
-        "Yıllık Artış Oranı":
-          0,
-
-        "Sabit Artış Tutarı":
-          0,
-
-        "Değişken Ödeme":
-          0,
-
-        "Varlığın Faydalı Ömrü":
-          "",
-
-        "Baz Endeks Oranı":
-          "",
-
-        "Güncel Endeks Oranı":
-          "",
-
-        "Endeks Güncelleme Ayı":
-          "",
-
-        "Endeks Güncelleme Günü":
-          "",
-
-        "Yenileme Opsiyonu":
-          "Hayır",
-
-        "Fesih Opsiyonu":
-          "Hayır",
-
-        "Satın Alma Opsiyonu":
-          "Hayır",
-
-        "Mülkiyet Devri":
-          "Hayır",
-
-        "Kısa Vadeli Kiralama İstisnası":
-          "Hayır",
-
-        "Düşük Değerli Varlık İstisnası":
-          "Hayır"
-      }
-
-    ];
-
-
-    if (
-      typeof XLSX !==
-      "undefined"
-    ) {
-
-      const worksheet =
-        XLSX.utils.json_to_sheet(
-          rows
-        );
-
-      const workbook =
-        XLSX.utils.book_new();
-
-      XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        "Sözleşmeler"
-      );
-
-      XLSX.writeFile(
-        workbook,
-        "TFRS16_Sozlesme_Sablonu.xlsx"
-      );
-
+    if (typeof XLSX !== "undefined") {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sözleşmeler");
+      XLSX.writeFile(workbook, "TFRS16_Sozlesme_Sablonu.xlsx");
       return;
     }
 
+    const headers = Object.keys(rows[0]);
 
-    const headers =
-      Object.keys(
-        rows[0]
-      );
+    const csv = [
+      headers.join(";"),
+      headers.map(h => rows[0][h]).join(";")
+    ].join("\n");
 
-
-    const csv =
-      [
-        headers.join(";"),
-        headers
-          .map(
-            h =>
-              rows[0][h]
-          )
-          .join(";")
-      ].join("\n");
-
-
-    const blob =
-      new Blob(
-        [
-          "\uFEFF" +
-          csv
-        ],
-        {
-          type:
-            "text/csv;charset=utf-8;"
-        }
-      );
-
-
-    const url =
-      URL.createObjectURL(
-        blob
-      );
-
-    const link =
-      document.createElement(
-        "a"
-      );
-
-    link.href =
-      url;
-
-    link.download =
-      "TFRS16_Sozlesme_Sablonu.csv";
-
-    document.body.appendChild(
-      link
-    );
-
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "TFRS16_Sozlesme_Sablonu.csv";
+    document.body.appendChild(link);
     link.click();
-
     link.remove();
-
-    URL.revokeObjectURL(
-      url
-    );
+    URL.revokeObjectURL(url);
   }
 
 
@@ -15514,26 +15866,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function cfoBuildSchedule(contract) {
-    try {
-      if (typeof getCurrentReassessmentState === "function" && typeof buildReassessedSchedule === "function") {
-        const latest = getCurrentReassessmentState(contract);
-        if (latest && latest.status === "APPLIED") {
-          const reassessed = buildReassessedSchedule(contract, latest);
-          if (Array.isArray(reassessed) && reassessed.length) return { schedule: reassessed, engine: null, source: "REASSESSED_SCHEDULE" };
-        }
-      }
-      if (typeof getCurrentAppliedModification === "function" && typeof buildModifiedSchedule === "function") {
-        const latestModification = getCurrentAppliedModification(contract);
-        if (latestModification) {
-          const modified = buildModifiedSchedule(contract, latestModification);
-          if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
-        }
-      }
-      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
-      return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
-    } catch (error) {
-      return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
-    }
+    // FAZ 4.1 (GC-18 düzeltmesi) — mantık resolveContractScheduleSource'a
+    // taşındı (satır ~6698 civarı, CORE katmanı); bu artık ince bir
+    // sarmalayıcı. getScheduleAsOfReportingDate de AYNI kaynağı kullanıyor
+    // — iki farklı schedule-seçim mantığı artık YOK, tek kaynak var.
+    return resolveContractScheduleSource(contract);
   }
 
   function cfoScheduleAtDate(schedule, reportingDate) {
@@ -15665,10 +16002,53 @@ document.addEventListener("DOMContentLoaded", () => {
     return totals;
   }
 
-  function getTotalLeaseLiability(reportingDate) { return cfoAggregateRows(cfoGetContracts().filter(c => cfoIsActive(c, cfoResolveReportingDate(reportingDate))).map(c => cfoGetContractMetricsInternal(c, reportingDate))).leaseLiability; }
-  function getCurrentLeaseLiability(reportingDate) { return cfoAggregateRows(cfoGetContracts().filter(c => cfoIsActive(c, cfoResolveReportingDate(reportingDate))).map(c => cfoGetContractMetricsInternal(c, reportingDate))).currentLiability; }
-  function getNonCurrentLeaseLiability(reportingDate) { return cfoAggregateRows(cfoGetContracts().filter(c => cfoIsActive(c, cfoResolveReportingDate(reportingDate))).map(c => cfoGetContractMetricsInternal(c, reportingDate))).nonCurrentLiability; }
-  function getTotalRuoAssets(reportingDate) { return cfoAggregateRows(cfoGetContracts().filter(c => cfoIsActive(c, cfoResolveReportingDate(reportingDate))).map(c => cfoGetContractMetricsInternal(c, reportingDate))).rouAsset; }
+  /**
+   * getCfoAggregateMetrics — tüm aktif kontratların toplam kira
+   * yükümlülüğü/ROU varlığı rakamlarını TEK GEÇİŞTE hesaplar ve
+   * `reportingDate` bazında önbelleğe alır.
+   *
+   * FAZ 4.1 (Performans, plan önerisi): `getTotalLeaseLiability`,
+   * `getCurrentLeaseLiability`, `getNonCurrentLeaseLiability`,
+   * `getTotalRuoAssets` her biri AYNI ayrı
+   * `cfoGetContracts().filter(...).map(cfoGetContractMetricsInternal)`
+   * zincirini KENDİ BAŞINA çalıştırıyordu — bir CFO Dashboard'da
+   * hepsi art arda çağrılırsa (tipik kullanım), reassessment/
+   * modification'lı kontratlarda pahalı olan bu zincir (control
+   * sonuçları, next-12-ay filtreleme, `buildReassessedSchedule` vb.
+   * dahil — yalnızca `calculateLeaseEngine` DEĞİL) 4 KEZ tekrarlanıyordu.
+   * `calculateLeaseEngine`'in KENDİ önbelleği (CALCULATION_CACHE) bu
+   * tekrarı KISMEN gizliyordu (LEASE_SCHEDULE dalı için), ama
+   * REASSESSED_SCHEDULE/MODIFIED_SCHEDULE dallarının hiç önbelleği yok
+   * — bu fonksiyonlar 4 kez tam olarak yeniden çalışıyordu.
+   *
+   * Önbellek geçersiz kılma: `clearCalculationCache()` bu önbelleği de
+   * temizler (kontrat mutasyonu olan HER yerde tek bakım noktası).
+   */
+  function getCfoAggregateMetrics(reportingDate) {
+    const resolvedDate = cfoResolveReportingDate(reportingDate);
+    const cacheKey = cfoIsoDate(resolvedDate) || String(reportingDate);
+
+    if (CFO_AGGREGATE_CACHE.has(cacheKey)) {
+      return CFO_AGGREGATE_CACHE.get(cacheKey);
+    }
+
+    const rows = cfoGetContracts()
+      .filter(c => cfoIsActive(c, resolvedDate))
+      .map(c => cfoGetContractMetricsInternal(c, reportingDate));
+
+    const totals = cfoAggregateRows(rows);
+    CFO_AGGREGATE_CACHE.set(cacheKey, totals);
+    return totals;
+  }
+
+  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
+  function getTotalLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).leaseLiability; }
+  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
+  function getCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).currentLiability; }
+  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
+  function getNonCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).nonCurrentLiability; }
+  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
+  function getTotalRuoAssets(reportingDate) { return getCfoAggregateMetrics(reportingDate).rouAsset; }
 
   function cfoPeriodMetrics(startDate, endDate, options = {}) {
     const start = cfoDate(startDate), end = cfoDate(endDate);
@@ -30439,6 +30819,10 @@ document.addEventListener("DOMContentLoaded", () => {
       renderEliminationManagementPage,
       renderFinancialReportingPage,
       openDetail,
+      renderPaymentScheduleSection,
+      renderAccountingCenter,
+      renderBulkJournalResults,
+      createBulkJournalModal,
       gkApplyDetailTab,
       v191ApplyPeriod,
       v191ResetPeriod,
@@ -30479,6 +30863,14 @@ document.addEventListener("DOMContentLoaded", () => {
         (Array.isArray(list) ? list : []).forEach(item => contracts.push(item));
         try { clearCalculationCache(); } catch (_) {}
         return contracts.length;
+      },
+
+      // Aynı desen — renderBulkJournalResults'ın SRP bölmesini
+      // doğrulamak için bulkJournalData'yı yerinde tohumlar.
+      __seedBulkJournalDataForTest(list) {
+        bulkJournalData.length = 0;
+        (Array.isArray(list) ? list : []).forEach(item => bulkJournalData.push(item));
+        return bulkJournalData.length;
       }
     };
   } catch (error) {
