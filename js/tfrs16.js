@@ -14541,12 +14541,28 @@ ${renderPaymentScheduleFooterContainers()}
 
       const committed = Array.isArray(result.committed) ? result.committed : [];
       const rejected = Array.isArray(result.rejected) ? result.rejected : [];
-      const backendFailed = rejected.filter(r => (r.errors || []).some(e => e.errorCode === "BACKEND_PERSIST_FAILED")).length;
+      const limitReached = Array.isArray(result.limitReachedSummary) ? result.limitReachedSummary : [];
+      const limitRowNumbers = new Set(limitReached.map(s => s.rowNumber));
+      const backendFailed = rejected.filter(r => (r.errors || []).some(e => e.errorCode === "BACKEND_PERSIST_FAILED" || e.errorCode === "LIMIT_REACHED" || e.errorCode === "NO_ACTIVE_LICENSE")).length;
       const otherRejected = rejected.length - backendFailed;
       const businessWarnings = committed.filter(c => Array.isArray(c.businessRuleWarnings) && c.businessRuleWarnings.length).length;
       updateLoadingProgress(100, `${committed.length} kayıt başarıyla aktarıldı.`);
       const alertType = backendFailed || otherRejected ? (committed.length ? "warning" : "error") : "success";
       showAlert(`${committed.length} kayıt aktarıldı${otherRejected ? `, ${otherRejected} kayıt doğrulama hatasıyla reddedildi` : ""}${backendFailed ? `, ${backendFailed} kayıt backend'e YAZILAMADI (sadece bunlar sisteme girmedi)` : ""}${businessWarnings ? `, ${businessWarnings} kayıtta iş kuralı uyarısı bulundu (denetim izinde kayıtlı)` : ""}.`, alertType);
+
+      // Limit/lisans yüzünden kırılan şirketleri AYRI ve net bir uyarıda
+      // özetliyoruz — "18 kayıt backend'e yazılamadı" demek yerine
+      // "hangi satırdan itibaren, hangi şirkette, hangi limitle" bilgisini
+      // veriyoruz. (Kullanıcı talebi: satır bazında limit kırılma noktası.)
+      if (limitReached.length) {
+        const detail = limitReached.map(s => {
+          const capacity = s.maxContracts != null
+            ? `${s.currentContracts ?? "?"}/${s.maxContracts}`
+            : (s.code === "NO_ACTIVE_LICENSE" ? "aktif lisans yok" : "limit bilinmiyor");
+          return `${s.company}: Satır ${s.rowNumber} (${s.contractId})'ten itibaren sözleşme limiti doldu (${capacity})`;
+        }).join(" · ");
+        showAlert(detail, "error");
+      }
     } catch (error) {
       console.error("V19.1 integration import commit error:", error);
       showAlert(`Import tamamlanamadı: ${error?.message || String(error)}`, "error");
@@ -20069,6 +20085,14 @@ ${renderPaymentScheduleFooterContainers()}
     }
     const working = Array.isArray(contracts) ? contracts.slice() : [];
     const committed = [], rejected = [], changes = [];
+    // DÜZELTME (kullanıcı talebi): backend'e yazarken lisans/kapasite
+    // limitine takılan satırları şirket bazında ayrıca izliyoruz.
+    // Amaç: 30 satırlık bir dosyada limit 12. satırda dolduysa,
+    // kullanıcıya "18 satır reddedildi" diye tek tek aynı hatayı
+    // 18 kez göstermek yerine "GK Holding: 12. satırdan (LEASE-012)
+    // itibaren sözleşme limiti doldu (12/12)" gibi tek, net bir özet
+    // vermek. İlk kırılma noktası şirket başına bir kez kaydedilir.
+    const limitReachedByCompany = new Map();
     // DÜZELTME (kritik veri kaybı — bkz. LEASE-030 / "30 kayıt aktarıldı"
     // sonrası refresh'te 0 sözleşme bugı): önceden bu döngü sadece
     // working[] ve localStorage'a yazıyordu, backend'e HİÇ POST/PUT
@@ -20102,16 +20126,36 @@ ${renderPaymentScheduleFooterContainers()}
       try {
         await persistContractToApi(next, action === "UPDATE");
       } catch (error) {
+        // Backend, lisans/kapasite limitine takılan istekleri
+        // { error, code: "LIMIT_REACHED" | "NO_ACTIVE_LICENSE",
+        //   currentContracts, maxContracts } gövdesiyle 403 döner
+        // (bkz. backend/routes/contracts.js, license-service.js
+        // canAddContractToCompany). tfrs16ApiFetch bu gövdeyi
+        // err.body'de saklıyor — burada okuyup şirket başına İLK
+        // kırılma noktasını (satır + o anki doluluk) kaydediyoruz.
+        const backendCode = error?.body?.code || null;
+        const isLimitError = backendCode === "LIMIT_REACHED" || backendCode === "NO_ACTIVE_LICENSE";
+        if (isLimitError && next.companyId && !limitReachedByCompany.has(String(next.companyId))) {
+          limitReachedByCompany.set(String(next.companyId), {
+            companyId: next.companyId,
+            company: next.company || String(next.companyId),
+            rowNumber: result.rowNumber,
+            contractId: id,
+            code: backendCode,
+            currentContracts: error?.body?.currentContracts ?? null,
+            maxContracts: error?.body?.maxContracts ?? null
+          });
+        }
         rejected.push({
           ...result,
           status: INTEGRATION_ROW_STATUS.INVALID,
           errors: [
             ...(result.errors || []),
-            { rowNumber: result.rowNumber, field: null, value: id, errorCode: "BACKEND_PERSIST_FAILED", message: `Backend'e kaydedilemedi: ${error?.message || String(error)}` }
+            { rowNumber: result.rowNumber, field: null, value: id, errorCode: backendCode || "BACKEND_PERSIST_FAILED", message: `Backend'e kaydedilemedi: ${error?.message || String(error)}` }
           ]
         });
         if (typeof recordAuditEvent === "function") {
-          recordAuditEvent({ action: "IMPORT_BACKEND_PERSIST_FAILED", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import — backend'e yazılamadı", metadata: { jobId, rowNumber: result.rowNumber, error: error?.message || String(error) } });
+          recordAuditEvent({ action: "IMPORT_BACKEND_PERSIST_FAILED", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import — backend'e yazılamadı", metadata: { jobId, rowNumber: result.rowNumber, companyId: next.companyId || null, backendCode, error: error?.message || String(error) } });
         }
         continue;
       }
@@ -20131,7 +20175,7 @@ ${renderPaymentScheduleFooterContainers()}
     });
     const finalStatus = rejected.length || preview.warningRows ? INTEGRATION_JOB_STATUS.COMPLETED_WITH_WARNINGS : INTEGRATION_JOB_STATUS.COMPLETED;
     const job = updateImportJob(jobId, { status: finalStatus, completedAt: integrationNow(), totalRows: preview.totalRows, importedRows: committed.length, rejectedRows: rejected.length, warningRows: preview.warningRows, errors: rejected.flatMap(x => x.errors || []), warnings: preview.validationResults.flatMap(x => x.warnings || []), validationResults: preview.validationResults, lifecycle: rejected.length ? INTEGRATION_LIFECYCLE.EXCEPTION : INTEGRATION_LIFECYCLE.PROCESSED, committedActions: committed, changeSummary: changes });
-    return { success: true, job, preview, committed, rejected, changes };
+    return { success: true, job, preview, committed, rejected, changes, limitReachedSummary: Array.from(limitReachedByCompany.values()) };
   }
 
   function getImportErrorReport(jobId) {
