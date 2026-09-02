@@ -14563,6 +14563,24 @@ ${renderPaymentScheduleFooterContainers()}
         }).join(" · ");
         showAlert(detail, "error");
       }
+
+      // DÜZELTME (kullanıcı talebi — "doğrulama hatasıyla reddedildi"
+      // mesajı sadece SAYI veriyordu, SEBEP vermiyordu): commitImport
+      // içindeki previewImport() satır bazında gerçek errorCode/field/
+      // message üretiyor (REQUIRED_FIELD, INVALID_NUMBER, INVALID_CURRENCY,
+      // DUPLICATE_IN_FILE, INVALID_DATE_RANGE...) ama bu bilgi hiçbir
+      // yerde gösterilmiyordu. Artık ilk birkaç reddedilen satırın gerçek
+      // hata metnini alert'te veriyoruz.
+      const validationRejected = rejected.filter(r => !(r.errors || []).some(e => e.errorCode === "BACKEND_PERSIST_FAILED" || e.errorCode === "LIMIT_REACHED" || e.errorCode === "NO_ACTIVE_LICENSE"));
+      if (validationRejected.length) {
+        const sample = validationRejected.slice(0, 5).map(r => {
+          const firstError = (r.errors || [])[0];
+          const reason = firstError ? `${firstError.field ? firstError.field + ": " : ""}${firstError.message || firstError.errorCode}` : "Bilinmeyen doğrulama hatası";
+          return `Satır ${r.rowNumber}${r.normalizedData?.id ? ` (${r.normalizedData.id})` : ""}: ${reason}`;
+        }).join(" · ");
+        const more = validationRejected.length > 5 ? ` (+${validationRejected.length - 5} satır daha, aynı türden)` : "";
+        showAlert(`Doğrulama hatası detayı — ${sample}${more}`, "error");
+      }
     } catch (error) {
       console.error("V19.1 integration import commit error:", error);
       showAlert(`Import tamamlanamadı: ${error?.message || String(error)}`, "error");
