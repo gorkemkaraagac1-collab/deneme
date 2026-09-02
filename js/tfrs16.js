@@ -14579,6 +14579,24 @@ ${renderPaymentScheduleFooterContainers()}
         showAlert(detail, "error");
       }
 
+      // DÜZELTME (kullanıcı talebi): "X kayıt backend'e YAZILAMADI" mesajı
+      // limit/lisans DIŞINDAKİ backend hatalarında (örn. "Şirket eşleşmedi",
+      // dönem kilidi, ağ hatası) hâlâ sadece bir SAYI veriyordu, gerçek
+      // sebebi göstermiyordu. limitReached'de zaten özetlenenleri (satır no
+      // üzerinden) burada TEKRARLAMIYORUZ.
+      const genericBackendFailed = rejected.filter(r =>
+        (r.errors || []).some(e => e.errorCode === "BACKEND_PERSIST_FAILED")
+        && !limitRowNumbers.has(r.rowNumber)
+      );
+      if (genericBackendFailed.length) {
+        const sample = genericBackendFailed.slice(0, 5).map(r => {
+          const firstError = (r.errors || []).find(e => e.errorCode === "BACKEND_PERSIST_FAILED") || (r.errors || [])[0];
+          return `Satır ${r.rowNumber}${r.normalizedData?.id ? ` (${r.normalizedData.id})` : ""}: ${firstError?.message || "Bilinmeyen hata"}`;
+        }).join(" · ");
+        const more = genericBackendFailed.length > 5 ? ` (+${genericBackendFailed.length - 5} satır daha, aynı türden)` : "";
+        showAlert(`Backend hatası detayı — ${sample}${more}`, "error");
+      }
+
       // DÜZELTME (kullanıcı talebi — "doğrulama hatasıyla reddedildi"
       // mesajı sadece SAYI veriyordu, SEBEP vermiyordu): commitImport
       // içindeki previewImport() satır bazında gerçek errorCode/field/
