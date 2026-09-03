@@ -31789,6 +31789,56 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
+    // DÜZELTME (kullanıcı talebi — "onay bekleyenleri toplu görüp
+    // oradan onaylasak daha kolay olmaz mı"): önceden bekleyen (DRAFT)
+    // modifikasyon/reassessment'ları görmek için sözleşmeleri TEK TEK
+    // dropdown'dan seçip kontrol etmek gerekiyordu — 30 sözleşmelik bir
+    // portföyde bu pratik değil. getModificationReport/getReassessmentReport
+    // zaten TÜM sözleşmeler için status bilgisiyle birlikte satır
+    // üretiyordu (CFO snapshot'ı için kullanılıyordu), sadece bunu
+    // gösteren bir ekran yoktu. Aşağıdaki blok bu iki raporu birleştirip
+    // "DRAFT" (uygulanmamış) olan HER ŞEYİ portföy genelinde, tek
+    // ekranda, satır bazında ve toplu "Tümünü Uygula" ile gösteriyor.
+    // applyModification/applyReassessment fonksiyonlarının KENDİSİNE
+    // dokunulmadı — sadece bunları çağıran YENİ bir liste/tetikleyici.
+    const buildPendingApprovals = () => {
+      const now = new Date();
+      const modRows = (typeof getModificationReport === "function" ? getModificationReport(now).rows : []) || [];
+      const reassRows = (typeof getReassessmentReport === "function" ? getReassessmentReport(now).rows : []) || [];
+      const pendingMods = modRows.filter(r => r.status !== "APPLIED" && r.status !== "CANCELLED")
+        .map(r => ({ kind: "MOD", contractId: r.contractId, company: r.company, id: r.modificationId, date: r.effectiveDate || r.modificationDate, reason: r.reason, oldPayment: r.oldPayment, newPayment: r.newPayment }));
+      const pendingReass = reassRows.filter(r => r.status !== "APPLIED" && r.status !== "CANCELLED")
+        .map(r => ({ kind: "REASS", contractId: r.contractId, company: r.company, id: r.reassessmentId, date: r.effectiveDate || r.reassessmentDate, reason: r.reason, oldPayment: r.oldPayment, newPayment: r.newPayment }));
+      return [...pendingMods, ...pendingReass].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+    };
+
+    const renderPendingApprovalsHtml = pending => {
+      if (!pending.length) return "";
+      const rowsHtml = pending.map(p => `
+        <tr>
+          <td>${escapeHtml(p.kind === "MOD" ? "Modifikasyon" : "Reassessment")}</td>
+          <td><strong>${escapeHtml(p.contractId)}</strong></td>
+          <td>${escapeHtml(p.company || "")}</td>
+          <td>${escapeHtml(p.date || "")}</td>
+          <td style="max-width:280px;font-size:12px;color:#475569;">${escapeHtml(p.reason || "")}</td>
+          <td>${v191Value(p.oldPayment)} → ${v191Value(p.newPayment)}</td>
+          <td><button type="button" class="secondary-button" data-pending-approve data-pending-kind="${escapeHtml(p.kind)}" data-pending-contract="${escapeHtml(p.contractId)}" data-pending-id="${escapeHtml(p.id)}">Uygula</button></td>
+        </tr>`).join("");
+      return `
+        <div class="gk-v26-card" style="background:#fffbeb;border-color:#fde68a;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+            <h3 style="margin:0;font-size:15px;color:#92400e;">⏳ Onay Bekleyenler <span style="font-weight:400;color:#b45309;">(${pending.length} kayıt, tüm portföy)</span></h3>
+            <button type="button" class="secondary-button" id="v26PendingApprovalsApplyAll">Tümünü Uygula</button>
+          </div>
+          <div style="overflow:auto;">
+            <table class="gk-v26-table">
+              <thead><tr><th>Tür</th><th>Sözleşme</th><th>Şirket</th><th>Tarih</th><th>Sebep</th><th>Ödeme (eski→yeni)</th><th></th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>`;
+    };
+
     const render = () => {
       const activeContracts = (Array.isArray(contracts) ? contracts : [])
         .slice()
@@ -31811,6 +31861,8 @@ const V26_FX_UI_PAGE_SIZE = 50;
           ? `<div class="gk-v26-card"><div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div></div>`
           : `${renderModificationManagementSection(selectedContract)}${renderReassessmentManagementSection(selectedContract)}`;
 
+      const pending = buildPendingApprovals();
+
       container.innerHTML = `
         <div class="gk-v26-page">
           <div style="margin-bottom:16px;">
@@ -31819,6 +31871,8 @@ const V26_FX_UI_PAGE_SIZE = 50;
               Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
             </p>
           </div>
+
+          ${renderPendingApprovalsHtml(pending)}
 
           <div class="gk-v26-card" style="margin-bottom:0;">
             <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
@@ -31833,6 +31887,52 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
       container.querySelector("#v26ModReassContractSelect")?.addEventListener("change", event => {
         v26SelectedModReassContractId = event.target.value;
+        render();
+      });
+
+      // Tek satırlık "Uygula" — hangi sözleşmede/dropdown'da olduğuna
+      // bakmaksızın, ilgili contract'ı `contracts` global dizisinden
+      // bulup doğrudan applyModification/applyReassessment'ı çağırır.
+      container.querySelectorAll("[data-pending-approve]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const kind = btn.dataset.pendingKind;
+          const contractId = btn.dataset.pendingContract;
+          const id = btn.dataset.pendingId;
+          const contract = (Array.isArray(contracts) ? contracts : []).find(c => c.id === contractId);
+          if (!contract) { showAlert(`${contractId}: sözleşme bulunamadı.`, "error"); return; }
+          btn.disabled = true;
+          const result = kind === "MOD" ? await applyModification(contract, id) : await applyReassessment(contract, id);
+          if (!result.valid) {
+            showAlert(`${contractId}: ${(result.errors || []).join(", ")}`, "error");
+            btn.disabled = false;
+            return;
+          }
+          refresh();
+          render();
+        });
+      });
+
+      // Toplu "Tümünü Uygula" — sırayla (await ile) uyguluyor; kısmi
+      // başarısızlıkta durmuyor, hangi kayıtların başarısız olduğunu
+      // sonunda tek bir özet mesajıyla raporluyor.
+      container.querySelector("#v26PendingApprovalsApplyAll")?.addEventListener("click", async () => {
+        const btn = container.querySelector("#v26PendingApprovalsApplyAll");
+        if (btn) { btn.disabled = true; btn.textContent = "Uygulanıyor…"; }
+        const items = buildPendingApprovals();
+        let success = 0;
+        const failed = [];
+        for (const item of items) {
+          const contract = (Array.isArray(contracts) ? contracts : []).find(c => c.id === item.contractId);
+          if (!contract) { failed.push(`${item.contractId}: sözleşme bulunamadı`); continue; }
+          try {
+            const result = item.kind === "MOD" ? await applyModification(contract, item.id) : await applyReassessment(contract, item.id);
+            if (result.valid) success++; else failed.push(`${item.contractId}: ${(result.errors || []).join(", ")}`);
+          } catch (error) {
+            failed.push(`${item.contractId}: ${error?.message || String(error)}`);
+          }
+        }
+        refresh();
+        showAlert(`${success} kayıt uygulandı${failed.length ? `, ${failed.length} kayıt başarısız: ${failed.slice(0, 3).join(" · ")}${failed.length > 3 ? ` (+${failed.length - 3} daha)` : ""}` : "."}`, failed.length ? "warning" : "success");
         render();
       });
 
