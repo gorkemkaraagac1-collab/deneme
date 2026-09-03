@@ -20939,8 +20939,37 @@ ${renderPaymentScheduleFooterContainers()}
       liabilityMonetaryGainLossOpening: 0,
       liabilityMonetaryGainLossPeriod: 0
     };
-    let totalNetAdjustment = 0, computedCount = 0, missingCount = 0;
-    rows.forEach(row => {
+    let totalNetAdjustment = 0, computedCount = 0, missingCount = 0, outOfScopeCount = 0;
+
+    // DÜZELTME (kullanıcı talebi — kritik ayrım): applyTMS29Restatement,
+    // raporlama dönemi sözleşme başlangıcından ÖNCEYSE ("Raporlama dönemi,
+    // sözleşme başlangıcından önce olamaz.") hata fırlatıyor — bu DOĞRU
+    // bir davranış (2025 raporunda 2026'da başlayacak bir sözleşmenin hiç
+    // hareketi olamaz), AMA önceden bu durum aşağıdaki genel catch
+    // bloğunda "enflasyon endeks tablosunda eksik ay var" hatasıyla AYNI
+    // sepete düşüyor, hem missingCount'u hem totalCount'u (30/30 üzerinden)
+    // yanlış şişiriyordu. Kullanıcı geçmiş bir dönemi çektiğinde, o
+    // dönemde henüz başlamamış sözleşmeler bir HATA değil, o rapor için
+    // basitçe KAPSAM DIŞI'dır — ne payda(totalCount)ya ne de "eksik ay"
+    // hata sayısına girmemeli. Bu yüzden forEach'ten ÖNCE, rp'ye göre
+    // henüz başlamamış sözleşmeleri ayrı bir kovaya (outOfScopeCount)
+    // alıp döngünün tamamen dışında tutuyoruz; geri kalanlarda hâlâ hata
+    // olursa bu artık gerçekten "endeks eksik" demektir.
+    const inScopeRows = rows.filter(row => {
+      const contract = (typeof contracts !== "undefined" ? contracts : []).find(c => String(c.id) === String(row.contractId));
+      if (!contract) return true; // "Sözleşme bulunamadı" — gerçek bir hata, aşağıdaki döngüde yakalanmaya devam etsin
+      const startDate = parseDate(contract.startDate);
+      if (!startDate) return true; // geçersiz tarih — gerçek bir hata, aşağıda yakalanmaya devam etsin
+      const acquisitionMonth = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
+      const rp = String(rpMonth || "").trim();
+      if (/^\d{4}-\d{2}$/.test(rp) && rp < acquisitionMonth) {
+        outOfScopeCount++;
+        return false;
+      }
+      return true;
+    });
+
+    inScopeRows.forEach(row => {
       const contract = (typeof contracts !== "undefined" ? contracts : []).find(c => String(c.id) === String(row.contractId));
       if (!contract) { results.set(row.contractId, { ok: false, error: "Sözleşme bulunamadı." }); missingCount++; return; }
       try {
@@ -20999,7 +21028,7 @@ ${renderPaymentScheduleFooterContainers()}
     ];
     const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, tms29SumKeys);
 
-    return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, totalCount: rows.length };
+    return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, outOfScopeCount, totalCount: inScopeRows.length };
   }
 
   // ARTIK ÇAĞRILMIYOR (bkz. aşağıdaki v191Tms29RouSummaryHtml/
@@ -21050,7 +21079,7 @@ ${renderPaymentScheduleFooterContainers()}
       <h5 style="margin:16px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
 
-      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}${tms29.outOfScopeCount > 0 ? ` <span style="color:#94a3b8;">(${tms29.outOfScopeCount} sözleşme bu dönemde henüz başlamadığı için kapsam dışı — normaldir.)</span>` : ""}</p>
       <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır. Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
     </div>`;
   }
@@ -21123,7 +21152,7 @@ ${renderPaymentScheduleFooterContainers()}
       <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
 
-      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}</p>
+      <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}${tms29.outOfScopeCount > 0 ? ` <span style="color:#94a3b8;">(${tms29.outOfScopeCount} sözleşme bu dönemde henüz başlamadığı için kapsam dışı — normaldir.)</span>` : ""}</p>
       <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
     </div>`;
   }
