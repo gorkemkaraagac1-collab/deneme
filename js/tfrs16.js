@@ -2346,7 +2346,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let rouRollForward = null;
     if (ps !== null) {
       const priorRow = fullSchedule
-        .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < ps)
+        .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < effectivePeriodStart)
         .pop();
 
       const liabilityOpeningNominal = priorRow
@@ -2360,13 +2360,13 @@ document.addEventListener("DOMContentLoaded", () => {
         ? priorRow.rouClosing
         : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
 
-      const ratioOpeningToRp = getInflationRatio(ps, rp);
+      const ratioOpeningToRp = getInflationRatio(effectivePeriodStart, rp);
       const liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
       const rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
 
       const periodRows = fullSchedule.filter(row => {
         const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
-        return rowMonth >= ps && rowMonth <= rp;
+        return rowMonth >= effectivePeriodStart && rowMonth <= rp;
       });
 
       let liabilityInterestNominal = 0, liabilityInterestRestated = 0;
@@ -2396,7 +2396,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const d = parseDate(x.effectiveDate);
           return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.liabilityAdjustment) || 0 } : null;
         })
-        .filter(x => x && x.month >= ps && x.month <= rp);
+        .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
       let liabilityEntriesNominal = 0, liabilityEntriesRestated = 0;
       entryChanges.forEach(entry => {
@@ -2412,7 +2412,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const d = parseDate(x.effectiveDate);
           return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.rouAdjustment) || 0 } : null;
         })
-        .filter(x => x && x.month >= ps && x.month <= rp);
+        .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
       let rouEntriesNominal = 0, rouEntriesRestated = 0;
       rouEntryChanges.forEach(entry => {
@@ -16825,7 +16825,7 @@ ${renderPaymentScheduleFooterContainers()}
     if (!rouRows.length) return false;
 
     const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
-    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
+    // rpMonth zaten satır 16813'te tanımlandı
     const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
     const t = tms29.totals;
 
