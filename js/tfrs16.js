@@ -2256,24 +2256,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const acquisitionMonth =
       `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
 
+    // ✅ FIX: Yeni sözleşme başlamış ise (acquisition > periodStart),
+    // otomatik olarak sözleşme başlangıcı minimum period olarak kullanılır.
+    // Bu TMS 29 hareket tablosunun yeni gelen kiralama kontratları için
+    // hesaplanabilmesini sağlar.
+    const ps = periodStart == null ? null : String(periodStart).trim();
+    const effectivePeriodStart = ps !== null && ps >= acquisitionMonth ? ps : acquisitionMonth;
+
     if (rp < acquisitionMonth) {
       throw new Error("Raporlama dönemi, sözleşme başlangıcından önce olamaz.");
     }
 
-    // periodStart opsiyonel — verilmişse yükümlülük hareket tablosu
-    // restatement'ı tetiklenir (kullanıcı onayı: serbest/kullanıcı
-    // seçimli periodStart).
-    const ps = periodStart == null ? null : String(periodStart).trim();
     if (ps !== null) {
       if (!/^\d{4}-\d{2}$/.test(ps)) {
         throw new Error(`Geçersiz periodStart formatı: "${periodStart}" (YYYY-MM bekleniyor).`);
       }
-      if (ps < acquisitionMonth) {
-        throw new Error("periodStart, sözleşme başlangıcından önce olamaz.");
-      }
       if (ps > rp) {
         throw new Error("periodStart, raporlama döneminden sonra olamaz.");
       }
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(effectivePeriodStart)) {
+      throw new Error(`Geçersiz effectivePeriodStart: "${effectivePeriodStart}".`);
     }
 
     const fullSchedule = getReassessmentBaseSchedule(contract) || [];
@@ -16804,7 +16808,20 @@ ${renderPaymentScheduleFooterContainers()}
     const start = rptDate(startDate), end = rptDate(endDate);
     if (!start || !end || end < start) return false;
     const rouReport = getRuoAssetRollForwardReport(start, end) || {};
-    const rouRows = Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : [];
+    // ✅ FIX: Raporlama döneminden SONRA başlayan kontratları filtrele
+    // (2026'da başlayan kontrat 2025 hareket tablosunda yer almaz)
+    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
+    const rouRows = Array.isArray(rouReport.rows) 
+      ? rouReport.rows
+        .filter(r => r.status !== "ERROR")
+        .filter(r => {
+          // Kontrat başlangıç tarihi ≤ Raporlama dönemi ayı
+          if (!r.contractStartDate && !r.startDate) return true; // Tarih yoksa dahil et
+          const contractStartDate = r.contractStartDate || r.startDate;
+          const contractMonth = `${new Date(contractStartDate).getFullYear()}-${String(new Date(contractStartDate).getMonth() + 1).padStart(2, "0")}`;
+          return contractMonth <= rpMonth;
+        })
+      : [];
     if (!rouRows.length) return false;
 
     const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
