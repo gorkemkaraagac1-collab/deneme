@@ -16649,6 +16649,21 @@ ${renderPaymentScheduleFooterContainers()}
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
     const rows = [];
     rptSafeContracts().forEach(contract => {
+      // DÜZELTME (kullanıcı talebi — kritik tutarlılık sorunu): önceden
+      // dönem sonundan (end) SONRA başlayacak bir sözleşme için de satır
+      // üretiliyordu — sadece tüm alanları 0 olarak (henüz hiçbir
+      // schedule satırı yoktu). Bu satır yine de "contractCount"a
+      // giriyordu, yani örn. 1.01.2025-31.12.2025 raporunda 2026'da
+      // başlayan sözleşmeler de "30 sözleşme" sayısına dahil oluyordu
+      // (0 tutarla). TMS29-restated dipnotlar (v191ComputePortfolioTms29,
+      // ayrı bir fix ile) bu sözleşmeleri zaten kapsam dışı sayıyordu —
+      // ama NOMİNAL (bu fonksiyon) hareket tabloları saymıyordu, bu da
+      // aynı raporun farklı dipnotlarında FARKLI sözleşme adedi göstermesi
+      // sonucunu doğuruyordu. Artık dönem sonundan sonra başlayan bir
+      // sözleşme için satır HİÇ ÜRETİLMİYOR — diğer tüm dipnotlarla
+      // (TMS29 dahil) tutarlı.
+      const contractStart = parseDate(contract.startDate);
+      if (contractStart && contractStart > end) return;
       try {
         const built = rptScheduleRows(contract);
         if (built.error) throw new Error(built.error);
@@ -16702,6 +16717,12 @@ ${renderPaymentScheduleFooterContainers()}
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
     const rows=[];
     rptSafeContracts().forEach(contract=>{
+      // DÜZELTME — bkz. getLeaseLiabilityRollForwardReport'taki aynı not:
+      // dönem sonundan (end) sonra başlayacak sözleşmeler bu dönem için
+      // kapsam dışıdır, satır bile üretilmemeli (tutarlılık: TMS29
+      // dipnotlarıyla aynı sözleşme adedi).
+      const contractStart = parseDate(contract.startDate);
+      if (contractStart && contractStart > end) return;
       try{
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
         const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
