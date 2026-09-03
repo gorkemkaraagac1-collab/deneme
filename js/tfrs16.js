@@ -441,6 +441,32 @@ document.addEventListener("DOMContentLoaded", () => {
       ),
       currency: row.currency || "TRY",
       status: String(row.status || "active").toLowerCase(),
+      renewalDate: details.renewalDate || null,
+      paymentFrequency: details.paymentFrequency || "monthly",
+      paymentTiming: details.paymentTiming || "arrears",
+      initialDirectCosts: details.initialDirectCosts != null ? Number(details.initialDirectCosts) : 0,
+      restorationObligation: details.restorationObligation != null ? Number(details.restorationObligation) : 0,
+      assetClass: details.assetClass || "",
+      prepayments: details.prepayments != null ? Number(details.prepayments) : 0,
+      leaseIncentives: details.leaseIncentives != null ? Number(details.leaseIncentives) : 0,
+      leaseIncreaseType: details.leaseIncreaseType || "none",
+      leaseIncreaseRate: details.leaseIncreaseRate != null ? Number(details.leaseIncreaseRate) : 0,
+      fixedIncrease: details.fixedIncrease != null ? Number(details.fixedIncrease) : 0,
+      variablePayment: details.variablePayment != null ? Number(details.variablePayment) : 0,
+      usefulLifeMonths: details.usefulLifeMonths != null ? Number(details.usefulLifeMonths) : null,
+      indexBaseRate: details.indexBaseRate != null ? Number(details.indexBaseRate) : null,
+      indexCurrentRate: details.indexCurrentRate != null ? Number(details.indexCurrentRate) : null,
+      indexReviewMonth: details.indexReviewMonth != null ? Number(details.indexReviewMonth) : null,
+      indexReviewDay: details.indexReviewDay != null ? Number(details.indexReviewDay) : null,
+      renewalOption: details.renewalOption === true,
+      terminationOption: details.terminationOption === true,
+      purchaseOption: details.purchaseOption === true,
+      ownershipTransfer: details.ownershipTransfer === true,
+      shortTermLease: details.shortTermLease === true,
+      lowValueAsset: details.lowValueAsset === true,
+      integrationMetadata: details.integrationMetadata && typeof details.integrationMetadata === "object"
+        ? details.integrationMetadata
+        : null,
       modification: Array.isArray(details.modifications) && details.modifications.length > 0,
       modifications: Array.isArray(details.modifications) ? details.modifications : [],
       modificationJournals: Array.isArray(details.modificationJournals) ? details.modificationJournals : [],
@@ -691,6 +717,42 @@ document.addEventListener("DOMContentLoaded", () => {
      * dokunulmuyor — üretilen objeler olduğu gibi taşınıyor.
      */
     const details = {
+      renewalDate: contract.renewalDate || null,
+      paymentFrequency: contract.paymentFrequency || "monthly",
+      paymentTiming: contract.paymentTiming || "arrears",
+      initialDirectCosts: Number(contract.initialDirectCosts) || 0,
+      restorationObligation: Number(contract.restorationObligation) || 0,
+      assetClass: contract.assetClass || "",
+      prepayments: Number(contract.prepayments) || 0,
+      leaseIncentives: Number(contract.leaseIncentives) || 0,
+      leaseIncreaseType: contract.leaseIncreaseType || "none",
+      leaseIncreaseRate: Number(contract.leaseIncreaseRate) || 0,
+      fixedIncrease: Number(contract.fixedIncrease) || 0,
+      variablePayment: Number(contract.variablePayment) || 0,
+      usefulLifeMonths: contract.usefulLifeMonths != null && contract.usefulLifeMonths !== ""
+        ? Number(contract.usefulLifeMonths)
+        : null,
+      indexBaseRate: contract.indexBaseRate != null && contract.indexBaseRate !== ""
+        ? Number(contract.indexBaseRate)
+        : null,
+      indexCurrentRate: contract.indexCurrentRate != null && contract.indexCurrentRate !== ""
+        ? Number(contract.indexCurrentRate)
+        : null,
+      indexReviewMonth: contract.indexReviewMonth != null && contract.indexReviewMonth !== ""
+        ? Number(contract.indexReviewMonth)
+        : null,
+      indexReviewDay: contract.indexReviewDay != null && contract.indexReviewDay !== ""
+        ? Number(contract.indexReviewDay)
+        : null,
+      renewalOption: contract.renewalOption === true,
+      terminationOption: contract.terminationOption === true,
+      purchaseOption: contract.purchaseOption === true,
+      ownershipTransfer: contract.ownershipTransfer === true,
+      shortTermLease: contract.shortTermLease === true,
+      lowValueAsset: contract.lowValueAsset === true,
+      integrationMetadata: contract.integrationMetadata && typeof contract.integrationMetadata === "object"
+        ? contract.integrationMetadata
+        : null,
       modifications: Array.isArray(contract.modifications)
         ? contract.modifications
         : [],
@@ -16760,7 +16822,8 @@ ${renderPaymentScheduleFooterContainers()}
         "Amortisman (Restated) (-)": rrf ? -Math.abs(rptRound(rrf.rouDepreciationRestated)) : null,
         "Kapanış (Restated)": rrf ? rptRound(rrf.rouClosingRestatedPeriod) : null,
         "Kapanış (Nominal)": rrf ? rptRound(rrf.rouClosingNominalPeriod) : null,
-        "Durum": r?.ok ? "OK" : "Endeks Eksik"
+        "Durum": r?.ok ? "OK" : "Hesaplanamadı",
+        "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
       };
     });
     rouDetailRows.push({
@@ -16768,7 +16831,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Açılış (Restated)": rptRound(t.rouOpeningRestated), "Girişler (Restated)": rptRound(t.rouEntriesRestated),
       "Amortisman (Restated) (-)": -Math.abs(rptRound(t.rouDepreciationRestated)),
       "Kapanış (Restated)": rptRound(t.rouClosingRestatedPeriod), "Kapanış (Nominal)": rptRound(t.rouClosingNominalPeriod),
-      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`
+      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
     });
 
     const liabDetailRows = rouRows.map(row => {
@@ -16784,7 +16847,8 @@ ${renderPaymentScheduleFooterContainers()}
         "Parasal K/Z — Dönem İçi Bileşeni (698.02) (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLossPeriod || 0) : null,
         "Parasal Kazanç/(Kayıp), net (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLoss) : null,
         "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal - lrf.liabilityPaymentsNominal) : null,
-        "Durum": r?.ok ? "OK" : "Endeks Eksik"
+        "Durum": r?.ok ? "OK" : "Hesaplanamadı",
+        "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
       };
     });
     liabDetailRows.push({
@@ -16795,7 +16859,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Parasal K/Z — Dönem İçi Bileşeni (698.02) (-)": -rptRound(t.liabilityMonetaryGainLossPeriod || 0),
       "Parasal Kazanç/(Kayıp), net (-)": -rptRound(t.liabilityMonetaryGainLoss),
       "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal),
-      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`
+      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
     });
 
     const rouAssetClassSummary = tms29.byAssetClass.map(g => ({
@@ -30970,6 +31034,7 @@ ${renderPaymentScheduleFooterContainers()}
       ensureReassessmentState,
       saveContracts,
       persistContractToApi,
+      mapDbContractToUi,
       lockPeriod,
       renderSlbSection,
       renderSubleaseSection,
