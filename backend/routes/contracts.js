@@ -609,6 +609,76 @@ router.put(
       }
 
 
+      /**
+       * P6 (GC-DUP-REASS düzeltmesi): client'ın gönderdiği details.reassessments
+       * (ve details.modifications), DB'deki mevcut satırla karşılaştırılmadan
+       * komple üzerine yazılıyordu. Bu, checkAllIndexReassessments() gibi eşzamanlı/
+       * art arda tetiklenen istemci akışlarında TOCTOU race'ine yol açıyordu:
+       * her istemci kopyası kendi (o anki) reassessments[] listesi üzerinde dedup
+       * kontrolü yapıp yeni bir kayıt ekliyor, DB'deki önceki APPLIED kaydı
+       * göremediği için silmiyor — sonuç: aynı ekonomik reassessment (aynı type +
+       * effectiveDate + newTerms) DB'de birden çok kez birikiyor (bkz. LEASE-012,
+       * 2026-09-03 — aynı endeks reassessment'ı 6 kez APPLIED olarak kaydedilmiş).
+       *
+       * Çözüm client-side değil burada (persist noktasında, DB'ye en yakın yerde)
+       * uygulanıyor: gelen details.reassessments içinde, DB'de ZATEN status!=
+       * CANCELLED olarak var olan bir (type, effectiveDate, newTerms) ekonomik
+       * anahtarına sahip YENİ bir kayıt (id DB'de yoksa) tespit edilirse istek
+       * 409 ile reddedilir. Var olan kayıtların düzenlenmesi (aynı id, status
+       * güncellemesi vb.) etkilenmez.
+       */
+      if (
+        details !== undefined &&
+        details !== null &&
+        Array.isArray(details.reassessments)
+      ) {
+
+        const existingResult = await pool.query(
+          `SELECT details FROM contracts WHERE id = $1 LIMIT 1`,
+          [req.params.id]
+        );
+
+        const existingReassessments =
+          Array.isArray(existingResult.rows[0]?.details?.reassessments)
+            ? existingResult.rows[0].details.reassessments
+            : [];
+
+        const economicKey = item => [
+          item?.type || "",
+          item?.effectiveDate || item?.reassessmentDate || "",
+          JSON.stringify(item?.newTerms || {})
+        ].join("|");
+
+        const existingKeys = new Set(
+          existingReassessments
+            .filter(item => item?.status !== "CANCELLED")
+            .map(economicKey)
+        );
+
+        const existingIds = new Set(
+          existingReassessments.map(item => item?.id)
+        );
+
+        const duplicate = details.reassessments.find(item =>
+          item?.status !== "CANCELLED" &&
+          !existingIds.has(item?.id) &&
+          existingKeys.has(economicKey(item))
+        );
+
+        if (duplicate) {
+
+          return res.status(409).json({
+            error:
+              "Aynı reassessment (tip + effective date + şartlar) bu kontrat için zaten mevcut.",
+            code: "DUPLICATE_REASSESSMENT",
+            conflictingId: duplicate.id
+          });
+
+        }
+
+      }
+
+
       const result = await pool.query(
         `
           UPDATE contracts
