@@ -3224,23 +3224,57 @@ document.addEventListener("DOMContentLoaded", () => {
     return historical.concat(future);
   }
 
+  function reassessmentStableStringify(value) {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return "[" + value.map(reassessmentStableStringify).join(",") + "]";
+    return "{" + Object.keys(value).sort().map(key =>
+      JSON.stringify(key) + ":" + reassessmentStableStringify(value[key])
+    ).join(",") + "}";
+  }
 
-  function buildReassessmentHistorySchedule(contract, excludeId) {
-    
-        const appliedReassessmentKey = item => [
+  function reassessmentEconomicKey(item) {
+    return [
       item?.type || "",
       item?.effectiveDate || item?.reassessmentDate || "",
-      JSON.stringify(item?.newTerms || {}),
-      Number(item?.rouAdjustment) || 0
+      reassessmentStableStringify(item?.newTerms || {})
     ].join("|");
+  }
+
+
+  function buildReassessmentHistorySchedule(contract, excludeId) {
+
+    const appliedReassessmentKey = reassessmentEconomicKey;
     const excluded = (contract.reassessments || []).find(item => item.id === excludeId);
     const excludedKey = excluded ? appliedReassessmentKey(excluded) : null;
     const seenKeys = new Set();
 
+    // APPLIED reassessment mutates the contract's headline terms. Starting
+    // the historical schedule from that mutated contract applies the new
+    // payment/rate retrospectively, then the roll-forward also records the
+    // reassessment adjustment: the same event is counted twice and its
+    // opposite leaks into "Other". Prefer the immutable pre-change snapshot.
+    // Older persisted records may predate originalContractSnapshot; their
+    // earliest appliedFromTerms is a safe migration fallback.
+    const earliestAppliedFromTerms = (contract.reassessments || [])
+      .filter(item => item?.status === "APPLIED" && item?.appliedFromTerms)
+      .slice()
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")))[0]
+      ?.appliedFromTerms;
+    const baseContract = contract.originalContractSnapshot
+      ? cloneModificationValue(contract.originalContractSnapshot)
+      : earliestAppliedFromTerms
+        ? {
+            ...cloneModificationValue(contract),
+            ...cloneModificationValue(earliestAppliedFromTerms),
+            reassessments: [],
+            modifications: []
+          }
+        : contract;
+
     const latestModification = getCurrentAppliedModification(contract);
     let schedule = latestModification
       ? buildModifiedSchedule(contract, latestModification)
-      : (calculateLeaseEngine(contract).schedule || []);
+      : (calculateLeaseEngine(baseContract).schedule || []);
 
     const prior = (contract.reassessments || [])
             .filter(item => {
@@ -3367,9 +3401,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // CANCELLED kayıtlar yeni bir işlem yapılmasına engel değildir.
     const duplicate = contract.reassessments.find(item =>
       item.status !== "CANCELLED" &&
-      item.type === result.reassessment.type &&
-      item.effectiveDate === result.reassessment.effectiveDate &&
-      JSON.stringify(item.newTerms || {}) === JSON.stringify(result.reassessment.newTerms || {})
+      reassessmentEconomicKey(item) === reassessmentEconomicKey(result.reassessment)
     );
     if (duplicate) {
       return {
@@ -3438,6 +3470,19 @@ document.addEventListener("DOMContentLoaded", () => {
       return { valid: false, errors: ["CANCELLED reassessment uygulanamaz."] };
     }
 
+    const duplicateApplied = (contract.reassessments || []).find(item =>
+      item.id !== reassessment.id &&
+      item.status === "APPLIED" &&
+      reassessmentEconomicKey(item) === reassessmentEconomicKey(reassessment)
+    );
+    if (duplicateApplied) {
+      return {
+        valid: false,
+        errors: ["Bu ekonomik reassessment daha önce uygulanmış (" + duplicateApplied.id + ")."],
+        duplicateId: duplicateApplied.id
+      };
+    }
+
     const snapshot = {
       endDate: contract.endDate,
       monthlyPayment: contract.monthlyPayment,
@@ -3450,6 +3495,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // Rollback için reassessment objesinin TAM kopyası.
     const reassessmentSnapshotForRollback =
       cloneModificationValue(reassessment);
+
+    const createdOriginalContractSnapshot = !contract.originalContractSnapshot;
+    if (createdOriginalContractSnapshot) {
+      contract.originalContractSnapshot = cloneModificationValue(contract);
+      delete contract.originalContractSnapshot.reassessments;
+      delete contract.originalContractSnapshot.modifications;
+      delete contract.originalContractSnapshot.auditTrail;
+      delete contract.originalContractSnapshot.originalContractSnapshot;
+    }
 
     const next = reassessment.newTerms || {};
 
@@ -3515,6 +3569,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       Object.keys(reassessment).forEach(key => delete reassessment[key]);
       Object.assign(reassessment, reassessmentSnapshotForRollback);
+
+      if (createdOriginalContractSnapshot) {
+        delete contract.originalContractSnapshot;
+      }
 
       saveContracts(contracts);
       return {
@@ -3926,9 +3984,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const result = [];
 
+    // Build every grid date from the original commencement-day anchor.
+    // Incrementing a previously clamped/overflowed Date would permanently
+    // drift month-end leases (31 Jan + 1 month => 3 Mar in JavaScript).
+    // Re-anchoring also means 30/31 Jan correctly returns to 30/31 March
+    // after being clamped to February's last day.
+    const paymentGridDate = (contractStart, stepNumber) => {
+      const targetMonth =
+        contractStart.getMonth() + stepNumber * stepMonths;
+      const targetYear =
+        contractStart.getFullYear() + Math.floor(targetMonth / 12);
+      const normalizedMonth =
+        ((targetMonth % 12) + 12) % 12;
+      const lastDayOfTargetMonth =
+        new Date(targetYear, normalizedMonth + 1, 0).getDate();
+
+      return new Date(
+        targetYear,
+        normalizedMonth,
+        Math.min(contractStart.getDate(), lastDayOfTargetMonth)
+      );
+    };
+
     // Start generating from the first payment date AFTER effectiveDate
     // (remeasurement uses remaining payments only).
     let cursor;
+    let arrearsCursorStep = null;
     if (advance) {
       // Next advance payment on or after the day following effective
       cursor = new Date(
@@ -3969,22 +4050,20 @@ document.addEventListener("DOMContentLoaded", () => {
         (effective.getFullYear() - contractStart.getFullYear()) * 12 +
         (effective.getMonth() - contractStart.getMonth());
       const stepsFromStart = Math.floor(monthsFromStart / stepMonths) + 1;
-      cursor = new Date(
-        contractStart.getFullYear(),
-        contractStart.getMonth() + stepsFromStart * stepMonths,
-        contractStart.getDate()
-      );
+      let cursorStep = stepsFromStart;
+      cursor = paymentGridDate(contractStart, cursorStep);
       // Savunma amaçlı: grid hizalaması herhangi bir uç durumda
       // effectiveDate'e eşit ya da öncesinde bir tarih üretirse,
       // bir sonraki grid adımına ilerlet (cursor kesinlikle
       // effectiveDate'ten SONRA olmalı).
       while (cursor.getTime() <= effective.getTime()) {
-        cursor = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth() + stepMonths,
-          cursor.getDate()
-        );
+        cursorStep++;
+        cursor = paymentGridDate(contractStart, cursorStep);
       }
+
+      // Keep the immutable grid ordinal for subsequent iterations; advancing
+      // from `cursor` itself would reintroduce February clamp drift.
+      arrearsCursorStep = cursorStep;
     }
 
     let period = 1;
@@ -4030,11 +4109,18 @@ document.addEventListener("DOMContentLoaded", () => {
         stepMonths
       });
 
-      cursor = new Date(
-        cursor.getFullYear(),
-        cursor.getMonth() + stepMonths,
-        cursor.getDate()
-      );
+      if (!advance && Number.isInteger(arrearsCursorStep)) {
+        const contractStart = parseDate(contract.startDate) || effective;
+        const nextStep = arrearsCursorStep + 1;
+        cursor = paymentGridDate(contractStart, nextStep);
+        arrearsCursorStep = nextStep;
+      } else {
+        cursor = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth() + stepMonths,
+          cursor.getDate()
+        );
+      }
       period++;
     }
 
@@ -16899,10 +16985,7 @@ ${renderPaymentScheduleFooterContainers()}
             // APPLIED olarak bulunabilir. Aynı ekonomik olayı raporda yalnızca
             // bir kez göster; ham kaydı sessizce silme/değiştirme.
             const key = [
-              x.type || "",
-              x.effectiveDate || x.reassessmentDate || "",
-              JSON.stringify(x.newTerms || {}),
-              rptNumber(x.liabilityAdjustment)
+              reassessmentEconomicKey(x)
             ].join("|");
             if (appliedReassessmentKeys.has(key)) return false;
             appliedReassessmentKeys.add(key);
@@ -16972,10 +17055,7 @@ ${renderPaymentScheduleFooterContainers()}
           .filter(x=>{const d=rptDate(x.effectiveDate||x.reassessmentDate);return d&&d>=start&&d<=end;})
           .filter(x=>{
             const key=[
-              x.type||"",
-              x.effectiveDate||x.reassessmentDate||"",
-              JSON.stringify(x.newTerms||{}),
-              rptNumber(x.rouAdjustment)
+              reassessmentEconomicKey(x)
             ].join("|");
             if(appliedReassessmentKeys.has(key)) return false;
             appliedReassessmentKeys.add(key);
