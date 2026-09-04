@@ -3204,12 +3204,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function buildReassessmentHistorySchedule(contract, excludeId) {
+    
+        const appliedReassessmentKey = item => [
+      item?.type || "",
+      item?.effectiveDate || item?.reassessmentDate || "",
+      JSON.stringify(item?.newTerms || {}),
+      Number(item?.rouAdjustment) || 0
+    ].join("|");
+    const excluded = (contract.reassessments || []).find(item => item.id === excludeId);
+    const excludedKey = excluded ? appliedReassessmentKey(excluded) : null;
+    const seenKeys = new Set();
+
     const latestModification = getCurrentAppliedModification(contract);
     let schedule = latestModification
       ? buildModifiedSchedule(contract, latestModification)
       : (calculateLeaseEngine(contract).schedule || []);
 
     const prior = (contract.reassessments || [])
+            .filter(item => {
+        const key = appliedReassessmentKey(item);
+        if (key === excludedKey || seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      })
+      
       .filter(item => item.status === "APPLIED" && item.id !== excludeId)
       .slice()
       .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
