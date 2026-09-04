@@ -3221,13 +3221,14 @@ document.addEventListener("DOMContentLoaded", () => {
       : (calculateLeaseEngine(contract).schedule || []);
 
     const prior = (contract.reassessments || [])
-      .filter(item => item.status === "APPLIED" && item.id !== excludeId)
-      .filter(item => {
+            .filter(item => {
         const key = appliedReassessmentKey(item);
         if (key === excludedKey || seenKeys.has(key)) return false;
         seenKeys.add(key);
         return true;
       })
+      
+      .filter(item => item.status === "APPLIED" && item.id !== excludeId)
       .slice()
       .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
 
@@ -3413,30 +3414,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (reassessment.status === "CANCELLED") {
       return { valid: false, errors: ["CANCELLED reassessment uygulanamaz."] };
-    }
-
-    // Eski verilerde farklı ID ile kalmış aynı ekonomik olayın ikinci kez
-    // uygulanmasını engelle. createReassessment yeni mükerrerleri durdurur;
-    // bu kontrol de geçmiş DRAFT kayıtlarının sonradan APPLIED yapılmasını kapatır.
-    const reassessmentKey = item => [
-      item?.type || "",
-      item?.effectiveDate || item?.reassessmentDate || "",
-      JSON.stringify(item?.newTerms || {})
-    ].join("|");
-    const duplicateApplied = contract.reassessments.find(item =>
-      item.id !== reassessment.id &&
-      item.status === "APPLIED" &&
-      reassessmentKey(item) === reassessmentKey(reassessment)
-    );
-    if (duplicateApplied) {
-      return {
-        valid: false,
-        duplicate: true,
-        errors: [
-          `Aynı ekonomik reassessment daha önce uygulandı (${duplicateApplied.id}). Mükerrer kayıt uygulanamaz.`
-        ],
-        reassessment: duplicateApplied
-      };
     }
 
     const snapshot = {
@@ -4129,6 +4106,40 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  function modificationEconomicKey(modification) {
+    if (!modification) return "";
+    const terms = modification.newTerms || {};
+    return [
+      modification.modificationType || "OTHER",
+      modification.effectiveDate || modification.modificationDate || "",
+      Number(terms.payment) || 0,
+      terms.leaseEndDate || "",
+      Number(terms.discountRate) || 0,
+      Number(modification.scopeReductionPercent) || 0,
+      Number(modification.scopeIncreasePercent) || 0,
+      Number(modification.scopeIncreaseAmount) || 0
+    ].join("|");
+  }
+
+  function dedupeAppliedModifications(items) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : [])
+      .filter(item => item && item.status === "APPLIED")
+      .filter(item => {
+        const key = modificationEconomicKey(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function rptRollForwardStatus(difference, otherAdjustment) {
+    return Math.abs(Number(difference) || 0) <= REPORTING_TOLERANCE &&
+      Math.abs(Number(otherAdjustment) || 0) <= REPORTING_TOLERANCE
+      ? "READY"
+      : "WARNING";
+  }
+
   function buildScheduleFromModificationChain(
     contract,
     appliedModifications
@@ -4155,8 +4166,7 @@ document.addEventListener("DOMContentLoaded", () => {
       (baseEngine.schedule || []).map(item => ({ ...item }));
 
     const ordered =
-      (appliedModifications || [])
-        .filter(item => item.status === "APPLIED")
+      dedupeAppliedModifications(appliedModifications)
         .slice()
         .sort(
           (a, b) =>
@@ -4715,6 +4725,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return result;
     }
 
+    const duplicateModification = (contract.modifications || []).find(item =>
+      item.status !== "CANCELLED" &&
+      modificationEconomicKey(item) === modificationEconomicKey(result.modification)
+    );
+    if (duplicateModification) {
+      return {
+        valid: false,
+        errors: ["Aynı ekonomik modifikasyon zaten mevcut (" + duplicateModification.id + ")."],
+        duplicateId: duplicateModification.id
+      };
+    }
+
     contract.modifications.push(
       result.modification
     );
@@ -4796,6 +4818,19 @@ document.addEventListener("DOMContentLoaded", () => {
       return {
         valid: false,
         errors: ["CANCELLED modification uygulanamaz."]
+      };
+    }
+
+    const appliedDuplicate = (contract.modifications || []).find(item =>
+      item.id !== modification.id &&
+      item.status === "APPLIED" &&
+      modificationEconomicKey(item) === modificationEconomicKey(modification)
+    );
+    if (appliedDuplicate) {
+      return {
+        valid: false,
+        errors: ["Bu ekonomik modifikasyon daha önce uygulanmış (" + appliedDuplicate.id + ")."],
+        duplicateId: appliedDuplicate.id
       };
     }
 
@@ -16738,7 +16773,8 @@ ${renderPaymentScheduleFooterContainers()}
         const periodRows = rptRowsBetween(schedule, start, end);
         const openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
         let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
-        const appliedModifications = (Array.isArray(contract.modifications) ? contract.modifications : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
+        const appliedModifications = dedupeAppliedModifications(contract.modifications)
+          .filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
         const appliedReassessmentKeys = new Set();
         const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : [])
           .filter(x => x.status === "APPLIED")
@@ -16781,18 +16817,16 @@ ${renderPaymentScheduleFooterContainers()}
         const unexplainedAdjustment = (closingLiability - expected) - modificationAdjustment - reassessmentAdjustment;
         const adjustments = modificationAdjustment + reassessmentAdjustment + unexplainedAdjustment;
         const difference = expected + adjustments - closingLiability;
-        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:Math.abs(difference)<=REPORTING_TOLERANCE?"READY":"WARNING", source:built.source });
+        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
     });
     report.rows = rows;
     report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
     const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
     report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
-    const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
-    if (unexplainedLiabilityRows.length) {
-      report.warnings.push(`Açıklanamayan kira yükümlülüğü hareketi: ${unexplainedLiabilityRows.map(r => r.contractId).join(", ")} — 'Diğer' bakiyesi araştırılmalıdır.`);
-    }
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
+    const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
+    if (unexplainedLiabilityRows.length) report.warnings.push("Açıklanamayan 'Diğer' yükümlülük hareketi: " + unexplainedLiabilityRows.map(r => r.contractId).join(", "));
     if (rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
     return rptFinalize(report);
   }
@@ -16816,7 +16850,7 @@ ${renderPaymentScheduleFooterContainers()}
         const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
         const openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
-        const appliedModifications=(Array.isArray(contract.modifications)?contract.modifications:[]).filter(x=>x.status==="APPLIED").filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
+        const appliedModifications=dedupeAppliedModifications(contract.modifications).filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
         const appliedReassessmentKeys = new Set();
         const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[])
           .filter(x=>x.status==="APPLIED")
@@ -16853,18 +16887,16 @@ ${renderPaymentScheduleFooterContainers()}
         const unexplainedAdjustment=(closingRuo-(openingRuo-depreciation))-modificationAdjustment-reassessmentAdjustment;
         const adjustments=modificationAdjustment+reassessmentAdjustment+unexplainedAdjustment;
         const diff=openingRuo-depreciation+adjustments-closingRuo;
-        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:Math.abs(diff)<=REPORTING_TOLERANCE?"READY":"WARNING",source:built.source});
+        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
     });
     report.rows=rows;
     report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
     report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
-    const unexplainedRouRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
-    if (unexplainedRouRows.length) {
-      report.warnings.push(`Açıklanamayan ROU hareketi: ${unexplainedRouRows.map(r => r.contractId).join(", ")} — 'Diğer' bakiyesi araştırılmalıdır.`);
-    }
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
+    const unexplainedRouRows=rows.filter(r=>r.status!=="ERROR"&&Math.abs(rptNumber(r.otherAdjustment))>REPORTING_TOLERANCE);
+    if(unexplainedRouRows.length) report.warnings.push("Açıklanamayan 'Diğer' ROU hareketi: "+unexplainedRouRows.map(r=>r.contractId).join(", "));
     if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
     return rptFinalize(report);
   }
@@ -28943,6 +28975,69 @@ ${renderPaymentScheduleFooterContainers()}
   }
   const runSelfTestsV25Part2 = runSelfTestsV18Part2; // belge uyumluluğu için takma ad
 
+  function runSelfTestsMovementControls() {
+    const results = [];
+    const assert = (name, pass, details = {}) => {
+      results.push({ name, pass: !!pass, ...details });
+      console.log((pass ? "✅ " : "❌ ") + name);
+    };
+
+    const baseContract = {
+      id: "SELFTEST-MOVEMENT-BASE",
+      monthlyPayment: 100000,
+      discountRate: 18,
+      startDate: "2026-01-01",
+      endDate: "2027-12-01",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+    const base = calculateLeaseEngine({ ...baseContract });
+
+    const modificationA = {
+      id: "MOD-A", status: "APPLIED", modificationType: "PAYMENT_INCREASE",
+      effectiveDate: "2026-07-01",
+      newTerms: { payment: 120000, leaseEndDate: "2027-12-01", discountRate: 18 },
+      liabilityAdjustment: 1000, rouAdjustment: 1000
+    };
+    const modificationB = { ...cloneModificationValue(modificationA), id: "MOD-B" };
+    assert(
+      "Modifikasyon — farklı ID'li aynı ekonomik olay tekilleştirilir",
+      dedupeAppliedModifications([modificationA, modificationB]).length === 1
+    );
+
+    assert(
+      "Manuel düzeltme — açıklanamayan Diğer satırı WARNING olur",
+      rptRollForwardStatus(0, -394798.49) === "WARNING",
+      { demoOtherAdjustment: -394798.49 }
+    );
+    assert(
+      "Yuvarlama toleransı — küçük fark READY kalır",
+      rptRollForwardStatus(0, REPORTING_TOLERANCE / 2) === "READY"
+    );
+
+    const fxOnly = calculateLeaseEngine({ ...baseContract, id: "SELFTEST-MOVEMENT-FX", currency: "USD" });
+    assert(
+      "Kur — para birimi etiketi nominal TFRS 16 planını değiştirmez",
+      Math.abs(base.liability - fxOnly.liability) <= 0.01 &&
+        Math.abs(base.rouAssets - fxOnly.rouAssets) <= 0.01
+    );
+
+    const inflationOnly = calculateLeaseEngine({
+      ...baseContract,
+      id: "SELFTEST-MOVEMENT-INFLATION",
+      inflationAdjustments: [{ id: "INF-DEMO", status: "APPLIED", reportingPeriod: "2026-12" }]
+    });
+    assert(
+      "Enflasyon — TMS 29 kaydı nominal TFRS 16 planına sızmaz",
+      Math.abs(base.liability - inflationOnly.liability) <= 0.01 &&
+        Math.abs(base.rouAssets - inflationOnly.rouAssets) <= 0.01
+    );
+
+    const passed = results.filter(item => item.pass).length;
+    console.log("Hareket kontrol demo özeti: " + passed + "/" + results.length + " geçti.");
+    return results;
+  }
+
   /* ==========================================================
      TAM KAPSAMLI TMS 29 (Kiralama Portföyü) — SELF-TEST SUITE
      ----------------------------------------------------------
@@ -31053,6 +31148,7 @@ ${renderPaymentScheduleFooterContainers()}
       refreshInflationIndexCacheFromBackend,
       runSelfTestsV18Part2,
       runSelfTestsV25Part2,
+      runSelfTestsMovementControls,
       runSelfTestsV19FullTms29,
       runSelfTestsV19AccountMapping,
       v191RenderFinancialReporting,
