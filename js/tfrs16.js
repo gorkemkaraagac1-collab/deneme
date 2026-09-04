@@ -16999,7 +16999,12 @@ ${renderPaymentScheduleFooterContainers()}
         // the latest such change so the roll-forward reconciles correctly.
         const closingRowDate = closingRow ? parseDate(closingRow.date) : null;
         const pendingChanges = appliedModifications.concat(appliedReassessments)
-          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDate || d.getTime() > closingRowDate.getTime()); })
+          // The row dated exactly on the effective date still belongs to the
+          // pre-change (historical) side of the spliced schedule. Treat an
+          // equal-dated change as pending as well, otherwise the adjustment is
+          // recognised while closing remains at the old balance and the same
+          // amount leaks into "Other".
+          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDate || d.getTime() >= closingRowDate.getTime()); })
           .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
         if (pendingChanges.length) {
           const latestPending = pendingChanges[pendingChanges.length - 1];
