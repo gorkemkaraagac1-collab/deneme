@@ -125,6 +125,38 @@ describe("release financial controls", () => {
     expect(Math.abs(report.rows[0].otherAdjustment)).toBeLessThan(1);
   });
 
+  test("önceki yılın son schedule günündeki reassessment yeni yıl açılışına taşınır", async () => {
+    const changed = contract("YEAR-END-REASS", {
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      reassessments: []
+    });
+    tfrs16.contracts.push(changed);
+    const created = await tfrs16.createReassessment(changed, {
+      reassessmentDate: "2025-12-31",
+      effectiveDate: "2025-12-31",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 14000,
+      newLeaseEndDate: changed.endDate
+    });
+    expect(created.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(changed, created.reassessment.id)).valid).toBe(true);
+
+    const liability = tfrs16.getLeaseLiabilityRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-07-31")
+    );
+    const rou = tfrs16.getRuoAssetRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-07-31")
+    );
+
+    expect(liability.rows[0].reassessmentAdjustment).toBe(0);
+    expect(Math.abs(liability.rows[0].otherAdjustment)).toBeLessThan(1);
+    expect(rou.rows[0].reassessmentAdjustment).toBe(0);
+    expect(Math.abs(rou.rows[0].otherAdjustment)).toBeLessThan(1);
+  });
+
   test("otomatik endeks reassessment'i yeni baz oranıyla birlikte kalıcılaştırılır", async () => {
     const indexed = contract("INDEXED", {
       startDate: "2025-01-01",

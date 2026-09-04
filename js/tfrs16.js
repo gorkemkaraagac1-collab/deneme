@@ -16972,8 +16972,29 @@ ${renderPaymentScheduleFooterContainers()}
         const openingRow = rptScheduleAtOrBefore(schedule, rptAddDays(start, -1));
         const closingRow = rptScheduleAtOrBefore(schedule, end);
         const periodRows = rptRowsBetween(schedule, start, end);
-        const openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
+        let openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
         let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
+        // A change effective on the last pre-period schedule row belongs to
+        // the opening balance, although that row itself is the historical
+        // (pre-change) side of the spliced schedule.  Without this boundary
+        // correction a 31 December reassessment appears as unexplained
+        // "Other" in the following year's roll-forward.
+        const openingRowDate = openingRow ? rptDate(openingRow.date) : null;
+        const openingChanges = dedupeAppliedModifications(contract.modifications)
+          .concat((Array.isArray(contract.reassessments) ? contract.reassessments : [])
+            .filter(x => x?.status === "APPLIED")
+            .filter((x, index, items) => items.findIndex(y => reassessmentEconomicKey(y) === reassessmentEconomicKey(x)) === index))
+          .filter(x => {
+            const d = rptDate(x.effectiveDate || x.modificationDate || x.reassessmentDate);
+            return d && d < start && (!openingRowDate || d.getTime() >= openingRowDate.getTime());
+          })
+          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+        if (openingChanges.length) {
+          const latestOpeningChange = openingChanges[openingChanges.length - 1];
+          if (Number.isFinite(Number(latestOpeningChange.revisedLeaseLiability))) {
+            openingLiability = Math.max(0, Number(latestOpeningChange.revisedLeaseLiability));
+          }
+        }
         const appliedModifications = dedupeAppliedModifications(contract.modifications)
           .filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
         const appliedReassessmentKeys = new Set();
@@ -17051,8 +17072,23 @@ ${renderPaymentScheduleFooterContainers()}
       try{
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
         const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
-        const openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
+        let openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
+        const openingRowDateRuo=openingRow?rptDate(openingRow.date):null;
+        const openingChangesRuo=dedupeAppliedModifications(contract.modifications)
+          .concat((Array.isArray(contract.reassessments)?contract.reassessments:[])
+            .filter(x=>x?.status==="APPLIED")
+            .filter((x,index,items)=>items.findIndex(y=>reassessmentEconomicKey(y)===reassessmentEconomicKey(x))===index))
+          .filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate||x.reassessmentDate);return d&&d<start&&(!openingRowDateRuo||d.getTime()>=openingRowDateRuo.getTime());})
+          .sort((a,b)=>String(a.effectiveDate||"").localeCompare(String(b.effectiveDate||"")));
+        if(openingChangesRuo.length){
+          const latestOpeningChangeRuo=openingChangesRuo[openingChangesRuo.length-1];
+          const revisedRuo=Number(latestOpeningChangeRuo.revisedROU);
+          const oldRuo=Number(latestOpeningChangeRuo.oldROU);
+          const rouAdjustment=Number(latestOpeningChangeRuo.rouAdjustment);
+          if(Number.isFinite(revisedRuo)) openingRuo=Math.max(0,revisedRuo);
+          else if(Number.isFinite(oldRuo)&&Number.isFinite(rouAdjustment)) openingRuo=Math.max(0,oldRuo+rouAdjustment);
+        }
         const appliedModifications=dedupeAppliedModifications(contract.modifications).filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
         const appliedReassessmentKeys = new Set();
         const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[])
