@@ -3950,12 +3950,41 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
     } else {
-      // Arrears: first remaining payment at end of next period
+      // Arrears: first remaining payment strictly after effectiveDate,
+      // aligned to the NATURAL payment grid from contract start.
+      //
+      // DÜZELTME (GC-18 / LEASE-012 — reassessment geçiş ödeme kaybı):
+      // önceden cursor = effectiveDate + stepMonths olarak hesaplanıyordu.
+      // effectiveDate doğal ödeme tarihinin bir gün öncesine denk
+      // geldiğinde (örn. effectiveDate=2026-03-31, doğal ödeme
+      // 2026-04-01), bu formül bir sonraki doğal ödemeyi (04-01) değil,
+      // ONDAN SONRAKİ ödemeyi (07-01) buluyordu — 04-01 ödemesi ne eski
+      // plana (effectiveDate'ten sonra olduğu için historical filtresine
+      // takılmıyor) ne yeni plana (future ilk satırı 07-01'den başlıyor)
+      // dahil oluyor, tamamen kayboluyordu. Artık cursor, kontrat
+      // başlangıcından itibaren adım adım ilerletilen grid üzerinde
+      // effectiveDate'i geçen İLK doğal ödeme tarihi olarak bulunuyor.
+      const contractStart = parseDate(contract.startDate) || effective;
+      const monthsFromStart =
+        (effective.getFullYear() - contractStart.getFullYear()) * 12 +
+        (effective.getMonth() - contractStart.getMonth());
+      const stepsFromStart = Math.floor(monthsFromStart / stepMonths) + 1;
       cursor = new Date(
-        effective.getFullYear(),
-        effective.getMonth() + stepMonths,
-        effective.getDate()
+        contractStart.getFullYear(),
+        contractStart.getMonth() + stepsFromStart * stepMonths,
+        contractStart.getDate()
       );
+      // Savunma amaçlı: grid hizalaması herhangi bir uç durumda
+      // effectiveDate'e eşit ya da öncesinde bir tarih üretirse,
+      // bir sonraki grid adımına ilerlet (cursor kesinlikle
+      // effectiveDate'ten SONRA olmalı).
+      while (cursor.getTime() <= effective.getTime()) {
+        cursor = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth() + stepMonths,
+          cursor.getDate()
+        );
+      }
     }
 
     let period = 1;
