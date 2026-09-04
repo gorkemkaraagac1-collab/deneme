@@ -127,4 +127,71 @@ describe("GC-18: arrears reassessment ödeme grid'i", () => {
     // Bir sonraki doğal ödeme (2026-07-01) hâlâ mevcut olmalı, atlanmamalı.
     expect(dates).toContain("2026-07-01");
   });
+
+  test.each([
+    {
+      label: "artık olmayan yıl",
+      startDate: "2025-01-31",
+      endDate: "2025-05-31",
+      effectiveDate: "2025-01-31",
+      expected: ["2025-02-28", "2025-03-31", "2025-04-30", "2025-05-31"]
+    },
+    {
+      label: "artık yıl",
+      startDate: "2024-01-31",
+      endDate: "2024-05-31",
+      effectiveDate: "2024-01-31",
+      expected: ["2024-02-29", "2024-03-31", "2024-04-30", "2024-05-31"]
+    }
+  ])("31 Ocak başlangıçlı aylık grid ay sonunu korur ($label)", async scenario => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      startDate: scenario.startDate,
+      endDate: scenario.endDate,
+      paymentFrequency: "monthly"
+    });
+
+    const result = await tfrs16.createReassessment(contract, {
+      reassessmentDate: scenario.effectiveDate,
+      effectiveDate: scenario.effectiveDate,
+      type: "INDEX_RATE_CHANGE",
+      newPayment: 486900,
+      reason: "month-end test"
+    });
+
+    expect(result.valid).toBe(true);
+    const dates = result.revisedSchedule.map(r =>
+      r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10)
+    );
+    expect(dates).toEqual(expect.arrayContaining(scenario.expected));
+    expect(dates).not.toContain(scenario.startDate.startsWith("2024") ? "2024-03-02" : "2025-03-03");
+  });
+
+  test("31 Ocak başlangıçlı çeyreklik grid kısa aylarda kırpılır, sonra doğal güne döner", async () => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      startDate: "2024-01-31",
+      endDate: "2025-01-31",
+      paymentFrequency: "quarterly"
+    });
+
+    const result = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2024-01-31",
+      effectiveDate: "2024-01-31",
+      type: "INDEX_RATE_CHANGE",
+      newPayment: 486900,
+      reason: "quarter-end test"
+    });
+
+    expect(result.valid).toBe(true);
+    const dates = result.revisedSchedule.map(r =>
+      r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10)
+    );
+    expect(dates).toEqual(expect.arrayContaining([
+      "2024-04-30",
+      "2024-07-31",
+      "2024-10-31",
+      "2025-01-31"
+    ]));
+  });
 });

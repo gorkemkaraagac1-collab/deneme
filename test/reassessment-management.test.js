@@ -240,6 +240,24 @@ describe("applyReassessment — mutlu yol + backend kaydı", () => {
     const applied = await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(applied.valid).toBe(true);
     expect(contract.monthlyPayment).toBe(140000);
+    expect(contract.originalContractSnapshot.monthlyPayment).toBe(100000);
+  });
+
+  test("aynı ekonomik reassessment ikinci kez APPLIED yapılamaz", async () => {
+    const terms = { payment: 140000, leaseTerm: "2027-12-01", discountRate: 18 };
+    const contract = baseContract({
+      reassessments: [
+        { id: "R-1", status: "APPLIED", type: "FIXED_PAYMENT_CHANGE", effectiveDate: "2026-07-01", newTerms: terms },
+        { id: "R-2", status: "DRAFT", type: "FIXED_PAYMENT_CHANGE", effectiveDate: "2026-07-01", newTerms: { discountRate: 18, leaseTerm: "2027-12-01", payment: 140000 } }
+      ]
+    });
+
+    const result = await tfrs16.applyReassessment(contract, "R-2");
+
+    expect(result.valid).toBe(false);
+    expect(result.duplicateId).toBe("R-1");
+    expect(contract.reassessments[1].status).toBe("DRAFT");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   test("opsiyon (renewal/termination/purchase) reassessment'i APPLIED sonrası contract flag'lerini günceller", async () => {
