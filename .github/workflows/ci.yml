@@ -26,20 +26,8 @@ jobs:
         
       - name: Run tests
         run: npm test
-
-      - name: Generate candidate golden baseline
-        if: always()
-        run: GOLDEN_WRITE=1 npx jest test/golden/baseline-writer.test.js --runInBand
-
-      - name: Upload candidate golden baseline
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: golden-baseline
-          path: test/golden/baseline/
       
       - name: Upload test results
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
