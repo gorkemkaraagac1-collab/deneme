@@ -92,6 +92,28 @@ describe("createReassessment — mutlu yol + backend kaydı", () => {
     expect(contract.endDate).toBe("2027-12-01");
   });
 
+  test("aynı ekonomik olay ikinci kez oluşturulursa mevcut kayıt döner ve duplicate yazılmaz", async () => {
+    const contract = baseContract();
+    const input = {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 140000,
+      newLeaseEndDate: contract.endDate,
+      reason: "Aynı endeks olayı"
+    };
+
+    const first = await tfrs16.createReassessment(contract, input);
+    const second = await tfrs16.createReassessment(contract, input);
+
+    expect(first.valid).toBe(true);
+    expect(second.valid).toBe(true);
+    expect(second.duplicate).toBe(true);
+    expect(second.reassessment.id).toBe(first.reassessment.id);
+    expect(contract.reassessments).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   test("geçersiz/eksik input reddedilir, sözleşmeye kayıt eklenmez, backend'e hiç gidilmez", async () => {
     const contract = baseContract();
     const result = await tfrs16.createReassessment(contract, {

@@ -3321,6 +3321,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const result = calculateReassessment(contract, input);
     if (!result.valid) return result;
 
+    // Aynı ekonomik olayı tekrar tekrar oluşturmaya izin verme. Özellikle
+    // otomatik endeks kontrolü birden fazla refresh/tab tarafından tetiklenirse
+    // aynı tarih ve şartlarla birden çok DRAFT/APPLIED kayıt oluşabiliyordu.
+    // CANCELLED kayıtlar yeni bir işlem yapılmasına engel değildir.
+    const duplicate = contract.reassessments.find(item =>
+      item.status !== "CANCELLED" &&
+      item.type === result.reassessment.type &&
+      item.effectiveDate === result.reassessment.effectiveDate &&
+      JSON.stringify(item.newTerms || {}) === JSON.stringify(result.reassessment.newTerms || {})
+    );
+    if (duplicate) {
+      return {
+        valid: true,
+        duplicate: true,
+        reassessment: duplicate,
+        revisedSchedule: result.revisedSchedule
+      };
+    }
+
     contract.reassessments.push(result.reassessment);
     recordReassessmentAuditEvent(
       contract,
@@ -16649,6 +16668,11 @@ ${renderPaymentScheduleFooterContainers()}
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
     const rows = [];
     rptSafeContracts().forEach(contract => {
+      // TFRS 16.5-6 kapsamındaki kısa dönem ve düşük değer istisnaları
+      // bilançoda kira yükümlülüğü oluşturmaz. Bu sözleşmelerin gider
+      // ödemelerini liability roll-forward'a almak, sıfır kapanışı yapay bir
+      // "Diğer Düzeltme" ile denkleştiriyordu.
+      if (contract.shortTermLease === true || contract.lowValueAsset === true) return;
       // DÜZELTME (kullanıcı talebi — kritik tutarlılık sorunu): önceden
       // dönem sonundan (end) SONRA başlayacak bir sözleşme için de satır
       // üretiliyordu — sadece tüm alanları 0 olarak (henüz hiçbir
@@ -16674,7 +16698,24 @@ ${renderPaymentScheduleFooterContainers()}
         const openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
         let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
         const appliedModifications = (Array.isArray(contract.modifications) ? contract.modifications : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
-        const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : []).filter(x => x.status === "APPLIED").filter(x => { const d = rptDate(x.effectiveDate || x.reassessmentDate); return d && d >= start && d <= end; });
+        const appliedReassessmentKeys = new Set();
+        const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : [])
+          .filter(x => x.status === "APPLIED")
+          .filter(x => { const d = rptDate(x.effectiveDate || x.reassessmentDate); return d && d >= start && d <= end; })
+          .filter(x => {
+            // Eski kayıtlarda aynı otomatik reassessment birden fazla kez
+            // APPLIED olarak bulunabilir. Aynı ekonomik olayı raporda yalnızca
+            // bir kez göster; ham kaydı sessizce silme/değiştirme.
+            const key = [
+              x.type || "",
+              x.effectiveDate || x.reassessmentDate || "",
+              JSON.stringify(x.newTerms || {}),
+              rptNumber(x.liabilityAdjustment)
+            ].join("|");
+            if (appliedReassessmentKeys.has(key)) return false;
+            appliedReassessmentKeys.add(key);
+            return true;
+          });
         // The monthly schedule only starts reflecting a modification/reassessment
         // from its next dated row onward. If the reporting cutoff falls on/after
         // an applied change's effective date but the picked closing row still
@@ -16704,7 +16745,7 @@ ${renderPaymentScheduleFooterContainers()}
     });
     report.rows = rows;
     report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment - report.totals.closingLiability);
+    const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
     report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
     if (rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
@@ -27189,10 +27230,17 @@ ${renderPaymentScheduleFooterContainers()}
         reassessment: null
       };
 
+      const previousIndexLastCheckedDate = contract.indexLastCheckedDate;
+      const previousIndexBaseRate = contract.indexBaseRate;
       contract.indexLastCheckedDate = today.toISOString().slice(0, 10);
 
       if (result.thresholdExceeded) {
         const newPayment = Math.round((Number(contract.monthlyPayment) || 0) * (1 + changePercent / 100) * 100) / 100;
+
+        // createReassessment sözleşmenin tamamını backend'e kaydeder. Yeni
+        // baz oranını çağrıdan önce ata ki reassessment ile kontrol durumu tek
+        // kalıcı yazımda birlikte saklansın.
+        contract.indexBaseRate = currentRate;
 
         // NOT: createReassessment artık backend'e yazmayı BEKLİYOR
         // (async). Bu fonksiyon (checkIndexReassessment) otomatik/
@@ -27224,22 +27272,30 @@ ${renderPaymentScheduleFooterContainers()}
         });
 
         if (created.valid) {
-          contract.indexBaseRate = currentRate;
-          result.reassessmentCreated = true;
+          result.reassessmentCreated = created.duplicate !== true;
           result.reassessment = created.reassessment;
 
-          recordAuditEvent({
-            action: "INDEX_REASSESSMENT_AUTO_CREATED",
-            entityType: "CONTRACT",
-            entityId: contract.id,
-            contractId: contract.id,
-            reassessmentId: created.reassessment.id,
-            reason: "Endeks bazlı otomatik reassessment (%5 eşik aşıldı)",
-            metadata: { baseRate, currentRate, changePercent }
-          });
+          if (created.duplicate === true) {
+            // createReassessment duplicate durumda backend'e yazmaz. Kontrol
+            // tarihini/baz oranı yine de kalıcılaştır ki sonraki reload aynı
+            // ekonomik olayı tekrar değerlendirmesin.
+            await persistContractToApi(contract, true);
+          } else {
+            recordAuditEvent({
+              action: "INDEX_REASSESSMENT_AUTO_CREATED",
+              entityType: "CONTRACT",
+              entityId: contract.id,
+              contractId: contract.id,
+              reassessmentId: created.reassessment.id,
+              reason: "Endeks bazlı otomatik reassessment (%5 eşik aşıldı)",
+              metadata: { baseRate, currentRate, changePercent }
+            });
 
-          showToast(`${contract.id}: Endeks değişimi %${changePercent.toFixed(1)} — otomatik reassessment oluşturuldu (onay bekliyor).`, "warning");
+            showToast(`${contract.id}: Endeks değişimi %${changePercent.toFixed(1)} — otomatik reassessment oluşturuldu (onay bekliyor).`, "warning");
+          }
         } else {
+          contract.indexLastCheckedDate = previousIndexLastCheckedDate;
+          contract.indexBaseRate = previousIndexBaseRate;
           result.errors = created.errors;
           showToast(`${contract.id}: Endeks reassessment oluşturulamadı — ${(created.errors || []).join(", ")}`, "error");
         }
