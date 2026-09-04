@@ -102,6 +102,29 @@ describe("release financial controls", () => {
     expect(report.reconciliation.passed).toBe(true);
   });
 
+  test("APPLIED reassessment geçmiş schedule'a geriye dönük uygulanmaz ve Diğer üretmez", async () => {
+    const changed = contract("REASS-HISTORY", { reassessments: [] });
+    tfrs16.contracts.push(changed);
+    const created = await tfrs16.createReassessment(changed, {
+      reassessmentDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 14000,
+      newLeaseEndDate: changed.endDate
+    });
+    expect(created.valid).toBe(true);
+    const applied = await tfrs16.applyReassessment(changed, created.reassessment.id);
+    expect(applied.valid).toBe(true);
+
+    const report = tfrs16.getLeaseLiabilityRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-07-31")
+    );
+
+    expect(report.rows).toHaveLength(1);
+    expect(Math.abs(report.rows[0].otherAdjustment)).toBeLessThan(1);
+  });
+
   test("otomatik endeks reassessment'i yeni baz oranıyla birlikte kalıcılaştırılır", async () => {
     const indexed = contract("INDEXED", {
       startDate: "2025-01-01",
