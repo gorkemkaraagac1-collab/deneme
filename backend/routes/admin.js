@@ -2368,7 +2368,13 @@ router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
                 END AS company_code,
 
                 ae.old_value,
-                ae.new_value
+                ae.new_value,
+
+                CASE
+                    WHEN LOWER(ae.metadata->>'success') = 'false'
+                        THEN FALSE
+                    ELSE TRUE
+                END AS success
 
             FROM audit_events ae
 
@@ -2628,6 +2634,12 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
                     ae.action,
                     ae.entity_type,
                     u.username AS user_username,
+
+                    CASE
+                        WHEN LOWER(ae.metadata->>'success') = 'false'
+                            THEN FALSE
+                        ELSE TRUE
+                    END AS success,
 
                     CASE
                         WHEN ae.entity_type = 'company'
