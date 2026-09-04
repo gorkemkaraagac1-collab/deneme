@@ -28979,7 +28979,6 @@ ${renderPaymentScheduleFooterContainers()}
     const results = [];
     const assert = (name, pass, details = {}) => {
       results.push({ name, pass: !!pass, ...details });
-      console.log((pass ? "✅ " : "❌ ") + name);
     };
 
     const baseContract = {
@@ -29033,8 +29032,6 @@ ${renderPaymentScheduleFooterContainers()}
         Math.abs(base.rouAssets - inflationOnly.rouAssets) <= 0.01
     );
 
-    const passed = results.filter(item => item.pass).length;
-    console.log("Hareket kontrol demo özeti: " + passed + "/" + results.length + " geçti.");
     return results;
   }
 
