@@ -1,0 +1,26 @@
+name: Generate Golden Baseline
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/golden-baseline.yml"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install dependencies
+        run: npm install
+      - name: Generate immutable baseline
+        run: GOLDEN_WRITE=1 npx jest test/golden/baseline-writer.test.js --runInBand
+      - name: Upload generated baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-baseline
+          path: test/golden/baseline/
