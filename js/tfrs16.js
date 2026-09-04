@@ -16758,6 +16758,8 @@ ${renderPaymentScheduleFooterContainers()}
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
     const rows=[];
     rptSafeContracts().forEach(contract=>{
+      // TFRS 16.5-6 recognition exemptions do not create a ROU asset.
+      if (contract.shortTermLease === true || contract.lowValueAsset === true) return;
       // DÜZELTME — bkz. getLeaseLiabilityRollForwardReport'taki aynı not:
       // dönem sonundan (end) sonra başlayacak sözleşmeler bu dönem için
       // kapsam dışıdır, satır bile üretilmemeli (tutarlılık: TMS29
@@ -16770,7 +16772,21 @@ ${renderPaymentScheduleFooterContainers()}
         const openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
         const appliedModifications=(Array.isArray(contract.modifications)?contract.modifications:[]).filter(x=>x.status==="APPLIED").filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
-        const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[]).filter(x=>x.status==="APPLIED").filter(x=>{const d=rptDate(x.effectiveDate||x.reassessmentDate);return d&&d>=start&&d<=end;});
+        const appliedReassessmentKeys = new Set();
+        const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[])
+          .filter(x=>x.status==="APPLIED")
+          .filter(x=>{const d=rptDate(x.effectiveDate||x.reassessmentDate);return d&&d>=start&&d<=end;})
+          .filter(x=>{
+            const key=[
+              x.type||"",
+              x.effectiveDate||x.reassessmentDate||"",
+              JSON.stringify(x.newTerms||{}),
+              rptNumber(x.rouAdjustment)
+            ].join("|");
+            if(appliedReassessmentKeys.has(key)) return false;
+            appliedReassessmentKeys.add(key);
+            return true;
+          });
         // Same timing gap as the liability roll-forward: pull the post-change ROU
         // directly from the latest pending modification/reassessment when the
         // schedule hasn't yet caught up to the reporting cutoff.
@@ -16797,7 +16813,7 @@ ${renderPaymentScheduleFooterContainers()}
     });
     report.rows=rows;
     report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment-report.totals.closingRuo);
+    const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
     report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
     if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");

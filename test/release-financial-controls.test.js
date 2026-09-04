@@ -123,6 +123,45 @@ describe("release financial controls", () => {
     expect(persisted.details.indexBaseRate).toBe(110);
   });
 
+  test("short-term ve low-value istisnaları ROU roll-forward'a girmez", () => {
+    tfrs16.contracts.push(
+      contract("SHORT-TERM-ROU", { shortTermLease: true }),
+      contract("LOW-VALUE-ROU", { lowValueAsset: true })
+    );
+
+    const report = tfrs16.getRuoAssetRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-07-31")
+    );
+
+    expect(report.rows).toEqual([]);
+    expect(report.reconciliation.passed).toBe(true);
+  });
+
+  test("ROU roll-forward mükerrer APPLIED reassessment'i bir kez sayar ve Diğer'i denkleme dahil eder", () => {
+    const duplicate = {
+      id: "ROU-REASS-1",
+      status: "APPLIED",
+      type: "FIXED_PAYMENT_CHANGE",
+      effectiveDate: "2026-03-31",
+      reassessmentDate: "2026-03-31",
+      rouAdjustment: 23456.78,
+      newTerms: { payment: 11000, leaseTerm: "2027-12-01", discountRate: 18 }
+    };
+    tfrs16.contracts.push(contract("DUP-APPLIED-ROU", {
+      reassessments: [duplicate, { ...duplicate, id: "ROU-REASS-2" }]
+    }));
+
+    const report = tfrs16.getRuoAssetRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-07-31")
+    );
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0].reassessmentAdjustment).toBe(23456.78);
+    expect(report.reconciliation.passed).toBe(true);
+  });
+
   test("admin audit ve dashboard sorguları kayıt sonucunu açıkça döndürür", () => {
     const source = fs.readFileSync(
       path.join(__dirname, "../backend/routes/admin.js"),
