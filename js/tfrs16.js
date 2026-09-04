@@ -3221,14 +3221,13 @@ document.addEventListener("DOMContentLoaded", () => {
       : (calculateLeaseEngine(contract).schedule || []);
 
     const prior = (contract.reassessments || [])
-            .filter(item => {
+      .filter(item => item.status === "APPLIED" && item.id !== excludeId)
+      .filter(item => {
         const key = appliedReassessmentKey(item);
         if (key === excludedKey || seenKeys.has(key)) return false;
         seenKeys.add(key);
         return true;
       })
-      
-      .filter(item => item.status === "APPLIED" && item.id !== excludeId)
       .slice()
       .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
 
@@ -3414,6 +3413,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (reassessment.status === "CANCELLED") {
       return { valid: false, errors: ["CANCELLED reassessment uygulanamaz."] };
+    }
+
+    // Eski verilerde farklı ID ile kalmış aynı ekonomik olayın ikinci kez
+    // uygulanmasını engelle. createReassessment yeni mükerrerleri durdurur;
+    // bu kontrol de geçmiş DRAFT kayıtlarının sonradan APPLIED yapılmasını kapatır.
+    const reassessmentKey = item => [
+      item?.type || "",
+      item?.effectiveDate || item?.reassessmentDate || "",
+      JSON.stringify(item?.newTerms || {})
+    ].join("|");
+    const duplicateApplied = contract.reassessments.find(item =>
+      item.id !== reassessment.id &&
+      item.status === "APPLIED" &&
+      reassessmentKey(item) === reassessmentKey(reassessment)
+    );
+    if (duplicateApplied) {
+      return {
+        valid: false,
+        duplicate: true,
+        errors: [
+          `Aynı ekonomik reassessment daha önce uygulandı (${duplicateApplied.id}). Mükerrer kayıt uygulanamaz.`
+        ],
+        reassessment: duplicateApplied
+      };
     }
 
     const snapshot = {
@@ -16765,6 +16788,10 @@ ${renderPaymentScheduleFooterContainers()}
     report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
     const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
     report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
+    const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
+    if (unexplainedLiabilityRows.length) {
+      report.warnings.push(`Açıklanamayan kira yükümlülüğü hareketi: ${unexplainedLiabilityRows.map(r => r.contractId).join(", ")} — 'Diğer' bakiyesi araştırılmalıdır.`);
+    }
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
     if (rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
     return rptFinalize(report);
@@ -16833,6 +16860,10 @@ ${renderPaymentScheduleFooterContainers()}
     report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
     report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
+    const unexplainedRouRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
+    if (unexplainedRouRows.length) {
+      report.warnings.push(`Açıklanamayan ROU hareketi: ${unexplainedRouRows.map(r => r.contractId).join(", ")} — 'Diğer' bakiyesi araştırılmalıdır.`);
+    }
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
     if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
     return rptFinalize(report);
