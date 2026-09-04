@@ -1,16 +1,14 @@
 # .github/workflows/update-tufe.yml
-# Bu dosyayı repo'nuzda .github/workflows/ klasörüne koyun.
-# TÜFE endeksini her ay otomatik günceller ve data/tufe-endeks.json'u repo'ya commit'ler.
+# Legacy yardımcı araç: yalnızca elle çalıştırılır ve data/tufe-endeks.json üretir.
+# Production enflasyon kayıtları bu dosyadan okunmaz; backend PostgreSQL senkronizasyonunu kullanır.
 #
-# GEREKLİ: Repo Settings > Secrets and variables > Actions altında
+# MANUEL KULLANIM İÇİN GEREKLİ: Repo Settings > Secrets and variables > Actions altında
 #   TUIK_API_KEY  (veya TUIK_CLIENT_ID + TUIK_CLIENT_SECRET)
 # secret'ını tanımlayın.
 
-name: TÜFE Endeksini Güncelle
+name: Legacy TÜFE JSON Aracı (Manuel)
 
 on:
-  schedule:
-    - cron: "0 6 3 * *"  # her ayın 3'ü, 06:00 UTC (TÜİK'in aylık yayım sonrası)
   workflow_dispatch: {}   # manuel tetikleme için
 
 jobs:
