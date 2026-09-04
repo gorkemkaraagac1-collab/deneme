@@ -926,14 +926,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // null kalıyor, loadInflationIndexTable() hep localStorage'a
   // düşüyordu. Artık admin panelinden VERIFIED yapılan kayıtlar bu
   // çağrıyla TFRS16 hesaplamasına gerçekten ulaşıyor.
+  async function hydrateTfrs16BackendData() {
+    await hydrateContractsFromApi();
+    await refreshInflationIndexCacheFromBackend(getRequiredInflationIndexMonths());
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-      hydrateContractsFromApi();
-      refreshInflationIndexCacheFromBackend();
+      hydrateTfrs16BackendData();
     });
   } else {
-    setTimeout(() => hydrateContractsFromApi(), 0);
-    setTimeout(() => refreshInflationIndexCacheFromBackend(), 0);
+    setTimeout(() => hydrateTfrs16BackendData(), 0);
   }
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
@@ -2054,6 +2057,25 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       return null;
     }
+  }
+
+  function getRequiredInflationIndexMonths() {
+    const starts = (Array.isArray(contracts) ? contracts : [])
+      .map(contract => rptDate(contract?.startDate))
+      .filter(Boolean);
+    if (!starts.length) return [];
+
+    const first = new Date(Math.min(...starts.map(date => date.getTime())));
+    const last = new Date();
+    const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
+    const end = new Date(last.getFullYear(), last.getMonth(), 1);
+    const months = [];
+
+    while (cursor <= end) {
+      months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return months;
   }
 
   async function refreshInflationIndexCacheFromBackend(months) {
@@ -16571,6 +16593,15 @@ ${renderPaymentScheduleFooterContainers()}
     return coreIsoDate(rptDate(value));
   }
 
+  function rptLocalIsoDate(value) {
+    const date = rptDate(value);
+    if (!date) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   /** @deprecated-name Kalıcı: rptAddDays — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddDays. */
   function rptAddDays(value, days) {
     return coreAddDays(rptDate(value), days);
@@ -21532,7 +21563,7 @@ ${renderPaymentScheduleFooterContainers()}
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="margin:0;">Dipnot: Kiralama Yükümlülükleri — Likidite Riski (TFRS 7.39)</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptIsoDate(effectivePeriodEnd))} · "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptLocalIsoDate(effectivePeriodEnd))} · "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiquidityRiskNote(new Date(${effectivePeriodEnd.getFullYear()},${effectivePeriodEnd.getMonth()},${effectivePeriodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
