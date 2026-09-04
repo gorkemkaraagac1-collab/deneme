@@ -8978,7 +8978,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return [];
     }
 
-    return [
+    const companyId = contract?.companyId || "";
+    const initialDirectCosts = Number(contract.initialDirectCosts) || 0;
+    const prepayments = Number(contract.prepayments) || 0;
+    const leaseIncentives = Number(contract.leaseIncentives) || 0;
+    const restorationObligation = Number(contract.restorationObligation) || 0;
+
+    const entries = [
 
       {
         account:
@@ -9001,6 +9007,55 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
     ];
+
+    /*
+      DÜZELTME (GC-JE-01 — LEASE-026 borç/alacak dengesizliği):
+      TFRS 16.24 uyarınca ROU'nun ilk ölçümü, kiralama yükümlülüğüne
+      (ödemelerin bugünkü değeri) ek olarak doğrudan ilk maliyetleri,
+      peşin ödemeleri ve restorasyon/sökme karşılığını İÇERİR, teşvikleri
+      İSE DÜŞER (engine.rouAssets zaten bunu yansıtıyor — bkz. yukarıdaki
+      initialROU formülü). Önceden bu dört bileşenin karşı kaydı hiç
+      üretilmiyordu; 260 (net ROU) ile 401 (sadece yükümlülük) arasındaki
+      fark, herhangi biri sıfırdan farklı olduğunda fişi dengesiz
+      bırakıyordu. Karşı kayıtlar eklendiğinde:
+        toplam borç  = ROU + teşvikler
+                     = (L+dc+pp-inc+res) + inc = L+dc+pp+res
+        toplam alacak= L + pp + dc + res
+      → birbirine eşit, fiş her zaman dengeli.
+    */
+    if (prepayments > 0.01) {
+      entries.push({
+        account: getAccountCode(companyId, "prepaidLease", "180 Peşin Ödenmiş Kira Giderleri"),
+        debit: 0,
+        credit: prepayments
+      });
+    }
+
+    if (initialDirectCosts > 0.01) {
+      entries.push({
+        account: "100/320 Kasa/Banka veya Borçlar (Doğrudan İlk Maliyetler)",
+        debit: 0,
+        credit: initialDirectCosts
+      });
+    }
+
+    if (restorationObligation > 0.01) {
+      entries.push({
+        account: getAccountCode(companyId, "restorationObligation", "479 Restorasyon/Sökme Yükümlülüğü Karşılığı"),
+        debit: 0,
+        credit: restorationObligation
+      });
+    }
+
+    if (leaseIncentives > 0.01) {
+      entries.push({
+        account: getAccountCode(companyId, "leaseIncentive", "360 Kiralayan Teşvikleri"),
+        debit: leaseIncentives,
+        credit: 0
+      });
+    }
+
+    return entries;
   }
 
 
@@ -31313,6 +31368,7 @@ ${renderPaymentScheduleFooterContainers()}
       calculateVariance,
       calculateVariancePercent,
       checkIndexReassessment,
+      generateInitialEntry,
       applyEarlyPayment,
       getEscalatedPayments,
       computeEscalatedPaymentV18,
