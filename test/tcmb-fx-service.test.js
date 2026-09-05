@@ -1,6 +1,10 @@
+const fs = require("fs");
+const path = require("path");
+
 jest.mock("../backend/db/pool", () => ({ query: jest.fn() }));
 
-const { parseRateNumber, parseTcmbXml, tcmbUrl, fetchTcmbDate } = require("../backend/services/tcmb-fx-service");
+const pool = require("../backend/db/pool");
+const { parseRateNumber, parseTcmbXml, insertPendingRates, tcmbUrl, fetchTcmbDate } = require("../backend/services/tcmb-fx-service");
 
 test("TCMB noktalı ondalık kuru doğru parse eder", () => {
   expect(parseRateNumber("35.1234")).toBeCloseTo(35.1234, 8);
@@ -39,4 +43,20 @@ test("yayınlanmamış gün 404 ile güvenli şekilde atlanır", async () => {
 test("TCMB HTTP hatası açık kaynak hatası üretir", async () => {
   const fetchImpl = jest.fn().mockResolvedValue({ status: 503, ok: false });
   await expect(fetchTcmbDate("2024-01-02", fetchImpl)).rejects.toMatchObject({ code: "TCMB_SOURCE_UNREACHABLE" });
+});
+
+test("FX şeması ve senkron INSERT'i retrieved_by denetim alanını birlikte taşır", async () => {
+  const initSql = fs.readFileSync(path.join(__dirname, "../backend/db/init.sql"), "utf8");
+  const fxSchema = initSql.match(/CREATE TABLE IF NOT EXISTS fx_rates[\s\S]*?\n\);/)?.[0] || "";
+  expect(fxSchema).toMatch(/retrieved_by\s+VARCHAR\(50\)/);
+
+  pool.query.mockResolvedValueOnce({ rows: [{ id: 42 }] });
+  await insertPendingRates([
+    { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2019-01-02", rate: 5.3196 }
+  ], "admin-1");
+
+  expect(pool.query).toHaveBeenCalledWith(
+    expect.stringMatching(/source_url,retrieved_by/),
+    ["USD", "TRY", "2019-01-02", 5.3196, "https://www.tcmb.gov.tr/kurlar/", "admin-1"]
+  );
 });
