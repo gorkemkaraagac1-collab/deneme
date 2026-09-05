@@ -210,7 +210,7 @@ describe("POST /api/contracts — cross-tenant company_id spoof", () => {
 
     jest.doMock("../backend/db/pool", () => ({
       query: poolQueryMock,
-      connect: jest.fn()
+      connect: jest.fn(async () => ({ query: poolQueryMock, release: jest.fn() }))
     }));
 
     app = require("../backend/app");
@@ -261,7 +261,7 @@ describe("Contract full CRUD tenant isolation", () => {
 
     jest.doMock("../backend/db/pool", () => ({
       query: poolQueryMock,
-      connect: jest.fn()
+      connect: jest.fn(async () => ({ query: poolQueryMock, release: jest.fn() }))
     }));
 
     app = require("../backend/app");
@@ -336,7 +336,7 @@ describe("Contract full CRUD tenant isolation", () => {
     // --- PUT ---
     poolQueryMock.mockReset();
     poolQueryMock.mockImplementation((sql) => {
-      if (sql.includes("SELECT") && sql.includes("company_id") && sql.includes("FROM contracts") && !sql.includes("UPDATE")) {
+      if (sql.includes("FOR UPDATE")) {
         return Promise.resolve({ rows: [{ company_id: COMPANY_A }] });
       }
       if (sql.includes("FROM company_licenses") && sql.includes("SELECT 1")) {
