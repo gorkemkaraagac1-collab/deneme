@@ -436,3 +436,13 @@ describe("Kilitli dönem koruması (assertPeriodWritable) — backend'e hiç gid
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("payment schedule presentation currency", () => {
+  test("payment schedule exposes presentation currency selector and renderer", () => {
+    const tfrs16 = loadTfrs16();
+    expect(typeof tfrs16.renderPaymentScheduleTable).toBe("function");
+    const html = tfrs16.renderPaymentScheduleSection({ currency: "EUR", startDate: "2026-01-01", endDate: "2026-12-01" });
+    expect(html).toContain('id="schedulePresentationCurrency"');
+    expect(html).toContain("Sunum Para Birimi");
+  });
+});
