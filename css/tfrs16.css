@@ -293,6 +293,47 @@ body {
   margin-bottom: 18px;
 }
 
+.primary-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.portfolio-secondary-metrics {
+  margin: -4px 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+}
+
+.portfolio-secondary-metrics > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 11px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.portfolio-secondary-metrics > summary::-webkit-details-marker {
+  display: none;
+}
+
+.portfolio-secondary-metrics > summary::before {
+  content: "＋";
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+.portfolio-secondary-metrics[open] > summary::before {
+  content: "－";
+}
+
+.kpi-grid-secondary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
 .kpi-card {
   background: var(--card);
   border: 1px solid var(--border);
