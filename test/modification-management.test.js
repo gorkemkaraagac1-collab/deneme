@@ -113,6 +113,26 @@ describe("createModification — mutlu yol + backend kaydı", () => {
     expect(contract.modifications || []).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  test.each([
+    ["PAYMENT_INCREASE", 100000, /mevcut ödemeden büyük/],
+    ["PAYMENT_INCREASE", 90000, /mevcut ödemeden büyük/],
+    ["PAYMENT_DECREASE", 100000, /mevcut ödemeden küçük/],
+    ["PAYMENT_DECREASE", 110000, /mevcut ödemeden küçük/]
+  ])("%s, ekonomik yönüyle uyumsuz %s ödemeyi reddeder", async (modificationType, newPayment, expectedError) => {
+    const contract = baseContract({ monthlyPayment: 100000 });
+    const result = await tfrs16.createModification(contract, {
+      modificationDate: "2026-06-01",
+      effectiveDate: "2026-07-01",
+      modificationType,
+      newPayment
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toMatch(expectedError);
+    expect(contract.modifications).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("createModification — backend hatası → ROLLBACK", () => {
