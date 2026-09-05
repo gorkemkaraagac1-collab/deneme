@@ -605,6 +605,42 @@ CREATE INDEX IF NOT EXISTS idx_inflation_indices_month
 CREATE INDEX IF NOT EXISTS idx_inflation_indices_verification_status
     ON inflation_indices(verification_status);
 
+-- ============================================================
+-- TFRS16 FX RATES (TCMB) — yalnızca TRY/USD/EUR
+-- ============================================================
+-- Günlük TCMB kayıtları immutable tutulur. Revizyonlarda eski kayıt
+-- superseded_by ile bağlanır; hesaplamaya yalnızca VERIFIED + aktif kayıt girer.
+CREATE TABLE IF NOT EXISTS fx_rates (
+    id BIGSERIAL PRIMARY KEY,
+    from_currency CHAR(3) NOT NULL,
+    to_currency CHAR(3) NOT NULL,
+    rate_date DATE NOT NULL,
+    rate_type VARCHAR(20) NOT NULL DEFAULT 'TCMB_OFFICIAL',
+    rate NUMERIC(20,10) NOT NULL,
+    source VARCHAR(20) NOT NULL DEFAULT 'TCMB_AUTO',
+    source_url TEXT,
+    retrieved_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    verified_at TIMESTAMP,
+    verified_by VARCHAR(50),
+    verification_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    superseded_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_fx_currency_allowlist CHECK (from_currency IN ('USD','EUR','TRY') AND to_currency IN ('USD','EUR','TRY')),
+    CONSTRAINT chk_fx_direct_pair CHECK ((from_currency, to_currency) IN (('USD','TRY'), ('EUR','TRY'), ('TRY','TRY'))),
+    CONSTRAINT chk_fx_effective_date CHECK (rate_date >= DATE '2019-01-01'),
+    CONSTRAINT chk_fx_source CHECK (source IN ('TCMB_AUTO','MANUAL_OVERRIDE')),
+    CONSTRAINT chk_fx_rate_positive CHECK (rate > 0),
+    CONSTRAINT chk_fx_status CHECK (verification_status IN ('PENDING','VERIFIED','REJECTED')),
+    CONSTRAINT fk_fx_rates_superseded_by FOREIGN KEY (superseded_by) REFERENCES fx_rates(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fx_rates_active_unique
+    ON fx_rates(from_currency, to_currency, rate_date, rate_type)
+    WHERE superseded_by IS NULL;
+CREATE INDEX IF NOT EXISTS idx_fx_rates_lookup
+    ON fx_rates(from_currency, to_currency, rate_date);
+CREATE INDEX IF NOT EXISTS idx_fx_rates_verified
+    ON fx_rates(verification_status);
+
 
 -- ============================================================
 -- GÜVENLİK NOTU — TEST/DEMO VERİSİ BU DOSYADAN KALDIRILDI
