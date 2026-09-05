@@ -620,6 +620,7 @@ CREATE TABLE IF NOT EXISTS fx_rates (
     source VARCHAR(20) NOT NULL DEFAULT 'TCMB_AUTO',
     source_url TEXT,
     retrieved_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    retrieved_by VARCHAR(50),
     verified_at TIMESTAMP,
     verified_by VARCHAR(50),
     verification_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -633,6 +634,8 @@ CREATE TABLE IF NOT EXISTS fx_rates (
     CONSTRAINT chk_fx_status CHECK (verification_status IN ('PENDING','VERIFIED','REJECTED')),
     CONSTRAINT fk_fx_rates_superseded_by FOREIGN KEY (superseded_by) REFERENCES fx_rates(id)
 );
+ALTER TABLE fx_rates
+    ADD COLUMN IF NOT EXISTS retrieved_by VARCHAR(50);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_fx_rates_active_unique
     ON fx_rates(from_currency, to_currency, rate_date, rate_type)
     WHERE superseded_by IS NULL;
