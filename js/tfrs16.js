@@ -25414,9 +25414,7 @@ ${renderPaymentScheduleFooterContainers()}
   const V23_DEFAULT_CURRENCIES = Object.freeze([
     { code:"TRY", name:"Turkish Lira", symbol:"₺", decimalPlaces:2, status:"ACTIVE" },
     { code:"USD", name:"US Dollar", symbol:"$", decimalPlaces:2, status:"ACTIVE" },
-    { code:"EUR", name:"Euro", symbol:"€", decimalPlaces:2, status:"ACTIVE" },
-    { code:"GBP", name:"British Pound", symbol:"£", decimalPlaces:2, status:"ACTIVE" },
-    { code:"PLN", name:"Polish Zloty", symbol:"zł", decimalPlaces:2, status:"ACTIVE" }
+    { code:"EUR", name:"Euro", symbol:"€", decimalPlaces:2, status:"ACTIVE" }
   ]);
   const FX_CONFIG = Object.freeze({
     version: V23_SCHEMA_VERSION,
@@ -25527,6 +25525,9 @@ ${renderPaymentScheduleFooterContainers()}
     const source=v23Object(input), from=v23CurrencyCode(source.fromCurrency), to=v23CurrencyCode(source.toCurrency), rateDate=v23DateKey(source.rateDate);
     if(!from || !to) throw Object.assign(new Error("Currency mismatch: fromCurrency and toCurrency are required."),{code:"FX_CURRENCY_REQUIRED"});
     if(!getCurrency(from) || !getCurrency(to)) throw Object.assign(new Error("Unsupported currency."),{code:"UNSUPPORTED_CURRENCY"});
+    if (from !== to && !((from === "USD" || from === "EUR") && to === "TRY")) {
+      throw Object.assign(new Error("Only USD/TRY and EUR/TRY direct rates are supported."),{code:"UNSUPPORTED_FX_PAIR"});
+    }
     if(!rateDate) throw Object.assign(new Error("Rate date is required."),{code:"FX_RATE_DATE_REQUIRED"});
     const rate= v23Num(source.rate,NaN); if(!(rate>0) || !Number.isFinite(rate)) throw Object.assign(new Error("FX rate must be greater than zero."),{code:"INVALID_FX_RATE"});
     const rateType=String(source.rateType || FX_CONFIG.defaultRateType).toUpperCase(); if(!Object.values(V23_RATE_TYPES).includes(rateType)) throw Object.assign(new Error("Invalid FX rate type."),{code:"INVALID_RATE_TYPE"});
@@ -25631,8 +25632,8 @@ ${renderPaymentScheduleFooterContainers()}
    * Bir tutarı aktif (veya belirtilen) raporlama para birimine çevirir.
    * Kaynak ve hedef para birimi aynıysa hiçbir şey değişmeden döner
    * (applied:false) — mevcut tek para birimli davranış korunur.
-   * Kur bulunamazsa hata fırlatmaz; applied:false + error ile döner
-   * (dashboard/export ekranları bu durumda ham tutarı göstermeye devam eder).
+   * Kur bulunamazsa applied:false + error döner; finansal ekranlar ham
+   * tutarı kur yokmuş gibi göstermez.
    * @param {number} amount
    * @param {string} fromCurrency - tutarın hâlihazırdaki para birimi
    * @param {string|Date} [date] - kur tarihi (varsayılan bugün)
@@ -25647,7 +25648,7 @@ ${renderPaymentScheduleFooterContainers()}
       return { value: num, currency: from, applied: false, rate: 1, error: null };
     }
     try {
-      const result = convertCurrencyOnDate(num, from, to, date || new Date(), FX_CONFIG.defaultRateType, { audit: false, allowLastAvailable: true, allowMissing: true });
+      const result = convertCurrencyOnDate(num, from, to, date || new Date(), FX_CONFIG.defaultRateType, { audit: false });
       if (result?.error) {
         return { value: num, currency: from, applied: false, rate: null, error: result.error };
       }
