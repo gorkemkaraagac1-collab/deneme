@@ -268,7 +268,7 @@ describe("Contract company isolation", () => {
 
     jest.doMock("../backend/db/pool", () => ({
       query: poolQueryMock,
-      connect: jest.fn()
+      connect: jest.fn(async () => ({ query: poolQueryMock, release: jest.fn() }))
     }));
 
     app = require("../backend/app");
@@ -374,7 +374,7 @@ describe("Audit company isolation", () => {
 
     jest.doMock("../backend/db/pool", () => ({
       query: poolQueryMock,
-      connect: jest.fn()
+      connect: jest.fn(async () => ({ query: poolQueryMock, release: jest.fn() }))
     }));
 
     app = require("../backend/app");
