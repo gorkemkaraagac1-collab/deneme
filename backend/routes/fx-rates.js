@@ -15,7 +15,14 @@ router.get("/", limiter, async (req, res) => {
     const from = String(req.query.from || "").toUpperCase();
     const to = String(req.query.to || "TRY").toUpperCase();
     if (!["USD", "EUR"].includes(from) || to !== "TRY") return res.status(400).json({ error: "Yalnızca USD/TRY ve EUR/TRY desteklenir.", code: "UNSUPPORTED_CURRENCY_PAIR" });
-    const result = await pool.query(`SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date`, [from, to, EFFECTIVE_FROM]);
+    const requestedDate = req.query.date ? String(req.query.date) : null;
+    if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return res.status(400).json({ error: "Geçersiz tarih.", code: "INVALID_DATE" });
+    const result = await pool.query(requestedDate
+      ? `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND rate_date <= $4 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date DESC LIMIT 1`
+      : `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date`,
+      requestedDate ? [from, to, EFFECTIVE_FROM, requestedDate] : [from, to, EFFECTIVE_FROM]);
+    if (requestedDate && !result.rows[0]) return res.status(404).json({ error: "Bu tarih veya önceki yayımlanmış iş günleri için doğrulanmış kur bulunamadı.", code: "FX_RATE_NOT_FOUND" });
+    if (requestedDate) return res.json({ rate: { ...result.rows[0], rate: Number(result.rows[0].rate) }, requestedDate });
     return res.json({ rates: result.rows.map(row => ({ ...row, rate: Number(row.rate) })) });
   } catch (error) { console.error("GET /api/fx-rates error:", error); return res.status(500).json({ error: "Kur verisi alınamadı." }); }
 });
