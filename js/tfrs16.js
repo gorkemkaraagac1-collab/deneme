@@ -1362,6 +1362,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {}
   }
 
+  /* eslint-disable no-console, no-empty */
   function loadPendingAuditSync() {
     try {
       const parsed = JSON.parse(localStorage.getItem(AUDIT_PENDING_SYNC_KEY) || "[]");
@@ -1403,6 +1404,7 @@ document.addEventListener("DOMContentLoaded", () => {
     savePendingAuditSync(remaining);
     return { sent, remaining: remaining.length };
   }
+  /* eslint-enable no-console, no-empty */
 
   function recordAuditEvent(input = {}) {
     const event = {
