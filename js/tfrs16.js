@@ -7402,28 +7402,40 @@ document.addEventListener("DOMContentLoaded", () => {
         c => c.status === "active"
       );
 
-    let liability = 0;
-    let rou = 0;
-    let next12 = 0;
+    const totals = new Map();
+    let totalsError = "";
 
     active.forEach(
       contract => {
-
+        const currency = String(contract.currency || "").trim().toUpperCase();
+        const presentationCurrency = String(contract.presentationCurrency || contract.reportingCurrency || getReportingCurrency() || "TRY").trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{3}$/.test(presentationCurrency)) {
+          totalsError = "Para birimi eksik/geçersiz";
+          return;
+        }
+        try {
         const engine =
           calculateLease(contract);
-
-        liability +=
-          engine.liability;
-
-        rou +=
-          engine.rouAssets;
-
-        next12 +=
-          calculateNext12Months(
-            contract
-          );
+        const values = [engine.liability, engine.rouAssets, calculateNext12Months(contract)].map(value => {
+          const converted = convertAmountToReportingCurrency(value, currency, new Date(), presentationCurrency);
+          if (converted.error) throw new Error("FX_RATE_NOT_FOUND");
+          return converted.value;
+        });
+        if (!values.every(Number.isFinite)) throw new Error("Invalid portfolio amount");
+        const group = totals.get(presentationCurrency) || [0, 0, 0];
+        values.forEach((value, index) => { group[index] += value; });
+        totals.set(presentationCurrency, group);
+        } catch (error) {
+          totalsError = "Hesaplama hatası — toplam gösterilemiyor";
+          console.error("Portfolio KPI calculation error:", contract.id, error);
+        }
       }
     );
+
+    // Transaction currencies remain separate; no exchange rate is assumed.
+    const totalText = index => totalsError || (totals.size
+      ? Array.from(totals).map(([currency, values]) => formatPortfolioAmount(values[index], currency)).join(" · ")
+      : formatCurrency(0));
 
     const renewals =
       active.filter(
@@ -7442,17 +7454,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setText(
       "leaseLiability",
-      formatCurrency(liability)
+      totalText(0)
     );
 
     setText(
       "rouAssets",
-      formatCurrency(rou)
+      totalText(1)
     );
 
     setText(
       "next12Months",
-      formatCurrency(next12)
+      totalText(2)
     );
 
     setText(
@@ -7532,6 +7544,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let tableCurrentPage = 1;
   const TABLE_PAGE_SIZE = 50;
+
+  function formatPortfolioAmount(value, currency, presentationCurrency) {
+    const code = String(currency || "").trim().toUpperCase();
+    const target = String(presentationCurrency || getReportingCurrency() || "TRY").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(code) || !/^[A-Z]{3}$/.test(target)) return "Para birimi eksik/geçersiz";
+    if (value === null || value === "" || !Number.isFinite(Number(value))) return "Tutar eksik/geçersiz";
+    const converted = convertAmountToReportingCurrency(Number(value), code, new Date(), target);
+    if (converted.error) return "Kur bulunamadı — tutar gösterilemiyor";
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency", currency: target,
+      minimumFractionDigits: 0, maximumFractionDigits: 2
+    }).format(Number(converted.value));
+  }
 
   function renderTable(renderOptions = {}) {
 
@@ -7650,7 +7675,7 @@ document.addEventListener("DOMContentLoaded", () => {
             )}
             <div style="margin-top:4px;">
               ${typeof v26StandardsBadgeHtml === "function" ? v26StandardsBadgeHtml(contract) : ""}
-              <span style="font-size:10px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
+              <span style="font-size:10px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "Para birimi eksik/geçersiz").toUpperCase())}</span>
             </div>
           </td>
 
@@ -7675,9 +7700,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </td>
 
           <td>
-            ${formatCurrency(
-              contract.monthlyPayment
-            )}
+            ${formatPortfolioAmount(contract.monthlyPayment, contract.currency, contract.presentationCurrency || contract.reportingCurrency)}
           </td>
 
           <td>
@@ -31398,6 +31421,8 @@ ${renderPaymentScheduleFooterContainers()}
      ========================================================== */
   try {
     window.__TFRS16_TEST__ = {
+      renderTable,
+      updateKPIs,
       formatCurrency,
       parseDate,
       calculateLeaseEngine,
