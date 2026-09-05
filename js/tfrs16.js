@@ -1396,6 +1396,7 @@ document.addEventListener("DOMContentLoaded", () => {
         sent++;
       } catch (error) {
         remaining.push(event);
+        // eslint-disable-next-line no-console
         console.error("Audit backend senkronizasyonu başarısız; olay kuyrukta tutuldu.", error);
       }
     }
