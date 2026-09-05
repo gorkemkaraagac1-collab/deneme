@@ -102,6 +102,24 @@ describe("v191Tms29RouSummaryHtml / v191Tms29LiabilitySummaryHtml — bağımsı
     expect(liabHtml).toMatch(/Kira Yükümlülüğü — Varlık Sınıfına Göre/);
     expect(liabHtml).not.toMatch(/Kullanım Hakkı Varlığı \(ROU\)/);
   });
+
+  test("endeks verisi tamamen eksikse yanıltıcı sıfır toplam yerine hesaplanamadı uyarısı gösterir", () => {
+    tfrs16.contracts.push(seedContract());
+    const prepared = tfrs16.v191PrepareFinancialReportingData(new Date("2026-01-01"), new Date("2026-12-31"));
+    expect(prepared.tms29.computedCount).toBe(0);
+    expect(prepared.tms29.missingCount).toBeGreaterThan(0);
+
+    const rouHtml = tfrs16.v191Tms29RouSummaryHtml(prepared.tms29, prepared.periodLabel, prepared.periodStart, prepared.periodEnd);
+    const liabHtml = tfrs16.v191Tms29LiabilitySummaryHtml(prepared.tms29, prepared.periodLabel, prepared.periodStart, prepared.periodEnd);
+
+    for (const html of [rouHtml, liabHtml]) {
+      expect(html).toContain('data-tms29-unavailable="true"');
+      expect(html).toMatch(/TMS 29 tablosu hesaplanamadı/);
+      expect(html).toMatch(/Yanıltıcı sıfır toplam gösterilmedi/);
+      expect(html).not.toMatch(/>TOPLAM</);
+      expect(html).not.toMatch(/Dipnotu Dışa Aktar/);
+    }
+  });
 });
 
 describe("v191RenderFinancialReporting (Finansal Raporlama ekranı) — hâlâ her iki tabloyu da içeriyor", () => {
