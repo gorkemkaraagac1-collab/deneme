@@ -203,15 +203,21 @@
     </header>
 
     <!-- KPI Grid -->
-    <section class="kpi-grid">
+    <section class="kpi-grid primary-kpi-grid" aria-label="Temel portföy göstergeleri">
       <div class="kpi-card"><div class="kpi-label">Aktif Sözleşme</div><div id="contractCount" class="kpi-value">0</div><div class="kpi-description">Portföydeki aktif sözleşmeler</div></div>
       <div class="kpi-card"><div class="kpi-label">Kira Yükümlülüğü</div><div id="leaseLiability" class="kpi-value">₺0</div><div class="kpi-description">İlk ölçüm bazlı toplam</div></div>
       <div class="kpi-card"><div class="kpi-label">ROU Varlıkları</div><div id="rouAssets" class="kpi-value">₺0</div><div class="kpi-description">Kullanım hakkı varlıkları</div></div>
       <div class="kpi-card"><div class="kpi-label">Önümüzdeki 12 Ay</div><div id="next12Months" class="kpi-value">₺0</div><div class="kpi-description">Beklenen kira ödemeleri</div></div>
+    </section>
+
+    <details class="portfolio-secondary-metrics">
+      <summary>Diğer göstergeler</summary>
+      <section class="kpi-grid kpi-grid-secondary" aria-label="Diğer portföy göstergeleri">
       <div class="kpi-card warning-card"><div class="kpi-label">Yenileme &lt;90 Gün</div><div id="renewals90Days" class="kpi-value warning-text">0</div><div class="kpi-description">Yönetim aksiyonu gerekenler</div></div>
       <div class="kpi-card warning-card"><div class="kpi-label">Modifikasyon</div><div id="modifications" class="kpi-value warning-text">0</div><div class="kpi-description">İnceleme bekleyenler</div></div>
       <div class="kpi-card"><div class="kpi-label">Gelecek Kiralamalar</div><div id="futureLeasesCount" class="kpi-value">0</div><div id="futureLeasesCommitment" class="kpi-description">₺0</div></div>
-    </section>
+      </section>
+    </details>
 
     <!-- Filtre Toolbar -->
     <section class="toolbar">
