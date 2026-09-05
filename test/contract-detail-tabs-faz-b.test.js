@@ -214,6 +214,26 @@ describe("Tab state korunması — kayıt sonrası aynı tab'da kalınır", () =
   });
 });
 
+describe("Contract Financial Tools — Audit Trail rapor uyumluluğu", () => {
+  let tfrs16, contract;
+
+  beforeEach(async () => {
+    tfrs16 = await setup();
+    contract = seedContract({ id: "FAZB-AUDIT-1" });
+    tfrs16.contracts.push(contract);
+  });
+
+  afterEach(() => { document.body.innerHTML = ""; });
+
+  test("getAuditTrailReport nesne döndürdüğünde rows dizisini kullanır ve audit.slice hatası vermez", async () => {
+    tfrs16.openDetail(contract.id);
+    await flushPromises();
+
+    expect(() => tfrs16.v191RenderContractTools()).not.toThrow();
+    expect(tfrs16.v191RenderContractTools()).toMatch(/Audit Trail/);
+  });
+});
+
 describe("dashboard.html — üç sayfa sidebar'dan kaldırıldı", () => {
   test("modification/slb/sublease linkleri sidebar'da YOK (artık sözleşme detayında)", () => {
     const fs = require("fs");
