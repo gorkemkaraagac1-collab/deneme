@@ -17152,6 +17152,10 @@ ${renderPaymentScheduleFooterContainers()}
     const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
     // rpMonth zaten satır 16813'te tanımlandı
     const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
+    if (tms29.computedCount === 0 && tms29.missingCount > 0) {
+      showAlert("TMS 29 dipnotu dışa aktarılamadı: seçilen dönem için doğrulanmış enflasyon endeksi eksik. Nominal tablolar etkilenmedi.");
+      return false;
+    }
     const t = tms29.totals;
 
     const rouDetailRows = rouRows.map(row => {
@@ -21408,6 +21412,20 @@ ${renderPaymentScheduleFooterContainers()}
    * (eski konumunda kalıyor, alt notlar/mutabakat uyarısı da burada).
    */
   function v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const unavailable = tms29.computedCount === 0 && tms29.missingCount > 0;
+    if (unavailable) {
+      return `<div style="margin-top:24px;">
+        <div>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (ROU)</h4>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
+        </div>
+        <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
+        <div data-tms29-unavailable="true" style="padding:12px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:11px;line-height:1.5;">
+          <strong>TMS 29 tablosu hesaplanamadı</strong><br>
+          Seçilen dönem için doğrulanmış enflasyon endeksi eksik. Yanıltıcı sıfır toplam gösterilmedi; nominal tablo etkilenmedi.
+        </div>
+      </div>`;
+    }
     const t = tms29.totals;
     const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
     const rouRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
@@ -21438,6 +21456,20 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const unavailable = tms29.computedCount === 0 && tms29.missingCount > 0;
+    if (unavailable) {
+      return `<div style="margin-top:24px;">
+        <div>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (Kira Yükümlülüğü)</h4>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
+        </div>
+        <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
+        <div data-tms29-unavailable="true" style="padding:12px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:11px;line-height:1.5;">
+          <strong>TMS 29 tablosu hesaplanamadı</strong><br>
+          Seçilen dönem için doğrulanmış enflasyon endeksi eksik. Yanıltıcı sıfır toplam gösterilmedi; nominal tablo etkilenmedi.
+        </div>
+      </div>`;
+    }
     const t = tms29.totals;
     const liabRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
     const liabTms29Columns = [
