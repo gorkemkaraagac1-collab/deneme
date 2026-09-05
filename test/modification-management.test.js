@@ -446,3 +446,14 @@ describe("payment schedule presentation currency", () => {
     expect(html).toContain("Sunum Para Birimi");
   });
 });
+
+describe("audit backend sync queue", () => {
+  test("audit olayını yerel kuyrukta tutar ve backend gönderim yardımcısını dışa açar", () => {
+    const tfrs16 = loadTfrs16();
+    localStorage.clear();
+    const event = tfrs16.recordAuditEvent({ id: "AUD-QUEUE-1", action: "TEST", entityType: "SYSTEM" });
+    expect(event.id).toBe("AUD-QUEUE-1");
+    expect(tfrs16.loadPendingAuditSync().map(x => x.id)).toContain("AUD-QUEUE-1");
+    expect(typeof tfrs16.flushAuditBackendSync).toBe("function");
+  });
+});
