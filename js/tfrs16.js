@@ -1683,10 +1683,7 @@ document.addEventListener("DOMContentLoaded", () => {
     liabilityMonetaryGainLoss: "698.02 Parasal Kazanç/(Kayıp), Net (Kiralama Yükümlülüğü)",
     // Karşı hesap: yükümlülüğün (401) nominal bakiyesi bu restatement ile
     // değişmez (moneter kalem — TMS 29.28); karşı taraf özkaynak/sonuç hesabıdır.
-    monetaryPositionOffset: "590 TMS 29 Parasal Pozisyon Karşılığı",
-    // Parasal Kazanç/(Kayıp) açılış bakiyesi bileşeni — geçmiş dönem(ler)e
-    // ait özkaynak etkisi (580 Geçmiş Yıllar Zararları).
-    liabilityMonetaryGainLossOpeningEquity: "580 Geçmiş Yıllar Zararları"
+    monetaryPositionOffset: "590 TMS 29 Parasal Pozisyon Karşılığı"
   };
 
   /* ==========================================================
@@ -1723,7 +1720,6 @@ document.addEventListener("DOMContentLoaded", () => {
       inflationGainLoss: "698.01",
       liabilityMonetaryGainLoss: "698.02",
       monetaryPositionOffset: "590",
-      liabilityMonetaryGainLossOpeningEquity: "580",
 
       // Opsiyonel / İleri seviye
       prepaidLease: "180.01",
@@ -1866,9 +1862,8 @@ document.addEventListener("DOMContentLoaded", () => {
     interestExpense: "Faiz Gideri",
     depreciationExpense: "Amortisman Gideri",
     inflationGainLoss: "Enflasyon Düzeltmesi K/Z",
-    liabilityMonetaryGainLoss: "Parasal Kazanç/(Kayıp) - Dönem",
+    liabilityMonetaryGainLoss: "Parasal Kazanç/(Kayıp), Net",
     monetaryPositionOffset: "Parasal Pozisyon Karşılığı",
-    liabilityMonetaryGainLossOpeningEquity: "Parasal K/Z Açılış (Özkaynak)",
     prepaidLease: "Peşin Ödenmiş Kira",
     leaseIncentive: "Kira Teşviki",
     restorationObligation: "Restorasyon Yükümlülüğü",
@@ -2451,22 +2446,6 @@ document.addEventListener("DOMContentLoaded", () => {
       // gösterilir: açılış+girişler+faiz-ödemeler+parasalK/Z = kapanış.
       const liabilityMonetaryGainLoss = nominalLiabilityClosing - restatedSum;
 
-      // ----------------------------------------------------------
-      // AYRIŞTIRMA (kullanıcı onayı — bu bölüm için): yukarıdaki tek
-      // kalem, matematiksel olarak iki ayrı bileşenin toplamıdır:
-      //   (a) AÇILIŞ bileşeni — dönem başında ZATEN var olan bakiyenin
-      //       gösterimsel endekslenmesinden doğar (liabilityOpeningNominal
-      //       − liabilityOpeningRestated). Geçmiş dönem(ler)e ait olduğu
-      //       için CARİ DÖNEM FAALİYET SONUCU değildir — özkaynağa gider.
-      //   (b) DÖNEM İÇİ bileşeni — o dönemde tahakkuk eden faiz/ödeme/
-      //       giriş hareketlerinin kendi aylarından rp'ye endekslenmesinden
-      //       doğar. Bu gerçekten cari dönem TMS 29.28 net parasal
-      //       pozisyon kâr/zararıdır — 698.02'de kalır.
-      // (a) + (b) === liabilityMonetaryGainLoss (aşağıda ayrı test edilir).
-      // ----------------------------------------------------------
-      const liabilityMonetaryGainLossOpening = liabilityOpeningNominal - liabilityOpeningRestated;
-      const liabilityMonetaryGainLossPeriod = liabilityMonetaryGainLoss - liabilityMonetaryGainLossOpening;
-
       liabilityRollForward = {
         periodStart: ps,
         liabilityOpeningNominal,
@@ -2478,9 +2457,7 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityPaymentsNominal,
         liabilityPaymentsRestated,
         restatedSum,
-        liabilityMonetaryGainLoss,
-        liabilityMonetaryGainLossOpening,
-        liabilityMonetaryGainLossPeriod
+        liabilityMonetaryGainLoss
       };
 
       // ROU — moneter olmayan kalem: kapanış NOMİNAL değil, gerçekten
@@ -2521,9 +2498,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // liabilityMonetaryGainLoss (periodStart verilmediyse null).
         liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
         netAdjustment,
-        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null,
-        liabilityMonetaryGainLossOpening: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLossOpening : null,
-        liabilityMonetaryGainLossPeriod: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLossPeriod : null
+        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null
       }
     };
   }
@@ -2570,56 +2545,14 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Yükümlülük hareket tablosu — Parasal Kazanç/(Kayıp) İKİYE
-    // AYRILARAK kaydedilir (kullanıcı talebi):
-    //   (a) AÇILIŞ bileşeni  → 580 Geçmiş Yıllar Zararları (özkaynak,
-    //       cari dönem P&L DEĞİL — geçmiş dönem(ler)e ait bakiyenin
-    //       endekslenmesinden doğar)
-    //   (b) DÖNEM İÇİ bileşeni → 698.02 (mevcut davranış — cari dönem
-    //       TMS 29.28 net parasal pozisyon kâr/zararı)
-    // Her iki bileşenin karşı tarafı da 590 (nominal yükümlülük — moneter
-    // kalem — bu restatement ile DEĞİŞMEDİĞİ için doğrudan 401'e karşı
-    // kayıt atılamaz; bkz. TFRS29_ACCOUNTS yorumları).
-    // Yalnızca applyTMS29Restatement'a periodStart verildiyse dolu olur;
-    // verilmediyse her iki bileşen de null — eski davranış korunur,
-    // jurnal etkilenmez (regresyon).
-    const openingGL = restatement?.totals?.liabilityMonetaryGainLossOpening;
-    const periodGL = restatement?.totals?.liabilityMonetaryGainLossPeriod;
+    // TMS 29.9: net parasal pozisyon kazanç/kaybının tamamı cari dönem
+    // kâr veya zararındadır. Dönem başında mevcut parasal yükümlülüğün
+    // dönem içindeki satın alma gücü etkisi de geçmiş yıl özkaynağı değil,
+    // bu tek net cari dönem sonucunun parçasıdır.
+    const monetaryGL = restatement?.totals?.liabilityMonetaryGainLoss;
 
-    if (Number.isFinite(openingGL)) {
-      const openingGain = -openingGL; // negatif openingGL = kazanç
-      if (openingGain > 0.005) {
-        entries.push({
-          account: TFRS29_ACCOUNTS.monetaryPositionOffset,
-          debit: openingGain, credit: 0,
-          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING",
-          controlStatus: "VALID"
-        });
-        entries.push({
-          account: TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity,
-          debit: 0, credit: openingGain,
-          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING",
-          controlStatus: "VALID"
-        });
-      } else if (openingGain < -0.005) {
-        const openingLoss = Math.abs(openingGain);
-        entries.push({
-          account: TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity,
-          debit: openingLoss, credit: 0,
-          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING",
-          controlStatus: "VALID"
-        });
-        entries.push({
-          account: TFRS29_ACCOUNTS.monetaryPositionOffset,
-          debit: 0, credit: openingLoss,
-          source: "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING",
-          controlStatus: "VALID"
-        });
-      }
-    }
-
-    if (Number.isFinite(periodGL)) {
-      const periodGain = -periodGL; // negatif periodGL = kazanç
+    if (Number.isFinite(monetaryGL)) {
+      const periodGain = -monetaryGL; // negatif monetaryGL = kazanç
       if (periodGain > 0.005) {
         entries.push({
           account: TFRS29_ACCOUNTS.monetaryPositionOffset,
@@ -2663,7 +2596,6 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (val === TFRS29_ACCOUNTS.inflationGainLoss) e.accountKey = "inflationGainLoss";
       else if (val === TFRS29_ACCOUNTS.liabilityMonetaryGainLoss) e.accountKey = "liabilityMonetaryGainLoss";
       else if (val === TFRS29_ACCOUNTS.monetaryPositionOffset) e.accountKey = "monetaryPositionOffset";
-      else if (val === TFRS29_ACCOUNTS.liabilityMonetaryGainLossOpeningEquity) e.accountKey = "liabilityMonetaryGainLossOpeningEquity";
       else if (val === TFRS29_ACCOUNTS.leaseLiability) e.accountKey = "leaseLiability";
     });
     return typeof applyAccountMappingToJournal === "function"
@@ -11435,9 +11367,7 @@ ${renderPaymentScheduleFooterContainers()}
         Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
         ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
         ${hasMonetary
-          ? ` · Parasal K/Z (toplam): <strong>${formatCurrency(-t.liabilityMonetaryGainLoss)}</strong>
-             (Açılış bileşeni — 580: ${formatCurrency(-t.liabilityMonetaryGainLossOpening)} ·
-              Dönem içi bileşen — 698.02: ${formatCurrency(-t.liabilityMonetaryGainLossPeriod)})`
+          ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(-t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
     });
@@ -17255,8 +17185,6 @@ ${renderPaymentScheduleFooterContainers()}
         "Girişler (Restated)": lrf ? rptRound(lrf.liabilityEntriesRestated) : null,
         "Faiz (Restated)": lrf ? rptRound(lrf.liabilityInterestRestated) : null,
         "Ödemeler (Restated) (-)": lrf ? -Math.abs(rptRound(lrf.liabilityPaymentsRestated)) : null,
-        "Parasal K/Z — Açılış Bileşeni (580) (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLossOpening || 0) : null,
-        "Parasal K/Z — Dönem İçi Bileşeni (698.02) (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLossPeriod || 0) : null,
         "Parasal Kazanç/(Kayıp), net (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLoss) : null,
         "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal - lrf.liabilityPaymentsNominal) : null,
         "Durum": r?.ok ? "OK" : "Hesaplanamadı",
@@ -17267,8 +17195,6 @@ ${renderPaymentScheduleFooterContainers()}
       "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
       "Açılış (Restated)": rptRound(t.liabilityOpeningRestated), "Girişler (Restated)": rptRound(t.liabilityEntriesRestated),
       "Faiz (Restated)": rptRound(t.liabilityInterestRestated), "Ödemeler (Restated) (-)": -Math.abs(rptRound(t.liabilityPaymentsRestated)),
-      "Parasal K/Z — Açılış Bileşeni (580) (-)": -rptRound(t.liabilityMonetaryGainLossOpening || 0),
-      "Parasal K/Z — Dönem İçi Bileşeni (698.02) (-)": -rptRound(t.liabilityMonetaryGainLossPeriod || 0),
       "Parasal Kazanç/(Kayıp), net (-)": -rptRound(t.liabilityMonetaryGainLoss),
       "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal),
       "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
@@ -17284,8 +17210,6 @@ ${renderPaymentScheduleFooterContainers()}
       "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
       "Açılış (Restated)": g.liabilityOpeningRestated, "Girişler (Restated)": g.liabilityEntriesRestated,
       "Faiz (Restated)": g.liabilityInterestRestated, "Ödemeler (Restated) (-)": -Math.abs(g.liabilityPaymentsRestated),
-      "Parasal K/Z — Açılış Bileşeni (580) (-)": -(g.liabilityMonetaryGainLossOpening || 0),
-      "Parasal K/Z — Dönem İçi Bileşeni (698.02) (-)": -(g.liabilityMonetaryGainLossPeriod || 0),
       "Parasal Kazanç/(Kayıp), net (-)": -g.liabilityMonetaryGainLoss,
       "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal
     }));
@@ -21330,9 +21254,7 @@ ${renderPaymentScheduleFooterContainers()}
       liabilityEntriesNominal: 0, liabilityEntriesRestated: 0,
       liabilityInterestNominal: 0, liabilityInterestRestated: 0,
       liabilityPaymentsNominal: 0, liabilityPaymentsRestated: 0,
-      liabilityMonetaryGainLoss: 0,
-      liabilityMonetaryGainLossOpening: 0,
-      liabilityMonetaryGainLossPeriod: 0
+      liabilityMonetaryGainLoss: 0
     };
     let totalNetAdjustment = 0, computedCount = 0, missingCount = 0, outOfScopeCount = 0;
 
@@ -21402,8 +21324,6 @@ ${renderPaymentScheduleFooterContainers()}
           totals.liabilityPaymentsNominal += lrf.liabilityPaymentsNominal;
           totals.liabilityPaymentsRestated += lrf.liabilityPaymentsRestated;
           totals.liabilityMonetaryGainLoss += lrf.liabilityMonetaryGainLoss;
-          totals.liabilityMonetaryGainLossOpening += (lrf.liabilityMonetaryGainLossOpening || 0);
-          totals.liabilityMonetaryGainLossPeriod += (lrf.liabilityMonetaryGainLossPeriod || 0);
         }
         computedCount++;
       } catch (error) {
@@ -21419,7 +21339,7 @@ ${renderPaymentScheduleFooterContainers()}
       "rouDepreciationNominal","rouDepreciationRestated","rouClosingNominalPeriod","rouClosingRestatedPeriod",
       "liabilityOpeningNominal","liabilityOpeningRestated","liabilityEntriesNominal","liabilityEntriesRestated",
       "liabilityInterestNominal","liabilityInterestRestated","liabilityPaymentsNominal","liabilityPaymentsRestated",
-      "liabilityMonetaryGainLoss","liabilityMonetaryGainLossOpening","liabilityMonetaryGainLossPeriod"
+      "liabilityMonetaryGainLoss"
     ];
     const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, tms29SumKeys);
 
@@ -21452,8 +21372,6 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityEntriesRestated", label: "Girişler" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
-      { key: "liabilityMonetaryGainLossOpening", label: "Parasal K/Z — Açılış (580)", render: row => v191Value(-(row.liabilityMonetaryGainLossOpening || 0)) },
-      { key: "liabilityMonetaryGainLossPeriod", label: "Parasal K/Z — Dönem İçi (698.02)", render: row => v191Value(-(row.liabilityMonetaryGainLossPeriod || 0)) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
       { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
     ];
@@ -21529,8 +21447,6 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityEntriesRestated", label: "Girişler" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
-      { key: "liabilityMonetaryGainLossOpening", label: "Parasal K/Z — Açılış (580)", render: row => v191Value(-(row.liabilityMonetaryGainLossOpening || 0)) },
-      { key: "liabilityMonetaryGainLossPeriod", label: "Parasal K/Z — Dönem İçi (698.02)", render: row => v191Value(-(row.liabilityMonetaryGainLossPeriod || 0)) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
       { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
     ];
@@ -29486,17 +29402,11 @@ ${renderPaymentScheduleFooterContainers()}
     }
     results.push({ name: "Vaka 4 — genel (portföy/kontrat tutarlılığı)", pass: vaka4Pass });
 
-    // ---- VAKA 5: AÇILIŞ/DÖNEM İÇİ AYRIŞTIRMASI — opening + period ===
-    // toplam ile birebir eşleşmeli; jurnalde açılış bileşeni SADECE 580
-    // hesabına, dönem içi bileşeni SADECE 698.02 hesabına gitmeli; her
-    // iki bileşenin karşı tarafı da 590; jurnal yine dengeli olmalı ----
+    // ---- VAKA 5: TEK NET PARASAL K/Z — TMS 29.9 uyarınca sonuç cari
+    // dönem K/Z'de tek kalemdir; 580/açılış özkaynak satırı üretilmez. ----
     let vaka5Pass = false;
     try {
       const v5Months = months2026to2027.filter(mo => mo <= "2027-06");
-      // Açılış bileşenini görünür kılmak için periodStart'ı 2026-07 yapıp
-      // 2026-01→2026-06 arası "geçmiş dönem" bakiyesi oluşturuyoruz;
-      // endeks eğrisi tüm ay boyunca kademeli artıyor ki hem açılış hem
-      // dönem içi bileşen sıfırdan farklı olsun.
       v5Months.forEach((mo, i) => addOrUpdateInflationIndexEntry(mo, 1000 + i * 20));
 
       const contract5 = { ...baseContract, id: "SELFTEST-V19-5" };
@@ -29504,58 +29414,29 @@ ${renderPaymentScheduleFooterContainers()}
       const restatement = applyTMS29Restatement(contract5, "2027-06", "2026-07");
       const t = restatement.totals;
 
-      const identityOk = check(
-        "Vaka 5 — açılış + dönem içi = toplam Parasal K/Z",
-        t.liabilityMonetaryGainLoss,
-        (t.liabilityMonetaryGainLossOpening || 0) + (t.liabilityMonetaryGainLossPeriod || 0),
-        0.01
-      );
-
       const journal = generateInflationAdjustmentJournal(restatement);
       const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
       const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
-      const journalBalanced = assertTrue("Vaka 5 — jurnal borç = alacak (4 satırlı)", Math.abs(debit - credit) < 0.01);
+      const journalBalanced = assertTrue("Vaka 5 — jurnal borç = alacak", Math.abs(debit - credit) < 0.01);
 
       const openingLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING");
       const periodLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_PERIOD");
-
-      // DÜZELTME (Vaka 5 — uzun süredir başarısız olan self-test):
-      // generateInflationAdjustmentJournal() en sonda
-      // applyAccountMappingToJournal() çağırıyor ve bu, accountKey
-      // üzerinden `account` alanını TAM ETİKETTEN ("580 Geçmiş Yıllar
-      // Zararları") HESAP KODUNA ("580") dönüştürüyor — bu, hesap planı
-      // eşleme (V19) özelliğinin ta kendisi ve DOĞRU davranış
-      // (kullanıcı kendi hesap kodunu tanımlayabilsin diye).
-      // Test ise dönüşüm SONRASI çıktıyı, dönüşüm ÖNCESİ sabitlerle
-      // (TFRS29_ACCOUNTS.*) karşılaştırıyordu — bu karşılaştırma ASLA
-      // eşleşemezdi. Yani MOTOR DEĞİL, TESTİN KENDİSİ hatalıydı:
-      // matematik (kimlik + jurnal dengesi) ve çapraz-bulaşma
-      // kontrolleri zaten hep PASS veriyordu.
-      // Çözüm: karşılaştırma artık accountKey üzerinden yapılıyor —
-      // hesap KODU kullanıcı tarafından değiştirilse bile (mapping
-      // özelliği), semantik anlam (hangi hesaba gittiği) korunur.
-      const openingHitsCorrectAccount = assertTrue(
-        "Vaka 5 — açılış bileşeni yalnızca 580/590 hesaplarında",
-        openingLines.length > 0 &&
-          openingLines.every(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity" || j.accountKey === "monetaryPositionOffset")
+      const noOpeningEquity = assertTrue(
+        "Vaka 5 — 580/açılış özkaynak satırı üretilmiyor",
+        openingLines.length === 0 && !journal.some(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity")
       );
-      const periodHitsCorrectAccount = assertTrue(
-        "Vaka 5 — dönem içi bileşen yalnızca 698.02/590 hesaplarında",
+      const netHitsCorrectAccount = assertTrue(
+        "Vaka 5 — net parasal K/Z yalnızca 698.02/590 hesaplarında",
         periodLines.length > 0 &&
           periodLines.every(j => j.accountKey === "liabilityMonetaryGainLoss" || j.accountKey === "monetaryPositionOffset")
       );
-      const noCrossContamination = assertTrue(
-        "Vaka 5 — 580 hesabı dönem içi satırlarında, 698.02 açılış satırlarında GEÇMİYOR",
-        !openingLines.some(j => j.accountKey === "liabilityMonetaryGainLoss") &&
-          !periodLines.some(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity")
-      );
 
-      vaka5Pass = identityOk && journalBalanced && openingHitsCorrectAccount && periodHitsCorrectAccount && noCrossContamination;
+      vaka5Pass = Number.isFinite(t.liabilityMonetaryGainLoss) && journalBalanced && noOpeningEquity && netHitsCorrectAccount;
       v5Months.forEach(mo => deleteInflationIndexEntry(mo));
     } catch (error) {
       console.error("Vaka 5 hata:", error);
     }
-    results.push({ name: "Vaka 5 — genel (açılış/dönem içi ayrıştırması)", pass: vaka5Pass });
+    results.push({ name: "Vaka 5 — genel (tek net parasal K/Z)", pass: vaka5Pass });
 
     const totalPass = results.filter(r => r.pass).length;
     console.log(`\nTam Kapsamlı TMS 29 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
