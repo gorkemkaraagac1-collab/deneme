@@ -15,7 +15,7 @@
     */
 
 const API_BASE_URL =
-    "https://deneme-git-285469227510.europe-west1.run.app";
+    "https://contracts-api-285469227510.europe-west1.run.app";
 
 const AdminAPI = {
 

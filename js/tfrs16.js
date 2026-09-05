@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
      localStorage yalnızca önbellek / offline yedektir.
   ========================================================== */
   const TFRS16_API_BASE =
-    "https://deneme-git-285469227510.europe-west1.run.app";
+    "https://contracts-api-285469227510.europe-west1.run.app";
 
   let sessionCompanies = []; // [{ id, name }]
   let sessionCompanyIds = [];
