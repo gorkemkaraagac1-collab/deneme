@@ -1286,6 +1286,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const AUDIT_TRAIL_STORAGE_KEY = "gk_tfrs16_audit_trail_v1";
   const AUDIT_MIGRATION_KEY = "gk_tfrs16_audit_trail_migrated_v1";
+  const AUDIT_PENDING_SYNC_KEY = "gk_tfrs16_audit_pending_sync_v1";
 
   /** @deprecated-name Kalıcı: cloneAuditValue — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function cloneAuditValue(value) {
@@ -1361,6 +1362,50 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {}
   }
 
+  /* eslint-disable no-console, no-empty */
+  function loadPendingAuditSync() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(AUDIT_PENDING_SYNC_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) { return []; }
+  }
+
+  function savePendingAuditSync(events) {
+    try { localStorage.setItem(AUDIT_PENDING_SYNC_KEY, JSON.stringify(events)); } catch (_) {}
+  }
+
+  function queueAuditBackendSync(event) {
+    if (!event?.id || typeof window === "undefined") return;
+    const pending = loadPendingAuditSync();
+    if (!pending.some(item => item.id === event.id)) {
+      pending.push(event);
+      savePendingAuditSync(pending);
+    }
+    if (window.location?.hostname === "gorkemkaraagac1-collab.github.io" && typeof tfrs16ApiFetch === "function") {
+      setTimeout(() => flushAuditBackendSync(), 0);
+    }
+  }
+
+  async function flushAuditBackendSync() {
+    const pending = loadPendingAuditSync();
+    if (!pending.length || typeof tfrs16ApiFetch !== "function" || !tfrs16GetToken()) return { sent: 0, remaining: pending.length };
+    const remaining = [];
+    let sent = 0;
+    for (const event of pending) {
+      try {
+        await tfrs16ApiFetch("/api/audit", { method: "POST", body: JSON.stringify(event) });
+        sent++;
+      } catch (error) {
+        remaining.push(event);
+        // eslint-disable-next-line no-console
+        console.error("Audit backend senkronizasyonu başarısız; olay kuyrukta tutuldu.", error);
+      }
+    }
+    savePendingAuditSync(remaining);
+    return { sent, remaining: remaining.length };
+  }
+  /* eslint-enable no-console, no-empty */
+
   function recordAuditEvent(input = {}) {
     const event = {
       id: input.id || auditEventId(),
@@ -1389,6 +1434,7 @@ document.addEventListener("DOMContentLoaded", () => {
         events.push(event);
         saveAuditEvents(events);
       }
+      queueAuditBackendSync(event);
     } catch (error) {}
     return event;
   }
@@ -31365,6 +31411,9 @@ ${renderPaymentScheduleFooterContainers()}
       exportTms29InflationNote,
       getLeaseLiquidityRiskDisclosure,
       exportLeaseLiquidityRiskNote,
+      recordAuditEvent,
+      loadPendingAuditSync,
+      flushAuditBackendSync,
       getApplicableStandards,
       v26LoadCompanies,
       v26StandardsBadgeHtml,
@@ -31497,6 +31546,9 @@ ${renderPaymentScheduleFooterContainers()}
       exportTms29InflationNote,
       getLeaseLiquidityRiskDisclosure,
       exportLeaseLiquidityRiskNote,
+      recordAuditEvent,
+      loadPendingAuditSync,
+      flushAuditBackendSync,
       getApplicableStandards,
       v26LoadCompanies,
       v26StandardsBadgeHtml,
