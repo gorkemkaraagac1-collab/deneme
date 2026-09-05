@@ -1380,7 +1380,7 @@ document.addEventListener("DOMContentLoaded", () => {
       pending.push(event);
       savePendingAuditSync(pending);
     }
-    if (window.location?.hostname !== "localhost" && window.location?.hostname !== "127.0.0.1" && typeof tfrs16ApiFetch === "function") {
+    if (window.location?.hostname === "gorkemkaraagac1-collab.github.io" && typeof tfrs16ApiFetch === "function") {
       setTimeout(() => flushAuditBackendSync(), 0);
     }
   }
