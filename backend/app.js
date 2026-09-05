@@ -50,6 +50,7 @@ app.use('/api/contracts', require('./routes/contracts'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/inflation-indices', require('./routes/inflation-indices'));
+app.use('/api/fx-rates', require('./routes/fx-rates'));
 app.use('/api/license-test', require('./routes/license-test'));
 
 
