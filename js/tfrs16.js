@@ -31174,7 +31174,7 @@ ${renderPaymentScheduleFooterContainers()}
       const activeCompanyOptions = typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [];
       const activeCompanyId = typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL";
       navBlock.innerHTML = `
-        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.06em;margin-bottom:6px;">ÇOKLU PB / KONSOLİDASYON</div>
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.06em;margin-bottom:6px;">TFRS 16 İŞLEMLERİ</div>
         ${activeCompanyOptions.length ? `
         <label style="display:block;font-size:11px;color:#64748b;font-weight:600;margin-bottom:8px;">
           🏢 Aktif Şirket
@@ -31183,22 +31183,22 @@ ${renderPaymentScheduleFooterContainers()}
             ${activeCompanyOptions.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === activeCompanyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
           </select>
         </label>` : ""}
-        <button type="button" id="v26NavCloseDashboard" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📋 Close Dashboard</button>
+        <button type="button" id="v26NavCloseDashboard" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📋 Kapanış Paneli</button>
         <button type="button" id="v26NavAccountMapping" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📒 Hesap Planı Eşleme</button>
-        <button type="button" id="v26NavCompanies" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Şirket Yönetimi</button>
+        <details class="gk-v26-advanced"><summary>Gelişmiş işlemler</summary>        <button type="button" id="v26NavCompanies" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Şirket Yönetimi</button>
         <button type="button" id="v26NavGroups" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">👥 Gruplar</button>
         <button type="button" id="v26NavEliminations" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">↔️ Eliminasyonlar</button>
         <button type="button" id="v26NavFxRates" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">💱 Döviz Kurları</button>
         <button type="button" id="v26NavInflation" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📈 Enflasyon Endeksleri</button>
-        <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon &amp; Reassessment</button>
-        <button type="button" id="v26NavSlb" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Satış ve Geri Kiralama (SLB)</button>
-        <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt Kiralama (Sublease)</button>
+        <button type="button" id="v26NavModReass" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔁 Modifikasyon ve yeniden ölçüm</button>
+        <button type="button" id="v26NavSlb" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🏢 Satış ve geri kiralama</button>
+        <button type="button" id="v26NavSublease" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🔄 Alt kiralama</button>
         <button type="button" id="v26NavAccountingCenter" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🧾 Toplu Fiş Merkezi</button>
         <button type="button" id="v26NavFootnotes" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📝 Dipnotlar</button>
         <button type="button" id="v26NavRiskControls" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">⚠️ Risk &amp; Kontroller</button>
         <button type="button" id="v26NavFinancialReporting" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📑 Finansal Raporlama</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
-        <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>`;
+        <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>        </details>`;
       sidebar.appendChild(navBlock);
       }
 
