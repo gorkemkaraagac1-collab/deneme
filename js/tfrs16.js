@@ -21892,7 +21892,10 @@ ${renderPaymentScheduleFooterContainers()}
     if (!contract) return `<div class="empty-state"><h3>Sözleşme bulunamadı</h3><p>Seçili sözleşme artık portföyde mevcut değil.</p></div>`;
     const schedule = typeof cfoBuildSchedule === "function" ? (cfoBuildSchedule(contract)?.schedule || []) : (typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : []);
     const journals = typeof getJournalSummaryReport === "function" ? (getJournalSummaryReport({ contractId: contract.id })?.rows || []) : [];
-    const audit = typeof getAuditTrailReport === "function" ? (getAuditTrailReport({ contractId: contract.id }) || []) : [];
+    const auditReport = typeof getAuditTrailReport === "function" ? getAuditTrailReport({ contractId: contract.id }) : null;
+    const audit = Array.isArray(auditReport)
+      ? auditReport
+      : (Array.isArray(auditReport?.rows) ? auditReport.rows : []);
     return `<h3>${v191Escape(contract.id)} — Payment Schedule</h3>${v191Table(schedule.slice(0, 24), [
       { key: "period", label: "Period" }, { key: "date", label: "Date" }, { key: "openingLiability", label: "Opening" }, { key: "payment", label: "Payment" }, { key: "interest", label: "Interest" }, { key: "principal", label: "Principal" }, { key: "closingLiability", label: "Closing" }
     ])}<h3>Journal</h3>${v191Table(journals.slice(0, 50), [
@@ -31498,6 +31501,7 @@ ${renderPaymentScheduleFooterContainers()}
       renderEliminationManagementPage,
       renderFinancialReportingPage,
       openDetail,
+      v191RenderContractTools,
       renderPaymentScheduleSection,
       renderAccountingCenter,
       renderBulkJournalResults,
