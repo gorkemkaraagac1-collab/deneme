@@ -5242,6 +5242,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return `₺${formatNumber(value)}`;
   }
 
+  function formatPresentationCurrency(value, currency = "TRY") {
+    const code = String(currency || "TRY").toUpperCase();
+    const symbol = code === "USD" ? "$" : code === "EUR" ? "€" : code === "GBP" ? "£" : "₺";
+    return `${symbol}${formatNumber(value)}`;
+  }
+
+  function formatScheduleMoney(item, field, currency) {
+    if (item?.presentationFxOk === false) return `<span title="Kur bulunamadı — tutar gösterilemiyor" style="color:#b45309;">—</span>`;
+    return formatPresentationCurrency(item?.[field], currency);
+  }
+
 
   /* ==========================================================
      DRY YARDIMCI FONKSİYONLAR (Code Quality Pass)
@@ -11142,7 +11153,7 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
 
-  function renderPaymentScheduleTable(contract) {
+  async function renderPaymentScheduleTable(contract) {
 
     const tbody =
       document.getElementById(
@@ -11173,13 +11184,20 @@ ${renderPaymentScheduleFooterContainers()}
         ? cfoBuildSchedule(contract)
         : calculateLeaseEngine(contract);
 
-    const rows =
-      filterSchedule(
-        engine.schedule,
-        year,
-        subPeriod,
-        periodType
-      );
+    const filteredRows = filterSchedule(
+      engine.schedule,
+      year,
+      subPeriod,
+      periodType
+    );
+    const presentationCurrency = String(document.getElementById("schedulePresentationCurrency")?.value || contract?.currency || "TRY").toUpperCase();
+    const conversion = await v26ConvertScheduleToPresentation(
+      filteredRows,
+      String(contract?.currency || "TRY").toUpperCase(),
+      presentationCurrency,
+      new Date()
+    );
+    const rows = conversion.schedule;
 
     // V18 Parça 1 — önceki satıra göre tutar sıçraması varsa 🔺 rozeti.
     const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
@@ -11196,13 +11214,13 @@ ${renderPaymentScheduleFooterContainers()}
             <tr>
               <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${item.period}</td>
               <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${getMonthName(item.month)} ${item.year}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.openingLiability)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.payment)}${escalationBadge}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.interest)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.principal)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.closingLiability)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.depreciation)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(item.rouClosing)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "openingLiability", presentationCurrency)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "payment", presentationCurrency)}${escalationBadge}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "interest", presentationCurrency)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "principal", presentationCurrency)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "closingLiability", presentationCurrency)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "depreciation", presentationCurrency)}</td>
+              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "rouClosing", presentationCurrency)}</td>
             </tr>
           `;
         })
@@ -11904,6 +11922,8 @@ ${renderPaymentScheduleFooterContainers()}
         () =>
           renderPaymentScheduleTable(contract)
       );
+
+    document.getElementById("schedulePresentationCurrency")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
 
     document
       .getElementById(
@@ -31543,6 +31563,7 @@ ${renderPaymentScheduleFooterContainers()}
       openDetail,
       v191RenderContractTools,
       renderPaymentScheduleSection,
+      renderPaymentScheduleTable,
       renderAccountingCenter,
       renderBulkJournalResults,
       createBulkJournalModal,
