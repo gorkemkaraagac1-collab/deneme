@@ -21,6 +21,52 @@ const {
 
 const router = express.Router();
 
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(value).sort().map(key =>
+    `${JSON.stringify(key)}:${stableStringify(value[key])}`
+  ).join(",")}}`;
+}
+
+function reassessmentEconomicKey(item) {
+  return [
+    item?.type || "",
+    item?.effectiveDate || item?.reassessmentDate || "",
+    stableStringify(item?.newTerms || {})
+  ].join("|");
+}
+
+function modificationEconomicKey(item) {
+  return [
+    item?.modificationType || item?.type || "",
+    item?.effectiveDate || item?.modificationDate || "",
+    stableStringify(item?.newTerms || {}),
+    Number(item?.scopeReductionPercent) || 0,
+    Number(item?.scopeIncreasePercent) || 0,
+    Number(item?.scopeIncreaseAmount) || 0
+  ].join("|");
+}
+
+function findEconomicDuplicate(existingItems, incomingItems, economicKey) {
+  const existing = Array.isArray(existingItems) ? existingItems : [];
+  const incoming = Array.isArray(incomingItems) ? incomingItems : [];
+  const existingIds = new Set(existing.map(item => item?.id));
+  const existingKeys = new Set(existing
+    .filter(item => item?.status !== "CANCELLED")
+    .map(economicKey));
+  const payloadKeys = new Set();
+
+  for (const item of incoming) {
+    if (item?.status === "CANCELLED") continue;
+    const key = economicKey(item);
+    if (payloadKeys.has(key)) return item;
+    payloadKeys.add(key);
+    if (!existingIds.has(item?.id) && existingKeys.has(key)) return item;
+  }
+  return null;
+}
+
 
 /**
  * ============================================================
@@ -466,7 +512,12 @@ router.put(
   requireContractWriteRole,
   async (req, res) => {
 
+    let client;
+
     try {
+
+      client = await pool.connect();
+      await client.query("BEGIN");
 
       const {
         company,
@@ -490,24 +541,28 @@ router.put(
        * (404).
        */
       const contractResult = scope.isGlobalAdmin
-        ? await pool.query(
+        ? await client.query(
             `
               SELECT
-                company_id
+                company_id,
+                details
               FROM contracts
               WHERE id = $1
               LIMIT 1
+              FOR UPDATE
             `,
             [req.params.id]
           )
-        : await pool.query(
+        : await client.query(
             `
               SELECT
-                company_id
+                company_id,
+                details
               FROM contracts
               WHERE id = $1
                 AND company_id = ANY($2)
               LIMIT 1
+              FOR UPDATE
             `,
             [
               req.params.id,
@@ -519,6 +574,8 @@ router.put(
       if (
         contractResult.rows.length === 0
       ) {
+
+        await client.query("ROLLBACK");
 
         return res.status(404).json({
           error: "Contract not found"
@@ -543,6 +600,8 @@ router.put(
        */
       if (!isCompanyInScope(contractCompanyId, scope)) {
 
+        await client.query("ROLLBACK");
+
         return res.status(403).json({
           error:
             "Bu şirkete erişim yetkiniz bulunmamaktadır",
@@ -559,7 +618,7 @@ router.put(
        * expired: write = 403" — yalnızca GET'lerden kaldırıldı).
        */
       const licenseResult =
-        await pool.query(
+        await client.query(
           `
             SELECT 1
             FROM company_licenses
@@ -580,6 +639,8 @@ router.put(
         licenseResult.rows.length === 0
       ) {
 
+        await client.query("ROLLBACK");
+
         return res.status(403).json({
           error:
             "Şirketin aktif lisansı bulunmamaktadır",
@@ -598,6 +659,8 @@ router.put(
         companyId !== undefined &&
         String(companyId) !== contractCompanyId
       ) {
+
+        await client.query("ROLLBACK");
 
         return res.status(403).json({
           error:
@@ -627,59 +690,37 @@ router.put(
        * 409 ile reddedilir. Var olan kayıtların düzenlenmesi (aynı id, status
        * güncellemesi vb.) etkilenmez.
        */
-      if (
-        details !== undefined &&
-        details !== null &&
-        Array.isArray(details.reassessments)
-      ) {
-
-        const existingResult = await pool.query(
-          `SELECT details FROM contracts WHERE id = $1 LIMIT 1`,
-          [req.params.id]
+      if (details !== undefined && details !== null) {
+        const existingDetails = contractResult.rows[0]?.details || {};
+        const duplicateReassessment = findEconomicDuplicate(
+          existingDetails.reassessments,
+          details.reassessments,
+          reassessmentEconomicKey
+        );
+        const duplicateModification = findEconomicDuplicate(
+          existingDetails.modifications,
+          details.modifications,
+          modificationEconomicKey
         );
 
-        const existingReassessments =
-          Array.isArray(existingResult.rows[0]?.details?.reassessments)
-            ? existingResult.rows[0].details.reassessments
-            : [];
-
-        const economicKey = item => [
-          item?.type || "",
-          item?.effectiveDate || item?.reassessmentDate || "",
-          JSON.stringify(item?.newTerms || {})
-        ].join("|");
-
-        const existingKeys = new Set(
-          existingReassessments
-            .filter(item => item?.status !== "CANCELLED")
-            .map(economicKey)
-        );
-
-        const existingIds = new Set(
-          existingReassessments.map(item => item?.id)
-        );
-
-        const duplicate = details.reassessments.find(item =>
-          item?.status !== "CANCELLED" &&
-          !existingIds.has(item?.id) &&
-          existingKeys.has(economicKey(item))
-        );
-
-        if (duplicate) {
-
+        if (duplicateReassessment || duplicateModification) {
+          await client.query("ROLLBACK");
+          const isModification = Boolean(duplicateModification);
+          const duplicate = duplicateModification || duplicateReassessment;
           return res.status(409).json({
-            error:
-              "Aynı reassessment (tip + effective date + şartlar) bu kontrat için zaten mevcut.",
-            code: "DUPLICATE_REASSESSMENT",
+            error: isModification
+              ? "Aynı modifikasyon (tip + effective date + şartlar) bu kontrat için zaten mevcut."
+              : "Aynı reassessment (tip + effective date + şartlar) bu kontrat için zaten mevcut.",
+            code: isModification
+              ? "DUPLICATE_MODIFICATION"
+              : "DUPLICATE_REASSESSMENT",
             conflictingId: duplicate.id
           });
-
         }
-
       }
 
 
-      const result = await pool.query(
+      const result = await client.query(
         `
           UPDATE contracts
           SET
@@ -722,12 +763,22 @@ router.put(
         ]
       );
 
+      await client.query("COMMIT");
+
 
       return res.json(
         result.rows[0]
       );
 
     } catch (error) {
+
+      if (client) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackError) {
+          console.error("PUT /api/contracts/:id rollback hatası:", rollbackError);
+        }
+      }
 
       console.error(
         "PUT /api/contracts/:id hatası:",
@@ -741,6 +792,8 @@ router.put(
         detail: process.env.DEBUG_ERRORS === "false" ? undefined : (error.message || String(error))
       });
 
+    } finally {
+      if (client) client.release();
     }
 
   }
