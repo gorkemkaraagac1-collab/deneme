@@ -3784,6 +3784,20 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    const currentPayment = Number(contract.monthlyPayment) || 0;
+
+    if (type === "PAYMENT_INCREASE" &&
+        Number.isFinite(newPayment) &&
+        newPayment <= currentPayment) {
+      errors.push("Payment increase için new payment mevcut ödemeden büyük olmalıdır.");
+    }
+
+    if (type === "PAYMENT_DECREASE" &&
+        Number.isFinite(newPayment) &&
+        newPayment >= currentPayment) {
+      errors.push("Payment decrease için new payment mevcut ödemeden küçük olmalıdır.");
+    }
+
     const termTypes = [
       "LEASE_TERM_EXTENSION",
       "LEASE_TERM_REDUCTION",
