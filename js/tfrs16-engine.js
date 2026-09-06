@@ -5722,6 +5722,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (element) {
       element.textContent = value;
     }
+
+    const compatibilityId = {
+      contractCount: "kpiContractCount",
+      leaseLiability: "kpiLiability",
+      rouAssets: "kpiRou",
+      next12Months: "kpiCurrent"
+    }[id];
+    const compatibilityElement = compatibilityId
+      ? document.getElementById(compatibilityId)
+      : null;
+    if (compatibilityElement) {
+      compatibilityElement.textContent = value;
+    }
   }
 
 
