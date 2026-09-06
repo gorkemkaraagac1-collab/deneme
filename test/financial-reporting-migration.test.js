@@ -128,23 +128,13 @@ describe("v191RenderFinancialReporting — hâlâ bağımsız çağrılabilir (d
   });
 });
 
-describe("dashboard.html — Finansal Raporlama linki eklendi", () => {
-  test("frontend/dashboard.html içinde data-v26-open=\"financialReporting\" var", () => {
-    const fs = require("fs");
-    const path = require("path");
-    const html = fs.readFileSync(path.join(__dirname, "../frontend/dashboard.html"), "utf-8");
-    expect(html).toMatch(/data-v26-open="financialReporting"/);
-  });
-});
 
-describe("tfrs16.html — 'CFO Cockpit' nav-item linki düzeltildi", () => {
-  test("artık root'taki eski/terk edilmiş dashboard.html'e DEĞİL, frontend/dashboard.html'e gidiyor", () => {
+describe("tfrs16.html — eski dashboard bağlantısı kaldırıldı", () => {
+  test("eski dashboard bağlantısı içermez", () => {
     const fs = require("fs");
     const path = require("path");
     const html = fs.readFileSync(path.join(__dirname, "../tfrs16.html"), "utf-8");
-    expect(html).toMatch(/href="frontend\/dashboard\.html"/);
-    // Eski, YANLIŞ hedefe giden link (bare "dashboard.html") artık YOK.
-    expect(html).not.toMatch(/href="dashboard\.html"/);
+    expect(html).not.toMatch(/dashboard\.html/);
   });
 
   test("CFO Cockpit projesi ertelendiği için nav-item ismi artık 'CFO Cockpit' DEĞİL (kafa karışıklığını önlemek için)", () => {

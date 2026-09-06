@@ -7,7 +7,7 @@
  *   kontrat oluştur → detay aç → ödeme planı gör → fiş üret → dışa aktar
  *
  * ⚠️ DOĞRULAMA DURUMU: Bu spec'in selector'ları tfrs16.html ve
- * frontend/dashboard.html KAYNAĞINDAN çıkarıldı, ancak bu ortamda
+ * tfrs16.html KAYNAĞINDAN çıkarıldı, ancak bu ortamda
  * tarayıcı ikilisi indirilemediği için HENÜZ GERÇEK BİR TARAYICIDA
  * KOŞULMADI. İlk koşumda selector düzeltmesi gerekebilir. Faz 0'ın
  * kapanış koşulu bu spec'in YEŞİL koşmasıdır — "dosya var" yeterli
@@ -73,10 +73,9 @@ async function createContract(page, contract = CONTRACT) {
 }
 
 test.describe("smoke — TFRS 16 ana akış", () => {
-  test("dashboard yüklenir ve sayfa hatası üretmez", async ({ dashboardPage }) => {
-    await expect(dashboardPage.locator("#userDisplay")).toContainText("e2e");
-    await expect(dashboardPage.locator("#apiStatus")).toContainText("AKTİF");
-    expect(dashboardPage.consoleErrors).toEqual([]);
+  test("TFRS16 motoru yüklenir ve sayfa hatası üretmez", async ({ tfrs16Page }) => {
+    await expect(tfrs16Page.locator("#newContractButton")).toHaveCount(1);
+    expect(tfrs16Page.consoleErrors).toEqual([]);
   });
 
   test("kontrat oluştur → detay aç → ödeme planı gör", async ({ stubbedPage, apiStore }) => {
