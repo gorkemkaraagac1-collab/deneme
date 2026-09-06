@@ -441,6 +441,12 @@ document.addEventListener("DOMContentLoaded", () => {
       ),
       currency: row.currency || "TRY",
       status: String(row.status || "active").toLowerCase(),
+      // Only APPROVED opening balances are exposed by the API. Keep the
+      // object on the contract so the synchronous engine can start its
+      // roll-forward at the customer's audited cut-over date.
+      openingBalance: row.opening_balance && typeof row.opening_balance === "object"
+        ? row.opening_balance
+        : null,
       renewalDate: details.renewalDate || null,
       paymentFrequency: details.paymentFrequency || "monthly",
       paymentTiming: details.paymentTiming || "arrears",
@@ -6834,6 +6840,61 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * Apply an approved migration closing balance to the forward schedule.
+   * Historical periods are deliberately removed from the displayed schedule:
+   * the imported closing balance is the authoritative starting point for the
+   * first period after the cut-over date. This stays synchronous and leaves
+   * legacy contracts unchanged when no approved balance exists.
+   */
+  function applyApprovedOpeningBalance(contract, schedule, core) {
+    const opening = contract && contract.openingBalance;
+    if (!opening || String(opening.status || "").toUpperCase() !== "APPROVED" || !schedule.length) {
+      return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+    }
+    const transition = parseDate(opening.next_payment_date || opening.opening_date);
+    if (!transition) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+    const firstIndex = schedule.findIndex(row => row.date >= transition);
+    if (firstIndex < 0) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+
+    const openingLiability = Math.max(0, Number(opening.opening_lease_liability) || 0);
+    const openingROU = Math.max(0, Number(opening.opening_rou_asset) || 0);
+    const sourceRows = schedule.slice(firstIndex);
+    const forward = [];
+    let liability = openingLiability;
+    let rou = openingROU;
+    sourceRows.forEach((row, index) => {
+      const previous = liability;
+      const interest = Math.max(0, previous * core.periodRate);
+      const payment = Math.max(0, Number(row.payment) || 0);
+      const principal = Math.min(previous, Math.max(0, payment - interest));
+      const monthsCovered = row.monthsCovered || core.stepMonths || 1;
+      const rouOpening = rou;
+      const rouDepreciation = index === sourceRows.length - 1
+        ? rouOpening
+        : Math.min(openingROU / sourceRows.length * monthsCovered, rouOpening);
+      forward.push({
+        ...row,
+        period: index + 1,
+        openingLiability: previous,
+        interest,
+        principal,
+        closingLiability: Math.max(0, previous - principal),
+        rouOpening,
+        depreciation: rouDepreciation,
+        rouClosing: Math.max(0, rouOpening - rouDepreciation)
+      });
+      liability = Math.max(0, previous - principal);
+      rou = Math.max(0, rouOpening - rouDepreciation);
+    });
+    return {
+      schedule: forward,
+      openingLiability,
+      openingROU,
+      depreciation: forward.length ? forward[0].depreciation : 0
+    };
+  }
+
+  /**
    * assembleLeaseEngineResult — motorun nihai dönüş objesini
    * (liability, rouAssets, schedule, assumptions vb.) paketler.
    */
@@ -6883,9 +6944,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const esc = applyLeaseEscalation(contract, assumptions, core);
     const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
-    const schedule = calculateAmortizationTable(assumptions, core, esc, measurement);
-
-    return assembleLeaseEngineResult(assumptions, core, measurement, schedule);
+    const calculatedSchedule = calculateAmortizationTable(assumptions, core, esc, measurement);
+    const migrated = applyApprovedOpeningBalance(contract, calculatedSchedule, core);
+    const effectiveMeasurement = migrated.openingLiability === null
+      ? measurement
+      : {
+          ...measurement,
+          initialLiability: migrated.openingLiability,
+          initialROU: migrated.openingROU,
+          depreciation: migrated.depreciation
+        };
+    const result = assembleLeaseEngineResult(assumptions, core, effectiveMeasurement, migrated.schedule);
+    if (migrated.openingLiability !== null) {
+      result.openingBalanceApplied = true;
+      result.openingBalance = contract.openingBalance;
+    }
+    return result;
   }
 
 
