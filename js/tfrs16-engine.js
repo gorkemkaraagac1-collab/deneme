@@ -7908,6 +7908,10 @@ document.addEventListener("DOMContentLoaded", () => {
           </td>
 
           <td>
+            <span>${escapeHtml(String(contract.currency || "Para birimi eksik/geçersiz").toUpperCase())}</span>
+          </td>
+
+          <td>
             <span class="status ${
               contract.status
             }">
