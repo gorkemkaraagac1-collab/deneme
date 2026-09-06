@@ -33,6 +33,13 @@ router.get("/pending", requireAdmin, async (req, res) => {
   return res.json({ rates: result.rows.map(row => ({ ...row, rate: Number(row.rate) })) });
 });
 
+router.post("/bulk-verify", requireAdmin, async (req, res) => {
+  const from=String(req.body?.from||"2019-01-01"); const to=String(req.body?.to||new Date().toISOString().slice(0,10));
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||from>to) return res.status(400).json({error:"Geçersiz tarih aralığı."});
+  const result=await pool.query("UPDATE fx_rates SET verification_status='VERIFIED', verified_at=NOW(), verified_by=$1 WHERE source='TCMB_AUTO' AND from_currency IN ('USD','EUR') AND to_currency='TRY' AND rate_date BETWEEN $2::date AND $3::date AND superseded_by IS NULL AND verification_status='PENDING' RETURNING id",[String(req.user.id),from,to]);
+  return res.json({verified:result.rowCount,from,to});
+});
+
 router.post("/:id/verify", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Geçersiz kur kimliği." });
