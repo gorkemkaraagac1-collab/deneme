@@ -111,6 +111,36 @@ CREATE INDEX IF NOT EXISTS idx_contracts_status
 CREATE INDEX IF NOT EXISTS idx_contracts_end_date
     ON contracts(end_date);
 
+-- TFRS 16 açılış bakiyeleri: mevcut müşterilerin önceki sistemden
+-- 31.12.2025 kapanışını denetlenebilir şekilde içe aktarmak için.
+CREATE TABLE IF NOT EXISTS contract_opening_balances (
+    id VARCHAR(50) PRIMARY KEY,
+    company_id VARCHAR(50) NOT NULL REFERENCES companies(id),
+    contract_id VARCHAR(50) NOT NULL REFERENCES contracts(id),
+    opening_date DATE NOT NULL,
+    opening_rou_asset DECIMAL(18,2) NOT NULL CHECK (opening_rou_asset >= 0),
+    opening_lease_liability DECIMAL(18,2) NOT NULL CHECK (opening_lease_liability >= 0),
+    opening_accumulated_depreciation DECIMAL(18,2) NOT NULL DEFAULT 0 CHECK (opening_accumulated_depreciation >= 0),
+    opening_accumulated_interest DECIMAL(18,2) NOT NULL DEFAULT 0 CHECK (opening_accumulated_interest >= 0),
+    opening_retained_earnings_adjustment DECIMAL(18,2) NOT NULL DEFAULT 0,
+    discount_rate DECIMAL(7,4),
+    currency VARCHAR(3) NOT NULL DEFAULT 'TRY',
+    next_payment_date DATE,
+    source_reference VARCHAR(200),
+    status VARCHAR(20) NOT NULL DEFAULT 'IMPORTED',
+    imported_by VARCHAR(50) NOT NULL,
+    approved_by VARCHAR(50),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (contract_id, opening_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_opening_balances_company
+    ON contract_opening_balances(company_id);
+CREATE INDEX IF NOT EXISTS idx_opening_balances_status
+    ON contract_opening_balances(status);
+
 -- P2 — ZENGİN SÖZLEŞME VERİSİ (modifications/reassessments/SLB/
 -- sublease/TMS29 enflasyon düzeltmesi/TMS21 fonksiyonel para birimi/
 -- erken ödemeler).
