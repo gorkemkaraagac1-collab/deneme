@@ -8,7 +8,7 @@
  *
  * Şirket Yönetimi/Gruplar/Eliminasyonlar zaten deepLinkMap'te
  * tanımlıydı (renderCompanyManagementPage/renderGroupManagementPage/
- * renderEliminationManagementPage) ama dashboard.html'e link olarak
+ * renderEliminationManagementPage) ama TFRS16 ana menüsünde
  * hiç eklenmemişlerdi (taşıma sürecinde atlanmış). Risk & Kontroller
  * ise tamamen ayrı bir modal sistemine (v191Show/v191EnsureModal)
  * bağımlıydı — renderRiskControlsPage bunu normal openInMain akışına
@@ -84,17 +84,5 @@ describe("renderRiskControlsPage — v191RenderRiskControls'ü normal sayfa akı
     // Eski modal sistemi tetiklenmiş olsaydı #v191FunctionalModal DOM'a
     // eklenirdi — burada host'un DIŞINDA hiçbir yan etki olmamalı.
     expect(document.getElementById("v191FunctionalModal")).toBeNull();
-  });
-});
-
-describe("dashboard.html sidebar linkleri (data-v26-open) — dört yeni modül", () => {
-  test("frontend/dashboard.html içinde companies/groups/eliminations/riskControls linkleri var", () => {
-    const fs = require("fs");
-    const path = require("path");
-    const html = fs.readFileSync(path.join(__dirname, "../frontend/dashboard.html"), "utf-8");
-    expect(html).toMatch(/data-v26-open="companies"/);
-    expect(html).toMatch(/data-v26-open="groups"/);
-    expect(html).toMatch(/data-v26-open="eliminations"/);
-    expect(html).toMatch(/data-v26-open="riskControls"/);
   });
 });

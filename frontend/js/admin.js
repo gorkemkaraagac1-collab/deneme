@@ -592,12 +592,12 @@ try {
          * ACCOUNTANT_MANAGER: kendi erişebildiği bir sayfaya
          * (Users) yönlendir. Diğer roller (ACCOUNTANT/
          * CONTROLLER/VIEWER) zaten admin panelinde hiçbir
-         * sayfaya erişemez — müşteri dashboard'una gönderilir.
+         * sayfaya erişemez — TFRS16 motoruna gönderilir.
          */
         window.location.href =
             user.role === "ACCOUNTANT_MANAGER"
                 ? "users.html"
-                : "../dashboard.html";
+                : "../../tfrs16.html";
         return false;
     }
 
