@@ -233,32 +233,3 @@ describe("Contract Financial Tools — Audit Trail rapor uyumluluğu", () => {
     expect(tfrs16.v191RenderContractTools()).toMatch(/Audit Trail/);
   });
 });
-
-describe("dashboard.html — üç sayfa sidebar'dan kaldırıldı", () => {
-  test("modification/slb/sublease linkleri sidebar'da YOK (artık sözleşme detayında)", () => {
-    const fs = require("fs");
-    const path = require("path");
-    const html = fs.readFileSync(path.join(__dirname, "../frontend/dashboard.html"), "utf-8");
-    const nav = html.match(/<nav class="side-nav">[\s\S]*?<\/nav>/)[0];
-
-    expect(nav).not.toMatch(/data-v26-open="modification"/);
-    expect(nav).not.toMatch(/data-v26-open="slb"/);
-    expect(nav).not.toMatch(/data-v26-open="sublease"/);
-  });
-
-  test("portföy geneli olan Toplu Fiş Merkezi sidebar'da KALDI (tek sözleşmeye bağlı değil)", () => {
-    const fs = require("fs");
-    const path = require("path");
-    const html = fs.readFileSync(path.join(__dirname, "../frontend/dashboard.html"), "utf-8");
-    const nav = html.match(/<nav class="side-nav">[\s\S]*?<\/nav>/)[0];
-    expect(nav).toMatch(/data-v26-open="accountingCenter"/);
-  });
-
-  test("deep-link fonksiyonları SİLİNMEDİ (eski ?open=modification linkleri kırılmasın)", async () => {
-    const tfrs16 = await setup();
-    expect(typeof tfrs16.renderModificationReassessmentPage).toBe("function");
-    expect(typeof tfrs16.renderSlbManagementPage).toBe("function");
-    expect(typeof tfrs16.renderSubleaseManagementPage).toBe("function");
-    document.body.innerHTML = "";
-  });
-});

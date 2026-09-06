@@ -4,8 +4,8 @@
  * ============================================================
  *
  * Her spec'in aynı 6 satırı kopyalaması yerine, kimlik tohumlama
- * ve backend stub'ı burada tek yerden bağlanır. `dashboardPage`
- * fixture'ı, dashboard'a girmiş ve önyüklemesi bitmiş bir sayfa verir.
+ * ve backend stub'ı burada tek yerden bağlanır. `tfrs16Page`
+ * fixture'ı, TFRS16 motoruna girmiş ve önyüklemesi bitmiş bir sayfa verir.
  */
 
 "use strict";
@@ -33,11 +33,11 @@ const test = base.test.extend({
     await use(page);
   },
 
-  /** Dashboard'a gitmiş ve önyüklemesi tamamlanmış sayfa. */
-  dashboardPage: async ({ stubbedPage }, use) => {
-    await stubbedPage.goto("/frontend/dashboard.html");
-    // loadDashboard() /api/auth/me'yi bekler; kullanıcı adı yazılınca hazır.
-    await stubbedPage.waitForSelector("#userDisplay:not(:empty)", { timeout: 15000 });
+  /** TFRS16 motoruna gitmiş ve önyüklemesi tamamlanmış sayfa. */
+  tfrs16Page: async ({ stubbedPage }, use) => {
+    await stubbedPage.goto("/tfrs16.html");
+    // Ana motor kabuğu yüklendiğinde yeni sözleşme eylemi hazırdır.
+    await stubbedPage.waitForSelector("#newContractButton", { timeout: 15000 });
     await use(stubbedPage);
   }
 });

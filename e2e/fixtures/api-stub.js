@@ -12,7 +12,7 @@
  * Bu modül tüm /api/** çağrılarını yakalar ve bellek içi bir
  * kontrat deposuyla yanıtlar. Depo test başına sıfırlanır.
  *
- * KAPSANAN UÇLAR (js/tfrs16.js + frontend/dashboard.html taramasından):
+ * KAPSANAN UÇLAR (js/tfrs16.js + tfrs16.html taramasından):
  *   GET    /api/auth/me
  *   GET    /api/contracts
  *   POST   /api/contracts
@@ -152,7 +152,7 @@ async function installApiStub(page, options = {}) {
 
 /**
  * Sayfa yüklenmeden ÖNCE oturum token'ını yerleştirir.
- * dashboard.html, getToken() yoksa login.html'e yönlendirir; bu yüzden
+ * tfrs16.html, getToken() yoksa login.html'e yönlendirir; bu yüzden
  * token navigasyondan önce mevcut olmalıdır.
  */
 async function seedSession(page, user = DEFAULT_USER) {
