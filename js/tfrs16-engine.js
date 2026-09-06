@@ -10462,7 +10462,13 @@ ${renderAccountingCenterBulkPromo()}
   async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview) {
     if (!preview || !contractNeedsFxTranslation(contract)) return;
     try {
-      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) await refreshFxRateCacheFromBackend();
+      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
+        const refreshed = await refreshFxRateCacheFromBackend();
+        if (refreshed) {
+          updateKPIs();
+          renderTable();
+        }
+      }
       const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) return;
