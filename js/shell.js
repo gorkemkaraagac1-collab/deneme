@@ -6,6 +6,28 @@
 (function () {
   "use strict";
 
+  const isProtectedEnginePage = /\/tfrs16\.html$/i.test(window.location.pathname);
+
+  // Engine pages must never render their local cache without a valid backend
+  // session. The redirect runs before the engine script is loaded.
+  if (isProtectedEnginePage && !localStorage.getItem("access_token") && !localStorage.getItem("gk_backend_jwt")) {
+    document.documentElement.style.visibility = "hidden";
+    window.location.replace("login.html");
+    return;
+  }
+
+  window.logout = function logout() {
+    [
+      "access_token",
+      "gk_backend_jwt",
+      "current_user",
+      "gk_tfrs16_v21_session_v1",
+      "gk_tfrs16_contracts_v7",
+      "gk_tfrs16_active_company_v1"
+    ].forEach(key => localStorage.removeItem(key));
+    window.location.replace("login.html");
+  };
+
   const VIEW_TITLES = {
     contracts: { title: "Sözleşmeler", subtitle: "Kiralama portföyü" },
     close: { title: "Kapanış Paneli", subtitle: "Ay sonu kapanış kontrolü" },
