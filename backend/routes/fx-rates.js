@@ -27,6 +27,12 @@ router.get("/", limiter, async (req, res) => {
   } catch (error) { console.error("GET /api/fx-rates error:", error); return res.status(500).json({ error: "Kur verisi alınamadı." }); }
 });
 
+
+router.get("/pending", requireAdmin, async (req, res) => {
+  const result = await pool.query(`SELECT id, from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate_type AS "rateType", rate, source, verification_status AS "verificationStatus" FROM fx_rates WHERE superseded_by IS NULL AND verification_status='PENDING' ORDER BY rate_date DESC, from_currency`);
+  return res.json({ rates: result.rows.map(row => ({ ...row, rate: Number(row.rate) })) });
+});
+
 router.post("/:id/verify", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Geçersiz kur kimliği." });
