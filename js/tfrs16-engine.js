@@ -9238,6 +9238,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     ];
 
+    /* Approved migration balances need a transition equity leg when the
+       carried ROU and lease liability differ because of prior-period activity. */
+    const openingBalance = contract?.openingBalance;
+    if (String(openingBalance?.status || "").toUpperCase() === "APPROVED") {
+      const explicitAdjustment = Number(openingBalance.opening_retained_earnings_adjustment);
+      const derivedAdjustment = Number(engine.liability) - Number(engine.rouAssets);
+      const adjustment = Number.isFinite(explicitAdjustment) && Math.abs(explicitAdjustment) > 0.01
+        ? explicitAdjustment
+        : derivedAdjustment;
+
+      if (Math.abs(adjustment) > 0.01) {
+        entries.push({
+          account: "570 Geçmiş Yıllar Kâr/Zararları (TFRS 16 Geçiş Düzeltmesi)",
+          debit: adjustment > 0 ? adjustment : 0,
+          credit: adjustment < 0 ? Math.abs(adjustment) : 0
+        });
+      }
+    }
+
     /*
       DÜZELTME (GC-JE-01 — LEASE-026 borç/alacak dengesizliği):
       TFRS 16.24 uyarınca ROU'nun ilk ölçümü, kiralama yükümlülüğüne
