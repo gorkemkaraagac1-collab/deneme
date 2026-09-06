@@ -7818,6 +7818,8 @@ document.addEventListener("DOMContentLoaded", () => {
               contract.company === company
             )
 
+            && v26ContractMatchesActiveCompany(contract)
+
           );
         }
       );
