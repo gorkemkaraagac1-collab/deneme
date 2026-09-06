@@ -46,4 +46,24 @@ describe("approved TFRS 16 opening balance", () => {
     expect(result.openingBalanceApplied).toBeUndefined();
     expect(result.schedule[0].date.getFullYear()).toBe(2026);
   });
+
+  test("does not apply an imported but unapproved balance", () => {
+    const tfrs16 = loadTfrs16();
+    const result = tfrs16.calculateLeaseEngine({
+      id: "OPENING-TEST-3",
+      monthlyPayment: 1000,
+      discountRate: 12,
+      startDate: "2020-01-01",
+      endDate: "2026-12-01",
+      openingBalance: {
+        status: "IMPORTED",
+        opening_date: "2025-12-31",
+        opening_rou_asset: 9000,
+        opening_lease_liability: 10000
+      }
+    });
+
+    expect(result.openingBalanceApplied).toBeUndefined();
+    expect(result.schedule[0].date.getFullYear()).toBe(2020);
+  });
 });
