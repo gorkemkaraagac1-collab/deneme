@@ -25654,7 +25654,7 @@ ${renderPaymentScheduleFooterContainers()}
   ]);
   const FX_CONFIG = Object.freeze({
     version: V23_SCHEMA_VERSION,
-    defaultRateType: V23_RATE_TYPES.SPOT,
+    defaultRateType: V23_RATE_TYPES.CLOSING,
     balanceSheetRateType: V23_RATE_TYPES.CLOSING,
     incomeStatementRateType: V23_RATE_TYPES.AVERAGE,
     equityRateType: V23_RATE_TYPES.HISTORICAL,
