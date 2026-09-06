@@ -2733,7 +2733,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (req, res) => {
 // endekslerini burada elle girer. Yazılan veri, mevcut
 // backend/services/tuik-index-service.js üzerinden AYNI
 // inflation_indices tablosuna, aynı immutable/supersede modeliyle
-// yazılır — TFRS16 hesaplama motoru (js/tfrs16.js) bu dosyadan
+// yazılır — TFRS16 hesaplama motoru (js/tfrs16-engine.js) bu dosyadan
 // tamamen habersizdir ve GET /api/inflation-indices (VERIFIED+aktif
 // filtresiyle) üzerinden veri okumaya devam eder.
 //

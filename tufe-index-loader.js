@@ -1,5 +1,5 @@
 /**
- * tfrs16.js içine eklenecek TÜFE endeks okuma yardımcıları.
+ * tfrs16-engine.js içine eklenecek TÜFE endeks okuma yardımcıları.
  * Bu dosya, fetch-tuik-tufe.js tarafından üretilen ./data/tufe-endeks.json
  * dosyasını okur. Statik (GitHub Pages) ortamda çalışacağı için tarayıcıdan
  * fetch ile aynı repo içindeki JSON'u çeker — API key'e ihtiyaç duymaz.
@@ -27,7 +27,7 @@ async function loadTufeIndex(jsonPath = "./data/tufe-endeks.json") {
  * Belirli bir dönem (YYYY-MM) için endeks değerini döndürür.
  * Tam eşleşme yoksa en yakın önceki dönemi kullanır (ay sonu/gün detayı
  * olmayan sözleşme tarihleri için pratik bir yaklaşım — gerekirse
- * tfrs16.js'teki mevcut enterpolasyon mantığınıza göre değiştirin).
+ * tfrs16-engine.js'teki mevcut enterpolasyon mantığınıza göre değiştirin).
  */
 function getTufeIndex(index, period /* "YYYY-MM" */) {
   if (index[period] !== undefined) return index[period];

@@ -2,7 +2,7 @@
  * @jest-environment node
  *
  * P3 DÜZELTMESİ (test altyapısı — üretim kodu DEĞİL): jest.config.js
- * GLOBAL olarak testEnvironment: "jsdom" kullanıyor (js/tfrs16.js gibi
+ * GLOBAL olarak testEnvironment: "jsdom" kullanıyor (js/tfrs16-engine.js gibi
  * DOM'a ihtiyaç duyan frontend testleri için gerekli). Ancak bu dosya
  * supertest ile gerçek bir Express app'e (backend/app.js) istek atıyor
  * ve backend/routes/admin.js (app.js üzerinden transitively yükleniyor)

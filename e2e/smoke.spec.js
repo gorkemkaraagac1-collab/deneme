@@ -35,13 +35,13 @@ const CONTRACT = {
 /**
  * Yeni kontrat modalını açar, doldurur, kaydeder.
  *
- * NOT: js/tfrs16.js içinde V26 "Şirket Ekle" modalı da id="company"
+ * NOT: js/tfrs16-engine.js içinde V26 "Şirket Ekle" modalı da id="company"
  * taşıyan bir <select> enjekte ediyor (satır ~29609) — sayfa genelinde
  * bare #company/#supplier gibi id'ler TEKİL DEĞİL. Bu yüzden alanlar
  * #contractModal içine SCOPE edilir.
  *
  * NOT 2 (gerçek davranış, hata DEĞİL): `applySessionCompanyToForm()`
- * (js/tfrs16.js satır ~580), kullanıcının atanmış şirketleri varsa
+ * (js/tfrs16-engine.js satır ~580), kullanıcının atanmış şirketleri varsa
  * (`sessionCompanies.length > 0` — çoklu şirket/holding mimarisi),
  * #company alanını serbest metin <input>'tan <select>'e DÖNÜŞTÜRÜR.
  * API stub'ı bir kullanıcı şirketi tohumladığı için select modu
@@ -103,7 +103,7 @@ test.describe("smoke — TFRS 16 ana akış", () => {
 
     // --- 3) Ödeme planı ---
     // NOT: #scheduleTableContainer, Faz B tab konsolidasyonu ÖNCESİNDEN
-    // kalma boş/orfan bir statik div ("tfrs16.js tarafından
+    // kalma boş/orfan bir statik div ("tfrs16-engine.js tarafından
     // doldurulacak" yorumu var ama hiçbir kod onu hedeflemiyor —
     // grep ile doğrulandı). Gerçek ödeme planı, renderPaymentSchedule
     // Section() tarafından #scheduleTableBody (tbody) içine, "Ödeme
@@ -204,7 +204,7 @@ test.describe("smoke — TFRS 16 ana akış", () => {
 
     // NOT: exportReport(format="html") dosya İNDİRMEZ — window.open() ile
     // yeni sekme açıp HTML'i doğrudan document.write() ile yazar
-    // (js/tfrs16.js satır ~26874). "download" event'i asla ateşlenmez;
+    // (js/tfrs16-engine.js satır ~26874). "download" event'i asla ateşlenmez;
     // gerçek davranış "popup" event'idir.
     const popupPromise = stubbedPage.waitForEvent("popup", { timeout: 15000 });
     await stubbedPage.click("#exportReportHtmlButton");
