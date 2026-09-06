@@ -551,7 +551,7 @@ router.post(
         error:
           "Kontrat oluşturulurken beklenmeyen bir hata oluştu",
         code: error.code || null,
-        detail: process.env.DEBUG_ERRORS === "false" ? undefined : (error.message || String(error))
+        detail: process.env.DEBUG_ERRORS === "true" ? (error.message || String(error)) : undefined
       });
 
     }
@@ -855,7 +855,7 @@ router.put(
         error:
           "Kontrat güncellenirken beklenmeyen bir hata oluştu",
         code: error.code || null,
-        detail: process.env.DEBUG_ERRORS === "false" ? undefined : (error.message || String(error))
+        detail: process.env.DEBUG_ERRORS === "true" ? (error.message || String(error)) : undefined
       });
 
     } finally {
