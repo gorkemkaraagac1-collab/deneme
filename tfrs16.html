@@ -1,478 +1,416 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TFRS 16 | Contract Portfolio</title>
-  <link rel="stylesheet" href="css/tfrs16.css">
-  <style>
-    /*
-     * DÜZELTME: Bu sayfa daha önce herkese açıktı (login/lisans
-     * kontrolü yoktu). Lisans doğrulaması bitene kadar içerik
-     * gizli tutulur; doğrulama başarılı olursa "gk-license-ok"
-     * sınıfı eklenerek gösterilir.
-     */
-    body { visibility: hidden; }
-    body.gk-license-ok { visibility: visible; }
-
-    /*
-     * write-blocked: salt-okunur rol (CONTROLLER/VIEWER) için
-     * newContractButton/deleteContract görsel olarak "yasak" görünsün.
-     * Önceden native `disabled` kullanılıyordu, ama disabled bir HTML
-     * butonu click event'i hiç ÜRETMEDİĞİ için kullanıcı hiçbir açıklama
-     * göremiyordu (bkz. js/tfrs16.js — emergency bridge artık bu
-     * durumda tıklamaya AÇIK bir toast ile yanıt veriyor). Bu buton
-     * artık tıklanabilir kalıyor; stil sadece görsel bir ipucu.
-     */
-    .write-blocked { opacity: 0.55; cursor: not-allowed; }
-
-    /*
-     * Yeni Sözleşme formu tab'ları (bkz. PROJECT_CONTEXT.md bölüm 32,
-     * Faz 1). SADECE görsel gruplama — form-group elemanları DOM'da
-     * kalmaya devam eder, submit'e giren FormData/id-bazlı okuma
-     * DEĞİŞMEZ. data-tab olmayan .form-group'lar (varsa) her zaman
-     * görünür kalır (güvenli varsayılan).
-     */
-    .gk-contract-tabs { display:flex; gap:4px; flex-wrap:wrap; margin:-4px 0 16px; border-bottom:1px solid #e5e7eb; padding-bottom:0; }
-    .gk-contract-tab { border:0; background:transparent; padding:9px 14px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
-    .gk-contract-tab:hover { color:#0f172a; }
-    .gk-contract-tab.active { color:#0f172a; border-bottom-color:#0f172a; }
-    .form-grid [data-tab]:not(.gk-tab-active) { display:none !important; }
-    .form-grid [data-tab].gk-tab-active { display:block; }
-  </style>
-  <script>
-    /*
-     * ============================================================
-     * ERİŞİM KONTROLÜ (LOGIN + AKTİF LİSANS)
-     * ============================================================
-     *
-     * Bu sayfa önceden herhangi bir kimlik/lisans kontrolü olmadan
-     * herkese açıktı. Artık:
-     *   1) localStorage'da geçerli bir access_token yoksa
-     *      doğrudan login sayfasına yönlendirilir.
-     *   2) Token varsa backend'deki mevcut
-     *      GET /api/customer/license (requireAuth korumalı)
-     *      endpoint'i ile kullanıcının aktif bir lisansı olup
-     *      olmadığı doğrulanır.
-     *   3) Token geçersizse (401) oturum temizlenip login'e,
-     *      aktif lisans yoksa (404) pricing sayfasına yönlendirilir.
-     *   4) Sadece doğrulama başarılı olursa sayfa içeriği gösterilir.
-     *
-     * NOT: Bu, tarayıcı tarafında bir erişim kontrolüdür (kullanım
-     * kolaylığını engellemek için). Sözleşme verisi zaten yalnızca
-     * localStorage'da tutulduğu ve backend'e yazılmadığı için asıl
-     * hassas nokta veri sızıntısı değil, aracın lisanssız
-     * kullanılabilmesiydi — bu kontrol onu kapatıyor.
-     */
-    (function () {
-      const API_BASE_URL =
-        "https://deneme-git-285469227510.europe-west1.run.app";
-
-      const LOGIN_PAGE = "frontend/login.html";
-      const PRICING_PAGE = "pricing.html";
-
-      const token = localStorage.getItem("access_token");
-
-      if (!token) {
-        window.location.replace(LOGIN_PAGE);
-        return;
-      }
-
-      fetch(`${API_BASE_URL}/api/customer/license`, {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      })
-        .then(response => {
-          if (response.status === 401) {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("current_user");
-            window.location.replace(LOGIN_PAGE);
-            return null;
-          }
-
-          if (response.status === 404) {
-            window.location.replace(PRICING_PAGE);
-            return null;
-          }
-
-          if (!response.ok) {
-            throw new Error(`Lisans kontrolü başarısız: HTTP ${response.status}`);
-          }
-
-          return response.json();
-        })
-        .then(result => {
-          if (!result) {
-            return;
-          }
-
-          if (result.success) {
-            document.body.classList.add("gk-license-ok");
-          } else {
-            window.location.replace(PRICING_PAGE);
-          }
-        })
-        .catch(error => {
-          console.error("Lisans doğrulama hatası:", error);
-          window.location.replace(LOGIN_PAGE);
-        });
-    })();
-
-    /*
-     * ============================================================
-     * GİRİŞ YAPAN KULLANICI BİLGİSİ
-     * ============================================================
-     *
-     * login.html başarılı girişte localStorage'a "current_user"
-     * (JSON: {id, username, role, ...}) yazıyor. Bu sayfada hiçbir
-     * yerde gösterilmiyordu; artık topbar'da kullanıcı adı görünür
-     * ve çıkış butonu oturumu temizleyip login'e yönlendirir.
-     */
-    document.addEventListener("DOMContentLoaded", function () {
-      const usernameEl = document.getElementById("gkCurrentUsername");
-      const logoutBtn = document.getElementById("gkLogoutButton");
-
-      try {
-        const raw = localStorage.getItem("current_user");
-        const user = raw ? JSON.parse(raw) : null;
-
-        if (usernameEl) {
-          usernameEl.textContent = user && user.username
-            ? `${user.username}${user.role ? " (" + user.role + ")" : ""}`
-            : "Kullanıcı bilgisi bulunamadı";
-        }
-      } catch (error) {
-        console.error("current_user okunamadı:", error);
-        if (usernameEl) {
-          usernameEl.textContent = "Kullanıcı bilgisi okunamadı";
-        }
-      }
-
-      if (logoutBtn) {
-        logoutBtn.addEventListener("click", function () {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("current_user");
-          window.location.href = "frontend/login.html";
-        });
-      }
-    });
-  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GK Finance — TFRS 16 Kiralama Yönetimi</title>
+  <meta name="description" content="TFRS 16 kiralama muhasebesi — sözleşme, hesaplama, kapanış ve raporlama" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/app.css" />
+  <!-- SheetJS for Excel import/export (engine uses XLSX) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
 <body>
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-title">GK Finance</div>
-      <div class="brand-subtitle">Finance Intelligence</div>
-    </div>
-    <nav class="navigation">
-      <a href="frontend/dashboard.html" class="nav-item"><span>◈</span>Dashboard</a>
-      <a href="tfrs16.html" class="nav-item active"><span>▣</span>TFRS 16</a>
-      <a href="#financial-reporting" class="nav-item"><span>▤</span>Finansal Raporlama</a>
-      <a href="#month-end-close" class="nav-item"><span>◫</span>Ay Sonu Kapanış</a>
-      <a href="#risk-controls" class="nav-item"><span>⚠</span>Risk &amp; Kontroller</a>
-      <a href="pricing.html" class="nav-item"><span>₺</span>Paketler</a>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="demo-badge">DEMO</div>
-      Finance Intelligence Platform
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-title">
-        <div id="gkUserInfo" class="gk-user-info">
-          👤 <span id="gkCurrentUsername">—</span>
+  <div class="app" id="app">
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">GK</div>
+        <div class="brand-text">
+          <strong>GK Finance</strong>
+          <span>TFRS 16 · SaaS</span>
         </div>
-
-        <div class="eyebrow">TFRS 16 / KİRALAMA MUHASEBESİ</div>
-        <h1>Sözleşme Portföyü</h1>
-        <div class="period">Tüm aktif kira sözleşmeleri</div>
       </div>
 
-      <div class="topbar-actions">
-        <a href="frontend/dashboard.html" class="secondary-button">← Dashboard</a>
-        <button id="bulkImportButton" class="secondary-button" type="button">
-          ⇧ Excel'den Toplu Aktar
-        </button>
-        <button id="newContractButton" class="primary-button" type="button">
-          + Yeni Sözleşme
-        </button>
-        <button id="gkLogoutButton" class="secondary-button" type="button">
-          Çıkış Yap
-        </button>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <div class="nav-section">
+          <div class="nav-section-label">Ana menü</div>
+          <button type="button" class="nav-item active" data-view="contracts" data-open="">
+            <span class="icon">📋</span> Sözleşmeler
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="close">
+            <span class="icon">✅</span> Kapanış Paneli
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="accountingCenter">
+            <span class="icon">🧾</span> Toplu Fiş Merkezi
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="financialReporting">
+            <span class="icon">📑</span> Finansal Raporlama
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="footnotes">
+            <span class="icon">📝</span> Dipnotlar
+          </button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-label">İşlemler</div>
+          <button type="button" class="nav-item" data-view="page" data-open="modification">
+            <span class="icon">🔁</span> Modifikasyon &amp; Reassessment
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="slb">
+            <span class="icon">🏢</span> Satış ve Geri Kiralama
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="sublease">
+            <span class="icon">🔄</span> Alt Kiralama
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="riskControls">
+            <span class="icon">⚠️</span> Risk &amp; Kontroller
+          </button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-label">Ayarlar</div>
+          <button type="button" class="nav-item" data-view="page" data-open="accountMapping">
+            <span class="icon">📒</span> Hesap Planı
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="fxRates">
+            <span class="icon">💱</span> Döviz Kurları
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="inflation">
+            <span class="icon">📈</span> Enflasyon Endeksleri
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="companies">
+            <span class="icon">🏢</span> Şirket Yönetimi
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="groups">
+            <span class="icon">👥</span> Gruplar
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="eliminations">
+            <span class="icon">↔️</span> Eliminasyonlar
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="consolidation">
+            <span class="icon">📊</span> Konsolidasyon
+          </button>
+          <button type="button" class="nav-item" data-view="page" data-open="audit">
+            <span class="icon">🕵️</span> Denetim İzi
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-meta">
+            <strong id="userName">Kullanıcı</strong>
+            <span id="userRole">Oturum</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ========== TOPBAR ========== -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menü">☰</button>
+        <div>
+          <span class="page-title" id="pageTitle">Sözleşmeler</span>
+          <span class="page-subtitle" id="pageSubtitle">Kiralama portföyü</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <select class="company-select" id="v26ActiveCompanySelect" title="Aktif şirket">
+          <option value="ALL">Tüm Şirketler</option>
+        </select>
+        <button type="button" class="btn btn-ghost btn-sm" id="cleanupButton" title="Eski logları temizle">🧹</button>
       </div>
     </header>
 
-    <!-- KPI Grid -->
-    <section class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Aktif Sözleşme</div><div id="contractCount" class="kpi-value">0</div><div class="kpi-description">Portföydeki aktif sözleşmeler</div></div>
-      <div class="kpi-card"><div class="kpi-label">Kira Yükümlülüğü</div><div id="leaseLiability" class="kpi-value">₺0</div><div class="kpi-description">İlk ölçüm bazlı toplam</div></div>
-      <div class="kpi-card"><div class="kpi-label">ROU Varlıkları</div><div id="rouAssets" class="kpi-value">₺0</div><div class="kpi-description">Right-of-use assets</div></div>
-      <div class="kpi-card"><div class="kpi-label">Önümüzdeki 12 Ay</div><div id="next12Months" class="kpi-value">₺0</div><div class="kpi-description">Beklenen kira ödemeleri</div></div>
-      <div class="kpi-card warning-card"><div class="kpi-label">Yenileme &lt;90 Gün</div><div id="renewals90Days" class="kpi-value warning-text">0</div><div class="kpi-description">Yönetim aksiyonu gerekenler</div></div>
-      <div class="kpi-card warning-card"><div class="kpi-label">Modification</div><div id="modifications" class="kpi-value warning-text">0</div><div class="kpi-description">İnceleme bekleyenler</div></div>
-      <div class="kpi-card"><div class="kpi-label">Gelecek Kiralamalar</div><div id="futureLeasesCount" class="kpi-value">0</div><div id="futureLeasesCommitment" class="kpi-description">₺0</div></div>
-    </section>
+    <!-- ========== MAIN ========== -->
+    <main class="main" id="mainContent">
+      <div class="main-inner" id="contractsView">
+        <!-- KPI -->
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card accent-blue">
+            <div class="kpi-label">Aktif sözleşme</div>
+            <div class="kpi-value" id="kpiContractCount">—</div>
+            <div class="kpi-hint">Portföydeki kiralama sayısı</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Kiralama yükümlülüğü</div>
+            <div class="kpi-value" id="kpiLiability">—</div>
+            <div class="kpi-hint">Toplam lease liability</div>
+          </div>
+          <div class="kpi-card accent-green">
+            <div class="kpi-label">Kullanım hakkı varlığı</div>
+            <div class="kpi-value" id="kpiRou">—</div>
+            <div class="kpi-hint">ROU net defter değeri</div>
+          </div>
+          <div class="kpi-card accent-amber">
+            <div class="kpi-label">Kısa vadeli yükümlülük</div>
+            <div class="kpi-value" id="kpiCurrent">—</div>
+            <div class="kpi-hint">12 ay içinde ödenecek anapara</div>
+          </div>
+        </div>
 
-    <!-- Filtre Toolbar -->
-    <section class="toolbar">
-      <div class="search-box"><span>⌕</span><input type="text" id="searchInput" placeholder="Sözleşme, tedarikçi veya şirket ara..." aria-label="Arama Yap"></div>
-      <select id="statusFilter" aria-label="Durum Filtresi"><option value="all">Tüm Durumlar</option><option value="active">Aktif</option><option value="inactive">Pasif</option></select>
-      <select id="companyFilter" aria-label="Şirket Filtresi"><option value="all">Tüm Şirketler</option></select>
-    </section>
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <div class="search-box">
+              <input type="search" id="searchInput" placeholder="Sözleşme, tedarikçi veya şirket ara…" autocomplete="off" />
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-secondary" id="bulkImportButton">
+              ⬆ Excel içe aktar
+            </button>
+            <button type="button" class="btn btn-primary" id="newContractButton">
+              + Yeni sözleşme
+            </button>
+          </div>
+        </div>
 
-    <!-- Sözleşme Tablosu Panel -->
-    <section class="panel">
-      <div class="panel-header">
-        <div><h2>Sözleşme Portföyü</h2><p>TFRS 16 kapsamında takip edilen kira sözleşmeleri</p></div>
-        <div id="resultCount" class="result-count">0 kayıt</div>
+        <!-- Table -->
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table" id="contractsTable">
+              <thead>
+                <tr>
+                  <th>Sözleşme</th>
+                  <th>Şirket</th>
+                  <th>Tedarikçi</th>
+                  <th>Başlangıç</th>
+                  <th>Bitiş</th>
+                  <th class="num">Aylık ödeme</th>
+                  <th>Para birimi</th>
+                  <th>Durum</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="contractsTableBody">
+                <tr>
+                  <td colspan="9">
+                    <div class="empty-state">
+                      <div class="empty-icon">📂</div>
+                      <h4>Henüz sözleşme yok</h4>
+                      <p>Yeni sözleşme ekleyin veya Excel şablonu ile toplu içe aktarın. Giriş yaptıysanız veriler sunucudan yüklenir.</p>
+                      <button type="button" class="btn btn-primary" onclick="document.getElementById('newContractButton')?.click()">+ İlk sözleşmeyi ekle</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="paginationContainer" style="display:none;">
+            <span id="paginationInfo">0 kayıt</span>
+            <div class="pagination-controls" id="paginationControls"></div>
+          </div>
+        </div>
       </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Sözleşme ID</th>
-              <th>Şirket</th>
-              <th>Tedarikçi</th>
-              <th>Başlangıç</th>
-              <th>Bitiş</th>
-              <th>Aylık Kira</th>
-              <th>Durum</th>
-              <th>Yenileme</th>
-              <th>İşlem</th>
-            </tr>
-          </thead>
-          <tbody id="contractTableBody"></tbody>
-        </table>
+
+      <!-- Engine-rendered advanced pages land here -->
+      <div id="v26PageHost"></div>
+    </main>
+  </div>
+
+  <!-- ========== NEW / EDIT CONTRACT MODAL ========== -->
+  <div class="modal-overlay hidden" id="contractModal" role="dialog" aria-modal="true" aria-labelledby="contractModalTitle">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2 id="contractModalTitle">Yeni sözleşme</h2>
+          <p>TFRS 16 başlangıç tanıma için gerekli alanlar</p>
+        </div>
+        <button type="button" class="modal-close" id="closeModal" aria-label="Kapat">×</button>
       </div>
-      <div id="emptyState" class="empty-state hidden"><div class="empty-icon">◫</div><h3>Sözleşme bulunamadı</h3><p>Arama veya filtre kriterlerini değiştirin.</p></div>
-    </section>
+      <form id="contractForm" autocomplete="off">
+        <div class="modal-body">
+          <input type="hidden" id="companyId" name="companyId" />
 
-    <section class="insight-panel">
-      <div class="insight-icon">!</div>
-      <div><strong>CFO Perspektifi</strong><p>Büyük sözleşme portföylerinde manuel veri girişini azaltmak için Excel üzerinden toplu aktarım kullanın. Aktarım öncesinde kayıtları kontrol ederek veri kalitesini koruyun.</p></div>
-    </section>
+          <div class="form-section">
+            <div class="form-section-title">Temel bilgiler</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="company">Şirket *</label>
+                <input type="text" id="company" name="company" required placeholder="Şirket adı" />
+              </div>
+              <div class="form-field">
+                <label for="supplier">Tedarikçi / Kiraya veren *</label>
+                <input type="text" id="supplier" name="supplier" required placeholder="Örn. ABC Plaza" />
+              </div>
+              <div class="form-field">
+                <label for="startDate">Başlangıç tarihi *</label>
+                <input type="date" id="startDate" name="startDate" required />
+              </div>
+              <div class="form-field">
+                <label for="endDate">Bitiş tarihi *</label>
+                <input type="date" id="endDate" name="endDate" required />
+              </div>
+              <div class="form-field">
+                <label for="monthlyPayment">Dönemsel ödeme *</label>
+                <input type="number" id="monthlyPayment" name="monthlyPayment" min="0" step="0.01" required placeholder="0" />
+              </div>
+              <div class="form-field">
+                <label for="discountRate">İskonto oranı (% yıllık) *</label>
+                <input type="number" id="discountRate" name="discountRate" min="0" step="0.01" required placeholder="Örn. 18" />
+              </div>
+              <div class="form-field">
+                <label for="currency">Para birimi</label>
+                <select id="currency" name="currency">
+                  <option value="TRY">TRY</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="assetClass">Varlık sınıfı</label>
+                <select id="assetClass" name="assetClass">
+                  <option value="">Seçiniz</option>
+                  <option value="Arsa">Arsa / Bina</option>
+                  <option value="Makine">Makine</option>
+                  <option value="Taşıt">Taşıt</option>
+                  <option value="Diğer">Diğer</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
-    <footer>TFRS 16 Contract Portfolio V10 · Bulk Import</footer>
-  </main>
-</div>
+          <div class="form-section">
+            <div class="form-section-title">Ödeme &amp; opsiyonlar</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="paymentFrequency">Ödeme sıklığı</label>
+                <select id="paymentFrequency" name="paymentFrequency">
+                  <option value="monthly">Aylık</option>
+                  <option value="quarterly">Çeyreklik</option>
+                  <option value="annual">Yıllık</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="paymentTiming">Ödeme zamanı</label>
+                <select id="paymentTiming" name="paymentTiming">
+                  <option value="arrears">Dönem sonu (arrears)</option>
+                  <option value="advance">Dönem başı (advance)</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="leaseIncreaseType">Artış tipi</label>
+                <select id="leaseIncreaseType" name="leaseIncreaseType">
+                  <option value="none">Yok</option>
+                  <option value="fixedRate">Sabit oran</option>
+                  <option value="index">Endeks (CPI)</option>
+                  <option value="fixed">Sabit tutar</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="leaseIncreaseRate">Artış oranı / tutarı</label>
+                <input type="number" id="leaseIncreaseRate" name="leaseIncreaseRate" step="0.01" placeholder="0" />
+              </div>
+              <div class="form-field">
+                <label for="initialDirectCosts">İlk doğrudan maliyetler</label>
+                <input type="number" id="initialDirectCosts" name="initialDirectCosts" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label for="leaseIncentives">Kira teşvikleri</label>
+                <input type="number" id="leaseIncentives" name="leaseIncentives" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label for="prepayments">Peşin ödemeler</label>
+                <input type="number" id="prepayments" name="prepayments" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label for="restorationObligation">Restorasyon yükümlülüğü</label>
+                <input type="number" id="restorationObligation" name="restorationObligation" min="0" step="0.01" value="0" />
+              </div>
+            </div>
+          </div>
 
-<!-- Yeni / Düzenle Sözleşme Modal -->
-<div id="contractModal" class="modal hidden">
-  <div class="modal-content" style="max-width: 720px;">
-    <div class="modal-header">
-      <div><div class="eyebrow">TFRS 16 / GİRDİ PARAMETRELERİ</div><h2 id="modalTitle">Yeni Sözleşme</h2></div>
-      <button id="closeModal" class="close-button" type="button">×</button>
+          <div class="form-section">
+            <div class="form-section-title">Muafiyet &amp; bayraklar</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label><input type="checkbox" id="shortTermLease" name="shortTermLease" /> Kısa vadeli kiralama (≤12 ay)</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="lowValueAsset" name="lowValueAsset" /> Düşük değerli varlık</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="renewalOption" name="renewalOption" /> Yenileme opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="terminationOption" name="terminationOption" /> Fesih opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="purchaseOption" name="purchaseOption" /> Satın alma opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="ownershipTransfer" name="ownershipTransfer" /> Mülkiyet devri</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelModal">İptal</button>
+          <button type="submit" class="btn btn-primary" id="saveContractButton">Kaydet</button>
+        </div>
+      </form>
     </div>
-    <form id="contractForm">
-      <div class="gk-contract-tabs" role="tablist">
-        <button type="button" class="gk-contract-tab active" data-tab-target="1" role="tab" aria-selected="true">Sözleşme</button>
-        <button type="button" class="gk-contract-tab" data-tab-target="2" role="tab" aria-selected="false">İleri TFRS 16 Parametreleri</button>
-        <button type="button" class="gk-contract-tab" data-tab-target="3" role="tab" aria-selected="false">Opsiyonlar &amp; İstisnalar</button>
-        <button type="button" class="gk-contract-tab" data-tab-target="4" role="tab" aria-selected="false">Para Birimi &amp; Standartlar</button>
+  </div>
+
+  <!-- ========== BULK IMPORT MODAL ========== -->
+  <div class="modal-overlay hidden" id="bulkImportModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2>Excel ile toplu içe aktarım</h2>
+          <p>Şablonu indirin, doldurun ve yükleyin</p>
+        </div>
+        <button type="button" class="modal-close" id="closeBulkModal" aria-label="Kapat">×</button>
       </div>
-      <div class="form-grid">
-        <div class="form-group" data-tab="1">
-          <label for="contractId">Sözleşme ID</label>
-          <input id="contractId" name="contractId" required placeholder="LEASE-004">
+      <div class="modal-body">
+        <p style="font-size:13px;color:#64748b;margin-bottom:14px;line-height:1.5;">
+          Önce şablonu indirip kolon başlıklarını koruyarak doldurun. Ardından dosyayı seçin;
+          sistem önizleme ve doğrulama gösterir.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <button type="button" class="btn btn-secondary" id="downloadTemplateButton">⬇ Şablon indir</button>
         </div>
-        <div class="form-group" data-tab="1">
-          <label for="company">Şirket</label>
-          <input id="company" name="company" required placeholder="Şirket adı" value="">
-          <input type="hidden" id="companyId" name="companyId" value="">
+        <div class="form-field">
+          <label for="bulkFileInput">Excel dosyası (.xlsx)</label>
+          <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" />
         </div>
-        <div class="form-group" data-tab="1">
-          <label for="supplier">Tedarikçi / Kiralayan</label>
-          <input id="supplier" name="supplier" required placeholder="Tedarikçi adı">
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="currency">Para Birimi</label>
-          <select id="currency" name="currency">
-            <option value="TRY" selected>TRY (₺)</option>
-            <option value="USD">USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-          </select>
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="monthlyPayment">Dönemsel Kira Tutarı</label>
-          <input id="monthlyPayment" name="monthlyPayment" type="number" min="0" step="0.01" required placeholder="0.00">
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="discountRate">Yıllık İskonto Oranı (%)</label>
-          <input id="discountRate" name="discountRate" type="number" min="0" step="0.01" value="18" required placeholder="18.00">
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="startDate">Başlangıç Tarihi</label>
-          <input id="startDate" name="startDate" type="date" required>
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="endDate">Bitiş Tarihi</label>
-          <input id="endDate" name="endDate" type="date" required>
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="paymentTiming">Ödeme Zamanı</label>
-          <select id="paymentTiming" name="paymentTiming">
-            <option value="advance">Dönem Başı (Advance)</option>
-            <option value="arrears" selected>Dönem Sonu (Arrears)</option>
-          </select>
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="paymentFrequency">Ödeme Sıklığı</label>
-          <select id="paymentFrequency" name="paymentFrequency">
-            <option value="1" selected>Aylık</option>
-            <option value="3">3 Aylık</option>
-            <option value="12">Yıllık</option>
-          </select>
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="initialDirectCost">Doğrudan İlk Maliyetler (₺)</label>
-          <input id="initialDirectCost" name="initialDirectCost" type="number" min="0" step="0.01" value="0" placeholder="0.00">
-        </div>
-        <div class="form-group" data-tab="1">
-          <label for="restorationCost">Sökme / Restorasyon Karşılığı (₺)</label>
-          <input id="restorationCost" name="restorationCost" type="number" min="0" step="0.01" value="0" placeholder="0.00">
-        </div>
-
-        <div class="form-group" data-tab="2">
-          <label for="prepayments">Peşin Ödemeler (₺)</label>
-          <input id="prepayments" name="prepayments" type="number" min="0" step="0.01" value="0" placeholder="0.00">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="leaseIncentives">Kiralayan Teşvikleri (₺)</label>
-          <input id="leaseIncentives" name="leaseIncentives" type="number" min="0" step="0.01" value="0" placeholder="0.00">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="leaseIncreaseType">Kira Artış Tipi</label>
-          <select id="leaseIncreaseType" name="leaseIncreaseType">
-            <option value="none" selected>Artış Yok</option>
-            <option value="fixedRate">Sabit Oran (%)</option>
-            <option value="fixedAmount">Sabit Tutar (₺)</option>
-            <option value="index">Endekse Bağlı (TÜFE vb.)</option>
-          </select>
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="leaseIncreaseRate">Yıllık Artış Oranı (%)</label>
-          <input id="leaseIncreaseRate" name="leaseIncreaseRate" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Oran' seçiliyse">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="fixedIncrease">Sabit Artış Tutarı (₺/yıl)</label>
-          <input id="fixedIncrease" name="fixedIncrease" type="number" min="0" step="0.01" value="0" placeholder="Sadece 'Sabit Tutar' seçiliyse">
-        </div>
-        <!-- V18 Parça 1 — yalnızca leaseIncreaseType "Sabit Oran"/"Endekse Bağlı"
-             iken görünür (bkz. init bloğundaki change listener). -->
-        <div id="escalationV18Fields" data-tab="2" style="display:none; grid-column: span 2; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px;">
-          <label style="display:block;margin-bottom:6px;font-size:11px;font-weight:800;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;">Kira Artışı — Gelişmiş (V18)</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px;">
-            <div class="form-group">
-              <label for="escalationFrequencyMonths">Artış Periyodu (Ay)</label>
-              <input id="escalationFrequencyMonths" name="escalationFrequencyMonths" type="number" min="1" step="1" placeholder="Boş=12 (yılda 1)">
-            </div>
-            <div class="form-group">
-              <label for="escalationBase">Artış Bazı</label>
-              <select id="escalationBase" name="escalationBase">
-                <option value="compound" selected>Bileşik (compound)</option>
-                <option value="initial">Basit / İlk Tabana Göre (initial)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="escalationFirstDate">İlk Artış Tarihi</label>
-              <input id="escalationFirstDate" name="escalationFirstDate" type="date" placeholder="Boş=başlangıç yıl dönümü">
-            </div>
-          </div>
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="variablePayment">Değişken Ödeme (₺/ay)</label>
-          <input id="variablePayment" name="variablePayment" type="number" min="0" step="0.01" value="0" placeholder="Yükümlülüğe dahil edilmez">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="usefulLifeMonths">Varlığın Faydalı Ömrü (Ay)</label>
-          <input id="usefulLifeMonths" name="usefulLifeMonths" type="number" min="0" step="1" placeholder="Mülkiyet devri / kesin satın alma opsiyonunda">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="indexBaseRate">Baz Endeks Oranı</label>
-          <input id="indexBaseRate" name="indexBaseRate" type="number" step="0.01" placeholder="Sadece 'Endekse Bağlı' seçiliyse">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="indexCurrentRate">Güncel Endeks Oranı</label>
-          <input id="indexCurrentRate" name="indexCurrentRate" type="number" step="0.01" placeholder="Manuel güncellenir">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="indexReviewMonth">Endeks Güncelleme Ayı</label>
-          <input id="indexReviewMonth" name="indexReviewMonth" type="number" min="1" max="12" placeholder="Boş=başlangıç ayı">
-        </div>
-        <div class="form-group" data-tab="2">
-          <label for="indexReviewDay">Endeks Güncelleme Günü</label>
-          <input id="indexReviewDay" name="indexReviewDay" type="number" min="1" max="31" placeholder="Boş=başlangıç günü">
-        </div>
-        <div class="form-group" data-tab="3" style="grid-column: span 2;">
-          <label style="display:block;margin-bottom:6px;">Opsiyonlar &amp; İstisnalar</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;">
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="renewalOption" name="renewalOption" type="checkbox"> Yenileme opsiyonu makul ölçüde kesin</label>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="terminationOption" name="terminationOption" type="checkbox"> Fesih opsiyonu makul ölçüde kesin değil</label>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="purchaseOption" name="purchaseOption" type="checkbox"> Satın alma opsiyonu makul ölçüde kesin</label>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="ownershipTransfer" name="ownershipTransfer" type="checkbox"> Kira sonunda mülkiyet devri var</label>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="shortTermLease" name="shortTermLease" type="checkbox"> Kısa vadeli kiralama istisnası (≤12 ay)</label>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input id="lowValueAsset" name="lowValueAsset" type="checkbox"> Düşük değerli varlık istisnası</label>
-          </div>
-          <p style="margin:8px 0 0;font-size:10px;color:#64748b;line-height:1.5;">Kısa vadeli veya düşük değerli olarak işaretlenen sözleşmeler TFRS 16.5-8 uyarınca aktifleştirilmez; kira gideri olarak (genellikle doğrusal esasa göre) muhasebeleştirilir.</p>
-        </div>
-
-        <div class="form-group" data-tab="3" style="grid-column: span 2;">
-          <label for="renewalDate">Yenileme / Opsiyon Tarihi</label>
-          <input id="renewalDate" name="renewalDate" type="date">
-        </div>
+        <div id="bulkImportStatus" style="margin-top:12px;font-size:13px;color:#64748b;"></div>
+        <div id="bulkPreview" style="margin-top:12px;overflow:auto;"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" id="cancelModal" class="secondary-button">İptal</button>
-        <button type="submit" class="primary-button">Sözleşmeyi Kaydet &amp; Hesapla</button>
+        <button type="button" class="btn btn-secondary" id="cancelBulkImport">İptal</button>
+        <button type="button" class="btn btn-primary" id="confirmBulkImport">İçe aktar</button>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- Bulk Import Modal -->
-<div id="bulkImportModal" class="modal hidden">
-  <div class="modal-content">
-    <div class="modal-header">
-      <div><div class="eyebrow">TFRS 16 / BULK IMPORT</div><h2>Excel'den Toplu Sözleşme Aktarımı</h2><p style="margin:6px 0 0;color:#64748b;font-size:11px;">Çok sayıda kira sözleşmesini tek seferde portföye ekleyin.</p></div>
-      <button id="closeBulkModal" class="close-button" type="button">×</button>
-    </div>
-    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:16px;"><strong style="font-size:12px;">1. Excel şablonunu indirin</strong><p style="font-size:10px;color:#64748b;line-height:1.5;">Şablondaki kolon isimlerini değiştirmeden sözleşme bilgilerini doldurun.</p><button id="downloadTemplateButton" type="button" class="secondary-button">↓ Excel Şablonu İndir</button></div>
-    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px;"><strong style="font-size:12px;">2. Dosyayı yükleyin</strong><p style="font-size:10px;color:#64748b;line-height:1.5;">.xlsx veya .csv dosyası seçebilirsiniz.</p><input id="bulkFileInput" type="file" accept=".xlsx,.xls,.csv" aria-label="Excel Yükle" style="width:100%;padding:10px;border:1px dashed #cbd5e1;border-radius:8px;background:white;font-size:11px;"></div>
-    <div id="bulkImportStatus" style="margin-top:15px;font-size:11px;line-height:1.5;"></div>
-    <div id="bulkPreview" style="margin-top:15px;max-height:300px;overflow:auto;"></div>
-    <div class="modal-footer"><button id="cancelBulkImport" type="button" class="secondary-button">İptal</button><button id="confirmBulkImport" type="button" class="primary-button" disabled>✓ Sözleşmeleri Aktar</button></div>
-  </div>
-</div>
-
-<!-- Detay Modal (İtfa Tablosu Dökümü) -->
-<div id="detailModal" class="modal hidden">
-  <div class="modal-content detail-modal" style="max-width: 900px;">
-    <div class="modal-header">
-      <div><div class="eyebrow">SÖZLEŞME DETAYI &amp; İTFA TABLOSU</div><h2 id="detailTitle">-</h2></div>
-      <button id="closeDetailModal" class="close-button" type="button">×</button>
-    </div>
-    <div id="detailContent" class="detail-content"></div>
-    
-    <!-- Dinamik İtfa Tablosu Alanı -->
-    <div id="scheduleTableContainer" class="table-wrapper" style="margin-top:20px; max-height: 350px; overflow-y: auto;">
-      <!-- tfrs16.js tarafından doldurulacak -->
-    </div>
-
-    <div class="detail-actions" style="margin-top: 20px;">
-      <button id="applyEarlyPaymentButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(!cid)return; const amt=prompt('Erken ödeme tutarı:'); if(amt===null)return; const dt=prompt('Ödeme tarihi (YYYY-MM-DD):', new Date().toISOString().slice(0,10)); if(dt===null)return; window.GK_TFRS16.applyEarlyPayment(cid, amt, dt);">⏱ Erken Ödeme Uygula</button>
-      <button id="exportReportPdfButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'pdf');">↓ Raporu PDF İndir</button>
-      <button id="exportReportHtmlButton" class="secondary-button" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'html');">↗ Raporu HTML Aç</button>
-      <button id="deleteContract" class="danger-button" type="button">Sözleşmeyi Sil</button>
-      <button id="detailCloseButton" class="secondary-button" type="button">Kapat</button>
     </div>
   </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
-<script src="js/tfrs16.js"></script>
+  <!-- ========== CONTRACT DETAIL MODAL ========== -->
+  <div class="modal-overlay hidden" id="detailModal" role="dialog" aria-modal="true">
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <div>
+          <h2 id="detailModalTitle">Sözleşme detayı</h2>
+          <p id="detailModalSubtitle">Hesaplama, plan ve işlemler</p>
+        </div>
+        <button type="button" class="modal-close" id="closeDetailModal" aria-label="Kapat">×</button>
+      </div>
+      <div class="modal-body" id="detailContent">
+        <!-- Engine / openDetail fills this -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger btn-sm" id="deleteContract">Sözleşmeyi sil</button>
+        <button type="button" class="btn btn-secondary" id="closeDetailModalFooter">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner" aria-label="Yükleniyor"></div>
+  </div>
+
+  <div class="toast-host" id="toastHost"></div>
+
+  <!-- Shell helpers (before engine) -->
+  <script src="js/shell.js"></script>
+  <!-- TFRS 16 calculation & UI engine -->
+  <script src="js/tfrs16-engine.js"></script>
 </body>
 </html>
