@@ -10524,6 +10524,9 @@ ${renderAccountingCenterBulkPromo()}
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
             Original contract history korunur. Accounting impact yalnızca APPLIED modification için oluşur.
           </p>
+          <p style="margin:7px 0 0;color:#475569;font-size:11px;">
+            <strong>Ne zaman kullanılır?</strong> Kiraya verenle yeni şartlarda anlaşıldığında; kapsam, kira bedeli veya sözleşme süresi taraflarca değiştirilir.
+          </p>
         </div>
 
         <div
@@ -10553,8 +10556,8 @@ ${renderAccountingCenterBulkPromo()}
             <label style="font-size:10px;font-weight:700;">
               Modifikasyon Tipi
               <select id="modificationType" style="display:block;width:100%;margin-top:5px;">
-                <option value="PAYMENT_INCREASE">Ödeme Artışı</option>
-                <option value="PAYMENT_DECREASE">Ödeme Azalışı</option>
+                <option value="PAYMENT_INCREASE">Ödeme Artışı (yeni anlaşma)</option>
+                <option value="PAYMENT_DECREASE">Ödeme Azalışı (yeni anlaşma)</option>
                 <option value="LEASE_TERM_EXTENSION">Kira Süresi Uzatma</option>
                 <option value="LEASE_TERM_REDUCTION">Kira Süresi Azaltma</option>
                 <option value="SCOPE_INCREASE">Kapsam Artışı</option>
@@ -10586,8 +10589,8 @@ ${renderAccountingCenterBulkPromo()}
           </div>
 
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">
-            Neden
-            <input id="modificationReason" type="text" placeholder="Modifikasyon nedeni" style="display:block;width:100%;margin-top:5px;">
+            Neden <span style="font-weight:400;color:#64748b;">(yeni sözleşme şartını belirtin)</span>
+            <input id="modificationReason" type="text" placeholder="Örn. kiraya verenle yeni bedel üzerinde anlaşıldı" style="display:block;width:100%;margin-top:5px;">
           </label>
 
           <button
@@ -10797,6 +10800,9 @@ ${renderAccountingCenterBulkPromo()}
           <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">REASSESSMENT YÖNETİMİ</div>
           <h3 style="margin:5px 0 0;font-size:18px;">Kira Reassessment İşlemi</h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Reassessment, V16.5 modification eventlerinden ayrı tutulur. Accounting impact yalnızca APPLIED reassessment için oluşur.</p>
+          <p style="margin:7px 0 0;color:#475569;font-size:11px;">
+            <strong>Ne zaman kullanılır?</strong> Yeni sözleşme imzalanmadan, mevcut hüküm veya endeks/opsiyon değişikliği kira ödemelerini yeniden ölçmeyi gerektirdiğinde kullanılır.
+          </p>
         </div>
 
         <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;">
@@ -10821,7 +10827,7 @@ ${renderAccountingCenterBulkPromo()}
             <label style="font-size:10px;font-weight:700;">Satın Alma Opsiyonu<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
           </div>
 
-          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
+          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden <span style="font-weight:400;color:#64748b;">(endeks, oran veya opsiyon kaynağını belirtin)</span><input id="reassessmentReason" type="text" placeholder="Örn. TÜFE endeksi değişti" style="display:block;width:100%;margin-top:5px;"></label>
 
           <button type="button" id="createReassessmentButton" class="primary-button" ${createDisabledAttr}>Reassessment Oluştur</button>
         </div>
