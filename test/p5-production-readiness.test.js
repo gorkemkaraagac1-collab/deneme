@@ -50,10 +50,25 @@ describe("P5-M: /health endpoint", () => {
     jest.resetModules();
   });
 
-  test("GET /health returns 200 { status: 'ok' }", async () => {
+  test("GET /health returns 200 when database is reachable", async () => {
+    const pool = require("../backend/db/pool");
+    pool.query.mockResolvedValueOnce({ rows: [{ ok: 1 }] });
+
     const res = await request(app).get("/health");
+
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok" });
+    expect(res.body).toEqual({ status: "ok", database: "ok" });
+    expect(pool.query).toHaveBeenCalledWith("SELECT 1");
+  });
+
+  test("GET /health returns 503 when database is unavailable", async () => {
+    const pool = require("../backend/db/pool");
+    pool.query.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const res = await request(app).get("/health");
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ status: "degraded", database: "unavailable" });
   });
 });
 
