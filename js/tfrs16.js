@@ -929,6 +929,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function hydrateTfrs16BackendData() {
     await hydrateContractsFromApi();
     await refreshInflationIndexCacheFromBackend(getRequiredInflationIndexMonths());
+    await refreshFxRateCacheFromBackend();
   }
 
   if (document.readyState === "loading") {
@@ -2157,6 +2158,43 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     } catch (error) {
       console.error("TÜİK endeks cache'i yenilenirken hata oluştu. localStorage tablosu kullanılacak.", error);
+      return false;
+    }
+  }
+
+  // VERIFIED TCMB kayıtlarını hesaplama motorunun senkron cache'ine alır.
+  // PENDING/REJECTED kayıtlar bilinçli olarak alınmaz; eksik kurda motorun
+  // mevcut fail-closed davranışı korunur.
+  async function refreshFxRateCacheFromBackend() {
+    try {
+      const token = getInflationIndexAuthToken();
+      if (!token) return false;
+      const responses = await Promise.all(["USD", "EUR"].map(currency =>
+        fetch(`${TFRS16_API_BASE}/api/fx-rates?from=${currency}&to=TRY`, {
+          headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
+        })
+      ));
+      if (responses.some(response => !response.ok)) {
+        console.error("TCMB kur cache'i yenilenemedi: backend yanıtı başarısız.");
+        return false;
+      }
+      const bodies = await Promise.all(responses.map(response => response.json()));
+      const rates = bodies.flatMap(body => Array.isArray(body?.rates) ? body.rates : [])
+        .filter(row => row && (row.fromCurrency === "USD" || row.fromCurrency === "EUR") && row.toCurrency === "TRY"
+          && row.verificationStatus === "VERIFIED" && Number(row.rate) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(row.rateDate)))
+        .map(row => ({
+          id: `BACKEND-FX-${row.fromCurrency}-${row.rateDate}`,
+          fromCurrency: row.fromCurrency, toCurrency: row.toCurrency,
+          rate: Number(row.rate), rateDate: row.rateDate,
+          rateType: Object.values(V23_RATE_TYPES).includes(String(row.rateType || "").toUpperCase()) ? String(row.rateType).toUpperCase() : V23_RATE_TYPES.CLOSING,
+          source: V23_RATE_SOURCES.CENTRAL_BANK, status: "APPROVED",
+          reason: "TCMB doğrulanmış backend kaydı", createdBy: "backend",
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), schemaVersion: V23_SCHEMA_VERSION
+        }));
+      backendFxRateCache = rates;
+      return true;
+    } catch (error) {
+      console.error("TCMB kur cache'i yenilenirken hata oluştu.", error);
       return false;
     }
   }
@@ -25599,7 +25637,15 @@ ${renderPaymentScheduleFooterContainers()}
     const before=rows[idx], next=normalizeV23Currency({...before,...v23Object(patch),code:before.code}); rows[idx]=next; v23StorageSet(V23_CURRENCY_STORAGE_KEY,rows); v23Audit("CURRENCY_UPDATED","CURRENCY",next.code,{before,newValue:next}); return v23Clone(next);
   }
 
-  function loadV23Rates() { const rows=v23StorageGet(V23_RATE_STORAGE_KEY,[]); return Array.isArray(rows) ? rows : []; }
+  let backendFxRateCache = null; // null = backend henüz sorulmadı
+  function loadV23Rates() {
+    const localRows=v23StorageGet(V23_RATE_STORAGE_KEY,[]);
+    const rows=Array.isArray(localRows) ? localRows.map(v23Clone) : [];
+    if (!Array.isArray(backendFxRateCache)) return rows;
+    const backendKeys=new Set(backendFxRateCache.map(row => `${row.fromCurrency}|${row.toCurrency}|${row.rateDate}|${row.rateType}`));
+    return rows.filter(row => !backendKeys.has(`${row.fromCurrency}|${row.toCurrency}|${row.rateDate}|${row.rateType}`))
+      .concat(backendFxRateCache.map(v23Clone));
+  }
   function saveV23Rates(rows) { return v23StorageSet(V23_RATE_STORAGE_KEY,rows); }
   function normalizeFxRate(input={}) {
     const source=v23Object(input), from=v23CurrencyCode(source.fromCurrency), to=v23CurrencyCode(source.toCurrency), rateDate=v23DateKey(source.rateDate);
@@ -25852,22 +25898,18 @@ ${renderPaymentScheduleFooterContainers()}
   async function syncTcmbRate(currencyCode, dateKey, options = {}) {
     const code = v23CurrencyCode(currencyCode);
     if (code === "TRY") return { rate: 1, fromCurrency: "TRY", toCurrency: "TRY", rateDate: v23DateKey(dateKey), source: V23_RATE_SOURCES.SYSTEM };
-    const existing = getFxRates({ fromCurrency: code, toCurrency: "TRY", rateDate: dateKey, rateType: options.rateType || FX_CONFIG.defaultRateType });
+    const existing = getFxRates({ fromCurrency: code, toCurrency: "TRY", rateDate: dateKey, rateType: options.rateType || V23_RATE_TYPES.CLOSING });
     if (existing.length && !options.forceRefresh) return existing[0];
-    const fetched = await fetchTcmbDailyRatesWithFallback(dateKey, options);
-    const rate = fetched.rates?.[code];
-    if (!Number.isFinite(rate)) {
-      throw Object.assign(new Error(`TCMB kur listesinde ${code} bulunamadı.`), { code: "TCMB_CURRENCY_NOT_FOUND", currency: code });
+    const result = await tfrs16ApiFetch("/api/fx-rates/sync", {
+      method: "POST",
+      body: JSON.stringify({ from: dateKey, to: dateKey })
+    });
+    const inserted = Array.isArray(result?.inserted) ? result.inserted : [];
+    const row = inserted.find(item => item.fromCurrency === code);
+    if (!row) {
+      throw Object.assign(new Error(`TCMB ${code}/TRY kuru kaydedilemedi veya kayıt zaten mevcut. Yönetici doğrulaması bekleniyor.`), { code: "TCMB_RATE_PENDING_OR_EXISTS", currency: code });
     }
-    return createFxRate({
-      fromCurrency: code,
-      toCurrency: "TRY",
-      rate,
-      rateDate: fetched.rateDate || dateKey,
-      rateType: options.rateType || FX_CONFIG.defaultRateType,
-      source: V23_RATE_SOURCES.CENTRAL_BANK,
-      reason: fetched.usedFallback ? `TCMB otomatik (${fetched.rateDate}, önceki iş günü kuru kullanıldı)` : "TCMB otomatik"
-    }, options);
+    return { ...row, rate: Number(row.rate), rateType: V23_RATE_TYPES.CLOSING, source: V23_RATE_SOURCES.CENTRAL_BANK, status: "PENDING" };
   }
 
   // getFxRate ile aynı imza; kayıtlı kur yoksa önce TCMB'den
@@ -32107,7 +32149,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
               <label>Tarih<input id="v26FxTcmbDate" type="date" value="${v26FxUiToday()}"></label>
               <label>Currency<select id="v26FxTcmbCurrency">${v26FxUiCurrencyOptions("EUR")}</select></label>
             </div>
-            <div style="margin-top:10px;font-size:11px;color:#64748b;">TCMB çekimi source=CENTRAL_BANK olarak V23 kur tablosuna kaydedilir. Hafta sonu/resmi tatilde mevcut fallback mekanizması önceki iş gününü dener.</div>
+            <div style="margin-top:10px;font-size:11px;color:#64748b;">TCMB kuru backend PostgreSQL'e PENDING olarak kaydedilir. Hesaplamaya girmesi için yönetici doğrulaması gerekir; hafta sonu/resmi tatil için TCMB'nin yayımladığı son iş günü kullanılır.</div>
             <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;"><button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26FxTcmbCancel">İptal</button><button type="button" class="gk-v26-btn" id="v26FxTcmbRun">Kur Çek</button></div>
           </div>`;
         m.classList.remove("hidden");
@@ -32123,7 +32165,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
           try {
             const result=await syncTcmbRate(currency,date,{action:"FX_Tcmb_UI_IMPORT",rateType:"CLOSING"});
             close(); render();
-            v26FxUiToast(`TCMB kuru kaydedildi: ${currency}/TRY = ${Number(result.rate).toFixed(4)} (${result.rateDate})`,"success");
+            v26FxUiToast(`TCMB kuru PENDING kaydedildi: ${currency}/TRY = ${Number(result.rate).toFixed(4)} (${result.rateDate}). Hesaplamaya almak için doğrulayın.`,"success");
           } catch(error) {
             const msg=error?.code === "TCMB_FETCH_BLOCKED" ? "TCMB'ye tarayıcıdan erişilemedi. Proxy endpoint tanımlayın (TCMB_CONFIG.proxyBaseUrl)." : (error?.message || "TCMB kuru alınamadı.");
             v26FxUiToast(msg,"error");
