@@ -7627,22 +7627,22 @@ document.addEventListener("DOMContentLoaded", () => {
       ).length;
 
     setText(
-      "contractCount",
+      "kpiContractCount",
       active.length
     );
 
     setText(
-      "leaseLiability",
+      "kpiLiability",
       totalText(0)
     );
 
     setText(
-      "rouAssets",
+      "kpiRou",
       totalText(1)
     );
 
     setText(
-      "next12Months",
+      "kpiCurrent",
       totalText(2)
     );
 
