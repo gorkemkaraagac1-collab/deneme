@@ -166,7 +166,27 @@ router.get("/", async (req, res) => {
       ? await pool.query(
           `
             SELECT
-              c.*
+              c.*,
+              (
+                SELECT json_build_object(
+                  'id', ob.id,
+                  'opening_date', ob.opening_date,
+                  'opening_rou_asset', ob.opening_rou_asset,
+                  'opening_lease_liability', ob.opening_lease_liability,
+                  'opening_accumulated_depreciation', ob.opening_accumulated_depreciation,
+                  'opening_accumulated_interest', ob.opening_accumulated_interest,
+                  'opening_retained_earnings_adjustment', ob.opening_retained_earnings_adjustment,
+                  'discount_rate', ob.discount_rate,
+                  'currency', ob.currency,
+                  'next_payment_date', ob.next_payment_date,
+                  'source_reference', ob.source_reference,
+                  'status', ob.status
+                )
+                FROM contract_opening_balances ob
+                WHERE ob.contract_id = c.id AND ob.status = 'APPROVED'
+                ORDER BY ob.opening_date DESC
+                LIMIT 1
+              ) AS opening_balance
             FROM contracts c
             ORDER BY c.created_at DESC
           `
@@ -174,7 +194,27 @@ router.get("/", async (req, res) => {
       : await pool.query(
           `
             SELECT
-              c.*
+              c.*,
+              (
+                SELECT json_build_object(
+                  'id', ob.id,
+                  'opening_date', ob.opening_date,
+                  'opening_rou_asset', ob.opening_rou_asset,
+                  'opening_lease_liability', ob.opening_lease_liability,
+                  'opening_accumulated_depreciation', ob.opening_accumulated_depreciation,
+                  'opening_accumulated_interest', ob.opening_accumulated_interest,
+                  'opening_retained_earnings_adjustment', ob.opening_retained_earnings_adjustment,
+                  'discount_rate', ob.discount_rate,
+                  'currency', ob.currency,
+                  'next_payment_date', ob.next_payment_date,
+                  'source_reference', ob.source_reference,
+                  'status', ob.status
+                )
+                FROM contract_opening_balances ob
+                WHERE ob.contract_id = c.id AND ob.status = 'APPROVED'
+                ORDER BY ob.opening_date DESC
+                LIMIT 1
+              ) AS opening_balance
             FROM contracts c
             WHERE c.company_id = ANY($1)
             ORDER BY c.created_at DESC
@@ -227,7 +267,20 @@ router.get("/:id", async (req, res) => {
       ? await pool.query(
           `
             SELECT
-              c.*
+              c.*,
+              (SELECT json_build_object(
+                'id', ob.id, 'opening_date', ob.opening_date,
+                'opening_rou_asset', ob.opening_rou_asset,
+                'opening_lease_liability', ob.opening_lease_liability,
+                'opening_accumulated_depreciation', ob.opening_accumulated_depreciation,
+                'opening_accumulated_interest', ob.opening_accumulated_interest,
+                'opening_retained_earnings_adjustment', ob.opening_retained_earnings_adjustment,
+                'discount_rate', ob.discount_rate, 'currency', ob.currency,
+                'next_payment_date', ob.next_payment_date,
+                'source_reference', ob.source_reference, 'status', ob.status
+              ) FROM contract_opening_balances ob
+               WHERE ob.contract_id = c.id AND ob.status = 'APPROVED'
+               ORDER BY ob.opening_date DESC LIMIT 1) AS opening_balance
             FROM contracts c
             WHERE c.id = $1
             LIMIT 1
@@ -237,7 +290,20 @@ router.get("/:id", async (req, res) => {
       : await pool.query(
           `
             SELECT
-              c.*
+              c.*,
+              (SELECT json_build_object(
+                'id', ob.id, 'opening_date', ob.opening_date,
+                'opening_rou_asset', ob.opening_rou_asset,
+                'opening_lease_liability', ob.opening_lease_liability,
+                'opening_accumulated_depreciation', ob.opening_accumulated_depreciation,
+                'opening_accumulated_interest', ob.opening_accumulated_interest,
+                'opening_retained_earnings_adjustment', ob.opening_retained_earnings_adjustment,
+                'discount_rate', ob.discount_rate, 'currency', ob.currency,
+                'next_payment_date', ob.next_payment_date,
+                'source_reference', ob.source_reference, 'status', ob.status
+              ) FROM contract_opening_balances ob
+               WHERE ob.contract_id = c.id AND ob.status = 'APPROVED'
+               ORDER BY ob.opening_date DESC LIMIT 1) AS opening_balance
             FROM contracts c
             WHERE c.id = $1
               AND c.company_id = ANY($2)
