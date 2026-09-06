@@ -103,7 +103,7 @@ describe("contract details JSONB round-trip", () => {
   });
 
   test("TMS29 Excel çıktısı genel Endeks Eksik etiketi yerine gerçek hata detayını içerir", () => {
-    const source = fs.readFileSync(path.join(__dirname, "../js/tfrs16.js"), "utf8");
+    const source = fs.readFileSync(path.join(__dirname, "../js/tfrs16-engine.js"), "utf8");
     expect(source).toContain('"Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")');
     expect(source).toContain('"Durum": r?.ok ? "OK" : "Hesaplanamadı"');
   });

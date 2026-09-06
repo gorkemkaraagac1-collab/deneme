@@ -6,7 +6,7 @@
  * ============================================================
  *
  * Kapsam: createModification / applyModification / updateModification /
- * cancelModification fonksiyonlarının (js/tfrs16.js) mantığını VE
+ * cancelModification fonksiyonlarının (js/tfrs16-engine.js) mantığını VE
  * backend'e (PostgreSQL, persistContractToApi → PUT /api/contracts/:id)
  * GERÇEKTEN kayıt yapıp yapmadığını doğrular.
  *

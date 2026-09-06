@@ -13,7 +13,7 @@ if (!global.TextDecoder) {
 
 /**
  * jest-environment-jsdom, Node'un yerleşik global fetch()'ini
- * jsdom sandbox'ına otomatik olarak taşımaz. js/tfrs16.js'teki
+ * jsdom sandbox'ına otomatik olarak taşımaz. js/tfrs16-engine.js'teki
  * refreshInflationIndexCacheFromBackend() (TÜİK/backend endeks
  * entegrasyonu, additive) fetch() kullandığı için testlerin
  * jest.spyOn(global, "fetch") ile bunu mock'layabilmesi adına
