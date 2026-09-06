@@ -28846,7 +28846,12 @@ ${renderPaymentScheduleFooterContainers()}
     try {
       const user = getCurrentUser();
       if (user && v20SafeArray(user.companyIds).length > 0) {
-        contracts = getTenantContracts(user.id);
+        // API hydration is the source of truth. The legacy local tenant
+        // cache can be empty after login and must not erase API contracts.
+        const tenantContracts = getTenantContracts(user.id);
+        if (tenantContracts.length > 0 || contracts.length === 0) {
+          contracts = tenantContracts;
+        }
       }
     } catch (error) {
       console.error("Multi-tenant refresh filtreleme hatası:", error);
