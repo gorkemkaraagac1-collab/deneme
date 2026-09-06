@@ -26129,10 +26129,13 @@ ${renderPaymentScheduleFooterContainers()}
 
     const rateType = options.rateType || V23_RATE_TYPES.CLOSING;
     const rateCache = new Map();
+    const availableRateDates = loadV23Rates().filter(row => row.fromCurrency === transactionCurrency && row.toCurrency === functionalCurrency && row.rateType === rateType && Number(row.rate) > 0).map(row => row.rateDate).sort();
+    const latestRateDate = availableRateDates[availableRateDates.length - 1] || v23DateKey(new Date());
+    const translationSchedule = schedule.filter(row => v23DateKey(row.date) <= latestRateDate);
     async function rateOn(dateKey) {
       const key = v23DateKey(dateKey);
       if (rateCache.has(key)) return rateCache.get(key);
-      const fx = await getFxRateAuto(transactionCurrency, functionalCurrency, key, rateType, { allowMissing: !!options.allowMissingRates, allowLastAvailable: !!options.allowLastAvailable });
+      const fx = getFxRate(transactionCurrency, functionalCurrency, key, rateType, { allowMissing: true, allowLastAvailable: true });
       if (fx?.error) {
         const err = Object.assign(new Error(`${transactionCurrency}/${functionalCurrency} kuru bulunamadı (${key}). ${fx.message || ""}`), { code: fx.error, rateDate: key });
         throw err;
@@ -26161,7 +26164,7 @@ ${renderPaymentScheduleFooterContainers()}
     let prevRouClosingOriginal = null;
     const outSchedule = [];
 
-    for (const row of schedule) {
+    for (const row of translationSchedule) {
       const closing = await rateOn(row.date);
       const closingRate = closing.rate;
 
