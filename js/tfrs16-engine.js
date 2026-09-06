@@ -7741,6 +7741,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }).format(Number(converted.value));
   }
 
+  function v26ContractMatchesActiveCompany(contract) {
+    const select = document.getElementById("v26ActiveCompanySelect");
+    const selected = String(select?.value || "all").trim().toLowerCase();
+    if (!selected || selected === "all" || selected === "tüm şirketler") return true;
+    return [contract?.companyId, contract?.company]
+      .filter(Boolean)
+      .some(value => String(value).trim().toLowerCase() === selected);
+  }
+
   function renderTable(renderOptions = {}) {
 
     const tbody =
