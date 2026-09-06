@@ -231,8 +231,14 @@
           if (result.user) {
             localStorage.setItem("current_user", JSON.stringify(result.user));
             if (result.user.mustChangePassword) {
-              // Parola zorunlu değişim — motor içinde modal da var; ana uygulamaya gönder
-              window.location.href = "tfrs16.html";
+              // Yönetim kullanıcıları parola değişimini admin akışında tamamlar.
+              window.location.href = (result.user.role === "ADMIN" || result.user.role === "ACCOUNTANT_MANAGER")
+                ? "frontend/admin/change-password.html"
+                : "tfrs16.html";
+              return;
+            }
+            if (result.user.role === "ADMIN") {
+              window.location.href = "frontend/admin/index.html";
               return;
             }
           }
