@@ -28763,7 +28763,12 @@ ${renderPaymentScheduleFooterContainers()}
   refresh = function gkRefreshWithMultiTenant(...args) {
     try {
       const user = getCurrentUser();
-      if (user && v20SafeArray(user.companyIds).length > 0) {
+      const isAdmin = typeof getCurrentUserRoles === "function"
+        && getCurrentUserRoles().includes("ADMIN");
+      // Backend zaten ADMIN erişimini yetkilendiriyor. Admin için yerel
+      // demo/önbellek şirket listesiyle ikinci kez filtrelemek, API'den
+      // gelen sözleşmeleri yanlışlıkla görünmez yapabiliyor.
+      if (user && !isAdmin && v20SafeArray(user.companyIds).length > 0) {
         contracts = getTenantContracts(user.id);
       }
     } catch (error) {
