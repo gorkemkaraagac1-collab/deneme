@@ -34,7 +34,7 @@ function parseTcmbXml(xml) {
 async function insertPendingRates(rows, actor = null) {
   const inserted = [];
   for (const row of rows) {
-    const result = await pool.query(`INSERT INTO fx_rates (from_currency,to_currency,rate_date,rate,source,source_url,retrieved_by) VALUES ($1,$2,$3,$4,'TCMB_AUTO',$5,$6) ON CONFLICT DO NOTHING RETURNING id`, [row.fromCurrency,row.toCurrency,row.rateDate,row.rate,"https://www.tcmb.gov.tr/kurlar/",actor]);
+    const result = await pool.query(`INSERT INTO fx_rates (from_currency,to_currency,rate_date,rate_type,rate,source,source_url,retrieved_by) VALUES ($1,$2,$3,'CLOSING',$4,'TCMB_AUTO',$5,$6) ON CONFLICT DO NOTHING RETURNING id`, [row.fromCurrency,row.toCurrency,row.rateDate,row.rate,"https://www.tcmb.gov.tr/kurlar/",actor]);
     if (result.rows[0]) inserted.push({ ...row, id: result.rows[0].id, verificationStatus: "PENDING" });
   }
   return inserted;
