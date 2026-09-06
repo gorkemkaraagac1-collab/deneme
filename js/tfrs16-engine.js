@@ -441,6 +441,12 @@ document.addEventListener("DOMContentLoaded", () => {
       ),
       currency: row.currency || "TRY",
       status: String(row.status || "active").toLowerCase(),
+      // Only APPROVED opening balances are exposed by the API. Keep the
+      // object on the contract so the synchronous engine can start its
+      // roll-forward at the customer's audited cut-over date.
+      openingBalance: row.opening_balance && typeof row.opening_balance === "object"
+        ? row.opening_balance
+        : null,
       renewalDate: details.renewalDate || null,
       paymentFrequency: details.paymentFrequency || "monthly",
       paymentTiming: details.paymentTiming || "arrears",
@@ -6834,6 +6840,61 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * Apply an approved migration closing balance to the forward schedule.
+   * Historical periods are deliberately removed from the displayed schedule:
+   * the imported closing balance is the authoritative starting point for the
+   * first period after the cut-over date. This stays synchronous and leaves
+   * legacy contracts unchanged when no approved balance exists.
+   */
+  function applyApprovedOpeningBalance(contract, schedule, core) {
+    const opening = contract && contract.openingBalance;
+    if (!opening || String(opening.status || "").toUpperCase() !== "APPROVED" || !schedule.length) {
+      return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+    }
+    const transition = parseDate(opening.next_payment_date || opening.opening_date);
+    if (!transition) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+    const firstIndex = schedule.findIndex(row => row.date >= transition);
+    if (firstIndex < 0) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
+
+    const openingLiability = Math.max(0, Number(opening.opening_lease_liability) || 0);
+    const openingROU = Math.max(0, Number(opening.opening_rou_asset) || 0);
+    const sourceRows = schedule.slice(firstIndex);
+    const forward = [];
+    let liability = openingLiability;
+    let rou = openingROU;
+    sourceRows.forEach((row, index) => {
+      const previous = liability;
+      const interest = Math.max(0, previous * core.periodRate);
+      const payment = Math.max(0, Number(row.payment) || 0);
+      const principal = Math.min(previous, Math.max(0, payment - interest));
+      const monthsCovered = row.monthsCovered || core.stepMonths || 1;
+      const rouOpening = rou;
+      const rouDepreciation = index === sourceRows.length - 1
+        ? rouOpening
+        : Math.min(openingROU / sourceRows.length * monthsCovered, rouOpening);
+      forward.push({
+        ...row,
+        period: index + 1,
+        openingLiability: previous,
+        interest,
+        principal,
+        closingLiability: Math.max(0, previous - principal),
+        rouOpening,
+        depreciation: rouDepreciation,
+        rouClosing: Math.max(0, rouOpening - rouDepreciation)
+      });
+      liability = Math.max(0, previous - principal);
+      rou = Math.max(0, rouOpening - rouDepreciation);
+    });
+    return {
+      schedule: forward,
+      openingLiability,
+      openingROU,
+      depreciation: forward.length ? forward[0].depreciation : 0
+    };
+  }
+
+  /**
    * assembleLeaseEngineResult — motorun nihai dönüş objesini
    * (liability, rouAssets, schedule, assumptions vb.) paketler.
    */
@@ -6883,9 +6944,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const esc = applyLeaseEscalation(contract, assumptions, core);
     const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
-    const schedule = calculateAmortizationTable(assumptions, core, esc, measurement);
-
-    return assembleLeaseEngineResult(assumptions, core, measurement, schedule);
+    const calculatedSchedule = calculateAmortizationTable(assumptions, core, esc, measurement);
+    const migrated = applyApprovedOpeningBalance(contract, calculatedSchedule, core);
+    const effectiveMeasurement = migrated.openingLiability === null
+      ? measurement
+      : {
+          ...measurement,
+          initialLiability: migrated.openingLiability,
+          initialROU: migrated.openingROU,
+          depreciation: migrated.depreciation
+        };
+    const result = assembleLeaseEngineResult(assumptions, core, effectiveMeasurement, migrated.schedule);
+    if (migrated.openingLiability !== null) {
+      result.openingBalanceApplied = true;
+      result.openingBalance = contract.openingBalance;
+    }
+    return result;
   }
 
 
@@ -7508,7 +7582,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const active =
       contracts.filter(
-        c => c.status === "active" && v26ContractMatchesActiveCompany(c)
+        c => c.status === "active"
       );
 
     const totals = new Map();
@@ -7556,10 +7630,25 @@ document.addEventListener("DOMContentLoaded", () => {
         c => c.modification === true
       ).length;
 
-    ["contractCount", "kpiContractCount"].forEach(id => setText(id, active.length));
-    ["leaseLiability", "kpiLiability"].forEach(id => setText(id, totalText(0)));
-    ["rouAssets", "kpiRou"].forEach(id => setText(id, totalText(1)));
-    ["next12Months", "kpiCurrent"].forEach(id => setText(id, totalText(2)));
+    setText(
+      "contractCount",
+      active.length
+    );
+
+    setText(
+      "leaseLiability",
+      totalText(0)
+    );
+
+    setText(
+      "rouAssets",
+      totalText(1)
+    );
+
+    setText(
+      "next12Months",
+      totalText(2)
+    );
 
     setText(
       "renewals90Days",
@@ -7576,16 +7665,6 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ==========================================================
      COMPANY FILTER
   ========================================================== */
-
-  function v26ContractMatchesActiveCompany(contract) {
-    const activeId = typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL";
-    if (!activeId || activeId === "ALL") return true;
-    const candidateId = String(contract?.companyId || "").trim();
-    if (candidateId === String(activeId)) return true;
-    const company = typeof v26FindCompany === "function" ? v26FindCompany(activeId) : null;
-    const activeNames = new Set([String(activeId), company?.id, company?.code, company?.name].filter(Boolean).map(String));
-    return activeNames.has(String(contract?.company || "").trim());
-  }
 
   function populateCompanyFilter() {
 
@@ -7665,8 +7744,9 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderTable(renderOptions = {}) {
 
     const tbody =
-      document.getElementById("contractTableBody") ||
-      document.getElementById("contractsTableBody");
+      document.getElementById(
+        "contractTableBody"
+      );
 
     if (!tbody) return;
 
@@ -7685,17 +7765,15 @@ document.addEventListener("DOMContentLoaded", () => {
         .trim()
         .toLowerCase();
 
-    const status = String(
+    const status =
       document.getElementById(
         "statusFilter"
-      )?.value || "all"
-    ).toLowerCase();
+      )?.value || "all";
 
-    const company = String(
+    const company =
       document.getElementById(
         "companyFilter"
-      )?.value || "all"
-    ).toLowerCase();
+      )?.value || "all";
 
     const filtered =
       contracts.filter(
@@ -7722,17 +7800,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
             (
               status === "all" ||
-              String(contract.status || "").toLowerCase() === status
+              contract.status === status
             )
 
             &&
 
             (
               company === "all" ||
-              String(contract.company || "").toLowerCase() === company
+              contract.company === company
             )
-
-            && v26ContractMatchesActiveCompany(contract)
 
           );
         }
@@ -10522,6 +10598,9 @@ ${renderAccountingCenterBulkPromo()}
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
             Original contract history korunur. Accounting impact yalnızca APPLIED modification için oluşur.
           </p>
+          <p style="margin:7px 0 0;color:#475569;font-size:11px;">
+            <strong>Ne zaman kullanılır?</strong> Kiraya verenle yeni şartlarda anlaşıldığında; kapsam, kira bedeli veya sözleşme süresi taraflarca değiştirilir.
+          </p>
         </div>
 
         <div
@@ -10551,8 +10630,8 @@ ${renderAccountingCenterBulkPromo()}
             <label style="font-size:10px;font-weight:700;">
               Modifikasyon Tipi
               <select id="modificationType" style="display:block;width:100%;margin-top:5px;">
-                <option value="PAYMENT_INCREASE">Ödeme Artışı</option>
-                <option value="PAYMENT_DECREASE">Ödeme Azalışı</option>
+                <option value="PAYMENT_INCREASE">Ödeme Artışı (yeni anlaşma)</option>
+                <option value="PAYMENT_DECREASE">Ödeme Azalışı (yeni anlaşma)</option>
                 <option value="LEASE_TERM_EXTENSION">Kira Süresi Uzatma</option>
                 <option value="LEASE_TERM_REDUCTION">Kira Süresi Azaltma</option>
                 <option value="SCOPE_INCREASE">Kapsam Artışı</option>
@@ -10584,8 +10663,8 @@ ${renderAccountingCenterBulkPromo()}
           </div>
 
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">
-            Neden
-            <input id="modificationReason" type="text" placeholder="Modifikasyon nedeni" style="display:block;width:100%;margin-top:5px;">
+            Neden <span style="font-weight:400;color:#64748b;">(yeni sözleşme şartını belirtin)</span>
+            <input id="modificationReason" type="text" placeholder="Örn. kiraya verenle yeni bedel üzerinde anlaşıldı" style="display:block;width:100%;margin-top:5px;">
           </label>
 
           <button
@@ -10795,6 +10874,9 @@ ${renderAccountingCenterBulkPromo()}
           <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">REASSESSMENT YÖNETİMİ</div>
           <h3 style="margin:5px 0 0;font-size:18px;">Kira Reassessment İşlemi</h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Reassessment, V16.5 modification eventlerinden ayrı tutulur. Accounting impact yalnızca APPLIED reassessment için oluşur.</p>
+          <p style="margin:7px 0 0;color:#475569;font-size:11px;">
+            <strong>Ne zaman kullanılır?</strong> Yeni sözleşme imzalanmadan, mevcut hüküm veya endeks/opsiyon değişikliği kira ödemelerini yeniden ölçmeyi gerektirdiğinde kullanılır.
+          </p>
         </div>
 
         <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;">
@@ -10819,7 +10901,7 @@ ${renderAccountingCenterBulkPromo()}
             <label style="font-size:10px;font-weight:700;">Satın Alma Opsiyonu<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
           </div>
 
-          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden<input id="reassessmentReason" type="text" placeholder="Reassessment nedeni" style="display:block;width:100%;margin-top:5px;"></label>
+          <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden <span style="font-weight:400;color:#64748b;">(endeks, oran veya opsiyon kaynağını belirtin)</span><input id="reassessmentReason" type="text" placeholder="Örn. TÜFE endeksi değişti" style="display:block;width:100%;margin-top:5px;"></label>
 
           <button type="button" id="createReassessmentButton" class="primary-button" ${createDisabledAttr}>Reassessment Oluştur</button>
         </div>
@@ -28763,12 +28845,7 @@ ${renderPaymentScheduleFooterContainers()}
   refresh = function gkRefreshWithMultiTenant(...args) {
     try {
       const user = getCurrentUser();
-      const isAdmin = typeof getCurrentUserRoles === "function"
-        && getCurrentUserRoles().includes("ADMIN");
-      // Backend zaten ADMIN erişimini yetkilendiriyor. Admin için yerel
-      // demo/önbellek şirket listesiyle ikinci kez filtrelemek, API'den
-      // gelen sözleşmeleri yanlışlıkla görünmez yapabiliyor.
-      if (user && !isAdmin && v20SafeArray(user.companyIds).length > 0) {
+      if (user && v20SafeArray(user.companyIds).length > 0) {
         contracts = getTenantContracts(user.id);
       }
     } catch (error) {

@@ -12,7 +12,7 @@
  * Bu modül tüm /api/** çağrılarını yakalar ve bellek içi bir
  * kontrat deposuyla yanıtlar. Depo test başına sıfırlanır.
  *
- * KAPSANAN UÇLAR (js/tfrs16.js + tfrs16.html taramasından):
+ * KAPSANAN UÇLAR (js/tfrs16-engine.js + tfrs16.html taramasından):
  *   GET    /api/auth/me
  *   GET    /api/contracts
  *   POST   /api/contracts
@@ -32,7 +32,7 @@ const DEFAULT_USER = {
   username: "e2e.kullanici",
   role: "FINANCE_MANAGER",
   companyIds: ["E2E-CO-1"],
-  // loadSessionCompanies() (js/tfrs16.js satır ~490) licenses[].companyName'i
+  // loadSessionCompanies() (js/tfrs16-engine.js satır ~490) licenses[].companyName'i
   // öncelikli kullanır; bu olmadan select'in seçenek metni sadece
   // companyId (ham "E2E-CO-1") olur. Gerçekçi bir isim için eklendi.
   licenses: [{ companyId: "E2E-CO-1", companyName: "E2E Test A.Ş." }],

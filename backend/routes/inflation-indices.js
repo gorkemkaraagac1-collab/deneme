@@ -22,7 +22,7 @@ const router = express.Router();
  * ============================================================
  *
  * KAPSAM — ÖNEMLİ: Bu, bağımsız bir "/api/tms29" ürünü DEĞİLDİR.
- * Bu router, yalnızca TFRS 16 modülünün js/tfrs16.js içindeki
+ * Bu router, yalnızca TFRS 16 modülünün js/tfrs16-engine.js içindeki
  * mevcut TMS 29 restatement motoruna (getInflationIndex vb. —
  * bu router'dan tamamen habersiz, davranışı değişmeyen
  * fonksiyonlar) veri sağlayan bir yardımcı veri kaynağıdır.

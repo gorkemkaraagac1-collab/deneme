@@ -145,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_opening_balances_status
 -- sublease/TMS29 enflasyon düzeltmesi/TMS21 fonksiyonel para birimi/
 -- erken ödemeler).
 --
--- SORUN: js/tfrs16.js hesap motoru bu alanları contract objesinin
+-- SORUN: js/tfrs16-engine.js hesap motoru bu alanları contract objesinin
 -- üzerinde tutuyor (contract.modifications, contract.reassessments,
 -- contract.saleAndLeaseback, contract.sublease,
 -- contract.inflationAdjustments, contract.functionalCurrency,
@@ -527,7 +527,7 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================
 --
 -- ÖNEMLİ — KAPSAM: Bu tablo BAĞIMSIZ bir "TMS 29 ürünü" DEĞİLDİR.
--- Yalnızca js/tfrs16.js içindeki mevcut TMS 29 restatement
+-- Yalnızca js/tfrs16-engine.js içindeki mevcut TMS 29 restatement
 -- motorunun (getInflationIndex/getInflationRatio/
 -- applyTMS29Restatement — bu tablodan HABERSİZ, davranışı
 -- değişmeyen fonksiyonlar) ihtiyaç duyduğu aylık endeks

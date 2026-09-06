@@ -14,7 +14,7 @@
  * eklenebilecek başka bir çağıran kodu (ör. manuel override
  * formu) aynı kurallara tabi tutar.
  *
- * ÖNEMLİ — SESSİZ VARSAYILAN YOK: js/tfrs16.js'teki
+ * ÖNEMLİ — SESSİZ VARSAYILAN YOK: js/tfrs16-engine.js'teki
  * getInflationIndex() ilkesiyle tutarlı olarak, bu dosyadaki
  * hiçbir fonksiyon geçersiz/eksik veri için "makul bir tahmin"
  * üretmez — ya geçerlidir ya da { valid: false, errors: [...] }
