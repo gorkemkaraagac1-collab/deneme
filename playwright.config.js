@@ -89,7 +89,7 @@ module.exports = defineConfig({
   ],
 
   // Depo kökü statik olarak servis edilir; tfrs16.html
-  // js/tfrs16.js'i göreli yolla yükler, bu yüzden KÖK servis edilmeli.
+  // js/tfrs16-engine.js'i göreli yolla yükler, bu yüzden KÖK servis edilmeli.
   webServer: {
     command: `python3 -m http.server ${PORT} --bind 127.0.0.1`,
     port: PORT,

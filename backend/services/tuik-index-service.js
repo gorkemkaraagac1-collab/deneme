@@ -8,7 +8,7 @@ const { validateInflationIndexEntry, parseBulkIndexInput } = require("../utils/i
  * ============================================================
  *
  * KAPSAM: Bu servis BAĞIMSIZ bir "TMS 29 ürünü" değildir. Tek
- * sorumluluğu, js/tfrs16.js'teki mevcut TMS 29 restatement
+ * sorumluluğu, js/tfrs16-engine.js'teki mevcut TMS 29 restatement
  * motorunun (getInflationIndex/getInflationRatio/
  * applyTMS29Restatement) ihtiyaç duyduğu aylık endeks
  * değerlerini resmî TÜİK kaynağından güvenilir, doğrulanmış ve
