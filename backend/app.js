@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const pool = require('./db/pool');
 
 const app = express();
 
@@ -37,8 +38,14 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Routes
 // ============================================================
 // P5-M: Minimal health endpoint (no DB dependency)
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'ok', database: 'ok' });
+  } catch (error) {
+    console.error('Health check database failure:', error);
+    res.status(503).json({ status: 'degraded', database: 'unavailable' });
+  }
 });
 
 app.use('/api/auth', require('./routes/auth'));
