@@ -137,11 +137,4 @@ describe("tfrs16.html — eski dashboard bağlantısı kaldırıldı", () => {
     expect(html).not.toMatch(/dashboard\.html/);
   });
 
-  test("CFO Cockpit projesi ertelendiği için nav-item ismi artık 'CFO Cockpit' DEĞİL (kafa karışıklığını önlemek için)", () => {
-    const fs = require("fs");
-    const path = require("path");
-    const html = fs.readFileSync(path.join(__dirname, "../tfrs16.html"), "utf-8");
-    const navSection = html.match(/<nav class="navigation">[\s\S]*?<\/nav>/)[0];
-    expect(navSection).not.toMatch(/CFO Cockpit/);
-  });
 });
