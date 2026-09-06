@@ -7665,9 +7665,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderTable(renderOptions = {}) {
 
     const tbody =
-      document.getElementById(
-        "contractTableBody"
-      );
+      document.getElementById("contractTableBody") ||
+      document.getElementById("contractsTableBody");
 
     if (!tbody) return;
 
