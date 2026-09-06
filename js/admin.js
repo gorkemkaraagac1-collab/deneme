@@ -581,7 +581,7 @@ try {
         window.location.href =
             user.role === "ACCOUNTANT_MANAGER"
                 ? "users.html"
-                : "../dashboard.html";
+                : "../../tfrs16.html";
         return false;
     }
 
