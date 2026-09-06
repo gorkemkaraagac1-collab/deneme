@@ -66,4 +66,30 @@ describe("approved TFRS 16 opening balance", () => {
     expect(result.openingBalanceApplied).toBeUndefined();
     expect(result.schedule[0].date.getFullYear()).toBe(2020);
   });
+
+  test("balances the opening journal with a transition retained-earnings leg", () => {
+    const tfrs16 = loadTfrs16();
+    const entries = tfrs16.generateInitialEntry({
+      id: "OPENING-JOURNAL-TEST",
+      companyId: "C-1",
+      monthlyPayment: 1000,
+      discountRate: 12,
+      startDate: "2020-01-01",
+      endDate: "2026-12-01",
+      openingBalance: {
+        status: "APPROVED",
+        opening_date: "2025-12-31",
+        opening_rou_asset: 9000,
+        opening_lease_liability: 10000,
+        opening_retained_earnings_adjustment: 0
+      }
+    });
+
+    const totalDebit = entries.reduce((sum, line) => sum + (Number(line.debit) || 0), 0);
+    const totalCredit = entries.reduce((sum, line) => sum + (Number(line.credit) || 0), 0);
+    const transitionLine = entries.find(line => line.account.includes("Geçiş Düzeltmesi"));
+
+    expect(transitionLine.debit).toBe(1000);
+    expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
+  });
 });
