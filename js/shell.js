@@ -214,10 +214,67 @@
         if (av) av.textContent = "?";
         return;
       }
-      if (nameEl) nameEl.textContent = "Oturum açık";
-      if (roleEl) roleEl.textContent = "JWT aktif";
-      if (av) av.textContent = "✓";
+      let user = null;
+      try {
+        user = JSON.parse(localStorage.getItem("current_user") || "null");
+      } catch (_) {}
+      const displayName = String(
+        user?.displayName || user?.name || user?.username || "Oturum açık"
+      ).trim();
+      const role = String(user?.role || user?.roleName || "JWT aktif").trim();
+      if (nameEl) nameEl.textContent = displayName || "Oturum açık";
+      if (roleEl) roleEl.textContent = role || "JWT aktif";
+      if (av) av.textContent = (displayName || "U").slice(0, 1).toUpperCase();
     } catch (_) {}
+  }
+
+  /* ---------- Active company bridge ----------
+     The engine owns the company context. The shell only mirrors it into the
+     topbar selector and the legacy contract filter, so existing calculations
+     and API paths remain untouched. */
+  function syncCompanySelector() {
+    const select = document.getElementById("v26ActiveCompanySelect");
+    if (!select) return;
+    const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
+    const options = api && typeof api.getUnifiedCompanyOptions === "function"
+      ? api.getUnifiedCompanyOptions()
+      : [];
+    const active = api && typeof api.getActiveCompanyId === "function"
+      ? api.getActiveCompanyId()
+      : "ALL";
+    const signature = [active].concat(options.map(c => `${c.id}:${c.name}`)).join("|");
+    if (select.dataset.signature !== signature) {
+      select.innerHTML = `<option value="ALL">Tüm Şirketler</option>`;
+      options.forEach(company => {
+        const option = document.createElement("option");
+        option.value = String(company.id);
+        option.textContent = String(company.name || company.id);
+        select.appendChild(option);
+      });
+      select.dataset.signature = signature;
+    }
+    select.value = Array.from(select.options).some(option => option.value === active) ? active : "ALL";
+  }
+
+  function initCompanySelector() {
+    const select = document.getElementById("v26ActiveCompanySelect");
+    if (!select || select.dataset.bound === "true") return;
+    select.dataset.bound = "true";
+    select.addEventListener("change", () => {
+      const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
+      if (api && typeof api.setActiveCompanyId === "function") {
+        api.setActiveCompanyId(select.value);
+      }
+      const legacyFilter = document.getElementById("companyFilter");
+      if (legacyFilter) {
+        const selected = select.options[select.selectedIndex];
+        legacyFilter.value = selected?.value === "ALL" ? "all" : (selected?.textContent || "all");
+        legacyFilter.dispatchEvent(new Event("change", { bubbles: true }));
+      } else if (typeof window.refresh === "function") {
+        try { window.refresh(); } catch (_) {}
+      }
+    });
+    syncCompanySelector();
   }
 
   /**
@@ -268,6 +325,7 @@
     initNav();
     initDetailClose();
     refreshUserChip();
+    initCompanySelector();
 
     // Soft-hook: after engine hydrates, try to fill KPIs from global GK_TFRS16
     setTimeout(() => {
@@ -275,6 +333,7 @@
         rewireLegacyOpeners();
         const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
         if (!api) return;
+        syncCompanySelector();
         // Best-effort: some engines expose aggregate helpers
         if (typeof api.getTotalLeaseLiability === "function") {
           const liability = api.getTotalLeaseLiability();
