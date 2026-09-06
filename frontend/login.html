@@ -57,7 +57,7 @@ async function handleLogin(event){
    if(result.user.mustChangePassword){window.location.href="./admin/change-password.html";return}
    if(result.user.role==="ADMIN"){window.location.href="./admin/index.html";return}
    if(result.user.role==="ACCOUNTANT_MANAGER"){window.location.href="./admin/users.html";return}
-   window.location.href="./dashboard.html";return;
+   window.location.href="../tfrs16.html";return;
   }
   errorEl.textContent=result.error||"Giriş başarısız. Bilgilerinizi kontrol edin.";errorEl.style.display="block";
  }catch(error){console.error("Login error:",error);errorEl.textContent="Backend bağlantısı kurulamadı. Lütfen tekrar deneyin.";errorEl.style.display="block"}
