@@ -173,6 +173,22 @@ a:hover { text-decoration: underline; }
 }
 
 .user-meta { min-width: 0; flex: 1; }
+
+.shell-logout {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(147,197,253,.25);
+  border-radius: 9px;
+  background: rgba(30,58,95,.35);
+  color: #bfdbfe;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.shell-logout:hover { background: #1e3a5f; color: #fff; }
 .user-meta strong {
   display: block;
   font-size: 12.5px;
