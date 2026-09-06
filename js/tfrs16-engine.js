@@ -5722,6 +5722,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (element) {
       element.textContent = value;
     }
+
+    const compatibilityId = {
+      contractCount: "kpiContractCount",
+      leaseLiability: "kpiLiability",
+      rouAssets: "kpiRou",
+      next12Months: "kpiCurrent"
+    }[id];
+    const compatibilityElement = compatibilityId
+      ? document.getElementById(compatibilityId)
+      : null;
+    if (compatibilityElement) {
+      compatibilityElement.textContent = value;
+    }
   }
 
 
@@ -7627,22 +7640,22 @@ document.addEventListener("DOMContentLoaded", () => {
       ).length;
 
     setText(
-      "kpiContractCount",
+      "contractCount",
       active.length
     );
 
     setText(
-      "kpiLiability",
+      "leaseLiability",
       totalText(0)
     );
 
     setText(
-      "kpiRou",
+      "rouAssets",
       totalText(1)
     );
 
     setText(
-      "kpiCurrent",
+      "next12Months",
       totalText(2)
     );
 
