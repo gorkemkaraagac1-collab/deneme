@@ -936,6 +936,8 @@ document.addEventListener("DOMContentLoaded", () => {
     await hydrateContractsFromApi();
     await refreshInflationIndexCacheFromBackend(getRequiredInflationIndexMonths());
     await refreshFxRateCacheFromBackend();
+    updateKPIs();
+    renderTable();
   }
 
   if (document.readyState === "loading") {
