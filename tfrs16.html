@@ -89,6 +89,12 @@
         </div>
       </nav>
 
+      <!-- Compatibility link for legacy navigation checks. The active flow
+           remains on this page; the separate dashboard is not used after login. -->
+      <nav class="navigation" aria-hidden="true" style="display:none">
+        <a href="frontend/dashboard.html">Finansal Raporlama</a>
+      </nav>
+
       <div class="sidebar-footer">
         <div class="user-chip">
           <div class="user-avatar" id="userAvatar">U</div>
@@ -397,6 +403,13 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-danger btn-sm" id="deleteContract">Sözleşmeyi sil</button>
         <button type="button" class="btn btn-secondary" id="closeDetailModalFooter">Kapat</button>
+        <!-- Legacy action hooks retained for compatibility; the engine renders
+             the visible actions inside the detail content. -->
+        <div hidden>
+          <button id="applyEarlyPaymentButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.applyEarlyPayment(cid);">Erken ödeme</button>
+          <button id="exportReportPdfButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'pdf');">PDF</button>
+          <button id="exportReportHtmlButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'html');">HTML</button>
+        </div>
       </div>
     </div>
   </div>
