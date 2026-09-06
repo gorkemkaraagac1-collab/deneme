@@ -7508,7 +7508,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const active =
       contracts.filter(
-        c => c.status === "active"
+        c => c.status === "active" && v26ContractMatchesActiveCompany(c)
       );
 
     const totals = new Map();
@@ -7591,6 +7591,16 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ==========================================================
      COMPANY FILTER
   ========================================================== */
+
+  function v26ContractMatchesActiveCompany(contract) {
+    const activeId = typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL";
+    if (!activeId || activeId === "ALL") return true;
+    const candidateId = String(contract?.companyId || "").trim();
+    if (candidateId === String(activeId)) return true;
+    const company = typeof v26FindCompany === "function" ? v26FindCompany(activeId) : null;
+    const activeNames = new Set([String(activeId), company?.id, company?.code, company?.name].filter(Boolean).map(String));
+    return activeNames.has(String(contract?.company || "").trim());
+  }
 
   function populateCompanyFilter() {
 
@@ -7735,6 +7745,8 @@ document.addEventListener("DOMContentLoaded", () => {
               company === "all" ||
               contract.company === company
             )
+
+            && v26ContractMatchesActiveCompany(contract)
 
           );
         }
