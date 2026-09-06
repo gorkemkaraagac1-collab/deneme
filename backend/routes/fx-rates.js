@@ -18,8 +18,8 @@ router.get("/", limiter, async (req, res) => {
     const requestedDate = req.query.date ? String(req.query.date) : null;
     if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return res.status(400).json({ error: "Geçersiz tarih.", code: "INVALID_DATE" });
     const result = await pool.query(requestedDate
-      ? `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND rate_date <= $4 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date DESC LIMIT 1`
-      : `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date`,
+      ? `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate_type AS "rateType", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND rate_date <= $4 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date DESC LIMIT 1`
+      : `SELECT from_currency AS "fromCurrency", to_currency AS "toCurrency", rate_date AS "rateDate", rate_type AS "rateType", rate, verification_status AS "verificationStatus" FROM fx_rates WHERE from_currency=$1 AND to_currency=$2 AND rate_date >= $3 AND superseded_by IS NULL AND verification_status='VERIFIED' ORDER BY rate_date`,
       requestedDate ? [from, to, EFFECTIVE_FROM, requestedDate] : [from, to, EFFECTIVE_FROM]);
     if (requestedDate && !result.rows[0]) return res.status(404).json({ error: "Bu tarih veya önceki yayımlanmış iş günleri için doğrulanmış kur bulunamadı.", code: "FX_RATE_NOT_FOUND" });
     if (requestedDate) return res.json({ rate: { ...result.rows[0], rate: Number(result.rows[0].rate) }, requestedDate });
