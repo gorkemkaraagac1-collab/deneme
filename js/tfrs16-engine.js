@@ -7578,7 +7578,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const active =
       contracts.filter(
-        c => c.status === "active"
+        c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE"
       );
 
     const totals = new Map();
