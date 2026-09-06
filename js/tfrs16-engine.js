@@ -10462,6 +10462,7 @@ ${renderAccountingCenterBulkPromo()}
   async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview) {
     if (!preview || !contractNeedsFxTranslation(contract)) return;
     try {
+      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) await refreshFxRateCacheFromBackend();
       const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) return;
