@@ -3048,7 +3048,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const interest = Math.max(0, opening * periodRate);
       const principal = Math.min(
         opening,
-        Math.max(0, item.payment - interest)
+        item.payment - interest
       );
       const closing = Math.max(0, opening - principal);
 
@@ -4252,7 +4252,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const principal =
         Math.min(
           opening,
-          Math.max(0, item.payment - interest)
+          item.payment - interest
         );
 
       const closing =
@@ -6761,10 +6761,6 @@ document.addEventListener("DOMContentLoaded", () => {
           ? Math.min(periodPayment, openingLiability)
           : periodPayment - interest;
 
-      if (principal < 0) {
-        principal = 0;
-      }
-
       if (
         principal >
         openingLiability
@@ -6866,7 +6862,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const previous = liability;
       const interest = Math.max(0, previous * core.periodRate);
       const payment = Math.max(0, Number(row.payment) || 0);
-      const principal = Math.min(previous, Math.max(0, payment - interest));
+      const principal = Math.min(previous, payment - interest);
       const monthsCovered = row.monthsCovered || core.stepMonths || 1;
       const rouOpening = rou;
       const rouDepreciation = index === sourceRows.length - 1
