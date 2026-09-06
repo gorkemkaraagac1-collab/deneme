@@ -7556,25 +7556,10 @@ document.addEventListener("DOMContentLoaded", () => {
         c => c.modification === true
       ).length;
 
-    setText(
-      "contractCount",
-      active.length
-    );
-
-    setText(
-      "leaseLiability",
-      totalText(0)
-    );
-
-    setText(
-      "rouAssets",
-      totalText(1)
-    );
-
-    setText(
-      "next12Months",
-      totalText(2)
-    );
+    ["contractCount", "kpiContractCount"].forEach(id => setText(id, active.length));
+    ["leaseLiability", "kpiLiability"].forEach(id => setText(id, totalText(0)));
+    ["rouAssets", "kpiRou"].forEach(id => setText(id, totalText(1)));
+    ["next12Months", "kpiCurrent"].forEach(id => setText(id, totalText(2)));
 
     setText(
       "renewals90Days",
@@ -7701,15 +7686,17 @@ document.addEventListener("DOMContentLoaded", () => {
         .trim()
         .toLowerCase();
 
-    const status =
+    const status = String(
       document.getElementById(
         "statusFilter"
-      )?.value || "all";
+      )?.value || "all"
+    ).toLowerCase();
 
-    const company =
+    const company = String(
       document.getElementById(
         "companyFilter"
-      )?.value || "all";
+      )?.value || "all"
+    ).toLowerCase();
 
     const filtered =
       contracts.filter(
@@ -7736,14 +7723,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             (
               status === "all" ||
-              contract.status === status
+              String(contract.status || "").toLowerCase() === status
             )
 
             &&
 
             (
               company === "all" ||
-              contract.company === company
+              String(contract.company || "").toLowerCase() === company
             )
 
             && v26ContractMatchesActiveCompany(contract)
