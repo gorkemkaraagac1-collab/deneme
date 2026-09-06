@@ -28846,7 +28846,11 @@ ${renderPaymentScheduleFooterContainers()}
     try {
       const user = getCurrentUser();
       if (user && v20SafeArray(user.companyIds).length > 0) {
-        contracts = getTenantContracts(user.id);
+        // API hydration is the source of truth. Empty legacy cache must not erase it.
+        const tenantContracts = getTenantContracts(user.id);
+        if (tenantContracts.length > 0 || contracts.length === 0) {
+          contracts = tenantContracts;
+        }
       }
     } catch (error) {
       console.error("Multi-tenant refresh filtreleme hatası:", error);
