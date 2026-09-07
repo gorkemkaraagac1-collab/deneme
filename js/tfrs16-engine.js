@@ -32693,7 +32693,7 @@ ${renderPaymentScheduleFooterContainers()}
     if (window.__GK_TFRS16_V26_DETAIL_HOOK__) return;
     window.__GK_TFRS16_V26_DETAIL_HOOK__ = true;
     const observer = new MutationObserver(() => {
-      const detail = document.getElementById("detailModal") || document.querySelector(".contract-detail, #contractDetail");
+      if (typeof document === "undefined") return; const detail = document.getElementById("detailModal") || document.querySelector(".contract-detail, #contractDetail");
       if (!detail || detail.classList?.contains("hidden")) return;
       if (detail.querySelector(".gk-v26-auto-detect")) return;
       const cid = (typeof selectedContractId !== "undefined" && selectedContractId) || null;
