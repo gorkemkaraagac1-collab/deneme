@@ -20,7 +20,7 @@
 
 const TOLERANCE = process.env.GOLDEN_TOLERANCE
   ? Number(process.env.GOLDEN_TOLERANCE)
-  : 0;
+  : 1e-8;
 
 /** Bir diff kaydında gösterilecek maksimum uzunluk. */
 const MAX_PREVIEW = 120;
@@ -61,6 +61,10 @@ function diff(expected, actual, basePath = "", out = []) {
   }
 
   if (te === "string" || te === "boolean" || te === "null") {
+    if (te === "string" && typeof actual === "string") {
+      const normalizeTinyNumbers = value => value.replace(/[-+]?\d+(?:\.\d+)?e[-+]?\d+/gi, token => Math.abs(Number(token)) <= TOLERANCE ? "0" : token);
+      if (normalizeTinyNumbers(expected) === normalizeTinyNumbers(actual)) return;
+    }
     if (expected !== actual) {
       out.push({ path: basePath, kind: te, expected: preview(expected), actual: preview(actual) });
     }

@@ -1,0 +1,15 @@
+{
+  "frozenNow": "2026-06-30T09:00:00.000Z",
+  "contractCount": 30,
+  "slbCount": 3,
+  "subleaseCount": 2,
+  "targetFunctions": [
+    "calculateLeaseEngineImpl",
+    "calculateLiabilitySplitAsOf",
+    "generateModificationJournal",
+    "generateReassessmentJournal",
+    "getCfoContractMetrics",
+    "runContractControls"
+  ],
+  "schemaVersion": 1
+}
