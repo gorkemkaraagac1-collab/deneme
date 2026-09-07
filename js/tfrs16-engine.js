@@ -10698,8 +10698,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <option value="closing">
                 Yıllık Kapanış
               </option>
+              <option value="custom">
+                Özel Tarih Aralığı
+              </option>
 
-            </select>
+            </select><div id="accountingCustomRange" style="display:flex;gap:8px;align-items:end;margin-top:8px;"><label style="font-size:10px;color:#64748b;flex:1;">Başlangıç <input id="accountingCustomStart" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;"></label><label style="font-size:10px;color:#64748b;flex:1;">Bitiş <input id="accountingCustomEnd" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;"></label></div>
 
           </div>
 
@@ -10885,6 +10888,9 @@ ${renderAccountingCenterBulkPromo()}
       document.getElementById(
         "accountingPeriod"
       )?.value;
+    const customStartValue = document.getElementById("accountingCustomStart")?.value;
+    const customEndValue = document.getElementById("accountingCustomEnd")?.value;
+
 
     const month =
       Number(
@@ -11009,8 +11015,16 @@ ${renderAccountingCenterBulkPromo()}
         ? resolveLeaseAccrualContext(contract)
         : null;
 
-    const { periodStartExclusive, periodEndInclusive } =
-      resolveJournalPeriodDateRange(year, month, period);
+    let { periodStartExclusive, periodEndInclusive } =
+      resolveJournalPeriodDateRange(year, month, period === "custom" ? "monthly" : period);
+    if (period === "custom" && customStartValue && customEndValue) {
+      const start = new Date(customStartValue + "T00:00:00");
+      const end = new Date(customEndValue + "T23:59:59");
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
+        periodStartExclusive = new Date(start.getTime() - 1);
+        periodEndInclusive = end;
+      }
+    }
 
     const accrualSummary =
       journalAccrualContext
@@ -11989,6 +12003,14 @@ ${renderAccountingCenterBulkPromo()}
               <option value="quarterly">Çeyreklik</option>
               <option value="annual">Yıllık</option>
             </select>
+            <div id="accountingCustomRange" style="display:none;gap:8px;align-items:end;margin-top:8px;">
+              <label style="font-size:10px;color:#64748b;flex:1;">Başlangıç
+                <input id="accountingCustomStart" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
+              </label>
+              <label style="font-size:10px;color:#64748b;flex:1;">Bitiş
+                <input id="accountingCustomEnd" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
+              </label>
+            </div>
           </div>
 
 
