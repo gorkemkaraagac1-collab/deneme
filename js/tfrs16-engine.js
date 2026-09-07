@@ -22316,7 +22316,9 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191WireExistingContractActions() {
-    const detailContent = document.getElementById("detailContent");
+    // Legacy popup is retired; contract detail tabs are the supported UI.
+    return;
+    /* const detailContent = document.getElementById("detailContent");
     if (!detailContent || detailContent.dataset.v191Delegated === "1") return;
     detailContent.addEventListener("click", event => {
       const target = event.target.closest("button");
@@ -22326,13 +22328,13 @@ ${renderPaymentScheduleFooterContainers()}
       else if (text.includes("audit") && !target.id) { v191OpenContractTools(); }
       else if (text.includes("journal") && !target.id) { v191OpenContractTools(); }
     });
-    detailContent.dataset.v191Delegated = "1";
+    detailContent.dataset.v191Delegated = "1"; */
   }
 
   function v191InitUiWiring() {
     try { v191WireNavigation(); } catch (error) { console.error("V19.1 sidebar navigation wiring error:", error); }
     try { v191AddUtilityButtons(); } catch (error) { console.error("V19.1 utility buttons wiring error:", error); }
-    // Contract Financial Tools eski ayrı penceresi devre dışı; detay tab'ları kullanılır.
+    try { v191WireExistingContractActions(); } catch (error) { console.error("V19.1 existing contract actions wiring error:", error); }
     const bulkInput = document.getElementById("bulkFileInput");
     if (bulkInput && bulkInput.dataset.v191Wired !== "1") {
       bulkInput.dataset.v191Wired = "1";
