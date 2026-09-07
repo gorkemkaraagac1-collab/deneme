@@ -10990,12 +10990,12 @@ ${renderAccountingCenterBulkPromo()}
     }
 
 
-    const selected =
+    let selected =
       getScheduleForYear(
         contract,
         year,
         month,
-        period
+        period === "custom" ? "annual" : period
       );
 
     /*
@@ -11023,6 +11023,10 @@ ${renderAccountingCenterBulkPromo()}
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
         periodStartExclusive = new Date(start.getTime() - 1);
         periodEndInclusive = end;
+        selected = selected.filter(item => {
+          const itemDate = item.date instanceof Date ? item.date : new Date(item.date);
+          return itemDate > periodStartExclusive && itemDate <= periodEndInclusive;
+        });
       }
     }
 
