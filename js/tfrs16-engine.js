@@ -17207,7 +17207,18 @@ ${renderPaymentScheduleFooterContainers()}
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   }
+let { periodStartExclusive, periodEndInclusive } = resolveJournalPeriodDateRange(year, month, period === "custom" ? "monthly" : period);
 
+    if (period === "custom") {
+      const customStartValue = document.getElementById("accountingCustomStart")?.value;
+      const customEndValue = document.getElementById("accountingCustomEnd")?.value;
+      const customStart = customStartValue ? new Date(`${customStartValue}T00:00:00`) : null;
+      const customEnd = customEndValue ? new Date(`${customEndValue}T23:59:59`) : null;
+      if (customStart && customEnd && !Number.isNaN(customStart.getTime()) && !Number.isNaN(customEnd.getTime()) && customEnd >= customStart) {
+        periodStartExclusive = new Date(customStart.getTime() - 1);
+        periodEndInclusive = customEnd;
+      }
+    }
   /**
    * coreRound — kuruş hassasiyetinde yuvarlama.
    * Eşlenen orijinaller: cfoRound, rptRound, v18Round — ÜÇÜ DE
