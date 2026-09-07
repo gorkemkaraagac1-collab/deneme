@@ -2193,7 +2193,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .map(row => ({
           id: `BACKEND-FX-${row.fromCurrency}-${row.rateDate}`,
           fromCurrency: row.fromCurrency, toCurrency: row.toCurrency,
-          rate: Number(row.rate), rateDate: row.rateDate,
+          rate: Number(row.rate), rateDate: v23DateKey(row.rateDate),
           rateType: Object.values(V23_RATE_TYPES).includes(String(row.rateType || "").toUpperCase()) ? String(row.rateType).toUpperCase() : V23_RATE_TYPES.CLOSING,
           source: V23_RATE_SOURCES.CENTRAL_BANK, status: "APPROVED",
           reason: "TCMB doğrulanmış backend kaydı", createdBy: "backend",
@@ -11410,12 +11410,16 @@ ${renderPaymentScheduleFooterContainers()}
       periodType
     );
     const presentationCurrency = String(document.getElementById("schedulePresentationCurrency")?.value || contract?.currency || "TRY").toUpperCase();
-    const conversion = await v26ConvertScheduleToPresentation(
-      filteredRows,
-      String(contract?.currency || "TRY").toUpperCase(),
-      presentationCurrency,
-      new Date()
-    );
+  const sourceCurrency = String(contract?.currency || "TRY").toUpperCase();
+  if (sourceCurrency !== presentationCurrency && (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0)) {
+    await refreshFxRateCacheFromBackend();
+  }
+  const conversion = await v26ConvertScheduleToPresentation(
+    filteredRows,
+    sourceCurrency,
+    presentationCurrency,
+    new Date()
+  );
     const rows = conversion.schedule;
 
     // V18 Parça 1 — önceki satıra göre tutar sıçraması varsa 🔺 rozeti.
