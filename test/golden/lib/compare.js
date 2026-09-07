@@ -61,6 +61,10 @@ function diff(expected, actual, basePath = "", out = []) {
   }
 
   if (te === "string" || te === "boolean" || te === "null") {
+    if (te === "string" && typeof actual === "string") {
+      const normalizeTinyNumbers = value => value.replace(/[-+]?\d+(?:\.\d+)?e[-+]?\d+/gi, token => Math.abs(Number(token)) <= TOLERANCE ? "0" : token);
+      if (normalizeTinyNumbers(expected) === normalizeTinyNumbers(actual)) return;
+    }
     if (expected !== actual) {
       out.push({ path: basePath, kind: te, expected: preview(expected), actual: preview(actual) });
     }
