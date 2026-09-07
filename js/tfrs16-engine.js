@@ -2553,7 +2553,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < effectivePeriodStart)
         .pop();
 
-      let liabilityOpeningNominal = priorRow
+      const liabilityOpeningNominal = priorRow
         ? priorRow.closingLiability
         : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
 
@@ -2565,7 +2565,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
 
       const ratioOpeningToRp = getInflationRatio(effectivePeriodStart, rp);
-      let liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+      const liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
       const rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
 
       const periodRows = fullSchedule.filter(row => {
@@ -2586,43 +2586,6 @@ document.addEventListener("DOMContentLoaded", () => {
         rouDepreciationNominal += row.depreciation;
         rouDepreciationRestated += row.depreciation * ratioRowToRp;
       });
-
-      if (tms29AccrualContext) {
-        const openingDate = new Date(Number(effectivePeriodStart.slice(0,4)), Number(effectivePeriodStart.slice(5,7)) - 1, 0);
-        const closingDate = new Date(Number(rp.slice(0,4)), Number(rp.slice(5,7)), 0);
-        const accrualSchedule = calculateLeaseEngine(contract).schedule;
-        const openingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, openingDate);
-        const closingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, closingDate);
-        const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
-        const fn = resolveContractFunctionalCurrency(contract);
-        let fxRate = 1;
-        if (tx !== fn) {
-          const fx = getFxRate(tx, fn, closingDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
-          if (fx?.error) throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${rp} kapanış kuru bulunamadı.`), { code: fx.error });
-          fxRate = fx.rate;
-        }
-        liabilityOpeningNominal = (openingSnapshot?.liability || 0) * fxRate;
-        liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
-        liabilityInterestNominal = 0; liabilityInterestRestated = 0;
-        liabilityPaymentsNominal = 0; liabilityPaymentsRestated = 0;
-        let cursor = openingDate;
-        while (cursor < closingDate) {
-          const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 2, 0);
-          if (monthEnd > closingDate) monthEnd.setTime(closingDate.getTime());
-          const a = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, cursor);
-          const b = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, monthEnd);
-          const payment = accrualSchedule.filter(row => row.date > cursor && row.date <= monthEnd).reduce((sum,row) => sum + ((tms29AccrualContext.core.advance && row === accrualSchedule[0]) ? 0 : (Number(row.payment)||0)), 0) * fxRate;
-          const interest = ((b?.liability||0) - (a?.liability||0)) * fxRate + payment;
-          const monthKey = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth()+1).padStart(2,"0")}`;
-          const flowRatio = getInflationRatio(monthKey, rp);
-          liabilityInterestNominal += interest;
-          liabilityInterestRestated += interest * flowRatio;
-          liabilityPaymentsNominal += payment;
-          liabilityPaymentsRestated += payment * flowRatio;
-          cursor = monthEnd;
-        }
-        nominalLiabilityClosing = (closingSnapshot?.liability || 0) * fxRate;
-      }
 
       // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
       // yükümlülük artışları, kendi effectiveDate ayından rp'ye restate
@@ -2722,8 +2685,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // liabilityMonetaryGainLoss (periodStart verilmediyse null).
         liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
         netAdjustment,
-        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null,
-        precisionSource
+        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null
       }
     };
   }
@@ -7581,11 +7543,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return null;
       }
 
-      const hasAppliedLayer =
-        (contract?.reassessments || []).some(x => String(x?.status || "").toUpperCase() === "APPLIED") ||
-        (contract?.modifications || []).some(x => String(x?.status || "").toUpperCase() === "APPLIED");
-      if (hasAppliedLayer) return null;
-
       const esc = applyLeaseEscalation(contract, assumptions, core);
       const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
 
@@ -7987,10 +7944,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const normalizedReportingDate = parseDate(reportingDate);
 
-    // The engine's ordinary schedule is not a custom override. Raw,
-    // single-layer leases must keep using the calendar accrual snapshot.
-    const rawAccrualContext = resolveLeaseAccrualContext(contract);
-    const scheduleData = Array.isArray(scheduleOverride) && !rawAccrualContext
+    const scheduleData = Array.isArray(scheduleOverride)
       ? {
           engine: calculateLeaseEngine(contract),
           closedPeriods: scheduleOverride.filter(item => {
@@ -8131,9 +8085,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       totalLeaseLiability:
         total,
-
-      outstandingROU:
-        Math.max(0, Number(scheduleData.outstandingROU) || 0),
 
       currentLiability:
         current,
@@ -9913,10 +9864,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const prepayments = Number(contract.prepayments) || 0;
     const leaseIncentives = Number(contract.leaseIncentives) || 0;
     const restorationObligation = Number(contract.restorationObligation) || 0;
-    const derivedAdvance = Number(engine.advancePaymentAtCommencement) || 0;
-    const explicitAdvance = contract && Object.prototype.hasOwnProperty.call(contract, "advancePaymentAtCommencement");
-    const includeAdvance = explicitAdvance || String(contract?.paymentFrequency || "").toLowerCase() === "annual";
-    const advancePaymentAtCommencement = includeAdvance ? derivedAdvance : 0;
 
     const entries = [
 
@@ -9925,7 +9872,7 @@ document.addEventListener("DOMContentLoaded", () => {
           "260 Kullanım Hakkı Varlığı",
 
         debit:
-          Math.max(0, Number(engine.rouAssets) - (derivedAdvance - advancePaymentAtCommencement)),
+          engine.rouAssets,
 
         credit: 0
       },
@@ -10017,7 +9964,8 @@ document.addEventListener("DOMContentLoaded", () => {
       kiralar). Bu farkın karşılığı olarak burada ayrı bir banka/
       kasa kaydı üretilmezse fiş dengesiz kalır (Dr 260 > Cr 401).
     */
-        if (advancePaymentAtCommencement > 0.01) {
+    const advancePaymentAtCommencement = Number(engine.advancePaymentAtCommencement) || 0;
+    if (advancePaymentAtCommencement > 0.01) {
       entries.push({
         account: "100/102 Kasa/Banka (Peşin Ödenen İlk Kira Taksiti)",
         debit: 0,
@@ -10117,46 +10065,43 @@ document.addEventListener("DOMContentLoaded", () => {
     endMonth
   ) {
 
-    const engine = calculateLease(contract);
-    const year = Number(arguments.length > 3 ? arguments[3] : new Date().getFullYear());
-    const periodStartExclusive = new Date(year, Math.max(0, Number(startMonth) - 1), 0);
-    const periodEndInclusive = new Date(year, Math.max(0, Number(endMonth)), 0);
-    const context = resolveLeaseAccrualContext(contract);
-    const summary = context
-      ? buildAccrualJournalSummary(context, engine.schedule, periodStartExclusive, periodEndInclusive)
-      : null;
-    // Legacy month ordinals are retained only as a date-range wrapper.
-    const selected = summary ? summary.rowsInPeriod : engine.schedule.filter(row => {
-      const d = parseDate(row.date);
-      return d && d > periodStartExclusive && d <= periodEndInclusive;
-    });
+    const engine =
+      calculateLease(
+        contract
+      );
+
+    const selected =
+      engine.schedule.slice(
+        startMonth - 1,
+        endMonth
+      );
 
     if (!selected.length) {
       return [];
     }
 
-    const interest = summary ? summary.interest :
+    const interest =
       selected.reduce(
         (total, item) =>
           total + item.interest,
         0
       );
 
-    const principal = summary ? summary.principal :
+    const principal =
       selected.reduce(
         (total, item) =>
           total + item.principal,
         0
       );
 
-    const payment = summary ? summary.payment :
+    const payment =
       selected.reduce(
         (total, item) =>
           total + item.payment,
         0
       );
 
-    const depreciation = summary ? summary.depreciation :
+    const depreciation =
       selected.reduce(
         (total, item) =>
           total + item.depreciation,
@@ -10698,11 +10643,8 @@ document.addEventListener("DOMContentLoaded", () => {
               <option value="closing">
                 Yıllık Kapanış
               </option>
-              <option value="custom">
-                Özel Tarih Aralığı
-              </option>
 
-            </select><div id="accountingCustomRange" style="display:flex;gap:8px;align-items:end;margin-top:8px;"><label style="font-size:10px;color:#64748b;flex:1;">Başlangıç <input id="accountingCustomStart" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;"></label><label style="font-size:10px;color:#64748b;flex:1;">Bitiş <input id="accountingCustomEnd" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;"></label></div>
+            </select>
 
           </div>
 
@@ -10888,9 +10830,6 @@ ${renderAccountingCenterBulkPromo()}
       document.getElementById(
         "accountingPeriod"
       )?.value;
-    const customStartValue = document.getElementById("accountingCustomStart")?.value;
-    const customEndValue = document.getElementById("accountingCustomEnd")?.value;
-
 
     const month =
       Number(
@@ -11017,12 +10956,15 @@ ${renderAccountingCenterBulkPromo()}
 
     let { periodStartExclusive, periodEndInclusive } =
       resolveJournalPeriodDateRange(year, month, period === "custom" ? "monthly" : period);
-    if (period === "custom" && customStartValue && customEndValue) {
-      const start = new Date(customStartValue + "T00:00:00");
-      const end = new Date(customEndValue + "T23:59:59");
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
-        periodStartExclusive = new Date(start.getTime() - 1);
-        periodEndInclusive = end;
+
+    if (period === "custom") {
+      const customStartValue = document.getElementById("accountingCustomStart")?.value;
+      const customEndValue = document.getElementById("accountingCustomEnd")?.value;
+      const customStart = customStartValue ? new Date(customStartValue + "T00:00:00") : null;
+      const customEnd = customEndValue ? new Date(customEndValue + "T23:59:59") : null;
+      if (customStart && customEnd && !Number.isNaN(customStart.getTime()) && !Number.isNaN(customEnd.getTime()) && customEnd >= customStart) {
+        periodStartExclusive = new Date(customStart.getTime() - 1);
+        periodEndInclusive = customEnd;
       }
     }
 
@@ -12003,14 +11945,6 @@ ${renderAccountingCenterBulkPromo()}
               <option value="quarterly">Çeyreklik</option>
               <option value="annual">Yıllık</option>
             </select>
-            <div id="accountingCustomRange" style="display:none;gap:8px;align-items:end;margin-top:8px;">
-              <label style="font-size:10px;color:#64748b;flex:1;">Başlangıç
-                <input id="accountingCustomStart" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-              </label>
-              <label style="font-size:10px;color:#64748b;flex:1;">Bitiş
-                <input id="accountingCustomEnd" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-              </label>
-            </div>
           </div>
 
 
@@ -17426,11 +17360,7 @@ ${renderPaymentScheduleFooterContainers()}
   function cfoGetLiabilitySplit(contract, reportingDate, schedule) {
     try {
       if (typeof calculateLiabilitySplitAsOf === "function") {
-        const built = cfoBuildSchedule(contract);
-        const customSchedule = built.source !== "LEASE_SCHEDULE" && Array.isArray(schedule) && schedule.length
-          ? schedule
-          : undefined;
-        const result = calculateLiabilitySplitAsOf(contract, reportingDate, customSchedule);
+        const result = calculateLiabilitySplitAsOf(contract, reportingDate, Array.isArray(schedule) && schedule.length ? schedule : undefined);
         if (result && result.valid !== false) return result;
       }
     } catch (error) {}
@@ -17448,8 +17378,8 @@ ${renderPaymentScheduleFooterContainers()}
     const nonCurrent = cfoNumber(split.nonCurrentLiability ?? split.nonCurrent);
     const total = cfoNumber(split.totalLeaseLiability ?? split.total ?? split.outstandingLiability);
 
-    let rouAsset = Math.max(0, cfoNumber(split.outstandingROU));
-    if (!rouAsset && rowAtDate && rowAtDate.rouClosing !== undefined) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouClosing));
+    let rouAsset = 0;
+    if (rowAtDate && rowAtDate.rouClosing !== undefined) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouClosing));
     else if (rowAtDate && rowAtDate.rouOpening !== undefined && cfoDate(rowAtDate.date)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouOpening));
     else if (!schedule.length && built.engine) rouAsset = Math.max(0, cfoNumber(built.engine.rouAssets));
     else if (schedule.length && !rowAtDate && cfoDate(contract.startDate)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(built.engine?.rouAssets));
@@ -17463,33 +17393,11 @@ ${renderPaymentScheduleFooterContainers()}
       const d = cfoDate(row?.date);
       return d && d.getTime() > report.getTime() && future12End && d.getTime() <= future12End.getTime();
     });
-    let next12Payment = future12Rows.reduce((s, r) => s + cfoNumber(r?.payment), 0);
-    let next12Principal = future12Rows.reduce((s, r) => s + cfoNumber(r?.principal), 0);
-    let next12Interest = future12Rows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    let monthInterest = monthRows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    let monthDepreciation = monthRows.reduce((s, r) => s + cfoNumber(r?.depreciation), 0);
-    const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
-    if (accrualContext) {
-      const monthEnd = new Date(report.getFullYear(), report.getMonth() + 1, 0);
-      const monthStartExclusive = new Date(report.getFullYear(), report.getMonth(), 0);
-      const currentSummary = buildAccrualJournalSummary(accrualContext, schedule, monthStartExclusive, monthEnd);
-      if (currentSummary) {
-        monthInterest = cfoNumber(currentSummary.interest);
-        monthDepreciation = cfoNumber(currentSummary.depreciation);
-      }
-      next12Payment = next12Principal = next12Interest = 0;
-      for (let i = 1; i <= 12; i++) {
-        const periodEnd = new Date(report.getFullYear(), report.getMonth() + i + 1, 0);
-        if (periodEnd.getTime() > future12End.getTime()) break;
-        const periodStartExclusive = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 0);
-        const summary = buildAccrualJournalSummary(accrualContext, schedule, periodStartExclusive, periodEnd);
-        if (summary) {
-          next12Payment += cfoNumber(summary.payment);
-          next12Principal += cfoNumber(summary.recurringCashSettlement);
-          next12Interest += cfoNumber(summary.interest);
-        }
-      }
-    }
+    const next12Payment = future12Rows.reduce((s, r) => s + cfoNumber(r?.payment), 0);
+    const next12Principal = future12Rows.reduce((s, r) => s + cfoNumber(r?.principal), 0);
+    const next12Interest = future12Rows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
+    const monthInterest = monthRows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
+    const monthDepreciation = monthRows.reduce((s, r) => s + cfoNumber(r?.depreciation), 0);
     const monthlyLeaseExpense = monthRows.some(r => r?.straightLineExpense !== undefined)
       ? monthRows.reduce((s, r) => s + cfoNumber(r?.straightLineExpense), 0)
       : monthInterest + monthDepreciation;
@@ -17757,16 +17665,16 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function getLeaseLiabilityRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
-    const report=getLeaseLiabilityRollForwardReport(start,d), t=report.totals||{};
-    return {reportingDate:cfoIsoDate(d),openingLiability:cfoRound(t.openingLiability),interest:cfoRound(t.interest),payments:cfoRound(t.payments),closingLiability:cfoRound(t.closingLiability),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL",monthlyLeaseExpense:cfoRound(getMonthlyLeaseExpense(d))};
+    const d=cfoResolveReportingDate(reportingDate), prior=cfoAddMonths(d,-1), current=getTotalLeaseLiability(d), priorTotal=getTotalLeaseLiability(prior);
+    const month=getMonthlyLeaseExpense(d); const interest=getInterestExpense(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0));
+    const payment=cfoPeriodMetrics(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0),{activeOnly:true}).cashPayments;
+    return { reportingDate:cfoIsoDate(d), openingLiability:cfoRound(priorTotal), interest:cfoRound(interest), payments:cfoRound(payment), closingLiability:cfoRound(current), reconciliationDifference:cfoRound((priorTotal+interest-payment)-current), source:"LEASE_SCHEDULE" , monthlyLeaseExpense:cfoRound(month) };
   }
 
   function getLeaseRouRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
-    const report=getRuoAssetRollForwardReport(start,d), t=report.totals||{};
-    const adjustments=cfoRound(cfoNumber(t.modificationAdjustment)+cfoNumber(t.reassessmentAdjustment));
-    return {reportingDate:cfoIsoDate(d),openingROU:cfoRound(t.openingRuo),depreciation:cfoRound(t.depreciation),modificationReassessmentAdjustments:adjustments,closingROU:cfoRound(t.closingRuo),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL"};
+    const d=cfoResolveReportingDate(reportingDate), prior=cfoAddMonths(d,-1), opening=getTotalRuoAssets(prior), closing=getTotalRuoAssets(d), depreciation=getDepreciationExpense(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0));
+    const adjustments=cfoRound(closing-(opening-depreciation));
+    return { reportingDate:cfoIsoDate(d), openingROU:cfoRound(opening), depreciation:cfoRound(depreciation), modificationReassessmentAdjustments:adjustments, closingROU:cfoRound(closing), reconciliationDifference:cfoRound((opening-depreciation+adjustments)-closing), source:"LEASE_SCHEDULE" };
   }
 
   function getCfoJournalMetrics() {
@@ -18100,22 +18008,6 @@ ${renderPaymentScheduleFooterContainers()}
         const built = rptScheduleRows(contract);
         if (built.error) throw new Error(built.error);
         const schedule = built.schedule;
-        const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
-        if (accrualContext) {
-          const openingDate = rptAddDays(start, -1);
-          const openingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, openingDate);
-          const closingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, end);
-          const eventRows = rptRowsBetween(schedule, start, end);
-          const payments = eventRows.reduce((sum, row, index) => {
-            const isCommencementAdvance = accrualContext.core.advance && row === schedule[0];
-            return sum + (isCommencementAdvance ? 0 : rptNumber(row.payment));
-          }, 0);
-          const openingLiability = rptNumber(openingSnapshot?.liability);
-          const closingLiability = rptNumber(closingSnapshot?.liability);
-          const interest = closingLiability - openingLiability + payments;
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingLiability:rptRound(openingLiability),interest:rptRound(interest),payments:rptRound(payments),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingLiability:rptRound(closingLiability),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
-          return;
-        }
         const openingRow = rptScheduleAtOrBefore(schedule, rptAddDays(start, -1));
         const closingRow = rptScheduleAtOrBefore(schedule, end);
         const periodRows = rptRowsBetween(schedule, start, end);
@@ -18185,16 +18077,16 @@ ${renderPaymentScheduleFooterContainers()}
         const expected = openingLiability + interest - payments;
         const modificationAdjustment = appliedModifications.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
-        const unexplainedAdjustment = 0;
-        const adjustments = modificationAdjustment + reassessmentAdjustment;
+        const unexplainedAdjustment = (closingLiability - expected) - modificationAdjustment - reassessmentAdjustment;
+        const adjustments = modificationAdjustment + reassessmentAdjustment + unexplainedAdjustment;
         const difference = expected + adjustments - closingLiability;
         rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
     });
     report.rows = rows;
     report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments - report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
-    report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE || Math.abs(report.totals.reassessmentAdjustment||0)>REPORTING_TOLERANCE };
+    const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
+    report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
     const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
     if (unexplainedLiabilityRows.length) report.warnings.push("Açıklanamayan 'Diğer' yükümlülük hareketi: " + unexplainedLiabilityRows.map(r => r.contractId).join(", "));
@@ -18218,17 +18110,7 @@ ${renderPaymentScheduleFooterContainers()}
       if (contractStart && contractStart > end) return;
       try{
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
-        const schedule=built.schedule;
-        const accrualContext=built.source==="LEASE_SCHEDULE"?resolveLeaseAccrualContext(contract):null;
-        if(accrualContext){
-          const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1));
-          const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end);
-          const openingRuo=rptNumber(openingSnapshot?.rouAsset),closingRuo=rptNumber(closingSnapshot?.rouAsset);
-          const depreciation=Math.max(0,openingRuo-closingRuo);
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingRuo:rptRound(closingRuo),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
-          return;
-        }
-        const openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
+        const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
         let openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
         const openingRowDateRuo=openingRow?rptDate(openingRow.date):null;
@@ -18277,8 +18159,8 @@ ${renderPaymentScheduleFooterContainers()}
         const depreciation=periodRows.reduce((s,r)=>s+rptNumber(r.depreciation),0);
         const modificationAdjustment=appliedModifications.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
-        const unexplainedAdjustment=0;
-        const adjustments=modificationAdjustment+reassessmentAdjustment;
+        const unexplainedAdjustment=(closingRuo-(openingRuo-depreciation))-modificationAdjustment-reassessmentAdjustment;
+        const adjustments=modificationAdjustment+reassessmentAdjustment+unexplainedAdjustment;
         const diff=openingRuo-depreciation+adjustments-closingRuo;
         rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
@@ -18286,7 +18168,7 @@ ${renderPaymentScheduleFooterContainers()}
     report.rows=rows;
     report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
-    report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:true};
+    report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
     const unexplainedRouRows=rows.filter(r=>r.status!=="ERROR"&&Math.abs(rptNumber(r.otherAdjustment))>REPORTING_TOLERANCE);
     if(unexplainedRouRows.length) report.warnings.push("Açıklanamayan 'Diğer' ROU hareketi: "+unexplainedRouRows.map(r=>r.contractId).join(", "));
@@ -32603,40 +32485,6 @@ ${renderPaymentScheduleFooterContainers()}
     runSelfTestsV27MultiCompany
   });
 
-  function runAcceptanceTestLease020() {
-    const expectedLiability = 332989.2615689249;
-    const expectedAdvance = 95000;
-    const expectedROU = 427989.2615689249;
-    const contract = {
-      id: "LEASE-020",
-      startDate: "2026-03-01",
-      endDate: "2031-02-28",
-      monthlyPayment: 95000,
-      paymentFrequency: "annual",
-      paymentTiming: "advance",
-      discountRate: 5.5,
-      discountRateConvention: "effectiveAnnual",
-      currency: "USD",
-      commencementFxRate: 43.8
-    };
-    const engine = calculateLeaseEngine(contract);
-    const context = resolveLeaseAccrualContext(contract);
-    const asOf = context ? buildReportingDateAccrual(context.core, context.measurement, engine.schedule, "2026-06-30") : null;
-    const expectedAsOfLiability = 338985.4425842508;
-    const expectedAsOfROU = expectedROU * 56 / 60;
-    const tolerance = 1e-7;
-    const checks = {
-      initialLiability: Math.abs(engine.liability - expectedLiability) <= tolerance,
-      advancePaymentAtCommencement: Math.abs(engine.advancePaymentAtCommencement - expectedAdvance) <= tolerance,
-      initialROU: Math.abs(engine.rouAssets - expectedROU) <= tolerance,
-      fiveAnnualPayments: engine.schedule.length === 5 && engine.schedule.every(row => Math.abs(row.payment - 95000) <= tolerance),
-      advanceNotDeductedTwice: !!engine.schedule[0] && Math.abs(engine.schedule[0].closingLiability - expectedLiability) <= tolerance && Math.abs(engine.schedule[0].principal) <= tolerance,
-      reportingDateLiability: !!asOf && Math.abs(asOf.liability - expectedAsOfLiability) <= tolerance,
-      reportingDateROU: !!asOf && Math.abs(asOf.rouAsset - expectedAsOfROU) <= tolerance
-    };
-    return {name:"LEASE-020 acceptance",passed:Object.values(checks).every(Boolean),checks,actual:{initialLiability:engine.liability,advancePaymentAtCommencement:engine.advancePaymentAtCommencement,initialROU:engine.rouAssets,firstClosingLiability:engine.schedule[0]?.closingLiability,asOfLiability:asOf?.liability,asOfROU:asOf?.rouAsset,paymentCount:engine.schedule.length}};
-  }
-
   /* ==========================================================
      TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
      ========================================================== */
@@ -32653,10 +32501,6 @@ ${renderPaymentScheduleFooterContainers()}
       formatCurrency,
       parseDate,
       calculateLeaseEngine,
-      calculateLiabilitySplitAsOf,
-      buildReportingDateAccrual,
-      resolveLeaseAccrualContext,
-      runAcceptanceTestLease020,
       validateContract,
       calculateVariance,
       calculateVariancePercent,
@@ -32718,7 +32562,7 @@ ${renderPaymentScheduleFooterContainers()}
     if (window.__GK_TFRS16_V26_DETAIL_HOOK__) return;
     window.__GK_TFRS16_V26_DETAIL_HOOK__ = true;
     const observer = new MutationObserver(() => {
-      if (typeof document === "undefined") return; const detail = document.getElementById("detailModal") || document.querySelector(".contract-detail, #contractDetail");
+      const detail = document.getElementById("detailModal") || document.querySelector(".contract-detail, #contractDetail");
       if (!detail || detail.classList?.contains("hidden")) return;
       if (detail.querySelector(".gk-v26-auto-detect")) return;
       const cid = (typeof selectedContractId !== "undefined" && selectedContractId) || null;
@@ -33851,7 +33695,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
     const render = () => {
       const activeContracts = (Array.isArray(contracts) ? contracts : [])
-        .map(c => JSON.parse(JSON.stringify(c)))
+        .slice()
         .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
       if (!v26SelectedAccountingContractId && activeContracts.length) {
@@ -33869,7 +33713,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
         ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div>`
         : !selectedContract
           ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div>`
-          : renderAccountingCenter(selectedContract ? JSON.parse(JSON.stringify(selectedContract)) : selectedContract);
+          : renderAccountingCenter(selectedContract);
 
       container.innerHTML = `
         <div class="gk-v26-page">
