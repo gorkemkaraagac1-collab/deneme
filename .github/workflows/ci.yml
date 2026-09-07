@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Node.js--max-warnings 224--max-warnings 225
+      - name: Setup Node.js--max-warnings 224--max-Setup Node.js --max-warnings 224--max-warnings 225Setup Node.jswarnings 225
         uses: actions/setup-node@v4
         with:
           node-version: '18'
