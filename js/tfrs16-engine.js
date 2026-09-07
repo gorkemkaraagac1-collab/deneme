@@ -11245,6 +11245,12 @@ ${renderAccountingCenterBulkPromo()}
 
           <div style="display:flex;align-items:end;">
             <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
+              Raporlama Tarihi
+              <input id="scheduleReportingDate" type="date" value="${getScheduleReportingDate()}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
+            </label>
+          </div>
+          <div style="display:flex;align-items:end;">
+            <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
               Sunum Para Birimi
               <select id="schedulePresentationCurrency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
                 ${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}
@@ -11364,6 +11370,7 @@ ${renderPaymentScheduleHeader()}
 
 ${renderPaymentScheduleFilters(contract)}
 
+<p id="scheduleFxStatus" role="status" style="color:#64748b;font-size:12px;"></p>
 ${renderPaymentScheduleTableShell()}
 ${renderPaymentScheduleFooterContainers()}
       </div>
@@ -11371,6 +11378,13 @@ ${renderPaymentScheduleFooterContainers()}
     `;
   }
 
+
+  function getScheduleReportingDate() {
+    const selected = document.getElementById("scheduleReportingDate")?.value;
+    if (selected) return selected;
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  }
 
   async function renderPaymentScheduleTable(contract) {
 
@@ -11418,9 +11432,15 @@ ${renderPaymentScheduleFooterContainers()}
     filteredRows,
     sourceCurrency,
     presentationCurrency,
-    new Date()
+    getScheduleReportingDate()
   );
     const rows = conversion.schedule;
+    const fxStatus = document.getElementById("scheduleFxStatus");
+    if (fxStatus) {
+      fxStatus.textContent = sourceCurrency === presentationCurrency ? "" : conversion.ok
+        ? `${conversion.asOfDate} kuruyla gösterim: 1 ${sourceCurrency} = ${conversion.rate} ${presentationCurrency}. Gelecek ödemelerin bu karşılığı tahmin veya muhasebe kaydı değildir.`
+        : `${sourceCurrency}/${presentationCurrency}: ${conversion.asOfDate} için kur bulunamadı. Raporlama Tarihi alanından kayıtlı kur tarihini seçin.`;
+    }
 
     // V18 Parça 1 — önceki satıra göre tutar sıçraması varsa 🔺 rozeti.
     const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
@@ -12150,6 +12170,7 @@ ${renderPaymentScheduleFooterContainers()}
           renderPaymentScheduleTable(contract)
       );
 
+    document.getElementById("scheduleReportingDate")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
     document.getElementById("schedulePresentationCurrency")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
 
     document
@@ -12166,7 +12187,7 @@ ${renderPaymentScheduleFooterContainers()}
 
   async function exportPaymentSchedule(contract, presentationCurrency) {
 
-    presentationCurrency = String(presentationCurrency || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
+    presentationCurrency = String(presentationCurrency || document.getElementById("schedulePresentationCurrency")?.value || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
 
     const baseEngine =
       calculateLeaseEngine(
@@ -12188,7 +12209,7 @@ ${renderPaymentScheduleFooterContainers()}
     }
 
     const sourceCurrency = String(contract?.currency || "TRY").toUpperCase();
-    const scheduleAsOfDate = new Date();
+    const scheduleAsOfDate = getScheduleReportingDate();
     const presentationConversion = await v26ConvertScheduleToPresentation(
       engine.schedule,
       sourceCurrency,
@@ -12221,7 +12242,7 @@ ${renderPaymentScheduleFooterContainers()}
       { "Alan": "Sunum Para Birimi", "Değer": presentationCurrency },
       { "Alan": "İlk Kira Yükümlülüğü", "Değer": engine.liability },
       { "Alan": "ROU Varlığı (Başlangıç)", "Değer": engine.rouAssets },
-      { "Alan": "Rapor Tarihi", "Değer": formatDate(new Date()) }
+      { "Alan": "Rapor Tarihi", "Değer": scheduleAsOfDate }
     ];
 
     if (fx?.applicable) {
@@ -30552,7 +30573,7 @@ ${renderPaymentScheduleFooterContainers()}
     const moneyFields = ["openingLiability", "payment", "interest", "principal", "closingLiability", "depreciation", "rouClosing"];
     const errors = [];
     const out = [];
-    const dateForRow = () => asOfDate || new Date();
+    const reportingDate = asOfDate || getScheduleReportingDate();
 
     for (const row of rows) {
       const copy = { ...row };
@@ -30561,8 +30582,8 @@ ${renderPaymentScheduleFooterContainers()}
       let error = null;
       if (from !== to) {
         try {
-          const fx = await getFxRateAuto(from, to, dateForRow(row), (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"));
-          if (fx?.error || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
+          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"));
+          if (fx?.error || !(Number(fx?.rate) > 0) || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
           rate = Number(fx.rate);
           moneyFields.forEach(field => { copy[field] = v23Round((Number(row[field]) || 0) * rate, 2); });
         } catch (e) {
@@ -30581,7 +30602,7 @@ ${renderPaymentScheduleFooterContainers()}
       copy.presentationFxError = error;
       out.push(copy);
     }
-    return { schedule: out, fromCurrency: from, toCurrency: to, rate: out.find(r => Number.isFinite(r.presentationRate))?.presentationRate ?? (from === to ? 1 : null), ok: errors.length === 0, errors };
+    return { schedule: out, asOfDate: v23DateKey(reportingDate), fromCurrency: from, toCurrency: to, rate: out.find(r => Number.isFinite(r.presentationRate))?.presentationRate ?? (from === to ? 1 : null), ok: errors.length === 0, errors };
   }
 
   function v26PresentationMoneyKey(key) {
