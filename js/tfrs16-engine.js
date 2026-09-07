@@ -22332,7 +22332,7 @@ ${renderPaymentScheduleFooterContainers()}
   function v191InitUiWiring() {
     try { v191WireNavigation(); } catch (error) { console.error("V19.1 sidebar navigation wiring error:", error); }
     try { v191AddUtilityButtons(); } catch (error) { console.error("V19.1 utility buttons wiring error:", error); }
-    try { v191WireExistingContractActions(); } catch (error) { console.error("V19.1 existing contract actions wiring error:", error); }
+    // Contract Financial Tools eski ayrı penceresi devre dışı; detay tab'ları kullanılır.
     const bulkInput = document.getElementById("bulkFileInput");
     if (bulkInput && bulkInput.dataset.v191Wired !== "1") {
       bulkInput.dataset.v191Wired = "1";
@@ -30582,7 +30582,7 @@ ${renderPaymentScheduleFooterContainers()}
       let error = null;
       if (from !== to) {
         try {
-          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"));
+          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"), { allowLastAvailable: true });
           if (fx?.error || !(Number(fx?.rate) > 0) || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
           rate = Number(fx.rate);
           moneyFields.forEach(field => { copy[field] = v23Round((Number(row[field]) || 0) * rate, 2); });
