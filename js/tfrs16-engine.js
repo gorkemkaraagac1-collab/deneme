@@ -2396,47 +2396,142 @@ document.addEventListener("DOMContentLoaded", () => {
       return rowMonth <= rp;
     });
 
-    // Edinim anındaki brüt ROU: ilk satırın açılış ROU'su (initialROU).
-    // Satır yoksa (henüz ödeme dönemi başlamamışsa) motoru doğrudan
-    // çağırıp initialROU'yu alıyoruz.
-    const grossROU =
-      fullSchedule.length
-        ? fullSchedule[0].rouOpening
-        : (calculateLeaseEngine(contract).rouAssets || 0);
+    /*
+      GC-2026-09 (TMS 29 EK GEREKSİNİM — 30.06.2026 nihai raporlama testi):
+      Yukarıdaki `fullSchedule`/`rowsUpToRp`, ÖDEME SATIRLARINA dayanır.
+      Aylık ödemeli (legacy) kontratlarda bu sorun yaratmaz (her satır =
+      1 takvim ayı). Ama çeyreklik/yıllık ödemeli kontratlarda (örn.
+      LEASE-020) bir satır 3-12 takvim ayını LUMPED (birleşik) olarak
+      taşır — 30 Haziran gibi ödeme günü olmayan bir rp için "rowMonth
+      <= rp" filtresi, henüz TAMAMLANMAMIŞ ay(lar)ın amortismanını da
+      dahil eder (bkz. Madde 3 — buildReportingDateAccrual).Ayrıca bu
+      fonksiyon şimdiye kadar hiç TMS 21 (USD→TRY) çevrimi yapmıyordu —
+      yabancı para birimli kontratlarda USD tutarlara doğrudan TRY
+      enflasyon katsayısı uygulanıyordu (YANLIŞ — bkz. görev tanımı).
+      Aşağıdaki blok, YALNIZCA ham motor kaynaklı (reassessment/
+      modification UYGULANMAMIŞ, migration'sız, exempt olmayan) tek
+      katmanlı kontratlarda buildReportingDateAccrual + TMS21 kurunu
+      kullanarak TAKVİME GÖRE DOĞRU ve DOĞRU PARA BİRİMİNDE bir taban
+      üretir. Diğer durumlarda (reassessment/modification uygulanmış,
+      migration, exempt) ESKİ (satır tabanlı) yöntem AYNEN çalışmaya
+      devam eder — çok katmanlı ROU (modifikasyon sonrası) restatement'ı
+      bu sürümde KAPSAM DIŞI bırakıldı (bkz. rapor).
+    */
+    const hasAppliedChange =
+      (contract?.reassessments || []).some(x => x?.status === "APPLIED") ||
+      (contract?.modifications || []).some(x => x?.status === "APPLIED");
+
+    const tms29AccrualContext =
+      !hasAppliedChange ? resolveLeaseAccrualContext(contract) : null;
+
+    let grossROU, restatedGrossROU, restatedAccumDep, restatedROUClosing,
+        nominalROUClosing, nominalLiabilityClosing, rows, lastRow,
+        monthsElapsedForRp = null, precisionSource = "SCHEDULE_ROWS";
+
+    if (tms29AccrualContext) {
+      const rpEndDate = new Date(Number(rp.slice(0, 4)), Number(rp.slice(5, 7)), 0);
+      const engineForSchedule = calculateLeaseEngine(contract);
+      const accrual = buildReportingDateAccrual(
+        tms29AccrualContext.core,
+        tms29AccrualContext.measurement,
+        engineForSchedule.schedule,
+        rpEndDate
+      );
+
+      if (accrual) {
+        const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+        const functionalCurrency = resolveContractFunctionalCurrency(contract);
+        const sameCurrency = transactionCurrency === functionalCurrency;
+
+        let commencementRate = 1, closingRate = 1;
+        if (!sameCurrency) {
+          const commencementFx = getFxRate(transactionCurrency, functionalCurrency, contract.startDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          if (commencementFx?.error) throw Object.assign(new Error(`TMS 29: ${transactionCurrency}/${functionalCurrency} başlangıç kuru bulunamadı.`), { code: commencementFx.error });
+          commencementRate = commencementFx.rate;
+          const closingFx = getFxRate(transactionCurrency, functionalCurrency, rpEndDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          if (closingFx?.error) throw Object.assign(new Error(`TMS 29: ${transactionCurrency}/${functionalCurrency} ${rp} kapanış kuru bulunamadı.`), { code: closingFx.error });
+          closingRate = closingFx.rate;
+        }
+
+        // ROU — gayrimoneter: TARİHİ (başlangıç/edinim) kuruyla TRY
+        // maliyet tabanı, sonra endeksle düzeltilir. Yükümlülük —
+        // moneter: KAPANIŞ kuruyla TRY'ye çevrilir (TMS 21.23(a)).
+        grossROU = tms29AccrualContext.measurement.initialROU * commencementRate;
+        nominalROUClosing = accrual.rouAsset * commencementRate;
+        nominalLiabilityClosing = accrual.liability * closingRate;
+
+        const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
+        restatedGrossROU = grossROU * ratioAcquisitionToRp;
+
+        monthsElapsedForRp = accrual.monthsElapsedTotal;
+        const depMonths = tms29AccrualContext.measurement.depreciationMonths;
+        restatedAccumDep = restatedGrossROU * (Math.min(monthsElapsedForRp, depMonths) / depMonths);
+        restatedROUClosing = Math.max(0, restatedGrossROU - restatedAccumDep);
+
+        rows = [{
+          period: 1,
+          date: rpEndDate,
+          month: rp,
+          ratio: ratioAcquisitionToRp,
+          nominalDepreciation: grossROU - nominalROUClosing,
+          restatedDepreciation: restatedAccumDep,
+          nominalInterest: null,
+          restatedInterest: null,
+          nominalClosingLiability: nominalLiabilityClosing,
+          restatedClosingLiability: nominalLiabilityClosing,
+          nominalClosingROU: nominalROUClosing,
+          note: "GC-2026-09: takvime göre doğru (accrual tabanlı) tek satır — schedule satırlarından TÜRETİLMEDİ."
+        }];
+        lastRow = null; // aşağıdaki eski-yol fallback'leri (lastRow?.x) bu dalda kullanılmaz
+        precisionSource = "CALENDAR_ACCRUAL";
+      }
+    }
+
+    if (precisionSource === "SCHEDULE_ROWS") {
+      // Edinim anındaki brüt ROU: ilk satırın açılış ROU'su (initialROU).
+      // Satır yoksa (henüz ödeme dönemi başlamamışsa) motoru doğrudan
+      // çağırıp initialROU'yu alıyoruz.
+      grossROU =
+        fullSchedule.length
+          ? fullSchedule[0].rouOpening
+          : (calculateLeaseEngine(contract).rouAssets || 0);
+
+      const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
+      restatedGrossROU = grossROU * ratioAcquisitionToRp;
+
+      restatedAccumDep = 0;
+      rows = rowsUpToRp.map(row => {
+        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        const ratioRowToRp = getInflationRatio(rowMonth, rp);
+        const restatedDepreciation = row.depreciation * ratioRowToRp;
+        restatedAccumDep += restatedDepreciation;
+
+        return {
+          period: row.period,
+          date: row.date,
+          month: rowMonth,
+          ratio: ratioRowToRp,
+          nominalDepreciation: row.depreciation,
+          restatedDepreciation,
+          // Yükümlülük moneter kalem — düzeltilmiş = nominal (fark yok).
+          nominalInterest: row.interest,
+          restatedInterest: row.interest,
+          nominalClosingLiability: row.closingLiability,
+          restatedClosingLiability: row.closingLiability,
+          nominalClosingROU: row.rouClosing
+        };
+      });
+
+      lastRow = rowsUpToRp.length ? rowsUpToRp[rowsUpToRp.length - 1] : null;
+
+      nominalROUClosing = lastRow ? lastRow.rouClosing : grossROU;
+      restatedROUClosing = Math.max(0, restatedGrossROU - restatedAccumDep);
+
+      nominalLiabilityClosing =
+        lastRow ? lastRow.closingLiability : (calculateLeaseEngine(contract).liability || 0);
+    }
 
     const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
-    const restatedGrossROU = grossROU * ratioAcquisitionToRp;
-
-    let restatedAccumDep = 0;
-    const rows = rowsUpToRp.map(row => {
-      const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
-      const ratioRowToRp = getInflationRatio(rowMonth, rp);
-      const restatedDepreciation = row.depreciation * ratioRowToRp;
-      restatedAccumDep += restatedDepreciation;
-
-      return {
-        period: row.period,
-        date: row.date,
-        month: rowMonth,
-        ratio: ratioRowToRp,
-        nominalDepreciation: row.depreciation,
-        restatedDepreciation,
-        // Yükümlülük moneter kalem — düzeltilmiş = nominal (fark yok).
-        nominalInterest: row.interest,
-        restatedInterest: row.interest,
-        nominalClosingLiability: row.closingLiability,
-        restatedClosingLiability: row.closingLiability,
-        nominalClosingROU: row.rouClosing
-      };
-    });
-
-    const lastRow = rowsUpToRp.length ? rowsUpToRp[rowsUpToRp.length - 1] : null;
-
-    const nominalROUClosing = lastRow ? lastRow.rouClosing : grossROU;
-    const restatedROUClosing = Math.max(0, restatedGrossROU - restatedAccumDep);
-
-    const nominalLiabilityClosing =
-      lastRow ? lastRow.closingLiability : (calculateLeaseEngine(contract).liability || 0);
     // Moneter kalem — kapanış bakiyesinin KENDİSİ için düzeltilmiş
     // tutar nominal ile aynıdır (bu satır DEĞİŞMEDİ).
     const restatedLiabilityClosing = nominalLiabilityClosing;
@@ -2458,7 +2553,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < effectivePeriodStart)
         .pop();
 
-      const liabilityOpeningNominal = priorRow
+      let liabilityOpeningNominal = priorRow
         ? priorRow.closingLiability
         : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
 
@@ -2470,7 +2565,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
 
       const ratioOpeningToRp = getInflationRatio(effectivePeriodStart, rp);
-      const liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+      let liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
       const rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
 
       const periodRows = fullSchedule.filter(row => {
@@ -2491,6 +2586,43 @@ document.addEventListener("DOMContentLoaded", () => {
         rouDepreciationNominal += row.depreciation;
         rouDepreciationRestated += row.depreciation * ratioRowToRp;
       });
+
+      if (tms29AccrualContext) {
+        const openingDate = new Date(Number(effectivePeriodStart.slice(0,4)), Number(effectivePeriodStart.slice(5,7)) - 1, 0);
+        const closingDate = new Date(Number(rp.slice(0,4)), Number(rp.slice(5,7)), 0);
+        const accrualSchedule = calculateLeaseEngine(contract).schedule;
+        const openingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, openingDate);
+        const closingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, closingDate);
+        const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+        const fn = resolveContractFunctionalCurrency(contract);
+        let fxRate = 1;
+        if (tx !== fn) {
+          const fx = getFxRate(tx, fn, closingDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          if (fx?.error) throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${rp} kapanış kuru bulunamadı.`), { code: fx.error });
+          fxRate = fx.rate;
+        }
+        liabilityOpeningNominal = (openingSnapshot?.liability || 0) * fxRate;
+        liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+        liabilityInterestNominal = 0; liabilityInterestRestated = 0;
+        liabilityPaymentsNominal = 0; liabilityPaymentsRestated = 0;
+        let cursor = openingDate;
+        while (cursor < closingDate) {
+          const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 2, 0);
+          if (monthEnd > closingDate) monthEnd.setTime(closingDate.getTime());
+          const a = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, cursor);
+          const b = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, monthEnd);
+          const payment = accrualSchedule.filter(row => row.date > cursor && row.date <= monthEnd).reduce((sum,row) => sum + ((tms29AccrualContext.core.advance && row === accrualSchedule[0]) ? 0 : (Number(row.payment)||0)), 0) * fxRate;
+          const interest = ((b?.liability||0) - (a?.liability||0)) * fxRate + payment;
+          const monthKey = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth()+1).padStart(2,"0")}`;
+          const flowRatio = getInflationRatio(monthKey, rp);
+          liabilityInterestNominal += interest;
+          liabilityInterestRestated += interest * flowRatio;
+          liabilityPaymentsNominal += payment;
+          liabilityPaymentsRestated += payment * flowRatio;
+          cursor = monthEnd;
+        }
+        nominalLiabilityClosing = (closingSnapshot?.liability || 0) * fxRate;
+      }
 
       // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
       // yükümlülük artışları, kendi effectiveDate ayından rp'ye restate
@@ -2590,7 +2722,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // liabilityMonetaryGainLoss (periodStart verilmediyse null).
         liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
         netAdjustment,
-        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null
+        liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null,
+        precisionSource
       }
     };
   }
@@ -2991,11 +3124,14 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     const monthlyRate =
-      newTerms?.effectiveMonthlyRate !== undefined &&
-      newTerms?.effectiveMonthlyRate !== null &&
-      newTerms?.effectiveMonthlyRate !== ""
-        ? Number(newTerms.effectiveMonthlyRate)
-        : (Number(newTerms?.discountRate) || 0) / 100 / 12;
+      resolveContractMonthlyRate(
+        newTerms?.discountRate,
+        newTerms?.effectiveMonthlyRate,
+        resolveDiscountRateConvention(newTerms) === "nominal" ||
+        resolveDiscountRateConvention(contract) === "nominal"
+          ? "nominal"
+          : "effective"
+      );
 
     if (!payments.length) {
       return { liability: 0, monthlyRate, payments: [], schedule: [] };
@@ -4180,11 +4316,14 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
     const monthlyRate =
-      newTerms.effectiveMonthlyRate !== undefined &&
-      newTerms.effectiveMonthlyRate !== null &&
-      newTerms.effectiveMonthlyRate !== ""
-        ? Number(newTerms.effectiveMonthlyRate)
-        : (Number(newTerms.discountRate) || 0) / 100 / 12;
+      resolveContractMonthlyRate(
+        newTerms.discountRate,
+        newTerms.effectiveMonthlyRate,
+        resolveDiscountRateConvention(newTerms) === "nominal" ||
+        resolveDiscountRateConvention(contract) === "nominal"
+          ? "nominal"
+          : "effective"
+      );
 
     if (!payments.length) {
       return {
@@ -5336,8 +5475,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function formatPresentationCurrency(value, currency = "TRY") {
     const code = String(currency || "TRY").toUpperCase();
-    const symbol = code === "USD" ? "$" : code === "EUR" ? "€" : code === "GBP" ? "£" : "₺";
+    if (code === "MIXED") return formatNumber(value);
+    const symbol = code === "USD" ? "$" : code === "EUR" ? "€" : code === "GBP" ? "£" : code === "TRY" ? "₺" : "";
     return `${symbol}${formatNumber(value)}`;
+  }
+
+  /**
+   * resolvePaymentFrequencyLabel — GC-2026-09 (Madde 6): ödeme
+   * sıklığına uygun etiket. Önceden "Aylık Kira" HER sözleşmede
+   * (çeyreklik/yıllık ödemeli olsa bile) sabit gösteriliyordu.
+   */
+  function resolvePaymentFrequencyLabel(frequency) {
+    const step = resolveFrequencyStepMonths(frequency);
+    if (step === 3) return "Çeyreklik";
+    if (step === 12) return "Yıllık";
+    return "Aylık";
   }
 
   function formatScheduleMoney(item, field, currency) {
@@ -5844,6 +5996,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function isAdvancePaymentTiming(timing) {
     return String(timing || "arrears").trim().toLowerCase() === "advance";
+  }
+
+
+  /**
+   * resolveDiscountRateConvention — kira sözleşmesindeki discountRate
+   * alanının EFEKTİF yıllık oran mı yoksa NOMİNAL yıllık oran mı
+   * olduğunu belirler. GC-2026-09 düzeltmesi öncesi motor, oranı her
+   * zaman nominal kabul edip 12'ye bölüyordu (annualRate/100/12); bu
+   * ay/çeyrek dışı ödeme sıklıklarında yanlış efektif yıllık orana
+   * yol açıyordu (bkz. engine-decisions-and-learnings.md).
+   *
+   * VARSAYILAN artık "effective" — LEASE-020 gibi "yıllık efektif
+   * iskonto oranı" olarak girilen sözleşmelerle tutarlı. Geçmişte
+   * nominal varsayımıyla girilmiş sözleşmeler için contract/newTerms
+   * üzerinde açık `discountRateConvention: "nominal"` alanı set
+   * edilerek ESKİ davranış (annualRate/100/12) korunabilir — hiçbir
+   * kayıt otomatik/sessizce yeniden yorumlanmaz, karar sözleşme
+   * bazında açık alanla verilir.
+   */
+  function resolveDiscountRateConvention(source) {
+    const raw = String((source && source.discountRateConvention) || "effective")
+      .trim()
+      .toLowerCase();
+    return raw === "nominal" ? "nominal" : "effective";
+  }
+
+  /**
+   * resolveContractMonthlyRate — annualRatePercent (örn. 5.5) ve
+   * convention'a göre AYLIK iskonto oranını üretir. explicitMonthlyRate
+   * (effectiveMonthlyRate alanı) verilmişse bu HER ZAMAN önceliklidir
+   * ve doğrudan kullanılır (davranış değişmedi).
+   */
+  function resolveContractMonthlyRate(annualRatePercent, explicitMonthlyRate, convention) {
+    if (
+      explicitMonthlyRate !== undefined &&
+      explicitMonthlyRate !== null &&
+      explicitMonthlyRate !== ""
+    ) {
+      return Number(explicitMonthlyRate);
+    }
+    const annual = Number(annualRatePercent) || 0;
+    if (convention === "nominal") {
+      return annual / 100 / 12;
+    }
+    // effective (default): yıllık efektif orandan tam ay dönüşümü
+    return Math.pow(1 + annual / 100, 1 / 12) - 1;
   }
 
 
@@ -6436,11 +6634,11 @@ document.addEventListener("DOMContentLoaded", () => {
       Number(contract.discountRate) || 0;
 
     const monthlyRate =
-      contract.effectiveMonthlyRate !== undefined &&
-      contract.effectiveMonthlyRate !== null &&
-      contract.effectiveMonthlyRate !== ""
-        ? Number(contract.effectiveMonthlyRate)
-        : annualRate / 100 / 12;
+      resolveContractMonthlyRate(
+        annualRate,
+        contract.effectiveMonthlyRate,
+        resolveDiscountRateConvention(contract)
+      );
 
     const months =
       monthsBetween(
@@ -6539,7 +6737,10 @@ document.addEventListener("DOMContentLoaded", () => {
       advance,
       paymentDates,
       periodRate,
-      nPayments: paymentDates.length
+      nPayments: paymentDates.length,
+      // GC-2026-09 (tahakkuk motoru): rapor tarihi tahakkuklarının
+      // (buildReportingDateAccrual) ay sayımı için kontrat başlangıcı.
+      commencementDate: parseDate(contract.startDate)
     };
   }
 
@@ -6640,6 +6841,16 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     } else {
       paymentDates.forEach((date, index) => {
+        // GC-2026-09 (çift sayım düzeltmesi): advance timing'te index=0
+        // ödemesi başlangıçta ZATEN nakden ödenmiştir — TFRS 16.24
+        // uyarınca muhasebe başlangıç YÜKÜMLÜLÜĞÜ yalnızca başlangıçta
+        // henüz ÖDENMEMİŞ kiraların bugünkü değeridir. Bu yüzden PV
+        // toplamına dahil edilmez (aşağıda advancePaymentAtCommencement
+        // olarak ayrıca taşınıp ROU'ya eklenir — ödeme planından/
+        // amortisman tablosundan İKİNCİ KEZ düşülmez, bkz.
+        // calculateAmortizationTable isFirstAdvancePayment dalı).
+        if (advance && index === 0) return;
+
         let exponent;
         if (stepMonths === 1 && !advance) {
           // Legacy monthly arrears: 1..n
@@ -6660,13 +6871,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const initialLiability =
       liability;
 
+    // Advance timing'te başlangıçta zaten ödenmiş ilk taksit — bu bir
+    // yükümlülük DEĞİL, ROU'nun bir bileşenidir (peşin ödenmiş kira).
+    // Kapalı-form (stepMonths===1 && !advance) ve monthlyRate===0
+    // dallarında advance hiç yok/ilgisiz olduğundan 0 kalır.
+    const advancePaymentAtCommencement =
+      advance && paymentAmounts.length
+        ? paymentAmounts[0]
+        : 0;
+
     // Initial ROU measurement per TFRS 16.24:
-    // liability + initial direct costs + prepayments
+    // liability (henüz ödenmemiş kiraların PV'si)
+    // + başlangıçta ödenmiş kira (advance ilk taksit)
+    // + initial direct costs + prepayments
     // - lease incentives + restoration/dismantling obligation.
-    // When all extended fields are 0 (legacy contracts), this
-    // equals initialLiability exactly, matching calculateLease().
+    // Legacy arrears kontratlarda advancePaymentAtCommencement=0
+    // olduğundan bu, initialLiability'ye eşit kalmaya devam eder —
+    // davranış birebir korunur.
     const initialROU =
       initialLiability +
+      advancePaymentAtCommencement +
       assumptions.initialDirectCosts +
       assumptions.prepayments -
       assumptions.leaseIncentives +
@@ -6700,6 +6924,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       initialLiability,
       initialROU,
+      advancePaymentAtCommencement,
       usesUsefulLife,
       depreciationMonths,
       depreciation
@@ -6747,22 +6972,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const periodPayment =
         paymentAmounts[i];
 
-      // ANNUITY-DUE (ADVANCE) 1. ÖDEME DÜZELTMESİ (Görkem onayı,
-      // PROJECT_CONTEXT.md bölüm 33) — TFRS 16 başlangıç ölçümü
-      // (initialLiability/PV) advance ödemeyi zaten t=0'da,
-      // İSKONTOSUZ saymıştı (yukarıda: advance ⇒ exponent = index*
-      // stepMonths, ilk ödeme exponent=0). Üzerine bu dönem için de
-      // faiz işletmek zaman değerini ÇİFT SAYAR — advance'de 1.
-      // ödeme öncesi faiz TAHAKKUK ETMEZ, ödeme doğrudan anaparadan
-      // düşer. 2. ödemeden itibaren mevcut arrears formülü AYNEN
-      // doğrudur: annuity-due PV'den ilk (iskontosuz) ödeme
-      // çıkarıldığında kalan bakiye, matematiksel olarak kalan
-      // (n-1) ödemelik SIRADAN bir anüitenin PV'sine eşittir — bu
-      // yüzden son satır kendiliğinden ~0'a yakınsar (GC-01
-      // arrears'taki float toleransı ile aynı mertebede; ayrıca
-      // bkz. bölüm 33'teki empirik doğrulama). Arrears yolu
-      // (advance=false) bu dalı hiç görmez — davranışı BİREBİR
-      // korunur.
+      // ANNUITY-DUE (ADVANCE) 1. ÖDEME DÜZELTMESİ — GÜNCELLEME (GC-2026-09,
+      // çift sayım düzeltmesiyle birlikte): calculateInitialLeaseMeasurement
+      // artık advance'de index=0 ödemesini initialLiability PV toplamına HİÇ
+      // DAHİL ETMİYOR (bkz. advancePaymentAtCommencement — ROU'ya ayrıca
+      // eklenir, initial fişte ayrı banka kaydı olarak muhasebeleşir).
+      // Dolayısıyla bu ilk satırda liability üzerinde YAPILACAK BİR ŞEY
+      // YOKTUR: faiz tahakkuk etmez (ödeme zaten yapılmıştır, borç hiç
+      // doğmamıştır) VE anapara da düşülmez (düşülecek bir şey liability'de
+      // zaten yoktur — eskiden buradaki "principal = min(payment,opening)"
+      // düşüşü, yükümlülüğü ÇİFT kez küçültüyordu). Bu satır yalnızca
+      // bilgi amaçlı "payment" tutarını gösterir; openingLiability =
+      // closingLiability olarak sabit kalır. 2. ödemeden itibaren mevcut
+      // arrears formülü AYNEN doğrudur (bkz. GC-01 arrears float toleransı).
+      // Arrears yolu (advance=false) bu dalı hiç görmez — davranışı
+      // BİREBİR korunur.
       const isFirstAdvancePayment =
         advance && i === 0;
 
@@ -6773,7 +6997,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let principal =
         isFirstAdvancePayment
-          ? Math.min(periodPayment, openingLiability)
+          ? 0
           : periodPayment - interest;
 
       if (
@@ -6851,6 +7075,354 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * resolveElapsedMonthsForAccrual — İKİ TARİH arasındaki geçen süreyi
+   * ondalıklı AY olarak döner (rapor tarihi tahakkukları için gün/ay
+   * sayım politikası, GC-2026-09).
+   *
+   * POLİTİKA — "yıldönümü (anniversary) kovası + ay sonu snap":
+   * - Temel birim, sözleşme başlangıç GÜNÜNÜN her ay tekrar ettiği
+   *   "yıldönümü" tarihleridir (örn. başlangıç 01.03 ise sonraki
+   *   yıldönümleri 01.04, 01.05, ... — ayın o günü yoksa ay sonuna
+   *   klemplenir, örn. başlangıç 31.01 ise Şubat'ta 28/29'a çeker).
+   * - asOf, tam bir yıldönümüne denklerse (örn. başlangıçtan tam 12
+   *   ay sonraki aynı gün) sonuç TAM SAYI döner (12.0) — ödeme
+   *   tarihleriyle örtüşen rapor tarihlerinde küsürat hatası olmasın
+   *   diye bu KRİTİKTİR (bkz. calculateAmortizationTable ile tutarlılık).
+   * - asOf, İÇİNDE BULUNDUĞU AYIN SON GÜNÜYSE (ay sonu), bir SONRAKİ
+   *   yıldönümüne ulaşmış gibi sayılır ("ay sonu = o ay tamamlanmıştır"
+   *   snap'i) — referans vakadaki "dört tam ay" beklentisiyle birebir
+   *   uyumlu: 01.03.2026 → 30.06.2026 = 4.0 ay (Haziran 30 gün, ay
+   *   sonu → Temmuz 1'e snap → tam 4. yıldönümü).
+   * - Diğer TÜM ara tarihlerde, içinde bulunulan yıldönümü-arası
+   *   dönemin ne kadarının geçtiği GÜN ORANIYLA (aktüel gün/aktüel
+   *   gün) hesaplanır.
+   * - Mevcut `monthsBetween()` (sözleşme SÜRESİ için kullanılan, gün
+   *   bilgisini yok sayan kaba ay farkı) burada KULLANILMAZ — o
+   *   fonksiyon süre hesaplamak için doğru, ama kısmi dönem tahakkuku
+   *   için gün bazlı hassasiyet gerekir.
+   */
+  function resolveElapsedMonthsForAccrual(startDate, asOfDate) {
+    const start = parseDate(startDate);
+    const asOf = parseDate(asOfDate);
+    if (!start || !asOf || asOf <= start) return 0;
+
+    const isMonthEnd =
+      asOf.getDate() ===
+      new Date(asOf.getFullYear(), asOf.getMonth() + 1, 0).getDate();
+
+    const effectiveAsOf =
+      isMonthEnd
+        ? new Date(asOf.getFullYear(), asOf.getMonth() + 1, 1)
+        : asOf;
+
+    const anniversaryFor = n => {
+      const d = new Date(start.getFullYear(), start.getMonth() + n, 1);
+      const daysInTarget =
+        new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(start.getDate(), daysInTarget));
+      return d;
+    };
+
+    let n =
+      (effectiveAsOf.getFullYear() - start.getFullYear()) * 12 +
+      (effectiveAsOf.getMonth() - start.getMonth());
+
+    while (anniversaryFor(n) > effectiveAsOf) n--;
+    while (anniversaryFor(n + 1) <= effectiveAsOf) n++;
+
+    const periodStart = anniversaryFor(n);
+    const periodEnd = anniversaryFor(n + 1);
+    const spanMs = periodEnd.getTime() - periodStart.getTime();
+    const elapsedMs = effectiveAsOf.getTime() - periodStart.getTime();
+    const fraction = spanMs > 0 ? elapsedMs / spanMs : 0;
+
+    return n + fraction;
+  }
+
+  /**
+   * buildReportingDateAccrual — GC-2026-09 tahakkuk motoru. Ödeme
+   * tarihleri arasındaki (ödeme olmayan) rapor tarihlerinde de
+   * yükümlülük/ROU bakiyesini üretir. Nakit ödeme olaylarını (schedule
+   * satırları) muhasebe tahakkuklarından AYIRIR:
+   *
+   * - Yükümlülük: en son GEÇMİŞ (asOf'a kadar) ödeme satırının
+   *   closingLiability'sinden başlayıp, o satırdan asOf'a kadar
+   *   geçen süre için efektif yıllık orana göre bileşik faiz
+   *   tahakkuk ettirir (ödeme yapılmadığı sürece anapara sabittir,
+   *   yalnızca faiz tahakkuk eder — TFRS 16.36(b)).
+   * - ROU: ödeme takvimine BAĞLI DEĞİL — initialROU'dan, kontrat
+   *   başlangıcından asOf'a kadar geçen (doğrusal) ay sayısı ×
+   *   aylık amortisman düşülerek hesaplanır. Bu sayede advance
+   *   ödemede ilk ödeme satırına yanlışlıkla yüklenen 12 aylık
+   *   amortisman sorunu (bkz. görev tanımı madde 3) tamamen
+   *   ortadan kalkar — amortisman HER ZAMAN takvime göre, satırdan
+   *   bağımsız hesaplanır.
+   *
+   * reportingDate tam bir ödeme tarihine denk geliyorsa, o satırın
+   * closing değerleri AYNEN döner (yuvarlama/çift hesap farkı olmasın
+   * diye ayrıca tahakkuk ettirilmez).
+   */
+  function buildReportingDateAccrual(core, measurement, schedule, reportingDate) {
+    const asOf = parseDate(reportingDate);
+    const commencementDate = core.commencementDate;
+    if (!asOf || !commencementDate) return null;
+
+    const { annualRate } = core;
+    const { initialLiability, initialROU, depreciation, depreciationMonths } = measurement;
+
+    if (asOf <= commencementDate) {
+      return {
+        reportingDate: asOf,
+        liability: initialLiability,
+        rouAsset: initialROU,
+        interestSinceLastEvent: 0,
+        depreciationSinceCommencement: 0,
+        lastEventDate: commencementDate,
+        isExactPaymentDate: false,
+        monthsElapsedTotal: 0
+      };
+    }
+
+    // ROU: ödeme takviminden bağımsız, saf takvim bazlı doğrusal itfa.
+    const monthsElapsedTotal = Math.min(
+      depreciationMonths,
+      resolveElapsedMonthsForAccrual(commencementDate, asOf)
+    );
+    const depreciationSinceCommencement = Math.min(
+      initialROU,
+      depreciation * monthsElapsedTotal
+    );
+    const rouAsset = Math.max(0, initialROU - depreciationSinceCommencement);
+
+    // Yükümlülük: asOf'tan önceki/eşit en son ödeme satırını bul.
+    let lastEventIndex = -1;
+    for (let i = 0; i < schedule.length; i++) {
+      if (schedule[i].date.getTime() <= asOf.getTime()) {
+        lastEventIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    const isExactPaymentDate =
+      lastEventIndex >= 0 &&
+      schedule[lastEventIndex].date.getTime() === asOf.getTime();
+
+    if (isExactPaymentDate) {
+      const row = schedule[lastEventIndex];
+      return {
+        reportingDate: asOf,
+        liability: row.closingLiability,
+        rouAsset,
+        interestSinceLastEvent: 0,
+        depreciationSinceCommencement,
+        lastEventDate: row.date,
+        isExactPaymentDate: true,
+        monthsElapsedTotal
+      };
+    }
+
+    const checkpointLiability =
+      lastEventIndex >= 0
+        ? schedule[lastEventIndex].closingLiability
+        : initialLiability;
+
+    const checkpointDate =
+      lastEventIndex >= 0
+        ? schedule[lastEventIndex].date
+        : commencementDate;
+
+    // Son satır zaten sözleşme sonrasıysa (tamamen itfa olmuş) —
+    // artık tahakkuk edecek bir yükümlülük kalmamıştır.
+    if (lastEventIndex === schedule.length - 1 && checkpointLiability <= 0.005) {
+      return {
+        reportingDate: asOf,
+        liability: 0,
+        rouAsset,
+        interestSinceLastEvent: 0,
+        depreciationSinceCommencement,
+        lastEventDate: checkpointDate,
+        isExactPaymentDate: false,
+        monthsElapsedTotal
+      };
+    }
+
+    const monthsElapsedInCurrentPeriod =
+      resolveElapsedMonthsForAccrual(checkpointDate, asOf);
+
+    const growthFactor =
+      Math.pow(1 + (Number(annualRate) || 0) / 100, monthsElapsedInCurrentPeriod / 12);
+
+    const interestSinceLastEvent =
+      checkpointLiability * (growthFactor - 1);
+
+    const liability =
+      checkpointLiability + interestSinceLastEvent;
+
+    return {
+      reportingDate: asOf,
+      liability,
+      rouAsset,
+      interestSinceLastEvent,
+      depreciationSinceCommencement,
+      lastEventDate: checkpointDate,
+      isExactPaymentDate: false,
+      monthsElapsedTotal
+    };
+  }
+
+  /**
+   * resolveJournalPeriodDateRange — Madde 5: muhasebe fişi üretiminde
+   * seçilen aylık/çeyreklik/yıllık dönemin TAKVİM ARALIĞINI döner.
+   * periodStartExclusive = bir önceki dönemin SON günü (bu tarih
+   * DAHİL DEĞİL — dönem bu tarihten SONRA başlar), periodEndInclusive
+   * = seçili dönemin SON günü (DAHİL). Yıl sınırı geçişleri (örn.
+   * Ocak ayının bir önceki günü = bir önceki yılın 31 Aralık'ı) JS
+   * Date'in ay taşması ile otomatik doğru hesaplanır.
+   */
+  function resolveJournalPeriodDateRange(year, month, period) {
+    const spanMonths =
+      period === "monthly" ? 1 :
+      period === "quarterly" ? 3 : 12;
+
+    const endMonth =
+      period === "monthly" ? month :
+      period === "quarterly" ? Math.ceil(month / 3) * 3 :
+      12;
+
+    const periodEndInclusive = new Date(year, endMonth, 0);
+    const periodStartExclusive = new Date(year, endMonth - spanMonths, 0);
+
+    return { periodStartExclusive, periodEndInclusive };
+  }
+
+  /**
+   * buildAccrualJournalSummary — Madde 5: bir tarih aralığı (dönem)
+   * için faiz/anapara/ödeme/amortisman tutarlarını, ödeme
+   * SATIRLARINDAN değil, buildReportingDateAccrual'ın dönem başı/sonu
+   * SNAPSHOT'larının FARKINDAN üretir. Bu sayede seçilen dönemde HİÇ
+   * ödeme günü olmasa bile (örn. yıllık ödemeli bir kontratta Haziran
+   * ayı fişi) doğru tahakkuk üretilir — eskiden bu durumda
+   * getScheduleForYear boş dönüyor ve fiş hiç üretilmiyordu.
+   *
+   * Formül: liability_end = liability_start + faiz - dönem içindeki
+   * anapara ödemeleri  ⇒  faiz = liability_end - liability_start +
+   * dönem içi anapara. Amortisman, iki kümülatif tahakkuk anındaki
+   * (depreciationSinceCommencement) farktır — ödeme tarihlerinden
+   * bağımsız, doğrudan takvimden gelir.
+   *
+   * accrualContext null ise (reassessed/modified/migration/exempt)
+   * null döner — çağıran taraf ESKİ (schedule satırı bazlı) yönteme
+   * düşer, davranış o senaryolarda DEĞİŞMEZ.
+   */
+  function buildAccrualJournalSummary(accrualContext, schedule, periodStartExclusive, periodEndInclusive) {
+    if (!accrualContext) return null;
+
+    const accrualStart = buildReportingDateAccrual(
+      accrualContext.core, accrualContext.measurement, schedule, periodStartExclusive
+    );
+    const accrualEnd = buildReportingDateAccrual(
+      accrualContext.core, accrualContext.measurement, schedule, periodEndInclusive
+    );
+    if (!accrualStart || !accrualEnd) return null;
+
+    const startTime = periodStartExclusive.getTime();
+    const endTime = periodEndInclusive.getTime();
+    const rowsInPeriod = schedule.filter(row => {
+      const t = row.date.getTime();
+      return t > startTime && t <= endTime;
+    });
+
+    const principal = rowsInPeriod.reduce((s, r) => s + (Number(r.principal) || 0), 0);
+    // GC-2026-09: `payment` = bu dönemdeki TOPLAM nakit çıkışı (nakit akışı
+    // açıklaması için — advance ilk taksit DAHİL, çünkü nakit gerçekten
+    // ödenmiştir). Bu, aşağıdaki `liabilityReductionInPeriod`'dan FARKLIDIR:
+    // advance ilk taksidin nakdi initial entry'de zaten muhasebeleşmiştir
+    // (bkz. generateInitialEntry → advancePaymentAtCommencement), bu yüzden
+    // periyodik fişte 401/301 hesaplarına TEKRAR yansıtılmamalıdır.
+    const payment = rowsInPeriod.reduce((s, r) => s + (Number(r.payment) || 0), 0);
+    const depreciation = Math.max(
+      0,
+      accrualEnd.depreciationSinceCommencement - accrualStart.depreciationSinceCommencement
+    );
+
+    /*
+      GC-2026-09 (Madde 5 — düzeltme): kritik nokta — yükümlülük
+      denkleminde ödemenin liability'yi NE KADAR azalttığı, satırın
+      KENDİ principal alanı değil. `row.principal` yalnızca o satırın
+      KENDİ (tam dönemlik) faiz tabanına göre anlamlıdır; ama bu dönem
+      özeti, o satırın faizinin bir kısmının ÖNCEKİ rapor döneminde
+      zaten tahakkuk ettirilmiş olabileceği (bkz. buildReportingDateAccrual
+      ara tahakkuku) bir ARA TARİH aralığı üzerinden çalışıyor. Bu
+      yüzden doğru kimlik:
+        faiz(periodStart,periodEnd) = liability(end) - liability(start)
+                                       + bu ARALIKTA liability'yi
+                                         GERÇEKTEN azaltan nakit tutarı
+      "Gerçekten azaltan nakit tutarı" NORMAL bir ödemede TAM ödeme
+      tutarıdır (ödeme, o anki tahakkuk etmiş TAM bakiyeden düşülür) —
+      principal DEĞİL. TEK istisna: advance timing'teki İLK taksit
+      (schedule[0], core.advance===true) — bu ödeme baştan beri
+      liability'ye hiç girmemiştir (bkz. calculateInitialLeaseMeasurement
+      çift-sayım düzeltmesi), dolayısıyla liability roll-forward'ını
+      HİÇ etkilemez (katkısı 0'dır, ne ödemenin tamamı ne principal'i).
+      Bu formülü `principal` ile karıştırmak, ödemenin faizi geçmiş bir
+      döneme ait olan bir satıra denk geldiği her durumda (örn. yıllık
+      ödemeli bir kontratta yıl sonu kapanışı) faizi YANLIŞ (hatta
+      negatif) hesaplatıyordu — LEASE-020 2027 yıl sonu fişiyle
+      doğrulanan bir regresyon, bkz. rapor.
+    */
+    const liabilityReductionInPeriod = rowsInPeriod.reduce((s, r) => {
+      const isAdvanceFirstPayment =
+        r === schedule[0] && !!accrualContext.core.advance;
+      return s + (isAdvanceFirstPayment ? 0 : (Number(r.payment) || 0));
+    }, 0);
+
+    const interest = (accrualEnd.liability - accrualStart.liability) + liabilityReductionInPeriod;
+    const interestClamped = Math.max(0, interest);
+
+    /*
+      401 (yükümlülük) borç tutarı — GERÇEK "anapara" değil, bu
+      DÖNEME ait faiz düşüldükten sonra liability'yi net ne kadar
+      azalttığıdır. Satırın KENDİ principal'ı (yukarıdaki `principal`,
+      yalnızca bilgi amaçlı/ödeme planı gösterimi için saklanıyor)
+      burada KULLANILMAZ — çünkü bir ödeme, faizinin bir kısmı ÖNCEKİ
+      dönemde zaten tahakkuk ettirilmiş bir satıra denk geldiğinde
+      (bkz. yukarıdaki not), o satırın principal'ı bu dönemin gerçek
+      yükümlülük hareketini YANSITMAZ. Fiş her zaman dengeli kalsın
+      diye: interest_je + liability_je = liabilityReductionInPeriod
+      (= dönem içindeki toplam nakit çıkışı, advance ilk taksit hariç).
+    */
+    const liabilityJournalDebit = Math.max(0, liabilityReductionInPeriod - interestClamped);
+    // GC-2026-09: tahakkuk eden faiz, o dönemki nakit yükümlülük
+    // azalışından FAZLAYSA (örn. advance ilk taksidin muhasebeleştiği
+    // dönem — nakit zaten initial entry'de ayrı işlendiği için bu
+    // dönem içindeki liabilityReductionInPeriod=0'dır), fark 401'e
+    // BORÇ değil ALACAK yazılmalıdır (ödenmemiş faiz yükümlülüğü
+    // BÜYÜTÜR). Eski şablon bu durumu hiç ele almıyordu — fiş hep
+    // dengesiz kalıyordu (bkz. rapor, 2026 örneği).
+    const liabilityJournalCredit = Math.max(0, interestClamped - liabilityReductionInPeriod);
+
+    return {
+      interest: interestClamped,
+      principal: liabilityJournalDebit,
+      liabilityGrowthCredit: liabilityJournalCredit,
+      rowPrincipal: principal,
+      payment,
+      // 301/banka kaydına giden, bu dönemdeki TEKRARLANAN (recurring)
+      // nakit yükümlülük azalışı — advance ilk taksit HARİÇ (o zaten
+      // initial entry'nin banka kaydında yer alır, burada TEKRAR
+      // işlenmez).
+      recurringCashSettlement: liabilityReductionInPeriod,
+      depreciation,
+      openingLiability: accrualStart.liability,
+      closingLiability: accrualEnd.liability,
+      openingROU: accrualStart.rouAsset,
+      closingROU: accrualEnd.rouAsset,
+      rowsInPeriod
+    };
+  }
+
+  /**
    * Apply an approved migration closing balance to the forward schedule.
    * Historical periods are deliberately removed from the displayed schedule:
    * the imported closing balance is the authoritative starting point for the
@@ -6911,12 +7483,18 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function assembleLeaseEngineResult(assumptions, core, measurement, schedule) {
     const { months, stepMonths } = core;
-    const { initialLiability, initialROU, depreciation, depreciationMonths, usesUsefulLife } = measurement;
+    const { initialLiability, initialROU, advancePaymentAtCommencement, depreciation, depreciationMonths, usesUsefulLife } = measurement;
 
     return {
       months,
       liability: initialLiability,
       rouAssets: initialROU,
+      // GC-2026-09: advance timing'te başlangıçta nakden ödenen ilk
+      // taksit — initialLiability'ye dahil DEĞİL, initialROU'ya dahil.
+      // generateInitialEntry bu tutarı ayrı bir banka/kasa kaydı olarak
+      // muhasebeleştirmek için kullanır (0 ise arrears/legacy davranış
+      // birebir korunur, ek kayıt üretilmez).
+      advancePaymentAtCommencement: advancePaymentAtCommencement || 0,
       depreciation,
       depreciationMonths,
       usesUsefulLifeDepreciation: usesUsefulLife,
@@ -6971,6 +7549,50 @@ document.addEventListener("DOMContentLoaded", () => {
       result.openingBalance = contract.openingBalance;
     }
     return result;
+  }
+
+  /**
+   * resolveLeaseAccrualContext — GC-2026-09 (Madde 4): tekrar kullanılabilir
+   * core/measurement bağlamı üretir. `buildTms21FxTranslation` (rapor
+   * tarihi için sentetik tahakkuk satırı) ve `getScheduleAsOfReportingDate`
+   * (current/non-current split) TEK bir bu fonksiyona bağımlıdır — motorun
+   * kendisi (calculateLeaseEngineImpl) ile birebir aynı adımları izler,
+   * böylece iki yer arasında sessizce farklı sonuç üretilmesi imkansız hale
+   * gelir.
+   *
+   * DÖNÜŞ: null ise (exempt kontrat, earlyReturn, veya migration/opening
+   * balance uygulanmış kontrat) çağıran taraf ESKİ (yalnızca ödeme
+   * tarihli satır) davranışına düşer — GC-18 migration senaryosunda
+   * "commencement" kavramı geçiş tarihine kaydığından, sentetik tahakkuk
+   * bu sürümde migration bakiyeleri için KASITLI OLARAK desteklenmiyor
+   * (ayrı bir görev — bkz. rapor).
+   */
+  function resolveLeaseAccrualContext(contract) {
+    try {
+      const assumptions = buildLeaseEngineAssumptions(contract);
+      if (buildExemptLeaseResult(contract, assumptions)) return null;
+
+      const core = resolveLeaseEngineCore(contract, assumptions);
+      if (core.earlyReturn) return null;
+
+      // Migration/opening-balance uygulanmış kontratlarda commencement
+      // artık geçiş tarihidir — bu sürümde sentetik tahakkuk desteklenmiyor.
+      if (contract?.openingBalance && String(contract.openingBalance.status || "").toUpperCase() === "APPROVED") {
+        return null;
+      }
+
+      const hasAppliedLayer =
+        (contract?.reassessments || []).some(x => String(x?.status || "").toUpperCase() === "APPLIED") ||
+        (contract?.modifications || []).some(x => String(x?.status || "").toUpperCase() === "APPLIED");
+      if (hasAppliedLayer) return null;
+
+      const esc = applyLeaseEscalation(contract, assumptions, core);
+      const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
+
+      return { core, measurement, esc };
+    } catch (error) {
+      return null;
+    }
   }
 
 
@@ -7277,27 +7899,80 @@ document.addEventListener("DOMContentLoaded", () => {
       Before commencement there is no reached period, so the
       initial liability is the applicable balance.  After the lease
       has fully amortised, the final closing liability is zero.
+
+      GC-2026-09 (Madde 3/4 — tahakkuk motoru): yukarıdaki "en son
+      kapanmış dönemin closingLiability'si" yaklaşımı, ödeme
+      OLMAYAN aylarda (örn. yıllık ödemeli bir kontratta iki ödeme
+      arası bir ay-sonu kapanışı) tahakkuk etmiş faizi/amortismanı
+      YOK SAYAR — bkz. buildReportingDateAccrual. Bu yalnızca HAM
+      motor kaynaklı (LEASE_SCHEDULE) ve migration/opening-balance
+      UYGULANMAMIŞ kontratlarda devreye girer (resolveLeaseAccrualContext
+      null dönerse — reassessed/modified/migration/exempt — ESKİ
+      "yalnızca ödeme satırı" davranışı AYNEN korunur, bu senaryolar
+      için sentetik tahakkuk henüz desteklenmiyor, bkz. rapor).
     */
-    const outstandingLiability =
-      closedPeriods.length
-        ? Math.max(
-            0,
-            Number(
-              closedPeriods[
-                closedPeriods.length - 1
-              ].closingLiability
-            ) || 0
+    const accrualContext =
+      resolved.source === "LEASE_SCHEDULE"
+        ? resolveLeaseAccrualContext(contract)
+        : null;
+
+    const accrual =
+      accrualContext
+        ? buildReportingDateAccrual(
+            accrualContext.core,
+            accrualContext.measurement,
+            resolved.schedule,
+            normalizedReportingDate
           )
-        : Math.max(
-            0,
-            Number(engine.liability) || 0
-          );
+        : null;
+
+    const outstandingLiability =
+      accrual
+        ? Math.max(0, Number(accrual.liability) || 0)
+        : closedPeriods.length
+          ? Math.max(
+              0,
+              Number(
+                closedPeriods[
+                  closedPeriods.length - 1
+                ].closingLiability
+              ) || 0
+            )
+          : Math.max(
+              0,
+              Number(engine.liability) || 0
+            );
+
+    // GC-2026-09: ROU bakiyesi de artık aynı tahakkuk motorundan —
+    // ödeme takviminden bağımsız, takvime dayalı doğrusal itfa ile.
+    // accrual null ise (reassessed/modified/migration/exempt) eski
+    // "en son kapanmış dönemin rouClosing'i" fallback'i kullanılır;
+    // bu alan öncesinde hiç yoktu, YENİ ve ek — mevcut çağıranları
+    // etkilemez.
+    const outstandingROU =
+      accrual
+        ? Math.max(0, Number(accrual.rouAsset) || 0)
+        : closedPeriods.length
+          ? Math.max(
+              0,
+              Number(
+                closedPeriods[
+                  closedPeriods.length - 1
+                ].rouClosing
+              ) || 0
+            )
+          : Math.max(
+              0,
+              Number(engine.rouAssets) || 0
+            );
 
     return {
       engine,
       closedPeriods,
       futurePeriods,
       outstandingLiability,
+      outstandingROU,
+      accrualApplied: !!accrual && !accrual.isExactPaymentDate,
       valid: true,
       scheduleSource: resolved.source
     };
@@ -7312,7 +7987,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const normalizedReportingDate = parseDate(reportingDate);
 
-    const scheduleData = Array.isArray(scheduleOverride)
+    // The engine's ordinary schedule is not a custom override. Raw,
+    // single-layer leases must keep using the calendar accrual snapshot.
+    const rawAccrualContext = resolveLeaseAccrualContext(contract);
+    const scheduleData = Array.isArray(scheduleOverride) && !rawAccrualContext
       ? {
           engine: calculateLeaseEngine(contract),
           closedPeriods: scheduleOverride.filter(item => {
@@ -7453,6 +8131,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       totalLeaseLiability:
         total,
+
+      outstandingROU:
+        Math.max(0, Number(scheduleData.outstandingROU) || 0),
 
       currentLiability:
         current,
@@ -9323,6 +10004,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    /*
+      GC-2026-09 (advance timing çift sayım düzeltmesi):
+      Advance (peşin) ödemeli sözleşmelerde başlangıçta ödenen ilk
+      taksit artık engine.liability'ye dahil değil (yalnızca henüz
+      ödenmemiş kiraların PV'si), ama engine.rouAssets içinde YER
+      ALIYOR (TFRS 16.24 — ROU = yükümlülük + başlangıçta ödenen
+      kiralar). Bu farkın karşılığı olarak burada ayrı bir banka/
+      kasa kaydı üretilmezse fiş dengesiz kalır (Dr 260 > Cr 401).
+    */
+    const advancePaymentAtCommencement = Number(engine.advancePaymentAtCommencement) || 0;
+    if (advancePaymentAtCommencement > 0.01) {
+      entries.push({
+        account: "100/102 Kasa/Banka (Peşin Ödenen İlk Kira Taksiti)",
+        debit: 0,
+        credit: advancePaymentAtCommencement
+      });
+    }
+
     return entries;
   }
 
@@ -9415,43 +10114,46 @@ document.addEventListener("DOMContentLoaded", () => {
     endMonth
   ) {
 
-    const engine =
-      calculateLease(
-        contract
-      );
-
-    const selected =
-      engine.schedule.slice(
-        startMonth - 1,
-        endMonth
-      );
+    const engine = calculateLease(contract);
+    const year = Number(arguments.length > 3 ? arguments[3] : new Date().getFullYear());
+    const periodStartExclusive = new Date(year, Math.max(0, Number(startMonth) - 1), 0);
+    const periodEndInclusive = new Date(year, Math.max(0, Number(endMonth)), 0);
+    const context = resolveLeaseAccrualContext(contract);
+    const summary = context
+      ? buildAccrualJournalSummary(context, engine.schedule, periodStartExclusive, periodEndInclusive)
+      : null;
+    // Legacy month ordinals are retained only as a date-range wrapper.
+    const selected = summary ? summary.rowsInPeriod : engine.schedule.filter(row => {
+      const d = parseDate(row.date);
+      return d && d > periodStartExclusive && d <= periodEndInclusive;
+    });
 
     if (!selected.length) {
       return [];
     }
 
-    const interest =
+    const interest = summary ? summary.interest :
       selected.reduce(
         (total, item) =>
           total + item.interest,
         0
       );
 
-    const principal =
+    const principal = summary ? summary.principal :
       selected.reduce(
         (total, item) =>
           total + item.principal,
         0
       );
 
-    const payment =
+    const payment = summary ? summary.payment :
       selected.reduce(
         (total, item) =>
           total + item.payment,
         0
       );
 
-    const depreciation =
+    const depreciation = summary ? summary.depreciation :
       selected.reduce(
         (total, item) =>
           total + item.depreciation,
@@ -9510,7 +10212,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderJournalEntry(
     title,
-    entries
+    entries,
+    currency = "TRY"
   ) {
 
     if (
@@ -9572,6 +10275,13 @@ document.addEventListener("DOMContentLoaded", () => {
           <strong>
             ${escapeHtml(title)}
           </strong>
+          <span style="font-size:11px;font-weight:700;color:#64748b;margin-left:8px;">
+            ${
+              String(currency).toUpperCase() === "MIXED"
+                ? `<span style="color:#b45309;">(Karışık para birimi — satır bazında hesap adındaki para birimine bakın)</span>`
+                : `(Tutarlar ${escapeHtml(String(currency || "TRY").toUpperCase())} cinsindendir)`
+            }
+          </span>
 
         </div>
 
@@ -9649,8 +10359,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     >
                       ${
                         item.debit
-                          ? formatCurrency(
-                              item.debit
+                          ? formatPresentationCurrency(
+                              item.debit,
+                              currency
                             )
                           : "-"
                       }
@@ -9665,8 +10376,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     >
                       ${
                         item.credit
-                          ? formatCurrency(
-                              item.credit
+                          ? formatPresentationCurrency(
+                              item.credit,
+                              currency
                             )
                           : "-"
                       }
@@ -9702,8 +10414,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     border-top:2px solid #cbd5e1;
                   "
                 >
-                  ${formatCurrency(
-                    debit
+                  ${formatPresentationCurrency(
+                    debit,
+                    currency
                   )}
                 </td>
 
@@ -9715,8 +10428,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     border-top:2px solid #cbd5e1;
                   "
                 >
-                  ${formatCurrency(
-                    credit
+                  ${formatPresentationCurrency(
+                    credit,
+                    currency
                   )}
                 </td>
 
@@ -10227,7 +10941,8 @@ ${renderAccountingCenterBulkPromo()}
         preview.innerHTML =
           renderJournalEntry(
             `${year} Yıl Sonu Current / Non-current Kapanış Fişi`,
-            entries
+            entries,
+            contract.currency || "TRY"
           );
       }
 
@@ -10274,8 +10989,37 @@ ${renderAccountingCenterBulkPromo()}
         period
       );
 
+    /*
+      GC-2026-09 (Madde 5): dönem içinde HİÇ ödeme günü yoksa (örn.
+      yıllık ödemeli bir kontratta ödeme dışı bir ay/çeyrek/yıl fişi)
+      eskiden burada "ödeme planı bulunmuyor" denip fiş HİÇ
+      üretilmiyordu — o dönemin tahakkuk etmiş faiz/amortismanı hiç
+      kayda geçmiyordu. Artık `buildAccrualJournalSummary` ile dönem
+      başı/sonu tahakkuk FARKINDAN fiş üretiliyor (yalnızca HAM motor
+      kaynaklı, migration'sız kontratlarda — reassessed/modified/
+      migration'da bu fonksiyon null döner ve ESKİ davranış AYNEN
+      korunur, bkz. resolveLeaseAccrualContext).
+    */
+    const scheduleSourceForJournal = cfoBuildSchedule(contract);
+    const journalAccrualContext =
+      scheduleSourceForJournal.source === "LEASE_SCHEDULE"
+        ? resolveLeaseAccrualContext(contract)
+        : null;
 
-    if (!selected.length) {
+    const { periodStartExclusive, periodEndInclusive } =
+      resolveJournalPeriodDateRange(year, month, period);
+
+    const accrualSummary =
+      journalAccrualContext
+        ? buildAccrualJournalSummary(
+            journalAccrualContext,
+            scheduleSourceForJournal.schedule,
+            periodStartExclusive,
+            periodEndInclusive
+          )
+        : null;
+
+    if (!selected.length && !accrualSummary) {
 
       if (preview) {
 
@@ -10300,34 +11044,54 @@ ${renderAccountingCenterBulkPromo()}
       return;
     }
 
+    // Fiş satırları için kullanılan ödeme satırları: tahakkuk özeti
+    // varsa onun dönem aralığına göre bulduğu satırlar (accrual
+    // yönteminin kendi filtresiyle TUTARLI), yoksa eski selected.
+    const journalRows =
+      accrualSummary ? accrualSummary.rowsInPeriod : selected;
 
     const interest =
-      selected.reduce(
-        (total, item) =>
-          total + item.interest,
-        0
-      );
+      accrualSummary
+        ? accrualSummary.interest
+        : selected.reduce(
+            (total, item) =>
+              total + item.interest,
+            0
+          );
 
     const principal =
-      selected.reduce(
-        (total, item) =>
-          total + item.principal,
-        0
-      );
+      accrualSummary
+        ? accrualSummary.principal
+        : selected.reduce(
+            (total, item) =>
+              total + item.principal,
+            0
+          );
 
     const payment =
-      selected.reduce(
-        (total, item) =>
-          total + item.payment,
-        0
-      );
+      accrualSummary
+        // GC-2026-09: 301 kaydı, advance ilk taksit gibi ZATEN initial
+        // entry'de banka'ya karşılık kaydedilmiş nakit hareketlerini
+        // TEKRAR içermemeli — bu yüzden `payment` DEĞİL,
+        // `recurringCashSettlement` kullanılıyor.
+        ? accrualSummary.recurringCashSettlement
+        : selected.reduce(
+            (total, item) =>
+              total + item.payment,
+            0
+          );
+
+    const liabilityGrowthCredit =
+      accrualSummary ? accrualSummary.liabilityGrowthCredit : 0;
 
     const depreciation =
-      selected.reduce(
-        (total, item) =>
-          total + item.depreciation,
-        0
-      );
+      accrualSummary
+        ? accrualSummary.depreciation
+        : selected.reduce(
+            (total, item) =>
+              total + item.depreciation,
+            0
+          );
 
 
     const entries = [
@@ -10368,6 +11132,23 @@ ${renderAccountingCenterBulkPromo()}
       }
 
     ];
+
+    /*
+      GC-2026-09 (Madde 5): dönem içinde HİÇ nakit ödeme/tekrarlanan
+      yükümlülük azalışı olmadan yalnızca faiz tahakkuk ettiğinde
+      (örn. advance ilk taksidin muhasebeleştiği dönem, veya iki
+      ödeme arası bir ara-dönem fişi), 401 hesabına BORÇ değil ALACAK
+      yazılması gerekir — tahakkuk eden faiz henüz ödenmediği için
+      yükümlülüğü BÜYÜTÜR. Eski şablon bunu hiç desteklemiyordu.
+    */
+    if (liabilityGrowthCredit > 0.01) {
+      entries.push({
+        accountKey: "leaseLiabilityAccrualGrowth",
+        account: "401 Kiralama Yükümlülüğü (Tahakkuk Eden, Ödenmemiş Faiz)",
+        debit: 0,
+        credit: liabilityGrowthCredit
+      });
+    }
     // V19 mapping applied below after FX append if any
 
 
@@ -10419,11 +11200,19 @@ ${renderAccountingCenterBulkPromo()}
       preview.innerHTML =
         renderJournalEntry(
           title,
-          entries
+          entries,
+          contract.currency || "TRY"
         );
     }
 
-    appendFxJournalLines(contract, selected, entries, title, preview);
+    appendFxJournalLines(
+      contract,
+      journalRows,
+      entries,
+      title,
+      preview,
+      { reportingDate: periodEndInclusive, periodStartExclusive, accrualContext: journalAccrualContext }
+    );
   }
 
   async function appendFxToReclassification(contract, reportingDate, originalEntries, title, preview) {
@@ -10446,7 +11235,7 @@ ${renderAccountingCenterBulkPromo()}
       });
 
       preview.innerHTML =
-        renderJournalEntry(title, translatedEntries) +
+        renderJournalEntry(title, translatedEntries, functionalCurrency) +
         `<div style="margin-top:10px;font-size:11px;color:#64748b;">
            Kontrat para birimi ${transactionCurrency}. Yukarıdaki temel tutarlar, ${v23DateKey(reportingDate)} tarihli TMS 21 kapanış kuruyla (${closing.rate.toFixed(4)}, ${closing.rateDate || v23DateKey(reportingDate)}) ${functionalCurrency}'ye çevrilmiştir. TMS21 kur farkı satırları ayrıca fişe dahil edilmiştir.
          </div>`;
@@ -10459,7 +11248,7 @@ ${renderAccountingCenterBulkPromo()}
   }
 
 
-  async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview) {
+  async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview, options = {}) {
     if (!preview || !contractNeedsFxTranslation(contract)) return;
     try {
       if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
@@ -10474,10 +11263,35 @@ ${renderAccountingCenterBulkPromo()}
     }
 
     const engineResult = cfoBuildSchedule(contract);
-      const fx = await buildTms21FxTranslation(contract, engineResult);
+      // GC-2026-09 (Madde 5): reportingDate/accrualContext verildiğinde
+      // buildTms21FxTranslation, dönem sonu ödeme gününe denk gelmeyen
+      // durumlarda sentetik bir kapanış satırı ekliyor (bkz.
+      // buildReportingDateAccrual) — bu satır aşağıda TARİH ARALIĞINA
+      // göre eşleştirilerek (eskiden yalnızca `selectedRows`'un TAM
+      // tarihleriyle eşleşen satırlar alınıyordu, ödeme günü olmayan
+      // dönemlerde bu her zaman BOŞ küme oluyordu) fişe dahil edilir.
+      const fx = await buildTms21FxTranslation(contract, engineResult, {
+        reportingDate: options.reportingDate,
+        accrualContext: options.accrualContext
+      });
       if (!fx.applicable) return;
-      const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
-      const fxRows = fx.schedule.filter(r => selectedDates.has(v23DateKey(r.date)));
+
+      let fxRows;
+      if (options.reportingDate) {
+        const periodEndKey = v23DateKey(options.reportingDate);
+        const periodStartKey = options.periodStartExclusive ? v23DateKey(options.periodStartExclusive) : null;
+        fxRows = fx.schedule.filter(r => {
+          const key = v23DateKey(r.date);
+          if (key > periodEndKey) return false;
+          if (periodStartKey && key <= periodStartKey) return false;
+          // reportingDate verilmeden önceki eski davranış: yalnızca
+          // seçili satırların TAM tarihleri + (varsa) sentetik satır.
+          return r.isAccrualRow || selectedRows.some(row => v23DateKey(row.date) === key);
+        });
+      } else {
+        const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
+        fxRows = fx.schedule.filter(r => selectedDates.has(v23DateKey(r.date)));
+      }
       if (!fxRows.length) return;
       const netFx = v23Round(fxRows.reduce((sum, r) => sum + r.fxGainLoss, 0), 2);
       if (Math.abs(netFx) < 0.01) return;
@@ -10498,8 +11312,8 @@ ${renderAccountingCenterBulkPromo()}
           ];
       if (preview) {
         preview.innerHTML =
-          renderJournalEntry(title, [...baseEntries, ...fxEntries]) +
-          `<div style="margin-top:10px;font-size:11px;color:#64748b;">TMS 21: kira yükümlülüğü ${fx.transactionCurrency} cinsinden, dönem kapanış kuruyla (${fx.functionalCurrency}'ye) yeniden çevrildi; kur farkı yukarıdaki fişe dahil edildi.</div>`;
+          renderJournalEntry(title, [...baseEntries, ...fxEntries], "MIXED") +
+          `<div style="margin-top:10px;font-size:11px;color:#64748b;">TMS 21: kira yükümlülüğü ${fx.transactionCurrency} cinsinden, dönem kapanış kuruyla (${fx.functionalCurrency}'ye) yeniden çevrildi; kur farkı yukarıdaki fişe dahil edildi. Yukarıdaki "780/401/301/770/268" satırları ${contract.currency || fx.transactionCurrency} cinsindendir, "656/646/401 (Kur Farkı)" satırları ${fx.functionalCurrency} cinsindendir — bu ikisi TOPLANMAZ, ayrı ayrı okunmalıdır.</div>`;
       }
     } catch (error) {
       if (preview) {
@@ -11504,7 +12318,22 @@ ${renderPaymentScheduleFooterContainers()}
     }
 
     const engineResult = cfoBuildSchedule(contract);
-      const fx = await buildTms21FxTranslation(contract, engineResult);
+      // GC-2026-09 (Madde 4): seçili rapor tarihini ve (yalnızca HAM
+      // motor kaynaklı, reassessed/modified OLMAYAN kontratlar için)
+      // tahakkuk bağlamını motora açıkça taşı — artık yalnızca ödeme
+      // tarihleri değil, seçili rapor tarihi de çevriliyor.
+      const fxReportingDate =
+        typeof getScheduleReportingDate === "function"
+          ? getScheduleReportingDate()
+          : null;
+      const fxAccrualContext =
+        engineResult.source === "LEASE_SCHEDULE"
+          ? resolveLeaseAccrualContext(contract)
+          : null;
+      const fx = await buildTms21FxTranslation(contract, engineResult, {
+        reportingDate: fxReportingDate,
+        accrualContext: fxAccrualContext
+      });
       if (!fx.applicable) { container.innerHTML = ""; return; }
 
       const rowsHtml = fx.schedule.map(row => `
@@ -12170,7 +12999,15 @@ ${renderPaymentScheduleFooterContainers()}
           renderPaymentScheduleTable(contract)
       );
 
-    document.getElementById("scheduleReportingDate")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
+    document.getElementById("scheduleReportingDate")?.addEventListener("change", () => {
+      renderPaymentScheduleTable(contract);
+      // GC-2026-09 (Madde 4): TMS 21 kur farkı bölümü daha önce rapor
+      // tarihi değişince YENİLENMİYORDU (yalnızca ödeme planı
+      // tablosu yenileniyordu) — artık ikisi birlikte tetikleniyor.
+      if (typeof renderFxTranslationSection === "function") {
+        renderFxTranslationSection(contract);
+      }
+    });
     document.getElementById("schedulePresentationCurrency")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
 
     document
@@ -12517,12 +13354,13 @@ ${renderPaymentScheduleFooterContainers()}
           <div class="detail-item">
 
             <span>
-              Aylık Kira
+              ${resolvePaymentFrequencyLabel(contract.paymentFrequency)} Kira
             </span>
 
             <strong>
-              ${formatCurrency(
-                contract.monthlyPayment
+              ${formatPresentationCurrency(
+                contract.monthlyPayment,
+                contract.currency
               )}
               <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
             </strong>
@@ -12537,9 +13375,11 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatCurrency(
-                engine.rouAssets
+              ${formatPresentationCurrency(
+                engine.rouAssets,
+                contract.currency
               )}
+              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
             </strong>
 
           </div>
@@ -12552,9 +13392,11 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatCurrency(
-                engine.liability
+              ${formatPresentationCurrency(
+                engine.liability,
+                contract.currency
               )}
+              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
             </strong>
 
           </div>
@@ -12567,9 +13409,11 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatCurrency(
-                engine.depreciation
+              ${formatPresentationCurrency(
+                engine.depreciation,
+                contract.currency
               )}
+              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
             </strong>
 
           </div>
@@ -12609,7 +13453,8 @@ ${renderPaymentScheduleFooterContainers()}
             "İlk Muhasebeleştirme Fişi",
             generateInitialEntry(
               contract
-            )
+            ),
+            contract.currency || "TRY"
           )}
         </div>
 
@@ -16556,7 +17401,11 @@ ${renderPaymentScheduleFooterContainers()}
   function cfoGetLiabilitySplit(contract, reportingDate, schedule) {
     try {
       if (typeof calculateLiabilitySplitAsOf === "function") {
-        const result = calculateLiabilitySplitAsOf(contract, reportingDate, Array.isArray(schedule) && schedule.length ? schedule : undefined);
+        const built = cfoBuildSchedule(contract);
+        const customSchedule = built.source !== "LEASE_SCHEDULE" && Array.isArray(schedule) && schedule.length
+          ? schedule
+          : undefined;
+        const result = calculateLiabilitySplitAsOf(contract, reportingDate, customSchedule);
         if (result && result.valid !== false) return result;
       }
     } catch (error) {}
@@ -16574,8 +17423,8 @@ ${renderPaymentScheduleFooterContainers()}
     const nonCurrent = cfoNumber(split.nonCurrentLiability ?? split.nonCurrent);
     const total = cfoNumber(split.totalLeaseLiability ?? split.total ?? split.outstandingLiability);
 
-    let rouAsset = 0;
-    if (rowAtDate && rowAtDate.rouClosing !== undefined) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouClosing));
+    let rouAsset = Math.max(0, cfoNumber(split.outstandingROU));
+    if (!rouAsset && rowAtDate && rowAtDate.rouClosing !== undefined) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouClosing));
     else if (rowAtDate && rowAtDate.rouOpening !== undefined && cfoDate(rowAtDate.date)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouOpening));
     else if (!schedule.length && built.engine) rouAsset = Math.max(0, cfoNumber(built.engine.rouAssets));
     else if (schedule.length && !rowAtDate && cfoDate(contract.startDate)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(built.engine?.rouAssets));
@@ -16589,11 +17438,33 @@ ${renderPaymentScheduleFooterContainers()}
       const d = cfoDate(row?.date);
       return d && d.getTime() > report.getTime() && future12End && d.getTime() <= future12End.getTime();
     });
-    const next12Payment = future12Rows.reduce((s, r) => s + cfoNumber(r?.payment), 0);
-    const next12Principal = future12Rows.reduce((s, r) => s + cfoNumber(r?.principal), 0);
-    const next12Interest = future12Rows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    const monthInterest = monthRows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    const monthDepreciation = monthRows.reduce((s, r) => s + cfoNumber(r?.depreciation), 0);
+    let next12Payment = future12Rows.reduce((s, r) => s + cfoNumber(r?.payment), 0);
+    let next12Principal = future12Rows.reduce((s, r) => s + cfoNumber(r?.principal), 0);
+    let next12Interest = future12Rows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
+    let monthInterest = monthRows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
+    let monthDepreciation = monthRows.reduce((s, r) => s + cfoNumber(r?.depreciation), 0);
+    const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
+    if (accrualContext) {
+      const monthEnd = new Date(report.getFullYear(), report.getMonth() + 1, 0);
+      const monthStartExclusive = new Date(report.getFullYear(), report.getMonth(), 0);
+      const currentSummary = buildAccrualJournalSummary(accrualContext, schedule, monthStartExclusive, monthEnd);
+      if (currentSummary) {
+        monthInterest = cfoNumber(currentSummary.interest);
+        monthDepreciation = cfoNumber(currentSummary.depreciation);
+      }
+      next12Payment = next12Principal = next12Interest = 0;
+      for (let i = 1; i <= 12; i++) {
+        const periodEnd = new Date(report.getFullYear(), report.getMonth() + i + 1, 0);
+        if (periodEnd.getTime() > future12End.getTime()) break;
+        const periodStartExclusive = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 0);
+        const summary = buildAccrualJournalSummary(accrualContext, schedule, periodStartExclusive, periodEnd);
+        if (summary) {
+          next12Payment += cfoNumber(summary.payment);
+          next12Principal += cfoNumber(summary.recurringCashSettlement);
+          next12Interest += cfoNumber(summary.interest);
+        }
+      }
+    }
     const monthlyLeaseExpense = monthRows.some(r => r?.straightLineExpense !== undefined)
       ? monthRows.reduce((s, r) => s + cfoNumber(r?.straightLineExpense), 0)
       : monthInterest + monthDepreciation;
@@ -16861,16 +17732,16 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function getLeaseLiabilityRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), prior=cfoAddMonths(d,-1), current=getTotalLeaseLiability(d), priorTotal=getTotalLeaseLiability(prior);
-    const month=getMonthlyLeaseExpense(d); const interest=getInterestExpense(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0));
-    const payment=cfoPeriodMetrics(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0),{activeOnly:true}).cashPayments;
-    return { reportingDate:cfoIsoDate(d), openingLiability:cfoRound(priorTotal), interest:cfoRound(interest), payments:cfoRound(payment), closingLiability:cfoRound(current), reconciliationDifference:cfoRound((priorTotal+interest-payment)-current), source:"LEASE_SCHEDULE" , monthlyLeaseExpense:cfoRound(month) };
+    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
+    const report=getLeaseLiabilityRollForwardReport(start,d), t=report.totals||{};
+    return {reportingDate:cfoIsoDate(d),openingLiability:cfoRound(t.openingLiability),interest:cfoRound(t.interest),payments:cfoRound(t.payments),closingLiability:cfoRound(t.closingLiability),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL",monthlyLeaseExpense:cfoRound(getMonthlyLeaseExpense(d))};
   }
 
   function getLeaseRouRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), prior=cfoAddMonths(d,-1), opening=getTotalRuoAssets(prior), closing=getTotalRuoAssets(d), depreciation=getDepreciationExpense(new Date(d.getFullYear(),d.getMonth(),1),new Date(d.getFullYear(),d.getMonth()+1,0));
-    const adjustments=cfoRound(closing-(opening-depreciation));
-    return { reportingDate:cfoIsoDate(d), openingROU:cfoRound(opening), depreciation:cfoRound(depreciation), modificationReassessmentAdjustments:adjustments, closingROU:cfoRound(closing), reconciliationDifference:cfoRound((opening-depreciation+adjustments)-closing), source:"LEASE_SCHEDULE" };
+    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
+    const report=getRuoAssetRollForwardReport(start,d), t=report.totals||{};
+    const adjustments=cfoRound(cfoNumber(t.modificationAdjustment)+cfoNumber(t.reassessmentAdjustment));
+    return {reportingDate:cfoIsoDate(d),openingROU:cfoRound(t.openingRuo),depreciation:cfoRound(t.depreciation),modificationReassessmentAdjustments:adjustments,closingROU:cfoRound(t.closingRuo),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL"};
   }
 
   function getCfoJournalMetrics() {
@@ -17204,6 +18075,22 @@ ${renderPaymentScheduleFooterContainers()}
         const built = rptScheduleRows(contract);
         if (built.error) throw new Error(built.error);
         const schedule = built.schedule;
+        const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
+        if (accrualContext) {
+          const openingDate = rptAddDays(start, -1);
+          const openingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, openingDate);
+          const closingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, end);
+          const eventRows = rptRowsBetween(schedule, start, end);
+          const payments = eventRows.reduce((sum, row, index) => {
+            const isCommencementAdvance = accrualContext.core.advance && row === schedule[0];
+            return sum + (isCommencementAdvance ? 0 : rptNumber(row.payment));
+          }, 0);
+          const openingLiability = rptNumber(openingSnapshot?.liability);
+          const closingLiability = rptNumber(closingSnapshot?.liability);
+          const interest = closingLiability - openingLiability + payments;
+          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingLiability:rptRound(openingLiability),interest:rptRound(interest),payments:rptRound(payments),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingLiability:rptRound(closingLiability),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
+          return;
+        }
         const openingRow = rptScheduleAtOrBefore(schedule, rptAddDays(start, -1));
         const closingRow = rptScheduleAtOrBefore(schedule, end);
         const periodRows = rptRowsBetween(schedule, start, end);
@@ -17273,8 +18160,8 @@ ${renderPaymentScheduleFooterContainers()}
         const expected = openingLiability + interest - payments;
         const modificationAdjustment = appliedModifications.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
-        const unexplainedAdjustment = (closingLiability - expected) - modificationAdjustment - reassessmentAdjustment;
-        const adjustments = modificationAdjustment + reassessmentAdjustment + unexplainedAdjustment;
+        const unexplainedAdjustment = 0;
+        const adjustments = modificationAdjustment + reassessmentAdjustment;
         const difference = expected + adjustments - closingLiability;
         rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
@@ -17306,7 +18193,17 @@ ${renderPaymentScheduleFooterContainers()}
       if (contractStart && contractStart > end) return;
       try{
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
-        const schedule=built.schedule, openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
+        const schedule=built.schedule;
+        const accrualContext=built.source==="LEASE_SCHEDULE"?resolveLeaseAccrualContext(contract):null;
+        if(accrualContext){
+          const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1));
+          const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end);
+          const openingRuo=rptNumber(openingSnapshot?.rouAsset),closingRuo=rptNumber(closingSnapshot?.rouAsset);
+          const depreciation=Math.max(0,openingRuo-closingRuo);
+          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingRuo:rptRound(closingRuo),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
+          return;
+        }
+        const openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
         let openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
         const openingRowDateRuo=openingRow?rptDate(openingRow.date):null;
@@ -17355,8 +18252,8 @@ ${renderPaymentScheduleFooterContainers()}
         const depreciation=periodRows.reduce((s,r)=>s+rptNumber(r.depreciation),0);
         const modificationAdjustment=appliedModifications.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
-        const unexplainedAdjustment=(closingRuo-(openingRuo-depreciation))-modificationAdjustment-reassessmentAdjustment;
-        const adjustments=modificationAdjustment+reassessmentAdjustment+unexplainedAdjustment;
+        const unexplainedAdjustment=0;
+        const adjustments=modificationAdjustment+reassessmentAdjustment;
         const diff=openingRuo-depreciation+adjustments-closingRuo;
         rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
@@ -26187,7 +27084,76 @@ ${renderPaymentScheduleFooterContainers()}
     const rateCache = new Map();
     const availableRateDates = loadV23Rates().filter(row => row.fromCurrency === transactionCurrency && row.toCurrency === functionalCurrency && row.rateType === rateType && Number(row.rate) > 0).map(row => row.rateDate).sort();
     const latestRateDate = availableRateDates[availableRateDates.length - 1] || v23DateKey(new Date());
-    const translationSchedule = schedule.filter(row => v23DateKey(row.date) <= latestRateDate);
+
+    /*
+      GC-2026-09 (Madde 4 — reportingDate wiring): önceden bu kesim
+      HER ZAMAN `latestRateDate`'e göre yapılıyordu — yani seçili
+      rapor tarihi ne olursa olsun, veri tabanındaki en son kur
+      tarihinden SONRAKİ hiçbir dönem işlenmiyordu (rapor tarihi
+      sessizce veri setindeki son kur tarihiyle DEĞİŞTİRİLİYORDU).
+      Artık `options.reportingDate` açıkça verildiyse kesim SEÇİLİ
+      RAPOR TARİHİNE göre yapılır; eksik kur `rateOn()` içinde zaten
+      açık hata/fallback ile ele alınıyor (allowLastAvailable +
+      görünür rateSource/usedFallback alanları) — burada "veri
+      setindeki son tarih" bir politika kararı olarak KULLANILMAZ.
+      reportingDate verilmemişse (eski çağıranlar) davranış birebir
+      korunur.
+    */
+    const scheduleCutoffDate =
+      options.reportingDate
+        ? v23DateKey(options.reportingDate)
+        : latestRateDate;
+    const translationSchedule = schedule.filter(row => v23DateKey(row.date) <= scheduleCutoffDate);
+
+    /*
+      GC-2026-09 (Madde 3+4): seçili rapor tarihi, ödeme takvimindeki
+      hiçbir satırla ÇAKIŞMIYORSA (ör. yıllık ödemeli bir kontratta
+      ara bir ay-sonu kapanışı), buildReportingDateAccrual ile
+      SENTETİK bir "kapanış olayı" satırı üretilip normal çevrim
+      döngüsüne eklenir — böylece TMS 21 motoru artık yalnızca ödeme
+      tarihlerini değil, seçili rapor tarihini de çevirir. Bu yalnızca
+      çağıran taraf `options.accrualContext` (core+measurement, bkz.
+      resolveLeaseAccrualContext) sağladığında devreye girer; sağlanmazsa
+      (reassessed/modified/migration/exempt kontratlar) ESKİ davranış
+      (yalnızca ödeme satırları) AYNEN korunur.
+    */
+    if (options.reportingDate && options.accrualContext) {
+      const reportingDateParsed = parseDate(options.reportingDate);
+      const lastRow = translationSchedule[translationSchedule.length - 1] || null;
+      const alreadyExact = lastRow && v23DateKey(lastRow.date) === v23DateKey(options.reportingDate);
+      if (reportingDateParsed && !alreadyExact) {
+        const accrual = buildReportingDateAccrual(
+          options.accrualContext.core,
+          options.accrualContext.measurement,
+          schedule,
+          reportingDateParsed
+        );
+        // Kontrat başlangıcından SONRA ve mevcut bir satırla
+        // çakışmayan (isExactPaymentDate=false) tahakkuklar için
+        // sentetik satır ekle. accrual null ise (asOf <= commencement
+        // vb.) hiçbir şey eklenmez.
+        if (accrual && !accrual.isExactPaymentDate) {
+          const rouOpeningForRow = lastRow ? lastRow.rouClosing : schedule[0].rouOpening;
+          const openingLiabilityForRow = lastRow ? lastRow.closingLiability : schedule[0].openingLiability;
+          translationSchedule.push({
+            period: lastRow ? Number(lastRow.period) + 0.5 : 0.5,
+            date: reportingDateParsed,
+            openingLiability: openingLiabilityForRow,
+            interest: accrual.interestSinceLastEvent,
+            payment: 0,
+            principal: 0,
+            closingLiability: accrual.liability,
+            rouOpening: rouOpeningForRow,
+            depreciation: Math.max(0, rouOpeningForRow - accrual.rouAsset),
+            rouClosing: accrual.rouAsset,
+            monthsCovered: 0,
+            variableExpense: 0,
+            isAccrualRow: true
+          });
+        }
+      }
+    }
+
     async function rateOn(dateKey) {
       const key = v23DateKey(dateKey);
       if (rateCache.has(key)) return rateCache.get(key);
@@ -26280,7 +27246,13 @@ ${renderPaymentScheduleFooterContainers()}
         rouOpeningFx,
         depreciationFx,
         rouClosingFx,
-        rouLayerCount: rouLayers.length
+        rouLayerCount: rouLayers.length,
+        // GC-2026-09: reportingDate ödeme tarihiyle çakışmadığında
+        // buildReportingDateAccrual ile üretilmiş sentetik "kapanış
+        // olayı" satırı mı, yoksa gerçek bir ödeme satırı mı —
+        // tüketiciler (UI, jurnal) bu satırı nakit ödeme olayıyla
+        // KARIŞTIRMAMALI (paymentFx her zaman 0'dır).
+        isAccrualRow: !!row.isAccrualRow
       });
 
       openingLiabilityFx = closingLiabilityFx;
@@ -26397,7 +27369,11 @@ ${renderPaymentScheduleFooterContainers()}
     }
     const statedLeasebackPV = leasebackEngine.liability;
     const n = leasebackEngine.schedule.length;
-    const monthlyRate = (v23Num(leasebackContract.discountRate) || 0) / 100 / 12;
+    const monthlyRate = resolveContractMonthlyRate(
+      leasebackContract.discountRate,
+      leasebackContract.effectiveMonthlyRate,
+      resolveDiscountRateConvention(leasebackContract)
+    );
 
     // --- Durum A: Devir bir SATIŞ SAYILMIYOR (TFRS 16.103) ---
     if (!input.qualifiesAsSale) {
@@ -26641,7 +27617,11 @@ ${renderPaymentScheduleFooterContainers()}
     const subEngine = calculateLeaseEngine(subleaseContract);
     const netInvestment = subEngine.liability; // alt kiralama ödemelerinin bugünkü değeri = net yatırım
     const sellingProfitLoss = v23Round(netInvestment - allocatedRouCarryingAmount, 2);
-    const monthlyRate = (v23Num(subleaseContract.discountRate) || 0) / 100 / 12;
+    const monthlyRate = resolveContractMonthlyRate(
+      subleaseContract.discountRate,
+      subleaseContract.effectiveMonthlyRate,
+      resolveDiscountRateConvention(subleaseContract)
+    );
 
     const schedule = [];
     let opening = netInvestment;
@@ -29306,6 +30286,12 @@ ${renderPaymentScheduleFooterContainers()}
       id: "SELFTEST-V18-1",
       monthlyPayment: 100000,
       discountRate: 18,
+      // GC-2026-09: bu test NOMİNAL yıllık oran varsayımıyla (18/100/12)
+      // yazılmıştı; motor varsayılanı artık "effective" olduğundan bu
+      // regresyon testinin orijinal anlamını korumak için convention
+      // açıkça "nominal" olarak sabitlendi (bkz. engine-decisions-and-
+      // learnings.md — rate convention migration notu).
+      discountRateConvention: "nominal",
       startDate: "2026-01-01",
       endDate: "2030-12-01", // 60 ay
       paymentFrequency: "monthly",
@@ -31592,6 +32578,40 @@ ${renderPaymentScheduleFooterContainers()}
     runSelfTestsV27MultiCompany
   });
 
+  function runAcceptanceTestLease020() {
+    const expectedLiability = 332989.2615689249;
+    const expectedAdvance = 95000;
+    const expectedROU = 427989.2615689249;
+    const contract = {
+      id: "LEASE-020",
+      startDate: "2026-03-01",
+      endDate: "2031-02-28",
+      monthlyPayment: 95000,
+      paymentFrequency: "annual",
+      paymentTiming: "advance",
+      discountRate: 5.5,
+      discountRateConvention: "effectiveAnnual",
+      currency: "USD",
+      commencementFxRate: 43.8
+    };
+    const engine = calculateLeaseEngine(contract);
+    const context = resolveLeaseAccrualContext(contract);
+    const asOf = context ? buildReportingDateAccrual(context.core, context.measurement, engine.schedule, "2026-06-30") : null;
+    const expectedAsOfLiability = 338985.4425842508;
+    const expectedAsOfROU = expectedROU * 56 / 60;
+    const tolerance = 1e-7;
+    const checks = {
+      initialLiability: Math.abs(engine.liability - expectedLiability) <= tolerance,
+      advancePaymentAtCommencement: Math.abs(engine.advancePaymentAtCommencement - expectedAdvance) <= tolerance,
+      initialROU: Math.abs(engine.rouAssets - expectedROU) <= tolerance,
+      fiveAnnualPayments: engine.schedule.length === 5 && engine.schedule.every(row => Math.abs(row.payment - 95000) <= tolerance),
+      advanceNotDeductedTwice: !!engine.schedule[0] && Math.abs(engine.schedule[0].closingLiability - expectedLiability) <= tolerance && Math.abs(engine.schedule[0].principal) <= tolerance,
+      reportingDateLiability: !!asOf && Math.abs(asOf.liability - expectedAsOfLiability) <= tolerance,
+      reportingDateROU: !!asOf && Math.abs(asOf.rouAsset - expectedAsOfROU) <= tolerance
+    };
+    return {name:"LEASE-020 acceptance",passed:Object.values(checks).every(Boolean),checks,actual:{initialLiability:engine.liability,advancePaymentAtCommencement:engine.advancePaymentAtCommencement,initialROU:engine.rouAssets,firstClosingLiability:engine.schedule[0]?.closingLiability,asOfLiability:asOf?.liability,asOfROU:asOf?.rouAsset,paymentCount:engine.schedule.length}};
+  }
+
   /* ==========================================================
      TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
      ========================================================== */
@@ -31608,6 +32628,10 @@ ${renderPaymentScheduleFooterContainers()}
       formatCurrency,
       parseDate,
       calculateLeaseEngine,
+      calculateLiabilitySplitAsOf,
+      buildReportingDateAccrual,
+      resolveLeaseAccrualContext,
+      runAcceptanceTestLease020,
       validateContract,
       calculateVariance,
       calculateVariancePercent,
