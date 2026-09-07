@@ -30548,7 +30548,7 @@ ${renderPaymentScheduleFooterContainers()}
     const moneyFields = ["openingLiability", "payment", "interest", "principal", "closingLiability", "depreciation", "rouClosing"];
     const errors = [];
     const out = [];
-    const dateForRow = row => row?.date || asOfDate || new Date();
+    const dateForRow = () => asOfDate || new Date();
 
     for (const row of rows) {
       const copy = { ...row };
