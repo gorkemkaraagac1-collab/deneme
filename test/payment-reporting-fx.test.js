@@ -24,8 +24,14 @@ test.each([['EUR', 50], ['USD', 40]])('%s payment plan uses selected report date
   expect(result.schedule.every(r => r.presentationFxOk)).toBe(true);
   expect(rows[0].payment).toBe(100);
 });
-test('missing report date rate stays explicit and preserves source amounts', async () => {
-  const result = await window.GK_TFRS16.v26ConvertScheduleToPresentation(rows, 'EUR', 'TRY', '2026-09-07');
+test('non-business report date uses the latest earlier verified rate', async () => {
+  const result = await window.GK_TFRS16.v26ConvertScheduleToPresentation(rows, 'EUR', 'TRY', '2026-08-02');
+  expect(result.ok).toBe(true);
+  expect(result.schedule[0].presentationFxOk).toBe(true);
+  expect(result.schedule[0].payment).toBe(5000);
+});
+test('missing report date before first rate stays explicit and preserves source amounts', async () => {
+  const result = await window.GK_TFRS16.v26ConvertScheduleToPresentation(rows, 'EUR', 'TRY', '2025-01-01');
   expect(result.ok).toBe(false);
   expect(result.schedule[0].presentationFxOk).toBe(false);
   expect(result.schedule[0].payment).toBe(100);
