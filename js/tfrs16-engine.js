@@ -10469,7 +10469,11 @@ ${renderAccountingCenterBulkPromo()}
           renderTable();
         }
       }
-      const engineResult = cfoBuildSchedule(contract);
+      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
+      await refreshFxRateCacheFromBackend();
+    }
+
+    const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) return;
       const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
@@ -11471,7 +11475,11 @@ ${renderPaymentScheduleFooterContainers()}
     `;
 
     try {
-      const engineResult = cfoBuildSchedule(contract);
+      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
+      await refreshFxRateCacheFromBackend();
+    }
+
+    const engineResult = cfoBuildSchedule(contract);
       const fx = await buildTms21FxTranslation(contract, engineResult);
       if (!fx.applicable) { container.innerHTML = ""; return; }
 
@@ -26278,6 +26286,10 @@ ${renderPaymentScheduleFooterContainers()}
       : (typeof getV23Contracts === "function" ? getV23Contracts().find(c => String(c.id) === String(contractOrId)) : null) ||
         (typeof getContracts === "function" ? getContracts().find(c => String(c.id) === String(contractOrId)) : null);
     if (!contract) throw Object.assign(new Error("Kontrat bulunamadı."), { code: "CONTRACT_NOT_FOUND" });
+    if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
+      await refreshFxRateCacheFromBackend();
+    }
+
     const engineResult = cfoBuildSchedule(contract);
     if (!contractNeedsFxTranslation(contract)) {
       return { contractId: contract.id, engine: engineResult, fx: { applicable: false, transactionCurrency: v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY), functionalCurrency: resolveContractFunctionalCurrency(contract) } };
