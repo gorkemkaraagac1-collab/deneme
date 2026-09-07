@@ -22316,7 +22316,9 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191WireExistingContractActions() {
-    const detailContent = document.getElementById("detailContent");
+    // Legacy popup is retired; contract detail tabs are the supported UI.
+    return;
+    /* const detailContent = document.getElementById("detailContent");
     if (!detailContent || detailContent.dataset.v191Delegated === "1") return;
     detailContent.addEventListener("click", event => {
       const target = event.target.closest("button");
@@ -22326,7 +22328,7 @@ ${renderPaymentScheduleFooterContainers()}
       else if (text.includes("audit") && !target.id) { v191OpenContractTools(); }
       else if (text.includes("journal") && !target.id) { v191OpenContractTools(); }
     });
-    detailContent.dataset.v191Delegated = "1";
+    detailContent.dataset.v191Delegated = "1"; */
   }
 
   function v191InitUiWiring() {
@@ -30582,7 +30584,7 @@ ${renderPaymentScheduleFooterContainers()}
       let error = null;
       if (from !== to) {
         try {
-          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"));
+          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"), { allowLastAvailable: true });
           if (fx?.error || !(Number(fx?.rate) > 0) || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
           rate = Number(fx.rate);
           moneyFields.forEach(field => { copy[field] = v23Round((Number(row[field]) || 0) * rate, 2); });
