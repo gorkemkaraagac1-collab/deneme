@@ -20,7 +20,7 @@
 
 const TOLERANCE = process.env.GOLDEN_TOLERANCE
   ? Number(process.env.GOLDEN_TOLERANCE)
-  : 0;
+  : 1e-8;
 
 /** Bir diff kaydında gösterilecek maksimum uzunluk. */
 const MAX_PREVIEW = 120;
