@@ -2189,7 +2189,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const bodies = await Promise.all(responses.map(response => response.json()));
       const rates = bodies.flatMap(body => Array.isArray(body?.rates) ? body.rates : [])
         .filter(row => row && (row.fromCurrency === "USD" || row.fromCurrency === "EUR") && row.toCurrency === "TRY"
-          && row.verificationStatus === "VERIFIED" && Number(row.rate) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(row.rateDate)))
+          && row.verificationStatus === "VERIFIED" && Number(row.rate) > 0 && /^\d{4}-\d{2}-\d{2}/.test(String(row.rateDate)))
         .map(row => ({
           id: `BACKEND-FX-${row.fromCurrency}-${row.rateDate}`,
           fromCurrency: row.fromCurrency, toCurrency: row.toCurrency,
