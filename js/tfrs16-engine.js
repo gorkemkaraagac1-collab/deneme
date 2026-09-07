@@ -2103,7 +2103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ve loadInflationIndexTable() sessizce localStorage'a düşüyordu. Artık
     // dosyanın kendi tfrs16GetToken() yardımcısıyla AYNI sırayı kullanır.
     try {
-      return tfrs16GetToken();
+      return localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt") || localStorage.getItem("token") || null;
     } catch (error) {
       return null;
     }
