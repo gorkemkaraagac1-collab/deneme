@@ -7904,7 +7904,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </td>
 
           <td>
-            ${formatPortfolioAmount(contract.monthlyPayment, contract.currency, contract.presentationCurrency || contract.reportingCurrency)}
+            ${formatPortfolioAmount(contract.monthlyPayment, contract.currency, contract.currency)}
           </td>
 
           <td>
