@@ -10873,30 +10873,18 @@ ${renderAccountingCenterBulkPromo()}
      SINGLE JOURNAL
   ========================================================== */
 
-  async function generateSelectedJournal(contractId, options = {}) {
-  const visibleAccountingControl = id => {
-    const matches = Array.from(document.querySelectorAll("#" + id));
-    return matches.find(el => el.offsetParent !== null) || matches[0] || null;
-  };(
+  async function generateSelectedJournal(
     contract
   ) {
-
-    const year =
-      Number(
-        visibleAccountingControl("accountingYear")?.value
-      );
-
-    const period =
-      visibleAccountingControl("accountingPeriod")?.value;
+    const visibleAccountingControl = id => {
+      const matches = Array.from(document.querySelectorAll("#" + id));
+      return matches.find(el => el.offsetParent !== null) || matches[0] || null;
+    };
+    const year = Number(visibleAccountingControl("accountingYear")?.value);
+    const period = visibleAccountingControl("accountingPeriod")?.value;
     const customStartValue = visibleAccountingControl("accountingCustomStart")?.value;
     const customEndValue = visibleAccountingControl("accountingCustomEnd")?.value;
-
-
-    const month =
-      Number(
-        visibleAccountingControl("accountingMonth")?.value
-      );
-
+    const month = Number(visibleAccountingControl("accountingMonth")?.value);
     const preview =
       document.getElementById(
         "journalPreview"
