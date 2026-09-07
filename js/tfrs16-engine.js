@@ -26047,21 +26047,35 @@ ${renderPaymentScheduleFooterContainers()}
   // çekmeyi dener, o da başarısız olursa normal missingRatePolicy
   // davranışına (BLOCK/WARNING/manuel giriş) düşer.
   async function getFxRateAuto(fromCurrency, toCurrency, date, rateType = FX_CONFIG.defaultRateType, options = {}) {
-    try {
-      return getFxRate(fromCurrency, toCurrency, date, rateType, { ...options, allowMissing: true, allowLastAvailable: options.allowLastAvailable === true }).error
-        ? await (async () => {
-            if (v23CurrencyCode(toCurrency) !== "TRY") throw Object.assign(new Error("Otomatik TCMB çekimi şu an sadece XXX/TRY için destekleniyor."), { code: "TCMB_UNSUPPORTED_PAIR" });
-            await syncTcmbRate(fromCurrency, date, { rateType, ...options });
-            return getFxRate(fromCurrency, toCurrency, date, rateType, options);
-          })()
-        : getFxRate(fromCurrency, toCurrency, date, rateType, options);
-    } catch (error) {
-      if (options.allowMissing) return { error: error.code || "FX_RATE_NOT_FOUND", rate: null, fromCurrency: v23CurrencyCode(fromCurrency), toCurrency: v23CurrencyCode(toCurrency), rateDate: v23DateKey(date), rateType, message: error.message };
-      throw error;
+  try {
+    return getFxRate(
+      fromCurrency,
+      toCurrency,
+      date,
+      rateType,
+      {
+        ...options,
+        allowMissing: true,
+        allowLastAvailable: options.allowLastAvailable === true
+      }
+    );
+  } catch (error) {
+    if (options.allowMissing) {
+      return {
+        error: error.code || "FX_RATE_NOT_FOUND",
+        rate: null,
+        fromCurrency: v23CurrencyCode(fromCurrency),
+        toCurrency: v23CurrencyCode(toCurrency),
+        rateDate: v23DateKey(date),
+        rateType,
+        message: error.message
+      };
     }
+    throw error;
   }
+}
 
-  /* ============================================================
+/* ============================================================
      TMS 21 — YABANCI PARA BİRİMLİ KİRALAMALARIN FONKSİYONEL PARA
      BİRİMİNE ÇEVRİMİ
      ------------------------------------------------------------
