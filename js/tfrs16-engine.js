@@ -10876,29 +10876,15 @@ ${renderAccountingCenterBulkPromo()}
   async function generateSelectedJournal(
     contract
   ) {
-
-    const year =
-      Number(
-        document.getElementById(
-          "accountingYear"
-        )?.value
-      );
-
-    const period =
-      document.getElementById(
-        "accountingPeriod"
-      )?.value;
-    const customStartValue = document.getElementById("accountingCustomStart")?.value;
-    const customEndValue = document.getElementById("accountingCustomEnd")?.value;
-
-
-    const month =
-      Number(
-        document.getElementById(
-          "accountingMonth"
-        )?.value
-      );
-
+    const visibleAccountingControl = id => {
+      const matches = Array.from(document.querySelectorAll("#" + id));
+      return matches.find(el => el.offsetParent !== null) || matches[0] || null;
+    };
+    const year = Number(visibleAccountingControl("accountingYear")?.value);
+    const period = visibleAccountingControl("accountingPeriod")?.value;
+    const customStartValue = visibleAccountingControl("accountingCustomStart")?.value;
+    const customEndValue = visibleAccountingControl("accountingCustomEnd")?.value;
+    const month = Number(visibleAccountingControl("accountingMonth")?.value);
     const preview =
       document.getElementById(
         "journalPreview"
