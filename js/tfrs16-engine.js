@@ -2448,7 +2448,10 @@ document.addEventListener("DOMContentLoaded", () => {
           const commencementFx = getFxRate(transactionCurrency, functionalCurrency, contract.startDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
           if (commencementFx?.error) throw Object.assign(new Error(`TMS 29: ${transactionCurrency}/${functionalCurrency} başlangıç kuru bulunamadı.`), { code: commencementFx.error });
           commencementRate = commencementFx.rate;
-          const closingFx = getFxRate(transactionCurrency, functionalCurrency, rpEndDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          // Raporlama kapanış kuru tam olarak seçilen dönem sonuna ait
+          // olmalıdır. Önceki kurun sessizce kullanılması (ör. 30.06
+          // yerine 01.07 kaydı) TMS 21 kapanış ölçümünü bozar.
+          const closingFx = getFxRate(transactionCurrency, functionalCurrency, rpEndDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: false });
           if (closingFx?.error) throw Object.assign(new Error(`TMS 29: ${transactionCurrency}/${functionalCurrency} ${rp} kapanış kuru bulunamadı.`), { code: closingFx.error });
           closingRate = closingFx.rate;
         }
@@ -2597,7 +2600,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const fn = resolveContractFunctionalCurrency(contract);
         let fxRate = 1;
         if (tx !== fn) {
-          const fx = getFxRate(tx, fn, closingDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          const fx = getFxRate(tx, fn, closingDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: false });
           if (fx?.error) throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${rp} kapanış kuru bulunamadı.`), { code: fx.error });
           fxRate = fx.rate;
         }
@@ -13856,6 +13859,10 @@ ${renderPaymentScheduleFooterContainers()}
                   Yıllık
                 </option>
 
+                <option value="custom">
+                  Özel Tarih Aralığı
+                </option>
+
               </select>
 
             </div>
@@ -13887,6 +13894,14 @@ ${renderPaymentScheduleFooterContainers()}
                 ${buildMonthOptions()}
               </select>
 
+            </div>
+
+            <div id="bulkCustomDateRange" style="display:none;">
+              <label style="display:block;font-size:10px;font-weight:700;color:#64748b;margin-bottom:7px;">Başlangıç / Bitiş</label>
+              <div style="display:flex;gap:6px;">
+                <input id="bulkAccountingStartDate" type="date" style="width:50%;padding:9px;border:1px solid #d1d5db;border-radius:7px;" aria-label="Toplu fiş başlangıç tarihi" />
+                <input id="bulkAccountingEndDate" type="date" style="width:50%;padding:9px;border:1px solid #d1d5db;border-radius:7px;" aria-label="Toplu fiş bitiş tarihi" />
+              </div>
             </div>
 
 
@@ -14324,6 +14339,9 @@ ${renderPaymentScheduleFooterContainers()}
     const annual =
       period === "annual";
 
+    const customRange = document.getElementById("bulkCustomDateRange");
+    if (customRange) customRange.style.display = period === "custom" ? "block" : "none";
+
     month.disabled =
       annual;
 
@@ -14447,6 +14465,13 @@ ${renderPaymentScheduleFooterContainers()}
     };
   }
 
+  function getBulkJournalDateRange() {
+    const start = parseDate(document.getElementById("bulkAccountingStartDate")?.value);
+    const end = parseDate(document.getElementById("bulkAccountingEndDate")?.value);
+    if (!start || !end || start > end) return null;
+    return { periodStart: start, periodEnd: end };
+  }
+
   /**
    * TMS21 kur farkını bulk jurnal entries dizisine ekler.
    * Mevcut entries değiştirilmez; yeni bir dizi döndürülür.
@@ -14521,7 +14546,9 @@ ${renderPaymentScheduleFooterContainers()}
       return;
     }
 
-    const periodDates = getBulkJournalPeriodDates(year, period, month);
+    const periodDates = period === "custom"
+      ? getBulkJournalDateRange()
+      : getBulkJournalPeriodDates(year, period, month);
     if (!periodDates) {
       showAlert("Seçilen dönem için geçerli başlangıç/bitiş tarihi oluşturulamadı.");
       return;
@@ -14550,7 +14577,12 @@ ${renderPaymentScheduleFooterContainers()}
 
     for (let index = 0; index < activeContracts.length; index++) {
       const contract = activeContracts[index];
-      const selected = getScheduleForYear(contract, year, month, period);
+      const selected = period === "custom"
+        ? calculateLease(contract).schedule.filter(item => {
+            const d = parseDate(item.date);
+            return d && d >= periodDates.periodStart && d <= periodDates.periodEnd;
+          })
+        : getScheduleForYear(contract, year, month, period);
 
       if (!selected.length) {
         if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {
@@ -34077,7 +34109,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
           <div class="gk-v26-card">
             <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label>
-            <input type="date" id="v26FootnotesPeriodEndInput" value="${effectivePeriodEnd.toISOString().slice(0,10)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+            <input type="date" id="v26FootnotesPeriodEndInput" value="${v191DateInputValue(effectivePeriodEnd)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
             <button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button>
             <span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${effectivePeriodStart.toLocaleDateString("tr-TR")}</span>
 
