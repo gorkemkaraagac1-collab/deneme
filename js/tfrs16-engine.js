@@ -27080,6 +27080,18 @@ ${renderPaymentScheduleFooterContainers()}
     const availableRateDates = loadV23Rates().filter(row => row.fromCurrency === transactionCurrency && row.toCurrency === functionalCurrency && row.rateType === rateType && Number(row.rate) > 0).map(row => row.rateDate).sort();
     const latestRateDate = availableRateDates[availableRateDates.length - 1] || v23DateKey(new Date());
 
+    // Schedule dates represent calendar dates.  Using toISOString() for
+    // a local Date can move a midnight date one day backwards in a
+    // positive-offset timezone (e.g. 01.07 becomes 30.06 UTC), causing a
+    // future payment to be included in a 30.06 reporting close.
+    const calendarDateKey = value => {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+      const date = v23Date(value);
+      return date
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+        : null;
+    };
+
     /*
       GC-2026-09 (Madde 4 — reportingDate wiring): önceden bu kesim
       HER ZAMAN `latestRateDate`'e göre yapılıyordu — yani seçili
@@ -27096,9 +27108,9 @@ ${renderPaymentScheduleFooterContainers()}
     */
     const scheduleCutoffDate =
       options.reportingDate
-        ? v23DateKey(options.reportingDate)
+        ? calendarDateKey(options.reportingDate)
         : latestRateDate;
-    const translationSchedule = schedule.filter(row => v23DateKey(row.date) <= scheduleCutoffDate);
+    const translationSchedule = schedule.filter(row => calendarDateKey(row.date) <= scheduleCutoffDate);
 
     /*
       GC-2026-09 (Madde 3+4): seçili rapor tarihi, ödeme takvimindeki
@@ -27115,7 +27127,7 @@ ${renderPaymentScheduleFooterContainers()}
     if (options.reportingDate && options.accrualContext) {
       const reportingDateParsed = parseDate(options.reportingDate);
       const lastRow = translationSchedule[translationSchedule.length - 1] || null;
-      const alreadyExact = lastRow && v23DateKey(lastRow.date) === v23DateKey(options.reportingDate);
+      const alreadyExact = lastRow && calendarDateKey(lastRow.date) === calendarDateKey(options.reportingDate);
       if (reportingDateParsed && !alreadyExact) {
         const accrual = buildReportingDateAccrual(
           options.accrualContext.core,
