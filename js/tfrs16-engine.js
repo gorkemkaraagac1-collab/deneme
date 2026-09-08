@@ -6062,20 +6062,19 @@ document.addEventListener("DOMContentLoaded", () => {
         cursor = new Date(cursor.getFullYear(), cursor.getMonth() + stepMonths, cursor.getDate());
       }
     } else {
-      // Arrears — align with the legacy monthly convention:
-      // schedule row date = period START; PV exponent = months to
-      // period END. Number of payments = floor(termMonths / step).
-      // Example: 24-month quarterly → 8 rows dated at months
-      // 0,3,6,...,21 from commencement (Jan, Apr, ..., Oct).
+      // Arrears payments occur one day before each start-date anniversary.
+      // Generate one candidate beyond the term when needed, then filter it
+      // out so contracts ending one day before an anniversary retain the
+      // correct number of payment events.
       const paymentCount = Math.max(1, Math.floor(termMonths / stepMonths));
-      for (let i = 0; i < paymentCount; i++) {
-        dates.push(
-          new Date(
-            start.getFullYear(),
-            start.getMonth() + i * stepMonths,
-            start.getDate()
-          )
-        );
+      for (let i = 1; i <= paymentCount; i++) {
+        const anniversary = new Date(start.getFullYear(), start.getMonth() + i * stepMonths, 1);
+        const daysInTargetMonth = new Date(anniversary.getFullYear(), anniversary.getMonth() + 1, 0).getDate();
+        anniversary.setDate(Math.min(start.getDate(), daysInTargetMonth));
+        anniversary.setDate(anniversary.getDate() - 1);
+        if (anniversary.getTime() <= end.getTime()) {
+          dates.push(anniversary);
+        }
       }
     }
     return dates;
@@ -6674,35 +6673,12 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
 
-    // Payment dates honour frequency (monthly/quarterly/annual)
-    // and timing (advance/arrears). Legacy monthly+arrears keeps
-    // the same date grid as before (payment at month-start labels
-    // with PV exponent = period index).
-    let paymentDates;
-
-    if (stepMonths === 1 && !advance) {
-      // Legacy monthly arrears path: one row per calendar month
-      // from commencement, matching the historical schedule shape
-      // used by current/non-current and modification engines.
-      paymentDates = [];
-      const contractStart = parseDate(contract.startDate);
-      for (let i = 1; i <= months; i++) {
-        paymentDates.push(
-          new Date(
-            contractStart.getFullYear(),
-            contractStart.getMonth() + i - 1,
-            1
-          )
-        );
-      }
-    } else {
-      paymentDates = buildLeasePaymentDates(
-        contract.startDate,
-        contract.endDate,
-        stepMonths,
-        advance
-      );
-    }
+    const paymentDates = buildLeasePaymentDates(
+      contract.startDate,
+      contract.endDate,
+      stepMonths,
+      advance
+    );
 
     if (!paymentDates.length) {
       return {
@@ -6733,6 +6709,10 @@ document.addEventListener("DOMContentLoaded", () => {
       annualRate,
       monthlyRate,
       months,
+      effectiveMonths:
+        stepMonths === 1 && !advance
+          ? paymentDates.length
+          : months,
       stepMonths,
       advance,
       paymentDates,
@@ -6814,7 +6794,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * bağlı ROU/amortisman parametreleri (initialROU, depreciation vb.)
    */
   function calculateInitialLeaseMeasurement(assumptions, core, esc) {
-    const { payment, monthlyRate, stepMonths, advance, paymentDates, months } = core;
+    const { payment, monthlyRate, stepMonths, advance, paymentDates, months, effectiveMonths } = core;
     const { paymentAmounts, hasEscalation } = esc;
 
     // Discount exponents in MONTHS from commencement:
@@ -6834,7 +6814,7 @@ document.addEventListener("DOMContentLoaded", () => {
             1 -
             Math.pow(
               1 + monthlyRate,
-              -months
+              -effectiveMonths
             )
           ) /
           monthlyRate
@@ -6916,7 +6896,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const depreciationMonths =
       usesUsefulLife
         ? assumptions.usefulLifeMonths
-        : months;
+        : effectiveMonths;
 
     const depreciation =
       initialROU / depreciationMonths;
