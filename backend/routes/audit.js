@@ -123,6 +123,7 @@ router.post("/", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO audit_events (id, actor, action, entity_type, entity_id, contract_id, old_value, new_value, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO NOTHING
        RETURNING *`,
       [
         id,
@@ -136,6 +137,12 @@ router.post("/", async (req, res) => {
         metadata ? JSON.stringify(metadata) : null
       ]
     );
+    // Senkronizasyon yeniden denemeleri aynı audit ID'sini gönderebilir.
+    // Append-only günlükte bu durum başarıyla sonuçlanmış idempotent bir
+    // işlem kabul edilir; istemciyi gereksiz yere hata durumuna sokmayız.
+    if (result.rows.length === 0) {
+      return res.status(200).json({ duplicate: true, id });
+    }
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error("POST /api/audit hatası:", error);
