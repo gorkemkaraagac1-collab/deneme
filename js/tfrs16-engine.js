@@ -18160,6 +18160,7 @@ ${renderPaymentScheduleFooterContainers()}
       // (TMS29 dahil) tutarlı.
       const contractStart = parseDate(contract.startDate);
       if (contractStart && contractStart > end) return;
+      const initialRecognitionInPeriod = contractStart && contractStart >= start && contractStart <= end;
       try {
         const built = rptScheduleRows(contract);
         if (built.error) throw new Error(built.error);
@@ -18174,16 +18175,21 @@ ${renderPaymentScheduleFooterContainers()}
             const isCommencementAdvance = accrualContext.core.advance && row === schedule[0];
             return sum + (isCommencementAdvance ? 0 : rptNumber(row.payment));
           }, 0);
-          const openingLiability = rptNumber(openingSnapshot?.liability);
+          const openingLiabilityBeforeEntry = rptNumber(openingSnapshot?.liability);
+          const openingLiability = initialRecognitionInPeriod ? 0 : openingLiabilityBeforeEntry;
+          const entriesLiability = initialRecognitionInPeriod ? openingLiabilityBeforeEntry : 0;
           const closingLiability = rptNumber(closingSnapshot?.liability);
-          const interest = closingLiability - openingLiability + payments;
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingLiability:rptRound(openingLiability),interest:rptRound(interest),payments:rptRound(payments),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingLiability:rptRound(closingLiability),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
+          const interest = closingLiability - openingLiabilityBeforeEntry + payments;
+          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingLiability:rptRound(openingLiability),entriesLiability:rptRound(entriesLiability),interest:rptRound(interest),payments:rptRound(payments),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingLiability:rptRound(closingLiability),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
           return;
         }
         const openingRow = rptScheduleAtOrBefore(schedule, rptAddDays(start, -1));
         const closingRow = rptScheduleAtOrBefore(schedule, end);
         const periodRows = rptRowsBetween(schedule, start, end);
         let openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
+        const openingLiabilityBeforeEntry = openingLiability;
+        const entriesLiability = initialRecognitionInPeriod ? openingLiabilityBeforeEntry : 0;
+        if (initialRecognitionInPeriod) openingLiability = 0;
         let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
         // A change effective on the last pre-period schedule row belongs to
         // the opening balance, although that row itself is the historical
@@ -18246,18 +18252,18 @@ ${renderPaymentScheduleFooterContainers()}
         }
         const interest = periodRows.reduce((s, r) => s + rptNumber(r.interest), 0);
         const payments = periodRows.reduce((s, r) => s + rptNumber(r.payment), 0);
-        const expected = openingLiability + interest - payments;
+        const expected = openingLiability + entriesLiability + interest - payments;
         const modificationAdjustment = appliedModifications.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const unexplainedAdjustment = 0;
         const adjustments = modificationAdjustment + reassessmentAdjustment;
         const difference = expected + adjustments - closingLiability;
-        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
+        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), entriesLiability:rptRound(entriesLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
     });
     report.rows = rows;
-    report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const diff = rptRound(report.totals.openingLiability + report.totals.interest - report.totals.payments - report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
+    report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    const diff = rptRound(report.totals.openingLiability + report.totals.entriesLiability + report.totals.interest - report.totals.payments - report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
     report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE || Math.abs(report.totals.reassessmentAdjustment||0)>REPORTING_TOLERANCE };
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
     const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
@@ -18280,6 +18286,7 @@ ${renderPaymentScheduleFooterContainers()}
       // dipnotlarıyla aynı sözleşme adedi).
       const contractStart = parseDate(contract.startDate);
       if (contractStart && contractStart > end) return;
+      const initialRecognitionInPeriod = contractStart && contractStart >= start && contractStart <= end;
       try{
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
         const schedule=built.schedule;
@@ -18287,13 +18294,18 @@ ${renderPaymentScheduleFooterContainers()}
         if(accrualContext){
           const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1));
           const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end);
-          const openingRuo=rptNumber(openingSnapshot?.rouAsset),closingRuo=rptNumber(closingSnapshot?.rouAsset);
-          const depreciation=Math.max(0,openingRuo-closingRuo);
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingRuo:rptRound(closingRuo),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
+          const openingRuoBeforeEntry=rptNumber(openingSnapshot?.rouAsset),closingRuo=rptNumber(closingSnapshot?.rouAsset);
+          const openingRuo=initialRecognitionInPeriod ? 0 : openingRuoBeforeEntry;
+          const entriesRuo=initialRecognitionInPeriod ? openingRuoBeforeEntry : 0;
+          const depreciation=Math.max(0,openingRuoBeforeEntry-closingRuo);
+          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),entriesRuo:rptRound(entriesRuo),depreciation:rptRound(depreciation),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingRuo:rptRound(closingRuo),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
           return;
         }
         const openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
         let openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
+        const openingRuoBeforeEntry=openingRuo;
+        const entriesRuo=initialRecognitionInPeriod ? openingRuoBeforeEntry : 0;
+        if (initialRecognitionInPeriod) openingRuo=0;
         let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
         const openingRowDateRuo=openingRow?rptDate(openingRow.date):null;
         const openingChangesRuo=dedupeAppliedModifications(contract.modifications)
@@ -18343,14 +18355,14 @@ ${renderPaymentScheduleFooterContainers()}
         const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const unexplainedAdjustment=0;
         const adjustments=modificationAdjustment+reassessmentAdjustment;
-        const diff=openingRuo-depreciation+adjustments-closingRuo;
-        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
+        const diff=openingRuo+entriesRuo-depreciation+adjustments-closingRuo;
+        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),entriesRuo:rptRound(entriesRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
     });
     report.rows=rows;
-    report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const diff=rptRound(report.totals.openingRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
-    report.reconciliation={formula:"Opening ROU - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:true};
+    report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+    const diff=rptRound(report.totals.openingRuo+report.totals.entriesRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
+    report.reconciliation={formula:"Opening ROU + Entries - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:true};
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
     const unexplainedRouRows=rows.filter(r=>r.status!=="ERROR"&&Math.abs(rptNumber(r.otherAdjustment))>REPORTING_TOLERANCE);
     if(unexplainedRouRows.length) report.warnings.push("Açıklanamayan 'Diğer' ROU hareketi: "+unexplainedRouRows.map(r=>r.contractId).join(", "));
@@ -18389,6 +18401,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Para Birimi": r.currency,
       "Varlık Sınıfı": r.assetClass,
       "Açılış Bakiyesi": r.openingRuo,
+      "Girişler": r.entriesRuo,
       "Amortisman (-)": -Math.abs(r.depreciation),
       "Modifikasyon Etkisi": r.modificationAdjustment,
       "Reassessment Etkisi": r.reassessmentAdjustment,
@@ -18398,19 +18411,19 @@ ${renderPaymentScheduleFooterContainers()}
     }));
     rows.push({
       "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "", "Varlık Sınıfı": "",
-      "Açılış Bakiyesi": totals.openingRuo, "Amortisman (-)": -Math.abs(totals.depreciation || 0),
+      "Açılış Bakiyesi": totals.openingRuo, "Girişler": totals.entriesRuo, "Amortisman (-)": -Math.abs(totals.depreciation || 0),
       "Modifikasyon Etkisi": totals.modificationAdjustment, "Reassessment Etkisi": totals.reassessmentAdjustment,
       "Diğer Düzeltme": totals.otherAdjustment, "Kapanış Bakiyesi": totals.closingRuo,
       "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
     });
     const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
       "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
+      "Açılış Bakiyesi": g.openingRuo, "Girişler": g.entriesRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
       "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
     }));
     const assetClassSummary = v191GroupRollForwardByAssetClass(dataRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
       "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
+      "Açılış Bakiyesi": g.openingRuo, "Girişler": g.entriesRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
       "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
     }));
     return v191ExportSheetsToFile([
@@ -18528,6 +18541,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Tedarikçi": r.supplier,
       "Para Birimi": r.currency,
       "Açılış Bakiyesi": r.openingLiability,
+      "Girişler": r.entriesLiability,
       "Faiz Gideri (+)": r.interest,
       "Ödemeler (-)": -Math.abs(r.payments),
       "Modifikasyon Etkisi": r.modificationAdjustment,
@@ -18538,7 +18552,7 @@ ${renderPaymentScheduleFooterContainers()}
     }));
     rows.push({
       "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "",
-      "Açılış Bakiyesi": totals.openingLiability, "Faiz Gideri (+)": totals.interest,
+      "Açılış Bakiyesi": totals.openingLiability, "Girişler": totals.entriesLiability, "Faiz Gideri (+)": totals.interest,
       "Ödemeler (-)": -Math.abs(totals.payments || 0), "Modifikasyon Etkisi": totals.modificationAdjustment,
       "Reassessment Etkisi": totals.reassessmentAdjustment, "Diğer Düzeltme": totals.otherAdjustment,
       "Kapanış Bakiyesi": totals.closingLiability,
@@ -18546,7 +18560,7 @@ ${renderPaymentScheduleFooterContainers()}
     });
     const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]).map(g => ({
       "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingLiability, "Faiz Gideri (+)": g.interest, "Ödemeler (-)": -Math.abs(g.payments),
+      "Açılış Bakiyesi": g.openingLiability, "Girişler": g.entriesLiability, "Faiz Gideri (+)": g.interest, "Ödemeler (-)": -Math.abs(g.payments),
       "Modifikasyon Etkisi": g.modificationAdjustment, "Reassessment Etkisi": g.reassessmentAdjustment,
       "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingLiability
     }));
@@ -22839,17 +22853,18 @@ ${renderPaymentScheduleFooterContainers()}
     });
 
     const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", inflationNetAdjustment: tms29.totalNetAdjustment }] : [];
-    const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+    const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+    const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
 
     const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", monetaryGainLoss: tms29.totalMonetaryGainLoss }] : [];
-    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
 
     const rouDetailColumns = [
       { key: "contractId", label: "Sözleşme" },
       { key: "company", label: "Şirket" },
       { key: "openingRuo", label: "Açılış" },
+      { key: "entriesRuo", label: "Girişler" },
       { key: "depreciation", label: "Amortisman" },
       { key: "modificationAdjustment", label: "Modifikasyon" },
       { key: "reassessmentAdjustment", label: "Reassessment" },
@@ -22862,6 +22877,7 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "contractId", label: "Sözleşme" },
       { key: "company", label: "Şirket" },
       { key: "openingLiability", label: "Açılış" },
+      { key: "entriesLiability", label: "Girişler" },
       { key: "interest", label: "Faiz" },
       { key: "payments", label: "Ödemeler" },
       { key: "modificationAdjustment", label: "Modifikasyon" },
@@ -22938,6 +22954,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("rou", row.assetClass) },
         { key: "contractCount", label: "Sözleşme Sayısı" },
         { key: "openingRuo", label: "Açılış" },
+        { key: "entriesRuo", label: "Girişler" },
         { key: "depreciation", label: "Amortisman" },
         { key: "modificationAdjustment", label: "Modifikasyon" },
         { key: "reassessmentAdjustment", label: "Reassessment" },
@@ -22949,13 +22966,14 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "currency", label: "Para Birimi" },
         { key: "contractCount", label: "Sözleşme Sayısı" },
         { key: "openingRuo", label: "Açılış" },
+        { key: "entriesRuo", label: "Girişler" },
         { key: "depreciation", label: "Amortisman" },
         { key: "modificationAdjustment", label: "Modifikasyon" },
         { key: "reassessmentAdjustment", label: "Reassessment" },
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingRuo", label: "Kapanış" }
       ])}
-      ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
+      ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
       ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
       ${tms29 ? v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) : ""}
     </div>`;
@@ -22976,6 +22994,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("liab", row.assetClass) },
         { key: "contractCount", label: "Sözleşme Sayısı" },
         { key: "openingLiability", label: "Açılış" },
+        { key: "entriesLiability", label: "Girişler" },
         { key: "interest", label: "Faiz" },
         { key: "payments", label: "Ödemeler" },
         { key: "modificationAdjustment", label: "Modifikasyon" },
@@ -22988,6 +23007,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "currency", label: "Para Birimi" },
         { key: "contractCount", label: "Sözleşme Sayısı" },
         { key: "openingLiability", label: "Açılış" },
+        { key: "entriesLiability", label: "Girişler" },
         { key: "interest", label: "Faiz" },
         { key: "payments", label: "Ödemeler" },
         { key: "modificationAdjustment", label: "Modifikasyon" },
@@ -22995,7 +23015,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingLiability", label: "Kapanış" }
       ])}
-      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
+      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
       ${v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
     </div>`;
