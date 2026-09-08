@@ -66,6 +66,7 @@ describe("release financial controls", () => {
     );
     const expected = Math.round((
       report.totals.openingLiability +
+      report.totals.entriesLiability +
       report.totals.interest -
       report.totals.payments +
       report.totals.modificationAdjustment +
@@ -191,6 +192,35 @@ describe("release financial controls", () => {
 
     expect(report.rows).toEqual([]);
     expect(report.reconciliation.passed).toBe(true);
+  });
+
+  test("dönem başında başlayan sözleşmenin ilk bakiyesi Açılış yerine Girişler'e alınır", () => {
+    tfrs16.contracts.push(contract("START-OF-PERIOD"));
+    const start = new Date("2026-01-01");
+    const end = new Date("2026-06-30");
+    const liability = tfrs16.getLeaseLiabilityRollForwardReport(start, end);
+    const rou = tfrs16.getRuoAssetRollForwardReport(start, end);
+
+    expect(liability.rows).toHaveLength(1);
+    expect(rou.rows).toHaveLength(1);
+    expect(liability.rows[0].openingLiability).toBe(0);
+    expect(rou.rows[0].openingRuo).toBe(0);
+    expect(liability.rows[0].entriesLiability).toBeGreaterThan(0);
+    expect(rou.rows[0].entriesRuo).toBeGreaterThan(0);
+    expect(liability.reconciliation.passed).toBe(true);
+    expect(rou.reconciliation.passed).toBe(true);
+  });
+
+  test("önceki yılda başlayan sözleşme 2026 hareketinde Açılış'ta kalır", () => {
+    tfrs16.contracts.push(contract("PRIOR-YEAR", { startDate: "2025-01-01" }));
+    const report = tfrs16.getLeaseLiabilityRollForwardReport(
+      new Date("2026-01-01"),
+      new Date("2026-06-30")
+    );
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0].openingLiability).toBeGreaterThan(0);
+    expect(report.rows[0].entriesLiability).toBe(0);
   });
 
   test("ROU roll-forward mükerrer APPLIED reassessment'i bir kez sayar ve Diğer'i denkleme dahil eder", () => {
