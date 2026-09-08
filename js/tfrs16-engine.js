@@ -14740,7 +14740,7 @@ ${renderPaymentScheduleFooterContainers()}
 
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
-      let entries = await appendFxToBulkJournal(
+      const nominalEntries = await appendFxToBulkJournal(
         contract,
         mappedBase,
         periodDates.periodStart,
@@ -14749,34 +14749,41 @@ ${renderPaymentScheduleFooterContainers()}
       const mappedTms29 = typeof applyAccountMappingToJournal === "function"
         ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
         : tms29Entries;
-      entries = entries.concat(mappedTms29);
 
-      // Kur farkı satırları eklendikten sonra toplamlar yeniden hesaplanır.
-      const totalDebit = entries.reduce((total, item) => total + Number(item.debit || 0), 0);
-      const totalCredit = entries.reduce((total, item) => total + Number(item.credit || 0), 0);
-      const difference = Math.abs(totalDebit - totalCredit);
-      const voucherNo = createVoucherNumber(voucherStart, sequence);
+      const pushVoucher = (entries, voucherDescription, journalType) => {
+        const totalDebit = entries.reduce((total, item) => total + Number(item.debit || 0), 0);
+        const totalCredit = entries.reduce((total, item) => total + Number(item.credit || 0), 0);
+        const difference = Math.abs(totalDebit - totalCredit);
+        bulkJournalData.push({
+          voucherNo: createVoucherNumber(voucherStart, sequence++),
+          voucherDate,
+          contractId: contract.id,
+          company: contract.company,
+          supplier: contract.supplier,
+          description: voucherDescription,
+          year,
+          period,
+          month,
+          periodStart: v23DateKey(periodDates.periodStart),
+          periodEnd: v23DateKey(periodDates.periodEnd),
+          journalType,
+          entries,
+          totalDebit,
+          totalCredit,
+          difference,
+          balanced: difference < 0.01
+        });
+      };
 
-      bulkJournalData.push({
-        voucherNo,
-        voucherDate,
-        contractId: contract.id,
-        company: contract.company,
-        supplier: contract.supplier,
-        description,
-        year,
-        period,
-        month,
-        periodStart: v23DateKey(periodDates.periodStart),
-        periodEnd: v23DateKey(periodDates.periodEnd),
-        entries,
-        totalDebit,
-        totalCredit,
-        difference,
-        balanced: difference < 0.01
-      });
-
-      sequence++;
+      // Nominal TFRS 16 ve TMS 21 kayıtları kendi fişi olarak kalır.
+      if (selected.length) {
+        pushVoucher(nominalEntries, description, "NOMINAL_TFRS16");
+      }
+      // TMS 29 enflasyon düzeltmesi nominal fişe eklenmez; ayrı bir
+      // fiş numarası ve açıklama ile üretilir.
+      if (mappedTms29.length) {
+        pushVoucher(mappedTms29, `${description} — TMS 29 enflasyon düzeltmesi`, "TMS29_INFLATION");
+      }
 
       if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {
         const pct = totalContracts ? Math.round(((index + 1) / totalContracts) * 100) : 100;
