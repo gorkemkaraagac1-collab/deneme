@@ -54,4 +54,19 @@ describe("calculateLeaseEngine", () => {
 
     expect(second).toBe(first);
   });
+
+  test("LEASE-027 aylık arrears ödemelerini gerçek dönem sonlarında üretir", () => {
+    const result = tfrs16.calculateLeaseEngine({
+      id: "LEASE-027",
+      monthlyPayment: 1000,
+      startDate: "2026-01-15",
+      endDate: "2029-01-14",
+      discountRate: 6
+    });
+
+    expect(result.schedule).toHaveLength(36);
+    expect(result.schedule[0].date).toEqual(new Date("2026-02-14T00:00:00"));
+    expect(result.schedule.at(-1).date).toEqual(new Date("2029-01-14T00:00:00"));
+    expect(result.depreciationMonths).toBe(36);
+  });
 });

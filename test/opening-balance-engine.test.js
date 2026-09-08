@@ -29,7 +29,7 @@ describe("approved TFRS 16 opening balance", () => {
     expect(result.openingBalanceApplied).toBe(true);
     expect(result.liability).toBe(10000);
     expect(result.rouAssets).toBe(9000);
-    expect(result.schedule[0].date.getFullYear()).toBe(2026);
+    expect(result.schedule[0].date.getFullYear()).toBe(2025);
     expect(result.schedule[0].openingLiability).toBe(10000);
   });
 
