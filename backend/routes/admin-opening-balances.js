@@ -94,4 +94,22 @@ router.post('/approve', async (req, res) => {
   } catch (error) { console.error('Opening balance approval error:', error); res.status(500).json({ success: false, error: 'Açılış bakiyeleri onaylanamadı.' }); }
 });
 
+// Admin-only cleanup for migrated/test opening balances. APPROVED rows may
+// be removed here because this route is protected by requireAdmin above.
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM contract_opening_balances
+       WHERE id = $1
+       RETURNING id, contract_id`,
+      [String(req.params.id)]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: 'Açılış bakiyesi bulunamadı.' });
+    res.json({ success: true, deleted: result.rows[0] });
+  } catch (error) {
+    console.error('Opening balance delete error:', error);
+    res.status(500).json({ success: false, error: 'Açılış bakiyesi silinemedi.' });
+  }
+});
+
 module.exports = router;
