@@ -9894,9 +9894,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const leaseIncentives = Number(contract.leaseIncentives) || 0;
     const restorationObligation = Number(contract.restorationObligation) || 0;
     const derivedAdvance = Number(engine.advancePaymentAtCommencement) || 0;
-    const explicitAdvance = contract && Object.prototype.hasOwnProperty.call(contract, "advancePaymentAtCommencement");
-    const includeAdvance = explicitAdvance || String(contract?.paymentFrequency || "").toLowerCase() === "annual";
-    const advancePaymentAtCommencement = includeAdvance ? derivedAdvance : 0;
+    // The engine has already identified an advance payment from the
+    // contract's payment timing.  Do not gate it on frequency or on an
+    // optional legacy field: monthly advance leases must also capitalize
+    // the commencement payment in ROU and show its bank leg.
+    const advancePaymentAtCommencement = derivedAdvance;
 
     const entries = [
 
@@ -12470,13 +12472,13 @@ ${renderPaymentScheduleFooterContainers()}
                 <th style="padding:9px;text-align:left;font-size:11px;">İşlem</th>
               </tr>
             </thead>
-            <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:10px;color:#94a3b8;font-size:12px;">Kayıt yok.</td></tr>`}</tbody>
+            <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:10px;color:#94a3b8;font-size:12px;">Henüz TMS 29 hesaplanmadı. Raporlama dönemini seçip Önizle'ye basın.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
     `;
 
-    document.getElementById("inflPreviewBtn")?.addEventListener("click", () => {
+    const runInflationPreview = () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
       const periodStart = document.getElementById("inflPeriodStart")?.value || "";
       const result = document.getElementById("inflPreviewResult");
@@ -12496,7 +12498,24 @@ ${renderPaymentScheduleFooterContainers()}
           ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(-t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
-    });
+    };
+
+    document.getElementById("inflPreviewBtn")?.addEventListener("click", runInflationPreview);
+
+    // TMS 29 paneli açıldığında sözleşmenin kayıtlı raporlama tarihi varsa
+    // tarihleri otomatik doldur ve önizlemeyi çalıştır. Tarih kayıtlı değilse
+    // kullanıcı seçimi korunur; hesaplama artık sessizce "Kayıt yok" demez.
+    const savedReportingDate = parseDate(contract?.reportingDate || contract?.tms29ReportingDate);
+    const reportingInput = document.getElementById("inflReportingPeriod");
+    const startInput = document.getElementById("inflPeriodStart");
+    if (savedReportingDate && reportingInput && !reportingInput.value) {
+      const reportMonth = `${savedReportingDate.getFullYear()}-${String(savedReportingDate.getMonth() + 1).padStart(2, "0")}`;
+      reportingInput.value = reportMonth;
+      if (startInput && !startInput.value) {
+        startInput.value = `${savedReportingDate.getFullYear()}-01`;
+      }
+      runInflationPreview();
+    }
 
     // V19 Kısa Vade Madde 1 (UI cilası): raporlama dönemi seçildiğinde
     // o dönem kilitliyse "Taslak Oluştur" butonu proaktif disable edilir.
