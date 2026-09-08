@@ -14564,6 +14564,97 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
+  /**
+   * TMS 29 düzeltmesini toplu fişin içine ekler. Nominal TFRS 16
+   * fişinden ayrı bir akış olarak hesaplanır; böylece ROU'nun
+   * gayrimoneter endeksleme farkı ile yükümlülüğün parasal pozisyon
+   * kazanç/kaybı birbirine karışmaz.
+   */
+  function buildTms29BulkJournalEntries(contract, periodStart, periodEnd) {
+    if (!contract || !periodEnd) return [];
+
+    const reportingPeriod = v23DateKey(periodEnd)?.slice(0, 7);
+    const periodStartMonth = v23DateKey(periodStart)?.slice(0, 7);
+    if (!reportingPeriod || !periodStartMonth) return [];
+
+    let restatement;
+    try {
+      restatement = applyTMS29Restatement(contract, reportingPeriod, periodStartMonth);
+    } catch (error) {
+      // Endeks tablosu eksikse nominal fiş yine üretilebilmeli. Eksik
+      // TMS 29 verisi, mevcut toplu fişi sessizce bozmadan atlanır.
+      console.warn(`TMS 29 bulk düzeltmesi hesaplanamadı (${contract.id}):`, error);
+      return [];
+    }
+
+    const entries = [];
+    const rou = restatement.rouRollForward;
+    const liab = restatement.liabilityRollForward;
+    const netAdjustment = Number(restatement.totals?.netAdjustment) || 0;
+    const depreciationDelta = rou
+      ? (Number(rou.rouDepreciationRestated) || 0) - (Number(rou.rouDepreciationNominal) || 0)
+      : 0;
+    // Net ROU farkı = brüt ROU farkı - amortisman farkı.
+    const grossRouDelta = netAdjustment + depreciationDelta;
+    const interestDelta = liab
+      ? (Number(liab.liabilityInterestRestated) || 0) - (Number(liab.liabilityInterestNominal) || 0)
+      : 0;
+
+    const addPair = (debitAccount, creditAccount, amount, source) => {
+      const value = Number(amount) || 0;
+      if (Math.abs(value) < 0.005) return;
+      const positive = value > 0;
+      entries.push({
+        account: positive ? debitAccount : creditAccount,
+        debit: positive ? Math.abs(value) : 0,
+        credit: positive ? 0 : Math.abs(value),
+        source,
+        journalType: "TMS29_INFLATION",
+        controlStatus: "VALID"
+      });
+      entries.push({
+        account: positive ? creditAccount : debitAccount,
+        debit: positive ? 0 : Math.abs(value),
+        credit: positive ? Math.abs(value) : 0,
+        source,
+        journalType: "TMS29_INFLATION",
+        controlStatus: "VALID"
+      });
+    };
+
+    addPair(
+      TFRS29_ACCOUNTS.rouAsset,
+      TFRS29_ACCOUNTS.inflationGainLoss,
+      grossRouDelta,
+      "INFLATION_ADJUSTMENT_ROU_GROSS"
+    );
+    addPair(
+      "770 / 730 Amortisman Giderleri",
+      "268 Birikmiş Amortismanlar",
+      depreciationDelta,
+      "INFLATION_ADJUSTMENT_ROU_DEPRECIATION"
+    );
+    addPair(
+      "780 Finansman Giderleri",
+      TFRS29_ACCOUNTS.leaseLiability,
+      interestDelta,
+      "INFLATION_ADJUSTMENT_LIABILITY_INTEREST"
+    );
+
+    const monetaryGL = Number(restatement.totals?.liabilityMonetaryGainLoss);
+    if (Number.isFinite(monetaryGL) && Math.abs(monetaryGL) >= 0.005) {
+      const gain = -monetaryGL;
+      addPair(
+        TFRS29_ACCOUNTS.monetaryPositionOffset,
+        TFRS29_ACCOUNTS.liabilityMonetaryGainLoss,
+        gain,
+        "INFLATION_ADJUSTMENT_LIABILITY_MONETARY"
+      );
+    }
+
+    return entries;
+  }
+
   async function generateBulkJournals() {
 
     const year = Number(document.getElementById("bulkAccountingYear")?.value);
@@ -14616,7 +14707,13 @@ ${renderPaymentScheduleFooterContainers()}
           })
         : getScheduleForYear(contract, year, month, period);
 
-      if (!selected.length) {
+      const tms29Entries = buildTms29BulkJournalEntries(
+        contract,
+        periodDates.periodStart,
+        periodDates.periodEnd
+      );
+
+      if (!selected.length && !tms29Entries.length) {
         if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {
           const pct = totalContracts ? Math.round(((index + 1) / totalContracts) * 100) : 100;
           updateLoadingProgress(pct, `Toplu fişler hazırlanıyor... (${index + 1}/${totalContracts})`);
@@ -14643,12 +14740,16 @@ ${renderPaymentScheduleFooterContainers()}
 
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
-      const entries = await appendFxToBulkJournal(
+      let entries = await appendFxToBulkJournal(
         contract,
         mappedBase,
         periodDates.periodStart,
         periodDates.periodEnd
       );
+      const mappedTms29 = typeof applyAccountMappingToJournal === "function"
+        ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
+        : tms29Entries;
+      entries = entries.concat(mappedTms29);
 
       // Kur farkı satırları eklendikten sonra toplamlar yeniden hesaplanır.
       const totalDebit = entries.reduce((total, item) => total + Number(item.debit || 0), 0);
@@ -14692,6 +14793,10 @@ ${renderPaymentScheduleFooterContainers()}
         (sum, item) => sum + item.entries.filter(e => e.journalType === "TMS21_FX").length,
         0
       );
+      const tms29EntryCount = bulkJournalData.reduce(
+        (sum, item) => sum + item.entries.filter(e => e.journalType === "TMS29_INFLATION").length,
+        0
+      );
       recordAuditEvent({
         action: "JOURNAL_GENERATED",
         entityType: "JOURNAL_BATCH",
@@ -14702,6 +14807,7 @@ ${renderPaymentScheduleFooterContainers()}
           balancedCount,
           unbalancedCount: bulkJournalData.length - balancedCount,
           fxEntryCount,
+          tms29EntryCount,
           year,
           period,
           month,
@@ -32694,6 +32800,7 @@ ${renderPaymentScheduleFooterContainers()}
     getAccountCode,
     applyAccountMappingToJournal,
     exportBulkJournals,
+    buildTms29BulkJournalEntries,
     exportJournalEntries,
     renderAccountMappingPage,
     renderCloseDashboardPage,
