@@ -11240,7 +11240,7 @@ ${renderAccountingCenterBulkPromo()}
         );
     }
 
-    appendFxJournalLines(
+    await appendFxJournalLines(
       contract,
       journalRows,
       entries,
@@ -11248,6 +11248,31 @@ ${renderAccountingCenterBulkPromo()}
       preview,
       { reportingDate: periodEndInclusive, periodStartExclusive, accrualContext: journalAccrualContext }
     );
+
+    // TMS 29 düzeltmesi nominal fişten ayrı gösterilir. Böylece
+    // kullanıcı tekil fişte de toplu merkezdekiyle aynı iki fişli
+    // yapıyı görür: nominal/TMS 21 fişi + enflasyon fişi.
+    if (preview) {
+      const tms29StartDate = new Date(periodStartExclusive.getTime() + 24 * 60 * 60 * 1000);
+      const tms29Entries = buildTms29BulkJournalEntries(
+        contract,
+        tms29StartDate,
+        periodEndInclusive
+      );
+      if (tms29Entries.length) {
+        const mappedTms29 = typeof applyAccountMappingToJournal === "function"
+          ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
+          : tms29Entries;
+        preview.insertAdjacentHTML(
+          "beforeend",
+          `<div style="margin-top:16px;">${renderJournalEntry(
+            `${title} — TMS 29 Enflasyon Düzeltme Fişi`,
+            mappedTms29,
+            resolveContractFunctionalCurrency(contract) || contract.currency || "TRY"
+          )}</div>`
+        );
+      }
+    }
   }
 
   async function appendFxToReclassification(contract, reportingDate, originalEntries, title, preview) {
