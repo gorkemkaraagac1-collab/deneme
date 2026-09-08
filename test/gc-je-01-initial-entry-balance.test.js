@@ -51,10 +51,10 @@ describe("GC-JE-01: ilk muhasebeleştirme fişi dengesi", () => {
     expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
 
     // ROU debit'i ile Liability credit'i arasındaki farkın tam olarak
-    // eklenen üç bileşenin toplamı kadar olduğunu doğrula.
+    // eklenen üç bileşen ile peşin ilk taksitin toplamı kadar olduğunu doğrula.
     const rouLine = entries.find(e => e.account.includes("260"));
     const liabilityLine = entries.find(e => e.account.includes("401"));
-    expect(rouLine.debit - liabilityLine.credit).toBeCloseTo(2200000, 1);
+    expect(rouLine.debit - liabilityLine.credit).toBeCloseTo(2750000, 1);
   });
 
   test("teşvik (lease incentive) olan sözleşmede de fiş dengede kalır", () => {
@@ -82,9 +82,29 @@ describe("GC-JE-01: ilk muhasebeleştirme fişi dengesi", () => {
     });
 
     const entries = tfrs16.generateInitialEntry(contract);
-    expect(entries.length).toBe(2);
+    expect(entries.length).toBe(3);
     const totalDebit = entries.reduce((s, e) => s + (Number(e.debit) || 0), 0);
     const totalCredit = entries.reduce((s, e) => s + (Number(e.credit) || 0), 0);
     expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
+  });
+
+  test("aylık peşin ödemede ilk taksit ROU'ya ve banka karşılığına dahil edilir", () => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      initialDirectCosts: 0,
+      restorationObligation: 0,
+      prepayments: 0,
+      leaseIncentives: 0
+    });
+
+    const engine = tfrs16.calculateLeaseEngine(contract);
+    const entries = tfrs16.generateInitialEntry(contract);
+    const rouLine = entries.find(e => e.account.includes("260"));
+    const bankLine = entries.find(e => e.account.includes("Peşin Ödenen İlk Kira"));
+
+    expect(rouLine.debit).toBeCloseTo(engine.rouAssets, 2);
+    expect(bankLine.credit).toBeCloseTo(engine.advancePaymentAtCommencement, 2);
+    expect(entries.reduce((s, e) => s + (Number(e.debit) || 0), 0))
+      .toBeCloseTo(entries.reduce((s, e) => s + (Number(e.credit) || 0), 0), 2);
   });
 });
