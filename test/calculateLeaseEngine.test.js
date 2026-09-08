@@ -70,3 +70,31 @@ describe("calculateLeaseEngine", () => {
     expect(result.depreciationMonths).toBe(36);
   });
 });
+
+describe("LEASE-022 annual arrears", () => {
+  let tfrs16;
+
+  beforeEach(() => {
+    tfrs16 = loadTfrs16();
+  });
+
+  test("yıllık arrears sözleşmede ilk ödeme başlangıçta değil dönem sonunda oluşur", () => {
+    const result = tfrs16.calculateLeaseEngine({
+      id: "LEASE-022",
+      monthlyPayment: 480000,
+      startDate: "2026-01-01",
+      endDate: "2029-12-31",
+      discountRate: 16,
+      paymentFrequency: "annual",
+      paymentTiming: "arrears",
+      leaseIncreaseType: "fixed",
+      leaseIncreaseRate: 6
+    });
+
+    expect(result.schedule).toHaveLength(4);
+    expect(result.schedule[0].date).toEqual(new Date("2026-12-31T00:00:00"));
+    expect(result.schedule[0].payment).toBeCloseTo(480000, 2);
+    expect(result.schedule[0].interest).toBeGreaterThan(0);
+    expect(result.schedule[0].closingLiability).toBeLessThan(result.schedule[0].openingLiability);
+  });
+});
