@@ -6885,17 +6885,28 @@ document.addEventListener("DOMContentLoaded", () => {
     // never uses a period SHORTER than the lease term here, since
     // useful life is by definition expected to be >= lease term in
     // the ownership-transfer/purchase-option case.
+    // Import şablonundaki "Varlığın Faydalı Ömrü" alanı kullanıcıya yıl
+    // olarak sunuluyor (LEASE-018 gibi kayıtlarda 20). Motor içindeki
+    // alan ay cinsinden tutulduğundan, eski içe aktarımlardaki küçük
+    // yıl değerlerini ay'a çevir. Zaten ay cinsinden girilmiş 96/120
+    // gibi değerler aynen korunur.
+    const suppliedUsefulLife = Number(assumptions.usefulLifeMonths);
+    const usefulLifeMonths =
+      Number.isFinite(suppliedUsefulLife) && suppliedUsefulLife > 0 && suppliedUsefulLife <= 50
+        ? suppliedUsefulLife * 12
+        : suppliedUsefulLife;
+
     const usesUsefulLife =
       (
         assumptions.ownershipTransfer ||
         assumptions.purchaseOption
       ) &&
-      assumptions.usefulLifeMonths &&
-      assumptions.usefulLifeMonths > months;
+      Number.isFinite(usefulLifeMonths) &&
+      usefulLifeMonths > months;
 
     const depreciationMonths =
       usesUsefulLife
-        ? assumptions.usefulLifeMonths
+        ? usefulLifeMonths
         : effectiveMonths;
 
     const depreciation =
@@ -9895,7 +9906,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const restorationObligation = Number(contract.restorationObligation) || 0;
     const derivedAdvance = Number(engine.advancePaymentAtCommencement) || 0;
     // The engine has already identified an advance payment from the
-    // contract's payment timing.  Do not gate it on frequency or on an
+    // contract's payment timing. Do not gate it on frequency or on an
     // optional legacy field: monthly advance leases must also capitalize
     // the commencement payment in ROU and show its bank leg.
     const advancePaymentAtCommencement = derivedAdvance;
