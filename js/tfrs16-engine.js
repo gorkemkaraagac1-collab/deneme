@@ -2556,6 +2556,13 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < effectivePeriodStart)
         .pop();
 
+      // Sözleşme dönem başında başlıyorsa ilk tanıma tutarı dönem açılışı
+      // değildir; hareket tablosunda "Girişler" olarak gösterilmelidir.
+      // Önceki kod ilk schedule satırının openingLiability/rouOpening
+      // değerini doğrudan açılışa taşıyarak bu tutarları iki kez sınıflıyordu.
+      const initialRecognitionInPeriod = !priorRow && effectivePeriodStart === acquisitionMonth;
+      let periodFxRate = 1;
+
       let liabilityOpeningNominal = priorRow
         ? priorRow.closingLiability
         : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
@@ -2563,13 +2570,20 @@ document.addEventListener("DOMContentLoaded", () => {
       // ROU tarafı için de aynı "dönem başından önceki son satır" mantığı
       // (moneter olmayan kalem — TMS 29.13 uyarınca dönem sonu satın alma
       // gücüne getirilir, yükümlülükten farklı olarak KENDİSİ değişir).
-      const rouOpeningNominal = priorRow
+      let rouOpeningNominal = priorRow
         ? priorRow.rouClosing
         : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
 
       const ratioOpeningToRp = getInflationRatio(effectivePeriodStart, rp);
       let liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
-      const rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
+      let rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
+
+      if (initialRecognitionInPeriod) {
+        liabilityOpeningNominal = 0;
+        liabilityOpeningRestated = 0;
+        rouOpeningNominal = 0;
+        rouOpeningRestated = 0;
+      }
 
       const periodRows = fullSchedule.filter(row => {
         const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
@@ -2591,6 +2605,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (tms29AccrualContext) {
+        // YYYY-MM'deki ay 1 tabanlıdır; Date() ayı 0 tabanlı kabul eder.
+        // Böylece 2026-01 dönemi için açılış snapshot'ı 31.12.2025 olur.
         const openingDate = new Date(Number(effectivePeriodStart.slice(0,4)), Number(effectivePeriodStart.slice(5,7)) - 1, 0);
         const closingDate = new Date(Number(rp.slice(0,4)), Number(rp.slice(5,7)), 0);
         const accrualSchedule = calculateLeaseEngine(contract).schedule;
@@ -2604,8 +2620,13 @@ document.addEventListener("DOMContentLoaded", () => {
           if (fx?.error) throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${rp} kapanış kuru bulunamadı.`), { code: fx.error });
           fxRate = fx.rate;
         }
+        periodFxRate = fxRate;
         liabilityOpeningNominal = (openingSnapshot?.liability || 0) * fxRate;
         liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
+        if (initialRecognitionInPeriod) {
+          liabilityOpeningNominal = 0;
+          liabilityOpeningRestated = 0;
+        }
         liabilityInterestNominal = 0; liabilityInterestRestated = 0;
         liabilityPaymentsNominal = 0; liabilityPaymentsRestated = 0;
         let cursor = openingDate;
@@ -2643,6 +2664,18 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
       let liabilityEntriesNominal = 0, liabilityEntriesRestated = 0;
+      let rouEntriesNominal = 0, rouEntriesRestated = 0;
+
+      if (initialRecognitionInPeriod) {
+        const initialLiability = tms29AccrualContext
+          ? (tms29AccrualContext.measurement.initialLiability || 0)
+          : (fullSchedule.length ? (fullSchedule[0].openingLiability || 0) : 0);
+        const liabilityFx = tms29AccrualContext ? periodFxRate : 1;
+        liabilityEntriesNominal = initialLiability * liabilityFx;
+        liabilityEntriesRestated = liabilityEntriesNominal * getInflationRatio(acquisitionMonth, rp);
+        rouEntriesNominal = grossROU || 0;
+        rouEntriesRestated = rouEntriesNominal * getInflationRatio(acquisitionMonth, rp);
+      }
       entryChanges.forEach(entry => {
         const ratioEntryToRp = getInflationRatio(entry.month, rp);
         liabilityEntriesNominal += entry.amount;
@@ -2658,7 +2691,6 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
-      let rouEntriesNominal = 0, rouEntriesRestated = 0;
       rouEntryChanges.forEach(entry => {
         const ratioEntryToRp = getInflationRatio(entry.month, rp);
         rouEntriesNominal += entry.amount;
@@ -2692,7 +2724,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // satın alma gücünde). Yükümlülükteki gibi ayrı bir "parasal K/Z"
       // satırı YOKTUR — TMS 29.13, tüm fark doğrudan 698 hesabına gider.
       const rouClosingRestatedPeriod = rouOpeningRestated + rouEntriesRestated - rouDepreciationRestated;
-      const rouClosingNominalPeriod = lastRow ? lastRow.rouClosing : rouOpeningNominal;
+      const rouClosingNominalPeriod = lastRow ? lastRow.rouClosing : nominalROUClosing;
 
       rouRollForward = {
         periodStart: ps,
@@ -12509,7 +12541,7 @@ ${renderPaymentScheduleFooterContainers()}
         Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
         ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
         ${hasMonetary
-          ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(-t.liabilityMonetaryGainLoss)}</strong>`
+          ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
     };
@@ -18448,7 +18480,7 @@ ${renderPaymentScheduleFooterContainers()}
         "Girişler (Restated)": lrf ? rptRound(lrf.liabilityEntriesRestated) : null,
         "Faiz (Restated)": lrf ? rptRound(lrf.liabilityInterestRestated) : null,
         "Ödemeler (Restated) (-)": lrf ? -Math.abs(rptRound(lrf.liabilityPaymentsRestated)) : null,
-        "Parasal Kazanç/(Kayıp), net (-)": lrf ? -rptRound(lrf.liabilityMonetaryGainLoss) : null,
+        "Parasal Kazanç/(Kayıp), net": lrf ? rptRound(lrf.liabilityMonetaryGainLoss) : null,
         "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal - lrf.liabilityPaymentsNominal) : null,
         "Durum": r?.ok ? "OK" : "Hesaplanamadı",
         "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
@@ -18458,7 +18490,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
       "Açılış (Restated)": rptRound(t.liabilityOpeningRestated), "Girişler (Restated)": rptRound(t.liabilityEntriesRestated),
       "Faiz (Restated)": rptRound(t.liabilityInterestRestated), "Ödemeler (Restated) (-)": -Math.abs(rptRound(t.liabilityPaymentsRestated)),
-      "Parasal Kazanç/(Kayıp), net (-)": -rptRound(t.liabilityMonetaryGainLoss),
+      "Parasal Kazanç/(Kayıp), net": rptRound(t.liabilityMonetaryGainLoss),
       "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal),
       "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
     });
@@ -18473,7 +18505,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
       "Açılış (Restated)": g.liabilityOpeningRestated, "Girişler (Restated)": g.liabilityEntriesRestated,
       "Faiz (Restated)": g.liabilityInterestRestated, "Ödemeler (Restated) (-)": -Math.abs(g.liabilityPaymentsRestated),
-      "Parasal Kazanç/(Kayıp), net (-)": -g.liabilityMonetaryGainLoss,
+      "Parasal Kazanç/(Kayıp), net": g.liabilityMonetaryGainLoss,
       "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal
     }));
 
@@ -22635,7 +22667,7 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityEntriesRestated", label: "Girişler" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
-      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
+      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
       { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
     ];
 
@@ -22738,7 +22770,7 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityEntriesRestated", label: "Girişler" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
-      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(-row.liabilityMonetaryGainLoss) },
+      { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
       { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
     ];
 
