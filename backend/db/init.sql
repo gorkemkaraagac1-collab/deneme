@@ -183,9 +183,12 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
     entity_id VARCHAR(50),
 
-    contract_id VARCHAR(50)
-        REFERENCES contracts(id)
-        ON DELETE SET NULL,
+    -- Audit kayıtları append-only'dir. Sözleşme silindiğinde FK'nin
+    -- ON DELETE SET NULL davranışı audit satırında UPDATE tetikleyerek
+    -- append-only trigger'ını çalıştırır ve sözleşme silinemeden işlemi
+    -- geri alır. İlişki uygulama katmanında doğrulanır; geçmiş kaydındaki
+    -- contract_id silinen sözleşmenin kimliğini korur.
+    contract_id VARCHAR(50),
 
     old_value JSONB,
 
