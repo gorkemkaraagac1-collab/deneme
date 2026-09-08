@@ -50,6 +50,18 @@ test('payment screen actually exposes a reporting date and feedback area', () =>
   expect(document.getElementById('scheduleReportingDate').type).toBe('date');
   expect(document.getElementById('scheduleFxStatus')).not.toBeNull();
 });
+test('30 Haziran kapanışı 1 Temmuz ödeme satırını içermemeli', async () => {
+  localStorage.setItem('gk_tfrs16_v23_fx_rates_v1', JSON.stringify([
+    { fromCurrency: 'EUR', toCurrency: 'TRY', rateDate: '2026-04-01', rateType: 'CLOSING', rate: 50, status: 'APPROVED' },
+    { fromCurrency: 'EUR', toCurrency: 'TRY', rateDate: '2026-06-30', rateType: 'CLOSING', rate: 53, status: 'APPROVED' },
+    { fromCurrency: 'EUR', toCurrency: 'TRY', rateDate: '2026-07-01', rateType: 'CLOSING', rate: 54, status: 'APPROVED' }
+  ]));
+  const contract = { currency: 'EUR', functionalCurrency: 'TRY', startDate: '2026-04-01' };
+  const result = await window.GK_TFRS16.buildTms21FxTranslation(contract, {
+    schedule: [{ period: 1, date: new Date(2026, 6, 1), openingLiability: 1000, payment: 100, interest: 10, closingLiability: 910, rouOpening: 1000, depreciation: 10, rouClosing: 990 }]
+  }, { reportingDate: new Date(2026, 5, 30) });
+  expect(result.schedule).toHaveLength(0);
+});
 test.each(['EUR', 'USD'])('%s rendered payment cells populate in TRY at selected date', async currency => {
   const contract = { id: 'REPORT-FX', currency, company: 'Test', monthlyPayment: 100,
     startDate: '2026-01-01', endDate: '2028-12-31', discountRate: 6,
