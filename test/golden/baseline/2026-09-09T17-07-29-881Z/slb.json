@@ -46,7 +46,7 @@
       "schedule": [
         {
           "closingLiability": 3480021.77,
-          "date": "<TIMESTAMP>",
+          "date": "2026-01-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 53831.02,
           "openingLiability": 3516190.75,
@@ -58,7 +58,7 @@
         },
         {
           "closingLiability": 3443299.06,
-          "date": "<TIMESTAMP>",
+          "date": "2026-02-28T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 53277.29,
           "openingLiability": 3480021.77,
@@ -70,7 +70,7 @@
         },
         {
           "closingLiability": 3406014.15,
-          "date": "<TIMESTAMP>",
+          "date": "2026-03-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 52715.09,
           "openingLiability": 3443299.06,
@@ -82,7 +82,7 @@
         },
         {
           "closingLiability": 3368158.42,
-          "date": "<TIMESTAMP>",
+          "date": "2026-04-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 52144.27,
           "openingLiability": 3406014.15,
@@ -94,7 +94,7 @@
         },
         {
           "closingLiability": 3329723.14,
-          "date": "<TIMESTAMP>",
+          "date": "2026-05-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 51564.72,
           "openingLiability": 3368158.42,
@@ -106,7 +106,7 @@
         },
         {
           "closingLiability": 3290699.44,
-          "date": "<TIMESTAMP>",
+          "date": "2026-06-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 50976.3,
           "openingLiability": 3329723.14,
@@ -118,7 +118,7 @@
         },
         {
           "closingLiability": 3251078.31,
-          "date": "<TIMESTAMP>",
+          "date": "2026-07-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 50378.87,
           "openingLiability": 3290699.44,
@@ -130,7 +130,7 @@
         },
         {
           "closingLiability": 3210850.6,
-          "date": "<TIMESTAMP>",
+          "date": "2026-08-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 49772.29,
           "openingLiability": 3251078.31,
@@ -142,7 +142,7 @@
         },
         {
           "closingLiability": 3170007.02,
-          "date": "<TIMESTAMP>",
+          "date": "2026-09-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 49156.42,
           "openingLiability": 3210850.6,
@@ -154,7 +154,7 @@
         },
         {
           "closingLiability": 3128538.15,
-          "date": "<TIMESTAMP>",
+          "date": "2026-10-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 48531.13,
           "openingLiability": 3170007.02,
@@ -166,7 +166,7 @@
         },
         {
           "closingLiability": 3086434.41,
-          "date": "<TIMESTAMP>",
+          "date": "2026-11-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 47896.26,
           "openingLiability": 3128538.15,
@@ -178,7 +178,7 @@
         },
         {
           "closingLiability": 3043686.09,
-          "date": "<TIMESTAMP>",
+          "date": "2026-12-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 47251.68,
           "openingLiability": 3086434.41,
@@ -190,7 +190,7 @@
         },
         {
           "closingLiability": 3000283.31,
-          "date": "<TIMESTAMP>",
+          "date": "2027-01-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 46597.22,
           "openingLiability": 3043686.09,
@@ -202,7 +202,7 @@
         },
         {
           "closingLiability": 2956216.06,
-          "date": "<TIMESTAMP>",
+          "date": "2027-02-28T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 45932.75,
           "openingLiability": 3000283.31,
@@ -214,7 +214,7 @@
         },
         {
           "closingLiability": 2911474.16,
-          "date": "<TIMESTAMP>",
+          "date": "2027-03-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 45258.1,
           "openingLiability": 2956216.06,
@@ -226,7 +226,7 @@
         },
         {
           "closingLiability": 2866047.29,
-          "date": "<TIMESTAMP>",
+          "date": "2027-04-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 44573.13,
           "openingLiability": 2911474.16,
@@ -238,7 +238,7 @@
         },
         {
           "closingLiability": 2819924.96,
-          "date": "<TIMESTAMP>",
+          "date": "2027-05-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 43877.67,
           "openingLiability": 2866047.29,
@@ -250,7 +250,7 @@
         },
         {
           "closingLiability": 2773096.52,
-          "date": "<TIMESTAMP>",
+          "date": "2027-06-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 43171.56,
           "openingLiability": 2819924.96,
@@ -262,7 +262,7 @@
         },
         {
           "closingLiability": 2725551.16,
-          "date": "<TIMESTAMP>",
+          "date": "2027-07-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 42454.64,
           "openingLiability": 2773096.52,
@@ -274,7 +274,7 @@
         },
         {
           "closingLiability": 2677277.91,
-          "date": "<TIMESTAMP>",
+          "date": "2027-08-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 41726.75,
           "openingLiability": 2725551.16,
@@ -286,7 +286,7 @@
         },
         {
           "closingLiability": 2628265.62,
-          "date": "<TIMESTAMP>",
+          "date": "2027-09-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 40987.71,
           "openingLiability": 2677277.91,
@@ -298,7 +298,7 @@
         },
         {
           "closingLiability": 2578502.97,
-          "date": "<TIMESTAMP>",
+          "date": "2027-10-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 40237.35,
           "openingLiability": 2628265.62,
@@ -310,7 +310,7 @@
         },
         {
           "closingLiability": 2527978.49,
-          "date": "<TIMESTAMP>",
+          "date": "2027-11-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 39475.52,
           "openingLiability": 2578502.97,
@@ -322,7 +322,7 @@
         },
         {
           "closingLiability": 2476680.5,
-          "date": "<TIMESTAMP>",
+          "date": "2027-12-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 38702.01,
           "openingLiability": 2527978.49,
@@ -334,7 +334,7 @@
         },
         {
           "closingLiability": 2424597.17,
-          "date": "<TIMESTAMP>",
+          "date": "2028-01-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 37916.67,
           "openingLiability": 2476680.5,
@@ -346,7 +346,7 @@
         },
         {
           "closingLiability": 2371716.47,
-          "date": "<TIMESTAMP>",
+          "date": "2028-02-29T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 37119.3,
           "openingLiability": 2424597.17,
@@ -358,7 +358,7 @@
         },
         {
           "closingLiability": 2318026.19,
-          "date": "<TIMESTAMP>",
+          "date": "2028-03-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 36309.72,
           "openingLiability": 2371716.47,
@@ -370,7 +370,7 @@
         },
         {
           "closingLiability": 2263513.94,
-          "date": "<TIMESTAMP>",
+          "date": "2028-04-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 35487.75,
           "openingLiability": 2318026.19,
@@ -382,7 +382,7 @@
         },
         {
           "closingLiability": 2208167.14,
-          "date": "<TIMESTAMP>",
+          "date": "2028-05-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 34653.2,
           "openingLiability": 2263513.94,
@@ -394,7 +394,7 @@
         },
         {
           "closingLiability": 2151973.01,
-          "date": "<TIMESTAMP>",
+          "date": "2028-06-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 33805.87,
           "openingLiability": 2208167.14,
@@ -406,7 +406,7 @@
         },
         {
           "closingLiability": 2094918.58,
-          "date": "<TIMESTAMP>",
+          "date": "2028-07-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 32945.57,
           "openingLiability": 2151973.01,
@@ -418,7 +418,7 @@
         },
         {
           "closingLiability": 2036990.67,
-          "date": "<TIMESTAMP>",
+          "date": "2028-08-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 32072.09,
           "openingLiability": 2094918.58,
@@ -430,7 +430,7 @@
         },
         {
           "closingLiability": 1978175.92,
-          "date": "<TIMESTAMP>",
+          "date": "2028-09-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 31185.25,
           "openingLiability": 2036990.67,
@@ -442,7 +442,7 @@
         },
         {
           "closingLiability": 1918460.75,
-          "date": "<TIMESTAMP>",
+          "date": "2028-10-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 30284.83,
           "openingLiability": 1978175.92,
@@ -454,7 +454,7 @@
         },
         {
           "closingLiability": 1857831.37,
-          "date": "<TIMESTAMP>",
+          "date": "2028-11-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 29370.62,
           "openingLiability": 1918460.75,
@@ -466,7 +466,7 @@
         },
         {
           "closingLiability": 1796273.78,
-          "date": "<TIMESTAMP>",
+          "date": "2028-12-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 28442.41,
           "openingLiability": 1857831.37,
@@ -478,7 +478,7 @@
         },
         {
           "closingLiability": 1733773.78,
-          "date": "<TIMESTAMP>",
+          "date": "2029-01-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 27500,
           "openingLiability": 1796273.78,
@@ -490,7 +490,7 @@
         },
         {
           "closingLiability": 1670316.94,
-          "date": "<TIMESTAMP>",
+          "date": "2029-02-28T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 26543.16,
           "openingLiability": 1733773.78,
@@ -502,7 +502,7 @@
         },
         {
           "closingLiability": 1605888.61,
-          "date": "<TIMESTAMP>",
+          "date": "2029-03-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 25571.67,
           "openingLiability": 1670316.94,
@@ -514,7 +514,7 @@
         },
         {
           "closingLiability": 1540473.91,
-          "date": "<TIMESTAMP>",
+          "date": "2029-04-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 24585.3,
           "openingLiability": 1605888.61,
@@ -526,7 +526,7 @@
         },
         {
           "closingLiability": 1474057.75,
-          "date": "<TIMESTAMP>",
+          "date": "2029-05-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 23583.84,
           "openingLiability": 1540473.91,
@@ -538,7 +538,7 @@
         },
         {
           "closingLiability": 1406624.79,
-          "date": "<TIMESTAMP>",
+          "date": "2029-06-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 22567.04,
           "openingLiability": 1474057.75,
@@ -550,7 +550,7 @@
         },
         {
           "closingLiability": 1338159.47,
-          "date": "<TIMESTAMP>",
+          "date": "2029-07-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 21534.68,
           "openingLiability": 1406624.79,
@@ -562,7 +562,7 @@
         },
         {
           "closingLiability": 1268645.98,
-          "date": "<TIMESTAMP>",
+          "date": "2029-08-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 20486.51,
           "openingLiability": 1338159.47,
@@ -574,7 +574,7 @@
         },
         {
           "closingLiability": 1198068.28,
-          "date": "<TIMESTAMP>",
+          "date": "2029-09-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 19422.3,
           "openingLiability": 1268645.98,
@@ -586,7 +586,7 @@
         },
         {
           "closingLiability": 1126410.07,
-          "date": "<TIMESTAMP>",
+          "date": "2029-10-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 18341.79,
           "openingLiability": 1198068.28,
@@ -598,7 +598,7 @@
         },
         {
           "closingLiability": 1053654.81,
-          "date": "<TIMESTAMP>",
+          "date": "2029-11-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 17244.74,
           "openingLiability": 1126410.07,
@@ -610,7 +610,7 @@
         },
         {
           "closingLiability": 979785.71,
-          "date": "<TIMESTAMP>",
+          "date": "2029-12-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 16130.9,
           "openingLiability": 1053654.81,
@@ -622,7 +622,7 @@
         },
         {
           "closingLiability": 904785.71,
-          "date": "<TIMESTAMP>",
+          "date": "2030-01-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 15000,
           "openingLiability": 979785.71,
@@ -634,7 +634,7 @@
         },
         {
           "closingLiability": 828637.5,
-          "date": "<TIMESTAMP>",
+          "date": "2030-02-28T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 13851.79,
           "openingLiability": 904785.71,
@@ -646,7 +646,7 @@
         },
         {
           "closingLiability": 751323.5,
-          "date": "<TIMESTAMP>",
+          "date": "2030-03-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 12686,
           "openingLiability": 828637.5,
@@ -658,7 +658,7 @@
         },
         {
           "closingLiability": 672825.86,
-          "date": "<TIMESTAMP>",
+          "date": "2030-04-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 11502.36,
           "openingLiability": 751323.5,
@@ -670,7 +670,7 @@
         },
         {
           "closingLiability": 593126.47,
-          "date": "<TIMESTAMP>",
+          "date": "2030-05-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 10300.61,
           "openingLiability": 672825.86,
@@ -682,7 +682,7 @@
         },
         {
           "closingLiability": 512206.92,
-          "date": "<TIMESTAMP>",
+          "date": "2030-06-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 9080.45,
           "openingLiability": 593126.47,
@@ -694,7 +694,7 @@
         },
         {
           "closingLiability": 430048.54,
-          "date": "<TIMESTAMP>",
+          "date": "2030-07-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 7841.62,
           "openingLiability": 512206.92,
@@ -706,7 +706,7 @@
         },
         {
           "closingLiability": 346632.36,
-          "date": "<TIMESTAMP>",
+          "date": "2030-08-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 6583.82,
           "openingLiability": 430048.54,
@@ -718,7 +718,7 @@
         },
         {
           "closingLiability": 261939.12,
-          "date": "<TIMESTAMP>",
+          "date": "2030-09-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 5306.76,
           "openingLiability": 346632.36,
@@ -730,7 +730,7 @@
         },
         {
           "closingLiability": 175949.27,
-          "date": "<TIMESTAMP>",
+          "date": "2030-10-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 4010.15,
           "openingLiability": 261939.12,
@@ -742,7 +742,7 @@
         },
         {
           "closingLiability": 88642.96,
-          "date": "<TIMESTAMP>",
+          "date": "2030-11-30T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 2693.69,
           "openingLiability": 175949.27,
@@ -754,7 +754,7 @@
         },
         {
           "closingLiability": 0.04,
-          "date": "<TIMESTAMP>",
+          "date": "2030-12-31T00:00:00.000Z",
           "depreciation": 39068.79,
           "interest": 1357.08,
           "openingLiability": 88642.96,
@@ -793,7 +793,7 @@
       "schedule": [
         {
           "closingBalance": 3187880.26,
-          "date": "<TIMESTAMP>",
+          "date": "2026-01-31T00:00:00.000Z",
           "interest": 57880.26,
           "openingBalance": 3200000,
           "payment": 70000,
@@ -802,7 +802,7 @@
         },
         {
           "closingBalance": 3175541.31,
-          "date": "<TIMESTAMP>",
+          "date": "2026-02-28T00:00:00.000Z",
           "interest": 57661.05,
           "openingBalance": 3187880.26,
           "payment": 70000,
@@ -811,7 +811,7 @@
         },
         {
           "closingBalance": 3162979.18,
-          "date": "<TIMESTAMP>",
+          "date": "2026-03-31T00:00:00.000Z",
           "interest": 57437.87,
           "openingBalance": 3175541.31,
           "payment": 70000,
@@ -820,7 +820,7 @@
         },
         {
           "closingBalance": 3150189.83,
-          "date": "<TIMESTAMP>",
+          "date": "2026-04-30T00:00:00.000Z",
           "interest": 57210.65,
           "openingBalance": 3162979.18,
           "payment": 70000,
@@ -829,7 +829,7 @@
         },
         {
           "closingBalance": 3137169.15,
-          "date": "<TIMESTAMP>",
+          "date": "2026-05-31T00:00:00.000Z",
           "interest": 56979.32,
           "openingBalance": 3150189.83,
           "payment": 70000,
@@ -838,7 +838,7 @@
         },
         {
           "closingBalance": 3123912.96,
-          "date": "<TIMESTAMP>",
+          "date": "2026-06-30T00:00:00.000Z",
           "interest": 56743.81,
           "openingBalance": 3137169.15,
           "payment": 70000,
@@ -847,7 +847,7 @@
         },
         {
           "closingBalance": 3110416.99,
-          "date": "<TIMESTAMP>",
+          "date": "2026-07-31T00:00:00.000Z",
           "interest": 56504.03,
           "openingBalance": 3123912.96,
           "payment": 70000,
@@ -856,7 +856,7 @@
         },
         {
           "closingBalance": 3096676.91,
-          "date": "<TIMESTAMP>",
+          "date": "2026-08-31T00:00:00.000Z",
           "interest": 56259.92,
           "openingBalance": 3110416.99,
           "payment": 70000,
@@ -865,7 +865,7 @@
         },
         {
           "closingBalance": 3082688.31,
-          "date": "<TIMESTAMP>",
+          "date": "2026-09-30T00:00:00.000Z",
           "interest": 56011.4,
           "openingBalance": 3096676.91,
           "payment": 70000,
@@ -874,7 +874,7 @@
         },
         {
           "closingBalance": 3068446.69,
-          "date": "<TIMESTAMP>",
+          "date": "2026-10-31T00:00:00.000Z",
           "interest": 55758.38,
           "openingBalance": 3082688.31,
           "payment": 70000,
@@ -883,7 +883,7 @@
         },
         {
           "closingBalance": 3053947.47,
-          "date": "<TIMESTAMP>",
+          "date": "2026-11-30T00:00:00.000Z",
           "interest": 55500.78,
           "openingBalance": 3068446.69,
           "payment": 70000,
@@ -892,7 +892,7 @@
         },
         {
           "closingBalance": 3039186,
-          "date": "<TIMESTAMP>",
+          "date": "2026-12-31T00:00:00.000Z",
           "interest": 55238.53,
           "openingBalance": 3053947.47,
           "payment": 70000,
@@ -901,7 +901,7 @@
         },
         {
           "closingBalance": 3024157.53,
-          "date": "<TIMESTAMP>",
+          "date": "2027-01-31T00:00:00.000Z",
           "interest": 54971.53,
           "openingBalance": 3039186,
           "payment": 70000,
@@ -910,7 +910,7 @@
         },
         {
           "closingBalance": 3008857.23,
-          "date": "<TIMESTAMP>",
+          "date": "2027-02-28T00:00:00.000Z",
           "interest": 54699.7,
           "openingBalance": 3024157.53,
           "payment": 70000,
@@ -919,7 +919,7 @@
         },
         {
           "closingBalance": 2993280.18,
-          "date": "<TIMESTAMP>",
+          "date": "2027-03-31T00:00:00.000Z",
           "interest": 54422.95,
           "openingBalance": 3008857.23,
           "payment": 70000,
@@ -928,7 +928,7 @@
         },
         {
           "closingBalance": 2977421.38,
-          "date": "<TIMESTAMP>",
+          "date": "2027-04-30T00:00:00.000Z",
           "interest": 54141.2,
           "openingBalance": 2993280.18,
           "payment": 70000,
@@ -937,7 +937,7 @@
         },
         {
           "closingBalance": 2961275.73,
-          "date": "<TIMESTAMP>",
+          "date": "2027-05-31T00:00:00.000Z",
           "interest": 53854.35,
           "openingBalance": 2977421.38,
           "payment": 70000,
@@ -946,7 +946,7 @@
         },
         {
           "closingBalance": 2944838.05,
-          "date": "<TIMESTAMP>",
+          "date": "2027-06-30T00:00:00.000Z",
           "interest": 53562.32,
           "openingBalance": 2961275.73,
           "payment": 70000,
@@ -955,7 +955,7 @@
         },
         {
           "closingBalance": 2928103.05,
-          "date": "<TIMESTAMP>",
+          "date": "2027-07-31T00:00:00.000Z",
           "interest": 53265,
           "openingBalance": 2944838.05,
           "payment": 70000,
@@ -964,7 +964,7 @@
         },
         {
           "closingBalance": 2911065.36,
-          "date": "<TIMESTAMP>",
+          "date": "2027-08-31T00:00:00.000Z",
           "interest": 52962.31,
           "openingBalance": 2928103.05,
           "payment": 70000,
@@ -973,7 +973,7 @@
         },
         {
           "closingBalance": 2893719.49,
-          "date": "<TIMESTAMP>",
+          "date": "2027-09-30T00:00:00.000Z",
           "interest": 52654.13,
           "openingBalance": 2911065.36,
           "payment": 70000,
@@ -982,7 +982,7 @@
         },
         {
           "closingBalance": 2876059.88,
-          "date": "<TIMESTAMP>",
+          "date": "2027-10-31T00:00:00.000Z",
           "interest": 52340.39,
           "openingBalance": 2893719.49,
           "payment": 70000,
@@ -991,7 +991,7 @@
         },
         {
           "closingBalance": 2858080.85,
-          "date": "<TIMESTAMP>",
+          "date": "2027-11-30T00:00:00.000Z",
           "interest": 52020.97,
           "openingBalance": 2876059.88,
           "payment": 70000,
@@ -1000,7 +1000,7 @@
         },
         {
           "closingBalance": 2839776.62,
-          "date": "<TIMESTAMP>",
+          "date": "2027-12-31T00:00:00.000Z",
           "interest": 51695.77,
           "openingBalance": 2858080.85,
           "payment": 70000,
@@ -1009,7 +1009,7 @@
         },
         {
           "closingBalance": 2821141.31,
-          "date": "<TIMESTAMP>",
+          "date": "2028-01-31T00:00:00.000Z",
           "interest": 51364.69,
           "openingBalance": 2839776.62,
           "payment": 70000,
@@ -1018,7 +1018,7 @@
         },
         {
           "closingBalance": 2802168.94,
-          "date": "<TIMESTAMP>",
+          "date": "2028-02-29T00:00:00.000Z",
           "interest": 51027.63,
           "openingBalance": 2821141.31,
           "payment": 70000,
@@ -1027,7 +1027,7 @@
         },
         {
           "closingBalance": 2782853.4,
-          "date": "<TIMESTAMP>",
+          "date": "2028-03-31T00:00:00.000Z",
           "interest": 50684.46,
           "openingBalance": 2802168.94,
           "payment": 70000,
@@ -1036,7 +1036,7 @@
         },
         {
           "closingBalance": 2763188.49,
-          "date": "<TIMESTAMP>",
+          "date": "2028-04-30T00:00:00.000Z",
           "interest": 50335.09,
           "openingBalance": 2782853.4,
           "payment": 70000,
@@ -1045,7 +1045,7 @@
         },
         {
           "closingBalance": 2743167.89,
-          "date": "<TIMESTAMP>",
+          "date": "2028-05-31T00:00:00.000Z",
           "interest": 49979.4,
           "openingBalance": 2763188.49,
           "payment": 70000,
@@ -1054,7 +1054,7 @@
         },
         {
           "closingBalance": 2722785.17,
-          "date": "<TIMESTAMP>",
+          "date": "2028-06-30T00:00:00.000Z",
           "interest": 49617.28,
           "openingBalance": 2743167.89,
           "payment": 70000,
@@ -1063,7 +1063,7 @@
         },
         {
           "closingBalance": 2702033.77,
-          "date": "<TIMESTAMP>",
+          "date": "2028-07-31T00:00:00.000Z",
           "interest": 49248.6,
           "openingBalance": 2722785.17,
           "payment": 70000,
@@ -1072,7 +1072,7 @@
         },
         {
           "closingBalance": 2680907.03,
-          "date": "<TIMESTAMP>",
+          "date": "2028-08-31T00:00:00.000Z",
           "interest": 48873.26,
           "openingBalance": 2702033.77,
           "payment": 70000,
@@ -1081,7 +1081,7 @@
         },
         {
           "closingBalance": 2659398.16,
-          "date": "<TIMESTAMP>",
+          "date": "2028-09-30T00:00:00.000Z",
           "interest": 48491.13,
           "openingBalance": 2680907.03,
           "payment": 70000,
@@ -1090,7 +1090,7 @@
         },
         {
           "closingBalance": 2637500.24,
-          "date": "<TIMESTAMP>",
+          "date": "2028-10-31T00:00:00.000Z",
           "interest": 48102.08,
           "openingBalance": 2659398.16,
           "payment": 70000,
@@ -1099,7 +1099,7 @@
         },
         {
           "closingBalance": 2615206.24,
-          "date": "<TIMESTAMP>",
+          "date": "2028-11-30T00:00:00.000Z",
           "interest": 47706,
           "openingBalance": 2637500.24,
           "payment": 70000,
@@ -1108,7 +1108,7 @@
         },
         {
           "closingBalance": 2592509,
-          "date": "<TIMESTAMP>",
+          "date": "2028-12-31T00:00:00.000Z",
           "interest": 47302.76,
           "openingBalance": 2615206.24,
           "payment": 70000,
@@ -1117,7 +1117,7 @@
         },
         {
           "closingBalance": 2569401.22,
-          "date": "<TIMESTAMP>",
+          "date": "2029-01-31T00:00:00.000Z",
           "interest": 46892.22,
           "openingBalance": 2592509,
           "payment": 70000,
@@ -1126,7 +1126,7 @@
         },
         {
           "closingBalance": 2545875.48,
-          "date": "<TIMESTAMP>",
+          "date": "2029-02-28T00:00:00.000Z",
           "interest": 46474.26,
           "openingBalance": 2569401.22,
           "payment": 70000,
@@ -1135,7 +1135,7 @@
         },
         {
           "closingBalance": 2521924.21,
-          "date": "<TIMESTAMP>",
+          "date": "2029-03-31T00:00:00.000Z",
           "interest": 46048.73,
           "openingBalance": 2545875.48,
           "payment": 70000,
@@ -1144,7 +1144,7 @@
         },
         {
           "closingBalance": 2497539.72,
-          "date": "<TIMESTAMP>",
+          "date": "2029-04-30T00:00:00.000Z",
           "interest": 45615.51,
           "openingBalance": 2521924.21,
           "payment": 70000,
@@ -1153,7 +1153,7 @@
         },
         {
           "closingBalance": 2472714.18,
-          "date": "<TIMESTAMP>",
+          "date": "2029-05-31T00:00:00.000Z",
           "interest": 45174.46,
           "openingBalance": 2497539.72,
           "payment": 70000,
@@ -1162,7 +1162,7 @@
         },
         {
           "closingBalance": 2447439.6,
-          "date": "<TIMESTAMP>",
+          "date": "2029-06-30T00:00:00.000Z",
           "interest": 44725.42,
           "openingBalance": 2472714.18,
           "payment": 70000,
@@ -1171,7 +1171,7 @@
         },
         {
           "closingBalance": 2421707.87,
-          "date": "<TIMESTAMP>",
+          "date": "2029-07-31T00:00:00.000Z",
           "interest": 44268.27,
           "openingBalance": 2447439.6,
           "payment": 70000,
@@ -1180,7 +1180,7 @@
         },
         {
           "closingBalance": 2395510.71,
-          "date": "<TIMESTAMP>",
+          "date": "2029-08-31T00:00:00.000Z",
           "interest": 43802.84,
           "openingBalance": 2421707.87,
           "payment": 70000,
@@ -1189,7 +1189,7 @@
         },
         {
           "closingBalance": 2368839.71,
-          "date": "<TIMESTAMP>",
+          "date": "2029-09-30T00:00:00.000Z",
           "interest": 43329,
           "openingBalance": 2395510.71,
           "payment": 70000,
@@ -1198,7 +1198,7 @@
         },
         {
           "closingBalance": 2341686.29,
-          "date": "<TIMESTAMP>",
+          "date": "2029-10-31T00:00:00.000Z",
           "interest": 42846.58,
           "openingBalance": 2368839.71,
           "payment": 70000,
@@ -1207,7 +1207,7 @@
         },
         {
           "closingBalance": 2314041.73,
-          "date": "<TIMESTAMP>",
+          "date": "2029-11-30T00:00:00.000Z",
           "interest": 42355.44,
           "openingBalance": 2341686.29,
           "payment": 70000,
@@ -1216,7 +1216,7 @@
         },
         {
           "closingBalance": 2285897.15,
-          "date": "<TIMESTAMP>",
+          "date": "2029-12-31T00:00:00.000Z",
           "interest": 41855.42,
           "openingBalance": 2314041.73,
           "payment": 70000,
@@ -1282,7 +1282,7 @@
       "schedule": [
         {
           "closingLiability": 3715862.17,
-          "date": "<TIMESTAMP>",
+          "date": "2026-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 52032.69,
           "openingLiability": 3746477.67,
@@ -1294,7 +1294,7 @@
         },
         {
           "closingLiability": 3684821.47,
-          "date": "<TIMESTAMP>",
+          "date": "2026-02-28T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 51607.49,
           "openingLiability": 3715862.17,
@@ -1306,7 +1306,7 @@
         },
         {
           "closingLiability": 3653349.67,
-          "date": "<TIMESTAMP>",
+          "date": "2026-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 51176.39,
           "openingLiability": 3684821.47,
@@ -1318,7 +1318,7 @@
         },
         {
           "closingLiability": 3621440.77,
-          "date": "<TIMESTAMP>",
+          "date": "2026-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 50739.29,
           "openingLiability": 3653349.67,
@@ -1330,7 +1330,7 @@
         },
         {
           "closingLiability": 3589088.71,
-          "date": "<TIMESTAMP>",
+          "date": "2026-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 50296.13,
           "openingLiability": 3621440.77,
@@ -1342,7 +1342,7 @@
         },
         {
           "closingLiability": 3556287.33,
-          "date": "<TIMESTAMP>",
+          "date": "2026-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 49846.81,
           "openingLiability": 3589088.71,
@@ -1354,7 +1354,7 @@
         },
         {
           "closingLiability": 3523030.39,
-          "date": "<TIMESTAMP>",
+          "date": "2026-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 49391.25,
           "openingLiability": 3556287.33,
@@ -1366,7 +1366,7 @@
         },
         {
           "closingLiability": 3489311.56,
-          "date": "<TIMESTAMP>",
+          "date": "2026-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 48929.36,
           "openingLiability": 3523030.39,
@@ -1378,7 +1378,7 @@
         },
         {
           "closingLiability": 3455124.43,
-          "date": "<TIMESTAMP>",
+          "date": "2026-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 48461.06,
           "openingLiability": 3489311.56,
@@ -1390,7 +1390,7 @@
         },
         {
           "closingLiability": 3420462.49,
-          "date": "<TIMESTAMP>",
+          "date": "2026-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 47986.25,
           "openingLiability": 3455124.43,
@@ -1402,7 +1402,7 @@
         },
         {
           "closingLiability": 3385319.16,
-          "date": "<TIMESTAMP>",
+          "date": "2026-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 47504.86,
           "openingLiability": 3420462.49,
@@ -1414,7 +1414,7 @@
         },
         {
           "closingLiability": 3349687.74,
-          "date": "<TIMESTAMP>",
+          "date": "2026-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 47016.77,
           "openingLiability": 3385319.16,
@@ -1426,7 +1426,7 @@
         },
         {
           "closingLiability": 3313561.45,
-          "date": "<TIMESTAMP>",
+          "date": "2027-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 46521.9,
           "openingLiability": 3349687.74,
@@ -1438,7 +1438,7 @@
         },
         {
           "closingLiability": 3276933.43,
-          "date": "<TIMESTAMP>",
+          "date": "2027-02-28T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 46020.17,
           "openingLiability": 3313561.45,
@@ -1450,7 +1450,7 @@
         },
         {
           "closingLiability": 3239796.7,
-          "date": "<TIMESTAMP>",
+          "date": "2027-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 45511.46,
           "openingLiability": 3276933.43,
@@ -1462,7 +1462,7 @@
         },
         {
           "closingLiability": 3202144.2,
-          "date": "<TIMESTAMP>",
+          "date": "2027-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 44995.69,
           "openingLiability": 3239796.7,
@@ -1474,7 +1474,7 @@
         },
         {
           "closingLiability": 3163968.77,
-          "date": "<TIMESTAMP>",
+          "date": "2027-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 44472.76,
           "openingLiability": 3202144.2,
@@ -1486,7 +1486,7 @@
         },
         {
           "closingLiability": 3125263.14,
-          "date": "<TIMESTAMP>",
+          "date": "2027-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 43942.56,
           "openingLiability": 3163968.77,
@@ -1498,7 +1498,7 @@
         },
         {
           "closingLiability": 3086019.95,
-          "date": "<TIMESTAMP>",
+          "date": "2027-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 43405,
           "openingLiability": 3125263.14,
@@ -1510,7 +1510,7 @@
         },
         {
           "closingLiability": 3046231.73,
-          "date": "<TIMESTAMP>",
+          "date": "2027-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 42859.97,
           "openingLiability": 3086019.95,
@@ -1522,7 +1522,7 @@
         },
         {
           "closingLiability": 3005890.92,
-          "date": "<TIMESTAMP>",
+          "date": "2027-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 42307.38,
           "openingLiability": 3046231.73,
@@ -1534,7 +1534,7 @@
         },
         {
           "closingLiability": 2964989.84,
-          "date": "<TIMESTAMP>",
+          "date": "2027-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 41747.11,
           "openingLiability": 3005890.92,
@@ -1546,7 +1546,7 @@
         },
         {
           "closingLiability": 2923520.7,
-          "date": "<TIMESTAMP>",
+          "date": "2027-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 41179.05,
           "openingLiability": 2964989.84,
@@ -1558,7 +1558,7 @@
         },
         {
           "closingLiability": 2881475.62,
-          "date": "<TIMESTAMP>",
+          "date": "2027-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 40603.11,
           "openingLiability": 2923520.7,
@@ -1570,7 +1570,7 @@
         },
         {
           "closingLiability": 2838846.6,
-          "date": "<TIMESTAMP>",
+          "date": "2028-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 40019.17,
           "openingLiability": 2881475.62,
@@ -1582,7 +1582,7 @@
         },
         {
           "closingLiability": 2795625.53,
-          "date": "<TIMESTAMP>",
+          "date": "2028-02-29T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 39427.12,
           "openingLiability": 2838846.6,
@@ -1594,7 +1594,7 @@
         },
         {
           "closingLiability": 2751804.19,
-          "date": "<TIMESTAMP>",
+          "date": "2028-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 38826.85,
           "openingLiability": 2795625.53,
@@ -1606,7 +1606,7 @@
         },
         {
           "closingLiability": 2707374.24,
-          "date": "<TIMESTAMP>",
+          "date": "2028-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 38218.24,
           "openingLiability": 2751804.19,
@@ -1618,7 +1618,7 @@
         },
         {
           "closingLiability": 2662327.23,
-          "date": "<TIMESTAMP>",
+          "date": "2028-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 37601.18,
           "openingLiability": 2707374.24,
@@ -1630,7 +1630,7 @@
         },
         {
           "closingLiability": 2616654.59,
-          "date": "<TIMESTAMP>",
+          "date": "2028-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 36975.55,
           "openingLiability": 2662327.23,
@@ -1642,7 +1642,7 @@
         },
         {
           "closingLiability": 2570347.63,
-          "date": "<TIMESTAMP>",
+          "date": "2028-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 36341.23,
           "openingLiability": 2616654.59,
@@ -1654,7 +1654,7 @@
         },
         {
           "closingLiability": 2523397.53,
-          "date": "<TIMESTAMP>",
+          "date": "2028-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 35698.09,
           "openingLiability": 2570347.63,
@@ -1666,7 +1666,7 @@
         },
         {
           "closingLiability": 2475795.37,
-          "date": "<TIMESTAMP>",
+          "date": "2028-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 35046.03,
           "openingLiability": 2523397.53,
@@ -1678,7 +1678,7 @@
         },
         {
           "closingLiability": 2427532.09,
-          "date": "<TIMESTAMP>",
+          "date": "2028-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 34384.91,
           "openingLiability": 2475795.37,
@@ -1690,7 +1690,7 @@
         },
         {
           "closingLiability": 2378598.51,
-          "date": "<TIMESTAMP>",
+          "date": "2028-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 33714.61,
           "openingLiability": 2427532.09,
@@ -1702,7 +1702,7 @@
         },
         {
           "closingLiability": 2328985.32,
-          "date": "<TIMESTAMP>",
+          "date": "2028-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 33035,
           "openingLiability": 2378598.51,
@@ -1714,7 +1714,7 @@
         },
         {
           "closingLiability": 2278683.08,
-          "date": "<TIMESTAMP>",
+          "date": "2029-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 32345.95,
           "openingLiability": 2328985.32,
@@ -1726,7 +1726,7 @@
         },
         {
           "closingLiability": 2227682.22,
-          "date": "<TIMESTAMP>",
+          "date": "2029-02-28T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 31647.33,
           "openingLiability": 2278683.08,
@@ -1738,7 +1738,7 @@
         },
         {
           "closingLiability": 2175973.04,
-          "date": "<TIMESTAMP>",
+          "date": "2029-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 30939.01,
           "openingLiability": 2227682.22,
@@ -1750,7 +1750,7 @@
         },
         {
           "closingLiability": 2123545.7,
-          "date": "<TIMESTAMP>",
+          "date": "2029-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 30220.85,
           "openingLiability": 2175973.04,
@@ -1762,7 +1762,7 @@
         },
         {
           "closingLiability": 2070390.23,
-          "date": "<TIMESTAMP>",
+          "date": "2029-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 29492.72,
           "openingLiability": 2123545.7,
@@ -1774,7 +1774,7 @@
         },
         {
           "closingLiability": 2016496.51,
-          "date": "<TIMESTAMP>",
+          "date": "2029-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 28754.47,
           "openingLiability": 2070390.23,
@@ -1786,7 +1786,7 @@
         },
         {
           "closingLiability": 1961854.29,
-          "date": "<TIMESTAMP>",
+          "date": "2029-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 28005.97,
           "openingLiability": 2016496.51,
@@ -1798,7 +1798,7 @@
         },
         {
           "closingLiability": 1906453.18,
-          "date": "<TIMESTAMP>",
+          "date": "2029-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 27247.08,
           "openingLiability": 1961854.29,
@@ -1810,7 +1810,7 @@
         },
         {
           "closingLiability": 1850282.63,
-          "date": "<TIMESTAMP>",
+          "date": "2029-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 26477.64,
           "openingLiability": 1906453.18,
@@ -1822,7 +1822,7 @@
         },
         {
           "closingLiability": 1793331.96,
-          "date": "<TIMESTAMP>",
+          "date": "2029-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 25697.52,
           "openingLiability": 1850282.63,
@@ -1834,7 +1834,7 @@
         },
         {
           "closingLiability": 1735590.34,
-          "date": "<TIMESTAMP>",
+          "date": "2029-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 24906.57,
           "openingLiability": 1793331.96,
@@ -1846,7 +1846,7 @@
         },
         {
           "closingLiability": 1677046.78,
-          "date": "<TIMESTAMP>",
+          "date": "2029-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 24104.63,
           "openingLiability": 1735590.34,
@@ -1858,7 +1858,7 @@
         },
         {
           "closingLiability": 1617690.14,
-          "date": "<TIMESTAMP>",
+          "date": "2030-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 23291.55,
           "openingLiability": 1677046.78,
@@ -1870,7 +1870,7 @@
         },
         {
           "closingLiability": 1557509.13,
-          "date": "<TIMESTAMP>",
+          "date": "2030-02-28T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 22467.18,
           "openingLiability": 1617690.14,
@@ -1882,7 +1882,7 @@
         },
         {
           "closingLiability": 1496492.3,
-          "date": "<TIMESTAMP>",
+          "date": "2030-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 21631.36,
           "openingLiability": 1557509.13,
@@ -1894,7 +1894,7 @@
         },
         {
           "closingLiability": 1434628.04,
-          "date": "<TIMESTAMP>",
+          "date": "2030-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 20783.93,
           "openingLiability": 1496492.3,
@@ -1906,7 +1906,7 @@
         },
         {
           "closingLiability": 1371904.58,
-          "date": "<TIMESTAMP>",
+          "date": "2030-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 19924.73,
           "openingLiability": 1434628.04,
@@ -1918,7 +1918,7 @@
         },
         {
           "closingLiability": 1308309.99,
-          "date": "<TIMESTAMP>",
+          "date": "2030-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 19053.6,
           "openingLiability": 1371904.58,
@@ -1930,7 +1930,7 @@
         },
         {
           "closingLiability": 1243832.17,
-          "date": "<TIMESTAMP>",
+          "date": "2030-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 18170.37,
           "openingLiability": 1308309.99,
@@ -1942,7 +1942,7 @@
         },
         {
           "closingLiability": 1178458.86,
-          "date": "<TIMESTAMP>",
+          "date": "2030-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 17274.88,
           "openingLiability": 1243832.17,
@@ -1954,7 +1954,7 @@
         },
         {
           "closingLiability": 1112177.61,
-          "date": "<TIMESTAMP>",
+          "date": "2030-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 16366.94,
           "openingLiability": 1178458.86,
@@ -1966,7 +1966,7 @@
         },
         {
           "closingLiability": 1044975.82,
-          "date": "<TIMESTAMP>",
+          "date": "2030-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 15446.4,
           "openingLiability": 1112177.61,
@@ -1978,7 +1978,7 @@
         },
         {
           "closingLiability": 976840.7,
-          "date": "<TIMESTAMP>",
+          "date": "2030-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 14513.07,
           "openingLiability": 1044975.82,
@@ -1990,7 +1990,7 @@
         },
         {
           "closingLiability": 907759.29,
-          "date": "<TIMESTAMP>",
+          "date": "2030-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 13566.78,
           "openingLiability": 976840.7,
@@ -2002,7 +2002,7 @@
         },
         {
           "closingLiability": 837718.45,
-          "date": "<TIMESTAMP>",
+          "date": "2031-01-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 12607.35,
           "openingLiability": 907759.29,
@@ -2014,7 +2014,7 @@
         },
         {
           "closingLiability": 766704.85,
-          "date": "<TIMESTAMP>",
+          "date": "2031-02-28T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 11634.59,
           "openingLiability": 837718.45,
@@ -2026,7 +2026,7 @@
         },
         {
           "closingLiability": 694704.99,
-          "date": "<TIMESTAMP>",
+          "date": "2031-03-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 10648.33,
           "openingLiability": 766704.85,
@@ -2038,7 +2038,7 @@
         },
         {
           "closingLiability": 621705.16,
-          "date": "<TIMESTAMP>",
+          "date": "2031-04-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 9648.36,
           "openingLiability": 694704.99,
@@ -2050,7 +2050,7 @@
         },
         {
           "closingLiability": 547691.48,
-          "date": "<TIMESTAMP>",
+          "date": "2031-05-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 8634.51,
           "openingLiability": 621705.16,
@@ -2062,7 +2062,7 @@
         },
         {
           "closingLiability": 472649.86,
-          "date": "<TIMESTAMP>",
+          "date": "2031-06-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 7606.57,
           "openingLiability": 547691.48,
@@ -2074,7 +2074,7 @@
         },
         {
           "closingLiability": 396566.03,
-          "date": "<TIMESTAMP>",
+          "date": "2031-07-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 6564.36,
           "openingLiability": 472649.86,
@@ -2086,7 +2086,7 @@
         },
         {
           "closingLiability": 319425.52,
-          "date": "<TIMESTAMP>",
+          "date": "2031-08-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 5507.68,
           "openingLiability": 396566.03,
@@ -2098,7 +2098,7 @@
         },
         {
           "closingLiability": 241213.65,
-          "date": "<TIMESTAMP>",
+          "date": "2031-09-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 4436.32,
           "openingLiability": 319425.52,
@@ -2110,7 +2110,7 @@
         },
         {
           "closingLiability": 161915.54,
-          "date": "<TIMESTAMP>",
+          "date": "2031-10-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 3350.08,
           "openingLiability": 241213.65,
@@ -2122,7 +2122,7 @@
         },
         {
           "closingLiability": 81516.1,
-          "date": "<TIMESTAMP>",
+          "date": "2031-11-30T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 2248.75,
           "openingLiability": 161915.54,
@@ -2134,7 +2134,7 @@
         },
         {
           "closingLiability": 0.04,
-          "date": "<TIMESTAMP>",
+          "date": "2031-12-31T00:00:00.000Z",
           "depreciation": 26017.21,
           "interest": 1132.13,
           "openingLiability": 81516.1,
