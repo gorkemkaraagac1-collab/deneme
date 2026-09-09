@@ -4301,6 +4301,16 @@ document.addEventListener("DOMContentLoaded", () => {
         Math.min(contractStart.getDate(), lastDayOfTargetMonth)
       );
     };
+    const arrearsPaymentGridDate = (contractStart, stepNumber) => {
+      const date = paymentGridDate(contractStart, stepNumber);
+      date.setDate(date.getDate() - 1);
+      return date;
+    };
+    // A monthly arrears modification effective on the first calendar day
+    // still has the prior month's closing-day payment in its transition
+    // period. Quarterly/annual grids retain their anniversary convention.
+    const useMonthEndBoundary = !advance && stepMonths === 1 && effective.getDate() === 1;
+    const arrearsGrid = useMonthEndBoundary ? arrearsPaymentGridDate : paymentGridDate;
 
     // Start generating from the first payment date AFTER effectiveDate
     // (remeasurement uses remaining payments only).
@@ -4341,14 +4351,14 @@ document.addEventListener("DOMContentLoaded", () => {
         (effective.getMonth() - contractStart.getMonth());
       const stepsFromStart = Math.floor(monthsFromStart / stepMonths) + 1;
       let cursorStep = stepsFromStart;
-      cursor = paymentGridDate(contractStart, cursorStep);
+      cursor = arrearsGrid(contractStart, cursorStep);
       // Savunma amaçlı: grid hizalaması herhangi bir uç durumda
       // effectiveDate'e eşit ya da öncesinde bir tarih üretirse,
       // bir sonraki grid adımına ilerlet (cursor kesinlikle
       // effectiveDate'ten SONRA olmalı).
       while (cursor.getTime() <= effective.getTime()) {
         cursorStep++;
-        cursor = paymentGridDate(contractStart, cursorStep);
+        cursor = arrearsGrid(contractStart, cursorStep);
       }
 
       // Keep the immutable grid ordinal for subsequent iterations; advancing
@@ -4402,7 +4412,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!advance && Number.isInteger(arrearsCursorStep)) {
         const contractStart = parseDate(contract.startDate) || effective;
         const nextStep = arrearsCursorStep + 1;
-        cursor = paymentGridDate(contractStart, nextStep);
+        cursor = arrearsGrid(contractStart, nextStep);
         arrearsCursorStep = nextStep;
       } else {
         cursor = new Date(
