@@ -349,7 +349,7 @@ describe("cancelModification", () => {
     expect(contract.modifications[0].status).toBe("CANCELLED");
   });
 
-  test("APPLIED bir modification iptal EDİLEMEZ (fail-closed — finansal geçmiş bozulmaz)", async () => {
+  test("APPLIED modification ADMIN onayıyla geri alınır ve eski şartlar geri gelir", async () => {
     const contract = baseContract();
     const created = await tfrs16.createModification(contract, {
       modificationDate: "2026-06-01",
@@ -358,8 +358,13 @@ describe("cancelModification", () => {
       newPayment: 120000
     });
     await tfrs16.applyModification(contract, created.modification.id);
-    const result = await tfrs16.cancelModification(contract, created.modification.id);
-    expect(result.valid).toBe(false);
+    const result = await tfrs16.cancelModification(contract, created.modification.id, { adminApproval: true });
+    expect(result.valid).toBe(true);
+    expect(result.rolledBack).toBe(true);
+    expect(contract.modifications[0].status).toBe("CANCELLED");
+    expect(contract.monthlyPayment).toBe(100000);
+    expect(contract.endDate).toBe("2027-12-01");
+    expect(contract.modifications[0].journal).toEqual([]);
   });
 
   test("backend hata verirse status DRAFT'a geri döner", async () => {
