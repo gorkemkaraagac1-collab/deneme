@@ -3405,7 +3405,8 @@ document.addEventListener("DOMContentLoaded", () => {
         currentSchedule,
         effectiveDate,
         revised.schedule,
-        rou.revisedROU
+        rou.revisedROU,
+        !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
       )
     };
   }
@@ -3415,14 +3416,17 @@ document.addEventListener("DOMContentLoaded", () => {
     currentSchedule,
     effectiveDate,
     futureSchedule,
-    revisedROU
+    revisedROU,
+    includeEffectiveDate = false
   ) {
     const historical = (currentSchedule || []).filter(item => {
       const date = parseDate(item.date);
       // The effective date belongs to the revised schedule. This is
       // essential for advance payments: retaining the old row on the same
       // date makes the new payment amount start one period late.
-      return date && date.getTime() < effectiveDate.getTime();
+      return date && (includeEffectiveDate
+        ? date.getTime() <= effectiveDate.getTime()
+        : date.getTime() < effectiveDate.getTime());
     });
 
     let rou = Math.max(0, Number(revisedROU) || 0);
@@ -3515,7 +3519,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const effective = parseDate(item.effectiveDate);
       if (!effective) return;
       const futureResult = calculateReassessmentLiability(contract, effective, item.newTerms);
-      schedule = buildReassessedScheduleFromResult(schedule, effective, futureResult.schedule, Number(item.revisedROU) || 0);
+      schedule = buildReassessedScheduleFromResult(
+        schedule,
+        effective,
+        futureResult.schedule,
+        Number(item.revisedROU) || 0,
+        !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
+      );
     });
 
     return schedule;
@@ -3536,7 +3546,8 @@ document.addEventListener("DOMContentLoaded", () => {
       schedule,
       effectiveDate,
       revised.schedule,
-      Number(reassessment.revisedROU) || 0
+      Number(reassessment.revisedROU) || 0,
+      !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
     );
   }
 
