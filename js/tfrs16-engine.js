@@ -2661,19 +2661,21 @@ document.addEventListener("DOMContentLoaded", () => {
       // yükümlülük artışları, kendi effectiveDate ayından rp'ye restate
       // edilir (kullanıcı onayı: effectiveDate'in ait olduğu ay).
       const appliedChanges = []
-        .concat(Array.isArray(contract?.modifications) ? contract.modifications : [])
-        .concat(Array.isArray(contract?.reassessments) ? contract.reassessments : [])
+        .concat(Array.isArray(contract?.modifications) ? contract.modifications.map(x => ({ ...x, __changeKind: "modification" })) : [])
+        .concat(Array.isArray(contract?.reassessments) ? contract.reassessments.map(x => ({ ...x, __changeKind: "reassessment" })) : [])
         .filter(x => x && x.status === "APPLIED");
 
       const entryChanges = appliedChanges
         .map(x => {
           const d = parseDate(x.effectiveDate);
-          return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.liabilityAdjustment) || 0 } : null;
+          return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.liabilityAdjustment) || 0, kind: x.__changeKind } : null;
         })
         .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
       let liabilityEntriesNominal = 0, liabilityEntriesRestated = 0;
       let rouEntriesNominal = 0, rouEntriesRestated = 0;
+      let liabilityModificationNominal = 0, liabilityModificationRestated = 0;
+      let liabilityReassessmentNominal = 0, liabilityReassessmentRestated = 0;
 
       if (initialRecognitionInPeriod) {
         const initialLiability = tms29AccrualContext
@@ -2687,8 +2689,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       entryChanges.forEach(entry => {
         const ratioEntryToRp = getInflationRatio(entry.month, rp);
-        liabilityEntriesNominal += entry.amount;
-        liabilityEntriesRestated += entry.amount * ratioEntryToRp;
+        if (entry.kind === "modification") {
+          liabilityModificationNominal += entry.amount;
+          liabilityModificationRestated += entry.amount * ratioEntryToRp;
+        } else if (entry.kind === "reassessment") {
+          liabilityReassessmentNominal += entry.amount;
+          liabilityReassessmentRestated += entry.amount * ratioEntryToRp;
+        } else {
+          liabilityEntriesNominal += entry.amount;
+          liabilityEntriesRestated += entry.amount * ratioEntryToRp;
+        }
       });
 
       // ROU girişleri: aynı modifikasyon/reassessment kayıtlarının
@@ -2707,7 +2717,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const restatedSum =
-        liabilityOpeningRestated + liabilityEntriesRestated + liabilityInterestRestated - liabilityPaymentsRestated;
+        liabilityOpeningRestated + liabilityEntriesRestated +
+        liabilityModificationRestated + liabilityReassessmentRestated +
+        liabilityInterestRestated - liabilityPaymentsRestated;
 
       // Negatifse KAZANÇ (yükümlülüğün reel yükü azalmış — TMS 29.28),
       // pozitifse KAYIP. Hareket tablosunda düşülen bir satır olarak
@@ -2724,6 +2736,10 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityInterestRestated,
         liabilityPaymentsNominal,
         liabilityPaymentsRestated,
+        liabilityModificationNominal,
+        liabilityModificationRestated,
+        liabilityReassessmentNominal,
+        liabilityReassessmentRestated,
         restatedSum,
         liabilityMonetaryGainLoss
       };
@@ -4229,24 +4245,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let cursor;
     let arrearsCursorStep = null;
     if (advance) {
-      // Next advance payment on or after the day following effective
-      cursor = new Date(
-        effective.getFullYear(),
-        effective.getMonth(),
-        effective.getDate() + 1
-      );
-      // Align to step grid from contract start when possible
       const contractStart = parseDate(contract.startDate) || effective;
       const monthsFromStart =
-        (cursor.getFullYear() - contractStart.getFullYear()) * 12 +
-        (cursor.getMonth() - contractStart.getMonth());
-      const offset = ((monthsFromStart % stepMonths) + stepMonths) % stepMonths;
-      if (offset !== 0) {
-        cursor = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth() + (stepMonths - offset),
-          contractStart.getDate()
-        );
+        (effective.getFullYear() - contractStart.getFullYear()) * 12 +
+        (effective.getMonth() - contractStart.getMonth());
+      // Advance payments on the effective date belong to the new terms.
+      // The former +1-day cursor skipped a payment on 01.03 when a
+      // modification became effective on 01.03.
+      let cursorStep = Math.max(0, Math.floor(monthsFromStart / stepMonths));
+      cursor = paymentGridDate(contractStart, cursorStep);
+      while (cursor.getTime() < effective.getTime()) {
+        cursorStep++;
+        cursor = paymentGridDate(contractStart, cursorStep);
       }
     } else {
       // Arrears: first remaining payment strictly after effectiveDate,
@@ -22744,6 +22754,8 @@ ${renderPaymentScheduleFooterContainers()}
       liabilityEntriesNominal: 0, liabilityEntriesRestated: 0,
       liabilityInterestNominal: 0, liabilityInterestRestated: 0,
       liabilityPaymentsNominal: 0, liabilityPaymentsRestated: 0,
+      liabilityModificationNominal: 0, liabilityModificationRestated: 0,
+      liabilityReassessmentNominal: 0, liabilityReassessmentRestated: 0,
       liabilityMonetaryGainLoss: 0
     };
     let totalNetAdjustment = 0, computedCount = 0, missingCount = 0, outOfScopeCount = 0;
@@ -22813,6 +22825,10 @@ ${renderPaymentScheduleFooterContainers()}
           totals.liabilityInterestRestated += lrf.liabilityInterestRestated;
           totals.liabilityPaymentsNominal += lrf.liabilityPaymentsNominal;
           totals.liabilityPaymentsRestated += lrf.liabilityPaymentsRestated;
+          totals.liabilityModificationNominal += lrf.liabilityModificationNominal || 0;
+          totals.liabilityModificationRestated += lrf.liabilityModificationRestated || 0;
+          totals.liabilityReassessmentNominal += lrf.liabilityReassessmentNominal || 0;
+          totals.liabilityReassessmentRestated += lrf.liabilityReassessmentRestated || 0;
           totals.liabilityMonetaryGainLoss += lrf.liabilityMonetaryGainLoss;
         }
         computedCount++;
@@ -22829,6 +22845,7 @@ ${renderPaymentScheduleFooterContainers()}
       "rouDepreciationNominal","rouDepreciationRestated","rouClosingNominalPeriod","rouClosingRestatedPeriod",
       "liabilityOpeningNominal","liabilityOpeningRestated","liabilityEntriesNominal","liabilityEntriesRestated",
       "liabilityInterestNominal","liabilityInterestRestated","liabilityPaymentsNominal","liabilityPaymentsRestated",
+      "liabilityModificationNominal","liabilityModificationRestated","liabilityReassessmentNominal","liabilityReassessmentRestated",
       "liabilityMonetaryGainLoss"
     ];
     const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, tms29SumKeys);
@@ -22860,6 +22877,8 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "contractCount", label: "Sözleşme Sayısı" },
       { key: "liabilityOpeningRestated", label: "Açılış" },
       { key: "liabilityEntriesRestated", label: "Girişler" },
+      { key: "liabilityModificationRestated", label: "Modifikasyon" },
+      { key: "liabilityReassessmentRestated", label: "Reassessment" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
@@ -22963,6 +22982,8 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "contractCount", label: "Sözleşme Sayısı" },
       { key: "liabilityOpeningRestated", label: "Açılış" },
       { key: "liabilityEntriesRestated", label: "Girişler" },
+      { key: "liabilityModificationRestated", label: "Modifikasyon" },
+      { key: "liabilityReassessmentRestated", label: "Reassessment" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
