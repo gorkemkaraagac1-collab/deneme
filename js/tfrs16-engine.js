@@ -22911,6 +22911,28 @@ ${renderPaymentScheduleFooterContainers()}
         const netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
         const rrf = restatement?.rouRollForward;
         const lrf = restatement?.liabilityRollForward;
+        // TMS 29 ROU is a non-monetary balance and must be presented in the
+        // company's functional/reporting currency. Older restatement paths
+        // return the ROU roll-forward in transaction currency for FX leases;
+        // normalize that legacy shape once, at the portfolio boundary, using
+        // the commencement (historical-cost) rate. Liability values remain
+        // untouched because they are already closing-rate/TRY monetary data.
+        if (rrf) {
+          const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+          const fn = resolveContractFunctionalCurrency(contract);
+          const engineR = calculateLeaseEngine(contract);
+          const rawClosing = Number(rrf.rouClosingNominalPeriod) || 0;
+          const rawScale = Math.abs(Number(engineR?.rouAssets) || 0);
+          if (tx !== fn && rawScale > 0 && Math.abs(rawClosing) <= rawScale * 2) {
+            const startFx = getFxRate(tx, fn, contract.startDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+            if (!startFx?.error && Number(startFx?.rate) > 0) {
+              const rate = Number(startFx.rate);
+              ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
+                if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
+              });
+            }
+          }
+        }
         results.set(row.contractId, {
           ok: true,
           netAdjustment,
@@ -23032,11 +23054,12 @@ ${renderPaymentScheduleFooterContainers()}
    * (eski konumunda kalıyor, alt notlar/mutabakat uyarısı da burada).
    */
   function v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     const unavailable = tms29.computedCount === 0 && tms29.missingCount > 0;
     if (unavailable) {
       return `<div style="margin-top:24px;">
         <div>
-          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (ROU)</h4>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (ROU) — ${v191Escape(presentationCurrency)}</h4>
           <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
         </div>
         <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
@@ -23068,7 +23091,7 @@ ${renderPaymentScheduleFooterContainers()}
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportTms29InflationNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
 
-      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
+      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — ${v191Escape(presentationCurrency)} Restated</h5>
       ${v191Table(rouRowsWithTotal, rouTms29Columns)}
       ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
       <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır.</p>
@@ -23076,11 +23099,12 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     const unavailable = tms29.computedCount === 0 && tms29.missingCount > 0;
     if (unavailable) {
       return `<div style="margin-top:24px;">
         <div>
-          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (Kira Yükümlülüğü)</h4>
+          <h4 style="margin:0;font-size:12px;color:#475569;">TMS 29 Enflasyon Düzeltmeli Hareket Tablosu (Kira Yükümlülüğü) — ${v191Escape(presentationCurrency)}</h4>
           <p style="margin:4px 0 0;color:#64748b;font-size:11px;">${v191Escape(periodLabel)} · dönem sonu satın alma gücüne göre — yukarıdaki nominal hareket tablosundan farklıdır.</p>
         </div>
         <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
@@ -23114,11 +23138,11 @@ ${renderPaymentScheduleFooterContainers()}
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportTms29InflationNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
 
-      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
+      <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — ${v191Escape(presentationCurrency)} Restated</h5>
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
 
       <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}${tms29.outOfScopeCount > 0 ? ` <span style="color:#94a3b8;">(${tms29.outOfScopeCount} sözleşme bu dönemde henüz başlamadığı için kapsam dışı — normaldir.)</span>` : ""}</p>
-      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir. TMS 21 yabancı para çevrim farkı bu tutara dahil edilmez; ayrı kur farkı satırı ve fişi olarak izlenir.</p>
     </div>`;
   }
 
@@ -23257,12 +23281,13 @@ ${renderPaymentScheduleFooterContainers()}
    * hesaplama çağrıları), HTML üretimi PAYLAŞILIYOR.
    */
   function v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 }) {
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="margin:0;">Dipnot: Kullanım Hakkı Varlığı Hareket Tablosu</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.53(a) — Varlık sınıfı ve para birimi kırılımı aşağıda verilmiştir.</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.53(a) — Tüm tutarlar sunum para birimi ${v191Escape(presentationCurrency)} cinsindendir.</p>
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportRouAssetMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
@@ -23278,7 +23303,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingRuo", label: "Kapanış" }
       ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet</h4>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet (${v191Escape(presentationCurrency)})</h4>
       ${v191Table(rouByCurrency, [
         { key: "currency", label: "Para Birimi" },
         { key: "contractCount", label: "Sözleşme Sayısı" },
@@ -23297,12 +23322,13 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="margin:0;">Dipnot: Kira Yükümlülüğü Hareket Tablosu</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Likidite riski (vade analizi) dipnotu aşağıda ayrıca yer almaktadır.</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Tüm tutarlar sunum para birimi ${v191Escape(presentationCurrency)} cinsindendir.</p>
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
@@ -23319,7 +23345,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "otherAdjustment", label: "Diğer" },
         { key: "closingLiability", label: "Kapanış" }
       ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet</h4>
+      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet (${v191Escape(presentationCurrency)})</h4>
       ${v191Table(liabByCurrency, [
         { key: "currency", label: "Para Birimi" },
         { key: "contractCount", label: "Sözleşme Sayısı" },
@@ -23339,12 +23365,13 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd }) {
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="margin:0;">Dipnot: Kiralama Yükümlülükleri — Likidite Riski (TFRS 7.39)</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptLocalIsoDate(effectivePeriodEnd))} · "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptLocalIsoDate(effectivePeriodEnd))} · Tüm tutarlar ${v191Escape(presentationCurrency)} cinsindendir. "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiquidityRiskNote(new Date(${effectivePeriodEnd.getFullYear()},${effectivePeriodEnd.getMonth()},${effectivePeriodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
