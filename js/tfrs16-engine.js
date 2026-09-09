@@ -22927,22 +22927,19 @@ ${renderPaymentScheduleFooterContainers()}
           const rawClosing = Number(rrf.rouClosingNominalPeriod) || 0;
           const rawScale = Math.abs(Number(engineR?.rouAssets) || 0);
           if (tx !== fn && rawScale > 0 && Math.abs(rawClosing) <= rawScale * 2) {
-            const startFx = getFxRate(tx, fn, contract.startDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
-            if (!startFx?.error && Number(startFx?.rate) > 0) {
-              const rate = Number(startFx.rate);
-              ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
-                if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
-              });
-            }
-            else if (typeof convertAmountToReportingCurrency === "function") {
-              const fallback = convertAmountToReportingCurrency(1, tx, contract.startDate, fn);
-              if (!fallback?.error && Number(fallback?.value) > 0) {
-                const rate = Number(fallback.value);
-                ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
-                  if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
-                });
-              }
-            }
+            const direct = typeof convertAmountToReportingCurrency === "function"
+              ? convertAmountToReportingCurrency(1, tx, contract.startDate, fn)
+              : null;
+            const quoted = getFxRate(tx, fn, contract.startDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+            // Prefer the public conversion API: getFxRate can return a
+            // neutral 1.0 placeholder when a historical quote is absent,
+            // which silently leaves a USD-scale ROU labelled as TRY.
+            const rate = direct && !direct.error && Number(direct.value) > 0
+              ? Number(direct.value)
+              : (!quoted?.error && Number(quoted?.rate) > 0 ? Number(quoted.rate) : null);
+            if (rate) ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
+              if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
+            });
           }
         }
         results.set(row.contractId, {
