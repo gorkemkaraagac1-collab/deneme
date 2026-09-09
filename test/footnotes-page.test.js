@@ -106,7 +106,11 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       paymentTiming: "arrears",
       status: "active",
       currency: "USD",
-      functionalCurrency: "TRY",
+      // Canlıya taşınmış eski sözleşmelerde bu alan işlem para birimiyle
+      // aynı kalmış olabilir. Dipnot yine seçili sunum para birimi TRY'de
+      // üretilmeli; başlık TRY iken hareketlerin USD ölçeğinde kalmasına
+      // izin verilmez.
+      functionalCurrency: "USD",
       reportingCurrency: "TRY",
       modifications: [],
       reassessments: [{
