@@ -399,7 +399,7 @@ describe("cancelReassessment", () => {
     });
     await tfrs16.applyReassessment(contract, created.reassessment.id);
     expect(contract.monthlyPayment).toBe(100000);
-    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id, { adminApproval: true });
+    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id, { adminApproval: true, approverRole: "ADMIN" });
     expect(result.valid).toBe(true);
     expect(result.rolledBack).toBe(true);
     expect(contract.reassessments[0].status).toBe("CANCELLED");
