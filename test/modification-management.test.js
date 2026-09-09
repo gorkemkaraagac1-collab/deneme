@@ -358,7 +358,7 @@ describe("cancelModification", () => {
       newPayment: 120000
     });
     await tfrs16.applyModification(contract, created.modification.id);
-    const result = await tfrs16.cancelModification(contract, created.modification.id, { adminApproval: true });
+    const result = await tfrs16.cancelModification(contract, created.modification.id, { adminApproval: true, approverRole: "ADMIN" });
     expect(result.valid).toBe(true);
     expect(result.rolledBack).toBe(true);
     expect(contract.modifications[0].status).toBe("CANCELLED");

@@ -1339,9 +1339,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // yöneticisinin açık onayıyla yapılabilir. Olay silinmez; CANCELLED
   // durumuna alınır ve audit trail'de eski/yeni değerleriyle tutulur.
   function isAdminApprovalGranted(options = {}) {
-    if (options.adminApproval === true) return true;
+    if (options.adminApproval === true && String(options.approverRole || "").toUpperCase() === "ADMIN") return true;
     try {
-      const user = typeof getCurrentUser === "function" ? getCurrentUser() : window.currentUser;
+      // Gerçek oturum rolü yüklendiyse tek yetkili kaynak budur. Demo
+      // kullanıcısının localStorage fallback'i ACCOUNTANT_MANAGER gibi
+      // rollerin ADMIN düğmelerini görmesine yol açmamalıdır.
+      if (sessionUserRole) return String(sessionUserRole).toUpperCase() === "ADMIN";
+      const user = window.currentUser;
       const roles = Array.isArray(user?.roleIds) ? user.roleIds : (Array.isArray(user?.roles) ? user.roles : [user?.role]);
       return roles.some(role => String(role || "").toUpperCase() === "ADMIN");
     } catch (_) { return false; }
