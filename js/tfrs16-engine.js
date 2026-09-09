@@ -13455,6 +13455,11 @@ ${renderPaymentScheduleFooterContainers()}
         contract
       );
 
+    const contractAuditEvents =
+      typeof getAuditTrail === "function"
+        ? getAuditTrail(contract.id)
+        : [];
+
     const modal =
       document.getElementById(
         "detailModal"
@@ -13678,6 +13683,12 @@ ${renderPaymentScheduleFooterContainers()}
             <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;">
               <label style="font-size:11px;color:#64748b;font-weight:600;">Sunum Para Birimi<select id="auditPresentationCurrency" style="display:block;margin-top:4px;padding:7px;border:1px solid #d1d5db;border-radius:7px;">${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}</select></label>
               <button type="button" id="exportContractAuditTrailButton" class="secondary-button">↓ Denetim İzini Dışa Aktar</button>
+            </div>
+            <div style="margin-top:14px;overflow:auto;">
+              <table class="gk-audit-table" style="width:100%;border-collapse:collapse;font-size:11px;">
+                <thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Tarih</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Kullanıcı</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">İşlem</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Neden</th></tr></thead>
+                <tbody>${contractAuditEvents.length ? contractAuditEvents.map(event => `<tr><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(formatDate(event.timestamp))}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(event.actor || "system")}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;font-weight:700;">${escapeHtml(event.action || "UNKNOWN")}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(event.reason || "")}</td></tr>`).join("") : `<tr><td colspan="4" style="padding:10px;color:#64748b;">Bu sözleşme için audit kaydı bulunmuyor.</td></tr>`}</tbody>
+              </table>
             </div>
           </div>
         </div>
