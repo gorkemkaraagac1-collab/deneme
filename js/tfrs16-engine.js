@@ -23142,7 +23142,7 @@ ${renderPaymentScheduleFooterContainers()}
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
 
       <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}${tms29.outOfScopeCount > 0 ? ` <span style="color:#94a3b8;">(${tms29.outOfScopeCount} sözleşme bu dönemde henüz başlamadığı için kapsam dışı — normaldir.)</span>` : ""}</p>
-      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir.</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir. TMS 21 yabancı para çevrim farkı bu tutara dahil edilmez; ayrı kur farkı satırı ve fişi olarak izlenir.</p>
     </div>`;
   }
 
