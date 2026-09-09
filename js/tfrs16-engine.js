@@ -11031,13 +11031,7 @@ ${renderAccountingCenterBulkPromo()}
     }
 
 
-    let selected =
-      getScheduleForYear(
-        contract,
-        year,
-        month,
-        period === "custom" ? "annual" : period
-      );
+    let selected = [];
 
     /*
       GC-2026-09 (Madde 5): dönem içinde HİÇ ödeme günü yoksa (örn.
@@ -11064,11 +11058,17 @@ ${renderAccountingCenterBulkPromo()}
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
         periodStartExclusive = new Date(start.getTime() - 1);
         periodEndInclusive = end;
-        selected = selected.filter(item => {
+        // Custom periods must start from the effective event-aware schedule,
+        // rather than an annual slice. This keeps reassessment/modification
+        // rows and cash settlements inside the exact requested date range.
+        const customSchedule = cfoBuildSchedule(contract)?.schedule || [];
+        selected = customSchedule.filter(item => {
           const itemDate = item.date instanceof Date ? item.date : new Date(item.date);
           return itemDate > periodStartExclusive && itemDate <= periodEndInclusive;
         });
       }
+    } else {
+      selected = getScheduleForYear(contract, year, month, period);
     }
 
     const accrualSummary =
@@ -11235,7 +11235,7 @@ ${renderAccountingCenterBulkPromo()}
     });
 
     let title =
-      `${year} - Yıllık Muhasebe Fişi`;
+      `${year} - Muhasebe Fişi`;
 
     if (
       period === "monthly"
