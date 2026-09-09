@@ -23196,18 +23196,38 @@ ${renderPaymentScheduleFooterContainers()}
     const tms29 = v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth);
     // Nominal roll-forward engines retain transaction-currency amounts for
     // FX leases. Financial statement notes, however, must be presented in
-    // the company's presentation currency. Translate every nominal movement
-    // at the reporting-date closing rate so the table cannot be labelled TRY
-    // while displaying USD-scale numbers. TMS 29 continues to use raw rows.
+    // the company's presentation currency. TMS 21 requires balance-sheet
+    // balances to use their balance date and income/cash movements to use
+    // their transaction or accrual dates. TMS 29 continues to use raw rows.
     const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     const translateNominalRows = (rows, keys) => (rows || []).map(row => {
       const sourceCurrency = String(row.currency || presentationCurrency).toUpperCase();
       if (sourceCurrency === presentationCurrency) return { ...row, currency: presentationCurrency };
       const translated = { ...row, currency: presentationCurrency };
+      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
+      const schedule = contract ? (rptScheduleRows(contract).schedule || []) : [];
+      const eventConverted = field => {
+        if (!schedule.length) return null;
+        let total = 0, found = false;
+        schedule.forEach(item => {
+          const d = rptDate(item.date);
+          const amount = Number(item[field]);
+          if (!d || d < periodStart || d > periodEnd || !Number.isFinite(amount) || amount === 0) return;
+          const fx = convertAmountToReportingCurrency(amount, sourceCurrency, d, presentationCurrency);
+          if (!fx?.error && Number.isFinite(Number(fx.value))) { total += Number(fx.value); found = true; }
+        });
+        return found ? total : null;
+      };
       keys.forEach(key => {
         const amount = Number(row[key]);
         if (!Number.isFinite(amount)) return;
-        const result = convertAmountToReportingCurrency(amount, sourceCurrency, periodEnd, presentationCurrency);
+        const eventField = key === "payments" ? "payment" : key === "interest" ? "interest" : key === "depreciation" ? "depreciation" : null;
+        const eventValue = eventField ? eventConverted(eventField) : null;
+        if (eventValue !== null) { translated[key] = rptRound(eventValue); return; }
+        const rateDate = key === "openingRuo" || key === "openingLiability" ? rptAddDays(periodStart, -1)
+          : key === "entriesRuo" || key === "entriesLiability" ? (contract?.startDate || periodStart)
+          : periodEnd;
+        const result = convertAmountToReportingCurrency(amount, sourceCurrency, rateDate, presentationCurrency);
         if (!result?.error && Number.isFinite(Number(result.value))) translated[key] = rptRound(Number(result.value));
       });
       return translated;
