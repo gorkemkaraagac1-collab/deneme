@@ -22919,7 +22919,10 @@ ${renderPaymentScheduleFooterContainers()}
         // untouched because they are already closing-rate/TRY monetary data.
         if (rrf) {
           const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
-          const fn = resolveContractFunctionalCurrency(contract);
+          // Dipnotlar şirketin sunum para biriminde üretilir. Şirket
+          // metadata'sı eksik olsa bile global raporlama para birimini
+          // kullanarak FX sözleşmelerini işlem para biriminde bırakma.
+          const fn = String(getReportingCurrency() || resolveContractFunctionalCurrency(contract) || DEFAULT_FUNCTIONAL_CURRENCY).toUpperCase();
           const engineR = calculateLeaseEngine(contract);
           const rawClosing = Number(rrf.rouClosingNominalPeriod) || 0;
           const rawScale = Math.abs(Number(engineR?.rouAssets) || 0);
@@ -22930,6 +22933,15 @@ ${renderPaymentScheduleFooterContainers()}
               ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
                 if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
               });
+            }
+            else if (typeof convertAmountToReportingCurrency === "function") {
+              const fallback = convertAmountToReportingCurrency(1, tx, contract.startDate, fn);
+              if (!fallback?.error && Number(fallback?.value) > 0) {
+                const rate = Number(fallback.value);
+                ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
+                  if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
+                });
+              }
             }
           }
         }
@@ -23176,12 +23188,32 @@ ${renderPaymentScheduleFooterContainers()}
     const liabReport = getLeaseLiabilityRollForwardReport(periodStart, periodEnd) || {};
     const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${periodEnd.toLocaleDateString("tr-TR")}`;
 
-    const rouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
-    const liabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
+    const rawRouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
+    const rawLiabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
 
     const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
     const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
-    const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
+    const tms29 = v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth);
+    // Nominal roll-forward engines retain transaction-currency amounts for
+    // FX leases. Financial statement notes, however, must be presented in
+    // the company's presentation currency. Translate every nominal movement
+    // at the reporting-date closing rate so the table cannot be labelled TRY
+    // while displaying USD-scale numbers. TMS 29 continues to use raw rows.
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
+    const translateNominalRows = (rows, keys) => (rows || []).map(row => {
+      const sourceCurrency = String(row.currency || presentationCurrency).toUpperCase();
+      if (sourceCurrency === presentationCurrency) return { ...row, currency: presentationCurrency };
+      const translated = { ...row, currency: presentationCurrency };
+      keys.forEach(key => {
+        const amount = Number(row[key]);
+        if (!Number.isFinite(amount)) return;
+        const result = convertAmountToReportingCurrency(amount, sourceCurrency, periodEnd, presentationCurrency);
+        if (!result?.error && Number.isFinite(Number(result.value))) translated[key] = rptRound(Number(result.value));
+      });
+      return translated;
+    });
+    const rouRows = translateNominalRows(rawRouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
+    const liabRows = translateNominalRows(rawLiabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
     rouRows.forEach(row => {
       const r = tms29.results.get(row.contractId);
       row.inflationNetAdjustment = r?.ok ? r.netAdjustment : null;
