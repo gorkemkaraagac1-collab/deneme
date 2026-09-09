@@ -22923,7 +22923,10 @@ ${renderPaymentScheduleFooterContainers()}
           // metadata'sı eksik olsa bile global raporlama para birimini
           // kullanarak FX sözleşmelerini işlem para biriminde bırakma.
           const fn = String(getReportingCurrency() || resolveContractFunctionalCurrency(contract) || DEFAULT_FUNCTIONAL_CURRENCY).toUpperCase();
-          if (tx !== fn && restatement?.totals?.precisionSource === "SCHEDULE_ROWS") {
+          const calculatedCurrency = restatement?.totals?.precisionSource === "SCHEDULE_ROWS"
+            ? tx
+            : v23CurrencyCode(resolveContractFunctionalCurrency(contract));
+          if (tx !== fn && calculatedCurrency === tx) {
             const direct = typeof convertAmountToReportingCurrency === "function"
               ? convertAmountToReportingCurrency(1, tx, contract.startDate, fn)
               : null;
