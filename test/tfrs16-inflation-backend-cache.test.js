@@ -223,4 +223,36 @@ describe("applyTMS29Restatement — motor davranışı DEĞİŞMEDİ (regresyon)
     const failed = results.filter(r => !r.pass);
     expect(failed).toEqual([]);
   });
+
+  test("önceki Aralık kapanışı Ocak değil Aralık endeksiyle düzeltilir", async () => {
+    localStorage.setItem("access_token", "fake-token-for-test");
+    const indices = [
+      ["2025-12", 100], ["2026-01", 110], ["2026-02", 120],
+      ["2026-03", 130], ["2026-04", 140], ["2026-05", 150], ["2026-06", 160]
+    ];
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: indices.map(([month, index]) => ({
+        month, index, source: "MANUAL_OVERRIDE", verificationStatus: "VERIFIED"
+      })) })
+    });
+    await tfrs16.refreshInflationIndexCacheFromBackend(indices.map(([month]) => month));
+    fetchSpy.mockRestore();
+
+    const contract = {
+      id: "TEST-DECEMBER-CLOSING",
+      monthlyPayment: 1000,
+      discountRate: 5,
+      startDate: "2025-12-01",
+      endDate: "2027-12-01",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears"
+    };
+    const result = tfrs16.applyTMS29Restatement(contract, "2026-06", "2026-01");
+    const openingRatio = result.rouRollForward.rouOpeningRestated / result.rouRollForward.rouOpeningNominal;
+
+    expect(openingRatio).toBeCloseTo(160 / 100, 8);
+    expect(openingRatio).not.toBeCloseTo(160 / 110, 8);
+    expect(result.liabilityRollForward.liabilityOpeningRestated / result.liabilityRollForward.liabilityOpeningNominal).toBeCloseTo(160 / 100, 8);
+  });
 });
