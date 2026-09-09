@@ -389,7 +389,7 @@ describe("cancelReassessment", () => {
     expect(contract.reassessments[0].status).toBe("CANCELLED");
   });
 
-  test("APPLIED bir reassessment iptal EDİLEMEZ (fail-closed)", async () => {
+  test("APPLIED reassessment ADMIN onayıyla geri alınır ve eski şartlar geri gelir", async () => {
     const contract = baseContract();
     const created = await tfrs16.createReassessment(contract, {
       reassessmentDate: "2026-06-01",
@@ -398,8 +398,14 @@ describe("cancelReassessment", () => {
       newLeaseEndDate: "2030-12-01"
     });
     await tfrs16.applyReassessment(contract, created.reassessment.id);
-    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id);
-    expect(result.valid).toBe(false);
+    expect(contract.monthlyPayment).toBe(100000);
+    const result = await tfrs16.cancelReassessment(contract, created.reassessment.id, { adminApproval: true });
+    expect(result.valid).toBe(true);
+    expect(result.rolledBack).toBe(true);
+    expect(contract.reassessments[0].status).toBe("CANCELLED");
+    expect(contract.monthlyPayment).toBe(100000);
+    expect(contract.endDate).toBe("2027-12-01");
+    expect(contract.reassessments[0].journal).toEqual([]);
   });
 
   test("backend hata verirse status DRAFT'a geri döner", async () => {

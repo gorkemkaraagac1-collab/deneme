@@ -1335,6 +1335,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Finansal olarak uygulanmış bir olayı geri almak yalnızca platform
+  // yöneticisinin açık onayıyla yapılabilir. Olay silinmez; CANCELLED
+  // durumuna alınır ve audit trail'de eski/yeni değerleriyle tutulur.
+  function isAdminApprovalGranted(options = {}) {
+    if (options.adminApproval === true) return true;
+    try {
+      const user = typeof getCurrentUser === "function" ? getCurrentUser() : window.currentUser;
+      const roles = Array.isArray(user?.roleIds) ? user.roleIds : (Array.isArray(user?.roles) ? user.roles : [user?.role]);
+      return roles.some(role => String(role || "").toUpperCase() === "ADMIN");
+    } catch (_) { return false; }
+  }
+
+  function isLatestAppliedEvent(contract, event, collection) {
+    const applied = (contract?.[collection] || []).filter(item => item.status === "APPLIED");
+    return applied.length > 0 && applied[applied.length - 1]?.id === event?.id;
+  }
+
   function auditEventId() {
     return `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
@@ -3825,7 +3842,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  async function cancelReassessment(contract, reassessmentIdValue) {
+  async function cancelReassessment(contract, reassessmentIdValue, options = {}) {
     ensureReassessmentState(contract);
 
     const reassessment = contract.reassessments.find(
@@ -3837,7 +3854,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (reassessment.status === "APPLIED") {
-      return { valid: false, errors: ["APPLIED reassessment iptal edilemez."] };
+      if (!isAdminApprovalGranted(options)) return { valid: false, errors: ["Uygulanmış reassessment yalnızca ADMIN onayıyla geri alınabilir."] };
+      if (!isLatestAppliedEvent(contract, reassessment, "reassessments")) return { valid: false, errors: ["Yalnızca en son uygulanmış reassessment geri alınabilir."] };
+      const lockCheck = assertPeriodWritable(contract, reassessment.effectiveDate || contract?.startDate || new Date());
+      if (lockCheck.locked && options.adminApproval !== true && !isAdminApprovalGranted(options)) return { valid: false, errors: [lockCheck.message] };
+      const oldValue = cloneModificationValue(reassessment);
+      const previousTerms = reassessment.appliedFromTerms || {};
+      const currentTerms = getReassessmentCurrentTerms(contract);
+      if (previousTerms.payment !== undefined || previousTerms.monthlyPayment !== undefined) contract.monthlyPayment = Number(previousTerms.payment ?? previousTerms.monthlyPayment) || 0;
+      if (previousTerms.leaseEndDate !== undefined || previousTerms.leaseTerm !== undefined || previousTerms.endDate !== undefined) contract.endDate = previousTerms.leaseEndDate ?? previousTerms.leaseTerm ?? previousTerms.endDate;
+      if (previousTerms.discountRate !== undefined) contract.discountRate = Number(previousTerms.discountRate) || 0;
+      if (previousTerms.renewalOption !== undefined) contract.renewalOption = previousTerms.renewalOption === true;
+      if (previousTerms.terminationOption !== undefined) contract.terminationOption = previousTerms.terminationOption === true;
+      if (previousTerms.purchaseOption !== undefined) contract.purchaseOption = previousTerms.purchaseOption === true;
+      reassessment.status = "CANCELLED";
+      reassessment.cancelledAt = new Date().toISOString();
+      reassessment.cancelledBy = auditActor();
+      reassessment.journal = [];
+      recordReassessmentAuditEvent(contract, "REASSESSMENT_ROLLED_BACK", reassessment, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
+      saveContracts(contracts);
+      try { await persistContractToApi(contract, true); }
+      catch (error) {
+        Object.keys(reassessment).forEach(key => delete reassessment[key]);
+        Object.assign(reassessment, oldValue);
+        Object.assign(contract, { monthlyPayment: currentTerms.payment, endDate: currentTerms.leaseEndDate, discountRate: currentTerms.discountRate, renewalOption: currentTerms.renewalOption, terminationOption: currentTerms.terminationOption, purchaseOption: currentTerms.purchaseOption });
+        saveContracts(contracts);
+        return { valid: false, errors: [`Backend'e kaydedilemedi: ${error?.message || error}`] };
+      }
+      return { valid: true, reassessment, rolledBack: true };
     }
 
     const oldStatus = reassessment.status;
@@ -5343,7 +5387,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function cancelModification(
     contract,
-    modificationIdValue
+    modificationIdValue,
+    options = {}
   ) {
 
     ensureModificationState(contract);
@@ -5361,10 +5406,31 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (modification.status === "APPLIED") {
-      return {
-        valid: false,
-        errors: ["APPLIED modification iptal edilemez."]
-      };
+      if (!isAdminApprovalGranted(options)) return { valid: false, errors: ["Uygulanmış modifikasyon yalnızca ADMIN onayıyla geri alınabilir."] };
+      if (!isLatestAppliedEvent(contract, modification, "modifications")) return { valid: false, errors: ["Yalnızca en son uygulanmış modifikasyon geri alınabilir."] };
+      const lockCheck = assertPeriodWritable(contract, modification.effectiveDate || contract?.startDate || new Date());
+      if (lockCheck.locked && !isAdminApprovalGranted(options)) return { valid: false, errors: [lockCheck.message] };
+      const oldValue = cloneModificationValue(modification);
+      const previousTerms = modification.appliedFromTerms || {};
+      const currentTerms = getModificationCurrentTerms(contract);
+      if (previousTerms.payment !== undefined || previousTerms.monthlyPayment !== undefined) contract.monthlyPayment = Number(previousTerms.payment ?? previousTerms.monthlyPayment) || 0;
+      if (previousTerms.leaseEndDate !== undefined || previousTerms.leaseTerm !== undefined || previousTerms.endDate !== undefined) contract.endDate = previousTerms.leaseEndDate ?? previousTerms.leaseTerm ?? previousTerms.endDate;
+      if (previousTerms.discountRate !== undefined) contract.discountRate = Number(previousTerms.discountRate) || 0;
+      modification.status = "CANCELLED";
+      modification.cancelledAt = new Date().toISOString();
+      modification.cancelledBy = auditActor();
+      modification.journal = [];
+      recordModificationAuditEvent(contract, "MODIFICATION_ROLLED_BACK", modification, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
+      saveContracts(contracts);
+      try { await persistContractToApi(contract, true); }
+      catch (error) {
+        Object.keys(modification).forEach(key => delete modification[key]);
+        Object.assign(modification, oldValue);
+        Object.assign(contract, { monthlyPayment: currentTerms.payment, endDate: currentTerms.leaseEndDate, discountRate: currentTerms.discountRate });
+        saveContracts(contracts);
+        return { valid: false, errors: [`Backend'e kaydedilemedi: ${error?.message || error}`] };
+      }
+      return { valid: true, modification, rolledBack: true };
     }
 
     const oldStatus = modification.status;
@@ -11540,6 +11606,7 @@ ${renderAccountingCenterBulkPromo()}
                     ? `<button type="button" class="secondary-button" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>İptal Et</button>`
                     : ""
                 }
+                ${item.status === "APPLIED" && isAdminApprovalGranted() ? `<button type="button" class="secondary-button" data-mod-action="cancel" data-mod-id="${escapeHtml(item.id)}" title="Admin onayıyla geri al">Geri Al (Admin)</button>` : ""}
               </span>
             </div>
           `;
@@ -11829,6 +11896,7 @@ ${renderAccountingCenterBulkPromo()}
               ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Düzenle</button>` : ""}
               ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Uygula</button>` : ""}
               ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>İptal Et</button>` : ""}
+              ${item.status === "APPLIED" && isAdminApprovalGranted() ? `<button type="button" class="secondary-button" data-reass-action="cancel" data-reass-id="${escapeHtml(item.id)}" title="Admin onayıyla geri al">Geri Al (Admin)</button>` : ""}
             </span>
           </div>
         `;
