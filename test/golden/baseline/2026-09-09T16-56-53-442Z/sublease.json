@@ -1,0 +1,927 @@
+[
+  {
+    "error": null,
+    "fixtureId": "SUB-01",
+    "label": "OPERATING alt kiralama (TFRS 16.B58) — doğrusal gelir",
+    "output": {
+      "classification": "OPERATING",
+      "headLeaseRouCarryingAmount": 5520986.642332617,
+      "note": "TFRS 16.B58: Alt kiralama OPERATING sınıflandırıldığından ana kiradan doğan ROU defterden çıkarılmaz; ROU kendi itfa planına göre (bu modülün ana kira motorunda, DEĞİŞTİRİLMEDEN) itfa edilmeye devam eder. Alt kiralama geliri doğrusal (straight-line) esasla tanınır.",
+      "periodicJournalNote": "Her dönem: Dr 102 Banka (tahsilat) / Cr 649 Diğer Olağan Gelir (Alt Kiralama Geliri, doğrusal) — nakit ile doğrusal gelir farkı '380 Ertelenmiş Gelir' veya '181 Gelir Tahakkukları' hesabında izlenir.",
+      "rouAllocationRatio": 1,
+      "schedule": [
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 1
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 2
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 3
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 4
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 5
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 6
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 7
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 8
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 9
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 10
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 11
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 12
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 13
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 14
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 15
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 16
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 17
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 18
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 19
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 20
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 21
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 22
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 23
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 24
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 25
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 26
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 27
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 28
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 29
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 30
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 31
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 32
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 33
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 34
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 35
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 36
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 37
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 38
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 39
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 40
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 41
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 42
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 43
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 44
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 45
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 46
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 47
+        },
+        {
+          "cashReceived": 190000,
+          "date": "<TIMESTAMP>",
+          "deferredIncomeBalance": 0,
+          "incomeRecognized": 190000,
+          "period": 48
+        }
+      ],
+      "straightLineMonthlyIncome": 190000,
+      "totalContractualIncome": 9120000
+    }
+  },
+  {
+    "error": null,
+    "fixtureId": "SUB-02",
+    "label": "FINANCE alt kiralama — ROU türetilmesi + kısmi tahsis (%60)",
+    "output": {
+      "allocatedRouCarryingAmount": 3312591.99,
+      "classification": "FINANCE",
+      "headLeaseRouCarryingAmount": 5520986.642332617,
+      "inceptionJournal": [
+        {
+          "account": "Alt Kiralamada Net Yatırım (Kira Alacağı)",
+          "credit": 0,
+          "debit": 4524522.901533732
+        },
+        {
+          "account": "ROU - Kullanım Hakkı Varlığı (Devredilen Kısım)",
+          "credit": 3312591.99,
+          "debit": 0
+        },
+        {
+          "account": "679 Diğer Olağandışı Gelir (Alt Kiralama Satış Karı)",
+          "credit": 1211930.91,
+          "debit": 0
+        }
+      ],
+      "netInvestment": 4524522.901533732,
+      "note": "TFRS 16.B58: Alt kiralama FINANCE sınıflandırıldığından ana kiradan doğan ROU'nun devredilen kısmı defterden çıkarılır; yerine alt kiralamada net yatırım (kira alacağı) tanınır. Ana kira yükümlülüğü/ROU'su (kalan kısmı varsa) bu işlemden ETKİLENMEZ, ara kiracı için normal kiracı muhasebesiyle değişmeden devam eder.",
+      "rouAllocationRatio": 0.6,
+      "schedule": [
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4480122.99,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 75600.09,
+          "openingNetInvestment": 4524522.901533732,
+          "period": 1,
+          "principalReduction": 44399.91
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4434981.2,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 74858.21,
+          "openingNetInvestment": 4480122.99,
+          "period": 2,
+          "principalReduction": 45141.79
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4389085.14,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 74103.94,
+          "openingNetInvestment": 4434981.2,
+          "period": 3,
+          "principalReduction": 45896.06
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4342422.21,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 73337.07,
+          "openingNetInvestment": 4389085.14,
+          "period": 4,
+          "principalReduction": 46662.93
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4294979.59,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 72557.38,
+          "openingNetInvestment": 4342422.21,
+          "period": 5,
+          "principalReduction": 47442.62
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4246744.25,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 71764.66,
+          "openingNetInvestment": 4294979.59,
+          "period": 6,
+          "principalReduction": 48235.34
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4197702.95,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 70958.7,
+          "openingNetInvestment": 4246744.25,
+          "period": 7,
+          "principalReduction": 49041.3
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4147842.22,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 70139.27,
+          "openingNetInvestment": 4197702.95,
+          "period": 8,
+          "principalReduction": 49860.73
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4097148.37,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 69306.15,
+          "openingNetInvestment": 4147842.22,
+          "period": 9,
+          "principalReduction": 50693.85
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 4045607.47,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 68459.1,
+          "openingNetInvestment": 4097148.37,
+          "period": 10,
+          "principalReduction": 51540.9
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3993205.38,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 67597.91,
+          "openingNetInvestment": 4045607.47,
+          "period": 11,
+          "principalReduction": 52402.09
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3939927.7,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 66722.32,
+          "openingNetInvestment": 3993205.38,
+          "period": 12,
+          "principalReduction": 53277.68
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3885759.81,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 65832.11,
+          "openingNetInvestment": 3939927.7,
+          "period": 13,
+          "principalReduction": 54167.89
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3830686.83,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 64927.02,
+          "openingNetInvestment": 3885759.81,
+          "period": 14,
+          "principalReduction": 55072.98
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3774693.64,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 64006.81,
+          "openingNetInvestment": 3830686.83,
+          "period": 15,
+          "principalReduction": 55993.19
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3717764.86,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 63071.22,
+          "openingNetInvestment": 3774693.64,
+          "period": 16,
+          "principalReduction": 56928.78
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3659884.86,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 62120,
+          "openingNetInvestment": 3717764.86,
+          "period": 17,
+          "principalReduction": 57880
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3601037.74,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 61152.88,
+          "openingNetInvestment": 3659884.86,
+          "period": 18,
+          "principalReduction": 58847.12
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3541207.35,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 60169.61,
+          "openingNetInvestment": 3601037.74,
+          "period": 19,
+          "principalReduction": 59830.39
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3480377.26,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 59169.91,
+          "openingNetInvestment": 3541207.35,
+          "period": 20,
+          "principalReduction": 60830.09
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3418530.76,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 58153.5,
+          "openingNetInvestment": 3480377.26,
+          "period": 21,
+          "principalReduction": 61846.5
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3355650.87,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 57120.11,
+          "openingNetInvestment": 3418530.76,
+          "period": 22,
+          "principalReduction": 62879.89
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3291720.32,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 56069.45,
+          "openingNetInvestment": 3355650.87,
+          "period": 23,
+          "principalReduction": 63930.55
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3226721.56,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 55001.24,
+          "openingNetInvestment": 3291720.32,
+          "period": 24,
+          "principalReduction": 64998.76
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3160636.73,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 53915.17,
+          "openingNetInvestment": 3226721.56,
+          "period": 25,
+          "principalReduction": 66084.83
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3093447.69,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 52810.96,
+          "openingNetInvestment": 3160636.73,
+          "period": 26,
+          "principalReduction": 67189.04
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 3025136,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 51688.31,
+          "openingNetInvestment": 3093447.69,
+          "period": 27,
+          "principalReduction": 68311.69
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2955682.89,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 50546.89,
+          "openingNetInvestment": 3025136,
+          "period": 28,
+          "principalReduction": 69453.11
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2885069.29,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 49386.4,
+          "openingNetInvestment": 2955682.89,
+          "period": 29,
+          "principalReduction": 70613.6
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2813275.81,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 48206.52,
+          "openingNetInvestment": 2885069.29,
+          "period": 30,
+          "principalReduction": 71793.48
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2740282.73,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 47006.92,
+          "openingNetInvestment": 2813275.81,
+          "period": 31,
+          "principalReduction": 72993.08
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2666070.02,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 45787.29,
+          "openingNetInvestment": 2740282.73,
+          "period": 32,
+          "principalReduction": 74212.71
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2590617.29,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 44547.27,
+          "openingNetInvestment": 2666070.02,
+          "period": 33,
+          "principalReduction": 75452.73
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2513903.82,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 43286.53,
+          "openingNetInvestment": 2590617.29,
+          "period": 34,
+          "principalReduction": 76713.47
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2435908.55,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 42004.73,
+          "openingNetInvestment": 2513903.82,
+          "period": 35,
+          "principalReduction": 77995.27
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2356610.06,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 40701.51,
+          "openingNetInvestment": 2435908.55,
+          "period": 36,
+          "principalReduction": 79298.49
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2275986.57,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 39376.51,
+          "openingNetInvestment": 2356610.06,
+          "period": 37,
+          "principalReduction": 80623.49
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2194015.95,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 38029.38,
+          "openingNetInvestment": 2275986.57,
+          "period": 38,
+          "principalReduction": 81970.62
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2110675.68,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 36659.73,
+          "openingNetInvestment": 2194015.95,
+          "period": 39,
+          "principalReduction": 83340.27
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 2025942.88,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 35267.2,
+          "openingNetInvestment": 2110675.68,
+          "period": 40,
+          "principalReduction": 84732.8
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1939794.29,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 33851.41,
+          "openingNetInvestment": 2025942.88,
+          "period": 41,
+          "principalReduction": 86148.59
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1852206.24,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 32411.95,
+          "openingNetInvestment": 1939794.29,
+          "period": 42,
+          "principalReduction": 87588.05
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1763154.69,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 30948.45,
+          "openingNetInvestment": 1852206.24,
+          "period": 43,
+          "principalReduction": 89051.55
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1672615.18,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 29460.49,
+          "openingNetInvestment": 1763154.69,
+          "period": 44,
+          "principalReduction": 90539.51
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1580562.85,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 27947.67,
+          "openingNetInvestment": 1672615.18,
+          "period": 45,
+          "principalReduction": 92052.33
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1486972.42,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 26409.57,
+          "openingNetInvestment": 1580562.85,
+          "period": 46,
+          "principalReduction": 93590.43
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1391818.19,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 24845.77,
+          "openingNetInvestment": 1486972.42,
+          "period": 47,
+          "principalReduction": 95154.23
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1295074.03,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 23255.84,
+          "openingNetInvestment": 1391818.19,
+          "period": 48,
+          "principalReduction": 96744.16
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1196713.38,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 21639.35,
+          "openingNetInvestment": 1295074.03,
+          "period": 49,
+          "principalReduction": 98360.65
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 1096709.22,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 19995.84,
+          "openingNetInvestment": 1196713.38,
+          "period": 50,
+          "principalReduction": 100004.16
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 995034.09,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 18324.87,
+          "openingNetInvestment": 1096709.22,
+          "period": 51,
+          "principalReduction": 101675.13
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 891660.08,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 16625.99,
+          "openingNetInvestment": 995034.09,
+          "period": 52,
+          "principalReduction": 103374.01
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 786558.8,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 14898.72,
+          "openingNetInvestment": 891660.08,
+          "period": 53,
+          "principalReduction": 105101.28
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 679701.38,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 13142.58,
+          "openingNetInvestment": 786558.8,
+          "period": 54,
+          "principalReduction": 106857.42
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 571058.49,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 11357.11,
+          "openingNetInvestment": 679701.38,
+          "period": 55,
+          "principalReduction": 108642.89
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 460600.29,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 9541.8,
+          "openingNetInvestment": 571058.49,
+          "period": 56,
+          "principalReduction": 110458.2
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 348296.44,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 7696.15,
+          "openingNetInvestment": 460600.29,
+          "period": 57,
+          "principalReduction": 112303.85
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 234116.11,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 5819.67,
+          "openingNetInvestment": 348296.44,
+          "period": 58,
+          "principalReduction": 114180.33
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 118027.95,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 3911.84,
+          "openingNetInvestment": 234116.11,
+          "period": 59,
+          "principalReduction": 116088.16
+        },
+        {
+          "cashReceived": 120000,
+          "closingNetInvestment": 0.07,
+          "date": "<TIMESTAMP>",
+          "interestIncome": 1972.12,
+          "openingNetInvestment": 118027.95,
+          "period": 60,
+          "principalReduction": 118027.88
+        }
+      ],
+      "sellingProfitLoss": 1211930.91
+    }
+  }
+]
