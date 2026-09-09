@@ -140,6 +140,44 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       2
     );
   });
+
+  test("takvim tahakkuku kullanan USD sözleşmenin TMS29 ROU hareketleri de TRY'ye çevrilir", () => {
+    tfrs16.contracts.push({
+      id: "FX-TMS29-CALENDAR",
+      company: "Currency Test A.Ş.",
+      supplier: "Test Supplier",
+      assetClass: "Makine",
+      monthlyPayment: 10000,
+      discountRate: 5,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears",
+      status: "active",
+      currency: "USD",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date("2026-01-01"),
+      new Date("2026-06-30")
+    );
+    const totals = prepared.tms29.totals;
+
+    expect(prepared.tms29.computedCount).toBe(1);
+    expect(totals.rouOpeningNominal).toBeGreaterThan(1_000_000);
+    expect(totals.rouClosingNominalPeriod).toBeCloseTo(
+      totals.rouOpeningNominal + totals.rouEntriesNominal - totals.rouDepreciationNominal,
+      2
+    );
+    expect(totals.rouClosingRestatedPeriod).toBeCloseTo(
+      totals.rouOpeningRestated + totals.rouEntriesRestated - totals.rouDepreciationRestated,
+      2
+    );
+  });
 });
 
 describe("v191RenderAssetNoteHtml / v191RenderLiabilityNoteHtml / v191RenderLiquidityNoteHtml — bağımsız çağrılabilirlik", () => {
