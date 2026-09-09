@@ -18696,10 +18696,11 @@ ${renderPaymentScheduleFooterContainers()}
   ========================================================== */
 
   function exportRouAssetMovementNote(startDate, endDate) {
-    const report = getRuoAssetRollForwardReport(startDate, endDate);
-    const dataRows = Array.isArray(report.rows) ? report.rows.filter(r => r.status !== "ERROR") : [];
+    const prepared = v191PrepareFinancialReportingData(rptResolveDate(startDate), rptResolveDate(endDate));
+    const report = prepared.rouReport;
+    const dataRows = prepared.rouRows || [];
     if (!dataRows.length) return false;
-    const totals = report.totals || {};
+    const totals = prepared.rouTotalsRow?.[0] || {};
     const rows = dataRows.map(r => ({
       "Sözleşme": r.contractId,
       "Şirket": r.company,
@@ -18837,10 +18838,11 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function exportLeaseLiabilityMovementNote(startDate, endDate) {
-    const report = getLeaseLiabilityRollForwardReport(startDate, endDate);
-    const dataRows = Array.isArray(report.rows) ? report.rows.filter(r => r.status !== "ERROR") : [];
+    const prepared = v191PrepareFinancialReportingData(rptResolveDate(startDate), rptResolveDate(endDate));
+    const report = prepared.liabReport;
+    const dataRows = prepared.liabRows || [];
     if (!dataRows.length) return false;
-    const totals = report.totals || {};
+    const totals = prepared.liabTotalsRow?.[0] || {};
     const rows = dataRows.map(r => ({
       "Sözleşme": r.contractId,
       "Şirket": r.company,
@@ -18853,6 +18855,7 @@ ${renderPaymentScheduleFooterContainers()}
       "Modifikasyon Etkisi": r.modificationAdjustment,
       "Reassessment Etkisi": r.reassessmentAdjustment,
       "Diğer Düzeltme": r.otherAdjustment,
+      "TMS 21 Çevrim Farkı": r.fxTranslationAdjustment,
       "Kapanış Bakiyesi": r.closingLiability,
       "Durum": r.status
     }));
@@ -18861,14 +18864,16 @@ ${renderPaymentScheduleFooterContainers()}
       "Açılış Bakiyesi": totals.openingLiability, "Girişler": totals.entriesLiability, "Faiz Gideri (+)": totals.interest,
       "Ödemeler (-)": -Math.abs(totals.payments || 0), "Modifikasyon Etkisi": totals.modificationAdjustment,
       "Reassessment Etkisi": totals.reassessmentAdjustment, "Diğer Düzeltme": totals.otherAdjustment,
+      "TMS 21 Çevrim Farkı": totals.fxTranslationAdjustment,
       "Kapanış Bakiyesi": totals.closingLiability,
       "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
     });
-    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]).map(g => ({
+    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"]).map(g => ({
       "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
       "Açılış Bakiyesi": g.openingLiability, "Girişler": g.entriesLiability, "Faiz Gideri (+)": g.interest, "Ödemeler (-)": -Math.abs(g.payments),
       "Modifikasyon Etkisi": g.modificationAdjustment, "Reassessment Etkisi": g.reassessmentAdjustment,
-      "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingLiability
+      "Diğer Düzeltme": g.otherAdjustment, "TMS 21 Çevrim Farkı": g.fxTranslationAdjustment,
+      "Kapanış Bakiyesi": g.closingLiability
     }));
     return v191ExportSheetsToFile([
       { rows, sheetName: "Yükümlülük Hareket" },
@@ -18877,7 +18882,7 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function exportLeaseLiquidityRiskNote(reportingDate) {
-    const report = getLeaseLiquidityRiskDisclosure(reportingDate);
+    const report = v191BuildPresentationLiquidityDisclosure(reportingDate, getReportingCurrency());
     const row = Array.isArray(report.rows) ? report.rows[0] : null;
     if (!row) return false;
     const bucketCol = id => rptRound(row.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
@@ -18890,8 +18895,7 @@ ${renderPaymentScheduleFooterContainers()}
       "1-5 yıl arası": bucketCol("1_TO_5_YEARS"),
       "5 yıldan uzun": bucketCol("OVER_5_YEARS")
     };
-    const companyReport = getLeaseLiquidityRiskDisclosure(reportingDate, { byCompany: true });
-    const companyRows = (Array.isArray(companyReport.rows) ? companyReport.rows : []).map(r => {
+    const companyRows = (Array.isArray(report.byCompanyRows) ? report.byCompanyRows : []).map(r => {
       const cBucket = id => rptRound(r.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
       return {
         "Şirket": r.company,
@@ -18907,6 +18911,101 @@ ${renderPaymentScheduleFooterContainers()}
       { rows: [mainRow], sheetName: "Likidite Riski (Kiralama)" },
       { rows: companyRows, sheetName: "Şirket Bazında" }
     ], "Kiralama_Yukumlulukleri_Likidite_Riski_Dipnotu");
+  }
+
+  /**
+   * TFRS 7.39 vade analizini şirketin sunum para biriminde üretir.
+   * Yabancı para yükümlülüklerinin defter değeri ve gelecekteki sözleşmesel
+   * nakit akışları raporlama tarihindeki kapanış kuruyla çevrilir. Böylece
+   * dipnot başlığı ile tutarlar aynı ölçüm biriminde kalır.
+   */
+  function v191BuildPresentationLiquidityDisclosure(reportingDate, targetCurrency) {
+    const d = rptResolveDate(reportingDate);
+    const presentationCurrency = String(targetCurrency || getReportingCurrency() || "TRY").toUpperCase();
+    const maturity = getLeasePaymentMaturityAnalysis(d, { byContract: true });
+    const carrying = getCurrentNonCurrentReport(d);
+    const carryingByContract = new Map((carrying.rows || [])
+      .filter(row => row.status !== "ERROR")
+      .map(row => [String(row.contractId), row]));
+    const errors = [];
+    const contractRows = [];
+
+    (maturity.rows || []).forEach(row => {
+      const contract = rptSafeContracts().find(item => String(item.id) === String(row.contractId));
+      const sourceCurrency = String(contract?.currency || row.currency || presentationCurrency).toUpperCase();
+      let conversionFailed = false;
+      const granular = (row.buckets || []).map(bucket => {
+        const converted = convertAmountToReportingCurrency(
+          rptNumber(bucket.cashPayment), sourceCurrency, d, presentationCurrency
+        );
+        if (converted?.error) {
+          errors.push(`${row.contractId}: ${converted.error}`);
+          conversionFailed = true;
+        }
+        return {
+          bucket: bucket.bucket,
+          cashPayment: converted?.error ? 0 : rptRound(converted.value)
+        };
+      });
+      const carryingRow = carryingByContract.get(String(row.contractId));
+      const carryingConverted = convertAmountToReportingCurrency(
+        rptNumber(carryingRow?.totalLiability), sourceCurrency, d, presentationCurrency
+      );
+      if (carryingConverted?.error) errors.push(`${row.contractId}: ${carryingConverted.error}`);
+      if (carryingConverted?.error || conversionFailed) return;
+      const buckets = rptRemapToDisclosureBuckets(granular);
+      contractRows.push({
+        contractId: row.contractId,
+        company: row.company || contract?.company || "",
+        label: "Kiralama yükümlülükleri",
+        currency: presentationCurrency,
+        carryingValue: rptRound(carryingConverted.value),
+        contractualCashOutflowsTotal: rptRound(buckets.reduce((sum, bucket) => sum + bucket.cashOutflow, 0)),
+        buckets
+      });
+    });
+
+    const aggregateRows = rows => {
+      const buckets = DISCLOSURE_RISK_BUCKETS.map(bucket => ({
+        bucket: bucket.id,
+        bucketName: bucket.name,
+        cashOutflow: rptRound(rows.reduce((sum, row) =>
+          sum + rptNumber((row.buckets || []).find(item => item.bucket === bucket.id)?.cashOutflow), 0))
+      }));
+      return {
+        label: "Kiralama yükümlülükleri",
+        currency: presentationCurrency,
+        carryingValue: rptRound(rows.reduce((sum, row) => sum + rptNumber(row.carryingValue), 0)),
+        contractualCashOutflowsTotal: rptRound(buckets.reduce((sum, bucket) => sum + bucket.cashOutflow, 0)),
+        buckets
+      };
+    };
+    const portfolioRow = aggregateRows(contractRows);
+    const byCompanyRows = Array.from(new Set(contractRows.map(row => row.company))).map(company => ({
+      company,
+      ...aggregateRows(contractRows.filter(row => row.company === company))
+    }));
+    const difference = rptRound(portfolioRow.contractualCashOutflowsTotal - portfolioRow.carryingValue);
+    const report = {
+      name: "Lease Liability Liquidity Risk Disclosure (TFRS 7.39)",
+      reportingDate: rptIsoDate(d),
+      presentationCurrency,
+      rows: [portfolioRow],
+      byCompanyRows,
+      contractRows,
+      totals: {
+        carryingValue: portfolioRow.carryingValue,
+        contractualCashOutflowsTotal: portfolioRow.contractualCashOutflowsTotal
+      },
+      reconciliation: {
+        undiscountedInterestComponent: difference,
+        passed: portfolioRow.contractualCashOutflowsTotal >= portfolioRow.carryingValue - REPORTING_TOLERANCE
+      },
+      warnings: [],
+      errors: Array.from(new Set([...(maturity.errors || []), ...(carrying.errors || []), ...errors]))
+    };
+    if (!report.reconciliation.passed) report.warnings.push("Sözleşme uyarınca nakit çıkışları toplamı, defter değerinin altında kaldı; veri tutarlılığını kontrol edin.");
+    return report;
   }
 
   function v191ExportRowsToFile(rows, fileBaseName, sheetName) {
@@ -23190,7 +23289,8 @@ ${renderPaymentScheduleFooterContainers()}
     const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
-    const liquidityDisclosure = data.liquidityRiskDisclosure || getLeaseLiquidityRiskDisclosure(effectivePeriodEnd);
+    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
+    const liquidityDisclosure = v191BuildPresentationLiquidityDisclosure(effectivePeriodEnd, presentationCurrency);
     const liquidityDisclosureRow = (liquidityDisclosure.rows || [])[0] || null;
     const v191LiquidityBucketValue = (row, id) => rptRound((row?.buckets || []).find(b => b.bucket === id)?.cashOutflow || 0);
     const liquidityRows = liquidityDisclosureRow ? [{
@@ -23220,7 +23320,6 @@ ${renderPaymentScheduleFooterContainers()}
     // the company's presentation currency. TMS 21 requires balance-sheet
     // balances to use their balance date and income/cash movements to use
     // their transaction or accrual dates. TMS 29 continues to use raw rows.
-    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     const translateNominalRows = (rows, keys) => (rows || []).map(row => {
       const sourceCurrency = String(row.currency || presentationCurrency).toUpperCase();
       if (sourceCurrency === presentationCurrency) return { ...row, currency: presentationCurrency };
@@ -23255,6 +23354,15 @@ ${renderPaymentScheduleFooterContainers()}
     });
     const rouRows = translateNominalRows(rawRouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const liabRows = translateNominalRows(rawLiabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    liabRows.forEach(row => {
+      row.fxTranslationAdjustment = rptRound(
+        rptNumber(row.closingLiability) - (
+          rptNumber(row.openingLiability) + rptNumber(row.entriesLiability) + rptNumber(row.interest)
+          - rptNumber(row.payments) + rptNumber(row.modificationAdjustment)
+          + rptNumber(row.reassessmentAdjustment) + rptNumber(row.otherAdjustment)
+        )
+      );
+    });
     rouRows.forEach(row => {
       const r = tms29.results.get(row.contractId);
       row.inflationNetAdjustment = r?.ok ? r.netAdjustment : null;
@@ -23266,13 +23374,28 @@ ${renderPaymentScheduleFooterContainers()}
       row.inflationStatus = r?.ok ? "OK" : "Endeks Eksik";
     });
 
-    const rouTotalsRow = rouReport.totals ? [{ ...rouReport.totals, contractId: "TOPLAM", company: "", status: rouReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", inflationNetAdjustment: tms29.totalNetAdjustment }] : [];
+    const rouSumKeys = ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"];
+    const translatedRouTotals = rptAggregateRows(rouRows, rouSumKeys);
+    const rouTotalsRow = rouRows.length ? [{ ...translatedRouTotals, contractId: "TOPLAM", company: "", status: "MUTABIK", inflationNetAdjustment: tms29.totalNetAdjustment }] : [];
     const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
 
-    const liabTotalsRow = liabReport.totals ? [{ ...liabReport.totals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation?.passed ? "MUTABIK" : "FARK VAR", monetaryGainLoss: tms29.totalMonetaryGainLoss }] : [];
-    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    const liabSumKeys = ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"];
+    const translatedLiabTotals = rptAggregateRows(liabRows, liabSumKeys);
+    const liabPresentationDifference = rptRound(
+      translatedLiabTotals.openingLiability + translatedLiabTotals.entriesLiability + translatedLiabTotals.interest
+      - translatedLiabTotals.payments + translatedLiabTotals.modificationAdjustment
+      + translatedLiabTotals.reassessmentAdjustment + translatedLiabTotals.otherAdjustment
+      + translatedLiabTotals.fxTranslationAdjustment - translatedLiabTotals.closingLiability
+    );
+    liabReport.reconciliation = {
+      formula: "Opening liability + Entries + Interest - Payments +/- Modifications +/- Reassessments +/- Other + TMS 21 FX = Closing liability",
+      difference: liabPresentationDifference,
+      passed: Math.abs(liabPresentationDifference) <= REPORTING_TOLERANCE
+    };
+    const liabTotalsRow = liabRows.length ? [{ ...translatedLiabTotals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation.passed ? "MUTABIK" : "FARK VAR", monetaryGainLoss: tms29.totalMonetaryGainLoss }] : [];
+    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, liabSumKeys);
+    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, liabSumKeys);
 
     const rouDetailColumns = [
       { key: "contractId", label: "Sözleşme" },
@@ -23297,6 +23420,7 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "modificationAdjustment", label: "Modifikasyon" },
       { key: "reassessmentAdjustment", label: "Reassessment" },
       { key: "otherAdjustment", label: "Diğer" },
+      { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
       { key: "closingLiability", label: "Kapanış" },
       { key: "monetaryGainLoss", label: "Parasal Kazanç/(Kayıp), Net", render: row => row.monetaryGainLoss === null ? `<span style="color:#94a3b8;">Endeks Eksik</span>` : v191Value(row.monetaryGainLoss) },
       { key: "status", label: "Durum" }
@@ -23416,6 +23540,7 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "modificationAdjustment", label: "Modifikasyon" },
         { key: "reassessmentAdjustment", label: "Reassessment" },
         { key: "otherAdjustment", label: "Diğer" },
+        { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
         { key: "closingLiability", label: "Kapanış" }
       ])}
       <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet (${v191Escape(presentationCurrency)})</h4>
@@ -23429,9 +23554,10 @@ ${renderPaymentScheduleFooterContainers()}
         { key: "modificationAdjustment", label: "Modifikasyon" },
         { key: "reassessmentAdjustment", label: "Reassessment" },
         { key: "otherAdjustment", label: "Diğer" },
+        { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
         { key: "closingLiability", label: "Kapanış" }
       ])}
-      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"])}
+      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"])}
       ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
       ${v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
     </div>`;
