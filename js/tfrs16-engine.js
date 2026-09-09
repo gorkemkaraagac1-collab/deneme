@@ -22908,7 +22908,7 @@ ${renderPaymentScheduleFooterContainers()}
       if (!contract) { results.set(row.contractId, { ok: false, error: "Sözleşme bulunamadı." }); missingCount++; return; }
       try {
         const restatement = applyTMS29Restatement(contract, rpMonth, periodStartMonth);
-        const netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
+        let netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
         const rrf = restatement?.rouRollForward;
         const lrf = restatement?.liabilityRollForward;
         // TMS 29 ROU is a non-monetary balance and must be presented in the
@@ -22923,10 +22923,7 @@ ${renderPaymentScheduleFooterContainers()}
           // metadata'sı eksik olsa bile global raporlama para birimini
           // kullanarak FX sözleşmelerini işlem para biriminde bırakma.
           const fn = String(getReportingCurrency() || resolveContractFunctionalCurrency(contract) || DEFAULT_FUNCTIONAL_CURRENCY).toUpperCase();
-          const engineR = calculateLeaseEngine(contract);
-          const rawClosing = Number(rrf.rouClosingNominalPeriod) || 0;
-          const rawScale = Math.abs(Number(engineR?.rouAssets) || 0);
-          if (tx !== fn && rawScale > 0 && Math.abs(rawClosing) <= rawScale * 2) {
+          if (tx !== fn && restatement?.totals?.precisionSource === "SCHEDULE_ROWS") {
             const direct = typeof convertAmountToReportingCurrency === "function"
               ? convertAmountToReportingCurrency(1, tx, contract.startDate, fn)
               : null;
@@ -22937,9 +22934,31 @@ ${renderPaymentScheduleFooterContainers()}
             const rate = direct && !direct.error && Number(direct.value) > 0
               ? Number(direct.value)
               : (!quoted?.error && Number(quoted?.rate) > 0 ? Number(quoted.rate) : null);
-            if (rate) ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated", "rouClosingNominalPeriod", "rouClosingRestatedPeriod"].forEach(k => {
-              if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
-            });
+            if (rate) {
+              // Legacy schedules can contain a mixed-unit closing field after
+              // an applied modification/reassessment: opening and depreciation
+              // remain in transaction currency while rouClosing is already in
+              // functional currency. Converting every field therefore double
+              // translates the closing balance. Translate the movement inputs
+              // and rebuild both closings from the roll-forward identity.
+              ["rouOpeningNominal", "rouOpeningRestated", "rouEntriesNominal", "rouEntriesRestated", "rouDepreciationNominal", "rouDepreciationRestated"].forEach(k => {
+                if (Object.prototype.hasOwnProperty.call(rrf, k)) rrf[k] = Number(rrf[k] || 0) * rate;
+              });
+              rrf.rouClosingNominalPeriod =
+                Number(rrf.rouOpeningNominal || 0) +
+                Number(rrf.rouEntriesNominal || 0) -
+                Number(rrf.rouDepreciationNominal || 0);
+              rrf.rouClosingRestatedPeriod =
+                Number(rrf.rouOpeningRestated || 0) +
+                Number(rrf.rouEntriesRestated || 0) -
+                Number(rrf.rouDepreciationRestated || 0);
+              netAdjustment = rrf.rouClosingRestatedPeriod - rrf.rouClosingNominalPeriod;
+              if (restatement?.totals) {
+                restatement.totals.nominalROUClosing = rrf.rouClosingNominalPeriod;
+                restatement.totals.restatedROUClosing = rrf.rouClosingRestatedPeriod;
+                restatement.totals.netAdjustment = netAdjustment;
+              }
+            }
           }
         }
         results.set(row.contractId, {
