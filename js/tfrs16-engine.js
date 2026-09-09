@@ -11335,6 +11335,14 @@ ${renderAccountingCenterBulkPromo()}
         `${year} - ${
           Math.ceil(month / 3)
         }. Çeyrek Muhasebe Fişi`;
+    } else if (period === "custom" && customStartValue && customEndValue) {
+      const customStart = new Date(`${customStartValue}T00:00:00`);
+      const customEnd = new Date(`${customEndValue}T00:00:00`);
+      title = !Number.isNaN(customStart.getTime()) && !Number.isNaN(customEnd.getTime())
+        ? `Muhasebe Fişi — ${formatDate(customStart)} - ${formatDate(customEnd)}`
+        : "Muhasebe Fişi";
+    } else {
+      title = "Muhasebe Fişi";
     }
 
 
@@ -12156,14 +12164,6 @@ ${renderAccountingCenterBulkPromo()}
               <option value="quarterly">Çeyreklik</option>
               <option value="annual">Yıllık</option>
             </select>
-            <div id="accountingCustomRange" style="display:none;gap:8px;align-items:end;margin-top:8px;">
-              <label style="font-size:10px;color:#64748b;flex:1;">Başlangıç
-                <input id="accountingCustomStart" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-              </label>
-              <label style="font-size:10px;color:#64748b;flex:1;">Bitiş
-                <input id="accountingCustomEnd" type="date" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-              </label>
-            </div>
           </div>
 
 
