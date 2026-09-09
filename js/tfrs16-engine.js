@@ -10026,11 +10026,6 @@ document.addEventListener("DOMContentLoaded", () => {
         contract
       );
 
-    const contractAuditEvents =
-      typeof getAuditTrail === "function"
-        ? getAuditTrail(contract.id)
-        : [];
-
     /*
       V16.6 FIX — GK Advisory review
       -------------------------------------------------------
@@ -13459,6 +13454,11 @@ ${renderPaymentScheduleFooterContainers()}
       calculateLease(
         contract
       );
+
+    const contractAuditEvents =
+      typeof getAuditTrail === "function"
+        ? getAuditTrail(contract.id)
+        : [];
 
     const modal =
       document.getElementById(
