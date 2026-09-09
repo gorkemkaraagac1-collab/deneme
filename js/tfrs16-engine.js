@@ -3419,7 +3419,10 @@ document.addEventListener("DOMContentLoaded", () => {
   ) {
     const historical = (currentSchedule || []).filter(item => {
       const date = parseDate(item.date);
-      return date && date.getTime() <= effectiveDate.getTime();
+      // The effective date belongs to the revised schedule. This is
+      // essential for advance payments: retaining the old row on the same
+      // date makes the new payment amount start one period late.
+      return date && date.getTime() < effectiveDate.getTime();
     });
 
     let rou = Math.max(0, Number(revisedROU) || 0);
@@ -7719,17 +7722,22 @@ document.addEventListener("DOMContentLoaded", () => {
     month,
     period
   ) {
+    // Always use the effective event-aware schedule.  The headline contract
+    // terms are mutated after an applied modification/reassessment; using
+    // calculateLease() here would retroactively apply the latest payment to
+    // earlier months and make period journals disagree with the disclosures.
+    const resolved = typeof resolveContractScheduleSource === "function"
+      ? resolveContractScheduleSource(contract)
+      : { schedule: calculateLease(contract).schedule || [] };
+    const schedule = Array.isArray(resolved.schedule) ? resolved.schedule : [];
 
-    const engine =
-      calculateLease(contract);
-
-    if (!engine.schedule.length) {
+    if (!schedule.length) {
       return [];
     }
 
     if (period === "monthly") {
 
-      return engine.schedule.filter(
+      return schedule.filter(
         item =>
           item.year === year &&
           item.month === month
@@ -7748,7 +7756,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const endMonth =
         quarter * 3;
 
-      return engine.schedule.filter(
+      return schedule.filter(
         item =>
           item.year === year &&
           item.month >= startMonth &&
@@ -7759,7 +7767,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (period === "annual") {
 
-      return engine.schedule.filter(
+      return schedule.filter(
         item =>
           item.year === year
       );
@@ -14744,8 +14752,11 @@ ${renderPaymentScheduleFooterContainers()}
 
     for (let index = 0; index < activeContracts.length; index++) {
       const contract = activeContracts[index];
+      const effectiveSchedule = typeof resolveContractScheduleSource === "function"
+        ? resolveContractScheduleSource(contract).schedule
+        : calculateLease(contract).schedule;
       const selected = period === "custom"
-        ? calculateLease(contract).schedule.filter(item => {
+        ? effectiveSchedule.filter(item => {
             const d = parseDate(item.date);
             return d && d >= periodDates.periodStart && d <= periodDates.periodEnd;
           })
