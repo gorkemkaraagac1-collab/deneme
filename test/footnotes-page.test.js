@@ -64,6 +64,80 @@ describe("v191PrepareFinancialReportingData — paylaşılan veri hazırlama", (
   });
 });
 
+describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
+  let tfrs16;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    localStorage.setItem("access_token", "fake-token-for-test");
+    localStorage.setItem("gk_tfrs16_v23_fx_rates_v1", JSON.stringify([
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2025-01-01", rateType: "CLOSING", rate: 35, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-06-30", rateType: "CLOSING", rate: 40, status: "APPROVED" }
+    ]));
+    tfrs16 = loadTfrs16();
+    tfrs16.setReportingCurrency("TRY");
+
+    const months = [];
+    for (let y = 2025; y <= 2026; y++) {
+      const lastMonth = y === 2026 ? 6 : 12;
+      for (let m = 1; m <= lastMonth; m++) months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: months.map(month => ({
+        month, index: 100, source: "MANUAL_OVERRIDE", verificationStatus: "VERIFIED"
+      })) })
+    });
+    await tfrs16.refreshInflationIndexCacheFromBackend(months);
+    fetchSpy.mockRestore();
+  });
+
+  test("uygulanmış değişiklik bulunan USD sözleşmenin TMS29 ROU hareketleri TRY'ye bir kez çevrilir", () => {
+    tfrs16.contracts.push({
+      id: "FX-TMS29-LEGACY",
+      company: "Currency Test A.Ş.",
+      supplier: "Test Supplier",
+      assetClass: "Makine",
+      monthlyPayment: 10000,
+      discountRate: 5,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears",
+      status: "active",
+      currency: "USD",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: [{
+        id: "FUTURE-REASS",
+        status: "APPLIED",
+        type: "FIXED_PAYMENT_CHANGE",
+        effectiveDate: "2027-01-01",
+        newTerms: { payment: 12000, leaseTerm: "2027-12-31", discountRate: 5 }
+      }]
+    });
+
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date("2026-01-01"),
+      new Date("2026-06-30")
+    );
+    const totals = prepared.tms29.totals;
+
+    expect(prepared.tms29.computedCount).toBe(1);
+    expect(totals.rouOpeningNominal).toBeGreaterThan(1_000_000);
+    expect(totals.rouOpeningRestated).toBeCloseTo(totals.rouOpeningNominal, 2);
+    expect(totals.rouClosingNominalPeriod).toBeCloseTo(
+      totals.rouOpeningNominal + totals.rouEntriesNominal - totals.rouDepreciationNominal,
+      2
+    );
+    expect(totals.rouClosingRestatedPeriod).toBeCloseTo(
+      totals.rouOpeningRestated + totals.rouEntriesRestated - totals.rouDepreciationRestated,
+      2
+    );
+  });
+});
+
 describe("v191RenderAssetNoteHtml / v191RenderLiabilityNoteHtml / v191RenderLiquidityNoteHtml — bağımsız çağrılabilirlik", () => {
   let tfrs16;
   beforeEach(() => {
