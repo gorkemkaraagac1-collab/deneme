@@ -2574,7 +2574,16 @@ document.addEventListener("DOMContentLoaded", () => {
         ? priorRow.rouClosing
         : (fullSchedule.length ? fullSchedule[0].rouOpening : grossROU);
 
-      const ratioOpeningToRp = getInflationRatio(effectivePeriodStart, rp);
+      // Dönem başında mevcut bir sözleşmenin açılışı, seçilen dönemin
+      // ilk gününden önceki son kapanış bakiyesidir. Örneğin Aralık
+      // 2025 kapanışı 1.1.2026 hareket tablosunda açılış olarak yer
+      // alıyorsa, satın alma gücü düzeltmesi Ocak değil Aralık endeksi
+      // ile başlatılmalıdır. Dönem içinde başlayan sözleşmelerde ise
+      // başlangıç ayı doğru baz olarak korunur.
+      const openingInflationBaseMonth = priorRow
+        ? `${priorRow.year}-${String(priorRow.month).padStart(2, "0")}`
+        : acquisitionMonth;
+      const ratioOpeningToRp = getInflationRatio(openingInflationBaseMonth, rp);
       let liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
       let rouOpeningRestated = rouOpeningNominal * ratioOpeningToRp;
 
