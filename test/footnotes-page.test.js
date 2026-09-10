@@ -71,7 +71,15 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
     localStorage.clear();
     localStorage.setItem("access_token", "fake-token-for-test");
     localStorage.setItem("gk_tfrs16_v23_fx_rates_v1", JSON.stringify([
-      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2025-01-01", rateType: "CLOSING", rate: 35, status: "APPROVED" },
+      // 01.01.2025 is a holiday.  Historical-cost conversion must use the
+      // latest published quote on or before commencement.
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2024-12-31", rateType: "CLOSING", rate: 35, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2025-12-31", rateType: "CLOSING", rate: 36, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-01-30", rateType: "CLOSING", rate: 36.5, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-02-27", rateType: "CLOSING", rate: 37, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-03-31", rateType: "CLOSING", rate: 37.5, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-04-30", rateType: "CLOSING", rate: 38, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-05-29", rateType: "CLOSING", rate: 39, status: "APPROVED" },
       { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-06-30", rateType: "CLOSING", rate: 40, status: "APPROVED" }
     ]));
     tfrs16 = loadTfrs16();
@@ -241,6 +249,56 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       prepared.tms29.results.get("FX-DISCLOSURE-TRY").rouClosingNominalPeriod,
       0
     );
+  });
+
+  test("TMS29 yükümlülük hareketinde TMS21 farkı parasal K/Z'den ayrı gösterilir", async () => {
+    const months = [];
+    for (let y = 2025; y <= 2026; y++) {
+      const lastMonth = y === 2026 ? 6 : 12;
+      for (let m = 1; m <= lastMonth; m++) months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: months.map((month, index) => ({
+        month, index: 100 + index * 2, source: "MANUAL_OVERRIDE", verificationStatus: "VERIFIED"
+      })) })
+    });
+    await tfrs16.refreshInflationIndexCacheFromBackend(months);
+    fetchSpy.mockRestore();
+
+    tfrs16.contracts.push({
+      id: "FX-TMS21-TMS29-SEPARATE",
+      company: "Currency Test A.Ş.", supplier: "Test Supplier", assetClass: "Makine",
+      monthlyPayment: 10000, discountRate: 5,
+      startDate: "2025-01-01", endDate: "2027-12-31",
+      paymentFrequency: "monthly", paymentTiming: "arrears", status: "active",
+      currency: "USD", functionalCurrency: "TRY", reportingCurrency: "TRY",
+      modifications: [], reassessments: []
+    });
+
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    const result = prepared.tms29.results.get("FX-TMS21-TMS29-SEPARATE");
+    const lrf = result.liabilityRollForward;
+
+    expect(Math.abs(lrf.liabilityFxTranslationNominal)).toBeGreaterThan(0);
+    expect(Math.abs(lrf.liabilityFxTranslationRestated)).toBeGreaterThan(0);
+    expect(
+      lrf.liabilityOpeningRestated + lrf.liabilityEntriesRestated
+      + lrf.liabilityModificationRestated + lrf.liabilityReassessmentRestated
+      + lrf.liabilityInterestRestated - lrf.liabilityPaymentsRestated
+      + lrf.liabilityFxTranslationRestated + lrf.liabilityMonetaryGainLoss
+    ).toBeCloseTo(lrf.liabilityClosingNominal, 2);
+
+    const html = tfrs16.v191RenderLiabilityNoteHtml({
+      liabRows: prepared.liabRows, liabTotalsRow: prepared.liabTotalsRow,
+      liabByAssetClass: prepared.liabByAssetClass, liabByCurrency: prepared.liabByCurrency,
+      liabDetailColumns: prepared.liabDetailColumns, liabReport: prepared.liabReport,
+      periodStart: prepared.periodStart, periodEnd: prepared.periodEnd,
+      periodLabel: prepared.periodLabel, tms29: prepared.tms29
+    });
+    expect(html).toMatch(/TMS 21 Çevrim Farkı/);
   });
 });
 

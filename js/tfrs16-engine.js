@@ -2622,6 +2622,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let liabilityInterestNominal = 0, liabilityInterestRestated = 0;
       let liabilityPaymentsNominal = 0, liabilityPaymentsRestated = 0;
+      let liabilityFxTranslationNominal = 0, liabilityFxTranslationRestated = 0;
       let rouDepreciationNominal = 0, rouDepreciationRestated = 0;
       periodRows.forEach(row => {
         const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
@@ -2644,14 +2645,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const closingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, closingDate);
         const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
         const fn = resolveContractFunctionalCurrency(contract);
-        let fxRate = 1;
-        if (tx !== fn) {
-          const fx = getFxRate(tx, fn, closingDate, V23_RATE_TYPES.CLOSING, { allowLastAvailable: false });
-          if (fx?.error) throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${rp} kapanış kuru bulunamadı.`), { code: fx.error });
-          fxRate = fx.rate;
-        }
-        periodFxRate = fxRate;
-        liabilityOpeningNominal = (openingSnapshot?.liability || 0) * fxRate;
+        const rateAt = date => {
+          if (tx === fn) return 1;
+          const fx = getFxRate(tx, fn, date, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+          if (fx?.error || !(Number(fx?.rate) > 0)) {
+            throw Object.assign(new Error(`TMS 29: ${tx}/${fn} ${v23DateKey(date)} kuru bulunamadı.`), { code: fx?.error || "FX_RATE_NOT_FOUND" });
+          }
+          return Number(fx.rate);
+        };
+        const openingRate = rateAt(openingDate);
+        const commencementRateForEntry = rateAt(contract.startDate);
+        periodFxRate = commencementRateForEntry;
+        liabilityOpeningNominal = (openingSnapshot?.liability || 0) * openingRate;
         liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
         if (initialRecognitionInPeriod) {
           liabilityOpeningNominal = 0;
@@ -2665,17 +2670,29 @@ document.addEventListener("DOMContentLoaded", () => {
           if (monthEnd > closingDate) monthEnd.setTime(closingDate.getTime());
           const a = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, cursor);
           const b = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, monthEnd);
-          const payment = accrualSchedule.filter(row => row.date > cursor && row.date <= monthEnd).reduce((sum,row) => sum + ((tms29AccrualContext.core.advance && row === accrualSchedule[0]) ? 0 : (Number(row.payment)||0)), 0) * fxRate;
-          const interest = ((b?.liability||0) - (a?.liability||0)) * fxRate + payment;
+          const paymentRows = accrualSchedule.filter(row => row.date > cursor && row.date <= monthEnd);
+          const paymentTx = paymentRows.reduce((sum,row) => sum + ((tms29AccrualContext.core.advance && row === accrualSchedule[0]) ? 0 : (Number(row.payment)||0)), 0);
+          const payment = paymentRows.reduce((sum, row) => {
+            const amount = (tms29AccrualContext.core.advance && row === accrualSchedule[0]) ? 0 : (Number(row.payment) || 0);
+            return sum + amount * rateAt(row.date);
+          }, 0);
+          const interestTx = ((b?.liability || 0) - (a?.liability || 0)) + paymentTx;
+          const monthEndRate = rateAt(monthEnd);
+          const interest = interestTx * monthEndRate;
+          const openingCarrying = (a?.liability || 0) * rateAt(cursor);
+          const closingCarrying = (b?.liability || 0) * monthEndRate;
+          const fxTranslation = closingCarrying - (openingCarrying + interest - payment);
           const monthKey = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth()+1).padStart(2,"0")}`;
           const flowRatio = getInflationRatio(monthKey, rp);
           liabilityInterestNominal += interest;
           liabilityInterestRestated += interest * flowRatio;
           liabilityPaymentsNominal += payment;
           liabilityPaymentsRestated += payment * flowRatio;
+          liabilityFxTranslationNominal += fxTranslation;
+          liabilityFxTranslationRestated += fxTranslation * flowRatio;
           cursor = monthEnd;
         }
-        nominalLiabilityClosing = (closingSnapshot?.liability || 0) * fxRate;
+        nominalLiabilityClosing = (closingSnapshot?.liability || 0) * rateAt(closingDate);
       }
 
       // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
@@ -2740,7 +2757,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const restatedSum =
         liabilityOpeningRestated + liabilityEntriesRestated +
         liabilityModificationRestated + liabilityReassessmentRestated +
-        liabilityInterestRestated - liabilityPaymentsRestated;
+        liabilityInterestRestated - liabilityPaymentsRestated +
+        liabilityFxTranslationRestated;
 
       // Negatifse KAZANÇ (yükümlülüğün reel yükü azalmış — TMS 29.28),
       // pozitifse KAYIP. Hareket tablosunda düşülen bir satır olarak
@@ -2757,10 +2775,13 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityInterestRestated,
         liabilityPaymentsNominal,
         liabilityPaymentsRestated,
+        liabilityFxTranslationNominal,
+        liabilityFxTranslationRestated,
         liabilityModificationNominal,
         liabilityModificationRestated,
         liabilityReassessmentNominal,
         liabilityReassessmentRestated,
+        liabilityClosingNominal: nominalLiabilityClosing,
         restatedSum,
         liabilityMonetaryGainLoss
       };
@@ -2804,6 +2825,8 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityDifference: restatedLiabilityClosing - nominalLiabilityClosing,
         netAdjustment,
         liabilityMonetaryGainLoss: liabilityRollForward ? liabilityRollForward.liabilityMonetaryGainLoss : null,
+        liabilityFxTranslationNominal: liabilityRollForward ? liabilityRollForward.liabilityFxTranslationNominal : null,
+        liabilityFxTranslationRestated: liabilityRollForward ? liabilityRollForward.liabilityFxTranslationRestated : null,
         precisionSource
       }
     };
@@ -18800,8 +18823,12 @@ ${renderPaymentScheduleFooterContainers()}
         "Girişler (Restated)": lrf ? rptRound(lrf.liabilityEntriesRestated) : null,
         "Faiz (Restated)": lrf ? rptRound(lrf.liabilityInterestRestated) : null,
         "Ödemeler (Restated) (-)": lrf ? -Math.abs(rptRound(lrf.liabilityPaymentsRestated)) : null,
+        "TMS 21 Çevrim Farkı (Restated)": lrf ? rptRound(lrf.liabilityFxTranslationRestated || 0) : null,
         "Parasal Kazanç/(Kayıp), net": lrf ? rptRound(lrf.liabilityMonetaryGainLoss) : null,
-        "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal - lrf.liabilityPaymentsNominal) : null,
+        "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityClosingNominal ?? (
+          lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal
+          - lrf.liabilityPaymentsNominal + (lrf.liabilityFxTranslationNominal || 0)
+        )) : null,
         "Durum": r?.ok ? "OK" : "Hesaplanamadı",
         "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
       };
@@ -18810,8 +18837,9 @@ ${renderPaymentScheduleFooterContainers()}
       "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
       "Açılış (Restated)": rptRound(t.liabilityOpeningRestated), "Girişler (Restated)": rptRound(t.liabilityEntriesRestated),
       "Faiz (Restated)": rptRound(t.liabilityInterestRestated), "Ödemeler (Restated) (-)": -Math.abs(rptRound(t.liabilityPaymentsRestated)),
+      "TMS 21 Çevrim Farkı (Restated)": rptRound(t.liabilityFxTranslationRestated || 0),
       "Parasal Kazanç/(Kayıp), net": rptRound(t.liabilityMonetaryGainLoss),
-      "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal),
+      "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal + (t.liabilityFxTranslationNominal || 0)),
       "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
     });
 
@@ -18825,8 +18853,9 @@ ${renderPaymentScheduleFooterContainers()}
       "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
       "Açılış (Restated)": g.liabilityOpeningRestated, "Girişler (Restated)": g.liabilityEntriesRestated,
       "Faiz (Restated)": g.liabilityInterestRestated, "Ödemeler (Restated) (-)": -Math.abs(g.liabilityPaymentsRestated),
+      "TMS 21 Çevrim Farkı (Restated)": g.liabilityFxTranslationRestated || 0,
       "Parasal Kazanç/(Kayıp), net": g.liabilityMonetaryGainLoss,
-      "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal
+      "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal + (g.liabilityFxTranslationNominal || 0)
     }));
 
     return v191ExportSheetsToFile([
@@ -22968,9 +22997,10 @@ ${renderPaymentScheduleFooterContainers()}
       liabilityEntriesNominal: 0, liabilityEntriesRestated: 0,
       liabilityInterestNominal: 0, liabilityInterestRestated: 0,
       liabilityPaymentsNominal: 0, liabilityPaymentsRestated: 0,
+      liabilityFxTranslationNominal: 0, liabilityFxTranslationRestated: 0,
       liabilityModificationNominal: 0, liabilityModificationRestated: 0,
       liabilityReassessmentNominal: 0, liabilityReassessmentRestated: 0,
-      liabilityMonetaryGainLoss: 0
+      liabilityMonetaryGainLoss: 0, liabilityClosingNominal: 0
     };
     let totalNetAdjustment = 0, computedCount = 0, missingCount = 0, outOfScopeCount = 0;
 
@@ -23094,11 +23124,17 @@ ${renderPaymentScheduleFooterContainers()}
           totals.liabilityInterestRestated += lrf.liabilityInterestRestated;
           totals.liabilityPaymentsNominal += lrf.liabilityPaymentsNominal;
           totals.liabilityPaymentsRestated += lrf.liabilityPaymentsRestated;
+          totals.liabilityFxTranslationNominal += lrf.liabilityFxTranslationNominal || 0;
+          totals.liabilityFxTranslationRestated += lrf.liabilityFxTranslationRestated || 0;
           totals.liabilityModificationNominal += lrf.liabilityModificationNominal || 0;
           totals.liabilityModificationRestated += lrf.liabilityModificationRestated || 0;
           totals.liabilityReassessmentNominal += lrf.liabilityReassessmentNominal || 0;
           totals.liabilityReassessmentRestated += lrf.liabilityReassessmentRestated || 0;
           totals.liabilityMonetaryGainLoss += lrf.liabilityMonetaryGainLoss;
+          totals.liabilityClosingNominal += lrf.liabilityClosingNominal ?? (
+            lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal
+            - lrf.liabilityPaymentsNominal + (lrf.liabilityFxTranslationNominal || 0)
+          );
         }
         computedCount++;
       } catch (error) {
@@ -23114,8 +23150,9 @@ ${renderPaymentScheduleFooterContainers()}
       "rouDepreciationNominal","rouDepreciationRestated","rouClosingNominalPeriod","rouClosingRestatedPeriod",
       "liabilityOpeningNominal","liabilityOpeningRestated","liabilityEntriesNominal","liabilityEntriesRestated",
       "liabilityInterestNominal","liabilityInterestRestated","liabilityPaymentsNominal","liabilityPaymentsRestated",
+      "liabilityFxTranslationNominal","liabilityFxTranslationRestated",
       "liabilityModificationNominal","liabilityModificationRestated","liabilityReassessmentNominal","liabilityReassessmentRestated",
-      "liabilityMonetaryGainLoss"
+      "liabilityMonetaryGainLoss","liabilityClosingNominal"
     ];
     const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, tms29SumKeys);
 
@@ -23150,8 +23187,14 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityReassessmentRestated", label: "Reassessment" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
+      { key: "liabilityFxTranslationRestated", label: "TMS 21 Çevrim Farkı", render: row => v191Value(row.liabilityFxTranslationRestated) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
-      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
+      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(
+        row.liabilityClosingNominal ?? (
+          row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal
+          - row.liabilityPaymentsNominal + (row.liabilityFxTranslationNominal || 0)
+        )
+      ) }
     ];
 
     return `<div style="margin-top:24px;">
@@ -23257,8 +23300,14 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "liabilityReassessmentRestated", label: "Reassessment" },
       { key: "liabilityInterestRestated", label: "Faiz" },
       { key: "liabilityPaymentsRestated", label: "Ödemeler", render: row => v191Value(-row.liabilityPaymentsRestated) },
+      { key: "liabilityFxTranslationRestated", label: "TMS 21 Çevrim Farkı", render: row => v191Value(row.liabilityFxTranslationRestated) },
       { key: "liabilityMonetaryGainLoss", label: "Parasal K/Z, net", render: row => v191Value(row.liabilityMonetaryGainLoss) },
-      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal - row.liabilityPaymentsNominal) }
+      { key: "liabilityClosingNominal", label: "Kapanış (=Nominal)", render: row => v191Value(
+        row.liabilityClosingNominal ?? (
+          row.liabilityOpeningNominal + row.liabilityEntriesNominal + row.liabilityInterestNominal
+          - row.liabilityPaymentsNominal + (row.liabilityFxTranslationNominal || 0)
+        )
+      ) }
     ];
 
     return `<div style="margin-top:24px;">
@@ -23274,7 +23323,7 @@ ${renderPaymentScheduleFooterContainers()}
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
 
       <p style="margin:10px 0 0;font-size:11px;color:#64748b;">${tms29.computedCount}/${tms29.totalCount} sözleşme hesaplanabildi${tms29.missingCount > 0 ? ` — <span style="color:#b91c1c;">${tms29.missingCount} sözleşme için enflasyon endeks tablosunda eksik ay var</span> (nominal rakamlar etkilenmedi, yalnızca TMS 29 düzeltmesi hesaplanamadı).` : "."}${tms29.outOfScopeCount > 0 ? ` <span style="color:#94a3b8;">(${tms29.outOfScopeCount} sözleşme bu dönemde henüz başlamadığı için kapsam dışı — normaldir.)</span>` : ""}</p>
-      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28), satın alma gücü farkı "Parasal Kazanç/(Kayıp)" satırında ayrıca gösterilir. TMS 21 yabancı para çevrim farkı bu tutara dahil edilmez; ayrı kur farkı satırı ve fişi olarak izlenir.</p>
+      <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">Yükümlülük (moneter): kapanış bakiyesi değişmez (TMS 29.28). TMS 21 yabancı para çevrim farkı ayrı sütunda, kendi oluştuğu aydan dönem sonuna düzeltilmiş olarak gösterilir; bu tutar Parasal Kazanç/(Kayıp) hesabına dahil edilmez.</p>
     </div>`;
   }
 
@@ -23326,6 +23375,21 @@ ${renderPaymentScheduleFooterContainers()}
       const translated = { ...row, currency: presentationCurrency };
       const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
       const schedule = contract ? (rptScheduleRows(contract).schedule || []) : [];
+      const convertAtFinancialDate = (amount, date) => {
+        try {
+          const quote = getFxRate(
+            sourceCurrency,
+            presentationCurrency,
+            date,
+            V23_RATE_TYPES.CLOSING,
+            { allowLastAvailable: true }
+          );
+          if (!quote?.error && Number(quote?.rate) > 0) {
+            return rptRound(Number(amount) * Number(quote.rate));
+          }
+        } catch (_) {}
+        return null;
+      };
       const eventConverted = field => {
         if (!schedule.length) return null;
         let total = 0, found = false;
@@ -23333,8 +23397,8 @@ ${renderPaymentScheduleFooterContainers()}
           const d = rptDate(item.date);
           const amount = Number(item[field]);
           if (!d || d < periodStart || d > periodEnd || !Number.isFinite(amount) || amount === 0) return;
-          const fx = convertAmountToReportingCurrency(amount, sourceCurrency, d, presentationCurrency);
-          if (!fx?.error && Number.isFinite(Number(fx.value))) { total += Number(fx.value); found = true; }
+          const converted = convertAtFinancialDate(amount, d);
+          if (converted !== null) { total += converted; found = true; }
         });
         return found ? total : null;
       };
@@ -23347,8 +23411,8 @@ ${renderPaymentScheduleFooterContainers()}
         const rateDate = key === "openingRuo" || key === "openingLiability" ? rptAddDays(periodStart, -1)
           : key === "entriesRuo" || key === "entriesLiability" ? (contract?.startDate || periodStart)
           : periodEnd;
-        const result = convertAmountToReportingCurrency(amount, sourceCurrency, rateDate, presentationCurrency);
-        if (!result?.error && Number.isFinite(Number(result.value))) translated[key] = rptRound(Number(result.value));
+        const converted = convertAtFinancialDate(amount, rateDate);
+        if (converted !== null) translated[key] = converted;
       });
       return translated;
     });
@@ -23369,12 +23433,27 @@ ${renderPaymentScheduleFooterContainers()}
         .concat(Array.isArray(contract.reassessments) ? contract.reassessments : [])
         .some(change => change?.status === "APPLIED" && (!rptDate(change.effectiveDate) || rptDate(change.effectiveDate) <= periodEnd));
       if (appliedRouLayerBeforePeriodEnd) return;
-      const historical = convertAmountToReportingCurrency(1, sourceCurrency, contract.startDate, presentationCurrency);
-      if (historical?.error || !Number.isFinite(Number(historical.value))) return;
+      // Commencement can fall on a weekend/public holiday (for example
+      // 01.01.2025).  The ROU historical-cost rate must then use the latest
+      // published rate on or before commencement.  The generic presentation
+      // converter is deliberately exact-date/fail-closed, so use the FX
+      // resolver explicitly here instead of silently retaining mixed rates.
+      let historicalRate = null;
+      try {
+        const quote = getFxRate(
+          sourceCurrency,
+          presentationCurrency,
+          contract.startDate,
+          V23_RATE_TYPES.CLOSING,
+          { allowLastAvailable: true }
+        );
+        if (!quote?.error && Number(quote?.rate) > 0) historicalRate = Number(quote.rate);
+      } catch (_) {}
+      if (!historicalRate) return;
       const raw = rawRouRows.find(item => String(item.contractId) === String(row.contractId));
       if (!raw) return;
       ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"].forEach(key => {
-        if (Number.isFinite(Number(raw[key]))) row[key] = rptRound(Number(raw[key]) * Number(historical.value));
+        if (Number.isFinite(Number(raw[key]))) row[key] = rptRound(Number(raw[key]) * historicalRate);
       });
     });
     liabRows.forEach(row => {
