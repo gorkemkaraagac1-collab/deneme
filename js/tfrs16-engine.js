@@ -23152,7 +23152,7 @@ ${renderPaymentScheduleFooterContainers()}
       return { nominal: rptNumber(item.amount) * rate, restated: rptNumber(item.amount) * rate * ratio };
     };
     const interestEvents = schedule.map(item => ({ date: item.date, amount: item.interest }));
-    const paymentEvents = schedule.map((item, index) => ({ date: item.date, amount: (contract.paymentTiming === "advance" && item === built.schedule[0]) ? 0 : item.payment }));
+    const paymentEvents = schedule.map(item => ({ date: item.date, amount: (contract.paymentTiming === "advance" && item === built.schedule[0]) ? 0 : item.payment }));
     const sumFlow = events => events.reduce((acc, item) => { const x = flow(item); acc.nominal += x.nominal; acc.restated += x.restated; return acc; }, { nominal: 0, restated: 0 });
     const interest = sumFlow(interestEvents);
     const payments = sumFlow(paymentEvents);
