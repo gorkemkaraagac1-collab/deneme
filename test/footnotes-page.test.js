@@ -178,6 +178,48 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       2
     );
   });
+
+  test("USD sözleşmenin likidite dipnotu TRY kapanış kuruyla çevrilir ve nominal yükümlülük TMS 21 farkıyla mutabık kalır", () => {
+    tfrs16.contracts.push({
+      id: "FX-DISCLOSURE-TRY",
+      company: "Currency Test A.Ş.",
+      supplier: "Test Supplier",
+      assetClass: "Makine",
+      monthlyPayment: 10000,
+      discountRate: 5,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly",
+      paymentTiming: "arrears",
+      status: "active",
+      currency: "USD",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date("2026-01-01"),
+      new Date("2026-06-30")
+    );
+    const liquidity = prepared.liquidityDisclosure.rows[0];
+    const liability = prepared.liabRows[0];
+    const bucketTotal = liquidity.buckets.reduce((sum, bucket) => sum + bucket.cashOutflow, 0);
+
+    expect(prepared.liquidityDisclosure.presentationCurrency).toBe("TRY");
+    expect(liquidity.currency).toBe("TRY");
+    expect(liquidity.contractualCashOutflowsTotal).toBeGreaterThan(1_000_000);
+    expect(liquidity.contractualCashOutflowsTotal).toBeCloseTo(bucketTotal, 2);
+    expect(Math.abs(liability.fxTranslationAdjustment)).toBeGreaterThan(0);
+    expect(
+      liability.openingLiability + liability.entriesLiability + liability.interest
+      - liability.payments + liability.modificationAdjustment
+      + liability.reassessmentAdjustment + liability.otherAdjustment
+      + liability.fxTranslationAdjustment
+    ).toBeCloseTo(liability.closingLiability, 2);
+    expect(prepared.liabReport.reconciliation.passed).toBe(true);
+  });
 });
 
 describe("v191RenderAssetNoteHtml / v191RenderLiabilityNoteHtml / v191RenderLiquidityNoteHtml — bağımsız çağrılabilirlik", () => {
