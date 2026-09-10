@@ -475,6 +475,74 @@ async rejectInflationIndex(id, reason) {
         return { success: false, error: result.error || "Endeks reddedilemedi" };
     }
     return result;
+},
+/*
+ * ========================================================
+ * FAQ (SSS) — index.html "Sık sorulanlar" bölümü
+ * ------------------------------------------------------
+ * GET    /api/admin/faq            (yayınlanmış + taslak, tümü)
+ * POST   /api/admin/faq            { question, answer, sortOrder?, isPublished? }
+ * PATCH  /api/admin/faq/:id        { question?, answer?, sortOrder?, isPublished? }
+ * DELETE /api/admin/faq/:id
+ * ========================================================
+ */
+async getFaqs() {
+    const response = await fetch(
+        `${this.baseURL}/faq`,
+        {
+            method: "GET",
+            headers: this.getHeaders()
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "SSS listesi alınamadı" };
+    }
+    return result;
+},
+async createFaq(data) {
+    const response = await fetch(
+        `${this.baseURL}/faq`,
+        {
+            method: "POST",
+            headers: this.getHeaders(),
+            body: JSON.stringify(data)
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "SSS oluşturulamadı" };
+    }
+    return result;
+},
+async updateFaq(id, data) {
+    const response = await fetch(
+        `${this.baseURL}/faq/${encodeURIComponent(id)}`,
+        {
+            method: "PATCH",
+            headers: this.getHeaders(),
+            body: JSON.stringify(data)
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "SSS güncellenemedi" };
+    }
+    return result;
+},
+async deleteFaq(id) {
+    const response = await fetch(
+        `${this.baseURL}/faq/${encodeURIComponent(id)}`,
+        {
+            method: "DELETE",
+            headers: this.getHeaders()
+        }
+    );
+    const result = await response.json();
+    if (!response.ok) {
+        return { success: false, error: result.error || "SSS silinemedi" };
+    }
+    return result;
 }
 
 };
