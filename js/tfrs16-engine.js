@@ -10529,6 +10529,18 @@ document.addEventListener("DOMContentLoaded", () => {
                       ${escapeHtml(
                         item.account
                       )}
+                      ${
+                        item.transactionCurrency &&
+                        String(item.transactionCurrency).toUpperCase() !== String(currency || "TRY").toUpperCase() &&
+                        (Number(item.transactionDebit) || Number(item.transactionCredit))
+                          ? `<div style="margin-top:3px;font-size:10px;color:#64748b;">
+                              İşlem tutarı: ${escapeHtml(String(item.transactionCurrency).toUpperCase())}
+                              ${formatNumber(Number(item.transactionDebit) || Number(item.transactionCredit))}
+                              · Kur: ${Number(item.fxRate) > 0 ? Number(item.fxRate).toLocaleString("tr-TR", { minimumFractionDigits: 4, maximumFractionDigits: 6 }) : "çoklu"}
+                              ${item.fxRateDate ? ` (${escapeHtml(String(item.fxRateDate))})` : ""}
+                            </div>`
+                          : ""
+                      }
                     </td>
 
                     <td
@@ -11523,9 +11535,7 @@ ${renderAccountingCenterBulkPromo()}
         const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
         fxRows = fx.schedule.filter(r => selectedDates.has(v23DateKey(r.date)));
       }
-      if (!fxRows.length) return;
       const netFx = v23Round(fxRows.reduce((sum, r) => sum + r.fxGainLoss, 0), 2);
-      if (Math.abs(netFx) < 0.01) return;
       // fxGainLoss = (orijinal para birimindeki kapanış bakiyesi × kapanış kuru)
       // − (dönem hareketleriyle üstü örtülen tutar). Pozitifse kur yükselmiş
       // ve yükümlülüğün TL karşılığı beklenenden fazla büyümüş demektir →
@@ -11541,10 +11551,28 @@ ${renderAccountingCenterBulkPromo()}
             { account: `401 Kiralama Yükümlülüğü (Kur Farkı - ${fx.transactionCurrency}/${fx.functionalCurrency})`, debit: Math.abs(netFx), credit: 0 },
             { account: "646 Kambiyo Karları (TMS 21 Kur Farkı Geliri)", debit: 0, credit: Math.abs(netFx) }
           ];
+      const functionalEntries = buildFunctionalCurrencyJournalEntries(
+        contract,
+        baseEntries,
+        selectedRows,
+        options.periodStartExclusive ? new Date(options.periodStartExclusive.getTime() + 1) : null,
+        options.reportingDate,
+        fxRows
+      );
+      const taggedFxEntries = Math.abs(netFx) < 0.01 ? [] : fxEntries.map(item => ({
+        ...item,
+        currency: fx.functionalCurrency,
+        journalType: "TMS21_FX",
+        transactionCurrency: fx.functionalCurrency,
+        transactionDebit: item.debit,
+        transactionCredit: item.credit,
+        fxRate: 1,
+        fxRateDate: v23DateKey(options.reportingDate)
+      }));
       if (preview) {
         preview.innerHTML =
-          renderJournalEntry(title, [...baseEntries, ...fxEntries], "MIXED") +
-          `<div style="margin-top:10px;font-size:11px;color:#64748b;">TMS 21: kira yükümlülüğü ${fx.transactionCurrency} cinsinden, dönem kapanış kuruyla (${fx.functionalCurrency}'ye) yeniden çevrildi; kur farkı yukarıdaki fişe dahil edildi. Yukarıdaki "780/401/301/770/268" satırları ${contract.currency || fx.transactionCurrency} cinsindendir, "656/646/401 (Kur Farkı)" satırları ${fx.functionalCurrency} cinsindendir — bu ikisi TOPLANMAZ, ayrı ayrı okunmalıdır.</div>`;
+          renderJournalEntry(title, [...functionalEntries, ...taggedFxEntries], fx.functionalCurrency) +
+          `<div style="margin-top:10px;font-size:11px;color:#64748b;">TMS 21: ${fx.transactionCurrency} işlem para birimindeki faiz ve ödemeler işlem tarihlerindeki kurlarla, ROU amortismanı tarihî maliyet kurlarıyla ${fx.functionalCurrency}'ye çevrilmiştir. Parasal kira yükümlülüğünün kapanış kuru farkı ayrıca 646/656 hesabında gösterilmiştir.</div>`;
       }
     } catch (error) {
       if (preview) {
@@ -14706,24 +14734,154 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   /**
+   * TMS 21 journal measurement layer. Every posting is returned in the
+   * contract's functional currency. The original transaction-currency
+   * amount remains on the row as audit metadata, but is never added to the
+   * functional-currency debit/credit totals.
+   */
+  function buildFunctionalCurrencyJournalEntries(
+    contract,
+    entries,
+    selectedRows,
+    periodStart,
+    periodEnd,
+    translatedRows = []
+  ) {
+    const sourceCurrency = v23CurrencyCode(contract?.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+    const functionalCurrency = resolveContractFunctionalCurrency(contract);
+    const rows = Array.isArray(selectedRows) ? selectedRows : [];
+    const fxRows = Array.isArray(translatedRows) ? translatedRows : [];
+    const endDate = periodEnd || rows[rows.length - 1]?.date || contract?.startDate;
+
+    const annotate = (entry, debit, credit, rate, rateDate) => ({
+      ...entry,
+      debit: v23Round(Number(debit) || 0, 2),
+      credit: v23Round(Number(credit) || 0, 2),
+      currency: functionalCurrency,
+      transactionCurrency: sourceCurrency,
+      transactionDebit: Number(entry.debit) || 0,
+      transactionCredit: Number(entry.credit) || 0,
+      fxRate: Number(rate) > 0 ? Number(rate) : null,
+      fxRateDate: rateDate || null
+    });
+
+    if (sourceCurrency === functionalCurrency) {
+      return (Array.isArray(entries) ? entries : []).map(entry =>
+        annotate(entry, entry.debit, entry.credit, 1, v23DateKey(entry.transactionDate || endDate))
+      );
+    }
+
+    const endRate = v191FxRateAt(sourceCurrency, functionalCurrency, endDate);
+    const hasOriginalFxAmounts = fxRows.some(row => row.interestOriginal !== undefined);
+    const journalFxRows = fxRows.filter(row => !row.isAdvanceCommencement);
+    const rawTotals = hasOriginalFxAmounts ? {
+      interest: fxRows.reduce((s, row) => s + (Number(row.interestOriginal) || 0), 0),
+      payment: journalFxRows.reduce((s, row) => s + (Number(row.paymentOriginal) || 0), 0),
+      depreciation: fxRows.reduce((s, row) => s + (Number(row.depreciationOriginal) || 0), 0)
+    } : {
+      interest: rows.reduce((s, row) => s + (Number(row.interest) || 0), 0),
+      payment: rows.reduce((s, row) => s + (Number(row.payment) || 0), 0),
+      depreciation: rows.reduce((s, row) => s + (Number(row.depreciation) || 0), 0)
+    };
+    const fnTotals = {
+      interest: fxRows.reduce((s, row) => s + (Number(row.interestFx) || 0), 0),
+      payment: journalFxRows.reduce((s, row) => s + (Number(row.paymentFx) || 0), 0),
+      depreciation: fxRows.reduce((s, row) => s + (Number(row.depreciationFx) || 0), 0)
+    };
+    const translatedAmount = (amount, key) => {
+      const tx = Number(amount) || 0;
+      if (!tx) return { amount: 0, rate: null, rateDate: null };
+      const raw = rawTotals[key];
+      const fn = fnTotals[key];
+      if (fxRows.length && Math.abs(raw) > 0.0000001 && Number.isFinite(fn)) {
+        const weightedRate = fn / raw;
+        return { amount: tx * weightedRate, rate: weightedRate, rateDate: "Çoklu işlem tarihi" };
+      }
+      return { amount: tx * endRate, rate: endRate, rateDate: v23DateKey(endDate) };
+    };
+
+    const interestEntry = (entries || []).find(x => x.accountKey === "interestExpense" && !x.source);
+    const paymentEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityCurrent" && !x.source);
+    const growthEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityAccrualGrowth" && !x.source);
+    const interest = translatedAmount(Number(interestEntry?.debit) || Number(interestEntry?.credit), "interest");
+    const payment = translatedAmount(Number(paymentEntry?.debit) || Number(paymentEntry?.credit), "payment");
+    const growthTx = Number(growthEntry?.debit) || Number(growthEntry?.credit) || 0;
+    const growth = { amount: growthTx * endRate, rate: endRate, rateDate: v23DateKey(endDate) };
+    // The principal line is the balancing liability reduction after interest,
+    // cash settlement and any unpaid-interest growth are measured in the
+    // functional currency.
+    const principalFn = payment.amount + growth.amount - interest.amount;
+    const principalEntry = (entries || []).find(x => x.accountKey === "leaseLiability" && !x.source);
+    const principalTx = Number(principalEntry?.debit) || Number(principalEntry?.credit) || 0;
+    const principalRate = Math.abs(principalTx) > 0.0000001 ? Math.abs(principalFn / principalTx) : endRate;
+
+    return (Array.isArray(entries) ? entries : []).map(entry => {
+      const txDebit = Number(entry.debit) || 0;
+      const txCredit = Number(entry.credit) || 0;
+      const txAmount = txDebit || txCredit;
+      let converted;
+
+      if (entry.source === "MODIFICATION" || entry.source === "REASSESSMENT") {
+        const eventDate = entry.transactionDate || endDate;
+        const rate = v191FxRateAt(sourceCurrency, functionalCurrency, eventDate);
+        converted = { amount: txAmount * rate, rate, rateDate: v23DateKey(eventDate) };
+      } else if (entry === interestEntry) {
+        converted = interest;
+      } else if (entry === paymentEntry) {
+        converted = payment;
+      } else if (entry === growthEntry) {
+        converted = growth;
+      } else if (entry === principalEntry) {
+        converted = { amount: Math.abs(principalFn), rate: principalRate, rateDate: "Çoklu işlem tarihi" };
+      } else if (entry.accountKey === "depreciationExpense" || entry.accountKey === "rouAccumDep") {
+        converted = translatedAmount(txAmount, "depreciation");
+      } else {
+        const eventDate = entry.transactionDate || endDate;
+        const rate = v191FxRateAt(sourceCurrency, functionalCurrency, eventDate);
+        converted = { amount: txAmount * rate, rate, rateDate: v23DateKey(eventDate) };
+      }
+
+      // Preserve the original side. A negative balancing principal is the
+      // exceptional case in which the liability grows; put it on credit.
+      if (entry === principalEntry && principalFn < -0.005) {
+        return annotate(entry, 0, Math.abs(principalFn), converted.rate, converted.rateDate);
+      }
+      return annotate(
+        entry,
+        txDebit ? converted.amount : 0,
+        txCredit ? converted.amount : 0,
+        converted.rate,
+        converted.rateDate
+      );
+    });
+  }
+
+  /**
    * TMS21 kur farkını bulk jurnal entries dizisine ekler.
    * Mevcut entries değiştirilmez; yeni bir dizi döndürülür.
    */
-  async function appendFxToBulkJournal(contract, entries, periodStart, periodEnd) {
+  async function appendFxToBulkJournal(contract, entries, periodStart, periodEnd, selectedRows = []) {
     const baseEntries = Array.isArray(entries) ? entries.slice() : [];
-    if (!contract || !contractNeedsFxTranslation(contract)) return baseEntries;
+    if (!contract) return baseEntries;
+    if (!contractNeedsFxTranslation(contract)) {
+      return buildFunctionalCurrencyJournalEntries(contract, baseEntries, selectedRows, periodStart, periodEnd);
+    }
 
     try {
-      const fx = await getContractFxTranslationJournal(
-        contract.id,
-        periodStart,
-        periodEnd
-      );
-
+      const engineResult = cfoBuildSchedule(contract);
+      const fx = await buildTms21FxTranslation(contract, engineResult, { reportingDate: periodEnd });
       if (!fx?.applicable) return baseEntries;
-
-      const totalFxGainLoss = v23Round(Number(fx.totalFxGainLoss) || 0, 2);
-      if (Math.abs(totalFxGainLoss) < 0.01) return baseEntries;
+      const start = parseDate(periodStart);
+      const end = parseDate(periodEnd);
+      const fxRows = (fx.schedule || []).filter(row => {
+        const date = parseDate(row.date);
+        return date && (!start || date >= start) && (!end || date <= end);
+      });
+      const totalFxGainLoss = v23Round(fxRows.reduce((sum, row) => sum + (Number(row.fxGainLoss) || 0), 0), 2);
+      const functionalEntries = buildFunctionalCurrencyJournalEntries(
+        contract, baseEntries, selectedRows, periodStart, periodEnd, fxRows
+      );
+      if (Math.abs(totalFxGainLoss) < 0.01) return functionalEntries;
 
       const amount = Math.abs(totalFxGainLoss);
       const fxEntries = totalFxGainLoss > 0
@@ -14732,13 +14890,15 @@ ${renderPaymentScheduleFooterContainers()}
               account: "656 Kambiyo Zararları",
               debit: amount,
               credit: 0,
-              journalType: "TMS21_FX"
+              journalType: "TMS21_FX",
+              currency: fx.functionalCurrency
             },
             {
               account: `401 Kiralama Yükümlülüğü (TMS 21 Kur Farkı - ${fx.transactionCurrency || v23CurrencyCode(contract.currency)}/${fx.functionalCurrency || resolveContractFunctionalCurrency(contract)})`,
               debit: 0,
               credit: amount,
-              journalType: "TMS21_FX"
+              journalType: "TMS21_FX",
+              currency: fx.functionalCurrency
             }
           ]
         : [
@@ -14746,22 +14906,22 @@ ${renderPaymentScheduleFooterContainers()}
               account: `401 Kiralama Yükümlülüğü (TMS 21 Kur Farkı - ${fx.transactionCurrency || v23CurrencyCode(contract.currency)}/${fx.functionalCurrency || resolveContractFunctionalCurrency(contract)})`,
               debit: amount,
               credit: 0,
-              journalType: "TMS21_FX"
+              journalType: "TMS21_FX",
+              currency: fx.functionalCurrency
             },
             {
               account: "646 Kambiyo Karları",
               debit: 0,
               credit: amount,
-              journalType: "TMS21_FX"
+              journalType: "TMS21_FX",
+              currency: fx.functionalCurrency
             }
           ];
 
-      return baseEntries.concat(fxEntries);
+      return functionalEntries.concat(fxEntries);
     } catch (error) {
-      // Bulk generation must not silently lose the base TFRS16 journal.
-      // Caller can continue with the original entries; the error is audited/logged.
       console.warn(`TMS 21 bulk FX hesaplanamadı (${contract.id}):`, error);
-      return baseEntries;
+      throw error;
     }
   }
 
@@ -14888,11 +15048,15 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function buildAppliedChangeJournalEntries(contract, periodStart, periodEnd) {
-    return v191AppliedChanges(contract, periodStart, periodEnd).flatMap(change =>
-      change.__changeKind === "reassessment"
+    return v191AppliedChanges(contract, periodStart, periodEnd).flatMap(change => {
+      const rows = change.__changeKind === "reassessment"
         ? generateReassessmentJournal(contract, change)
-        : generateModificationJournal(contract, change)
-    );
+        : generateModificationJournal(contract, change);
+      return rows.map(entry => ({
+        ...entry,
+        transactionDate: v23DateKey(change.__effective)
+      }));
+    });
   }
 
   async function generateBulkJournals() {
@@ -14987,12 +15151,22 @@ ${renderPaymentScheduleFooterContainers()}
         : baseEntries;
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
-      const nominalEntries = await appendFxToBulkJournal(
-        contract,
-        mappedBase.concat(changeEntries),
-        periodDates.periodStart,
-        periodDates.periodEnd
-      );
+      let nominalEntries;
+      try {
+        nominalEntries = await appendFxToBulkJournal(
+          contract,
+          mappedBase.concat(changeEntries),
+          periodDates.periodStart,
+          periodDates.periodEnd,
+          selected
+        );
+      } catch (error) {
+        hideLoading();
+        showAlert(
+          `${contract.id} sözleşmesinin fişi fonksiyonel para birimine çevrilemedi: ${error?.message || error}`
+        );
+        return;
+      }
       const mappedTms29 = typeof applyAccountMappingToJournal === "function"
         ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
         : tms29Entries;
@@ -15014,6 +15188,7 @@ ${renderPaymentScheduleFooterContainers()}
           periodStart: v23DateKey(periodDates.periodStart),
           periodEnd: v23DateKey(periodDates.periodEnd),
           journalType,
+          currency: resolveContractFunctionalCurrency(contract) || contract.currency || "TRY",
           entries,
           totalDebit,
           totalCredit,
@@ -15830,7 +16005,12 @@ ${renderPaymentScheduleFooterContainers()}
           reportingCurrency: debitReporting !== null ? reportingCcy : "",
           debitReporting,
           creditReporting,
-          fxRateApplied
+          fxRateApplied,
+          transactionCurrency: entry.transactionCurrency || "",
+          transactionDebit: entry.transactionDebit ?? "",
+          transactionCredit: entry.transactionCredit ?? "",
+          transactionFxRate: entry.fxRate ?? "",
+          transactionFxRateDate: entry.fxRateDate || ""
         });
       });
     });
@@ -15865,7 +16045,12 @@ ${renderPaymentScheduleFooterContainers()}
           "Raporlama PB": r.reportingCurrency,
           "Borç (Raporlama)": r.debitReporting !== null && r.debitReporting !== undefined ? r.debitReporting : "",
           "Alacak (Raporlama)": r.creditReporting !== null && r.creditReporting !== undefined ? r.creditReporting : "",
-          "Kur (Uygulanan)": r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : ""
+          "Kur (Uygulanan)": r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : "",
+          "İşlem Para Birimi": r.transactionCurrency,
+          "İşlem Borç": r.transactionDebit,
+          "İşlem Alacak": r.transactionCredit,
+          "İşlem Kuru": r.transactionFxRate,
+          "Kur Tarihi": r.transactionFxRateDate
         }));
         const worksheet = XLSX.utils.json_to_sheet(excelRows);
         const workbook = XLSX.utils.book_new();
@@ -28357,13 +28542,16 @@ ${renderPaymentScheduleFooterContainers()}
         rateUsedFallback: !!closing.usedFallback,
         openingLiabilityFx,
         interestFx,
+        interestOriginal: v23Num(row.interest),
         paymentFx,
+        paymentOriginal: v23Num(row.payment),
         movementBeforeRetranslationFx,
         closingLiabilityFx,
         fxGainLoss,
         cumulativeFxGainLoss,
         rouOpeningFx,
         depreciationFx,
+        depreciationOriginal: v23Num(row.depreciation),
         rouClosingFx,
         rouLayerCount: rouLayers.length,
         // GC-2026-09: reportingDate ödeme tarihiyle çakışmadığında
@@ -28371,7 +28559,10 @@ ${renderPaymentScheduleFooterContainers()}
         // olayı" satırı mı, yoksa gerçek bir ödeme satırı mı —
         // tüketiciler (UI, jurnal) bu satırı nakit ödeme olayıyla
         // KARIŞTIRMAMALI (paymentFx her zaman 0'dır).
-        isAccrualRow: !!row.isAccrualRow
+        isAccrualRow: !!row.isAccrualRow,
+        isAdvanceCommencement:
+          isAdvancePaymentTiming(contract.paymentTiming || "arrears") &&
+          calendarDateKey(row.date) === calendarDateKey(contract.startDate)
       });
 
       openingLiabilityFx = closingLiabilityFx;
@@ -33974,6 +34165,8 @@ ${renderPaymentScheduleFooterContainers()}
       renderAccountingCenterPage,
       renderAccountingCenter,
       generateSelectedJournal,
+      buildFunctionalCurrencyJournalEntries,
+      appendFxToBulkJournal,
       buildTms29BulkJournalEntries,
       buildAppliedChangeJournalEntries,
       openBulkJournalModal,
