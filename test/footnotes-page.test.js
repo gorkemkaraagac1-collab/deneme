@@ -428,6 +428,80 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
   });
 });
 
+describe("Muhasebe fişleri — fonksiyonel para birimi", () => {
+  let tfrs16;
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("gk_tfrs16_v23_fx_rates_v1", JSON.stringify([
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-03-01", rateType: "CLOSING", rate: 37, status: "APPROVED" },
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2026-06-30", rateType: "CLOSING", rate: 40, status: "APPROVED" }
+    ]));
+    tfrs16 = loadTfrs16();
+  });
+
+  test("aynı TL şirketindeki USD ve TRY sözleşmeler toplu fişte yalnızca TRY olarak toplanır", () => {
+    const usdContract = {
+      id: "JOURNAL-USD", company: "Test A.Ş.", companyId: "C-TRY",
+      currency: "USD", functionalCurrency: "TRY", startDate: "2025-01-01"
+    };
+    const tryContract = {
+      id: "JOURNAL-TRY", company: "Test A.Ş.", companyId: "C-TRY",
+      currency: "TRY", functionalCurrency: "TRY", startDate: "2025-01-01"
+    };
+    const entries = [
+      { accountKey: "interestExpense", account: "780", debit: 100, credit: 0 },
+      { accountKey: "leaseLiability", account: "401", debit: 900, credit: 0 },
+      { accountKey: "leaseLiabilityCurrent", account: "301", debit: 0, credit: 1000 },
+      { accountKey: "depreciationExpense", account: "770", debit: 500, credit: 0 },
+      { accountKey: "rouAccumDep", account: "268", debit: 0, credit: 500 }
+    ];
+    const selectedRows = [{
+      date: "2026-06-30", interest: 100, principal: 900,
+      payment: 1000, depreciation: 500
+    }];
+    const translatedRows = [{
+      date: "2026-06-30", interestFx: 4000,
+      paymentFx: 40000, depreciationFx: 17500
+    }];
+
+    const usdJournal = tfrs16.buildFunctionalCurrencyJournalEntries(
+      usdContract, entries, selectedRows,
+      new Date(2026, 0, 1), new Date(2026, 5, 30), translatedRows
+    );
+    const tryJournal = tfrs16.buildFunctionalCurrencyJournalEntries(
+      tryContract, entries, selectedRows,
+      new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    const portfolio = usdJournal.concat(tryJournal);
+    const debit = portfolio.reduce((sum, row) => sum + row.debit, 0);
+    const credit = portfolio.reduce((sum, row) => sum + row.credit, 0);
+
+    expect(portfolio.every(row => row.currency === "TRY")).toBe(true);
+    expect(debit).toBeCloseTo(59000, 2);
+    expect(credit).toBeCloseTo(59000, 2);
+    expect(usdJournal.find(row => row.accountKey === "leaseLiability").debit)
+      .toBeCloseTo(36000, 2);
+    expect(usdJournal[0]).toMatchObject({
+      transactionCurrency: "USD", transactionDebit: 100, debit: 4000
+    });
+    expect(tryJournal[0]).toMatchObject({
+      currency: "TRY", transactionCurrency: "TRY", fxRate: 1, debit: 100
+    });
+
+    const modificationJournal = tfrs16.buildFunctionalCurrencyJournalEntries(
+      usdContract,
+      [
+        { accountKey: "rouAsset", account: "260", debit: 100, credit: 0, source: "MODIFICATION", transactionDate: "2026-03-01" },
+        { accountKey: "leaseLiability", account: "401", debit: 0, credit: 100, source: "MODIFICATION", transactionDate: "2026-03-01" }
+      ],
+      [], new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    expect(modificationJournal[0]).toMatchObject({ debit: 3700, fxRate: 37, fxRateDate: "2026-03-01" });
+    expect(modificationJournal[1]).toMatchObject({ credit: 3700, fxRate: 37, fxRateDate: "2026-03-01" });
+  });
+});
+
 describe("v191RenderAssetNoteHtml / v191RenderLiabilityNoteHtml / v191RenderLiquidityNoteHtml — bağımsız çağrılabilirlik", () => {
   let tfrs16;
   beforeEach(() => {
