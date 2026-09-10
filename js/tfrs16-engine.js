@@ -11204,7 +11204,14 @@ ${renderAccountingCenterBulkPromo()}
           )
         : null;
 
-    if (!selected.length && !accrualSummary) {
+    const journalPeriodStart = new Date(periodStartExclusive.getTime() + 1);
+    const journalChangeEntries = buildAppliedChangeJournalEntries(
+      contract,
+      journalPeriodStart,
+      periodEndInclusive
+    );
+
+    if (!selected.length && !accrualSummary && !journalChangeEntries.length) {
 
       if (preview) {
 
@@ -11317,6 +11324,12 @@ ${renderAccountingCenterBulkPromo()}
       }
 
     ];
+
+    // A modification/reassessment is a separate remeasurement event. Its
+    // ROU/liability entry belongs to the period in which it becomes effective;
+    // it is not contained in interest, principal or depreciation schedule
+    // totals and must therefore be appended explicitly.
+    entries.push(...journalChangeEntries);
 
     /*
       GC-2026-09 (Madde 5): dönem içinde HİÇ nakit ödeme/tekrarlanan
@@ -14775,6 +14788,37 @@ ${renderPaymentScheduleFooterContainers()}
       return [];
     }
 
+    // The base restatement function works directly from the transaction-
+    // currency schedule for multi-layer leases. For a foreign-currency lease,
+    // use the same historical-rate ROU layers and TMS 21-aware liability
+    // movements as the financial-statement note, so the journal reconciles to
+    // the displayed TRY roll-forward.
+    if (contractNeedsFxTranslation(contract)) {
+      try {
+        const presentationCurrency = resolveContractFunctionalCurrency(contract) || getReportingCurrency() || DEFAULT_FUNCTIONAL_CURRENCY;
+        const rawRou = (getRuoAssetRollForwardReport(periodStart, periodEnd).rows || [])
+          .find(row => String(row.contractId) === String(contract.id) && row.status !== "ERROR");
+        const rawLiab = (getLeaseLiabilityRollForwardReport(periodStart, periodEnd).rows || [])
+          .find(row => String(row.contractId) === String(contract.id) && row.status !== "ERROR");
+        if (rawRou && rawLiab) {
+          const rouRollForward = v191BuildFxRouRollForward(contract, rawRou, periodStartMonth, reportingPeriod, presentationCurrency);
+          const liabilityRollForward = v191BuildFxLiabilityRollForward(contract, rawLiab, periodStartMonth, reportingPeriod, presentationCurrency);
+          restatement = {
+            ...restatement,
+            rouRollForward,
+            liabilityRollForward,
+            totals: {
+              ...(restatement.totals || {}),
+              netAdjustment: rouRollForward.rouClosingRestatedPeriod - rouRollForward.rouClosingNominalPeriod,
+              liabilityMonetaryGainLoss: liabilityRollForward.liabilityMonetaryGainLoss
+            }
+          };
+        }
+      } catch (_) {
+        return [];
+      }
+    }
+
     const entries = [];
     const rou = restatement.rouRollForward;
     const liab = restatement.liabilityRollForward;
@@ -14843,6 +14887,14 @@ ${renderPaymentScheduleFooterContainers()}
     return entries;
   }
 
+  function buildAppliedChangeJournalEntries(contract, periodStart, periodEnd) {
+    return v191AppliedChanges(contract, periodStart, periodEnd).flatMap(change =>
+      change.__changeKind === "reassessment"
+        ? generateReassessmentJournal(contract, change)
+        : generateModificationJournal(contract, change)
+    );
+  }
+
   async function generateBulkJournals() {
 
     const year = Number(document.getElementById("bulkAccountingYear")?.value);
@@ -14897,6 +14949,11 @@ ${renderPaymentScheduleFooterContainers()}
             return d && d >= periodDates.periodStart && d <= periodDates.periodEnd;
           })
         : getScheduleForYear(contract, year, month, period);
+      const changeEntries = buildAppliedChangeJournalEntries(
+        contract,
+        periodDates.periodStart,
+        periodDates.periodEnd
+      );
 
       const tms29Entries = buildTms29BulkJournalEntries(
         contract,
@@ -14904,7 +14961,7 @@ ${renderPaymentScheduleFooterContainers()}
         periodDates.periodEnd
       );
 
-      if (!selected.length && !tms29Entries.length) {
+      if (!selected.length && !changeEntries.length && !tms29Entries.length) {
         if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {
           const pct = totalContracts ? Math.round(((index + 1) / totalContracts) * 100) : 100;
           updateLoadingProgress(pct, `Toplu fişler hazırlanıyor... (${index + 1}/${totalContracts})`);
@@ -14928,12 +14985,11 @@ ${renderPaymentScheduleFooterContainers()}
       const mappedBase = typeof applyAccountMappingToJournal === "function"
         ? applyAccountMappingToJournal(baseEntries, contract?.companyId || "")
         : baseEntries;
-
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
       const nominalEntries = await appendFxToBulkJournal(
         contract,
-        mappedBase,
+        mappedBase.concat(changeEntries),
         periodDates.periodStart,
         periodDates.periodEnd
       );
@@ -14967,7 +15023,7 @@ ${renderPaymentScheduleFooterContainers()}
       };
 
       // Nominal TFRS 16 ve TMS 21 kayıtları kendi fişi olarak kalır.
-      if (selected.length) {
+      if (selected.length || changeEntries.length) {
         pushVoucher(nominalEntries, description, "NOMINAL_TFRS16");
       }
       // TMS 29 enflasyon düzeltmesi nominal fişe eklenmez; ayrı bir
@@ -33603,6 +33659,7 @@ ${renderPaymentScheduleFooterContainers()}
     applyAccountMappingToJournal,
     exportBulkJournals,
     buildTms29BulkJournalEntries,
+    buildAppliedChangeJournalEntries,
     exportJournalEntries,
     renderAccountMappingPage,
     renderCloseDashboardPage,
@@ -33917,6 +33974,8 @@ ${renderPaymentScheduleFooterContainers()}
       renderAccountingCenterPage,
       renderAccountingCenter,
       generateSelectedJournal,
+      buildTms29BulkJournalEntries,
+      buildAppliedChangeJournalEntries,
       openBulkJournalModal,
       v191PrepareFinancialReportingData,
       v191RenderAssetNoteHtml,
