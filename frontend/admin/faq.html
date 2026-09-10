@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSS - Admin Panel</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            Financial Intelligence
+            <small>Platform Admin</small>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="index.html">📊 Dashboard</a>
+            <a href="companies.html">🏢 Companies</a>
+            <a href="users.html">👤 Users</a>
+            <a href="licenses.html">🔑 Licenses</a>
+            <a href="plans.html">📦 Plans</a>
+            <a href="faq.html" class="active">❓ SSS</a>
+            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
+            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
+            <a href="inflation-indices.html">📈 Enflasyon Endeksleri</a>
+            <a href="fx-rates.html">
+                <span class="icon">💱</span> TCMB Kurları
+            </a>
+            <a href="audit.html">📋 Audit Log</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <header class="top-header">
+            <div class="page-title">SSS (Sık Sorulanlar)</div>
+            <div class="user-info">
+                <span class="username" id="adminUsername">Loading...</span>
+                <span class="role-badge">ADMIN</span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div class="table-container">
+                <div class="table-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>index.html — Sık Sorulanlar</h3>
+                    <button class="btn btn-primary" onclick="openCreateModal()">+ Yeni Soru</button>
+                </div>
+                <p style="padding:0 20px 12px;color:var(--text-light);font-size:13px;">
+                    Bu liste marketing sitesindeki (<code>index.html</code>) "Sık sorulanlar"
+                    bölümünü besler. Sıralama sütunundaki ↑ / ↓ ile görünüm sırası değiştirilir.
+                    "Yayında değil" işaretli sorular admin panelde görünmeye devam eder ama
+                    public sitede gösterilmez.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:70px;">Sıra</th>
+                            <th>Soru / Cevap</th>
+                            <th style="width:90px;">Durum</th>
+                            <th style="width:170px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="faqTableBody">
+                        <tr><td colspan="4" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Yeni Soru</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="../js/admin.js"></script>
+    <script>
+        let allFaqs = [];
+
+        function escapeAttr(value) {
+            return escapeHtml(value).replace(/"/g, '&quot;');
+        }
+
+        async function loadFaqs() {
+            try {
+                const result = await AdminAPI.getFaqs();
+
+                if (!result.success) {
+                    document.getElementById('faqTableBody').innerHTML =
+                        `<tr><td colspan="4" style="text-align:center;color:var(--danger);">Error: ${escapeHtml(describeApiError(result))}</td></tr>`;
+                    return;
+                }
+
+                allFaqs = (result.data || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+
+                renderFaqTable();
+
+            } catch (error) {
+                console.error('Load FAQ error:', error);
+                document.getElementById('faqTableBody').innerHTML =
+                    `<tr><td colspan="4" style="text-align:center;color:var(--danger);">SSS listesi yüklenirken hata oluştu</td></tr>`;
+            }
+        }
+
+        function renderFaqTable() {
+            const html = allFaqs.map((f, index) => `
+                <tr>
+                    <td>
+                        <div style="display:flex;flex-direction:column;gap:2px;">
+                            <button class="btn btn-sm btn-outline" title="Yukarı taşı" ${index === 0 ? 'disabled' : ''} onclick="moveFaq('${f.id}', -1)">↑</button>
+                            <button class="btn btn-sm btn-outline" title="Aşağı taşı" ${index === allFaqs.length - 1 ? 'disabled' : ''} onclick="moveFaq('${f.id}', 1)">↓</button>
+                        </div>
+                    </td>
+                    <td>
+                        <strong>${escapeHtml(f.question)}</strong>
+                        <div style="color:var(--text-light);font-size:12px;margin-top:4px;max-width:520px;">${escapeHtml(f.answer)}</div>
+                    </td>
+                    <td>
+                        ${f.is_published
+                            ? '<span class="role-badge" style="background:var(--success);color:#fff;">Yayında</span>'
+                            : '<span class="role-badge" style="background:var(--text-light);color:#fff;">Yayında değil</span>'}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="openEditModal('${f.id}')">Düzenle</button>
+                        <button class="btn btn-sm btn-danger" onclick="confirmDeleteFaq('${f.id}')">Sil</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('faqTableBody').innerHTML = html ||
+                `<tr><td colspan="4" style="text-align:center;color:var(--text-light);">Henüz soru eklenmemiş</td></tr>`;
+        }
+
+        function faqFormFields(faq) {
+            const question = faq ? faq.question : '';
+            const answer = faq ? faq.answer : '';
+            const isPublished = faq ? faq.is_published : true;
+
+            return `
+                <div class="form-group">
+                    <label>Soru</label>
+                    <input type="text" id="faqQuestion" value="${escapeAttr(question)}" maxlength="300">
+                </div>
+                <div class="form-group">
+                    <label>Cevap</label>
+                    <textarea id="faqAnswer" rows="5" style="width:100%;resize:vertical;">${escapeHtml(answer)}</textarea>
+                    <small style="color:var(--text-light);">Basit HTML (ör. &lt;strong&gt;, &lt;code&gt;) desteklenir — index.html'de olduğu gibi render edilir.</small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="faqIsPublished" ${isPublished ? 'checked' : ''}>
+                        Sitede yayınla
+                    </label>
+                </div>
+            `;
+        }
+
+        function openCreateModal() {
+            document.getElementById('modalTitle').textContent = 'Yeni Soru';
+            document.getElementById('modalBody').innerHTML = `
+                <form id="faqForm" onsubmit="submitCreateFaq(event)">
+                    ${faqFormFields(null)}
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal()">İptal</button>
+                        <button type="submit" class="btn btn-primary">Ekle</button>
+                    </div>
+                </form>
+            `;
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function openEditModal(id) {
+            const faq = allFaqs.find(f => f.id === id);
+            if (!faq) return;
+
+            document.getElementById('modalTitle').textContent = 'Soruyu Düzenle';
+            document.getElementById('modalBody').innerHTML = `
+                <form id="faqForm" onsubmit="submitEditFaq(event, '${faq.id}')">
+                    ${faqFormFields(faq)}
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal()">İptal</button>
+                        <button type="submit" class="btn btn-primary">Kaydet</button>
+                    </div>
+                </form>
+            `;
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function readFaqForm() {
+            const question = document.getElementById('faqQuestion').value.trim();
+            const answer = document.getElementById('faqAnswer').value.trim();
+            const isPublished = document.getElementById('faqIsPublished').checked;
+
+            if (!question || !answer) {
+                throw new Error('Soru ve cevap alanları boş bırakılamaz.');
+            }
+
+            return { question, answer, isPublished };
+        }
+
+        async function submitCreateFaq(event) {
+            event.preventDefault();
+
+            let data;
+            try {
+                data = readFaqForm();
+            } catch (validationError) {
+                alert(validationError.message);
+                return;
+            }
+
+            try {
+                const result = await AdminAPI.createFaq(data);
+                if (result.success) {
+                    closeModal();
+                    loadFaqs();
+                } else {
+                    alert('Hata: ' + describeApiError(result));
+                }
+            } catch (error) {
+                alert('Soru eklenirken hata oluştu: ' + error.message);
+            }
+        }
+
+        async function submitEditFaq(event, id) {
+            event.preventDefault();
+
+            let data;
+            try {
+                data = readFaqForm();
+            } catch (validationError) {
+                alert(validationError.message);
+                return;
+            }
+
+            try {
+                const result = await AdminAPI.updateFaq(id, data);
+                if (result.success) {
+                    closeModal();
+                    loadFaqs();
+                } else {
+                    alert('Hata: ' + describeApiError(result));
+                }
+            } catch (error) {
+                alert('Soru güncellenirken hata oluştu: ' + error.message);
+            }
+        }
+
+        async function confirmDeleteFaq(id) {
+            const faq = allFaqs.find(f => f.id === id);
+            if (!faq) return;
+
+            if (!confirm(`"${faq.question}" sorusunu silmek istediğinize emin misiniz?`)) {
+                return;
+            }
+
+            try {
+                const result = await AdminAPI.deleteFaq(id);
+                if (result.success) {
+                    loadFaqs();
+                } else {
+                    alert('Hata: ' + describeApiError(result));
+                }
+            } catch (error) {
+                alert('Soru silinirken hata oluştu: ' + error.message);
+            }
+        }
+
+        // Sıralamayı, komşu kaydın sort_order değeriyle yer değiştirerek
+        // taşır — böylece her taşıma tek bir PATCH isteğiyle sonuçlanır.
+        async function moveFaq(id, direction) {
+            const index = allFaqs.findIndex(f => f.id === id);
+            const targetIndex = index + direction;
+
+            if (index === -1 || targetIndex < 0 || targetIndex >= allFaqs.length) {
+                return;
+            }
+
+            const current = allFaqs[index];
+            const target = allFaqs[targetIndex];
+
+            try {
+                const [resultA, resultB] = await Promise.all([
+                    AdminAPI.updateFaq(current.id, { sortOrder: target.sort_order }),
+                    AdminAPI.updateFaq(target.id, { sortOrder: current.sort_order })
+                ]);
+
+                if (!resultA.success || !resultB.success) {
+                    alert('Hata: ' + describeApiError(!resultA.success ? resultA : resultB));
+                    return;
+                }
+
+                loadFaqs();
+
+            } catch (error) {
+                alert('Sıralama güncellenirken hata oluştu: ' + error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAdminAuth();
+            if (authenticated) {
+                loadFaqs();
+            }
+        });
+    </script>
+</body>
+</html>

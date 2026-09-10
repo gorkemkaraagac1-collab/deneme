@@ -403,7 +403,7 @@
         <div class="eyebrow">SSS</div>
         <h2>Sık sorulanlar</h2>
       </div>
-      <div style="max-width:720px">
+      <div style="max-width:720px" id="faqList">
         <details class="faq-item">
           <summary>Dashboard’a nasıl girerim? <span class="plus">+</span></summary>
           <div class="faq-a">Sağ üstten veya “Dashboard'a Gir” ile <strong>login.html</strong> açılır. Başarılı girişten sonra uygulama (<code>tfrs16.html</code>) yüklenir.</div>
@@ -421,6 +421,74 @@
           <div class="faq-a">Yeni sözleşme, silme, modifikasyon, reassessment ve toplu yevmiye gibi yazma işlemleri engellenir.</div>
         </details>
       </div>
+      <!--
+        Yukarıdaki 4 madde statik fallback'tir: /api/faq'a ulaşılamazsa
+        (backend kapalı, ağ hatası vb.) sayfa boş kalmaz. Script
+        başarıyla veri çekerse #faqList'in içeriğini admin panelinden
+        (frontend/admin/faq.html) yönetilen tam listeyle DEĞİŞTİRİR.
+      -->
+      <script>
+        (function () {
+          var API_BASE = "https://contracts-api-285469227510.europe-west1.run.app";
+
+          function escapeHtml(value) {
+            var div = document.createElement('div');
+            div.textContent = String(value == null ? '' : value);
+            return div.innerHTML;
+          }
+
+          function sanitizeFaqHtml(value) {
+            var template = document.createElement('template');
+            template.innerHTML = String(value == null ? '' : value);
+
+            var allowedTags = {
+              STRONG: true,
+              CODE: true,
+              EM: true,
+              B: true,
+              BR: true
+            };
+
+            Array.from(template.content.querySelectorAll('*')).forEach(function (node) {
+              if (allowedTags[node.tagName]) {
+                Array.from(node.attributes).forEach(function (attr) {
+                  node.removeAttribute(attr.name);
+                });
+                return;
+              }
+
+              if (/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|SVG|MATH)$/i.test(node.tagName)) {
+                node.remove();
+                return;
+              }
+
+              node.replaceWith(document.createTextNode(node.textContent || ''));
+            });
+
+            return template.innerHTML;
+          }
+
+          fetch(API_BASE + '/api/faq')
+            .then(function (r) { return r.json(); })
+            .then(function (result) {
+              if (!result || !result.success || !Array.isArray(result.data) || result.data.length === 0) {
+                return; // fallback statik liste sayfada kalır
+              }
+
+              var html = result.data.map(function (item) {
+                return '<details class="faq-item">' +
+                  '<summary>' + escapeHtml(item.question) + ' <span class="plus">+</span></summary>' +
+                  '<div class="faq-a">' + sanitizeFaqHtml(item.answer) + '</div>' +
+                  '</details>';
+              }).join('');
+
+              document.getElementById('faqList').innerHTML = html;
+            })
+            .catch(function () {
+              /* /api/faq'a ulaşılamıyorsa sayfadaki statik SSS listesi görünmeye devam eder */
+            });
+        })();
+      </script>
     </div>
   </section>
 
