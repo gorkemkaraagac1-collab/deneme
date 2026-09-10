@@ -161,10 +161,17 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       reassessments: []
     });
 
-    const prepared = tfrs16.v191PrepareFinancialReportingData(
-      new Date("2026-01-01"),
-      new Date("2026-06-30")
-    );
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = "Europe/Istanbul";
+    let prepared;
+    try {
+      prepared = tfrs16.v191PrepareFinancialReportingData(
+        new Date(2026, 0, 1),
+        new Date(2026, 5, 30)
+      );
+    } finally {
+      process.env.TZ = previousTimezone;
+    }
     const totals = prepared.tms29.totals;
 
     expect(prepared.tms29.computedCount).toBe(1);
@@ -209,7 +216,13 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
 
     expect(prepared.liquidityDisclosure.presentationCurrency).toBe("TRY");
     expect(liquidity.currency).toBe("TRY");
-    expect(liquidity.contractualCashOutflowsTotal).toBeGreaterThan(1_000_000);
+    // Yerel gece yarısı Date'i 29.06 UTC'ye kaymamalı; 30.06 için
+    // tanımlanan 40,00 kapanış kuru aynen kullanılmalı.
+    expect(liquidity.contractualCashOutflowsTotal).toBeCloseTo(180_000 * 40, 2);
+    expect(liquidity.carryingValue).toBeCloseTo(
+      prepared.liabReport.rows[0].closingLiability * 40,
+      2
+    );
     expect(liquidity.contractualCashOutflowsTotal).toBeCloseTo(bucketTotal, 2);
     expect(Math.abs(liability.fxTranslationAdjustment)).toBeGreaterThan(0);
     expect(
@@ -219,6 +232,15 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       + liability.fxTranslationAdjustment
     ).toBeCloseTo(liability.closingLiability, 2);
     expect(prepared.liabReport.reconciliation.passed).toBe(true);
+
+    const rou = prepared.rouRows[0];
+    expect(rou.openingRuo + rou.entriesRuo - rou.depreciation
+      + rou.modificationAdjustment + rou.reassessmentAdjustment + rou.otherAdjustment
+    ).toBeCloseTo(rou.closingRuo, 2);
+    expect(rou.closingRuo).toBeCloseTo(
+      prepared.tms29.results.get("FX-DISCLOSURE-TRY").rouClosingNominalPeriod,
+      0
+    );
   });
 });
 

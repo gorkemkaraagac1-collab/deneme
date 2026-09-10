@@ -23354,6 +23354,29 @@ ${renderPaymentScheduleFooterContainers()}
     });
     const rouRows = translateNominalRows(rawRouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const liabRows = translateNominalRows(rawLiabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
+    // ROU maliyet modeli altında gayrimoneter bir kalemdir: başlangıçta
+    // tanınan maliyet ve o maliyete ait amortisman kapanış kuruyla tekrar
+    // çevrilmez. Dönem sonuna kadar uygulanmış ayrı bir ROU katmanı
+    // (modifikasyon/reassessment) yoksa bütün nominal hareketleri
+    // başlangıç tarihindeki tarihi kurla çevir.
+    rouRows.forEach(row => {
+      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
+      if (!contract) return;
+      const sourceCurrency = String(contract.currency || row.currency || presentationCurrency).toUpperCase();
+      if (sourceCurrency === presentationCurrency) return;
+      const appliedRouLayerBeforePeriodEnd = []
+        .concat(Array.isArray(contract.modifications) ? contract.modifications : [])
+        .concat(Array.isArray(contract.reassessments) ? contract.reassessments : [])
+        .some(change => change?.status === "APPLIED" && (!rptDate(change.effectiveDate) || rptDate(change.effectiveDate) <= periodEnd));
+      if (appliedRouLayerBeforePeriodEnd) return;
+      const historical = convertAmountToReportingCurrency(1, sourceCurrency, contract.startDate, presentationCurrency);
+      if (historical?.error || !Number.isFinite(Number(historical.value))) return;
+      const raw = rawRouRows.find(item => String(item.contractId) === String(row.contractId));
+      if (!raw) return;
+      ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"].forEach(key => {
+        if (Number.isFinite(Number(raw[key]))) row[key] = rptRound(Number(raw[key]) * Number(historical.value));
+      });
+    });
     liabRows.forEach(row => {
       row.fxTranslationAdjustment = rptRound(
         rptNumber(row.closingLiability) - (
@@ -27272,11 +27295,21 @@ ${renderPaymentScheduleFooterContainers()}
   function v23Object(value) { return value && typeof value === "object" ? value : {}; }
   function v23Now() { return new Date().toISOString(); }
   function v23Id(prefix="V23") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`; }
-  // v23Date/v23DateKey KASITLI OLARAK dokunulmadı — parseDate() yerine
-  // native `new Date(value)` kullanıyor (bkz. coreDate yorumu, PROJECT_
-  // CONTEXT.md bölüm 33). Konsolide etmek davranış değişikliği olurdu.
+  // v23Date native `new Date(value)` davranışını korur. v23DateKey ise
+  // finansal takvim gününü korumak için aşağıda yerel tarih bileşenlerini
+  // kullanır; UTC ISO dönüşümü Türkiye'de günü geriye kaydırmamalıdır.
   function v23Date(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? null : d; }
-  function v23DateKey(value) { const d=v23Date(value); return d ? d.toISOString().slice(0,10) : null; }
+  function v23DateKey(value) {
+    // Finansal kur tabloları takvim günüyle anahtarlanır. Raporlama
+    // ekranlarından gelen Date nesneleri yerel gece yarısını taşır;
+    // toISOString() bunları UTC'ye çevirip Türkiye saat diliminde bir
+    // önceki güne kaydırıyordu (30.06 kapanışı yerine 29.06 kuru).
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+      return value.trim();
+    }
+    const d=v23Date(value);
+    return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : null;
+  }
   /** @deprecated-name Kalıcı: v23Num — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
   function v23Num(value, fallback=0) { return coreNumber(value, fallback); }
   function v23CurrencyCode(value) { return String(value || "").trim().toUpperCase(); }
