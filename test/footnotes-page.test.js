@@ -346,6 +346,13 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
     persistSpy.mockRestore();
     expect(applied.valid).toBe(true);
 
+    const effectiveSchedule = tfrs16.resolveContractScheduleSource(contract);
+    expect(effectiveSchedule.source).toBe("MODIFIED_SCHEDULE");
+    const marchPayment = effectiveSchedule.schedule.find(row =>
+      tfrs16.parseDate(row.date) >= new Date(2026, 2, 1)
+    );
+    expect(marchPayment.payment).toBeCloseTo(12000, 2);
+
     const after2025 = tfrs16.v191PrepareFinancialReportingData(
       new Date(2025, 0, 1), new Date(2025, 11, 31)
     ).tms29.results.get(contract.id);
@@ -364,6 +371,14 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
     const rrf = result.rouRollForward;
     const lrf = result.liabilityRollForward;
 
+    expect(rrf.rouEntriesRestated).toBeCloseTo(0, 2);
+    expect(rrf.rouModificationRestated).toBeGreaterThan(0);
+    const tms29RouHtml = tfrs16.v191Tms29RouSummaryHtml(
+      prepared.tms29, prepared.periodLabel, prepared.periodStart, prepared.periodEnd
+    );
+    expect(tms29RouHtml).toMatch(/Modifikasyon/);
+    expect(tms29RouHtml).toMatch(/Reassessment/);
+
     // 01.03.2026 is a Sunday: the modification layer uses the latest
     // available quote, 27.02.2026 = 37.00, rather than June's 40.00.
     expect(liability.modificationAdjustment)
@@ -377,8 +392,9 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       - liability.payments + liability.modificationAdjustment
       + liability.reassessmentAdjustment + liability.otherAdjustment
       + liability.fxTranslationAdjustment - liability.closingLiability)).toBeLessThanOrEqual(0.02);
-    expect(rrf.rouOpeningRestated + rrf.rouEntriesRestated - rrf.rouDepreciationRestated)
-      .toBeCloseTo(rrf.rouClosingRestatedPeriod, 2);
+    expect(rrf.rouOpeningRestated + rrf.rouEntriesRestated
+      + (rrf.rouModificationRestated || 0) + (rrf.rouReassessmentRestated || 0)
+      - rrf.rouDepreciationRestated).toBeCloseTo(rrf.rouClosingRestatedPeriod, 2);
     expect(lrf.liabilityOpeningRestated + lrf.liabilityEntriesRestated
       + lrf.liabilityModificationRestated + lrf.liabilityReassessmentRestated
       + lrf.liabilityInterestRestated - lrf.liabilityPaymentsRestated
@@ -650,5 +666,44 @@ describe("renderFootnotesPage — 3 tab arası geçiş (Varlık/Yükümlülük/L
     // sözleşme satırları (ya da en azından değişmiş bir DOM) beklenir.
     expect(after).not.toBe(before);
     expect(host.innerHTML).toMatch(/Kullanım Hakkı Varlığı/); // hâlâ asset tab'ındayız (default), sayfa BOZULMADI
+  });
+});
+
+
+describe("canlı FX raporlama regresyonları", () => {
+  let tfrs16;
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("gk_tfrs16_v23_fx_rates_v1", JSON.stringify([
+      { fromCurrency: "USD", toCurrency: "TRY", rateDate: "2024-12-31", rateType: "CLOSING", rate: 35, status: "APPROVED" }
+    ]));
+    tfrs16 = loadTfrs16();
+  });
+
+  test("ilk muhasebeleştirme fişi fonksiyonel para birimi TRY'de ve dengeli üretilir", () => {
+    const contract = {
+      id: "FX-INITIAL-TRY", companyId: "C-1", monthlyPayment: 10000, discountRate: 5,
+      startDate: "2025-01-01", endDate: "2027-12-31", paymentFrequency: "monthly",
+      paymentTiming: "arrears", currency: "USD", functionalCurrency: "TRY", reportingCurrency: "TRY"
+    };
+    const entries = tfrs16.generateInitialEntryForFunctionalCurrency(contract);
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every(entry => entry.currency === "TRY")).toBe(true);
+    expect(entries.reduce((sum, entry) => sum + entry.debit, 0))
+      .toBeCloseTo(entries.reduce((sum, entry) => sum + entry.credit, 0), 2);
+    expect(entries[0].transactionCurrency).toBe("USD");
+    expect(entries[0].fxRate).toBeCloseTo(35, 4);
+  });
+
+  test("toplu fiş kartı fiş adedini sözleşme adedi diye göstermez", () => {
+    const data = [
+      { contractId: "LEASE-1", totalDebit: 10, totalCredit: 10, balanced: true },
+      { contractId: "LEASE-1", totalDebit: 5, totalCredit: 5, balanced: true }
+    ];
+    const html = tfrs16.renderBulkJournalSummaryCards(data, {
+      balanced: 2, unbalanced: 0, totalDebit: 15, totalCredit: 15
+    });
+    expect(html).toMatch(/SÖZLEŞME/);
+    expect(html).toMatch(/>\s*1\s*<\/strong>/);
   });
 });

@@ -10387,6 +10387,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  function generateInitialEntryForFunctionalCurrency(contract) {
+    const entries = generateInitialEntry(contract);
+    if (!contractNeedsFxTranslation(contract)) return entries;
+    return buildFunctionalCurrencyJournalEntries(
+      contract,
+      entries,
+      [],
+      parseDate(contract.startDate),
+      parseDate(contract.startDate),
+      []
+    );
+  }
+
   /* ==========================================================
      JOURNAL RENDER
   ========================================================== */
@@ -12600,7 +12613,7 @@ ${renderPaymentScheduleFooterContainers()}
       const rowsHtml = fx.schedule.map(row => `
         <tr>
           <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${row.period}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${row.date}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${formatDate(parseDate(row.date))}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${row.closingRate.toFixed(4)}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.openingLiabilityFx)}</td>
           <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.interestFx)}</td>
@@ -13734,10 +13747,10 @@ ${renderPaymentScheduleFooterContainers()}
             </div>
           ` : renderJournalEntry(
             "İlk Muhasebeleştirme Fişi",
-            generateInitialEntry(
+            generateInitialEntryForFunctionalCurrency(
               contract
             ),
-            contract.currency || "TRY"
+            resolveContractFunctionalCurrency(contract) || contract.currency || "TRY"
           )}
         </div>
 
@@ -15395,7 +15408,7 @@ ${renderPaymentScheduleFooterContainers()}
               font-size:20px;
             "
           >
-            ${bulkJournalData.length}
+            ${new Set((Array.isArray(data) ? data : []).map(item => String(item.contractId || "")).filter(Boolean)).size}
           </strong>
 
         </div>
@@ -19049,6 +19062,8 @@ ${renderPaymentScheduleFooterContainers()}
         "Sözleşme": row.contractId, "Şirket": row.company, "Varlık Sınıfı": row.assetClass, "Para Birimi": row.currency,
         "Açılış (Restated)": rrf ? rptRound(rrf.rouOpeningRestated) : null,
         "Girişler (Restated)": rrf ? rptRound(rrf.rouEntriesRestated) : null,
+        "Modifikasyon (Restated)": rrf ? rptRound(rrf.rouModificationRestated || 0) : null,
+        "Reassessment (Restated)": rrf ? rptRound(rrf.rouReassessmentRestated || 0) : null,
         "Amortisman (Restated) (-)": rrf ? -Math.abs(rptRound(rrf.rouDepreciationRestated)) : null,
         "Kapanış (Restated)": rrf ? rptRound(rrf.rouClosingRestatedPeriod) : null,
         "Kapanış (Nominal)": rrf ? rptRound(rrf.rouClosingNominalPeriod) : null,
@@ -19059,6 +19074,8 @@ ${renderPaymentScheduleFooterContainers()}
     rouDetailRows.push({
       "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
       "Açılış (Restated)": rptRound(t.rouOpeningRestated), "Girişler (Restated)": rptRound(t.rouEntriesRestated),
+      "Modifikasyon (Restated)": rptRound(t.rouModificationRestated || 0),
+      "Reassessment (Restated)": rptRound(t.rouReassessmentRestated || 0),
       "Amortisman (Restated) (-)": -Math.abs(rptRound(t.rouDepreciationRestated)),
       "Kapanış (Restated)": rptRound(t.rouClosingRestatedPeriod), "Kapanış (Nominal)": rptRound(t.rouClosingNominalPeriod),
       "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
@@ -19096,6 +19113,8 @@ ${renderPaymentScheduleFooterContainers()}
     const rouAssetClassSummary = tms29.byAssetClass.map(g => ({
       "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
       "Açılış (Restated)": g.rouOpeningRestated, "Girişler (Restated)": g.rouEntriesRestated,
+      "Modifikasyon (Restated)": g.rouModificationRestated || 0,
+      "Reassessment (Restated)": g.rouReassessmentRestated || 0,
       "Amortisman (Restated) (-)": -Math.abs(g.rouDepreciationRestated),
       "Kapanış (Restated)": g.rouClosingRestatedPeriod, "Kapanış (Nominal)": g.rouClosingNominalPeriod
     }));
@@ -23349,10 +23368,11 @@ ${renderPaymentScheduleFooterContainers()}
       periodStart: periodStartMonth,
       rouOpeningNominal: openingNominal,
       rouOpeningRestated: openingRestated,
-      // TMS 29 display has one "Girişler" column, so it includes new
-      // historical-cost layers arising from changes in the period.
-      rouEntriesNominal: allEntriesNominal,
-      rouEntriesRestated: allEntriesRestated,
+      // Initial recognition, modification and reassessment are distinct
+      // movements in the TMS 29 note. Keeping them separate prevents a
+      // change in terms from being mislabeled as a new lease addition.
+      rouEntriesNominal: entriesNominal,
+      rouEntriesRestated: entriesRestated,
       rouInitialEntriesNominal: entriesNominal,
       rouInitialEntriesRestated: entriesRestated,
       rouModificationNominal: modificationNominal,
@@ -23468,6 +23488,8 @@ ${renderPaymentScheduleFooterContainers()}
     const totals = {
       rouOpeningNominal: 0, rouOpeningRestated: 0,
       rouEntriesNominal: 0, rouEntriesRestated: 0,
+      rouModificationNominal: 0, rouModificationRestated: 0,
+      rouReassessmentNominal: 0, rouReassessmentRestated: 0,
       rouDepreciationNominal: 0, rouDepreciationRestated: 0,
       rouClosingNominalPeriod: 0, rouClosingRestatedPeriod: 0,
       liabilityOpeningNominal: 0, liabilityOpeningRestated: 0,
@@ -23607,6 +23629,10 @@ ${renderPaymentScheduleFooterContainers()}
           totals.rouOpeningRestated += rrf.rouOpeningRestated;
           totals.rouEntriesNominal += rrf.rouEntriesNominal;
           totals.rouEntriesRestated += rrf.rouEntriesRestated;
+          totals.rouModificationNominal += rrf.rouModificationNominal || 0;
+          totals.rouModificationRestated += rrf.rouModificationRestated || 0;
+          totals.rouReassessmentNominal += rrf.rouReassessmentNominal || 0;
+          totals.rouReassessmentRestated += rrf.rouReassessmentRestated || 0;
           totals.rouDepreciationNominal += rrf.rouDepreciationNominal;
           totals.rouDepreciationRestated += rrf.rouDepreciationRestated;
           totals.rouClosingNominalPeriod += rrf.rouClosingNominalPeriod;
@@ -23642,6 +23668,7 @@ ${renderPaymentScheduleFooterContainers()}
     // hareket tabloları için de kullanılan) yeniden kullanılıyor.
     const tms29SumKeys = [
       "rouOpeningNominal","rouOpeningRestated","rouEntriesNominal","rouEntriesRestated",
+      "rouModificationNominal","rouModificationRestated","rouReassessmentNominal","rouReassessmentRestated",
       "rouDepreciationNominal","rouDepreciationRestated","rouClosingNominalPeriod","rouClosingRestatedPeriod",
       "liabilityOpeningNominal","liabilityOpeningRestated","liabilityEntriesNominal","liabilityEntriesRestated",
       "liabilityInterestNominal","liabilityInterestRestated","liabilityPaymentsNominal","liabilityPaymentsRestated",
@@ -23659,7 +23686,7 @@ ${renderPaymentScheduleFooterContainers()}
   // SİLİNMEDİ (minimal risk), sadece hiçbir yerden referans verilmiyor.
   function v191Tms29SummaryHtml(tms29, periodLabel, periodStart, periodEnd) {
     const t = tms29.totals;
-    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
+    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated + t.rouModificationRestated + t.rouReassessmentRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
 
     const rouRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
     const liabRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
@@ -23669,6 +23696,8 @@ ${renderPaymentScheduleFooterContainers()}
       { key: "contractCount", label: "Sözleşme Sayısı" },
       { key: "rouOpeningRestated", label: "Açılış" },
       { key: "rouEntriesRestated", label: "Girişler" },
+      { key: "rouModificationRestated", label: "Modifikasyon" },
+      { key: "rouReassessmentRestated", label: "Reassessment" },
       { key: "rouDepreciationRestated", label: "Amortisman", render: row => v191Value(-row.rouDepreciationRestated) },
       { key: "rouClosingRestatedPeriod", label: "Kapanış (Restated)" },
       { key: "rouClosingNominalPeriod", label: "Kapanış (Nominal)" }
@@ -23703,7 +23732,7 @@ ${renderPaymentScheduleFooterContainers()}
 
       <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — Varlık Sınıfına Göre, Restated</h5>
       ${v191Table(rouRowsWithTotal, rouTms29Columns)}
-      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
+      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler+Modifikasyon+Reassessment−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
 
       <h5 style="margin:16px 0 6px;font-size:11px;color:#475569;">Kira Yükümlülüğü — Varlık Sınıfına Göre, Restated</h5>
       ${v191Table(liabRowsWithTotal, liabTms29Columns)}
@@ -23740,13 +23769,15 @@ ${renderPaymentScheduleFooterContainers()}
       </div>`;
     }
     const t = tms29.totals;
-    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
+    const rouReconciles = Math.abs((t.rouOpeningRestated + t.rouEntriesRestated + t.rouModificationRestated + t.rouReassessmentRestated - t.rouDepreciationRestated) - t.rouClosingRestatedPeriod) < 1;
     const rouRowsWithTotal = [...tms29.byAssetClass, { assetClass: "TOPLAM", contractCount: tms29.computedCount, ...t }];
     const rouTms29Columns = [
       { key: "assetClass", label: "Varlık Sınıfı" },
       { key: "contractCount", label: "Sözleşme Sayısı" },
       { key: "rouOpeningRestated", label: "Açılış" },
       { key: "rouEntriesRestated", label: "Girişler" },
+      { key: "rouModificationRestated", label: "Modifikasyon" },
+      { key: "rouReassessmentRestated", label: "Reassessment" },
       { key: "rouDepreciationRestated", label: "Amortisman", render: row => v191Value(-row.rouDepreciationRestated) },
       { key: "rouClosingRestatedPeriod", label: "Kapanış (Restated)" },
       { key: "rouClosingNominalPeriod", label: "Kapanış (Nominal)" }
@@ -23763,7 +23794,7 @@ ${renderPaymentScheduleFooterContainers()}
 
       <h5 style="margin:14px 0 6px;font-size:11px;color:#475569;">Kullanım Hakkı Varlığı (ROU) — ${v191Escape(presentationCurrency)} Restated</h5>
       ${v191Table(rouRowsWithTotal, rouTms29Columns)}
-      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
+      ${!rouReconciles ? `<p style="color:#b91c1c;font-size:11px;margin-top:4px;">⚠ Açılış+Girişler+Modifikasyon+Reassessment−Amortisman (restated) ≠ Kapanış (restated) — mutabakat farkı var.</p>` : ""}
       <p style="margin:4px 0 0;font-size:10px;color:#94a3b8;">ROU (moneter olmayan): kapanış bakiyesinin kendisi düzeltilir, fark 698 hesabına yazılır.</p>
     </div>`;
   }
@@ -34084,6 +34115,9 @@ ${renderPaymentScheduleFooterContainers()}
       calculateVariancePercent,
       checkIndexReassessment,
       generateInitialEntry,
+      generateInitialEntryForFunctionalCurrency,
+      resolveContractScheduleSource,
+      renderBulkJournalSummaryCards,
       applyEarlyPayment,
       getEscalatedPayments,
       computeEscalatedPaymentV18,
