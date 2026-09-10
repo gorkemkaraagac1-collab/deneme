@@ -2438,9 +2438,18 @@ document.addEventListener("DOMContentLoaded", () => {
       devam eder — çok katmanlı ROU (modifikasyon sonrası) restatement'ı
       bu sürümde KAPSAM DIŞI bırakıldı (bkz. rapor).
     */
+    const rpEndDateForChanges = new Date(Number(rp.slice(0, 4)), Number(rp.slice(5, 7)), 0);
+    const changeAppliesByReportingDate = x => {
+      if (x?.status !== "APPLIED") return false;
+      const effective = parseDate(x.effectiveDate || x.modificationDate || x.reassessmentDate);
+      return effective && effective <= rpEndDateForChanges;
+    };
+    // A later modification/reassessment must never force an earlier report
+    // onto the legacy multi-layer path.  Example: a March 2026 modification
+    // cannot change the 31 December 2025 TMS 29 measurement.
     const hasAppliedChange =
-      (contract?.reassessments || []).some(x => x?.status === "APPLIED") ||
-      (contract?.modifications || []).some(x => x?.status === "APPLIED");
+      (contract?.reassessments || []).some(changeAppliesByReportingDate) ||
+      (contract?.modifications || []).some(changeAppliesByReportingDate);
 
     const tms29AccrualContext =
       !hasAppliedChange ? resolveLeaseAccrualContext(contract) : null;
@@ -11634,7 +11643,7 @@ ${renderAccountingCenterBulkPromo()}
               <span>${escapeHtml(item.modificationType || "OTHER")}</span>
               <span>${escapeHtml(item.effectiveDate || "")}</span>
               <span>${escapeHtml(item.status || "DRAFT")}</span>
-              <strong>${formatCurrency(item.liabilityAdjustment || 0)}</strong>
+              <strong>${formatPresentationCurrency(item.liabilityAdjustment || 0, contract.currency)}</strong>
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
@@ -11936,7 +11945,7 @@ ${renderAccountingCenterBulkPromo()}
             <span>${escapeHtml(item.type || "OTHER")}</span>
             <span>${escapeHtml(item.effectiveDate || "")}</span>
             <span>${escapeHtml(item.status || "DRAFT")}</span>
-            <strong>${formatCurrency(item.liabilityAdjustment || 0)}</strong>
+            <strong>${formatPresentationCurrency(item.liabilityAdjustment || 0, contract.currency)}</strong>
             <span style="display:flex;gap:5px;">
               ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="edit" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Düzenle</button>` : ""}
               ${item.status !== "APPLIED" && item.status !== "CANCELLED" ? `<button type="button" class="secondary-button" data-reass-action="apply" data-reass-id="${escapeHtml(item.id)}" ${rowDisabledAttr}>Uygula</button>` : ""}
@@ -22985,7 +22994,234 @@ ${renderPaymentScheduleFooterContainers()}
   // yüzden geniş bir portföyde birçok kontrat için endeks eksik
   // kalabilir — bu durumda o kontrat "Endeks Eksik" olarak işaretlenir,
   // NOMİNAL rakamlar etkilenmeden gösterilmeye devam eder.
-  function v191ComputePortfolioTms29(rows, periodStartMonth, rpMonth) {
+  function v191PeriodBounds(periodStartMonth, rpMonth) {
+    return {
+      start: new Date(Number(periodStartMonth.slice(0, 4)), Number(periodStartMonth.slice(5, 7)) - 1, 1),
+      end: new Date(Number(rpMonth.slice(0, 4)), Number(rpMonth.slice(5, 7)), 0)
+    };
+  }
+
+  function v191AppliedChanges(contract, start, end) {
+    const modifications = dedupeAppliedModifications(contract?.modifications)
+      .map(x => ({ ...x, __changeKind: "modification" }));
+    const reassessmentKeys = new Set();
+    const reassessments = (Array.isArray(contract?.reassessments) ? contract.reassessments : [])
+      .filter(x => x?.status === "APPLIED")
+      .filter(x => {
+        const key = reassessmentEconomicKey(x);
+        if (reassessmentKeys.has(key)) return false;
+        reassessmentKeys.add(key);
+        return true;
+      })
+      .map(x => ({ ...x, __changeKind: "reassessment" }));
+    return modifications.concat(reassessments)
+      .map(x => ({ ...x, __effective: rptDate(x.effectiveDate || x.modificationDate || x.reassessmentDate) }))
+      .filter(x => x.__effective && (!start || x.__effective >= start) && (!end || x.__effective <= end))
+      .sort((a, b) => a.__effective - b.__effective);
+  }
+
+  function v191FxRateAt(sourceCurrency, presentationCurrency, date) {
+    if (sourceCurrency === presentationCurrency) return 1;
+    const quote = getFxRate(sourceCurrency, presentationCurrency, date, V23_RATE_TYPES.CLOSING, { allowLastAvailable: true });
+    if (quote?.error || !(Number(quote?.rate) > 0)) {
+      throw Object.assign(new Error(`TMS 21: ${sourceCurrency}/${presentationCurrency} ${v23DateKey(date)} kuru bulunamadı.`), { code: quote?.error || "FX_RATE_NOT_FOUND" });
+    }
+    return Number(quote.rate);
+  }
+
+  function v191MonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  // Foreign-currency ROU assets are non-monetary historical-cost layers.
+  // The original asset keeps the commencement rate; each positive
+  // modification/reassessment creates a new layer at its effective-date
+  // rate. Depreciation consumes the layers proportionally, preserving their
+  // weighted historical rate. Negative adjustments derecognise the existing
+  // carrying amount at that same weighted rate.
+  function v191BuildFxRouRollForward(contract, rawRow, periodStartMonth, rpMonth, presentationCurrency) {
+    const { start, end } = v191PeriodBounds(periodStartMonth, rpMonth);
+    const sourceCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+    const built = rptScheduleRows(contract);
+    if (built.error) throw new Error(built.error);
+    const schedule = (built.schedule || []).slice().sort((a, b) => rptDate(a.date) - rptDate(b.date));
+    const first = schedule[0] || {};
+    const commencement = rptDate(contract.startDate);
+    const initialTx = rptNumber(first.rouOpening || calculateLeaseEngine(contract).rouAssets || 0);
+    const additions = [{ date: commencement, tx: initialTx, fn: initialTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement), kind: "initial" }];
+    const changes = v191AppliedChanges(contract, null, end);
+    const depreciationEvents = [];
+    let txCarrying = initialTx;
+    let fnCarrying = additions[0].fn;
+    let changeIndex = 0;
+
+    const applyChangesThrough = (date, inclusive) => {
+      while (changeIndex < changes.length) {
+        const change = changes[changeIndex];
+        const due = inclusive ? change.__effective <= date : change.__effective < date;
+        if (!due) break;
+        const tx = rptNumber(change.rouAdjustment);
+        const weightedRate = txCarrying ? fnCarrying / txCarrying : v191FxRateAt(sourceCurrency, presentationCurrency, change.__effective);
+        const rate = tx >= 0 ? v191FxRateAt(sourceCurrency, presentationCurrency, change.__effective) : weightedRate;
+        const fn = tx * rate;
+        additions.push({ date: change.__effective, tx, fn, kind: change.__changeKind });
+        txCarrying = Math.max(0, txCarrying + tx);
+        fnCarrying = Math.max(0, fnCarrying + fn);
+        changeIndex++;
+      }
+    };
+
+    schedule.forEach(item => {
+      const date = rptDate(item.date);
+      if (!date || date > end) return;
+      applyChangesThrough(date, false);
+      const depTx = Math.min(Math.max(0, rptNumber(item.depreciation)), txCarrying);
+      const weightedRate = txCarrying ? fnCarrying / txCarrying : 0;
+      const depFn = depTx * weightedRate;
+      depreciationEvents.push({ date, tx: depTx, fn: depFn });
+      txCarrying = Math.max(0, txCarrying - depTx);
+      fnCarrying = Math.max(0, fnCarrying - depFn);
+      applyChangesThrough(date, true);
+    });
+    applyChangesThrough(end, true);
+
+    const beforeStart = event => event.date < start;
+    const inPeriod = event => event.date >= start && event.date <= end;
+    const restate = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
+    const openingNominal = additions.filter(beforeStart).reduce((s, x) => s + x.fn, 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + x.fn, 0);
+    const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restate(x), 0);
+    const periodAdditions = additions.filter(inPeriod);
+    const periodDepreciation = depreciationEvents.filter(inPeriod);
+    const entries = periodAdditions.filter(x => x.kind === "initial");
+    const changesInPeriod = periodAdditions.filter(x => x.kind !== "initial");
+    const entriesNominal = entries.reduce((s, x) => s + x.fn, 0);
+    const entriesRestated = entries.reduce((s, x) => s + restate(x), 0);
+    const modificationNominal = changesInPeriod.filter(x => x.kind === "modification").reduce((s, x) => s + x.fn, 0);
+    const modificationRestated = changesInPeriod.filter(x => x.kind === "modification").reduce((s, x) => s + restate(x), 0);
+    const reassessmentNominal = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + x.fn, 0);
+    const reassessmentRestated = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + restate(x), 0);
+    const depreciationNominal = periodDepreciation.reduce((s, x) => s + x.fn, 0);
+    const depreciationRestated = periodDepreciation.reduce((s, x) => s + restate(x), 0);
+    const allEntriesNominal = entriesNominal + modificationNominal + reassessmentNominal;
+    const allEntriesRestated = entriesRestated + modificationRestated + reassessmentRestated;
+    return {
+      periodStart: periodStartMonth,
+      rouOpeningNominal: openingNominal,
+      rouOpeningRestated: openingRestated,
+      // TMS 29 display has one "Girişler" column, so it includes new
+      // historical-cost layers arising from changes in the period.
+      rouEntriesNominal: allEntriesNominal,
+      rouEntriesRestated: allEntriesRestated,
+      rouInitialEntriesNominal: entriesNominal,
+      rouInitialEntriesRestated: entriesRestated,
+      rouModificationNominal: modificationNominal,
+      rouModificationRestated: modificationRestated,
+      rouReassessmentNominal: reassessmentNominal,
+      rouReassessmentRestated: reassessmentRestated,
+      rouDepreciationNominal: depreciationNominal,
+      rouDepreciationRestated: depreciationRestated,
+      rouClosingNominalPeriod: openingNominal + allEntriesNominal - depreciationNominal,
+      rouClosingRestatedPeriod: openingRestated + allEntriesRestated - depreciationRestated
+    };
+  }
+
+  function v191BuildFxLiabilityRollForward(contract, rawRow, periodStartMonth, rpMonth, presentationCurrency) {
+    const { start, end } = v191PeriodBounds(periodStartMonth, rpMonth);
+    const sourceCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+    const built = rptScheduleRows(contract);
+    if (built.error) throw new Error(built.error);
+    const schedule = (built.schedule || []).filter(item => {
+      const d = rptDate(item.date);
+      return d && d >= start && d <= end;
+    });
+    const changes = v191AppliedChanges(contract, start, end);
+    const commencement = rptDate(contract.startDate);
+    const initialInPeriod = commencement && commencement >= start && commencement <= end;
+    const openingDate = rptAddDays(start, -1);
+    const openingNominal = initialInPeriod ? 0 : rptNumber(rawRow.openingLiability) * v191FxRateAt(sourceCurrency, presentationCurrency, openingDate);
+    const openingRestated = initialInPeriod
+      ? 0
+      : openingNominal * getInflationRatio(v191MonthKey(openingDate), rpMonth);
+    const entriesTx = rptNumber(rawRow.entriesLiability);
+    const entriesNominal = entriesTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement || start);
+    const entriesRestated = entriesNominal * getInflationRatio(v191MonthKey(commencement || start), rpMonth);
+    const flow = item => {
+      const date = rptDate(item.date);
+      const rate = v191FxRateAt(sourceCurrency, presentationCurrency, date);
+      const ratio = getInflationRatio(v191MonthKey(date), rpMonth);
+      return { nominal: rptNumber(item.amount) * rate, restated: rptNumber(item.amount) * rate * ratio };
+    };
+    const interestEvents = schedule.map(item => ({ date: item.date, amount: item.interest }));
+    const paymentEvents = schedule.map(item => ({ date: item.date, amount: (contract.paymentTiming === "advance" && item === built.schedule[0]) ? 0 : item.payment }));
+    const sumFlow = events => events.reduce((acc, item) => { const x = flow(item); acc.nominal += x.nominal; acc.restated += x.restated; return acc; }, { nominal: 0, restated: 0 });
+    const interest = sumFlow(interestEvents);
+    const payments = sumFlow(paymentEvents);
+    const modification = sumFlow(changes.filter(x => x.__changeKind === "modification").map(x => ({ date: x.__effective, amount: x.liabilityAdjustment })));
+    const reassessment = sumFlow(changes.filter(x => x.__changeKind === "reassessment").map(x => ({ date: x.__effective, amount: x.liabilityAdjustment })));
+    const closingNominal = rptNumber(rawRow.closingLiability) * v191FxRateAt(sourceCurrency, presentationCurrency, end);
+    const fxNominal = closingNominal - (openingNominal + entriesNominal + interest.nominal - payments.nominal + modification.nominal + reassessment.nominal);
+
+    // Attribute the exchange movement to the month in which it arose. This
+    // keeps TMS 21 exchange differences separate from the TMS 29 monetary
+    // gain/loss and restates each flow with its own month's CPI.
+    let fxRestated = 0;
+    let fxNominalByMonth = 0;
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    let txOpening = initialInPeriod ? 0 : rptNumber(rawRow.openingLiability);
+    while (cursor <= end) {
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+      const boundedEnd = monthEnd > end ? end : monthEnd;
+      const inMonth = event => {
+        const d = rptDate(event.date);
+        return d && d >= cursor && d <= boundedEnd;
+      };
+      const monthInterest = interestEvents.filter(inMonth).reduce((s, x) => s + rptNumber(x.amount), 0);
+      const monthPayments = paymentEvents.filter(inMonth).reduce((s, x) => s + rptNumber(x.amount), 0);
+      const monthChanges = changes.filter(x => inMonth({ date: x.__effective }));
+      const monthAdjustment = monthChanges.reduce((s, x) => s + rptNumber(x.liabilityAdjustment), 0);
+      const monthEntry = initialInPeriod && commencement >= cursor && commencement <= boundedEnd ? entriesTx : 0;
+      const txClosing = txOpening + monthEntry + monthInterest - monthPayments + monthAdjustment;
+      const openingRateDate = rptAddDays(cursor, -1);
+      const openingFn = txOpening * v191FxRateAt(sourceCurrency, presentationCurrency, openingRateDate);
+      const interestFn = interestEvents.filter(inMonth).reduce((s, x) => s + flow(x).nominal, 0);
+      const paymentsFn = paymentEvents.filter(inMonth).reduce((s, x) => s + flow(x).nominal, 0);
+      const changesFn = monthChanges.reduce((s, x) => s + flow({ date: x.__effective, amount: x.liabilityAdjustment }).nominal, 0);
+      const entryFn = monthEntry * v191FxRateAt(sourceCurrency, presentationCurrency, commencement || cursor);
+      const closingFn = txClosing * v191FxRateAt(sourceCurrency, presentationCurrency, boundedEnd);
+      const monthFx = closingFn - (openingFn + entryFn + interestFn - paymentsFn + changesFn);
+      fxNominalByMonth += monthFx;
+      fxRestated += monthFx * getInflationRatio(v191MonthKey(boundedEnd), rpMonth);
+      txOpening = txClosing;
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+    // Schedule rounding or a boundary event can create a small difference
+    // between the reconstructed monthly FX and the authoritative closing
+    // residual. Keep nominal exact and carry the small correction at rp.
+    fxRestated += fxNominal - fxNominalByMonth;
+    const restatedSum = openingRestated + entriesRestated + interest.restated - payments.restated + modification.restated + reassessment.restated + fxRestated;
+    return {
+      periodStart: periodStartMonth,
+      liabilityOpeningNominal: openingNominal,
+      liabilityOpeningRestated: openingRestated,
+      liabilityEntriesNominal: entriesNominal,
+      liabilityEntriesRestated: entriesRestated,
+      liabilityInterestNominal: interest.nominal,
+      liabilityInterestRestated: interest.restated,
+      liabilityPaymentsNominal: payments.nominal,
+      liabilityPaymentsRestated: payments.restated,
+      liabilityFxTranslationNominal: fxNominal,
+      liabilityFxTranslationRestated: fxRestated,
+      liabilityModificationNominal: modification.nominal,
+      liabilityModificationRestated: modification.restated,
+      liabilityReassessmentNominal: reassessment.nominal,
+      liabilityReassessmentRestated: reassessment.restated,
+      liabilityClosingNominal: closingNominal,
+      restatedSum,
+      liabilityMonetaryGainLoss: closingNominal - restatedSum
+    };
+  }
+
+  function v191ComputePortfolioTms29(rows, periodStartMonth, rpMonth, liabilityRows) {
     const results = new Map();
     const flatRows = [];
     const totals = {
@@ -23038,15 +23274,33 @@ ${renderPaymentScheduleFooterContainers()}
       try {
         const restatement = applyTMS29Restatement(contract, rpMonth, periodStartMonth);
         let netAdjustment = Number(restatement?.totals?.netAdjustment) || 0;
-        const rrf = restatement?.rouRollForward;
-        const lrf = restatement?.liabilityRollForward;
+        let rrf = restatement?.rouRollForward;
+        let lrf = restatement?.liabilityRollForward;
+        const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
+        const presentationCurrency = String(getReportingCurrency() || resolveContractFunctionalCurrency(contract) || DEFAULT_FUNCTIONAL_CURRENCY).toUpperCase();
+        if (transactionCurrency !== presentationCurrency) {
+          const rawLiabilityRow = (Array.isArray(liabilityRows) ? liabilityRows : [])
+            .find(item => String(item.contractId) === String(row.contractId));
+          rrf = v191BuildFxRouRollForward(contract, row, periodStartMonth, rpMonth, presentationCurrency);
+          if (rawLiabilityRow) {
+            lrf = v191BuildFxLiabilityRollForward(contract, rawLiabilityRow, periodStartMonth, rpMonth, presentationCurrency);
+          }
+          netAdjustment = rrf.rouClosingRestatedPeriod - rrf.rouClosingNominalPeriod;
+          if (restatement?.totals) {
+            restatement.totals.nominalROUClosing = rrf.rouClosingNominalPeriod;
+            restatement.totals.restatedROUClosing = rrf.rouClosingRestatedPeriod;
+            restatement.totals.nominalLiabilityClosing = lrf?.liabilityClosingNominal ?? restatement.totals.nominalLiabilityClosing;
+            restatement.totals.restatedLiabilityClosing = lrf?.liabilityClosingNominal ?? restatement.totals.restatedLiabilityClosing;
+            restatement.totals.netAdjustment = netAdjustment;
+          }
+        }
         // TMS 29 ROU is a non-monetary balance and must be presented in the
         // company's functional/reporting currency. Older restatement paths
         // return the ROU roll-forward in transaction currency for FX leases;
         // normalize that legacy shape once, at the portfolio boundary, using
         // the commencement (historical-cost) rate. Liability values remain
         // untouched because they are already closing-rate/TRY monetary data.
-        if (rrf) {
+        if (rrf && transactionCurrency === presentationCurrency) {
           const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
           // Dipnotlar şirketin sunum para biriminde üretilir. Şirket
           // metadata'sı eksik olsa bile global raporlama para birimini
@@ -23363,7 +23617,7 @@ ${renderPaymentScheduleFooterContainers()}
 
     const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
     const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
-    const tms29 = v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth);
+    const tms29 = v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth, rawLiabRows);
     // Nominal roll-forward engines retain transaction-currency amounts for
     // FX leases. Financial statement notes, however, must be presented in
     // the company's presentation currency. TMS 21 requires balance-sheet
@@ -23402,9 +23656,24 @@ ${renderPaymentScheduleFooterContainers()}
         });
         return found ? total : null;
       };
+      const changeConverted = kind => {
+        if (!contract) return null;
+        const changes = v191AppliedChanges(contract, periodStart, periodEnd)
+          .filter(item => item.__changeKind === kind);
+        if (!changes.length) return null;
+        return changes.reduce((sum, item) => {
+          const field = keys.includes("openingRuo") ? "rouAdjustment" : "liabilityAdjustment";
+          const converted = convertAtFinancialDate(rptNumber(item[field]), item.__effective);
+          return sum + (converted === null ? 0 : converted);
+        }, 0);
+      };
       keys.forEach(key => {
         const amount = Number(row[key]);
         if (!Number.isFinite(amount)) return;
+        if (key === "modificationAdjustment" || key === "reassessmentAdjustment") {
+          const convertedChange = changeConverted(key === "modificationAdjustment" ? "modification" : "reassessment");
+          if (convertedChange !== null) { translated[key] = rptRound(convertedChange); return; }
+        }
         const eventField = key === "payments" ? "payment" : key === "interest" ? "interest" : key === "depreciation" ? "depreciation" : null;
         const eventValue = eventField ? eventConverted(eventField) : null;
         if (eventValue !== null) { translated[key] = rptRound(eventValue); return; }
@@ -23432,7 +23701,25 @@ ${renderPaymentScheduleFooterContainers()}
         .concat(Array.isArray(contract.modifications) ? contract.modifications : [])
         .concat(Array.isArray(contract.reassessments) ? contract.reassessments : [])
         .some(change => change?.status === "APPLIED" && (!rptDate(change.effectiveDate) || rptDate(change.effectiveDate) <= periodEnd));
-      if (appliedRouLayerBeforePeriodEnd) return;
+      if (appliedRouLayerBeforePeriodEnd) {
+        const raw = rawRouRows.find(item => String(item.contractId) === String(row.contractId));
+        if (!raw) return;
+        try {
+          const layer = v191BuildFxRouRollForward(contract, raw, periodStartMonth, rpMonth, presentationCurrency);
+          row.openingRuo = rptRound(layer.rouOpeningNominal);
+          row.entriesRuo = rptRound(layer.rouInitialEntriesNominal);
+          row.depreciation = rptRound(layer.rouDepreciationNominal);
+          row.modificationAdjustment = rptRound(layer.rouModificationNominal);
+          row.reassessmentAdjustment = rptRound(layer.rouReassessmentNominal);
+          row.otherAdjustment = 0;
+          row.closingRuo = rptRound(layer.rouClosingNominalPeriod);
+          row.reconciliationDifference = rptRound(
+            row.openingRuo + row.entriesRuo - row.depreciation +
+            row.modificationAdjustment + row.reassessmentAdjustment - row.closingRuo
+          );
+        } catch (_) {}
+        return;
+      }
       // Commencement can fall on a weekend/public holiday (for example
       // 01.01.2025).  The ROU historical-cost rate must then use the latest
       // published rate on or before commencement.  The generic presentation
