@@ -386,6 +386,45 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
       .toBeCloseTo(lrf.liabilityClosingNominal, 2);
     expect(Math.abs(lrf.liabilityFxTranslationNominal)).toBeGreaterThan(0);
     expect(rrf.rouClosingRestatedPeriod).toBeGreaterThan(rrf.rouClosingNominalPeriod);
+
+    // Modifikasyonun kendi yeniden ölçüm fişi yalnızca etkin olduğu
+    // dönemde görünür ve sözleşme para biriminde borç/alacak eşit kalır.
+    expect(tfrs16.buildAppliedChangeJournalEntries(
+      contract, new Date(2025, 0, 1), new Date(2025, 11, 31)
+    )).toEqual([]);
+    const modificationJournal = tfrs16.buildAppliedChangeJournalEntries(
+      contract, new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    expect(modificationJournal).toHaveLength(2);
+    expect(modificationJournal.every(entry => entry.source === "MODIFICATION")).toBe(true);
+    expect(modificationJournal.reduce((sum, entry) => sum + entry.debit, 0))
+      .toBeCloseTo(contract.modifications[0].liabilityAdjustment, 2);
+    expect(modificationJournal.reduce((sum, entry) => sum + entry.credit, 0))
+      .toBeCloseTo(contract.modifications[0].liabilityAdjustment, 2);
+
+    // Dövizli sözleşmenin ayrı TMS 29 fişi, USD ölçeğindeki legacy
+    // sonuçtan değil dipnotta kullanılan TRY hareketlerinden türetilir.
+    const tms29Journal = tfrs16.buildTms29BulkJournalEntries(
+      contract, new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    const amountFor = source => {
+      const entry = tms29Journal.find(item => item.source === source);
+      return entry ? Math.max(Number(entry.debit) || 0, Number(entry.credit) || 0) : 0;
+    };
+    const depreciationDelta = rrf.rouDepreciationRestated - rrf.rouDepreciationNominal;
+    const netRouDelta = rrf.rouClosingRestatedPeriod - rrf.rouClosingNominalPeriod;
+    const interestDelta = lrf.liabilityInterestRestated - lrf.liabilityInterestNominal;
+    expect(amountFor("INFLATION_ADJUSTMENT_ROU_GROSS"))
+      .toBeCloseTo(netRouDelta + depreciationDelta, 2);
+    expect(amountFor("INFLATION_ADJUSTMENT_ROU_DEPRECIATION"))
+      .toBeCloseTo(depreciationDelta, 2);
+    expect(amountFor("INFLATION_ADJUSTMENT_LIABILITY_INTEREST"))
+      .toBeCloseTo(interestDelta, 2);
+    expect(amountFor("INFLATION_ADJUSTMENT_LIABILITY_MONETARY"))
+      .toBeCloseTo(Math.abs(lrf.liabilityMonetaryGainLoss), 2);
+    expect(tms29Journal.reduce((sum, entry) => sum + entry.debit, 0))
+      .toBeCloseTo(tms29Journal.reduce((sum, entry) => sum + entry.credit, 0), 2);
+    expect(amountFor("INFLATION_ADJUSTMENT_ROU_GROSS")).toBeGreaterThan(1_000_000);
   });
 });
 
