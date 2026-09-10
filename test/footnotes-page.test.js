@@ -300,6 +300,93 @@ describe("TMS 29 ROU — dövizli legacy hareket tablosu", () => {
     });
     expect(html).toMatch(/TMS 21 Çevrim Farkı/);
   });
+
+  test("USD modifikasyonu geçmiş dönemi değiştirmez; işlem tarihinde çevrilir ve 2026 nominal/TMS29 tabloları mutabık kalır", async () => {
+    const inflationMonths = [];
+    for (let y = 2025; y <= 2026; y++) {
+      const lastMonth = y === 2026 ? 6 : 12;
+      for (let m = 1; m <= lastMonth; m++) inflationMonths.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    const inflationSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ indices: inflationMonths.map((month, index) => ({
+        month, index: 100 + index * 2, source: "MANUAL_OVERRIDE", verificationStatus: "VERIFIED"
+      })) })
+    });
+    await tfrs16.refreshInflationIndexCacheFromBackend(inflationMonths);
+    inflationSpy.mockRestore();
+    const contract = {
+      id: "FX-MOD-LAYERS",
+      company: "Currency Test A.Ş.", companyId: "C-1", supplier: "Test Supplier", assetClass: "Makine",
+      monthlyPayment: 10000, discountRate: 5.5,
+      startDate: "2025-01-01", endDate: "2030-12-31",
+      paymentFrequency: "monthly", paymentTiming: "arrears", status: "active",
+      currency: "USD", functionalCurrency: "TRY", reportingCurrency: "TRY",
+      modifications: [], reassessments: []
+    };
+    tfrs16.contracts.push(contract);
+    const before = tfrs16.v191PrepareFinancialReportingData(
+      new Date(2025, 0, 1), new Date(2025, 11, 31)
+    );
+    const before2025 = before.tms29.results.get(contract.id);
+
+    const persistSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true, status: 200, text: async () => JSON.stringify({ success: true })
+    });
+    const created = await tfrs16.createModification(contract, {
+      modificationDate: "2026-03-01",
+      effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 12000,
+      newDiscountRate: 6,
+      reason: "FX layer regression"
+    });
+    expect(created.valid).toBe(true);
+    const applied = await tfrs16.applyModification(contract, created.modification.id);
+    persistSpy.mockRestore();
+    expect(applied.valid).toBe(true);
+
+    const after2025 = tfrs16.v191PrepareFinancialReportingData(
+      new Date(2025, 0, 1), new Date(2025, 11, 31)
+    ).tms29.results.get(contract.id);
+    expect(before2025?.error).toBeUndefined();
+    expect(after2025?.error).toBeUndefined();
+    expect(after2025.rouClosingNominalPeriod).toBeCloseTo(before2025.rouClosingNominalPeriod, 2);
+    expect(after2025.liabilityRollForward.liabilityClosingNominal)
+      .toBeCloseTo(before2025.liabilityRollForward.liabilityClosingNominal, 2);
+
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date(2026, 0, 1), new Date(2026, 5, 30)
+    );
+    const rou = prepared.rouRows.find(row => row.contractId === contract.id);
+    const liability = prepared.liabRows.find(row => row.contractId === contract.id);
+    const result = prepared.tms29.results.get(contract.id);
+    const rrf = result.rouRollForward;
+    const lrf = result.liabilityRollForward;
+
+    // 01.03.2026 is a Sunday: the modification layer uses the latest
+    // available quote, 27.02.2026 = 37.00, rather than June's 40.00.
+    expect(liability.modificationAdjustment)
+      .toBeCloseTo(contract.modifications[0].liabilityAdjustment * 37, 2);
+    expect(rou.modificationAdjustment)
+      .toBeCloseTo(contract.modifications[0].rouAdjustment * 37, 2);
+    expect(Math.abs(rou.openingRuo + rou.entriesRuo - rou.depreciation
+      + rou.modificationAdjustment + rou.reassessmentAdjustment + rou.otherAdjustment
+      - rou.closingRuo)).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(liability.openingLiability + liability.entriesLiability + liability.interest
+      - liability.payments + liability.modificationAdjustment
+      + liability.reassessmentAdjustment + liability.otherAdjustment
+      + liability.fxTranslationAdjustment - liability.closingLiability)).toBeLessThanOrEqual(0.02);
+    expect(rrf.rouOpeningRestated + rrf.rouEntriesRestated - rrf.rouDepreciationRestated)
+      .toBeCloseTo(rrf.rouClosingRestatedPeriod, 2);
+    expect(lrf.liabilityOpeningRestated + lrf.liabilityEntriesRestated
+      + lrf.liabilityModificationRestated + lrf.liabilityReassessmentRestated
+      + lrf.liabilityInterestRestated - lrf.liabilityPaymentsRestated
+      + lrf.liabilityFxTranslationRestated + lrf.liabilityMonetaryGainLoss)
+      .toBeCloseTo(lrf.liabilityClosingNominal, 2);
+    expect(Math.abs(lrf.liabilityFxTranslationNominal)).toBeGreaterThan(0);
+    expect(rrf.rouClosingRestatedPeriod).toBeGreaterThan(rrf.rouClosingNominalPeriod);
+  });
 });
 
 describe("v191RenderAssetNoteHtml / v191RenderLiabilityNoteHtml / v191RenderLiquidityNoteHtml — bağımsız çağrılabilirlik", () => {
