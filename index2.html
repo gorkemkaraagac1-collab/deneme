@@ -42,32 +42,12 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 11px;
+      gap: 0;
     }
-    .logo-svg {
-      width: 38px;
-      height: 38px;
-      flex-shrink: 0;
-    }
-    .logo-text {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.05;
-    }
-    .logo-name {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-    .logo-name .lease { color: #fff; }
-    .logo-name .qant { color: #3b82f6; }
-    .logo-tag {
-      font-size: 8.5px;
-      font-weight: 500;
-      letter-spacing: 0.07em;
-      color: #94a3b8;
-      text-transform: uppercase;
-      margin-top: 1px;
+    .logo-img {
+      height: 42px;
+      width: auto;
+      display: block;
     }
 
     /* Nav */
@@ -226,6 +206,7 @@
     }
     .faq-item summary::-webkit-details-marker { display: none; }
     .faq-item .plus { color: var(--primary); font-weight: 700; }
+    .faq-item[open] .plus { transform: rotate(45deg); }
     .faq-a { padding: 0 0 16px; font-size: 14px; color: var(--text-2); max-width: 68ch; line-height: 1.65; }
 
     .cta {
@@ -269,6 +250,7 @@
     @media (max-width: 560px) {
       .why-grid, .footer-grid { grid-template-columns: 1fr; }
       .kpi-row { grid-template-columns: 1fr; }
+      .logo-img { height: 36px; }
     }
   </style>
 </head>
@@ -276,26 +258,12 @@
   <nav class="nav">
     <div class="nav-inner">
       <a href="index.html" class="logo">
-        <svg class="logo-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="lqGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#60a5fa"/>
-              <stop offset="100%" stop-color="#1d4ed8"/>
-            </linearGradient>
-          </defs>
-          <!-- L -->
-          <path d="M9 8 H19 V30 H33 V38 H9 V8Z" fill="url(#lqGrad)"/>
-          <!-- Q circle -->
-          <circle cx="31" cy="27" r="11.5" stroke="url(#lqGrad)" stroke-width="4.5" fill="none"/>
-          <!-- White Q diagonal -->
-          <path d="M35 33 L42 40" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
-        </svg>
-        <div class="logo-text">
-          <div class="logo-name">
-            <span class="lease">Lease</span><span class="qant">Qant</span>
-          </div>
-          <div class="logo-tag">Intelligent Lease Accounting</div>
-        </div>
+        <!-- LOGO RESMİ (GitHub'dan) -->
+        <img 
+          src="https://raw.githubusercontent.com/gorkemkaraagac1-collab/deneme/main/logo.jpeg" 
+          alt="LeaseQant" 
+          class="logo-img"
+        >
       </a>
       <ul class="nav-links">
         <li><a href="#standartlar">Standartlar</a></li>
@@ -462,6 +430,68 @@
           <div class="faq-a">Yeni sözleşme, silme, modifikasyon, reassessment ve toplu yevmiye gibi yazma işlemleri engellenir.</div>
         </details>
       </div>
+
+      <!-- Backend FAQ script (korundu) -->
+      <script>
+        (function () {
+          var API_BASE = "https://contracts-api-285469227510.europe-west1.run.app";
+
+          function escapeHtml(value) {
+            var div = document.createElement('div');
+            div.textContent = String(value == null ? '' : value);
+            return div.innerHTML;
+          }
+
+          function sanitizeFaqHtml(value) {
+            var template = document.createElement('template');
+            template.innerHTML = String(value == null ? '' : value);
+
+            var allowedTags = {
+              STRONG: true,
+              CODE: true,
+              EM: true,
+              B: true,
+              BR: true
+            };
+
+            Array.from(template.content.querySelectorAll('*')).forEach(function (node) {
+              if (allowedTags[node.tagName]) {
+                Array.from(node.attributes).forEach(function (attr) {
+                  node.removeAttribute(attr.name);
+                });
+                return;
+              }
+
+              if (/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|SVG|MATH)$/i.test(node.tagName)) {
+                node.remove();
+                return;
+              }
+
+              node.replaceWith(document.createTextNode(node.textContent || ''));
+            });
+
+            return template.innerHTML;
+          }
+
+          fetch(API_BASE + '/api/faq')
+            .then(function (r) { return r.json(); })
+            .then(function (result) {
+              if (!result || !result.success || !Array.isArray(result.data) || result.data.length === 0) {
+                return;
+              }
+
+              var html = result.data.map(function (item) {
+                return '<details class="faq-item">' +
+                  '<summary>' + escapeHtml(item.question) + ' <span class="plus">+</span></summary>' +
+                  '<div class="faq-a">' + sanitizeFaqHtml(item.answer) + '</div>' +
+                  '</details>';
+              }).join('');
+
+              document.getElementById('faqList').innerHTML = html;
+            })
+            .catch(function () {});
+        })();
+      </script>
     </div>
   </section>
 
@@ -476,22 +506,12 @@
       <div class="footer-grid">
         <div>
           <a href="index.html" class="logo" style="margin-bottom:14px">
-            <svg class="logo-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="lqGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#60a5fa"/>
-                  <stop offset="100%" stop-color="#1d4ed8"/>
-                </linearGradient>
-              </defs>
-              <path d="M9 8 H19 V30 H33 V38 H9 V8Z" fill="url(#lqGrad2)"/>
-              <circle cx="31" cy="27" r="11.5" stroke="url(#lqGrad2)" stroke-width="4.5" fill="none"/>
-              <path d="M35 33 L42 40" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
-            </svg>
-            <div class="logo-text">
-              <div class="logo-name">
-                <span class="lease">Lease</span><span class="qant">Qant</span>
-              </div>
-            </div>
+            <img 
+              src="https://raw.githubusercontent.com/gorkemkaraagac1-collab/deneme/main/logo.jpeg" 
+              alt="LeaseQant" 
+              class="logo-img"
+              style="height:36px"
+            >
           </a>
           <p style="max-width:28ch;line-height:1.6;margin-top:8px">TFRS 16 kiralama muhasebesi için lisanslı SaaS çalışma alanı.</p>
         </div>
