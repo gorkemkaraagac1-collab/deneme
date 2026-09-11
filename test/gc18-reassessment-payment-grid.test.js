@@ -242,4 +242,69 @@ describe("GC-18: arrears reassessment ödeme grid'i", () => {
     expect(paymentAt("2026-04")).toBeCloseTo(15000, 2);
     expect(paymentAt("2026-05")).toBeCloseTo(16000, 2);
   });
+
+  test("geçmiş tarihli modification, gelecekteki ödeme ve faiz değişikliğini baz almaz", async () => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      monthlyPayment: 12000,
+      discountRate: 6,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly"
+    });
+
+    const future = await tfrs16.createModification(contract, {
+      modificationDate: "2026-02-01", effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 15000,
+      newDiscountRate: 8
+    });
+    expect(future.valid).toBe(true);
+    await tfrs16.applyModification(contract, future.modification.id);
+
+    const past = await tfrs16.createModification(contract, {
+      modificationDate: "2025-06-01", effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 13500,
+      newDiscountRate: 7
+    });
+    expect(past.valid).toBe(true);
+    await tfrs16.applyModification(contract, past.modification.id);
+
+    const rows = tfrs16.cfoBuildSchedule(contract).schedule;
+    const paymentAt = month => Number(rows.find(row => {
+      const date = row.date instanceof Date ? row.date.toISOString().slice(0, 7) : String(row.date).slice(0, 7);
+      return date === month;
+    })?.payment || 0);
+    expect(paymentAt("2025-06")).toBeCloseTo(12000, 2);
+    expect(paymentAt("2025-07")).toBeCloseTo(13500, 2);
+    expect(paymentAt("2026-02")).toBeCloseTo(13500, 2);
+    expect(paymentAt("2026-03")).toBeCloseTo(15000, 2);
+  });
+
+  test("geçmiş tarihli reassessment gelecekteki reassessment şartlarını ezmez", async () => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      monthlyPayment: 12000,
+      discountRate: 6,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly"
+    });
+
+    const future = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-02-01", effectiveDate: "2026-03-01",
+      type: "FIXED_PAYMENT_CHANGE", newPayment: 15000,
+      newDiscountRate: 8, reason: "future event"
+    });
+    expect(future.valid).toBe(true);
+    await tfrs16.applyReassessment(contract, future.reassessment.id);
+
+    const past = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2025-06-01", effectiveDate: "2025-07-01",
+      type: "FIXED_PAYMENT_CHANGE", newPayment: 13500,
+      newDiscountRate: 7, reason: "past event"
+    });
+    expect(past.valid).toBe(true);
+    expect(past.reassessment.oldTerms.payment).toBeCloseTo(12000, 2);
+    expect(past.reassessment.oldTerms.discountRate).toBeCloseTo(6, 2);
+  });
 });
