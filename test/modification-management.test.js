@@ -244,6 +244,32 @@ describe("applyModification — mutlu yol + backend kaydı", () => {
     expect(Array.isArray(contract.modifications[0].journal)).toBe(true);
   });
 
+  test("ardışık iki modification birlikte korunur ve ikinci olay ilkini ezmez", async () => {
+    const contract = baseContract({ startDate: "2025-01-01", endDate: "2030-12-01", monthlyPayment: 12000 });
+    const first = await tfrs16.createModification(contract, {
+      modificationDate: "2025-06-15",
+      effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 13500
+    });
+    expect(first.valid).toBe(true);
+    await tfrs16.applyModification(contract, first.modification.id);
+
+    const second = await tfrs16.createModification(contract, {
+      modificationDate: "2026-02-15",
+      effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 15000
+    });
+    expect(second.valid).toBe(true);
+    await tfrs16.applyModification(contract, second.modification.id);
+
+    expect(contract.modifications).toHaveLength(2);
+    expect(contract.modifications.map(item => item.effectiveDate)).toEqual(["2025-07-01", "2026-03-01"]);
+    expect(contract.modifications.every(item => item.status === "APPLIED")).toBe(true);
+    expect(contract.monthlyPayment).toBe(15000);
+  });
+
   test("zaten APPLIED olan bir modification tekrar apply edilirse aynı sonucu döner (idempotent), backend'e tekrar gitmez", async () => {
     const contract = baseContract({ monthlyPayment: 100000 });
     const created = await tfrs16.createModification(contract, {
