@@ -8500,6 +8500,24 @@ document.addEventListener("DOMContentLoaded", () => {
      KPI
   ========================================================== */
 
+  // KPI kartları güncel kur bulunmayan bir günde de portföyü gösterebilmelidir.
+  // Bu geri dönüş yalnızca gösterge amaçlıdır; seçili raporlama tarihleri ve
+  // muhasebe hesaplamaları her zaman kendi tarih kurunu kullanmaya devam eder.
+  function resolveKpiFxDate(fromCurrency, toCurrency, asOfDate) {
+    const from = String(fromCurrency || "").trim().toUpperCase();
+    const to = String(toCurrency || "").trim().toUpperCase();
+    if (!from || from === to) return { date: asOfDate, usedFallback: false };
+    const requested = v23DateKey(asOfDate);
+    const available = typeof getFxRates === "function"
+      ? getFxRates({ fromCurrency: from, toCurrency: to, rateType: V23_RATE_TYPES.CLOSING })
+          .filter(row => row.rateDate <= requested)
+          .sort((a, b) => b.rateDate.localeCompare(a.rateDate))
+      : [];
+    if (!available.length) return { date: asOfDate, usedFallback: false };
+    const latest = available[0].rateDate;
+    return { date: latest, usedFallback: latest !== requested };
+  }
+
   function updateKPIs() {
 
     const active =
@@ -8509,6 +8527,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const totals = new Map();
     let totalsError = "";
+    const kpiAsOfDate = new Date();
+    const fallbackDates = new Set();
 
     active.forEach(
       contract => {
@@ -8521,8 +8541,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
         const engine =
           calculateLease(contract);
+        const fxDate = resolveKpiFxDate(currency, presentationCurrency, kpiAsOfDate);
+        if (fxDate.usedFallback) fallbackDates.add(fxDate.date);
         const values = [engine.liability, engine.rouAssets, calculateNext12Months(contract)].map(value => {
-          const converted = convertAmountToReportingCurrency(value, currency, new Date(), presentationCurrency);
+          const converted = convertAmountToReportingCurrency(value, currency, fxDate.date, presentationCurrency);
           if (converted.error) throw new Error("FX_RATE_NOT_FOUND");
           return converted.value;
         });
@@ -8581,6 +8603,11 @@ document.addEventListener("DOMContentLoaded", () => {
       "modifications",
       modifications
     );
+
+    const asOfText = fallbackDates.size
+      ? `Gösterge kurları: ${Array.from(fallbackDates).sort().join(", ")} (son geçerli veri)`
+      : "";
+    setText("kpiDataAsOf", asOfText);
   }
 
 

@@ -291,6 +291,14 @@ body {
   margin-bottom: 18px;
 }
 
+.kpi-data-as-of {
+  min-height: 18px;
+  margin: -8px 0 16px;
+  color: var(--ink-soft, #64748b);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .primary-kpi-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
