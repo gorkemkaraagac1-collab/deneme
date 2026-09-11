@@ -3567,6 +3567,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Modification and reassessment events share one chronological stream.
   function buildScheduleFromChangeChain(contract, excludeId) {
+    // Reassessment-only contracts must retain the persisted empty
+    // modifications array for API/golden-output compatibility.
+    ensureModificationState(contract);
     const baseContract = getModificationBaseContract(contract);
     const baseEngine = calculateLeaseEngine(baseContract);
     const events = []
