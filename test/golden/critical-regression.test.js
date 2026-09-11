@@ -61,6 +61,24 @@ describe("kritik kontrat regresyon kontrolleri", () => {
     });
   });
 
+  test("TMS 29 ROU reassessment hareketi ayrı sütunda ve mutabık", () => {
+    const reassessed = result.contracts.filter(record => record.reassessmentJournals.length > 0);
+    expect(reassessed.length).toBeGreaterThan(0);
+    reassessed.forEach(record => {
+      record.tms29.forEach(({ restatement }) => {
+        if (!restatement || restatement.error || !restatement.rouRollForward) return;
+        const rrf = restatement.rouRollForward;
+        expect(Object.prototype.hasOwnProperty.call(rrf, "rouReassessmentRestated")).toBe(true);
+        const reconstructed = Number(rrf.rouOpeningRestated || 0) +
+          Number(rrf.rouEntriesRestated || 0) +
+          Number(rrf.rouModificationRestated || 0) +
+          Number(rrf.rouReassessmentRestated || 0) -
+          Number(rrf.rouDepreciationRestated || 0);
+        expect(Math.abs(reconstructed - Number(rrf.rouClosingRestatedPeriod || 0))).toBeLessThanOrEqual(0.01);
+      });
+    });
+  });
+
   test("yabancı para fixture'larında çevrim kanıtı ve pozitif kur bulunur", () => {
     const foreign = result.contracts.filter(record => record.fx && record.fx.from !== record.fx.to);
     expect(foreign.length).toBeGreaterThan(0);
@@ -78,4 +96,3 @@ describe("kritik kontrat regresyon kontrolleri", () => {
     expect(serialized).not.toContain("<-Infinity>");
   });
 });
-

@@ -226,6 +226,20 @@ async function buildContractRecord(tfrs16, fixture) {
       entries: tfrs16.generateReassessmentJournal(contract, r)
     }));
 
+  // TMS 29 hareket tablosunu da golden çıktıya al: reassessment kaynaklı
+  // ROU hareketlerinin ayrı sütunda korunması geriye dönük regresyonla
+  // izlenir (özellikle faiz/endeks değişikliklerinde).
+  const tms29 = (fixture.reportingDates || []).map(reportingDate => {
+    const year = String(reportingDate).slice(0, 4);
+    let restatement = null;
+    try {
+      restatement = tfrs16.applyTMS29Restatement(contract, reportingDate, `${year}-01`);
+    } catch (error) {
+      restatement = { error: error?.message || String(error) };
+    }
+    return { reportingDate, restatement };
+  });
+
   const controls = tfrs16.runContractControls(contract);
 
   const primaryReportingDate = (fixture.reportingDates || [])[0] || FROZEN_NOW.slice(0, 10);
@@ -239,7 +253,7 @@ async function buildContractRecord(tfrs16, fixture) {
     fx
   });
 
-  return normalize({
+  const record = normalize({
     fixtureId: fixture.id,
     label: fixture.label,
     dimensions: fixture.dimensions,
@@ -253,6 +267,10 @@ async function buildContractRecord(tfrs16, fixture) {
     fx,
     invariantChecks
   });
+  // Keep this diagnostic out of the persisted golden schema while exposing
+  // it to focused regression tests.
+  Object.defineProperty(record, "tms29", { value: tms29, enumerable: false });
+  return record;
 }
 
 /** SLB senaryosu için golden kaydı. */
