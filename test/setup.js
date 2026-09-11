@@ -1,3 +1,9 @@
+// Golden/regresyon testleri tarihleri makinenin yerel saat diliminden
+// bağımsız çalışmalıdır. Aksi halde YYYY-MM-DD tarihleri Türkiye gibi
+// UTC+ saat dilimlerinde UTC serileştirmesinde bir gün geriye kayar ve
+// gerçek bir hesap değişikliği olmayan sahte golden farkları oluşur.
+process.env.TZ = "UTC";
+
 const {
   TextEncoder,
   TextDecoder
