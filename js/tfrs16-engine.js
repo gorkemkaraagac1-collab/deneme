@@ -1296,6 +1296,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const AUDIT_TRAIL_STORAGE_KEY = "gk_tfrs16_audit_trail_v1";
   const AUDIT_MIGRATION_KEY = "gk_tfrs16_audit_trail_migrated_v1";
   const AUDIT_PENDING_SYNC_KEY = "gk_tfrs16_audit_pending_sync_v1";
+  const AUDIT_REJECTED_SYNC_KEY = "gk_tfrs16_audit_rejected_sync_v1";
 
   /** @deprecated-name Kalıcı: cloneAuditValue — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function cloneAuditValue(value) {
@@ -1426,9 +1427,19 @@ document.addEventListener("DOMContentLoaded", () => {
         await tfrs16ApiFetch("/api/audit", { method: "POST", body: JSON.stringify(event) });
         sent++;
       } catch (error) {
-        remaining.push(event);
-        // eslint-disable-next-line no-console
-        console.error("Audit backend senkronizasyonu başarısız; olay kuyrukta tutuldu.", error);
+        if (error?.status === 403 || error?.status === 404) {
+          try {
+            const rejected = JSON.parse(localStorage.getItem(AUDIT_REJECTED_SYNC_KEY) || "[]");
+            rejected.push({ event, rejectedAt: new Date().toISOString(), status: error.status, reason: error.message });
+            localStorage.setItem(AUDIT_REJECTED_SYNC_KEY, JSON.stringify(rejected.slice(-500)));
+          } catch (_) {}
+          // eslint-disable-next-line no-console
+          console.warn("Audit olayı kalıcı olarak reddedildi ve inceleme kuyruğuna taşındı.", error);
+        } else {
+          remaining.push(event);
+          // eslint-disable-next-line no-console
+          console.error("Audit backend senkronizasyonu başarısız; olay kuyrukta tutuldu.", error);
+        }
       }
     }
     savePendingAuditSync(remaining);
@@ -2710,7 +2721,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const appliedChanges = []
         .concat(Array.isArray(contract?.modifications) ? contract.modifications.map(x => ({ ...x, __changeKind: "modification" })) : [])
         .concat(Array.isArray(contract?.reassessments) ? contract.reassessments.map(x => ({ ...x, __changeKind: "reassessment" })) : [])
-        .filter(x => x && x.status === "APPLIED");
+        .filter(x => x && x.status === "APPLIED")
+        .map(x => x.__changeKind === "modification"
+          ? { ...resolveAppliedModificationMeasurement(contract, x), __changeKind: "modification" }
+          : x);
 
       const entryChanges = appliedChanges
         .map(x => {
@@ -4605,6 +4619,37 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
+  function resolveAppliedModificationMeasurement(contract, modification) {
+    if (!modification || modification.status !== "APPLIED") return modification;
+    const effectiveDate = parseDate(modification.effectiveDate);
+    if (!effectiveDate || !modification.newTerms) return modification;
+
+    const priorApplied = (contract.modifications || []).filter(item =>
+      item && item.status === "APPLIED" && item.id !== modification.id &&
+      String(item.effectiveDate || "") < String(modification.effectiveDate || "")
+    );
+    const currentStateSchedule = buildScheduleFromModificationChain(contract, priorApplied, true);
+    const baseContract = contract.originalContractSnapshot || contract;
+    const baseEngine = calculateLeaseEngine(baseContract);
+    const oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
+    const oldROU = getModificationROUAsOf(contract, effectiveDate, { schedule: currentStateSchedule, rouAssets: baseEngine.rouAssets });
+    const revised = calculateModifiedLeaseLiability(baseContract, effectiveDate, modification.newTerms);
+    const revisedLeaseLiability = Math.max(0, Number(revised.liability) || 0);
+    const liabilityAdjustment = revisedLeaseLiability - oldLeaseLiability;
+    const rou = calculateROUAdjustment(modification, oldROU, liabilityAdjustment, oldLeaseLiability, revisedLeaseLiability);
+
+    return {
+      ...modification,
+      oldLeaseLiability,
+      revisedLeaseLiability,
+      liabilityAdjustment,
+      oldROU,
+      rouAdjustment: rou.rouAdjustment,
+      gainLoss: rou.gainLoss,
+      measurementSource: "RECALCULATED_FROM_TERMS"
+    };
+  }
+
   function rptRollForwardStatus(difference, otherAdjustment) {
     return Math.abs(Number(difference) || 0) <= REPORTING_TOLERANCE &&
       Math.abs(Number(otherAdjustment) || 0) <= REPORTING_TOLERANCE
@@ -4614,7 +4659,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function buildScheduleFromModificationChain(
     contract,
-    appliedModifications
+    appliedModifications,
+    preserveStoredMeasurements = false
   ) {
 
     const baseContract =
@@ -4647,7 +4693,11 @@ document.addEventListener("DOMContentLoaded", () => {
             )
         );
 
-    ordered.forEach(modification => {
+    ordered.forEach(storedModification => {
+
+      const modification = preserveStoredMeasurements
+        ? storedModification
+        : resolveAppliedModificationMeasurement(contract, storedModification);
 
       const effectiveDate =
         parseDate(modification.effectiveDate);
@@ -4983,12 +5033,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function buildModifiedSchedule(
     contract,
-    modification
+    storedModification
   ) {
 
-    if (!modification) {
+    if (!storedModification) {
       return calculateLeaseEngine(contract).schedule || [];
     }
+
+    const modification = resolveAppliedModificationMeasurement(contract, storedModification);
 
     const priorApplied =
       (contract.modifications || [])
@@ -5080,12 +5132,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function generateModificationJournal(
     contract,
-    modification
+    storedModification
   ) {
 
-    if (!modification || modification.status !== "APPLIED") {
+    if (!storedModification || storedModification.status !== "APPLIED") {
       return [];
     }
+
+    const modification = resolveAppliedModificationMeasurement(contract, storedModification);
 
     const liabilityAdjustment =
       Number(modification.liabilityAdjustment) || 0;
@@ -18799,6 +18853,7 @@ ${renderPaymentScheduleFooterContainers()}
           }
         }
         const appliedModifications = dedupeAppliedModifications(contract.modifications)
+          .map(x => resolveAppliedModificationMeasurement(contract, x))
           .filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
         const appliedReassessmentKeys = new Set();
         const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : [])
@@ -18914,7 +18969,7 @@ ${renderPaymentScheduleFooterContainers()}
           if(Number.isFinite(revisedRuo)) openingRuo=Math.max(0,revisedRuo);
           else if(Number.isFinite(oldRuo)&&Number.isFinite(rouAdjustment)) openingRuo=Math.max(0,oldRuo+rouAdjustment);
         }
-        const appliedModifications=dedupeAppliedModifications(contract.modifications).filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
+        const appliedModifications=dedupeAppliedModifications(contract.modifications).map(x=>resolveAppliedModificationMeasurement(contract,x)).filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
         const appliedReassessmentKeys = new Set();
         const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[])
           .filter(x=>x.status==="APPLIED")
@@ -19556,7 +19611,10 @@ ${renderPaymentScheduleFooterContainers()}
 
   function getModificationReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Modification Report",d,"MODIFICATION_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>(Array.isArray(contract.modifications)?contract.modifications:[]).forEach(item=>{
+    rptSafeContracts().forEach(contract=>(Array.isArray(contract.modifications)?contract.modifications:[]).forEach(storedItem=>{
+      const item = storedItem?.status === "APPLIED"
+        ? resolveAppliedModificationMeasurement(contract, storedItem)
+        : storedItem;
       if(filters.company&&String(contract.company||"")!==String(filters.company))return;
       if(filters.contractId&&contract.id!==filters.contractId)return;
       if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
@@ -23263,6 +23321,7 @@ ${renderPaymentScheduleFooterContainers()}
 
   function v191AppliedChanges(contract, start, end) {
     const modifications = dedupeAppliedModifications(contract?.modifications)
+      .map(x => resolveAppliedModificationMeasurement(contract, x))
       .map(x => ({ ...x, __changeKind: "modification" }));
     const reassessmentKeys = new Set();
     const reassessments = (Array.isArray(contract?.reassessments) ? contract.reassessments : [])
