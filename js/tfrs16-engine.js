@@ -1353,7 +1353,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function isLatestAppliedEvent(contract, event, collection) {
-    const applied = (contract?.[collection] || []).filter(item => item.status === "APPLIED");
+    const applied = (contract?.[collection] || [])
+      .filter(item => item.status === "APPLIED")
+      .slice()
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
     return applied.length > 0 && applied[applied.length - 1]?.id === event?.id;
   }
 
@@ -4073,12 +4076,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function getModificationCurrentTerms(contract) {
-    return {
-      payment: Number(contract?.monthlyPayment) || 0,
-      leaseEndDate: contract?.endDate || "",
-      discountRate: Number(contract?.discountRate) || 0
+  function getModificationCurrentTerms(contract, asOfDate = null) {
+    const base = contract?.originalContractSnapshot || contract || {};
+    const cutoff = asOfDate ? parseDate(asOfDate) : null;
+    const terms = {
+      payment: Number(base.monthlyPayment) || 0,
+      leaseEndDate: base.endDate || "",
+      discountRate: Number(base.discountRate) || 0
     };
+    const applied = (contract?.modifications || [])
+      .filter(item => item?.status === "APPLIED")
+      .slice()
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+    applied.forEach(item => {
+      const effective = parseDate(item.effectiveDate);
+      if (cutoff && (!effective || effective > cutoff)) return;
+      const next = item.newTerms || item.appliedToTerms;
+      if (!next) return;
+      if (next.payment !== undefined) terms.payment = Number(next.payment) || 0;
+      if (next.leaseEndDate !== undefined) terms.leaseEndDate = next.leaseEndDate;
+      if (next.discountRate !== undefined) terms.discountRate = Number(next.discountRate) || 0;
+    });
+    return terms;
   }
 
 
@@ -5404,20 +5423,14 @@ document.addEventListener("DOMContentLoaded", () => {
       delete contract.originalContractSnapshot.originalContractSnapshot;
     }
 
+    // Eski şartlar, sözleşmenin etkinlik tarihindeki son uygulanmış
+    // şartlardır. Üst seviyedeki monthlyPayment son girilen olayı temsil
+    // edebilir; geçmiş tarihli bir olayın bazını bununla kuramayız.
     const oldTerms =
-      getModificationCurrentTerms(contract);
+      getModificationCurrentTerms(contract, modification.effectiveDate);
 
     const nextTerms =
       modification.newTerms || oldTerms;
-
-    contract.monthlyPayment =
-      Number(nextTerms.payment) || 0;
-
-    contract.endDate =
-      nextTerms.leaseEndDate || contract.endDate;
-
-    contract.discountRate =
-      Number(nextTerms.discountRate) || 0;
 
     modification.status = "APPLIED";
     modification.updatedAt = new Date().toISOString();
@@ -5427,8 +5440,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     modification.appliedToTerms =
       cloneModificationValue(
-        getModificationCurrentTerms(contract)
+        nextTerms
       );
+
+    // Ana sözleşme alanları yalnızca tarih sırasındaki en son etkin
+    // modifikasyonun şartlarını yansıtır. Böylece daha sonra kaydedilen
+    // geçmiş tarihli bir olay, gelecekteki tutarı geriye dönük ezemez.
+    const latestTerms = getModificationCurrentTerms(contract);
+    contract.monthlyPayment = Number(latestTerms.payment) || 0;
+    contract.endDate = latestTerms.leaseEndDate || contract.endDate;
+    contract.discountRate = Number(latestTerms.discountRate) || 0;
 
     modification.journal =
       generateModificationJournal(
@@ -5452,7 +5473,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "MODIFICATION_APPLIED",
       modification,
       snapshot,
-      getModificationCurrentTerms(contract)
+      latestTerms
     );
 
     recordModificationAuditEvent(
