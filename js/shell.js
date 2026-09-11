@@ -355,6 +355,11 @@
         rewireLegacyOpeners();
         const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
         if (!api) return;
+        // TFRS16 engine owns the KPI cards and applies the correct reporting
+        // currency/available FX date. The legacy bridge exposes raw functional
+        // currency amounts and would overwrite them with a forced TRY symbol.
+        // Leave the engine-owned cards untouched.
+        if (document.getElementById("kpiDataAsOf")) return;
         syncCompanySelector();
         // Best-effort: some engines expose aggregate helpers
         if (typeof api.getTotalLeaseLiability === "function") {
