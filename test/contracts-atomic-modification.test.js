@@ -111,6 +111,30 @@ describe("PUT /api/contracts/:id atomic modification persistence", () => {
     expect(pool.readDetails().modifications[0].reason).toBe("edited");
   });
 
+  test("stale ikinci PUT önceki modification kaydını silemez", async () => {
+    const first = modification("MOD-A", {
+      effectiveDate: "2025-07-01",
+      newTerms: { payment: 13500, discountRate: 18, leaseEndDate: "2028-12-31" }
+    });
+    const second = modification("MOD-B", {
+      effectiveDate: "2026-03-01",
+      newTerms: { payment: 15000, discountRate: 18, leaseEndDate: "2028-12-31" }
+    });
+    const pool = createPool({ modifications: [] });
+    const app = createApp(pool);
+
+    const firstResponse = await request(app).put("/api/contracts/LEASE-1")
+      .send({ details: { modifications: [first] } });
+    expect(firstResponse.status).toBe(200);
+
+    // Simulate the second browser request carrying a stale list that only
+    // contains the newly created event.
+    const secondResponse = await request(app).put("/api/contracts/LEASE-1")
+      .send({ details: { modifications: [second] } });
+    expect(secondResponse.status).toBe(200);
+    expect(pool.readDetails().modifications.map(item => item.id)).toEqual(["MOD-A", "MOD-B"]);
+  });
+
   test("CANCELLED economic key does not block a new modification", async () => {
     const cancelled = modification("MOD-OLD", { status: "CANCELLED" });
     const pool = createPool({ modifications: [cancelled] });
