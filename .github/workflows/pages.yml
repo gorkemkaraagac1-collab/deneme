@@ -27,10 +27,32 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Stamp frontend asset cache version
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          rsync -a --exclude '_site' ./ _site/
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+
+          page = Path('_site/tfrs16.html')
+          text = page.read_text(encoding='utf-8')
+          sha = os.environ['DEPLOY_SHA']
+          updated, count = re.subn(
+              r'js/tfrs16-engine\.js\?v=[^"\']+',
+              f'js/tfrs16-engine.js?v={sha}',
+              text,
+          )
+          if count != 1:
+              raise SystemExit(f'Expected one engine asset reference, found {count}')
+          page.write_text(updated, encoding='utf-8')
+          PY
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to Pages
         id: deployment
