@@ -1710,15 +1710,36 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function getReassessmentCurrentTerms(contract) {
-    return {
-      leaseTerm: contract?.endDate || "",
+  function getReassessmentCurrentTerms(contract, asOfDate = null) {
+    // Reassessment must start from the effective modification chain. Reading
+    // headline contract fields here caused a later rate/payment reassessment
+    // to replace earlier modification terms in historical periods.
+    const modificationTerms = getModificationCurrentTerms(contract, asOfDate);
+    const cutoff = asOfDate ? parseDate(asOfDate) : null;
+    const terms = {
+      leaseTerm: modificationTerms.leaseEndDate || contract?.endDate || "",
       renewalOption: contract?.renewalOption === true,
       terminationOption: contract?.terminationOption === true,
       purchaseOption: contract?.purchaseOption === true,
-      payment: Number(contract?.monthlyPayment) || 0,
-      discountRate: Number(contract?.discountRate) || 0
+      payment: Number(modificationTerms.payment) || 0,
+      discountRate: Number(modificationTerms.discountRate) || 0
     };
+    (contract?.reassessments || [])
+      .filter(item => item?.status === "APPLIED")
+      .slice()
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")))
+      .forEach(item => {
+        const effective = parseDate(item.effectiveDate);
+        if (cutoff && (!effective || effective > cutoff)) return;
+        const next = item.newTerms || item.appliedToTerms || {};
+        if (next.leaseTerm !== undefined) terms.leaseTerm = next.leaseTerm;
+        if (next.payment !== undefined) terms.payment = Number(next.payment) || 0;
+        if (next.discountRate !== undefined) terms.discountRate = Number(next.discountRate) || 0;
+        if (next.renewalOption !== undefined) terms.renewalOption = next.renewalOption === true;
+        if (next.terminationOption !== undefined) terms.terminationOption = next.terminationOption === true;
+        if (next.purchaseOption !== undefined) terms.purchaseOption = next.purchaseOption === true;
+      });
+    return terms;
   }
 
 
