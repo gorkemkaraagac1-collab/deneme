@@ -194,6 +194,36 @@ describe("applyModification — mutlu yol + backend kaydı", () => {
 
   afterEach(() => fetchSpy.mockRestore());
 
+  test("zincirli modifikasyonlar geçmiş döneme sızmaz (12.000 → 13.500 → 15.000)", async () => {
+    const contract = baseContract({
+      monthlyPayment: 12000,
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      discountRate: 6
+    });
+
+    const first = await tfrs16.createModification(contract, {
+      modificationDate: "2025-06-01",
+      effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 13500
+    });
+    expect(first.valid).toBe(true);
+    await tfrs16.applyModification(contract, first.modification.id);
+    expect(contract.monthlyPayment).toBe(13500);
+
+    const second = await tfrs16.createModification(contract, {
+      modificationDate: "2026-02-01",
+      effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 15000
+    });
+    expect(second.valid).toBe(true);
+    expect(second.modification.oldTerms.payment).toBe(13500);
+    await tfrs16.applyModification(contract, second.modification.id);
+    expect(contract.monthlyPayment).toBe(15000);
+  });
+
   test("APPLIED sonrası sözleşmenin monthlyPayment/discountRate/endDate alanları GERÇEKTEN güncellenir", async () => {
     const contract = baseContract({ monthlyPayment: 100000, discountRate: 18 });
     const created = await tfrs16.createModification(contract, {
