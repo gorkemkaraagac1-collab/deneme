@@ -1687,28 +1687,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function getReassessmentBaseSchedule(contract) {
-    const reassessments =
-      (contract?.reassessments || [])
-        .filter(item => item.status === "APPLIED")
-        .slice()
-        .sort((a, b) =>
-          String(a.effectiveDate || "").localeCompare(
-            String(b.effectiveDate || "")
-          )
-        );
-
-    if (!reassessments.length) {
-      return getModifiedCurrentSchedule(contract);
-    }
-
-    const latest = reassessments[reassessments.length - 1];
-
-    return buildReassessedSchedule(
-      contract,
-      latest
-    );
+    return buildScheduleFromChangeChain(contract);
   }
-
 
   function getReassessmentCurrentTerms(contract, asOfDate = null) {
     // Reassessment must start from the effective modification chain. Reading
@@ -3582,124 +3562,44 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   function buildReassessmentHistorySchedule(contract, excludeId) {
+    return buildScheduleFromChangeChain(contract, excludeId);
+  }
 
-    // Keep the persisted contract shape stable even when a reassessment-only
-    // contract has never carried a modification array.
+  // Modification and reassessment events share one chronological stream.
+  function buildScheduleFromChangeChain(contract, excludeId) {
+    // Reassessment-only contracts must retain the persisted empty
+    // modifications array for API/golden-output compatibility.
     ensureModificationState(contract);
-
-    const appliedReassessmentKey = reassessmentEconomicKey;
-    const excluded = (contract.reassessments || []).find(item => item.id === excludeId);
-    const excludedKey = excluded ? appliedReassessmentKey(excluded) : null;
-    const seenKeys = new Set();
-
-    // APPLIED reassessment mutates the contract's headline terms. Starting
-    // the historical schedule from that mutated contract applies the new
-    // payment/rate retrospectively, then the roll-forward also records the
-    // reassessment adjustment: the same event is counted twice and its
-    // opposite leaks into "Other". Prefer the immutable pre-change snapshot.
-    // Older persisted records may predate originalContractSnapshot; their
-    // earliest appliedFromTerms is a safe migration fallback.
-    const earliestAppliedFromTerms = (contract.reassessments || [])
-      .filter(item => item?.status === "APPLIED" && item?.appliedFromTerms)
-      .slice()
-      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")))[0]
-      ?.appliedFromTerms;
-    const baseContract = contract.originalContractSnapshot
-      ? cloneModificationValue(contract.originalContractSnapshot)
-      : earliestAppliedFromTerms
-        ? {
-            ...cloneModificationValue(contract),
-            ...cloneModificationValue(earliestAppliedFromTerms),
-            reassessments: [],
-            modifications: []
-          }
-        : contract;
-
-    // Modifications and reassessments are one chronological stream.  Applying
-    // all modifications first and reassessments afterwards lets a later
-    // reassessment replace an earlier modification (especially a rate change).
-    // Replaying every event in effective-date order preserves each interval.
-    const modificationEvents = (contract.modifications || [])
-      .filter(item => item?.status === "APPLIED")
-      .map(item => ({ ...item, __changeKind: "modification" }));
-    const reassessmentEvents = (contract.reassessments || [])
-      .filter(item => item?.status === "APPLIED" && item.id !== excludeId)
-      .filter(item => {
-        const key = appliedReassessmentKey(item);
-        if (key === excludedKey || seenKeys.has(key)) return false;
-        seenKeys.add(key);
-        return true;
-      })
-      .map(item => ({ ...item, __changeKind: "reassessment" }));
-
-    const events = modificationEvents.concat(reassessmentEvents).sort((a, b) => {
-      const dateOrder = String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || ""));
-      if (dateOrder !== 0) return dateOrder;
-      // A modification recorded for the same date is the base terms; a
-      // reassessment on that date then measures the revised terms.
-      return a.__changeKind === b.__changeKind ? 0 : a.__changeKind === "modification" ? -1 : 1;
-    });
-
-    let schedule = (calculateLeaseEngine(baseContract).schedule || []).map(item => ({ ...item }));
+    const baseContract = getModificationBaseContract(contract);
     const baseEngine = calculateLeaseEngine(baseContract);
-
+    const events = []
+      .concat((contract?.modifications || []).filter(x => x?.status === "APPLIED").map(x => ({ ...x, __kind: "MODIFICATION" })))
+      .concat((contract?.reassessments || []).filter(x => x?.status === "APPLIED").map(x => ({ ...x, __kind: "REASSESSMENT" })))
+      .filter(x => x.id !== excludeId)
+      .sort((a,b) => String(a.effectiveDate||"").localeCompare(String(b.effectiveDate||"")) || String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+    let schedule = (baseEngine.schedule || []).map(item => ({ ...item }));
     events.forEach(event => {
-      const effective = parseDate(event.effectiveDate);
-      if (!effective) return;
-      const historical = schedule.filter(item => {
-        const date = parseDate(item.date);
-        return date && date.getTime() <= effective.getTime();
-      });
-
-      if (event.__changeKind === "modification") {
-        const measured = resolveAppliedModificationMeasurement(contract, event);
-        const futureResult = calculateModifiedLeaseLiability(baseContract, effective, event.newTerms || {});
-        const oldROU = getScheduleValueAsOfDate(schedule, effective, "rouClosing", baseEngine.rouAssets);
-        const rouOpening = Math.max(0, oldROU + (Number(measured.rouAdjustment) || 0));
-        const remainingMonths = futureResult.schedule.length;
-        const depreciation = remainingMonths > 0 ? rouOpening / remainingMonths : 0;
-        let rou = rouOpening;
-        const future = futureResult.schedule.map((item, index) => {
-          const dep = Math.min(depreciation, rou);
-          const closing = Math.max(0, rou - dep);
-          const row = { ...item, period: historical.length + index + 1, rouOpening: rou, depreciation: dep, rouClosing: closing };
-          rou = closing;
-          return row;
-        });
-        schedule = historical.concat(future);
-      } else {
-        const futureResult = calculateReassessmentLiability(baseContract, effective, event.newTerms || {});
-        schedule = buildReassessedScheduleFromResult(
-          schedule,
-          effective,
-          futureResult.schedule,
-          Number(event.revisedROU) || 0,
-          !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
-        );
-      }
+      const effective = parseDate(event.effectiveDate); if (!effective) return;
+      const oldLiability = getScheduleValueAsOfDate(schedule, effective, "closingLiability", baseEngine.liability);
+      const oldROU = getScheduleValueAsOfDate(schedule, effective, "rouClosing", baseEngine.rouAssets);
+      const revised = event.__kind === "MODIFICATION" ? calculateModifiedLeaseLiability(baseContract, effective, event.newTerms) : calculateReassessmentLiability(baseContract, effective, event.newTerms);
+      const revisedLiability = Math.max(0, Number(revised.liability) || 0);
+      const liabilityAdjustment = revisedLiability - oldLiability;
+      const rou = event.__kind === "MODIFICATION" ? calculateROUAdjustment(event, oldROU, liabilityAdjustment, oldLiability, revisedLiability) : calculateReassessmentROUAdjustment(oldROU, liabilityAdjustment, oldLiability, revisedLiability);
+      const historical = schedule.filter(item => { const date=parseDate(item.date); return date && date.getTime() <= effective.getTime(); });
+      let rouValue = Math.max(0, oldROU + (Number(rou.rouAdjustment)||0));
+      const depreciation = revised.schedule.length ? rouValue/revised.schedule.length : 0;
+      const future = revised.schedule.map((item,index) => { const row={...item,period:historical.length+index+1,rouOpening:rouValue}; row.depreciation=Math.min(depreciation,rouValue); row.rouClosing=Math.max(0,rouValue-row.depreciation); rouValue=row.rouClosing; return row; });
+      schedule=historical.concat(future);
     });
-
     return schedule;
   }
 
-
   function buildReassessedSchedule(contract, reassessment) {
-    if (!reassessment) {
-      return buildReassessmentHistorySchedule(contract, null);
-    }
-
-    const schedule = buildReassessmentHistorySchedule(contract, reassessment.id);
-    const effectiveDate = parseDate(reassessment.effectiveDate);
-    if (!effectiveDate) return schedule;
-
-    const revised = calculateReassessmentLiability(contract, effectiveDate, reassessment.newTerms);
-    return buildReassessedScheduleFromResult(
-      schedule,
-      effectiveDate,
-      revised.schedule,
-      Number(reassessment.revisedROU) || 0,
-      !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
-    );
+    const excludeId = reassessment && reassessment.status !== "APPLIED"
+      ? reassessment.id
+      : null;
+    return buildScheduleFromChangeChain(contract, excludeId);
   }
 
 
@@ -5777,21 +5677,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return applied.length
       ? applied[applied.length - 1]
       : null;
-  }
-
-
-  function getModifiedCurrentSchedule(contract) {
-    const modification =
-      getCurrentAppliedModification(contract);
-
-    if (!modification) {
-      return calculateLeaseEngine(contract).schedule || [];
-    }
-
-    return buildModifiedSchedule(
-      contract,
-      modification
-    );
   }
 
 
