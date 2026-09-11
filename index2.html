@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeaseQant — TFRS 16 Kiralama Muhasebesi</title>
+  <meta name="description" content="TFRS 16 kiralama, TMS 29 enflasyon ve TMS 21 kur çevrimi — tek platformda hesaplama, kapanış, yevmiye ve konsolidasyon." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --border: #e5e9f0;
+      --text: #0f172a;
+      --text-2: #475569;
+      --text-3: #94a3b8;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --primary-soft: #eff6ff;
+      --navy: #0b1220;
+      --navy-2: #111827;
+      --success: #059669;
+      --radius: 12px;
+      --font: Inter, system-ui, -apple-system, sans-serif;
+      --shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+    /* Logo */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .logo-svg {
+      width: 38px;
+      height: 38px;
+      flex-shrink: 0;
+    }
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.05;
+    }
+    .logo-name {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .logo-name .lease { color: #fff; }
+    .logo-name .qant { color: #3b82f6; }
+    .logo-tag {
+      font-size: 8.5px;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    /* Nav */
+    .nav {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(11, 18, 32, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-inner {
+      max-width: 1120px; margin: 0 auto; padding: 12px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .nav-links { display: flex; gap: 22px; list-style: none; }
+    .nav-links a { font-size: 13.5px; color: #94a3b8; font-weight: 500; }
+    .nav-links a:hover { color: #e2e8f0; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600;
+      border: 1px solid transparent; cursor: pointer; transition: .15s ease;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-ghost { border-color: rgba(255,255,255,.2); color: #e2e8f0; background: transparent; }
+    .btn-ghost:hover { border-color: #93c5fd; color: #fff; }
+
+    /* Hero */
+    .hero {
+      background: var(--navy);
+      color: #e2e8f0;
+      padding: 72px 0 64px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 700px 400px at 85% -10%, rgba(59,130,246,.18), transparent 60%),
+        linear-gradient(rgba(148,163,184,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148,163,184,.06) 1px, transparent 1px);
+      background-size: auto, 48px 48px, 48px 48px;
+      mask-image: linear-gradient(to bottom, #000, transparent 90%);
+      pointer-events: none;
+    }
+    .hero-inner {
+      position: relative;
+      display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center;
+    }
+    .eyebrow {
+      font-size: 11px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase;
+      color: #93c5fd; margin-bottom: 14px;
+    }
+    .hero h1 {
+      font-size: clamp(30px, 4.2vw, 48px); font-weight: 700; line-height: 1.12;
+      color: #fff; letter-spacing: -0.02em; max-width: 18ch;
+    }
+    .hero h1 span { color: #93c5fd; }
+    .hero .lead {
+      margin-top: 18px; font-size: 16px; color: #94a3b8; max-width: 48ch; line-height: 1.65;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .hero-stats {
+      margin-top: 36px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.08);
+      display: flex; flex-wrap: wrap; gap: 8px 0; font-size: 12px; color: #64748b; font-weight: 500;
+    }
+    .hero-stats span { padding: 0 14px; border-right: 1px solid rgba(255,255,255,.1); }
+    .hero-stats span:first-child { padding-left: 0; }
+    .hero-stats span:last-child { border-right: none; }
+
+    .hero-card {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      padding: 22px;
+      backdrop-filter: blur(8px);
+    }
+    .hero-card h3 { font-size: 14px; color: #e2e8f0; margin-bottom: 14px; font-weight: 650; }
+    .kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kpi {
+      background: rgba(15,23,42,.45);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .kpi .val { font-size: 20px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+    .kpi .val.ok { color: #34d399; }
+    .kpi .lab { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    .lock-list { margin-top: 14px; font-size: 12px; color: #94a3b8; }
+    .lock-list div {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .tag {
+      font-size: 10px; font-weight: 650; padding: 3px 8px; border-radius: 999px;
+      background: rgba(29,78,216,.25); color: #93c5fd;
+    }
+
+    /* Sections */
+    section { padding: 72px 0; }
+    .section-head { max-width: 560px; margin-bottom: 36px; }
+    .section-head .eyebrow { color: var(--primary); }
+    .section-head h2 {
+      font-size: clamp(24px, 2.8vw, 32px); font-weight: 700; letter-spacing: -0.02em; margin-top: 8px;
+    }
+    .section-head p { margin-top: 12px; color: var(--text-2); font-size: 15px; }
+
+    .std-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .card .code {
+      font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--primary);
+    }
+    .card h3 { font-size: 17px; margin-top: 10px; font-weight: 650; }
+    .card p { font-size: 14px; color: var(--text-2); margin-top: 8px; line-height: 1.6; }
+
+    .feat-section { background: var(--navy); color: #e2e8f0; }
+    .feat-section .section-head .eyebrow { color: #93c5fd; }
+    .feat-section .section-head h2 { color: #fff; }
+    .feat-section .section-head p { color: #94a3b8; }
+    .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .feat-card {
+      background: var(--navy-2);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .feat-card .idx { font-size: 11px; font-weight: 650; color: #60a5fa; letter-spacing: .04em; }
+    .feat-card h3 { font-size: 16px; color: #fff; margin-top: 8px; font-weight: 650; }
+    .feat-card p { font-size: 13.5px; color: #94a3b8; margin-top: 8px; line-height: 1.6; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .tags span {
+      font-size: 11px; font-weight: 550; color: #93c5fd;
+      border: 1px solid rgba(147,197,253,.3); padding: 4px 9px; border-radius: 999px;
+    }
+
+    .why-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .why-card h3 { font-size: 15px; font-weight: 650; margin-top: 12px; }
+    .why-card p { font-size: 13px; color: var(--text-2); margin-top: 6px; line-height: 1.55; }
+    .why-num {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--primary-soft); color: var(--primary);
+      display: grid; place-items: center; font-size: 13px; font-weight: 700;
+    }
+
+    .faq-item { border-bottom: 1px solid var(--border); }
+    .faq-item summary {
+      list-style: none; cursor: pointer; padding: 16px 0;
+      display: flex; justify-content: space-between; gap: 12px;
+      font-size: 15px; font-weight: 650;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item .plus { color: var(--primary); font-weight: 700; }
+    .faq-a { padding: 0 0 16px; font-size: 14px; color: var(--text-2); max-width: 68ch; line-height: 1.65; }
+
+    .cta {
+      background: var(--navy);
+      text-align: center;
+      padding: 64px 24px;
+    }
+    .cta h2 { color: #fff; font-size: clamp(24px, 3vw, 34px); font-weight: 700; letter-spacing: -0.02em; }
+    .cta p { color: #94a3b8; margin: 12px auto 24px; max-width: 42ch; font-size: 15px; }
+
+    footer {
+      background: var(--navy);
+      border-top: 1px solid rgba(255,255,255,.06);
+      padding: 40px 0 24px;
+      color: #94a3b8;
+      font-size: 13px;
+    }
+    .footer-grid {
+      display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 28px; margin-bottom: 28px;
+    }
+    .footer-grid h4 {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: #64748b; margin-bottom: 12px;
+    }
+    .footer-grid ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .footer-grid a:hover { color: #e2e8f0; }
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,.06);
+      padding-top: 18px;
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px;
+      font-size: 12px; color: #64748b;
+    }
+
+    @media (max-width: 900px) {
+      .nav-links { display: none; }
+      .hero-inner { grid-template-columns: 1fr; }
+      .std-grid, .feat-grid { grid-template-columns: 1fr; }
+      .why-grid { grid-template-columns: 1fr 1fr; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+      .why-grid, .footer-grid { grid-template-columns: 1fr; }
+      .kpi-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="logo">
+        <svg class="logo-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lqGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#60a5fa"/>
+              <stop offset="100%" stop-color="#1d4ed8"/>
+            </linearGradient>
+          </defs>
+          <!-- L -->
+          <path d="M9 8 H19 V30 H33 V38 H9 V8Z" fill="url(#lqGrad)"/>
+          <!-- Q circle -->
+          <circle cx="31" cy="27" r="11.5" stroke="url(#lqGrad)" stroke-width="4.5" fill="none"/>
+          <!-- White Q diagonal -->
+          <path d="M35 33 L42 40" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+        </svg>
+        <div class="logo-text">
+          <div class="logo-name">
+            <span class="lease">Lease</span><span class="qant">Qant</span>
+          </div>
+          <div class="logo-tag">Intelligent Lease Accounting</div>
+        </div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#standartlar">Standartlar</a></li>
+        <li><a href="#ozellikler">Özellikler</a></li>
+        <li><a href="#neden">Neden</a></li>
+        <li><a href="#sss">SSS</a></li>
+      </ul>
+      <a href="login.html" class="btn btn-primary">Dashboard'a Gir</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container hero-inner">
+      <div>
+        <div class="eyebrow">TFRS 16 · TMS 29 · TMS 21</div>
+        <h1>Kiralama muhasebesini <span>doğru hesapla</span>, kapat.</h1>
+        <p class="lead">
+          Sözleşmeden yevmiyeye, enflasyon düzeltmesinden konsolidasyona —
+          lisanslı ekipler için sade, denetlenebilir ve kapanışa hazır çalışma alanı.
+        </p>
+        <div class="hero-actions">
+          <a href="login.html" class="btn btn-primary">Dashboard'a Gir</a>
+          <a href="#standartlar" class="btn btn-ghost">Kapsamı gör →</a>
+        </div>
+        <div class="hero-stats">
+          <span>TFRS 16 hesap motoru</span>
+          <span>Period locking</span>
+          <span>Excel &amp; ERP çıktısı</span>
+          <span>Audit trail</span>
+        </div>
+      </div>
+      <div class="hero-card" aria-hidden="true">
+        <h3>Month-End Close · Örnek</h3>
+        <div class="kpi-row">
+          <div class="kpi"><div class="val">92</div><div class="lab">Kapanış skoru</div></div>
+          <div class="kpi"><div class="val">184</div><div class="lab">Aktif sözleşme</div></div>
+          <div class="kpi"><div class="val">₺48,2M</div><div class="lab">Yükümlülük</div></div>
+          <div class="kpi"><div class="val ok">READY</div><div class="lab">Mutabakat</div></div>
+        </div>
+        <div class="lock-list">
+          <div><span>2026-06</span><span class="tag">Kilitli</span></div>
+          <div><span>2026-05</span><span class="tag">Kilitli</span></div>
+          <div><span>2026-04</span><span class="tag">Kilitli</span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="standartlar">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Standartlar</div>
+        <h2>Üç standart, tek sözleşme üzerinde</h2>
+        <p>İşlem, fonksiyonel ve raporlama para birimi farklılaştığında hangi kuralların devreye girdiğini motor otomatik belirler.</p>
+      </div>
+      <div class="std-grid">
+        <article class="card">
+          <div class="code">TFRS 16</div>
+          <h3>Kiralamalar</h3>
+          <p>ROU varlık ve kira yükümlülüğü; modifikasyon, reassessment, CPI artışı, erken ödeme ve ödeme planı uçtan uca.</p>
+        </article>
+        <article class="card">
+          <div class="code">TMS 29</div>
+          <h3>Yüksek enflasyon</h3>
+          <p>Restatement, endeks tablosu ve enflasyon düzeltme olayları — raporlama dönemine göre net etki.</p>
+        </article>
+        <article class="card">
+          <div class="code">TMS 21</div>
+          <h3>Kur değişimleri</h3>
+          <p>Fonksiyonel para birimi dışı kiralamalarda kur çevrimi; TCMB doğrulanmış kur kayıtlarıyla.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="feat-section" id="ozellikler">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Kapsam</div>
+        <h2>Hesaptan kapanışa kadar</h2>
+        <p>Günlük operasyon ile CFO / denetçi ihtiyacı aynı üründe.</p>
+      </div>
+      <div class="feat-grid">
+        <article class="feat-card">
+          <div class="idx">01 — HESAPLAMA</div>
+          <h3>Hesaplama &amp; yeniden ölçüm</h3>
+          <p>Modifikasyon, reassessment, endeks, erken ödeme ve escalation senaryoları standart formülle işlenir.</p>
+          <div class="tags"><span>Modifikasyon</span><span>Reassessment</span><span>CPI</span><span>Erken ödeme</span></div>
+        </article>
+        <article class="feat-card">
+          <div class="idx">02 — RAPORLAMA</div>
+          <h3>Yevmiye, dipnot, Excel</h3>
+          <p>Toplu fiş, roll-forward tabloları, likidite dipnotu ve Excel dışa aktarım.</p>
+          <div class="tags"><span>Toplu fiş</span><span>Dipnot</span><span>Excel</span></div>
+        </article>
+        <article class="feat-card">
+          <div class="idx">03 — GRUP</div>
+          <h3>Çoklu şirket &amp; para birimi</h3>
+          <p>Holding ağacı, aktif şirket filtresi, kur yönetimi ve konsolidasyon görünümü.</p>
+          <div class="tags"><span>Konsolidasyon</span><span>TCMB</span><span>Eliminasyon</span></div>
+        </article>
+        <article class="feat-card">
+          <div class="idx">04 — KONTROL</div>
+          <h3>Period lock &amp; denetim izi</h3>
+          <p>Kilitli dönemde yazma engeli; her kritik işlem audit trail’de kalır.</p>
+          <div class="tags"><span>Period lock</span><span>Audit</span><span>Roller</span></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="neden">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Neden LeaseQant</div>
+        <h2>Lisanslı kullanım için net sınırlar</h2>
+      </div>
+      <div class="why-grid">
+        <div class="why-card">
+          <div class="why-num">01</div>
+          <h3>Sade arayüz</h3>
+          <p>Muhasebe ekibinin günlük işine göre sadeleştirilmiş ekranlar; gereksiz karmaşa yok.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-num">02</div>
+          <h3>Gerçek kapanış</h3>
+          <p>Period locking arayüzde değil, işlem seviyesinde; kilitli ayda yazma yok.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-num">03</div>
+          <h3>Türkiye koşulları</h3>
+          <p>TMS 29 ve TCMB kurları ürünün merkezinde; sonradan eklenmiş dekor değil.</p>
+        </div>
+        <div class="why-card">
+          <div class="why-num">04</div>
+          <h3>Rol &amp; lisans</h3>
+          <p>JWT oturum, şirket lisansı ve salt okunur roller backend ile uyumlu.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sss">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">SSS</div>
+        <h2>Sık sorulanlar</h2>
+      </div>
+      <div style="max-width:720px" id="faqList">
+        <details class="faq-item">
+          <summary>Dashboard’a nasıl girerim? <span class="plus">+</span></summary>
+          <div class="faq-a">Sağ üstten veya “Dashboard'a Gir” ile <strong>login.html</strong> açılır. Başarılı girişten sonra uygulama yüklenir.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Hangi standartlar kapsanıyor? <span class="plus">+</span></summary>
+          <div class="faq-a">TFRS 16, TMS 29 ve TMS 21 — aynı sözleşme üzerinde birlikte çalışacak şekilde tasarlandı.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Çoklu şirket destekleniyor mu? <span class="plus">+</span></summary>
+          <div class="faq-a">Evet. Oturum şirketleri, holding ağacı ve aktif şirket filtresi ürün içinde yer alır.</div>
+        </details>
+        <details class="faq-item">
+          <summary>Kilitli dönemde ne olur? <span class="plus">+</span></summary>
+          <div class="faq-a">Yeni sözleşme, silme, modifikasyon, reassessment ve toplu yevmiye gibi yazma işlemleri engellenir.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <h2>Kapanışı açık bırakmayın.</h2>
+    <p>Lisanslı hesabınızla giriş yapın; sözleşmeler, kapanış ve raporlama tek yerde.</p>
+    <a href="login.html" class="btn btn-primary">Dashboard'a Gir</a>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a href="index.html" class="logo" style="margin-bottom:14px">
+            <svg class="logo-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="lqGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#60a5fa"/>
+                  <stop offset="100%" stop-color="#1d4ed8"/>
+                </linearGradient>
+              </defs>
+              <path d="M9 8 H19 V30 H33 V38 H9 V8Z" fill="url(#lqGrad2)"/>
+              <circle cx="31" cy="27" r="11.5" stroke="url(#lqGrad2)" stroke-width="4.5" fill="none"/>
+              <path d="M35 33 L42 40" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+            </svg>
+            <div class="logo-text">
+              <div class="logo-name">
+                <span class="lease">Lease</span><span class="qant">Qant</span>
+              </div>
+            </div>
+          </a>
+          <p style="max-width:28ch;line-height:1.6;margin-top:8px">TFRS 16 kiralama muhasebesi için lisanslı SaaS çalışma alanı.</p>
+        </div>
+        <div>
+          <h4>Ürün</h4>
+          <ul>
+            <li><a href="#standartlar">Standartlar</a></li>
+            <li><a href="#ozellikler">Özellikler</a></li>
+            <li><a href="login.html">Giriş</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Uygulama</h4>
+          <ul>
+            <li><a href="login.html">Dashboard</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Not</h4>
+          <ul>
+            <li><a href="#sss">SSS</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 LeaseQant</span>
+        <span>TFRS / TMS yorumları resmi danışmanlık yerine geçmez.</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
