@@ -300,6 +300,39 @@ describe("applyModification — mutlu yol + backend kaydı", () => {
     expect(contract.monthlyPayment).toBe(15000);
   });
 
+  test("persisted olay sırası ters olsa bile ödeme planı kronolojik şartları korur", async () => {
+    const contract = baseContract({
+      monthlyPayment: 12000,
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      discountRate: 6
+    });
+    const first = await tfrs16.createModification(contract, {
+      modificationDate: "2025-06-01", effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 13500
+    });
+    await tfrs16.applyModification(contract, first.modification.id);
+    const second = await tfrs16.createModification(contract, {
+      modificationDate: "2026-02-01", effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 15000
+    });
+    await tfrs16.applyModification(contract, second.modification.id);
+
+    // Simulate the legacy persistence order that caused the live regression.
+    contract.modifications.reverse();
+    const resolved = tfrs16.cfoBuildSchedule(contract);
+    const rows = resolved.schedule;
+    const paymentAt = month => rows.find(row => {
+      const date = row.date instanceof Date ? row.date : new Date(row.date);
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}` === month;
+    })?.payment;
+    expect(paymentAt("2025-01")).toBe(12000);
+    expect(paymentAt("2025-06")).toBe(12000);
+    expect(paymentAt("2025-07")).toBe(13500);
+    expect(paymentAt("2026-02")).toBe(13500);
+    expect(paymentAt("2026-03")).toBe(15000);
+  });
+
   test("zaten APPLIED olan bir modification tekrar apply edilirse aynı sonucu döner (idempotent), backend'e tekrar gitmez", async () => {
     const contract = baseContract({ monthlyPayment: 100000 });
     const created = await tfrs16.createModification(contract, {
