@@ -35306,6 +35306,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
   // `injectV26Navigation()` can execute before the later page renderer is
   // initialized (deep-link `?open=footnotes`). `var` avoids the temporal
   // dead zone while preserving the existing null/undefined fallback.
+  // eslint-disable-next-line no-var
   var v26FootnotesPeriodEndOverride = null; // null => bugün
 
   /* ==========================================================
