@@ -5677,11 +5677,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function getModifiedCurrentSchedule(contract) {
-    return buildScheduleFromChangeChain(contract);
-  }
-
-
   /* ==========================================================
      HELPERS
   ========================================================== */
