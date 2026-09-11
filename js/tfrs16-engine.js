@@ -11751,7 +11751,7 @@ ${renderAccountingCenterBulkPromo()}
               <span>${escapeHtml(item.modificationType || "OTHER")}</span>
               <span>${escapeHtml(item.effectiveDate || "")}</span>
               <span>${escapeHtml(item.status || "DRAFT")}</span>
-              <strong>${formatPresentationCurrency(item.liabilityAdjustment || 0, contract.currency)}</strong>
+              <strong>${formatPresentationCurrency((item.status === "APPLIED" ? resolveAppliedModificationMeasurement(contract, item).liabilityAdjustment : item.liabilityAdjustment) || 0, contract.currency)}</strong>
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
@@ -35303,7 +35303,10 @@ const V26_FX_UI_PAGE_SIZE = 50;
      TUTARLI şekilde o yılın 1 Ocak'ı olarak sabitlendi.
   ========================================================== */
   let v26FootnotesActiveTab = "asset"; // asset | liability | liquidity
-  let v26FootnotesPeriodEndOverride = null; // null => bugün
+  // `injectV26Navigation()` can execute before the later page renderer is
+  // initialized (deep-link `?open=footnotes`). `var` avoids the temporal
+  // dead zone while preserving the existing null/undefined fallback.
+  var v26FootnotesPeriodEndOverride = null; // null => bugün
 
   /* ==========================================================
      RİSK & KONTROLLER — AYRI SAYFA (onaylı plan)
