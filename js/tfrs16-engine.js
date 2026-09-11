@@ -4076,8 +4076,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  // Resolve the immutable pre-modification terms. Older persisted contracts
+  // can have an originalContractSnapshot contaminated by a later change;
+  // the earliest applied event's appliedFromTerms is the migration-safe base.
+  function getModificationBaseContract(contract) {
+    const snapshot = contract?.originalContractSnapshot
+      ? cloneModificationValue(contract.originalContractSnapshot)
+      : cloneModificationValue(contract || {});
+    const earliest = (contract?.modifications || [])
+      .filter(item => item?.status === "APPLIED" && item?.appliedFromTerms)
+      .slice()
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")))[0];
+    const terms = earliest?.appliedFromTerms;
+    if (terms) {
+      if (terms.payment !== undefined) snapshot.monthlyPayment = Number(terms.payment) || 0;
+      if (terms.leaseEndDate !== undefined) snapshot.endDate = terms.leaseEndDate;
+      if (terms.discountRate !== undefined) snapshot.discountRate = Number(terms.discountRate) || 0;
+    }
+    delete snapshot.modifications;
+    delete snapshot.auditTrail;
+    delete snapshot.originalContractSnapshot;
+    return snapshot;
+  }
+
   function getModificationCurrentTerms(contract, asOfDate = null) {
-    const base = contract?.originalContractSnapshot || contract || {};
+    const base = getModificationBaseContract(contract);
     const cutoff = asOfDate ? parseDate(asOfDate) : null;
     const terms = {
       payment: Number(base.monthlyPayment) || 0,
@@ -4520,7 +4543,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const payments =
       buildModificationFuturePayments(
-        contract,
+        getModificationBaseContract(contract),
         effectiveDate,
         newTerms
       );
@@ -4667,7 +4690,7 @@ document.addEventListener("DOMContentLoaded", () => {
       String(item.effectiveDate || "") < String(modification.effectiveDate || "")
     );
     const currentStateSchedule = buildScheduleFromModificationChain(contract, priorApplied, true);
-    const baseContract = contract.originalContractSnapshot || contract;
+    const baseContract = getModificationBaseContract(contract);
     const baseEngine = calculateLeaseEngine(baseContract);
     const oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
     const oldROU = getModificationROUAsOf(contract, effectiveDate, { schedule: currentStateSchedule, rouAssets: baseEngine.rouAssets });
@@ -4701,19 +4724,7 @@ document.addEventListener("DOMContentLoaded", () => {
     preserveStoredMeasurements = false
   ) {
 
-    const baseContract =
-      contract?.originalContractSnapshot
-        ? cloneModificationValue(contract.originalContractSnapshot)
-        : {
-            ...contract,
-            modifications: [],
-            auditTrail: [],
-            originalContractSnapshot: undefined
-          };
-
-    delete baseContract.modifications;
-    delete baseContract.auditTrail;
-    delete baseContract.originalContractSnapshot;
+    const baseContract = getModificationBaseContract(contract);
 
     const baseEngine =
       calculateLeaseEngine(baseContract);
@@ -4954,9 +4965,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
     const baseEngine =
-      calculateLeaseEngine(
-        contract.originalContractSnapshot || contract
-      );
+      calculateLeaseEngine(getModificationBaseContract(contract));
 
     const oldLeaseLiability =
       getScheduleValueAsOfDate(
@@ -5111,7 +5120,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const futureResult =
       calculateModifiedLeaseLiability(
-        contract.originalContractSnapshot || contract,
+        getModificationBaseContract(contract),
         effectiveDate,
         modification.newTerms
       );
@@ -5689,9 +5698,10 @@ document.addEventListener("DOMContentLoaded", () => {
     ensureModificationState(contract);
 
     const applied =
-      contract.modifications.filter(
-        item => item.status === "APPLIED"
-      );
+      contract.modifications
+        .filter(item => item.status === "APPLIED")
+        .slice()
+        .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
 
     return applied.length
       ? applied[applied.length - 1]
@@ -34236,6 +34246,7 @@ ${renderPaymentScheduleFooterContainers()}
       formatCurrency,
       parseDate,
       calculateLeaseEngine,
+      cfoBuildSchedule,
       validateContract,
       calculateVariance,
       calculateVariancePercent,
