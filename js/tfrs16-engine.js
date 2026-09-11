@@ -3559,6 +3559,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function buildReassessmentHistorySchedule(contract, excludeId) {
 
+    // Keep the persisted contract shape stable even when a reassessment-only
+    // contract has never carried a modification array.
+    ensureModificationState(contract);
+
     const appliedReassessmentKey = reassessmentEconomicKey;
     const excluded = (contract.reassessments || []).find(item => item.id === excludeId);
     const excludedKey = excluded ? appliedReassessmentKey(excluded) : null;
@@ -3587,34 +3591,68 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         : contract;
 
-    const latestModification = getCurrentAppliedModification(contract);
-    let schedule = latestModification
-      ? buildModifiedSchedule(contract, latestModification)
-      : (calculateLeaseEngine(baseContract).schedule || []);
-
-    const prior = (contract.reassessments || [])
-            .filter(item => {
+    // Modifications and reassessments are one chronological stream.  Applying
+    // all modifications first and reassessments afterwards lets a later
+    // reassessment replace an earlier modification (especially a rate change).
+    // Replaying every event in effective-date order preserves each interval.
+    const modificationEvents = (contract.modifications || [])
+      .filter(item => item?.status === "APPLIED")
+      .map(item => ({ ...item, __changeKind: "modification" }));
+    const reassessmentEvents = (contract.reassessments || [])
+      .filter(item => item?.status === "APPLIED" && item.id !== excludeId)
+      .filter(item => {
         const key = appliedReassessmentKey(item);
         if (key === excludedKey || seenKeys.has(key)) return false;
         seenKeys.add(key);
         return true;
       })
-      
-      .filter(item => item.status === "APPLIED" && item.id !== excludeId)
-      .slice()
-      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+      .map(item => ({ ...item, __changeKind: "reassessment" }));
 
-    prior.forEach(item => {
-      const effective = parseDate(item.effectiveDate);
+    const events = modificationEvents.concat(reassessmentEvents).sort((a, b) => {
+      const dateOrder = String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || ""));
+      if (dateOrder !== 0) return dateOrder;
+      // A modification recorded for the same date is the base terms; a
+      // reassessment on that date then measures the revised terms.
+      return a.__changeKind === b.__changeKind ? 0 : a.__changeKind === "modification" ? -1 : 1;
+    });
+
+    let schedule = (calculateLeaseEngine(baseContract).schedule || []).map(item => ({ ...item }));
+    const baseEngine = calculateLeaseEngine(baseContract);
+
+    events.forEach(event => {
+      const effective = parseDate(event.effectiveDate);
       if (!effective) return;
-      const futureResult = calculateReassessmentLiability(contract, effective, item.newTerms);
-      schedule = buildReassessedScheduleFromResult(
-        schedule,
-        effective,
-        futureResult.schedule,
-        Number(item.revisedROU) || 0,
-        !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
-      );
+      const historical = schedule.filter(item => {
+        const date = parseDate(item.date);
+        return date && date.getTime() <= effective.getTime();
+      });
+
+      if (event.__changeKind === "modification") {
+        const measured = resolveAppliedModificationMeasurement(contract, event);
+        const futureResult = calculateModifiedLeaseLiability(baseContract, effective, event.newTerms || {});
+        const oldROU = getScheduleValueAsOfDate(schedule, effective, "rouClosing", baseEngine.rouAssets);
+        const rouOpening = Math.max(0, oldROU + (Number(measured.rouAdjustment) || 0));
+        const remainingMonths = futureResult.schedule.length;
+        const depreciation = remainingMonths > 0 ? rouOpening / remainingMonths : 0;
+        let rou = rouOpening;
+        const future = futureResult.schedule.map((item, index) => {
+          const dep = Math.min(depreciation, rou);
+          const closing = Math.max(0, rou - dep);
+          const row = { ...item, period: historical.length + index + 1, rouOpening: rou, depreciation: dep, rouClosing: closing };
+          rou = closing;
+          return row;
+        });
+        schedule = historical.concat(future);
+      } else {
+        const futureResult = calculateReassessmentLiability(baseContract, effective, event.newTerms || {});
+        schedule = buildReassessedScheduleFromResult(
+          schedule,
+          effective,
+          futureResult.schedule,
+          Number(event.revisedROU) || 0,
+          !isAdvancePaymentTiming(contract.paymentTiming || "arrears")
+        );
+      }
     });
 
     return schedule;
