@@ -194,4 +194,52 @@ describe("GC-18: arrears reassessment ödeme grid'i", () => {
       "2025-01-31"
     ]));
   });
+
+  test("modification ve reassessment aynı planda kronolojik olarak birlikte uygulanır", async () => {
+    const tfrs16 = loadTfrs16();
+    const contract = baseContract({
+      monthlyPayment: 12000,
+      startDate: "2025-01-01",
+      endDate: "2027-12-31",
+      paymentFrequency: "monthly"
+    });
+
+    const first = await tfrs16.createModification(contract, {
+      modificationDate: "2025-06-01", effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 13500
+    });
+    expect(first.valid).toBe(true);
+    await tfrs16.applyModification(contract, first.modification.id);
+
+    const second = await tfrs16.createModification(contract, {
+      modificationDate: "2026-02-01", effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE", newPayment: 15000
+    });
+    expect(second.valid).toBe(true);
+    await tfrs16.applyModification(contract, second.modification.id);
+
+    const reassessment = await tfrs16.createReassessment(contract, {
+      reassessmentDate: "2026-04-01", effectiveDate: "2026-05-01",
+      type: "FIXED_PAYMENT_CHANGE", newPayment: 16000,
+      reason: "chronological event chain"
+    });
+    expect(reassessment.valid).toBe(true);
+    await tfrs16.applyReassessment(contract, reassessment.reassessment.id);
+
+    const rows = tfrs16.cfoBuildSchedule(contract).schedule;
+    const paymentAt = month => {
+      const row = rows.find(item => {
+        const date = item.date instanceof Date ? item.date.toISOString().slice(0, 7) : String(item.date).slice(0, 7);
+        return date === month;
+      });
+      return Number(row?.payment || 0);
+    };
+
+    expect(paymentAt("2025-06")).toBeCloseTo(12000, 2);
+    expect(paymentAt("2025-07")).toBeCloseTo(13500, 2);
+    expect(paymentAt("2026-02")).toBeCloseTo(13500, 2);
+    expect(paymentAt("2026-03")).toBeCloseTo(15000, 2);
+    expect(paymentAt("2026-04")).toBeCloseTo(15000, 2);
+    expect(paymentAt("2026-05")).toBeCloseTo(16000, 2);
+  });
 });
