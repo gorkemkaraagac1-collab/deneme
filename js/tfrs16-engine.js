@@ -3419,7 +3419,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const effectiveDate = parseDate(input.effectiveDate);
     const type = input.type || "OTHER";
-    const oldTerms = getReassessmentCurrentTerms(contract);
+    // A reassessment is measured using the terms that were effective on its
+    // own effective date.  Do not let a later-dated reassessment leak into a
+    // historical event created out of order.
+    const oldTerms = getReassessmentCurrentTerms(contract, input.effectiveDate);
 
     const newTerms = {
       leaseTerm: input.newLeaseEndDate
@@ -4237,8 +4240,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const startDate =
       parseDate(contract.startDate);
 
+    const historicalTerms =
+      effectiveDate ? getModificationCurrentTerms(contract, input?.effectiveDate) : null;
     const currentEndDate =
-      parseDate(contract.endDate);
+      parseDate(historicalTerms?.leaseEndDate || contract.endDate);
 
     if (!modificationDate) {
       errors.push("Modification Date geçersiz.");
@@ -4300,7 +4305,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const currentPayment = Number(contract.monthlyPayment) || 0;
+    // Validate increases/decreases against the terms effective at this
+    // event date, rather than the mutable headline payment (which may
+    // represent a later modification).
+    const currentPayment = Number(historicalTerms?.payment ?? contract.monthlyPayment) || 0;
 
     if (type === "PAYMENT_INCREASE" &&
         Number.isFinite(newPayment) &&
@@ -4960,8 +4968,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const effectiveDate =
       parseDate(input.effectiveDate);
 
+    // Build the new terms at the modification's effective date.  Reading the
+    // latest headline terms here would make a past-dated modification inherit
+    // a future payment/rate change and overwrite the historical interval.
     const currentTerms =
-      getModificationCurrentTerms(contract);
+      getModificationCurrentTerms(contract, input.effectiveDate);
 
     const type =
       input.modificationType || "OTHER";
@@ -5014,7 +5025,8 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(
           item =>
             item.status === "APPLIED" &&
-            item.id !== input.id
+            item.id !== input.id &&
+            (!effectiveDate || (parseDate(item.effectiveDate) && parseDate(item.effectiveDate) < effectiveDate))
         );
 
     const currentStateSchedule =
