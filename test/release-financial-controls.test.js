@@ -247,6 +247,52 @@ describe("release financial controls", () => {
     expect(report.reconciliation.passed).toBe(true);
   });
 
+  test("TRY sözleşmede kronoloji farkı TMS 21 çevrim farkı olarak sınıflanmaz", async () => {
+    const changed = contract("TRY-NO-FX", {
+      startDate: "2025-01-01",
+      endDate: "2028-12-31",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+    tfrs16.contracts.push(changed);
+
+    const persist = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true, status: 200, text: async () => JSON.stringify({ success: true })
+    });
+    const modification = await tfrs16.createModification(changed, {
+      modificationDate: "2025-07-01",
+      effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 13500,
+      reason: "TRY chain regression"
+    });
+    expect(modification.valid).toBe(true);
+    expect((await tfrs16.applyModification(changed, modification.modification.id)).valid).toBe(true);
+
+    const reassessment = await tfrs16.createReassessment(changed, {
+      reassessmentDate: "2026-03-01",
+      effectiveDate: "2026-03-01",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 15000,
+      newLeaseEndDate: changed.endDate
+    });
+    expect(reassessment.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(changed, reassessment.reassessment.id)).valid).toBe(true);
+    persist.mockRestore();
+
+    // Simulate an old persisted delta from before the chronological resolver.
+    changed.reassessments[0].liabilityAdjustment += 1234.56;
+    const prepared = tfrs16.v191PrepareFinancialReportingData(
+      new Date("2026-01-01"), new Date("2026-06-30")
+    );
+    const liability = prepared.liabRows.find(row => row.contractId === changed.id);
+
+    expect(liability.currency).toBe("TRY");
+    expect(liability.fxTranslationAdjustment).toBe(0);
+  });
+
   test("admin audit ve dashboard sorguları kayıt sonucunu açıkça döndürür", () => {
     const source = fs.readFileSync(
       path.join(__dirname, "../backend/routes/admin.js"),

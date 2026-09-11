@@ -2728,7 +2728,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(x => x && x.status === "APPLIED")
         .map(x => x.__changeKind === "modification"
           ? { ...resolveAppliedModificationMeasurement(contract, x), __changeKind: "modification" }
-          : x);
+          : { ...resolveAppliedReassessmentMeasurement(contract, x), __changeKind: "reassessment" });
 
       const entryChanges = appliedChanges
         .map(x => {
@@ -4647,35 +4647,69 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
-  function resolveAppliedModificationMeasurement(contract, modification) {
-    if (!modification || modification.status !== "APPLIED") return modification;
-    const effectiveDate = parseDate(modification.effectiveDate);
-    if (!effectiveDate || !modification.newTerms) return modification;
+  // Recalculate an applied event against the complete chronological chain.
+  // Reading the stored delta is unsafe after a reassessment: the event may
+  // have been entered before/after another event and its old liability then
+  // refers to a different schedule.  The old implementation considered
+  // modifications only, so a later modification could be reported on top of
+  // a schedule that already contained a reassessment (or vice versa).
+  function resolveAppliedChangeMeasurement(contract, change, kind) {
+    if (!change || change.status !== "APPLIED") return change;
+    const effectiveDate = parseDate(change.effectiveDate || change.modificationDate || change.reassessmentDate);
+    if (!effectiveDate || !change.newTerms) return change;
 
-    const priorApplied = (contract.modifications || []).filter(item =>
-      item && item.status === "APPLIED" && item.id !== modification.id &&
-      String(item.effectiveDate || "") < String(modification.effectiveDate || "")
-    );
-    const currentStateSchedule = buildScheduleFromModificationChain(contract, priorApplied, true);
+    // Eski/import edilmiş reassessment kayıtlarında yalnızca delta bulunabilir.
+    // Bu kayıtlara geriye dönük yeni bir ölçüm uydurmak yerine saklanan değeri
+    // koru; yeni kayıtlar ölçüm alanlarını taşır ve kronolojik zincirden okunur.
+    if (kind === "reassessment" &&
+        !(Number.isFinite(Number(change.oldLeaseLiability)) &&
+          Number.isFinite(Number(change.revisedLeaseLiability))) &&
+        !change.measurementSource) return change;
+
+    const eventKey = event => `${String(event?.effectiveDate || event?.modificationDate || event?.reassessmentDate || "")}|${String(event?.createdAt || "")}|${String(event?.id || "")}`;
+    const currentKey = eventKey(change);
+    const priorModifications = (Array.isArray(contract?.modifications) ? contract.modifications : [])
+      .filter(item => item && item.status === "APPLIED" && item.id !== change.id && eventKey(item) < currentKey);
+    const priorReassessments = (Array.isArray(contract?.reassessments) ? contract.reassessments : [])
+      .filter(item => item && item.status === "APPLIED" && item.id !== change.id && eventKey(item) < currentKey);
+    const historyContract = {
+      ...contract,
+      modifications: priorModifications,
+      reassessments: priorReassessments
+    };
+    const currentStateSchedule = buildScheduleFromChangeChain(historyContract);
     const baseContract = getModificationBaseContract(contract);
     const baseEngine = calculateLeaseEngine(baseContract);
     const oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
-    const oldROU = getModificationROUAsOf(contract, effectiveDate, { schedule: currentStateSchedule, rouAssets: baseEngine.rouAssets });
-    const revised = calculateModifiedLeaseLiability(baseContract, effectiveDate, modification.newTerms);
+    const oldROU = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "rouClosing", baseEngine.rouAssets);
+    const revised = kind === "modification"
+      ? calculateModifiedLeaseLiability(baseContract, effectiveDate, change.newTerms)
+      : calculateReassessmentLiability(baseContract, effectiveDate, change.newTerms);
     const revisedLeaseLiability = Math.max(0, Number(revised.liability) || 0);
     const liabilityAdjustment = revisedLeaseLiability - oldLeaseLiability;
-    const rou = calculateROUAdjustment(modification, oldROU, liabilityAdjustment, oldLeaseLiability, revisedLeaseLiability);
+    const rou = kind === "modification"
+      ? calculateROUAdjustment(change, oldROU, liabilityAdjustment, oldLeaseLiability, revisedLeaseLiability)
+      : calculateReassessmentROUAdjustment(oldROU, liabilityAdjustment, oldLeaseLiability, revisedLeaseLiability);
 
     return {
-      ...modification,
+      ...change,
       oldLeaseLiability,
       revisedLeaseLiability,
       liabilityAdjustment,
       oldROU,
       rouAdjustment: rou.rouAdjustment,
+      revisedROU: rou.revisedROU,
       gainLoss: rou.gainLoss,
-      measurementSource: "RECALCULATED_FROM_TERMS"
+      measurementSource: "RECALCULATED_FROM_CHRONOLOGICAL_CHAIN"
     };
+  }
+
+  function resolveAppliedModificationMeasurement(contract, modification) {
+    return resolveAppliedChangeMeasurement(contract, modification, "modification");
+  }
+
+  function resolveAppliedReassessmentMeasurement(contract, reassessment) {
+    return resolveAppliedChangeMeasurement(contract, reassessment, "reassessment");
   }
 
   function rptRollForwardStatus(difference, otherAdjustment) {
@@ -18902,7 +18936,8 @@ ${renderPaymentScheduleFooterContainers()}
             if (appliedReassessmentKeys.has(key)) return false;
             appliedReassessmentKeys.add(key);
             return true;
-          });
+          })
+          .map(x => resolveAppliedReassessmentMeasurement(contract, x));
         // The monthly schedule only starts reflecting a modification/reassessment
         // from its next dated row onward. If the reporting cutoff falls on/after
         // an applied change's effective date but the picked closing row still
@@ -19014,7 +19049,8 @@ ${renderPaymentScheduleFooterContainers()}
             if(appliedReassessmentKeys.has(key)) return false;
             appliedReassessmentKeys.add(key);
             return true;
-          });
+          })
+          .map(x=>resolveAppliedReassessmentMeasurement(contract,x));
         // Same timing gap as the liability roll-forward: pull the post-change ROU
         // directly from the latest pending modification/reassessment when the
         // schedule hasn't yet caught up to the reporting cutoff.
@@ -23365,7 +23401,7 @@ ${renderPaymentScheduleFooterContainers()}
         reassessmentKeys.add(key);
         return true;
       })
-      .map(x => ({ ...x, __changeKind: "reassessment" }));
+      .map(x => ({ ...resolveAppliedReassessmentMeasurement(contract, x), __changeKind: "reassessment" }));
     return modifications.concat(reassessments)
       .map(x => ({ ...x, __effective: rptDate(x.effectiveDate || x.modificationDate || x.reassessmentDate) }))
       .filter(x => x.__effective && (!start || x.__effective >= start) && (!end || x.__effective <= end))
@@ -24108,6 +24144,19 @@ ${renderPaymentScheduleFooterContainers()}
       });
     });
     liabRows.forEach(row => {
+      // TMS 21 translation is only applicable when the contract's
+      // transaction currency differs from the presentation currency.  The
+      // previous residual-based calculation treated every roll-forward
+      // mismatch as an FX difference, which made TRY→TRY leases show a
+      // spurious "TMS 21 Çevrim Farkı" amount.  Keep genuine reconciliation
+      // differences visible through the report warning, but never classify
+      // them as foreign-exchange movement for a same-currency contract.
+      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
+      const sourceCurrency = String(contract?.currency || row.currency || presentationCurrency).toUpperCase();
+      if (sourceCurrency === presentationCurrency) {
+        row.fxTranslationAdjustment = 0;
+        return;
+      }
       row.fxTranslationAdjustment = rptRound(
         rptNumber(row.closingLiability) - (
           rptNumber(row.openingLiability) + rptNumber(row.entriesLiability) + rptNumber(row.interest)
