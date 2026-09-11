@@ -67,6 +67,49 @@ function findEconomicDuplicate(existingItems, incomingItems, economicKey) {
   return null;
 }
 
+/**
+ * Merge event collections when a client sends a stale contract snapshot.
+ *
+ * Modification and reassessment records are append-only business history:
+ * omitting an older record from a later PUT must never erase it.  A record
+ * with the same id is an edit of that record and therefore replaces the
+ * stored version; new ids are appended in payload order.
+ */
+function mergeEventCollection(existingItems, incomingItems) {
+  if (!Array.isArray(incomingItems)) return existingItems;
+  const existing = Array.isArray(existingItems) ? existingItems : [];
+  const merged = existing.map(item => item);
+  const indexById = new Map(
+    merged
+      .filter(item => item && item.id !== undefined && item.id !== null)
+      .map((item, index) => [String(item.id), index])
+  );
+
+  incomingItems.forEach(item => {
+    if (!item || typeof item !== "object") return;
+    const id = item.id === undefined || item.id === null ? null : String(item.id);
+    if (id !== null && indexById.has(id)) {
+      merged[indexById.get(id)] = item;
+      return;
+    }
+    if (id !== null) indexById.set(id, merged.length);
+    merged.push(item);
+  });
+  return merged;
+}
+
+function mergePersistedDetails(existingDetails, incomingDetails) {
+  const existing = existingDetails && typeof existingDetails === "object" ? existingDetails : {};
+  const incoming = incomingDetails && typeof incomingDetails === "object" ? incomingDetails : {};
+  const merged = { ...existing, ...incoming };
+  ["modifications", "reassessments"].forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(incoming, field)) {
+      merged[field] = mergeEventCollection(existing[field], incoming[field]);
+    }
+  });
+  return merged;
+}
+
 
 /**
  * ============================================================
@@ -785,6 +828,15 @@ router.put(
         }
       }
 
+      // Clients can legitimately hold a stale snapshot while another event
+      // is being applied. Preserve the database's event history and merge
+      // same-id edits instead of replacing the whole array with that stale
+      // snapshot (which previously made the first modification disappear).
+      const persistedDetails =
+        details !== undefined && details !== null
+          ? mergePersistedDetails(contractResult.rows[0]?.details, details)
+          : null;
+
 
       const result = await client.query(
         `
@@ -822,7 +874,7 @@ router.put(
            * "değiştirme" olarak yorumlar.
            */
           details !== undefined && details !== null
-            ? JSON.stringify(details)
+            ? JSON.stringify(persistedDetails)
             : null,
           req.params.id,
           contractCompanyId
