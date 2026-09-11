@@ -35329,7 +35329,11 @@ const V26_FX_UI_PAGE_SIZE = 50;
      tarihi) seçilebiliyor; dönem başı, Finansal Raporlama ekranıyla
      TUTARLI şekilde o yılın 1 Ocak'ı olarak sabitlendi.
   ========================================================== */
-  let v26FootnotesActiveTab = "asset"; // asset | liability | liquidity
+  // The deep-link renderer may run during navigation injection, before the
+  // renderer declaration site is reached; use hoisted bindings for both
+  // values so `?open=footnotes` cannot hit a temporal dead zone.
+  // eslint-disable-next-line no-var
+  var v26FootnotesActiveTab = "asset"; // asset | liability | liquidity
   // `injectV26Navigation()` can execute before the later page renderer is
   // initialized (deep-link `?open=footnotes`). `var` avoids the temporal
   // dead zone while preserving the existing null/undefined fallback.
