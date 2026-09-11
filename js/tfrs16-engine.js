@@ -2735,6 +2735,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let liabilityEntriesNominal = 0, liabilityEntriesRestated = 0;
       let rouEntriesNominal = 0, rouEntriesRestated = 0;
+      let rouModificationNominal = 0, rouModificationRestated = 0;
+      let rouReassessmentNominal = 0, rouReassessmentRestated = 0;
       let liabilityModificationNominal = 0, liabilityModificationRestated = 0;
       let liabilityReassessmentNominal = 0, liabilityReassessmentRestated = 0;
 
@@ -2767,14 +2769,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const rouEntryChanges = appliedChanges
         .map(x => {
           const d = parseDate(x.effectiveDate);
-          return d ? { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, amount: Number(x.rouAdjustment) || 0 } : null;
+          return d ? {
+            month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+            amount: Number(x.rouAdjustment) || 0,
+            kind: x.__changeKind
+          } : null;
         })
         .filter(x => x && x.month >= effectivePeriodStart && x.month <= rp);
 
       rouEntryChanges.forEach(entry => {
         const ratioEntryToRp = getInflationRatio(entry.month, rp);
-        rouEntriesNominal += entry.amount;
-        rouEntriesRestated += entry.amount * ratioEntryToRp;
+        if (entry.kind === "modification") {
+          rouModificationNominal += entry.amount;
+          rouModificationRestated += entry.amount * ratioEntryToRp;
+        } else if (entry.kind === "reassessment") {
+          rouReassessmentNominal += entry.amount;
+          rouReassessmentRestated += entry.amount * ratioEntryToRp;
+        } else {
+          rouEntriesNominal += entry.amount;
+          rouEntriesRestated += entry.amount * ratioEntryToRp;
+        }
       });
 
       const restatedSum =
@@ -2813,7 +2827,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // düzeltilmiş tutar (açılış + girişler − amortisman, hepsi rp
       // satın alma gücünde). Yükümlülükteki gibi ayrı bir "parasal K/Z"
       // satırı YOKTUR — TMS 29.13, tüm fark doğrudan 698 hesabına gider.
-      const rouClosingRestatedPeriod = rouOpeningRestated + rouEntriesRestated - rouDepreciationRestated;
+      const rouClosingRestatedPeriod = rouOpeningRestated + rouEntriesRestated +
+        rouModificationRestated + rouReassessmentRestated - rouDepreciationRestated;
       const rouClosingNominalPeriod = lastRow ? lastRow.rouClosing : nominalROUClosing;
 
       rouRollForward = {
@@ -2822,6 +2837,10 @@ document.addEventListener("DOMContentLoaded", () => {
         rouOpeningRestated,
         rouEntriesNominal,
         rouEntriesRestated,
+        rouModificationNominal,
+        rouModificationRestated,
+        rouReassessmentNominal,
+        rouReassessmentRestated,
         rouDepreciationNominal,
         rouDepreciationRestated,
         rouClosingNominalPeriod,
