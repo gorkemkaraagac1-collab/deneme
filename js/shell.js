@@ -32,7 +32,6 @@
     contracts: { title: "Sözleşmeler", subtitle: "Kiralama portföyü" },
     close: { title: "Kapanış Paneli", subtitle: "Ay sonu kapanış kontrolü" },
     accountingCenter: { title: "Toplu Fiş Merkezi", subtitle: "Muhasebe fişleri" },
-    financialReporting: { title: "Finansal Raporlama", subtitle: "Bilanço & dipnot KPI" },
     footnotes: { title: "Dipnotlar", subtitle: "Varlık · Yükümlülük · Likidite" },
     modification: { title: "Modifikasyon & Reassessment", subtitle: "Sözleşme değişiklikleri" },
     slb: { title: "Satış ve Geri Kiralama", subtitle: "TFRS 16.98–103" },
@@ -306,7 +305,9 @@
    */
   function rewireLegacyOpeners() {
     const map = {
-      v191OpenFinancialReporting: "financialReporting",
+      // Finansal Raporlama menüsü kaldırıldı; eski bağlantılar Dipnotlar'a
+      // yönlendirilerek mevcut raporlama işlevi korunur.
+      v191OpenFinancialReporting: "footnotes",
       v191OpenRiskControls: "riskControls",
       v191OpenMonthEndClose: "close",
       v191OpenCfoDashboard: "close"
@@ -348,6 +349,7 @@
     initDetailClose();
     refreshUserChip();
     initCompanySelector();
+    window.addEventListener("gk-backend-hydrated", syncCompanySelector);
 
     // Soft-hook: after engine hydrates, try to fill KPIs from global GK_TFRS16
     setTimeout(() => {
