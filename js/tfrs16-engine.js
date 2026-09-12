@@ -8628,17 +8628,37 @@ document.addEventListener("DOMContentLoaded", () => {
     active.forEach(
       contract => {
         const currency = String(contract.currency || "").trim().toUpperCase();
-        const presentationCurrency = String(contract.presentationCurrency || contract.reportingCurrency || getReportingCurrency() || "TRY").trim().toUpperCase();
+        // Portföy KPI'ları şirketin fonksiyonel/sunum para biriminde
+        // raporlanır. Sözleşmede taşınan presentationCurrency alanı,
+        // şirket para birimini ezmemelidir; aksi halde USD sözleşme
+        // bakiyesi TRY sözleşmelerle yanlış toplanabilir.
+        const presentationCurrency = String(
+          resolveContractFunctionalCurrency(contract) ||
+          contract.presentationCurrency ||
+          contract.reportingCurrency ||
+          getReportingCurrency() ||
+          "TRY"
+        ).trim().toUpperCase();
         if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{3}$/.test(presentationCurrency)) {
           totalsError = "Para birimi eksik/geçersiz";
           return;
         }
         try {
-        const engine =
-          calculateLease(contract);
+        // KPI kartları ilk tanıma bedelini değil raporlama günündeki
+        // güncel kapanış bakiyesini göstermelidir. CFO katmanı; değişiklik
+        // zincirini, ödeme planını ve rapor tarihindeki son satırı birlikte
+        // çözer. Böylece modifikasyon/reassessment sonrası kalan ROU ve
+        // yükümlülük kullanılır.
+        const metrics = typeof cfoGetContractMetricsInternal === "function"
+          ? cfoGetContractMetricsInternal(contract, kpiAsOfDate)
+          : null;
+        if (!metrics || metrics.calculationValid === false) throw new Error("KPI_CURRENT_BALANCE_UNAVAILABLE");
         const fxDate = resolveKpiFxDate(currency, presentationCurrency, kpiAsOfDate);
         if (fxDate.usedFallback) fallbackDates.add(fxDate.date);
-        const values = [engine.liability, engine.rouAssets, calculateNext12Months(contract)].map(value => {
+        const next12MonthPayments = Number.isFinite(Number(metrics.next12MonthPayments))
+          ? Number(metrics.next12MonthPayments)
+          : calculateNext12Months(contract);
+        const values = [metrics.leaseLiability, metrics.rouAsset, next12MonthPayments].map(value => {
           const converted = convertAmountToReportingCurrency(value, currency, fxDate.date, presentationCurrency);
           if (converted.error) throw new Error("FX_RATE_NOT_FOUND");
           return converted.value;
