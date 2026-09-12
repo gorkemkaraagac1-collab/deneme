@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db/pool');
 const { requireAdmin } = require('../middleware/admin');
+const { assertPeriodOpen } = require('../services/period-lock-service');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -56,6 +57,9 @@ router.post('/import', async (req, res) => {
   try {
     if (!checked.errors.length) await checkReferences(client, checked.rows, checked.errors);
     if (checked.errors.length) return res.status(400).json({ success: false, errors: checked.errors });
+    for (const r of checked.rows) {
+      await assertPeriodOpen(client, String(r.company_id), String(r.opening_date).slice(0, 7));
+    }
     await client.query('BEGIN');
     for (const r of checked.rows) {
       await client.query(`INSERT INTO contract_opening_balances
@@ -76,7 +80,20 @@ router.post('/import', async (req, res) => {
     }
     await client.query('COMMIT');
     res.status(201).json({ success: true, imported: checked.rows.length, status: 'IMPORTED' });
-  } catch (error) { await client.query('ROLLBACK'); console.error('Opening balance import error:', error); res.status(500).json({ success: false, error: 'Açılış bakiyeleri içe aktarılamadı.' }); }
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.code === 'PERIOD_CLOSED') {
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+        companyId: error.companyId,
+        periodKey: error.periodKey
+      });
+    }
+    console.error('Opening balance import error:', error);
+    return res.status(500).json({ success: false, error: 'Açılış bakiyeleri içe aktarılamadı.' });
+  }
   finally { client.release(); }
 });
 
