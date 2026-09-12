@@ -31,7 +31,7 @@ jobs:
         run: npm run lint
         
       - name: Run tests
-        run: npm test
+        run: TZ=UTC npx jest --maxWorkers=2
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
