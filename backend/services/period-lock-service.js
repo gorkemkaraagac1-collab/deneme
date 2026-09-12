@@ -32,7 +32,7 @@ async function assertPeriodOpen(db, companyId, periodKey) {
     'SELECT 1 FROM closed_periods WHERE company_id = $1 AND period_key = $2 AND reopened_at IS NULL LIMIT 1',
     [companyId, periodKey]
   );
-  if (result.rowCount > 0) throw new PeriodClosedError(companyId, periodKey);
+  if ((result?.rowCount || 0) > 0) throw new PeriodClosedError(companyId, periodKey);
   return true;
 }
 
