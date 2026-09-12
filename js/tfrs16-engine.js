@@ -2795,6 +2795,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
+      // The roll-forward movements, including changes effective in the
+      // historical period, determine the nominal closing liability.
+      nominalLiabilityClosing = liabilityOpeningNominal + liabilityEntriesNominal +
+        liabilityModificationNominal + liabilityReassessmentNominal +
+        liabilityInterestNominal - liabilityPaymentsNominal + liabilityFxTranslationNominal;
+
       const restatedSum =
         liabilityOpeningRestated + liabilityEntriesRestated +
         liabilityModificationRestated + liabilityReassessmentRestated +
@@ -2833,7 +2839,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // satırı YOKTUR — TMS 29.13, tüm fark doğrudan 698 hesabına gider.
       const rouClosingRestatedPeriod = rouOpeningRestated + rouEntriesRestated +
         rouModificationRestated + rouReassessmentRestated - rouDepreciationRestated;
-      const rouClosingNominalPeriod = lastRow ? lastRow.rouClosing : nominalROUClosing;
+      // Keep the nominal closing aligned with the classified movements.  A
+      // historical change can leave the schedule's last snapshot stale.
+      const rouClosingNominalPeriod = rouOpeningNominal + rouEntriesNominal -
+        rouDepreciationNominal + rouModificationNominal + rouReassessmentNominal;
 
       rouRollForward = {
         periodStart: ps,
@@ -18996,6 +19005,12 @@ ${renderPaymentScheduleFooterContainers()}
         const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
         const unexplainedAdjustment = 0;
         const adjustments = modificationAdjustment + reassessmentAdjustment;
+        // The generated schedule may still expose the pre-change closing
+        // snapshot for a historical report.  The classified roll-forward is
+        // authoritative, so derive closing from its movements.
+        const hasResolvedClosing = appliedModifications.concat(appliedReassessments)
+          .some(change => Number.isFinite(Number(change.revisedLeaseLiability)));
+        if (hasResolvedClosing) closingLiability = expected + adjustments;
         const difference = expected + adjustments - closingLiability;
         rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), entriesLiability:rptRound(entriesLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
       } catch (error) { rows.push(rptErrorRow(contract, error)); }
@@ -19101,6 +19116,12 @@ ${renderPaymentScheduleFooterContainers()}
         const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
         const unexplainedAdjustment=0;
         const adjustments=modificationAdjustment+reassessmentAdjustment;
+        // Historical changes must be reflected in the same period's closing
+        // balance; do not carry a stale schedule snapshot into the note.
+        const hasResolvedRouClosing = appliedModifications.concat(appliedReassessments)
+          .some(change => Number.isFinite(Number(change.revisedROU)) ||
+            Number.isFinite(Number(change.rouAdjustment)));
+        if (hasResolvedRouClosing) closingRuo=openingRuo+entriesRuo-depreciation+adjustments;
         const diff=openingRuo+entriesRuo-depreciation+adjustments-closingRuo;
         rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),entriesRuo:rptRound(entriesRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
       }catch(error){rows.push(rptErrorRow(contract,error));}
@@ -19108,7 +19129,7 @@ ${renderPaymentScheduleFooterContainers()}
     report.rows=rows;
     report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
     const diff=rptRound(report.totals.openingRuo+report.totals.entriesRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
-    report.reconciliation={formula:"Opening ROU + Entries - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:true};
+    report.reconciliation={formula:"Opening ROU + Entries - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
     if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
     const unexplainedRouRows=rows.filter(r=>r.status!=="ERROR"&&Math.abs(rptNumber(r.otherAdjustment))>REPORTING_TOLERANCE);
     if(unexplainedRouRows.length) report.warnings.push("Açıklanamayan 'Diğer' ROU hareketi: "+unexplainedRouRows.map(r=>r.contractId).join(", "));
