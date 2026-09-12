@@ -988,7 +988,10 @@ router.delete(
           contractResult.rows[0].company_id
         );
 
-      await assertPeriodOpen(pool, companyId, String(contractResult.rows[0].start_date).slice(0, 7));
+      const startDate = contractResult.rows[0].start_date;
+      if (startDate) {
+        await assertPeriodOpen(pool, companyId, String(startDate).slice(0, 7));
+      }
 
 
       const licenseResult =
