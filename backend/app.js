@@ -50,6 +50,7 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin')); // Admin panel API'leri
+app.use('/api/admin', require('./routes/admin-periods')); // Dönem kapatma ve yeniden açma
 app.use('/api/admin', require('./routes/admin-licenses')); // Mevcut license API'leri
 app.use('/api/admin', require('./routes/admin-faq')); // FAQ (SSS) yönetimi
 app.use('/api/admin/opening-balances', require('./routes/admin-opening-balances'));
