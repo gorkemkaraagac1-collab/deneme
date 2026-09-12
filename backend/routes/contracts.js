@@ -647,6 +647,10 @@ router.put(
 
       const scope = req.accessScope;
 
+      if (startDate) {
+        await assertPeriodOpen(client, companyId || req.companyId, String(startDate).slice(0, 7));
+      }
+
       /**
        * Önce kontratın sahibini buluyoruz — erişim kapsamı
        * dışındaki bir kontrat için "var olduğu" bile sızdırılmaz
