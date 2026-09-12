@@ -33,8 +33,6 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Install Playwright browser
-        run: npx playwright install chromium
 
       - name: Run E2E smoke tests
         run: npm run test:e2e
