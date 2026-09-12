@@ -2427,8 +2427,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const fullSchedule = getReassessmentBaseSchedule(contract) || [];
 
+    const scheduleMonth = row => {
+      const date = parseDate(row?.date);
+      return date
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        : `${row.year}-${String(row.month).padStart(2, "0")}`;
+    };
     const rowsUpToRp = fullSchedule.filter(row => {
-      const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+      const rowMonth = scheduleMonth(row);
       return rowMonth <= rp;
     });
 
@@ -2549,7 +2555,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       restatedAccumDep = 0;
       rows = rowsUpToRp.map(row => {
-        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        const rowMonth = scheduleMonth(row);
         const ratioRowToRp = getInflationRatio(rowMonth, rp);
         const restatedDepreciation = row.depreciation * ratioRowToRp;
         restatedAccumDep += restatedDepreciation;
@@ -2598,7 +2604,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let rouRollForward = null;
     if (ps !== null) {
       const priorRow = fullSchedule
-        .filter(row => `${row.year}-${String(row.month).padStart(2, "0")}` < effectivePeriodStart)
+        .filter(row => scheduleMonth(row) < effectivePeriodStart)
         .pop();
 
       // Sözleşme dönem başında başlıyorsa ilk tanıma tutarı dönem açılışı
@@ -2626,7 +2632,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // ile başlatılmalıdır. Dönem içinde başlayan sözleşmelerde ise
       // başlangıç ayı doğru baz olarak korunur.
       const openingInflationBaseMonth = priorRow
-        ? `${priorRow.year}-${String(priorRow.month).padStart(2, "0")}`
+        ? scheduleMonth(priorRow)
         : acquisitionMonth;
       const ratioOpeningToRp = getInflationRatio(openingInflationBaseMonth, rp);
       let liabilityOpeningRestated = liabilityOpeningNominal * ratioOpeningToRp;
@@ -2640,7 +2646,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const periodRows = fullSchedule.filter(row => {
-        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        const rowMonth = scheduleMonth(row);
         return rowMonth >= effectivePeriodStart && rowMonth <= rp;
       });
 
@@ -2649,7 +2655,7 @@ document.addEventListener("DOMContentLoaded", () => {
       let liabilityFxTranslationNominal = 0, liabilityFxTranslationRestated = 0;
       let rouDepreciationNominal = 0, rouDepreciationRestated = 0;
       periodRows.forEach(row => {
-        const rowMonth = `${row.year}-${String(row.month).padStart(2, "0")}`;
+        const rowMonth = scheduleMonth(row);
         const ratioRowToRp = getInflationRatio(rowMonth, rp);
         liabilityInterestNominal += row.interest;
         liabilityInterestRestated += row.interest * ratioRowToRp;
