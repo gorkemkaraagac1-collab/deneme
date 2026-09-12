@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Working Capital Analyzer — GK Advisory</title>
+<title>Working Capital Analyzer — LeaseQant</title>
 <link rel="stylesheet" href="styles.css">
 <style>
 :root{--ink:#0F1C2E;--parchment:#F7F5F0;--brass:#B08D57;--muted:#68717f;--line:#ddd6ca;--white:#fff;--good:#55765b;--warn:#9a7138}
@@ -78,7 +78,7 @@ function calculate(){
  </div>`;
 }
 function largest(a,b,c){const arr=[['Alacak / DSO',a],['Stok / DIO',b],['Borç / DPO',c]].sort((x,y)=>y[1]-x[1]);return arr[0][0]+' tarafında '+money(arr[0][1])+' potansiyel nakit etkisi bulunuyor.'}
-function exportCSV(){if(!last)calculate();if(!last)return;const rows=[['GK Advisory - Working Capital Analyzer'],['Metric','Current','Target','Cash Impact'],['DSO',last.dso,last.tdso,last.arRelease],['DIO',last.dio,last.tdio,last.invRelease],['DPO',last.dpo,last.tdpo,last.apRelease],['CCC',last.ccc,'',last.total],['Current Net Operating WC',last.currentWC,last.targetWC,last.total]];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='GK_Advisory_Working_Capital_Analysis.csv';a.click();URL.revokeObjectURL(a.href)}
+function exportCSV(){if(!last)calculate();if(!last)return;const rows=[['LeaseQant - Working Capital Analyzer'],['Metric','Current','Target','Cash Impact'],['DSO',last.dso,last.tdso,last.arRelease],['DIO',last.dio,last.tdio,last.invRelease],['DPO',last.dpo,last.tdpo,last.apRelease],['CCC',last.ccc,'',last.total],['Current Net Operating WC',last.currentWC,last.targetWC,last.total]];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='GK_Advisory_Working_Capital_Analysis.csv';a.click();URL.revokeObjectURL(a.href)}
 calculate();
 </script>
 </body></html>
