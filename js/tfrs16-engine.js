@@ -2672,7 +2672,14 @@ document.addEventListener("DOMContentLoaded", () => {
         liabilityPaymentsNominal += row.payment;
         liabilityPaymentsRestated += row.payment * ratioRowToRp;
         rouDepreciationNominal += row.depreciation;
-        rouDepreciationRestated += row.depreciation * ratioRowToRp;
+        // GC-2026-09-3 düzeltmesi (TMS 29 Uygulama Rehberi 3.1 — Örnek 8,
+        // "Birikmiş Amortisman" tabloları): amortisman, KAYDEDİLDİĞİ ayın
+        // değil, İLGİLİ VARLIĞIN EDİNİM TARİHİNİN endeksiyle düzeltilir.
+        // rowMonth (o dönemin hangi ayı olduğu) burada YANLIŞ tabandı;
+        // doğrusu ratioAcquisitionToRp (edinim ayı → rp) — liability
+        // faiz/ödeme kalemleri (parasal, dönemsel nakit akışı) için
+        // rowMonth doğru tabana devam eder, sadece amortisman değişti.
+        rouDepreciationRestated += row.depreciation * ratioAcquisitionToRp;
       });
 
       if (tms29AccrualContext) {
@@ -2733,6 +2740,33 @@ document.addEventListener("DOMContentLoaded", () => {
           cursor = monthEnd;
         }
         nominalLiabilityClosing = (closingSnapshot?.liability || 0) * rateAt(closingDate);
+
+        // GC-2026-09-3 (devamı): rouRollForward da headline netAdjustment
+        // ile AYNI Yöntem A tabanını kullanmalı — "net taşınan değeri tek
+        // bir zincir oranıyla ileri taşı" (eski yöntem) yerine, açılış
+        // ANI için de brüt maliyeti/birikmiş amortismanı AYRI AYRI, ikisi
+        // de edinim tarihinden o ana kadarki oranla yeniden düzenleyip
+        // farkını al (TMS 29 Uygulama Rehberi 3.1, Örnek 8 ile birebir
+        // aynı mantık). tms29AccrualContext yalnızca UYGULANMIŞ katman
+        // (modifikasyon/reassessment) YOKKEN var olduğundan (bkz.
+        // resolveLeaseAccrualContext), Girişler burada her zaman 0'dır —
+        // amortismanı açılış/kapanışın restated farkı olarak (rezidüel)
+        // almak hem tutarlılığı garanti eder hem de rehberin yöntemiyle
+        // birebir örtüşür.
+        if (!initialRecognitionInPeriod) {
+          const depMonthsForRou = tms29AccrualContext.measurement.depreciationMonths;
+          // DÜZELTME: rp'nin (cari raporlama dönemi sonu) ölçüm birimine
+          // getirmek için ratioAcquisitionToRp kullanılmalı (edinim→rp) —
+          // ratio(edinim→açılış ayı) DEĞİL. Açılışın kendine özgü olan
+          // kısmı sadece "elapsedAtOpening" (o ana kadar geçen ay sayısı);
+          // ölçüm birimi (hangi tarihin satın alma gücü) HER ZAMAN rp'dir.
+          const restatedGrossAtOpening = grossROU * ratioAcquisitionToRp;
+          const elapsedAtOpening = Math.min(openingSnapshot?.monthsElapsedTotal || 0, depMonthsForRou);
+          rouOpeningNominal = (openingSnapshot?.rouAsset || 0) * commencementRateForEntry;
+          rouOpeningRestated = Math.max(0, restatedGrossAtOpening * (1 - elapsedAtOpening / depMonthsForRou));
+        }
+        rouDepreciationNominal = rouOpeningNominal - nominalROUClosing;
+        rouDepreciationRestated = rouOpeningRestated - restatedROUClosing;
       }
 
       // Girişler: uygulanmış (APPLIED) modifikasyon/reassessment kaynaklı
@@ -4261,11 +4295,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const termTypes = [
       "LEASE_TERM_EXTENSION",
       "LEASE_TERM_REDUCTION",
-      "COMBINED_MODIFICATION",
-      "OTHER"
+      "COMBINED_MODIFICATION"
     ];
 
     if (termTypes.includes(type)) {
+      if (!newEndDate) {
+        errors.push("New lease end date geçersiz.");
+      } else if (effectiveDate && newEndDate <= effectiveDate) {
+        errors.push("New lease end date Effective Date'ten sonra olmalıdır.");
+      }
+    }
+
+    // GC-2026-09-2 düzeltmesi: "OTHER" tipi, ödeme (paymentTypes) ve
+    // vade (termTypes) alanlarını AYNI ANDA zorunlu kılıyordu — bu,
+    // salt discountRate değişikliği yapmak isteyen bir modification'ı
+    // (ör. reassessment'lı bir sözleşmeye faiz güncellemesi) geçersiz
+    // bir newLeaseEndDate göndermeye zorluyordu. OTHER için vade
+    // alanı artık YALNIZCA girdi olarak sağlanmışsa doğrulanır;
+    // sağlanmamışsa (salt ödeme/faiz değişikliği senaryosu) zorunlu
+    // değildir.
+    if (type === "OTHER" && input?.newLeaseEndDate !== undefined &&
+        input?.newLeaseEndDate !== null && input?.newLeaseEndDate !== "") {
       if (!newEndDate) {
         errors.push("New lease end date geçersiz.");
       } else if (effectiveDate && newEndDate <= effectiveDate) {
@@ -23585,8 +23635,21 @@ ${renderPaymentScheduleFooterContainers()}
     const beforeStart = event => event.date < start;
     const inPeriod = event => event.date >= start && event.date <= end;
     const restate = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
+    // GC-2026-09-3 düzeltmesi (TMS 29 Uygulama Rehberi 3.1 — Örnek 8,
+    // "Birikmiş Amortisman" tabloları): amortisman tutarları, KAYDEDİLDİĞİ
+    // ayın değil, İLGİLİ ROU KATMANININ EDİNİM/EKLENME TARİHİNİN endeksiyle
+    // düzeltilir (rehberde: yeni demirbaşın amortismanı bile kendi alım
+    // ayının katsayısıyla, satırın kaydedildiği ay değil). additions/
+    // entries için `restate` (kendi tarihiyle) zaten doğru — sadece
+    // depreciationEvents burada YANLIŞ tabanı (event.date = ödeme/itfa
+    // satırının tarihi) kullanıyordu. Bu motor katmanları ayrıştırmadan
+    // (blended FIFO) tükettiği için tam vintage-bazlı bölüştürme yerine
+    // taahhüt (commencement) tarihini taban alıyoruz — çok katmanlı
+    // (modifikasyon/reassessment sonrası) ROU'larda bu bir yaklaşıklıktır,
+    // tek katmanlı (pristine) sözleşmelerde tam doğrudur.
+    const restateDepreciation = event => event.fn * getInflationRatio(v191MonthKey(commencement), rpMonth);
     const openingNominal = additions.filter(beforeStart).reduce((s, x) => s + x.fn, 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + x.fn, 0);
-    const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restate(x), 0);
+    const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restateDepreciation(x), 0);
     const periodAdditions = additions.filter(inPeriod);
     const periodDepreciation = depreciationEvents.filter(inPeriod);
     const entries = periodAdditions.filter(x => x.kind === "initial");
@@ -23598,7 +23661,7 @@ ${renderPaymentScheduleFooterContainers()}
     const reassessmentNominal = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + x.fn, 0);
     const reassessmentRestated = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + restate(x), 0);
     const depreciationNominal = periodDepreciation.reduce((s, x) => s + x.fn, 0);
-    const depreciationRestated = periodDepreciation.reduce((s, x) => s + restate(x), 0);
+    const depreciationRestated = periodDepreciation.reduce((s, x) => s + restateDepreciation(x), 0);
     const allEntriesNominal = entriesNominal + modificationNominal + reassessmentNominal;
     const allEntriesRestated = entriesRestated + modificationRestated + reassessmentRestated;
     return {
