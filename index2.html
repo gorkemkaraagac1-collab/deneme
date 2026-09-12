@@ -43,11 +43,13 @@
       display: flex;
       align-items: center;
       gap: 0;
+      line-height: 0;
     }
     .logo-img {
-      height: 42px;
+      height: 38px;
       width: auto;
       display: block;
+      object-fit: contain;
     }
 
     /* Nav */
@@ -250,18 +252,16 @@
     @media (max-width: 560px) {
       .why-grid, .footer-grid { grid-template-columns: 1fr; }
       .kpi-row { grid-template-columns: 1fr; }
-      .logo-img { height: 36px; }
+      .logo-img { height: 32px; }
     }
   </style>
 </head>
 <body>
-    <div class="leaseqant-logo" style="padding:12px 20px;display:flex;align-items:center"><img src="logo-nav.png" alt="LeaseQant" style="height:36px;width:auto;max-width:180px;object-fit:contain"></div>
   <nav class="nav">
     <div class="nav-inner">
       <a href="index.html" class="logo">
-        <!-- LOGO RESMİ (GitHub'dan) -->
         <img 
-          src="https://raw.githubusercontent.com/gorkemkaraagac1-collab/deneme/main/logo.jpeg" 
+          src="logo-nav.png" 
           alt="LeaseQant" 
           class="logo-img"
         >
@@ -508,10 +508,10 @@
         <div>
           <a href="index.html" class="logo" style="margin-bottom:14px">
             <img 
-              src="https://raw.githubusercontent.com/gorkemkaraagac1-collab/deneme/main/logo.jpeg" 
+              src="logo-nav.png" 
               alt="LeaseQant" 
               class="logo-img"
-              style="height:36px"
+              style="height:34px"
             >
           </a>
           <p style="max-width:28ch;line-height:1.6;margin-top:8px">TFRS 16 kiralama muhasebesi için lisanslı SaaS çalışma alanı.</p>

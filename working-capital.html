@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Working Capital Analyzer — LeaseQant</title>
+<title>Working Capital Analyzer — GK Advisory</title>
 <link rel="stylesheet" href="styles.css">
 <style>
 :root{--ink:#0F1C2E;--parchment:#F7F5F0;--brass:#B08D57;--muted:#68717f;--line:#ddd6ca;--white:#fff;--good:#55765b;--warn:#9a7138}
@@ -12,8 +12,7 @@ body{background:var(--parchment);color:#1c2a3a}.wc-wrap{max-width:1180px;margin:
 </style>
 </head>
 <body>
-    <div class="leaseqant-logo" style="padding:12px 20px;display:flex;align-items:center"><img src="logo-nav.png" alt="LeaseQant" style="height:36px;width:auto;max-width:180px;object-fit:contain"></div>
-<header><nav class="nav"><a href="index.html" class="wordmark">GK <span>ADVISORY</span></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="dashboard.html">← Panele dön</a></div></nav></header>
+<header><nav class="nav"><a href="index.html" class="wordmark" style="display:inline-flex;align-items:center;line-height:0"><img src="logo-nav.png" alt="LeaseQant" style="height:32px;width:auto;display:block;object-fit:contain;"></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="dashboard.html">← Panele dön</a></div></nav></header>
 <main class="wc-wrap">
   <div class="wc-head">
     <div><div class="eyebrow">Finance Intelligence · Working Capital</div><h1>Working Capital Analyzer</h1><p>Çalışma sermayesi KPI'larını nakit etkisine çevirin. DSO, DIO, DPO ve Cash Conversion Cycle'ı analiz edin; hedef seviyeye göre potansiyel nakit serbestleşmesini görün.</p></div>
@@ -79,7 +78,7 @@ function calculate(){
  </div>`;
 }
 function largest(a,b,c){const arr=[['Alacak / DSO',a],['Stok / DIO',b],['Borç / DPO',c]].sort((x,y)=>y[1]-x[1]);return arr[0][0]+' tarafında '+money(arr[0][1])+' potansiyel nakit etkisi bulunuyor.'}
-function exportCSV(){if(!last)calculate();if(!last)return;const rows=[['LeaseQant - Working Capital Analyzer'],['Metric','Current','Target','Cash Impact'],['DSO',last.dso,last.tdso,last.arRelease],['DIO',last.dio,last.tdio,last.invRelease],['DPO',last.dpo,last.tdpo,last.apRelease],['CCC',last.ccc,'',last.total],['Current Net Operating WC',last.currentWC,last.targetWC,last.total]];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='GK_Advisory_Working_Capital_Analysis.csv';a.click();URL.revokeObjectURL(a.href)}
+function exportCSV(){if(!last)calculate();if(!last)return;const rows=[['GK Advisory - Working Capital Analyzer'],['Metric','Current','Target','Cash Impact'],['DSO',last.dso,last.tdso,last.arRelease],['DIO',last.dio,last.tdio,last.invRelease],['DPO',last.dpo,last.tdpo,last.apRelease],['CCC',last.ccc,'',last.total],['Current Net Operating WC',last.currentWC,last.targetWC,last.total]];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='GK_Advisory_Working_Capital_Analysis.csv';a.click();URL.revokeObjectURL(a.href)}
 calculate();
 </script>
 </body></html>
