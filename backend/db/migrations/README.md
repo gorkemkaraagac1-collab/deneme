@@ -8,7 +8,8 @@ Production database changes are applied from this directory in numeric order. Ea
 | --- | --- | --- | --- |
 | 001 | 001_audit_append_only.sql | Prevent UPDATE/DELETE on audit_events | Applied and verified |
 | 002 | 002_audit_contract_delete.sql | Preserve append-only audit rows when a contract is deleted | Pending deployment |
-| 003 | 003_faq_items.sql | Create faq_items table + seed marketing-site FAQ content | Pending deployment |
+| 003 | 003_faq_items.sql | Create faq_items table + seed marketing-site FAQ content | Applied and verified |
+| 004 | 004_closed_periods.sql | Store company period close locks | Pending deployment |
 
 The table above documents the verified production state. It is not permission to re-run an unreviewed migration against another database.
 
