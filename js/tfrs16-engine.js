@@ -4070,14 +4070,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const snapshot = contract?.originalContractSnapshot
       ? cloneModificationValue(contract.originalContractSnapshot)
       : cloneModificationValue(contract || {});
+    // The immutable base is the terms immediately before the first applied
+    // change, regardless of whether that change was a modification or a
+    // reassessment.  Reassessment-only contracts previously fell back to the
+    // headline contract fields; applying a later payment change therefore
+    // made the current payment (e.g. 15,000) appear in all earlier months.
     const earliest = (contract?.modifications || [])
+      .concat(contract?.reassessments || [])
       .filter(item => item?.status === "APPLIED" && item?.appliedFromTerms)
       .slice()
-      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")))[0];
+      .sort((a, b) => {
+        const dateCmp = String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || ""));
+        return dateCmp || String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+      })[0];
     const terms = earliest?.appliedFromTerms;
     if (terms) {
       if (terms.payment !== undefined) snapshot.monthlyPayment = Number(terms.payment) || 0;
+      if (terms.monthlyPayment !== undefined) snapshot.monthlyPayment = Number(terms.monthlyPayment) || 0;
       if (terms.leaseEndDate !== undefined) snapshot.endDate = terms.leaseEndDate;
+      if (terms.endDate !== undefined) snapshot.endDate = terms.endDate;
       if (terms.discountRate !== undefined) snapshot.discountRate = Number(terms.discountRate) || 0;
     }
     delete snapshot.modifications;
