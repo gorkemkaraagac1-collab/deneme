@@ -40,7 +40,8 @@ function resolveLocalChromium() {
     "/opt/google/chrome/chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
-    "/usr/bin/google-chrome"
+    "/usr/bin/google-chrome" ,
+    "/usr/bin/google-chrome-stable"
   ];
   return candidates.find(p => fs.existsSync(p));
 }
