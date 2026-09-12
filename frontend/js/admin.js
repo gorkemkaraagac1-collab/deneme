@@ -82,6 +82,30 @@ async getCompanies(params = {}) {
         );
     return response.json();
 },
+async getPeriods(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const response = await fetch(
+        `${this.baseURL}/periods${query ? `?${query}` : ""}`,
+        { method: "GET", headers: this.getHeaders() }
+    );
+    return response.json();
+},
+async closePeriod(companyId, periodKey) {
+    const response = await fetch(`${this.baseURL}/periods/close`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ companyId, periodKey })
+    });
+    return response.json();
+},
+async reopenPeriod(companyId, periodKey) {
+    const response = await fetch(`${this.baseURL}/periods/reopen`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ companyId, periodKey })
+    });
+    return response.json();
+},
 async updateCompanyStatus(id, status) {
     const response =
         await fetch(
