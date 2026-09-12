@@ -64,18 +64,36 @@ describe("Sözleşme Portföyü — çoklu para birimi", () => {
     expect(document.querySelector("#contractTableBody").textContent).toContain(currency(amount, code));
   });
 
-  test("KPI toplamları para birimlerine göre ayrı gösterilir, kur dönüşümü yapmaz", () => {
+  test("KPI güncel kapanış bakiyesini şirket para biriminde ve onaylı kurla toplar", () => {
     const tryContract = contract({ id: "TRY-1", currency: "TRY", monthlyPayment: 1000 });
     const tryContract2 = contract({ id: "TRY-2", currency: "TRY", monthlyPayment: 2000 });
-    const usdContract = contract({ id: "USD-1", currency: "USD", presentationCurrency: "USD", monthlyPayment: 3000 });
+    const usdContract = contract({
+      id: "USD-1", currency: "USD", functionalCurrency: "TRY", monthlyPayment: 3000
+    });
+    // Son onaylı kapanış kuru; KPI bu kuru raporlama gününe kadar seçer.
+    localStorage.setItem("gk_tfrs16_v23_fx_rates_v1", JSON.stringify([{
+      id: "FX-USD-2026-06-30", fromCurrency: "USD", toCurrency: "TRY",
+      rate: 40, rateDate: "2026-06-30", rateType: "CLOSING",
+      source: "CENTRAL_BANK", status: "APPROVED"
+    }]));
     tfrs16.contracts.push(tryContract, tryContract2, usdContract);
     expect(typeof tfrs16.updateKPIs).toBe("function");
     tfrs16.updateKPIs();
-    const tryLiability = tfrs16.calculateLeaseEngine(tryContract).liability;
-    const tryLiability2 = tfrs16.calculateLeaseEngine(tryContract2).liability;
-    const usdLiability = tfrs16.calculateLeaseEngine(usdContract).liability;
-    expect(document.getElementById("leaseLiability").textContent).toContain(currency(tryLiability + tryLiability2, "TRY"));
-    expect(document.getElementById("leaseLiability").textContent).toContain("Kur bulunamadı");
+
+    const asOf = new Date("2026-06-30T12:00:00Z");
+    const metrics = [tryContract, tryContract2, usdContract].map(c => tfrs16.getCfoContractMetrics(c.id, asOf));
+    const expectedLiability = metrics[0].leaseLiability + metrics[1].leaseLiability + metrics[2].leaseLiability * 40;
+    const expectedRou = metrics[0].rouAsset + metrics[1].rouAsset + metrics[2].rouAsset * 40;
+    const expectedInitialLiability = tfrs16.calculateLeaseEngine(tryContract).liability +
+      tfrs16.calculateLeaseEngine(tryContract2).liability +
+      tfrs16.calculateLeaseEngine(usdContract).liability * 40;
+
+    expect(document.getElementById("leaseLiability").textContent).toContain(currency(expectedLiability, "TRY"));
+    expect(document.getElementById("rouAssets").textContent).toContain(currency(expectedRou, "TRY"));
+    // Güncel KPI ilk tanıma toplamına dönmemeli.
+    expect(expectedLiability).not.toBeCloseTo(expectedInitialLiability, 2);
+    expect(document.getElementById("leaseLiability").textContent).not.toContain(currency(expectedInitialLiability, "TRY"));
+    expect(document.getElementById("leaseLiability").textContent).not.toContain("Kur bulunamadı");
   });
 
   test.each([undefined, "", "USDX"]) (
