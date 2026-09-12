@@ -106,15 +106,42 @@ router.post('/approve', async (req, res) => {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
     if (!ids.length || ids.length > MAX_ROWS) return res.status(400).json({ success: false, error: 'Geçerli kayıt listesi gönderilmelidir.' });
+    const periods = await pool.query(
+      `SELECT company_id, opening_date
+       FROM contract_opening_balances
+       WHERE id = ANY($1::varchar[]) AND status = 'IMPORTED'`,
+      [ids]
+    );
+    for (const row of periods.rows) {
+      await assertPeriodOpen(pool, String(row.company_id), String(row.opening_date).slice(0, 7));
+    }
     const result = await pool.query(`UPDATE contract_opening_balances SET status='APPROVED', approved_by=$1, approved_at=NOW(), updated_at=NOW() WHERE id=ANY($2::varchar[]) AND status='IMPORTED' RETURNING id`, [req.user.id, ids]);
     res.json({ success: true, approved: result.rowCount });
-  } catch (error) { console.error('Opening balance approval error:', error); res.status(500).json({ success: false, error: 'Açılış bakiyeleri onaylanamadı.' }); }
+  } catch (error) {
+    if (error.code === 'PERIOD_CLOSED') {
+      return res.status(409).json({ success: false, error: error.message, code: error.code, companyId: error.companyId, periodKey: error.periodKey });
+    }
+    console.error('Opening balance approval error:', error);
+    return res.status(500).json({ success: false, error: 'Açılış bakiyeleri onaylanamadı.' });
+  }
 });
 
 // Admin-only cleanup for migrated/test opening balances. APPROVED rows may
 // be removed here because this route is protected by requireAdmin above.
 router.delete('/:id', async (req, res) => {
   try {
+    const existing = await pool.query(
+      `SELECT company_id, opening_date
+       FROM contract_opening_balances
+       WHERE id = $1`,
+      [String(req.params.id)]
+    );
+    if (!existing.rowCount) return res.status(404).json({ success: false, error: 'Açılış bakiyesi bulunamadı.' });
+    await assertPeriodOpen(
+      pool,
+      String(existing.rows[0].company_id),
+      String(existing.rows[0].opening_date).slice(0, 7)
+    );
     const result = await pool.query(
       `DELETE FROM contract_opening_balances
        WHERE id = $1
@@ -124,8 +151,11 @@ router.delete('/:id', async (req, res) => {
     if (!result.rowCount) return res.status(404).json({ success: false, error: 'Açılış bakiyesi bulunamadı.' });
     res.json({ success: true, deleted: result.rows[0] });
   } catch (error) {
+    if (error.code === 'PERIOD_CLOSED') {
+      return res.status(409).json({ success: false, error: error.message, code: error.code, companyId: error.companyId, periodKey: error.periodKey });
+    }
     console.error('Opening balance delete error:', error);
-    res.status(500).json({ success: false, error: 'Açılış bakiyesi silinemedi.' });
+    return res.status(500).json({ success: false, error: 'Açılış bakiyesi silinemedi.' });
   }
 });
 
