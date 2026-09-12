@@ -4680,8 +4680,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentStateSchedule = buildScheduleFromChangeChain(historyContract);
     const baseContract = getModificationBaseContract(contract);
     const baseEngine = calculateLeaseEngine(baseContract);
-    const oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
-    const oldROU = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "rouClosing", baseEngine.rouAssets);
+    let oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
+    let oldROU = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "rouClosing", baseEngine.rouAssets);
+
+    // Birden fazla değişiklik aynı yürürlük tarihinde uygulanabilir (örneğin
+    // önce ödeme, ardından iskonto oranı değişikliği). Aylık plan bu tarihte
+    // yalnızca nihai ölçümü taşır. Her olayı gün başındaki aynı bakiye ile
+    // karşılaştırıp deltaları toplamak ise ara ölçümü ikinci kez raporlar.
+    // Aynı tarihte daha önce kaydedilmiş bir olay varsa sonraki ölçümün bazını
+    // onun revize edilmiş bakiyesine taşı; böylece ayrı sütunlar korunurken
+    // olayların toplamı plandaki tek net sıçramaya eşit kalır.
+    const priorSameDateEvents = priorModifications
+      .map(item => ({ item, kind: "modification" }))
+      .concat(priorReassessments.map(item => ({ item, kind: "reassessment" })))
+      .filter(entry => {
+        const date = parseDate(entry.item.effectiveDate || entry.item.modificationDate || entry.item.reassessmentDate);
+        return date && date.getTime() === effectiveDate.getTime();
+      })
+      .sort((a, b) => eventKey(a.item).localeCompare(eventKey(b.item)));
+    const immediatelyPrior = priorSameDateEvents[priorSameDateEvents.length - 1];
+    if (immediatelyPrior) {
+      const priorMeasurement = resolveAppliedChangeMeasurement(
+        contract,
+        immediatelyPrior.item,
+        immediatelyPrior.kind
+      );
+      if (Number.isFinite(Number(priorMeasurement?.revisedLeaseLiability))) {
+        oldLeaseLiability = Math.max(0, Number(priorMeasurement.revisedLeaseLiability));
+      }
+      if (Number.isFinite(Number(priorMeasurement?.revisedROU))) {
+        oldROU = Math.max(0, Number(priorMeasurement.revisedROU));
+      }
+    }
     const revised = kind === "modification"
       ? calculateModifiedLeaseLiability(baseContract, effectiveDate, change.newTerms)
       : calculateReassessmentLiability(baseContract, effectiveDate, change.newTerms);
@@ -18972,8 +19002,8 @@ ${renderPaymentScheduleFooterContainers()}
     });
     report.rows = rows;
     report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const diff = rptRound(report.totals.openingLiability + report.totals.entriesLiability + report.totals.interest - report.totals.payments - report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
-    report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE || Math.abs(report.totals.reassessmentAdjustment||0)>REPORTING_TOLERANCE };
+    const diff = rptRound(report.totals.openingLiability + report.totals.entriesLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
+    report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
     if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
     const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
     if (unexplainedLiabilityRows.length) report.warnings.push("Açıklanamayan 'Diğer' yükümlülük hareketi: " + unexplainedLiabilityRows.map(r => r.contractId).join(", "));

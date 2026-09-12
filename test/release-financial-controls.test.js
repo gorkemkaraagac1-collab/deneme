@@ -100,7 +100,9 @@ describe("release financial controls", () => {
 
     expect(report.rows).toHaveLength(1);
     expect(report.rows[0].reassessmentAdjustment).toBe(12345.67);
-    expect(report.reconciliation.passed).toBe(true);
+    // Sentetik eski kayıt bilinçli olarak ödeme planıyla uyuşmayan bir delta
+    // taşıyor. Mükerrer sayılmamalı ve mutabakat kontrolü bu farkı gizlememeli.
+    expect(report.reconciliation.passed).toBe(false);
   });
 
   test("APPLIED reassessment geçmiş schedule'a geriye dönük uygulanmaz ve Diğer üretmez", async () => {
@@ -291,6 +293,128 @@ describe("release financial controls", () => {
 
     expect(liability.currency).toBe("TRY");
     expect(liability.fxTranslationAdjustment).toBe(0);
+  });
+
+  test("aynı yürürlük tarihindeki değişiklikler net plan sıçramasını yalnızca bir kez raporlar", async () => {
+    const modificationContract = contract("SAME-DATE-MOD", {
+      monthlyPayment: 12000,
+      discountRate: 6,
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+    const reassessmentContract = contract("SAME-DATE-REASS", {
+      monthlyPayment: 12000,
+      discountRate: 6,
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+    const mixedContract = contract("SAME-DATE-MIXED", {
+      monthlyPayment: 12000,
+      discountRate: 6,
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      functionalCurrency: "TRY",
+      reportingCurrency: "TRY",
+      modifications: [],
+      reassessments: []
+    });
+    tfrs16.contracts.push(modificationContract, reassessmentContract, mixedContract);
+
+    const paymentModification = await tfrs16.createModification(modificationContract, {
+      modificationDate: "2026-02-01",
+      effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 15000,
+      newDiscountRate: 6
+    });
+    expect(paymentModification.valid).toBe(true);
+    expect((await tfrs16.applyModification(modificationContract, paymentModification.modification.id)).valid).toBe(true);
+    modificationContract.modifications[0].createdAt = "2026-02-01T10:00:00.000Z";
+
+    const rateModification = await tfrs16.createModification(modificationContract, {
+      modificationDate: "2026-02-02",
+      effectiveDate: "2026-03-01",
+      modificationType: "OTHER",
+      newPayment: 15000,
+      newDiscountRate: 8,
+      newLeaseEndDate: modificationContract.endDate,
+      reason: "same-date rate change"
+    });
+    expect(rateModification.valid).toBe(true);
+    expect((await tfrs16.applyModification(modificationContract, rateModification.modification.id)).valid).toBe(true);
+    modificationContract.modifications[1].createdAt = "2026-02-02T10:00:00.000Z";
+
+    const paymentReassessment = await tfrs16.createReassessment(reassessmentContract, {
+      reassessmentDate: "2026-02-01",
+      effectiveDate: "2026-03-01",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 15000,
+      newDiscountRate: 6,
+      newLeaseEndDate: reassessmentContract.endDate
+    });
+    expect(paymentReassessment.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(reassessmentContract, paymentReassessment.reassessment.id)).valid).toBe(true);
+    reassessmentContract.reassessments[0].createdAt = "2026-02-01T10:00:00.000Z";
+
+    const rateReassessment = await tfrs16.createReassessment(reassessmentContract, {
+      reassessmentDate: "2026-02-02",
+      effectiveDate: "2026-03-01",
+      type: "INDEX_RATE_CHANGE",
+      newPayment: 15000,
+      newDiscountRate: 8,
+      newLeaseEndDate: reassessmentContract.endDate,
+      reason: "same-date rate change"
+    });
+    expect(rateReassessment.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(reassessmentContract, rateReassessment.reassessment.id)).valid).toBe(true);
+    reassessmentContract.reassessments[1].createdAt = "2026-02-02T10:00:00.000Z";
+
+    const mixedModification = await tfrs16.createModification(mixedContract, {
+      modificationDate: "2026-02-01",
+      effectiveDate: "2026-03-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 15000,
+      newDiscountRate: 6
+    });
+    expect(mixedModification.valid).toBe(true);
+    expect((await tfrs16.applyModification(mixedContract, mixedModification.modification.id)).valid).toBe(true);
+    mixedContract.modifications[0].createdAt = "2026-02-01T10:00:00.000Z";
+
+    const mixedReassessment = await tfrs16.createReassessment(mixedContract, {
+      reassessmentDate: "2026-02-02",
+      effectiveDate: "2026-03-01",
+      type: "INDEX_RATE_CHANGE",
+      newPayment: 15000,
+      newDiscountRate: 8,
+      newLeaseEndDate: mixedContract.endDate,
+      reason: "same-date mixed change"
+    });
+    expect(mixedReassessment.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(mixedContract, mixedReassessment.reassessment.id)).valid).toBe(true);
+    mixedContract.reassessments[0].createdAt = "2026-02-02T10:00:00.000Z";
+
+    const report = tfrs16.getLeaseLiabilityRollForwardReport(
+      new Date("2026-01-01"), new Date("2026-06-30")
+    );
+
+    expect(report.rows).toHaveLength(3);
+    report.rows.forEach(row => {
+      const requiredNetChange = row.closingLiability - row.openingLiability -
+        row.entriesLiability - row.interest + row.payments;
+      const reportedNetChange = row.modificationAdjustment + row.reassessmentAdjustment;
+      expect(Math.abs(reportedNetChange - requiredNetChange)).toBeLessThanOrEqual(0.02);
+      expect(Math.abs(row.reconciliationDifference)).toBeLessThanOrEqual(0.02);
+    });
+    expect(Math.abs(report.reconciliation.difference)).toBeLessThanOrEqual(0.02);
+    expect(report.reconciliation.passed).toBe(true);
   });
 
   test("admin audit ve dashboard sorguları kayıt sonucunu açıkça döndürür", () => {
