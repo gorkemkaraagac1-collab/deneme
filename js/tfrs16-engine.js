@@ -821,12 +821,15 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
+  let backendContractsHydrated = false;
+  let backendContractsHydrationError = null;
+
   async function hydrateContractsFromApi() {
     try {
       await loadSessionCompanies();
       try {
         tfrs16ApplyWriteRoleUiGates();
-      } catch (_) {}
+      } catch (_) { /* UI gate is best-effort. */ }
       const rows = await tfrs16ApiFetch("/api/contracts");
       if (!Array.isArray(rows)) {
         console.warn("GET /api/contracts beklenen dizi değil:", rows);
@@ -841,18 +844,25 @@ document.addEventListener("DOMContentLoaded", () => {
           )
         );
       contracts = mapped;
+      backendContractsHydrated = true;
+      backendContractsHydrationError = null;
       try {
         saveContracts(contracts);
-      } catch (_) {}
+      } catch (_) { /* Cache persistence is best-effort. */ }
       if (typeof refresh === "function") refresh();
+      try { window.dispatchEvent(new CustomEvent("gk-backend-hydrated")); } catch (_) { /* Event bridge is best-effort. */ }
+      try { if (typeof v26RefreshActivePage === "function") v26RefreshActivePage(); } catch (_) { /* Refresh bridge is best-effort. */ }
       console.info(
         `[TFRS16] ${contracts.length} sözleşme API'den yüklendi.`
       );
     } catch (error) {
+      backendContractsHydrationError = error;
       console.warn(
         "[TFRS16] API'den sözleşme yüklenemedi, localStorage kullanılıyor:",
         error?.message || error
       );
+      try { window.dispatchEvent(new CustomEvent("gk-backend-hydration-failed")); } catch (_) { /* Event bridge is best-effort. */ }
+      try { if (typeof v26RefreshActivePage === "function") v26RefreshActivePage(); } catch (_) { /* Refresh bridge is best-effort. */ }
     }
   }
 
@@ -20800,6 +20810,17 @@ ${renderPaymentScheduleFooterContainers()}
 
     const companyOptions = typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [];
 
+    // Kapanış sonuçları yalnızca backend sözleşme verisi doğrulandıktan sonra
+    // gösterilir. LocalStorage, eski bir sonucu güncel kapanış bakiyesi gibi
+    // göstermemesi için bu ekranın veri kaynağı olamaz.
+    if (!backendContractsHydrated) {
+      const failed = backendContractsHydrationError;
+      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${failed
+        ? "Backend sözleşme verisi alınamadı. Kapanış sonuçları gösterilmiyor; Yenile ile tekrar deneyin."
+        : "Backend sözleşme verisi yükleniyor… Kapanış sonuçları doğrulama tamamlanınca gösterilecek."}</div></div>`;
+      return;
+    }
+
     const render = () => {
       const reportingDate = period + "-28"; // mid-late month for close checks
       let data = {};
@@ -34000,7 +34021,6 @@ ${renderPaymentScheduleFooterContainers()}
         <button type="button" id="v26NavAccountingCenter" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">🧾 Toplu Fiş Merkezi</button>
         <button type="button" id="v26NavFootnotes" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📝 Dipnotlar</button>
         <button type="button" id="v26NavRiskControls" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">⚠️ Risk &amp; Kontroller</button>
-        <button type="button" id="v26NavFinancialReporting" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📑 Finansal Raporlama</button>
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>        </details>`;
       sidebar.appendChild(navBlock);
@@ -34021,7 +34041,6 @@ ${renderPaymentScheduleFooterContainers()}
       document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMain(renderAccountingCenterPage));
       document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMain(renderFootnotesPage));
       document.getElementById("v26NavRiskControls")?.addEventListener("click",()=>openInMain(renderRiskControlsPage));
-      document.getElementById("v26NavFinancialReporting")?.addEventListener("click",()=>openInMain(renderFinancialReportingPage));
       document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
       window.__gkOpenInMain = openInMain;
@@ -34042,7 +34061,8 @@ ${renderPaymentScheduleFooterContainers()}
           accountingCenter: renderAccountingCenterPage,
           footnotes: renderFootnotesPage,
           riskControls: renderRiskControlsPage,
-          financialReporting: renderFinancialReportingPage,
+          // Eski deep-link'ler kırılmasın; ayrıntılı ekran Dipnotlar'dır.
+          financialReporting: renderFootnotesPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         // dashboard.html'in NATİVE linkleri (JS click handler'ları)

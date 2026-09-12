@@ -138,3 +138,14 @@ describe("tfrs16.html — eski dashboard bağlantısı kaldırıldı", () => {
   });
 
 });
+
+describe("navigasyon — Dipnotlar tek raporlama ekranı", () => {
+  test("Finansal Raporlama menüsü kaldırılır, Dipnotlar menüsü korunur", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const html = fs.readFileSync(path.join(__dirname, "../tfrs16.html"), "utf-8");
+    expect(html).not.toMatch(/data-open="financialReporting"/);
+    expect(html).toMatch(/data-open="footnotes"/);
+  });
+
+});
