@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dönem Yönetimi - Admin Panel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .period-form{display:grid;grid-template-columns:minmax(240px,2fr) minmax(170px,1fr) auto auto;gap:12px;align-items:end}
+        .period-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+        .period-form select,.period-form input{padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text)}
+        .period-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+        .message{min-height:22px;margin-top:12px;font-weight:600}.message.error{color:var(--danger)}.message.success{color:var(--success)}
+        .status-active{color:var(--danger);font-weight:700}.status-reopened{color:var(--success);font-weight:700}
+        @media(max-width:850px){.period-form{grid-template-columns:1fr}.period-form button{width:100%}}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Platform Admin</small></div>
+        <div class="sidebar-nav">
+            <div class="nav-label">Yönetim</div>
+            <a href="index.html">📊 Dashboard</a><a href="companies.html">🏢 Companies</a><a href="users.html">👤 Users</a><a href="licenses.html">🔑 Licenses</a><a href="plans.html">📦 Plans</a><a href="faq.html">❓ SSS</a><a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a><a href="tfrs16.html">🧾 TFRS16 Customers</a><a href="opening-balances.html">🧾 Açılış Bakiyeleri</a><a href="periods.html" class="active">🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a><a href="fx-rates.html">💱 TCMB Kurları</a><a href="audit.html">📋 Audit Log</a>
+        </div>
+    </nav>
+    <main class="main-content">
+        <header class="top-header"><div class="page-title">Dönem Yönetimi</div><div class="user-info"><span id="adminUsername"></span><button class="btn-logout" onclick="logout()">Logout</button></div></header>
+        <div class="page-content">
+            <div class="card">
+                <h2>Dönem kapatma / yeniden açma</h2>
+                <p>Kapatılan ayda sözleşme ve onaylı açılış bakiyesi değişiklikleri engellenir. Yeniden açma işlemi audit kaydına yazılır.</p>
+                <div class="period-form">
+                    <label>Şirket<select id="company"><option value="">Şirketler yükleniyor…</option></select></label>
+                    <label>Dönem<input id="period" type="month"></label>
+                    <button class="btn btn-primary" id="closePeriod">Dönemi kapat</button>
+                    <button class="btn btn-outline" id="reopenPeriod">Yeniden aç</button>
+                </div>
+                <div id="message" class="message" role="status"></div>
+            </div>
+            <div class="card">
+                <div class="period-toolbar"><h2>Kapanış kayıtları</h2><label><input id="includeReopened" type="checkbox"> Yeniden açılanları göster</label></div>
+                <div style="overflow:auto"><table><thead><tr><th>Şirket</th><th>Dönem</th><th>Durum</th><th>Kapatan</th><th>Kapanış zamanı</th><th>Yeniden açan</th><th>Yeniden açma zamanı</th></tr></thead><tbody id="rows"><tr><td colspan="7">Yükleniyor…</td></tr></tbody></table></div>
+            </div>
+        </div>
+    </main>
+    <script src="../js/admin.js"></script>
+    <script>
+        const companyNames = new Map();
+        const value = id => document.getElementById(id).value;
+        const formatTime = value => value ? new Date(value).toLocaleString('tr-TR') : '—';
+        function showMessage(text, type='success'){const el=document.getElementById('message');el.textContent=text;el.className=`message ${type}`}
+        async function loadCompanies(){
+            const result=await AdminAPI.getCompanies({limit:500});
+            if(!result.success) throw new Error(describeApiError(result));
+            result.data.forEach(c=>companyNames.set(c.id,c.name));
+            company.innerHTML='<option value="">Tüm şirketler</option>'+result.data.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.code)} — ${escapeHtml(c.name)}</option>`).join('');
+        }
+        async function loadPeriods(){
+            rows.innerHTML='<tr><td colspan="7">Yükleniyor…</td></tr>';
+            const params={includeReopened:includeReopened.checked}; if(value('company')) params.companyId=value('company');
+            const result=await AdminAPI.getPeriods(params);
+            if(!result.success){rows.innerHTML=`<tr><td colspan="7">${escapeHtml(describeApiError(result))}</td></tr>`;return}
+            rows.innerHTML=(result.periods||[]).map(p=>`<tr><td>${escapeHtml(companyNames.get(p.company_id)||p.company_id)}</td><td><strong>${escapeHtml(p.period_key)}</strong></td><td class="${p.reopened_at?'status-reopened':'status-active'}">${p.reopened_at?'Yeniden açıldı':'Kapalı'}</td><td>${escapeHtml(p.closed_by||'—')}</td><td>${formatTime(p.closed_at)}</td><td>${escapeHtml(p.reopened_by||'—')}</td><td>${formatTime(p.reopened_at)}</td></tr>`).join('')||'<tr><td colspan="7">Kapanış kaydı bulunamadı.</td></tr>';
+        }
+        async function changePeriod(action){
+            const companyId=value('company'),periodKey=value('period');
+            if(!companyId||!periodKey){showMessage('Şirket ve dönem seçin.','error');return}
+            const verb=action==='close'?'kapatılsın':'yeniden açılsın';
+            if(!confirm(`${companyNames.get(companyId)} için ${periodKey} dönemi ${verb} mı?`)) return;
+            closePeriod.disabled=reopenPeriod.disabled=true;
+            try{const result=action==='close'?await AdminAPI.closePeriod(companyId,periodKey):await AdminAPI.reopenPeriod(companyId,periodKey);if(!result.success)throw new Error(describeApiError(result));showMessage(`Dönem başarıyla ${action==='close'?'kapatıldı':'yeniden açıldı'}.`);await loadPeriods()}catch(error){showMessage(error.message,'error')}finally{closePeriod.disabled=reopenPeriod.disabled=false}
+        }
+        closePeriod.onclick=()=>changePeriod('close'); reopenPeriod.onclick=()=>changePeriod('reopen'); company.onchange=loadPeriods; includeReopened.onchange=loadPeriods;
+        document.addEventListener('DOMContentLoaded',async()=>{if(!await checkAdminAuth(['ADMIN']))return;period.value=new Date().toISOString().slice(0,7);try{await loadCompanies();await loadPeriods()}catch(error){showMessage(error.message,'error')}});
+    </script>
+</body>
+</html>
