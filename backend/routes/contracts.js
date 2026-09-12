@@ -18,6 +18,7 @@ const {
   isCompanyInScope,
   isContractWriteRole
 } = require("../services/organization-service");
+const { assertPeriodOpen } = require("../services/period-lock-service");
 
 const router = express.Router();
 
@@ -426,6 +427,8 @@ router.post(
        */
       const authorizedCompanyId =
         req.companyId;
+
+      await assertPeriodOpen(pool, authorizedCompanyId, String(startDate).slice(0, 7));
 
 
       if (
