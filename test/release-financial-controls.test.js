@@ -417,6 +417,50 @@ describe("release financial controls", () => {
     expect(report.reconciliation.passed).toBe(true);
   });
 
+  test("geçmiş dönemdeki modification ve reassessment kapanış bakiyesini birlikte mutabıklaştırır", async () => {
+    const historical = contract("HISTORICAL-CHANGES", {
+      startDate: "2025-01-01",
+      endDate: "2030-12-31",
+      monthlyPayment: 12000,
+      discountRate: 6
+    });
+    tfrs16.contracts.push(historical);
+
+    const modification = await tfrs16.createModification(historical, {
+      modificationDate: "2025-06-01",
+      effectiveDate: "2025-07-01",
+      modificationType: "PAYMENT_INCREASE",
+      newPayment: 13500,
+      newDiscountRate: 6,
+      newLeaseEndDate: historical.endDate
+    });
+    expect(modification.valid).toBe(true);
+    expect((await tfrs16.applyModification(historical, modification.modification.id)).valid).toBe(true);
+
+    const reassessment = await tfrs16.createReassessment(historical, {
+      reassessmentDate: "2025-10-01",
+      effectiveDate: "2025-10-01",
+      type: "FIXED_PAYMENT_CHANGE",
+      newPayment: 15000,
+      newDiscountRate: 6,
+      newLeaseEndDate: historical.endDate
+    });
+    expect(reassessment.valid).toBe(true);
+    expect((await tfrs16.applyReassessment(historical, reassessment.reassessment.id)).valid).toBe(true);
+
+    const periodStart = new Date("2025-01-01");
+    const periodEnd = new Date("2025-12-31");
+    const liability = tfrs16.getLeaseLiabilityRollForwardReport(periodStart, periodEnd);
+    const rou = tfrs16.getRuoAssetRollForwardReport(periodStart, periodEnd);
+    [liability, rou].forEach(report => {
+      expect(report.rows).toHaveLength(1);
+      expect(["OK", "READY"]).toContain(report.rows[0].status);
+      expect(Math.abs(report.rows[0].reconciliationDifference)).toBeLessThanOrEqual(0.02);
+      expect(Math.abs(report.reconciliation.difference)).toBeLessThanOrEqual(0.02);
+      expect(report.reconciliation.passed).toBe(true);
+    });
+  });
+
   test("admin audit ve dashboard sorguları kayıt sonucunu açıkça döndürür", () => {
     const source = fs.readFileSync(
       path.join(__dirname, "../backend/routes/admin.js"),
