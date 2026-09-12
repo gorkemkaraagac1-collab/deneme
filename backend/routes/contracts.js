@@ -947,7 +947,8 @@ router.delete(
         ? await pool.query(
             `
               SELECT
-                company_id
+                company_id,
+                start_date
               FROM contracts
               WHERE id = $1
               LIMIT 1
@@ -957,7 +958,8 @@ router.delete(
         : await pool.query(
             `
               SELECT
-                company_id
+                company_id,
+                start_date
               FROM contracts
               WHERE id = $1
                 AND company_id = ANY($2)
@@ -985,6 +987,11 @@ router.delete(
         String(
           contractResult.rows[0].company_id
         );
+
+      const startDate = contractResult.rows[0].start_date;
+      if (startDate) {
+        await assertPeriodOpen(pool, companyId, String(startDate).slice(0, 7));
+      }
 
 
       const licenseResult =
