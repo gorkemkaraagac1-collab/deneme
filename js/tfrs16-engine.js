@@ -23598,6 +23598,9 @@ ${renderPaymentScheduleFooterContainers()}
     const additions = [{ date: commencement, tx: initialTx, fn: initialTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement), kind: "initial" }];
     const changes = v191AppliedChanges(contract, null, end);
     const depreciationEvents = [];
+    // Keep ROU vintages so each depreciation portion uses its own layer's
+    // acquisition/addition month for TMS 29 restatement.
+    const rouLayers = [{ date: commencement, tx: initialTx, fn: additions[0].fn }];
     let txCarrying = initialTx;
     let fnCarrying = additions[0].fn;
     let changeIndex = 0;
@@ -23612,6 +23615,20 @@ ${renderPaymentScheduleFooterContainers()}
         const rate = tx >= 0 ? v191FxRateAt(sourceCurrency, presentationCurrency, change.__effective) : weightedRate;
         const fn = tx * rate;
         additions.push({ date: change.__effective, tx, fn, kind: change.__changeKind });
+        if (tx >= 0) {
+          rouLayers.push({ date: change.__effective, tx, fn });
+        } else {
+          let remaining = Math.abs(tx);
+          rouLayers.forEach(layer => {
+            const take = Math.min(layer.tx, remaining);
+            if (take > 0) {
+              const layerRate = layer.tx ? layer.fn / layer.tx : 0;
+              layer.tx -= take;
+              layer.fn -= take * layerRate;
+              remaining -= take;
+            }
+          });
+        }
         txCarrying = Math.max(0, txCarrying + tx);
         fnCarrying = Math.max(0, fnCarrying + fn);
         changeIndex++;
@@ -23623,9 +23640,20 @@ ${renderPaymentScheduleFooterContainers()}
       if (!date || date > end) return;
       applyChangesThrough(date, false);
       const depTx = Math.min(Math.max(0, rptNumber(item.depreciation)), txCarrying);
-      const weightedRate = txCarrying ? fnCarrying / txCarrying : 0;
-      const depFn = depTx * weightedRate;
-      depreciationEvents.push({ date, tx: depTx, fn: depFn });
+      let remaining = depTx;
+      const parts = [];
+      rouLayers.forEach(layer => {
+        const take = Math.min(layer.tx, remaining);
+        if (take > 0) {
+          const layerRate = layer.tx ? layer.fn / layer.tx : 0;
+          parts.push({ date, tx: take, fn: take * layerRate, vintageDate: layer.date });
+          layer.tx -= take;
+          layer.fn -= take * layerRate;
+          remaining -= take;
+        }
+      });
+      const depFn = parts.reduce((sum, part) => sum + part.fn, 0);
+      depreciationEvents.push({ date, tx: depTx, fn: depFn, parts });
       txCarrying = Math.max(0, txCarrying - depTx);
       fnCarrying = Math.max(0, fnCarrying - depFn);
       applyChangesThrough(date, true);
@@ -23635,19 +23663,7 @@ ${renderPaymentScheduleFooterContainers()}
     const beforeStart = event => event.date < start;
     const inPeriod = event => event.date >= start && event.date <= end;
     const restate = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
-    // GC-2026-09-3 düzeltmesi (TMS 29 Uygulama Rehberi 3.1 — Örnek 8,
-    // "Birikmiş Amortisman" tabloları): amortisman tutarları, KAYDEDİLDİĞİ
-    // ayın değil, İLGİLİ ROU KATMANININ EDİNİM/EKLENME TARİHİNİN endeksiyle
-    // düzeltilir (rehberde: yeni demirbaşın amortismanı bile kendi alım
-    // ayının katsayısıyla, satırın kaydedildiği ay değil). additions/
-    // entries için `restate` (kendi tarihiyle) zaten doğru — sadece
-    // depreciationEvents burada YANLIŞ tabanı (event.date = ödeme/itfa
-    // satırının tarihi) kullanıyordu. Bu motor katmanları ayrıştırmadan
-    // (blended FIFO) tükettiği için tam vintage-bazlı bölüştürme yerine
-    // taahhüt (commencement) tarihini taban alıyoruz — çok katmanlı
-    // (modifikasyon/reassessment sonrası) ROU'larda bu bir yaklaşıklıktır,
-    // tek katmanlı (pristine) sözleşmelerde tam doğrudur.
-    const restateDepreciation = event => event.fn * getInflationRatio(v191MonthKey(commencement), rpMonth);
+    const restateDepreciation = event => event.parts.reduce((sum, part) => sum + part.fn * getInflationRatio(v191MonthKey(part.vintageDate), rpMonth), 0);
     const openingNominal = additions.filter(beforeStart).reduce((s, x) => s + x.fn, 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + x.fn, 0);
     const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restateDepreciation(x), 0);
     const periodAdditions = additions.filter(inPeriod);
