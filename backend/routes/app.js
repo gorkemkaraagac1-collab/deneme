@@ -37,6 +37,7 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin')); // Admin panel API'leri
+app.use('/api/admin', require('./routes/admin-periods'));
 app.use('/api/admin', require('./routes/admin-licenses')); // Mevcut license API'leri
 app.use('/api/customer', require('./routes/customer')); // YENİ: Customer API'leri
 app.use('/api/org', require('./routes/org')); // P3: Organization API (limits/companies)
