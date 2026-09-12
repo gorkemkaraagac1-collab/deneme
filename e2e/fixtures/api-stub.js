@@ -25,7 +25,7 @@
 
 "use strict";
 
-const API_ORIGIN = "https://deneme-git-285469227510.europe-west1.run.app";
+const API_ORIGIN = "https://contracts-api-285469227510.europe-west1.run.app";
 
 const DEFAULT_USER = {
   id: "e2e-user-1",
