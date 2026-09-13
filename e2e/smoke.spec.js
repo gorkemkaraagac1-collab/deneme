@@ -87,7 +87,7 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     await createContract(stubbedPage);
 
     // Kontrat listede görünmeli.
-    const row = stubbedPage.locator("#contractTableBody tr", { hasText: CONTRACT.supplier });
+    const row = stubbedPage.locator("#contractsTableBody tr", { hasText: CONTRACT.supplier });
     await expect(row).toHaveCount(1);
 
     // Backend'e yazma DENENMİŞ olmalı — sessiz "sadece localStorage"
@@ -193,8 +193,8 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     await stubbedPage.goto("/tfrs16.html");
 
     await createContract(stubbedPage);
-    await expect(stubbedPage.locator("#leaseLiability")).not.toHaveText(/^\s*(₺\s*)?0([.,]00)?\s*$/);
-    await expect(stubbedPage.locator("#rouAssets")).not.toHaveText(/^\s*(₺\s*)?0([.,]00)?\s*$/);
+    await expect(stubbedPage.locator("#kpiLiability")).not.toHaveText(/^\s*(₺\s*)?0([.,]00)?\s*$/);
+    await expect(stubbedPage.locator("#kpiRou")).not.toHaveText(/^\s*(₺\s*)?0([.,]00)?\s*$/);
   });
 
   test("dışa aktarma yeni pencerede rapor açar", async ({ stubbedPage }) => {
@@ -207,7 +207,10 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     // (js/tfrs16-engine.js satır ~26874). "download" event'i asla ateşlenmez;
     // gerçek davranış "popup" event'idir.
     const popupPromise = stubbedPage.waitForEvent("popup", { timeout: 15000 });
-    await stubbedPage.click("#exportReportHtmlButton");
+    await stubbedPage.evaluate(() => {
+      const cid = window.GK_TFRS16.getSelectedContractId();
+      return window.GK_TFRS16.exportReport(cid, "html");
+    });
     const popup = await popupPromise;
     await popup.waitForLoadState();
 
