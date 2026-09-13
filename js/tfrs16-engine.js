@@ -201,6 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const TFRS16_API_BASE =
     "https://contracts-api-285469227510.europe-west1.run.app";
 
+// Send HttpOnly session cookies on cross-origin API calls while preserving explicit options.
+const _nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const url = typeof input === "string" ? input : input && input.url;
+  if (url && url.startsWith(TFRS16_API_BASE)) return _nativeFetch(input, { ...init, credentials: init.credentials || "include" });
+  return _nativeFetch(input, init);
+};
+
+
   let sessionCompanies = []; // [{ id, name }]
   let sessionCompanyIds = [];
   let sessionUserRole = null; // P1 uyum: gerçek backend rolü (/api/auth/me)
