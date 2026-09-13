@@ -25,7 +25,7 @@
 
 "use strict";
 
-const API_ORIGIN = "https://contracts-api-bldvwyywka-ew.a.run.app";
+const API_ORIGIN = "https://api.leaseqant.com";
 
 const DEFAULT_USER = {
   id: "e2e-user-1",
