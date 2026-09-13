@@ -609,10 +609,7 @@ const roles = Array.isArray(allowedRoles) && allowedRoles.length > 0
     ? allowedRoles
     : ["ADMIN"];
 
-const token =
-    localStorage.getItem(
-        "access_token"
-    );
+const token = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token");
 /*
  * Token yok
  */
@@ -639,9 +636,8 @@ try {
      * Token geçersiz
      */
     if (!response.ok) {
-        localStorage.removeItem(
-            "access_token"
-        );
+        localStorage.removeItem("access_token");
+        sessionStorage.removeItem("gk_session_token");
         localStorage.removeItem(
             "current_user"
         );
