@@ -49,10 +49,12 @@ function isMustChangePasswordExempt(req) {
  */
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
-  const [scheme, token] = header.split(" ");
+  const [scheme, headerToken] = header.split(" ");
+  const cookieToken = String(req.headers.cookie || "").split(";").map((part) => part.trim()).find((part) => part.startsWith("gk_session="))?.slice("gk_session=".length);
+  const token = scheme === "Bearer" && headerToken ? headerToken : cookieToken;
 
-  if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({ error: "Authorization header eksik veya hatalı (Bearer <token> bekleniyor)" });
+  if (!token) {
+    return res.status(401).json({ error: "Oturum bulunamadı" });
   }
 
   try {
