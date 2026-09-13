@@ -9254,8 +9254,6 @@ window.fetch = (input, init = {}) => {
     applySessionCompanyToForm(contract);
     if (contract?.company) {
       setInput("company", contract.company);
-    } else if (!sessionCompanies.length) {
-      setInput("company", contract?.company || "");
     }
 
     setInput(
