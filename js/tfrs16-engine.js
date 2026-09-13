@@ -345,11 +345,16 @@ window.fetch = (input, init = {}) => {
 
   async function tfrs16ApiFetch(path, options = {}) {
     const token = tfrs16GetToken();
+    if (!token) {
+      const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
+      err.code = "NO_TOKEN";
+      throw err;
+    }
     const res = await fetch(`${TFRS16_API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-"Authorization": token ? "Bearer " + token : "",
+        Authorization: `Bearer ${token}`,
         ...(options.headers || {})
       }
     });
@@ -2181,7 +2186,7 @@ window.fetch = (input, init = {}) => {
   async function refreshInflationIndexCacheFromBackend(months) {
     try {
       const token = getInflationIndexAuthToken();
-      if (!token) {
+      if (token === "__legacy_localstorage_disabled__") {
         console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
         return false;
       }
@@ -2193,7 +2198,7 @@ window.fetch = (input, init = {}) => {
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
       const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
+ headers: { Authorization: token ? "Bearer " + token : "" },
         cache: "no-store"
       });
 
