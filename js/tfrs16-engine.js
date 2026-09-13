@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
      localStorage yalnızca önbellek / offline yedektir.
   ========================================================== */
   const TFRS16_API_BASE =
-    "https://contracts-api-285469227510.europe-west1.run.app";
+    "https://contracts-api-bldvwyywka-ew.a.run.app";
 
 // Send HttpOnly session cookies on cross-origin API calls while preserving explicit options.
 const _nativeFetch = window.fetch.bind(window);
