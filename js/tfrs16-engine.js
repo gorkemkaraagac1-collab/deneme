@@ -511,7 +511,7 @@ window.fetch = (input, init = {}) => {
    */
   async function loadStaffCompanyTree() {
     try {
-      const res = await tfrs16ApiFetch("/api/admin/companies?limit=500");
+      const res = await tfrs16ApiFetch("/api/org/companies");
       const rows = Array.isArray(res?.data) ? res.data : [];
       return rows
         .filter(c => c && c.id)
