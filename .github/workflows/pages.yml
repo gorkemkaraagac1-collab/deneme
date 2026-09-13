@@ -76,7 +76,7 @@ jobs:
           test -f _site/frontend/admin/index.html
 
       - name: Upload site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
