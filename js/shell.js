@@ -14,7 +14,7 @@
     document.documentElement.style.visibility = "hidden";
     const hasLegacySession = localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt");
     if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
-    else { fetch("https://contracts-api-285469227510.europe-west1.run.app/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
+    else { fetch("https://contracts-api-bldvwyywka-ew.a.run.app/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
   }
 
   window.logout = function logout() {
