@@ -313,7 +313,6 @@ window.fetch = (input, init = {}) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({ currentPassword, newPassword })
         });
@@ -2192,8 +2191,7 @@ window.fetch = (input, init = {}) => {
       // kendisine gider (404) — TFRS16_API_BASE (Cloud Run) ile aynı mutlak
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
-      const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await tfrs16ApiFetch(`/api/inflation-indices${query}`, {
         cache: "no-store"
       });
 
@@ -2229,7 +2227,6 @@ window.fetch = (input, init = {}) => {
       if (!token) return false;
       const responses = await Promise.all(["USD", "EUR"].map(currency =>
         fetch(`${TFRS16_API_BASE}/api/fx-rates?from=${currency}&to=TRY`, {
-          headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
         })
       ));
       if (responses.some(response => !response.ok)) {
