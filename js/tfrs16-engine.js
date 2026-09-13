@@ -13030,7 +13030,7 @@ ${renderPaymentScheduleFooterContainers()}
         Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
         ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
         ${hasMonetary
-          ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
+          ? ` · Parasal Kazanç/(Kayıp), net: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
     };
