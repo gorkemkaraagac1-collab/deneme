@@ -39,8 +39,7 @@ baseURL:
  * ========================================================
  */
 getHeaders() {
-    const token =
-        localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token");
     return {
         "Content-Type":
             "application/json",
@@ -632,8 +631,7 @@ try {
             {
                 method: "GET",
                 headers: {
-                    "Authorization":
-                        `Bearer ${token}`
+                    ...(token ? { "Authorization": "Bearer " + token } : {})
                 }
             }
         );
@@ -771,9 +769,8 @@ try {
         "Admin auth check error:",
         error
     );
-    localStorage.removeItem(
-        "access_token"
-    );
+    localStorage.removeItem("access_token");
+        sessionStorage.removeItem("gk_session_token");
     localStorage.removeItem(
         "current_user"
     );
