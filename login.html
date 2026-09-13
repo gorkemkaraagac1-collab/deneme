@@ -193,12 +193,12 @@
         </div>
         <button type="submit" class="btn-login" id="loginBtn">Giriş Yap</button>
       </form>
-      <div class="footer-note">Güvenli oturum · access_token localStorage</div>
+      <div class="footer-note">Güvenli oturum · HttpOnly cookie</div>
     </div>
   </section>
 
   <script>
-    const API_BASE = "https://contracts-api-285469227510.europe-west1.run.app";
+    const API_BASE = "https://contracts-api-bldvwyywka-ew.a.run.app";
 
     document.getElementById("loginForm").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -226,7 +226,7 @@
         });
         const result = await res.json().catch(() => ({}));
 
-        if (res.ok && result.token) {
+          if (res.ok && (result.user || result.token)) {
           if (result.user) {
             localStorage.setItem("current_user", JSON.stringify(result.user));
             if (result.user.mustChangePassword) {
