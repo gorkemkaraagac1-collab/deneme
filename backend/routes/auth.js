@@ -1338,4 +1338,5 @@ router.post(
 );
 
 
+router.post("/logout", (req, res) => { res.clearCookie("gk_session", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "none", path: "/" }); res.status(204).end(); });
 module.exports = router;
