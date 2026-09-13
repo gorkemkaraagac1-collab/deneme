@@ -38,11 +38,11 @@
 <div class="form-group"><label for="password">Şifre</label><input type="password" id="password" placeholder="Şifrenizi girin" autocomplete="current-password" required></div>
 <button type="submit" class="btn-login" id="loginBtn">Giriş Yap</button>
 </form>
-<div class="footer">Güvenli oturum · JWT doğrulaması aktif</div>
+<div class="footer">Güvenli oturum · HttpOnly cookie + sekme içi fallback</div>
 </div>
 </section>
 <script>
-const API_BASE_URL="https://contracts-api-285469227510.europe-west1.run.app";
+const API_BASE_URL="https://contracts-api-bldvwyywka-ew.a.run.app";
 async function handleLogin(event){
  event.preventDefault();
  const username=document.getElementById("username").value.trim(),password=document.getElementById("password").value,btn=document.getElementById("loginBtn"),errorEl=document.getElementById("errorMsg");
@@ -53,7 +53,7 @@ async function handleLogin(event){
   const result=await response.json();
   if(response.ok&&result.token&&result.user){
 
-   localStorage.setItem("current_user",JSON.stringify(result.user));
+   localStorage.setItem("current_user",JSON.stringify(result.user)); if(result.token)sessionStorage.setItem("gk_session_token",result.token);
    if(result.user.mustChangePassword){window.location.href="./admin/change-password.html";return}
    if(result.user.role==="ADMIN"){window.location.href="./admin/index.html";return}
    if(result.user.role==="ACCOUNTANT_MANAGER"){window.location.href="./admin/users.html";return}
