@@ -52,7 +52,7 @@ async function handleLogin(event){
   const response=await fetch(`${API_BASE_URL}/api/auth/login`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
   const result=await response.json();
   if(response.ok&&result.token&&result.user){
-   localStorage.setItem("access_token",result.token);
+
    localStorage.setItem("current_user",JSON.stringify(result.user));
    if(result.user.mustChangePassword){window.location.href="./admin/change-password.html";return}
    if(result.user.role==="ADMIN"){window.location.href="./admin/index.html";return}
