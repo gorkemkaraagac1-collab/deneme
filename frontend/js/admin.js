@@ -982,7 +982,7 @@ return div.innerHTML;
 // LOGOUT
 // ============================================================
 
-function logout() {
+async function logout() { await fetch(API_BASE_URL + "/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
 
 localStorage.removeItem(
     "access_token"
