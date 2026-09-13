@@ -2143,10 +2143,6 @@ window.fetch = (input, init = {}) => {
      401/hata durumunda SESSİZCE "başarılı" görünmez — hatayı loglar
      ve cache'i boş bırakır, böylece loadInflationIndexTable()
      otomatik olarak mevcut localStorage davranışına düşer (yanlış
-     veri asla üretilmez). Gerçek uçtan uca çalışma için frontend'in
-     backend JWT'sine geçirilmesi ayrı bir iş kalemidir — bu
-     değişikliğin kapsamı DIŞINDADIR.
-     ========================================================== */
   let backendInflationIndexCache = null; // null = backend henüz sorulmadı
 
   function getInflationIndexAuthToken() {
