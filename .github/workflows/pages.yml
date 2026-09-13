@@ -31,17 +31,15 @@ jobs:
         env:
           DEPLOY_SHA: ${{ github.sha }}
         run: |
-          rsync -a --delete \
-            --exclude '_site' \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'backend' \
-            --exclude 'node_modules' \
-            --exclude 'test' \
-            --exclude 'tests' \
-            --exclude 'package*.json' \
-            --exclude '*.md' \
-            ./ _site/
+          rm -rf _site
+          mkdir _site
+
+          # Public site files are copied from an explicit allowlist. New
+          # repository files therefore cannot silently enter the deployment.
+          cp -- *.html *.png *.jpeg _site/
+          cp -- auth.js content.json robots.txt sitemap.xml site.webmanifest styles.css _site/
+          cp -R css js frontend _site/
+
           python3 - <<'PY'
           from pathlib import Path
           import os, re
@@ -58,6 +56,24 @@ jobs:
               raise SystemExit(f'Expected one engine asset reference, found {count}')
           page.write_text(updated, encoding='utf-8')
           PY
+
+      - name: Verify public artifact boundary
+        run: |
+          forbidden="$(find _site -type f \( \
+            -name '.env*' -o -name 'Dockerfile' -o -name 'package*.json' -o \
+            -name '*.md' -o -name '*.xlsx' -o -name '*.sql' -o \
+            -name 'playwright.config.js' -o -name 'jest.config.js' \
+          \) -print)"
+          if [ -n "$forbiden" ]; then
+            echo "Forbidden files found in Pages artifact:"
+            echo "$forbidden"
+            exit 1
+          fi
+
+          test -f _site/index.html
+          test -f _site/tfrs16.html
+          test -f _site/js/tfrs16-engine.js
+          test -f _site/frontend/admin/index.html
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
