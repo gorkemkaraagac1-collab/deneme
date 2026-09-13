@@ -942,7 +942,7 @@ router.post(
        * LOGIN RESPONSE
        */
 
-      res.cookie("gk_session", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 8 * 60 * 60 * 1000, path: "/" });
+      res.cookie("gk_session", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "none", maxAge: 8 * 60 * 60 * 1000, path: "/" });
       return res.json({
 
         token,
