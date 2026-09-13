@@ -49,7 +49,7 @@ async function handleLogin(event){
  if(!username||!password){errorEl.textContent="Kullanıcı adı ve şifre gerekli.";errorEl.style.display="block";return}
  errorEl.style.display="none";btn.disabled=true;btn.textContent="Giriş yapılıyor...";
  try{
-  const response=await fetch(`${API_BASE_URL}/api/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
+  const response=await fetch(`${API_BASE_URL}/api/auth/login`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
   const result=await response.json();
   if(response.ok&&result.token&&result.user){
    localStorage.setItem("access_token",result.token);
