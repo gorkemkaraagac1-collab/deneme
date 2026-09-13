@@ -227,7 +227,6 @@
         const result = await res.json().catch(() => ({}));
 
         if (res.ok && result.token) {
-          localStorage.setItem("access_token", result.token);
           if (result.user) {
             localStorage.setItem("current_user", JSON.stringify(result.user));
             if (result.user.mustChangePassword) {
