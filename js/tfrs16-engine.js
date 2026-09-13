@@ -344,17 +344,11 @@ window.fetch = (input, init = {}) => {
   }
 
   async function tfrs16ApiFetch(path, options = {}) {
-    const token = tfrs16GetToken();
-    if (!token) {
-      const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-      err.code = "NO_TOKEN";
-      throw err;
-    }
     const res = await fetch(`${TFRS16_API_BASE}${path}`, {
       ...options,
+    credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
         ...(options.headers || {})
       }
     });
@@ -517,7 +511,7 @@ window.fetch = (input, init = {}) => {
    */
   async function loadStaffCompanyTree() {
     try {
-      const res = await tfrs16ApiFetch("/api/admin/companies?limit=500");
+      const res = await tfrs16ApiFetch("/api/org/companies");
       const rows = Array.isArray(res?.data) ? res.data : [];
       return rows
         .filter(c => c && c.id)
@@ -2186,7 +2180,7 @@ window.fetch = (input, init = {}) => {
   async function refreshInflationIndexCacheFromBackend(months) {
     try {
       const token = getInflationIndexAuthToken();
-      if (!token) {
+      if (token === "__legacy_localstorage_disabled__") {
         console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
         return false;
       }
@@ -2198,7 +2192,7 @@ window.fetch = (input, init = {}) => {
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
       const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
+ headers: { Authorization: token ? "Bearer " + token : "" },
         cache: "no-store"
       });
 
@@ -9254,8 +9248,6 @@ window.fetch = (input, init = {}) => {
     applySessionCompanyToForm(contract);
     if (contract?.company) {
       setInput("company", contract.company);
-    } else if (!sessionCompanies.length) {
-      setInput("company", contract?.company || "");
     }
 
     setInput(
@@ -13038,7 +13030,7 @@ ${renderPaymentScheduleFooterContainers()}
         Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
         ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
         ${hasMonetary
-          ? ` · Parasal Kazanç/(Kayıp), net — 698.02: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
+          ? ` · Parasal Kazanç/(Kayıp), net: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
     };

@@ -22,6 +22,16 @@ const { assertPeriodOpen } = require("../services/period-lock-service");
 
 const router = express.Router();
 
+function toPeriodKey(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 7);
+  const raw=String(value || '').trim();
+  const iso=raw.match(/^(\d{4})-(\d{2})/);
+  if (iso) return iso[1]+'-'+iso[2];
+  const local=raw.match(/^(\d{2})[./-](\d{2})[./-](\d{4})/);
+  if (local) return local[3]+'-'+local[2];
+  return raw.slice(0,7);
+}
+
 function stableStringify(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -428,7 +438,7 @@ router.post(
       const authorizedCompanyId =
         req.companyId;
 
-      await assertPeriodOpen(pool, authorizedCompanyId, String(startDate).slice(0, 7));
+      await assertPeriodOpen(pool, authorizedCompanyId, toPeriodKey(startDate));
 
 
       if (
@@ -648,7 +658,7 @@ router.put(
       const scope = req.accessScope;
 
       if (startDate) {
-        await assertPeriodOpen(client, companyId || req.companyId, String(startDate).slice(0, 7));
+        await assertPeriodOpen(client, companyId || req.companyId, toPeriodKey(startDate));
       }
 
       /**
@@ -990,7 +1000,7 @@ router.delete(
 
       const startDate = contractResult.rows[0].start_date;
       if (startDate) {
-        await assertPeriodOpen(pool, companyId, String(startDate).slice(0, 7));
+        await assertPeriodOpen(pool, companyId, toPeriodKey(startDate));
       }
 
 
