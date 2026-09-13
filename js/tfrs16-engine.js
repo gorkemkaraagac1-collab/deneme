@@ -345,16 +345,11 @@ window.fetch = (input, init = {}) => {
 
   async function tfrs16ApiFetch(path, options = {}) {
     const token = tfrs16GetToken();
-    if (!token) {
-      const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-      err.code = "NO_TOKEN";
-      throw err;
-    }
     const res = await fetch(`${TFRS16_API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+"Authorization": token ? "Bearer " + token : "",
         ...(options.headers || {})
       }
     });
