@@ -29,7 +29,10 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Build and deploy
         run: |
-          gcloud builds submit --project="$PROJECT_ID" --config=cloudbuild.yaml .
+          gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+          IMAGE="europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/contracts-api:$GITHUB_SHA"
+          docker build -f backend/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
           gcloud run deploy "$SERVICE" \
             --project="$PROJECT_ID" --region="$REGION" \
             --image="europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/contracts-api:$GITHUB_SHA" \
