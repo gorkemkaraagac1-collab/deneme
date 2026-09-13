@@ -10,7 +10,7 @@
 const _gkFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   const url = typeof input === "string" ? input : (input && input.url) || "";
-  if (url.startsWith("https://contracts-api-bldvwyywka-ew.a.run.app")) {
+  if (url.startsWith("https://api.leaseqant.com")) {
     const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
     const token = sessionStorage.getItem("gk_session_token");
     if (token && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
@@ -27,7 +27,7 @@ window.fetch = (input, init = {}) => {
     document.documentElement.style.visibility = "hidden";
     const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
     if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
-    else { fetch("https://contracts-api-bldvwyywka-ew.a.run.app/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
+    else { fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
   }
 
   window.logout = function logout() {

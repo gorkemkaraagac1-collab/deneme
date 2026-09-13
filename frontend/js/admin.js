@@ -15,7 +15,7 @@
     */
 
 const API_BASE_URL =
-    "https://contracts-api-bldvwyywka-ew.a.run.app";
+    "https://api.leaseqant.com";
 
 // Send HttpOnly session cookies on cross-origin API calls while preserving explicit options.
 const _nativeFetch = window.fetch.bind(window);
