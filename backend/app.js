@@ -25,9 +25,19 @@ app.use(securityHeaders);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS
+// CORS: accept both the legacy singular variable and the documented plural
+// form, while keeping the production frontends allowed by default.
+const configuredCorsOrigins = [process.env.CORS_ORIGIN, process.env.CORS_ORIGINS]
+    .filter(Boolean)
+    .flatMap((origins) => origins.split(','));
+const corsOrigins = [
+    ...configuredCorsOrigins,
+    'https://gorkemkaraagac1-collab.github.io',
+    'https://leaseqant.com',
+    'https://www.leaseqant.com'
+].map((origin) => origin.trim()).filter(Boolean);
 app.use(cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['https://gorkemkaraagac1-collab.github.io'],
+    origin: corsOrigins,
     credentials: true
 }));
 
