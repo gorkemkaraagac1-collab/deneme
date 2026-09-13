@@ -313,7 +313,7 @@ window.fetch = (input, init = {}) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: token ? "Bearer " + token : ""
+            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({ currentPassword, newPassword })
         });
@@ -345,7 +345,7 @@ window.fetch = (input, init = {}) => {
 
   async function tfrs16ApiFetch(path, options = {}) {
     const token = tfrs16GetToken();
-    if (false) {
+    if (!token) {
       const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
       err.code = "NO_TOKEN";
       throw err;
@@ -354,7 +354,7 @@ window.fetch = (input, init = {}) => {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        Authorization: token ? "Bearer " + token : "",
+        Authorization: `Bearer ${token}`,
         ...(options.headers || {})
       }
     });
@@ -2143,6 +2143,10 @@ window.fetch = (input, init = {}) => {
      401/hata durumunda SESSİZCE "başarılı" görünmez — hatayı loglar
      ve cache'i boş bırakır, böylece loadInflationIndexTable()
      otomatik olarak mevcut localStorage davranışına düşer (yanlış
+     veri asla üretilmez). Gerçek uçtan uca çalışma için frontend'in
+     backend JWT'sine geçirilmesi ayrı bir iş kalemidir — bu
+     değişikliğin kapsamı DIŞINDADIR.
+     ========================================================== */
   let backendInflationIndexCache = null; // null = backend henüz sorulmadı
 
   function getInflationIndexAuthToken() {
@@ -2182,7 +2186,7 @@ window.fetch = (input, init = {}) => {
   async function refreshInflationIndexCacheFromBackend(months) {
     try {
       const token = getInflationIndexAuthToken();
-      if (false) {
+      if (token === "__legacy_localstorage_disabled__") {
         console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
         return false;
       }
@@ -2194,7 +2198,7 @@ window.fetch = (input, init = {}) => {
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
       const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
-        headers: { Authorization: token ? "Bearer " + token : "" },
+ headers: { Authorization: token ? "Bearer " + token : "" },
         cache: "no-store"
       });
 
@@ -2230,7 +2234,7 @@ window.fetch = (input, init = {}) => {
       if (!token) return false;
       const responses = await Promise.all(["USD", "EUR"].map(currency =>
         fetch(`${TFRS16_API_BASE}/api/fx-rates?from=${currency}&to=TRY`, {
-          headers: { Authorization: token ? "Bearer " + token : "" }, cache: "no-store"
+          headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
         })
       ));
       if (responses.some(response => !response.ok)) {
