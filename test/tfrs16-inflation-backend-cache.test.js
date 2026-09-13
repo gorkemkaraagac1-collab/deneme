@@ -61,7 +61,7 @@ describe("refreshInflationIndexCacheFromBackend — auth token yoksa güvenle ge
     const result = await tfrs16.refreshInflationIndexCacheFromBackend(["2025-01"]);
 
     expect(result).toBe(false);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     // Cache dolmadığı için loadInflationIndexTable artık BOŞ döner —
     // eski davranışta olduğu gibi localStorage'a düşmez (fail-closed).

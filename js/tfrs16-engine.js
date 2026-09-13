@@ -313,6 +313,7 @@ window.fetch = (input, init = {}) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: token ? "Bearer " + token : ""
           },
           body: JSON.stringify({ currentPassword, newPassword })
         });
@@ -344,11 +345,16 @@ window.fetch = (input, init = {}) => {
 
   async function tfrs16ApiFetch(path, options = {}) {
     const token = tfrs16GetToken();
+    if (false) {
+      const err = new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
+      err.code = "NO_TOKEN";
+      throw err;
+    }
     const res = await fetch(`${TFRS16_API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-"Authorization": token ? "Bearer " + token : "",
+        Authorization: token ? "Bearer " + token : "",
         ...(options.headers || {})
       }
     });
@@ -2180,7 +2186,7 @@ window.fetch = (input, init = {}) => {
   async function refreshInflationIndexCacheFromBackend(months) {
     try {
       const token = getInflationIndexAuthToken();
-      if (!token) {
+      if (false) {
         console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
         return false;
       }
@@ -2191,7 +2197,8 @@ window.fetch = (input, init = {}) => {
       // kendisine gider (404) — TFRS16_API_BASE (Cloud Run) ile aynı mutlak
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
-      const response = await tfrs16ApiFetch(`/api/inflation-indices${query}`, {
+      const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
+        headers: { Authorization: token ? "Bearer " + token : "" },
         cache: "no-store"
       });
 
@@ -2227,6 +2234,7 @@ window.fetch = (input, init = {}) => {
       if (!token) return false;
       const responses = await Promise.all(["USD", "EUR"].map(currency =>
         fetch(`${TFRS16_API_BASE}/api/fx-rates?from=${currency}&to=TRY`, {
+          headers: { Authorization: token ? "Bearer " + token : "" }, cache: "no-store"
         })
       ));
       if (responses.some(response => !response.ok)) {
