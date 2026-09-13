@@ -64,7 +64,7 @@ jobs:
             -name '*.md' -o -name '*.xlsx' -o -name '*.sql' -o \
             -name 'playwright.config.js' -o -name 'jest.config.js' \
           \) -print)"
-          if [ -n "$forbiden" ]; then
+          if [ -n "$forbidden" ]; then
             echo "Forbidden files found in Pages artifact:"
             echo "$forbidden"
             exit 1
