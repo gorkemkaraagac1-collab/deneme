@@ -6,13 +6,26 @@
 (function () {
   "use strict";
 
+// Cross-site cookies can be blocked in private browsers; use the login response token for this tab.
+const _gkFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const url = typeof input === "string" ? input : (input && input.url) || "";
+  if (url.startsWith("https://contracts-api-bldvwyywka-ew.a.run.app")) {
+    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+    const token = sessionStorage.getItem("gk_session_token");
+    if (token && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
+    return _gkFetch(input, { ...init, headers, credentials: init.credentials || "include" });
+  }
+  return _gkFetch(input, init);
+};
+
   const isProtectedEnginePage = /\/tfrs16\.html$/i.test(window.location.pathname);
 
   // Engine pages must never render their local cache without a valid backend
   // session. The redirect runs before the engine script is loaded.
   if (isProtectedEnginePage) {
     document.documentElement.style.visibility = "hidden";
-    const hasLegacySession = localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt");
+    const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
     if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
     else { fetch("https://contracts-api-bldvwyywka-ew.a.run.app/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
   }
@@ -225,7 +238,7 @@
   function refreshUserChip() {
     try {
       const token =
-        localStorage.getItem("access_token") ||
+        localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") ||
         localStorage.getItem("gk_backend_jwt");
       const nameEl = document.getElementById("userName");
       const roleEl = document.getElementById("userRole");
