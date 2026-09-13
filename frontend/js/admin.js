@@ -15,7 +15,7 @@
     */
 
 const API_BASE_URL =
-    "https://contracts-api-285469227510.europe-west1.run.app";
+    "https://contracts-api-bldvwyywka-ew.a.run.app";
 
 // Send HttpOnly session cookies on cross-origin API calls while preserving explicit options.
 const _nativeFetch = window.fetch.bind(window);
@@ -617,7 +617,7 @@ const token =
 /*
  * Token yok
  */
-if (!token) {
+if (!token && !document.cookie.includes("gk_session")) {
     window.location.href =
         "../login.html";
     return false;
