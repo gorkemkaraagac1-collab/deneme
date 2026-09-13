@@ -344,13 +344,11 @@ window.fetch = (input, init = {}) => {
   }
 
   async function tfrs16ApiFetch(path, options = {}) {
-    const token = tfrs16GetToken();
     const res = await fetch(`${TFRS16_API_BASE}${path}`, {
       ...options,
     credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
         ...(options.headers || {})
       }
     });
