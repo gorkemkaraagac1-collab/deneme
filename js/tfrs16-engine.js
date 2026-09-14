@@ -218,6 +218,7 @@ window.fetch = (input, init = {}) => {
     return (
       localStorage.getItem("access_token") ||
       localStorage.getItem("gk_backend_jwt") ||
+      // Login keeps the tab-scoped bearer here when cross-site cookies are unavailable.
       sessionStorage.getItem("gk_session_token") ||
       null
     );
