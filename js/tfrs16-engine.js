@@ -14434,6 +14434,17 @@ ${renderPaymentScheduleFooterContainers()}
         "detailContent"
       );
 
+    // Journal preview can require an FX rate even when the private
+    // calculation result is already cached. Keep the detail modal usable
+    // when that auxiliary preview cannot be generated yet.
+    let initialJournalEntries = null;
+    if (!calculationError && !engine.exempt) {
+      try {
+        initialJournalEntries = generateInitialEntryForFunctionalCurrency(contract);
+      } catch (error) {
+        calculationError = error;
+      }
+    }
 
     if (title) {
       // FAZ C: başlıkta sadece sözleşme ID'si vardı — kullanıcı hangi
@@ -14634,9 +14645,7 @@ ${renderPaymentScheduleFooterContainers()}
             </div>
           ` : renderJournalEntry(
             "İlk Muhasebeleştirme Fişi",
-            generateInitialEntryForFunctionalCurrency(
-              contract
-            ),
+            initialJournalEntries || [],
             resolveContractFunctionalCurrency(contract) || contract.currency || "TRY"
           )}
         </div>
