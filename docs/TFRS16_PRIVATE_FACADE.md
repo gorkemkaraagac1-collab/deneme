@@ -44,6 +44,19 @@ logic and does not expose the proprietary engine.
 - This keeps modification and reassessment on the same private result envelope
   as the summary and payment-plan consumers.
 
+## Private apply envelope
+
+- `applyModification(contract, modificationId)` and
+  `applyReassessment(contract, reassessmentId)` now call authenticated private
+  endpoints and receive the authoritative `APPLIED` event, contract field
+  patch, journal lines and refreshed schedule.
+- The browser merges that envelope, persists the returned event through the
+  existing contract write, and refreshes its private calculation cache. The
+  input draft is never mutated by the server response.
+- The local apply implementation remains available only in the explicit
+  `?api=0` rollback path; the public engine removal gate stays closed until a
+  live apply smoke has passed.
+
 This package is intentionally behavior-preserving. It establishes the seam for
 moving read-only detail, report, journal, modification and sublease consumers
 one group at a time. The public engine remains in the Pages artifact until each

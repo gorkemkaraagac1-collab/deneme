@@ -65,6 +65,22 @@
     return copyResult(await value.calculateReassessmentPreview(contract, input, options));
   }
 
+  async function applyModification(contract, modificationId, options) {
+    const value = adapter();
+    if (typeof value.applyModification !== "function") {
+      throw new Error("TFRS16 private modification apply is unavailable");
+    }
+    return copyResult(await value.applyModification(contract, modificationId, options));
+  }
+
+  async function applyReassessment(contract, reassessmentId, options) {
+    const value = adapter();
+    if (typeof value.applyReassessment !== "function") {
+      throw new Error("TFRS16 private reassessment apply is unavailable");
+    }
+    return copyResult(await value.applyReassessment(contract, reassessmentId, options));
+  }
+
   function project(result) {
     const value = copyResult(result);
     return {
@@ -95,6 +111,8 @@
     loadTms29,
     loadModificationPreview,
     loadReassessmentPreview,
+    applyModification,
+    applyReassessment,
     project
   });
 })(window);
