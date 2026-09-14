@@ -49,6 +49,22 @@
     return copyResult(await value.calculateTms29(contract, reportingPeriod, periodStart, options));
   }
 
+  async function loadModificationPreview(contract, input, options) {
+    const value = adapter();
+    if (typeof value.calculateModificationPreview !== "function") {
+      throw new Error("TFRS16 private modification preview is unavailable");
+    }
+    return copyResult(await value.calculateModificationPreview(contract, input, options));
+  }
+
+  async function loadReassessmentPreview(contract, input, options) {
+    const value = adapter();
+    if (typeof value.calculateReassessmentPreview !== "function") {
+      throw new Error("TFRS16 private reassessment preview is unavailable");
+    }
+    return copyResult(await value.calculateReassessmentPreview(contract, input, options));
+  }
+
   function project(result) {
     const value = copyResult(result);
     return {
@@ -73,5 +89,12 @@
     };
   }
 
-  global.LeaseQantPrivateTfrs16Facade = Object.freeze({ load, loadMany, loadTms29, project });
+  global.LeaseQantPrivateTfrs16Facade = Object.freeze({
+    load,
+    loadMany,
+    loadTms29,
+    loadModificationPreview,
+    loadReassessmentPreview,
+    project
+  });
 })(window);
