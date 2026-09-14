@@ -14,6 +14,15 @@ logic and does not expose the proprietary engine.
 - `tfrs16-engine.js` uses the facade when it is present and retains the same
   single-request fallback for a rolling deploy or a temporary API failure.
 
+## First consumer migration
+
+- The **Ödeme Planı** tab requests the private result on demand when opened,
+  including the case where portfolio warm-up has not finished yet.
+- An in-flight request is shared per contract and invalidated with the normal
+  calculation cache, so edits cannot reuse a stale read-only result.
+- If the private request fails, the existing CFO/local schedule path remains
+  available as the rollback-safe fallback.
+
 This package is intentionally behavior-preserving. It establishes the seam for
 moving read-only detail, report, journal, modification and sublease consumers
 one group at a time. The public engine remains in the Pages artifact until each
