@@ -443,6 +443,10 @@ window.fetch = (input, init = {}) => {
             : 0
       ),
       currency: row.currency || "TRY",
+      // Functional/reporting currency belongs to the company context. Keep
+      // both fields when the API has them so the standards layer can resolve
+      // the company currency without losing legacy contract details.
+      reportingCurrency: details.reportingCurrency || details.presentationCurrency || row.reportingCurrency || row.reporting_currency || null,
       status: String(row.status || "active").toLowerCase(),
       // Only APPROVED opening balances are exposed by the API. Keep the
       // object on the contract so the synchronous engine can start its
@@ -515,7 +519,16 @@ window.fetch = (input, init = {}) => {
       const rows = Array.isArray(res?.data) ? res.data : [];
       return rows
         .filter(c => c && c.id)
-        .map(c => ({ id: String(c.id), name: c.name || c.code || String(c.id) }));
+        .map(c => ({
+          id: String(c.id),
+          name: c.name || c.code || String(c.id),
+          code: c.code || String(c.id),
+          status: c.status || "ACTIVE",
+          // Kept additive: newer company endpoints may expose the currency;
+          // older deployments simply fall back to the local company record.
+          baseCurrency: c.baseCurrency || c.base_currency || null,
+          functionalCurrency: c.functionalCurrency || c.functional_currency || c.baseCurrency || c.base_currency || null
+        }));
     } catch (error) {
       // ADMIN/ACCOUNTANT_MANAGER değilse veya endpoint erişilemezse
       // sessizce boş dön — aşağıdaki eski (companyIds/licenses bazlı)
@@ -538,7 +551,10 @@ window.fetch = (input, init = {}) => {
             .filter(l => l && l.companyId)
             .map(l => ({
               id: String(l.companyId),
-              name: l.companyName || String(l.companyId)
+              name: l.companyName || String(l.companyId),
+              code: l.companyCode || l.code || String(l.companyId),
+              baseCurrency: l.baseCurrency || l.base_currency || null,
+              functionalCurrency: l.functionalCurrency || l.functional_currency || l.baseCurrency || l.base_currency || null
             }))
         : [];
       // companyIds içinde olup licenses'ta olmayanlar
@@ -547,7 +563,7 @@ window.fetch = (input, init = {}) => {
         ...fromLicenses,
         ...sessionCompanyIds
           .filter(id => !seen.has(String(id)))
-          .map(id => ({ id: String(id), name: String(id) }))
+          .map(id => ({ id: String(id), name: String(id), code: String(id) }))
       ];
 
       // P1: ADMIN/ACCOUNTANT_MANAGER için holding ağacının tamamını
@@ -10053,9 +10069,15 @@ window.fetch = (input, init = {}) => {
         const co = typeof v26FindCompany === "function"
           ? v26FindCompany(document.getElementById("companyId")?.value)
           : null;
-        if (co?.functionalCurrency) {
-          const fxSel = document.getElementById("functionalCurrency");
-          if (fxSel) fxSel.value = co.functionalCurrency;
+        const companyFx = co?.functionalCurrency || co?.baseCurrency || "";
+        const fxSel = document.getElementById("functionalCurrency");
+        const reportingSel = document.getElementById("reportingCurrency");
+        if (companyFx) {
+          if (fxSel) { fxSel.value = companyFx; fxSel.disabled = true; fxSel.title = "Şirketin tanımlı fonksiyonel para birimi"; }
+          if (reportingSel) { reportingSel.value = companyFx; reportingSel.disabled = true; reportingSel.title = "Şirketin tanımlı sunum para birimi"; }
+        } else {
+          if (fxSel) { fxSel.disabled = false; fxSel.title = ""; }
+          if (reportingSel) { reportingSel.disabled = false; reportingSel.title = ""; }
         }
         if (co?.name) {
           const companyInput = document.getElementById("company");
@@ -10094,8 +10116,18 @@ window.fetch = (input, init = {}) => {
     }
 
     fillSelect("currency", (contract?.currency || "TRY").toUpperCase());
-    fillSelect("functionalCurrency", (contract?.functionalCurrency || "TRY").toUpperCase());
-    fillSelect("reportingCurrency", (contract?.reportingCurrency || contract?.functionalCurrency || "TRY").toUpperCase());
+    const selectedCompany = coSelect?.value && typeof v26FindCompany === "function"
+      ? v26FindCompany(coSelect.value)
+      : null;
+    const selectedCompanyFx = selectedCompany?.functionalCurrency || selectedCompany?.baseCurrency || "";
+    fillSelect("functionalCurrency", (selectedCompanyFx || contract?.functionalCurrency || "TRY").toUpperCase());
+    fillSelect("reportingCurrency", (selectedCompanyFx || contract?.reportingCurrency || contract?.functionalCurrency || "TRY").toUpperCase());
+    if (selectedCompanyFx) {
+      const fxSel = document.getElementById("functionalCurrency");
+      const reportingSel = document.getElementById("reportingCurrency");
+      if (fxSel) { fxSel.value = selectedCompanyFx; fxSel.disabled = true; fxSel.title = "Şirketin tanımlı fonksiyonel para birimi"; }
+      if (reportingSel) { reportingSel.value = selectedCompanyFx; reportingSel.disabled = true; reportingSel.title = "Şirketin tanımlı sunum para birimi"; }
+    }
 
     const tms21 = document.getElementById("tms21Force");
     const tms29 = document.getElementById("tms29Force");
@@ -25643,7 +25675,10 @@ ${renderPaymentScheduleFooterContainers()}
           code: companyName || companyId,
           name: companyName || companyId,
           country: contract?.country || "TR",
-          baseCurrency: contract?.currency || "TRY",
+          // A lease's transaction currency must never be used as a proxy for
+          // the company's functional currency. The company default is TRY
+          // until an explicit company record supplies another currency.
+          baseCurrency: contract?.companyBaseCurrency || "TRY",
           status: "ACTIVE"
         }, index));
       }
@@ -27749,7 +27784,7 @@ ${renderPaymentScheduleFooterContainers()}
           code: name.toUpperCase().replace(/[^A-Z0-9_-]/g, "-").slice(0, 24),
           name,
           country: contract?.country || "TR",
-          baseCurrency: v22Currency(contract?.currency, "TRY"),
+          baseCurrency: v22Currency(contract?.companyBaseCurrency, "TRY"),
           status: "ACTIVE"
         });
       }
@@ -29294,10 +29329,37 @@ ${renderPaymentScheduleFooterContainers()}
   const DEFAULT_FUNCTIONAL_CURRENCY = "TRY";
 
   function resolveContractFunctionalCurrency(contract = {}) {
+    // The company's functional currency is authoritative. Prefer the V26
+    // company master (which is where the admin-defined currency lives), then
+    // any enriched session company returned by the backend. A contract-level
+    // currency remains only as a compatibility fallback for legacy records
+    // whose company cannot be resolved.
+    const companyRef = contract.companyId || contract.company;
+    let company = null;
+    try {
+      if (companyRef && typeof v26FindCompany === "function") {
+        company = v26FindCompany(companyRef);
+      }
+    } catch (_) {}
+    const companyFx = v23CurrencyCode(
+      company?.functionalCurrency || company?.baseCurrency || company?.currency
+    );
+    if (companyFx) return companyFx;
+    try {
+      const session = Array.isArray(sessionCompanies)
+        ? sessionCompanies.find(c =>
+            String(c.id || "") === String(companyRef || "") ||
+            String(c.name || "") === String(companyRef || "") ||
+            String(c.code || "") === String(companyRef || "")
+          )
+        : null;
+      const sessionFx = v23CurrencyCode(session?.functionalCurrency || session?.baseCurrency);
+      if (sessionFx) return sessionFx;
+    } catch (_) {}
+    const backendCompanyFx = v23CompanyCurrency(companyRef);
+    if (backendCompanyFx) return backendCompanyFx;
     const explicit = v23CurrencyCode(contract.functionalCurrency);
     if (explicit) return explicit;
-    const companyFx = v23CompanyCurrency(contract.company);
-    if (companyFx) return companyFx;
     return DEFAULT_FUNCTIONAL_CURRENCY;
   }
 
@@ -33239,10 +33301,14 @@ ${renderPaymentScheduleFooterContainers()}
       contract?.currency || contract?.transactionCurrency || "TRY"
     ).toUpperCase();
 
+    // Functional currency is an entity attribute. When a company record is
+    // available, it is authoritative; a contract-level value is only a
+    // legacy fallback for records that predate company currency setup.
+    const companyCurrency = v23CurrencyCode(
+      company?.functionalCurrency || company?.baseCurrency || company?.currency
+    );
     const functionalCurrency = String(
-      contract?.functionalCurrency ||
-      company?.baseCurrency ||
-      company?.functionalCurrency ||
+      companyCurrency ||
       (typeof resolveContractFunctionalCurrency === "function"
         ? resolveContractFunctionalCurrency(contract)
         : null) ||
@@ -33250,6 +33316,7 @@ ${renderPaymentScheduleFooterContainers()}
     ).toUpperCase();
 
     const reportingCurrency = String(
+      companyCurrency ||
       contract?.reportingCurrency ||
       contract?.presentationCurrency ||
       functionalCurrency
@@ -33587,6 +33654,20 @@ ${renderPaymentScheduleFooterContainers()}
     } catch (error) {
       console.error("Test 2 hata:", error);
       results.push({ name: "2 — getUnifiedCompanyOptions (genel)", pass: false });
+    }
+
+    // ---- 2d) Şirket para birimi sözleşme değerine üstün gelir ----
+    try {
+      const currencyProbe = getApplicableStandards(
+        { currency: "EUR", functionalCurrency: "EUR", reportingCurrency: "EUR" },
+        { id: "SELFTEST-V27-COMPANY", functionalCurrency: "TRY", baseCurrency: "TRY" }
+      );
+      assertEqual("2d — şirket TL ise EUR sözleşmede fonksiyonel PB TRY", "TRY", currencyProbe.functionalCurrency);
+      assertEqual("2e — şirket TL ise sunum PB TRY", "TRY", currencyProbe.reportingCurrency);
+      assertTrue("2f — EUR işlem/TL şirket için TMS21 uygulanıyor", currencyProbe.tms21 === true);
+    } catch (error) {
+      console.error("Test 2d hata:", error);
+      results.push({ name: "2d — şirket para birimi otoritesi", pass: false });
     }
 
     // ---- 3) Close Dashboard şirket filtresi (ALL vs belirli şirket) ----
