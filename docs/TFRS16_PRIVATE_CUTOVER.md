@@ -62,6 +62,21 @@ Pages artifact boundary, and the absence of a TMS19 dependency in `tfrs16.html`.
 The gate is deliberately source-level and dependency-free so it also runs in
 the public Pages checks without exposing backend code or secrets.
 
+## Special-flow cutover slice (2026-09-14)
+
+TMS 29 preview, sale-and-leaseback, and sublease views now fail closed in
+API-primary mode. They render only the versioned private result envelope;
+when that envelope is unavailable they show an explicit unavailable state
+instead of invoking the browser calculation implementation. The local
+calculation path remains available only through the explicit `?api=0`
+emergency rollback.
+
+This closes three of the remaining production fallback paths. Modification
+and reassessment previews, journal construction, and the legacy compatibility
+exports remain in the structural extraction inventory below; the public engine
+must stay in place until those consumers have equivalent private result
+readers and the clean-cache/rollback smoke evidence is recorded.
+
 ## Removal criteria
 
 The public engine may be removed in a separate, reversible pull request only
