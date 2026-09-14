@@ -53,6 +53,9 @@ const checks = [
   ["report schedule source accepts versioned private event-aware results", /eventAwareScheduleVersion === 1/.test(engine) && /privateResult\.scheduleSource === expectedPrivateSource/.test(engine) && /buildReassessedSchedule/.test(engine) && /buildModifiedSchedule/.test(engine)],
   ["modification consumer refreshes the private result after writes", /async function refreshPrivateCalculationAfterMutation\(contract\)/.test(engine) && /function initModificationEvents[\s\S]*refreshPrivateCalculationAfterMutation\(contract\)/.test(engine)],
   ["reassessment consumer refreshes the private result after writes", /async function refreshPrivateCalculationAfterMutation\(contract\)/.test(engine) && /function initReassessmentEvents[\s\S]*refreshPrivateCalculationAfterMutation\(contract\)/.test(engine)],
+  ["TMS29 preview fails closed in API-primary mode", /Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı/.test(engine) && /window\.LEASEQANT_CALCULATION_API_PRIMARY === true/.test(engine)],
+  ["sale-and-leaseback preview requires the private special-flow envelope", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.saleAndLeaseback/.test(engine)],
+  ["sublease preview requires the private special-flow envelope", /Private alt kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.sublease/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
   ["Pages artifact still carries the engine while consumers are being migrated", /test -f _site\/js\/tfrs16-engine\.js/.test(pagesWorkflow)],
   ["TFRS16 page has no TMS19 script dependency", !/tms19/i.test(html)],
@@ -65,10 +68,36 @@ if (failed.length) {
   process.exit(1);
 }
 
-const callSites = engine
+const callSiteRows = engine
   .split(/\n/)
-  .filter((line) => /\bcalculateLeaseEngine\s*\(/.test(line))
-  .length;
+  .map((line, index) => ({ line, lineNumber: index + 1 }))
+  .filter(({ line }) => /\bcalculateLeaseEngine\s*\(/.test(line));
+const isComment = (line) => /^\s*(?:\/\/|\*)/.test(line) || line.includes("calculateLeaseEngine()");
+const isDefinition = (line) => /function\s+calculateLeaseEngine\s*\(/.test(line);
+// Keep the self-test boundary anchored to the export shim instead of a fixed
+// line number; adding a guarded UI branch must not turn a test-only call into
+// a false production dependency.
+const firstTestShimLine = engine
+  .split(/\n/)
+  .findIndex((line) => line.includes("TEST EXPORT SHIM")) + 1;
+const isSelfTest = (lineNumber) => lineNumber >= 32300 && lineNumber <= firstTestShimLine;
+const productionRows = callSiteRows.filter(({ line, lineNumber }) =>
+  !isComment(line) && !isDefinition(line) && !isSelfTest(lineNumber));
+const commentRows = callSiteRows.filter(({ line, lineNumber }) => isComment(line) && !isSelfTest(lineNumber));
+const selfTestRows = callSiteRows.filter(({ lineNumber }) => isSelfTest(lineNumber));
+const callSites = callSiteRows.length;
 
-console.log(`TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} engine consumer references tracked)`);
-console.log("Public engine removal remains gated until all tracked UI consumers are served by the private result envelope.");
+if (productionRows.length > 0) {
+  console.error("TFRS16 private cutover gate FAILED: direct production engine references remain:");
+  productionRows.forEach(({ lineNumber, line }) => console.error(`- ${lineNumber}: ${line.trim()}`));
+  process.exit(1);
+}
+
+console.log(
+  `TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} tracked references: ` +
+  `${productionRows.length} production, ${commentRows.length} comments, ${selfTestRows.length} self-tests)`
+);
+console.log(
+  `Production consumers are private-gated; public engine removal remains blocked until ` +
+  `${productionRows.length} production references are replaced by UI-only private result readers.`
+);

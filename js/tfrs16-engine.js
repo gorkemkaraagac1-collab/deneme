@@ -920,8 +920,8 @@ window.fetch = (input, init = {}) => {
   const CALCULATION_CACHE = new Map();
   const CALCULATION_CACHE_MAX_SIZE = 200;
 
-  // Async API cutover cache. The public engine remains available as a
-  // controlled fallback while the private calculation API is warming up.
+  // Async API cutover cache. API-primary consumers read this cache exclusively;
+  // the local cache is reserved for the explicit ?api=0 rollback path.
   // Results are keyed with the same contract signature as the local cache so
   // a mutation can never reuse a stale remote result.
   const PRIVATE_CALCULATION_CACHE = new Map();
@@ -957,22 +957,21 @@ window.fetch = (input, init = {}) => {
     await hydrateContractsFromApi();
     await refreshInflationIndexCacheFromBackend(getRequiredInflationIndexMonths());
     await refreshFxRateCacheFromBackend();
+
+    // API-primary is a hard privacy boundary, so hydrate the private result
+    // cache before any KPI/table/detail consumer is allowed to render. This
+    // prevents a first paint from touching the public calculation engine.
+    if (isPrivateCalculationApiReady()) {
+      const hydration = await hydratePrivateCalculationCache(contracts);
+      if (hydration.failed > 0) {
+        console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
+      }
+    }
+
     updateKPIs();
     renderTable();
-
-    // API-primary runs after the authenticated session is hydrated. It stays
-    // in the background so opening the portfolio never waits on a remote
-    // calculation; local results remain the immediate and error fallback.
-    if (isPrivateCalculationApiReady()) {
-      hydratePrivateCalculationCache(contracts).then(() => {
-        updateKPIs();
-        renderTable();
-        if (selectedContractId && contracts.some(item => item.id === selectedContractId)) {
-          openDetail(selectedContractId, { skipPrivateRefresh: true });
-        }
-      }).catch(error => {
-        console.warn("Private hesaplama API önbelleği doldurulamadı:", error);
-      });
+    if (selectedContractId && contracts.some(item => item.id === selectedContractId)) {
+      openDetail(selectedContractId, { skipPrivateRefresh: true });
     }
   }
 
@@ -1204,7 +1203,7 @@ window.fetch = (input, init = {}) => {
     if (!isPrivateCalculationApiReady()) return "local";
     const key = getCalculationCacheKey(contract);
     if (PRIVATE_CALCULATION_CACHE.has(key)) return "private-api";
-    if (PRIVATE_CALCULATION_ERRORS.has(key)) return "local-fallback";
+    if (PRIVATE_CALCULATION_ERRORS.has(key)) return "private-error";
     return "local-warming";
   }
 
@@ -1315,12 +1314,31 @@ window.fetch = (input, init = {}) => {
 
   // Synchronous read-only views (controls and legacy reporting panels) cannot
   // await the API. Once the page warm-up has populated the private cache,
-  // they must read that result before considering the local engine fallback.
+  // they must read that result; API-primary never falls through to local math.
   // Keeping this lookup in one helper makes the remaining synchronous
   // consumers auditable during the final engine-removal gate.
   function getPrivateCachedCalculationResult(contract) {
     if (!contract || !isPrivateCalculationApiReady()) return null;
     return PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract)) || null;
+  }
+
+  // All production UI consumers call this boundary instead of reaching the
+  // calculation implementation directly. API-primary reads only the private
+  // cache and fails closed when hydration is incomplete. The rollback branch
+  // deliberately retains the local implementation for ?api=0 smoke tests.
+  function getPrivateCalculationForConsumer(contract) {
+    if (isPrivateCalculationApiReady()) {
+      const privateResult = getPrivateCachedCalculationResult(contract);
+      if (privateResult) return privateResult;
+      const error = new Error("Private hesaplama sonucu henüz hazır değil");
+      error.code = "PRIVATE_CALCULATION_NOT_READY";
+      throw error;
+    }
+    const cached = getCachedCalculation(contract);
+    if (cached) return cached;
+    const result = calculateLeaseEngineImpl(contract);
+    setCachedCalculation(contract, result);
+    return result;
   }
 
   // Mutations invalidate the calculation cache. Warm the new private result
@@ -2712,7 +2730,7 @@ window.fetch = (input, init = {}) => {
 
     if (tms29AccrualContext) {
       const rpEndDate = new Date(Number(rp.slice(0, 4)), Number(rp.slice(5, 7)), 0);
-      const engineForSchedule = calculateLeaseEngine(contract);
+      const engineForSchedule = getPrivateCalculationForConsumer(contract);
       const accrual = buildReportingDateAccrual(
         tms29AccrualContext.core,
         tms29AccrualContext.measurement,
@@ -2779,7 +2797,7 @@ window.fetch = (input, init = {}) => {
       grossROU =
         fullSchedule.length
           ? fullSchedule[0].rouOpening
-          : (calculateLeaseEngine(contract).rouAssets || 0);
+          : (getPrivateCalculationForConsumer(contract).rouAssets || 0);
 
       const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
       restatedGrossROU = grossROU * ratioAcquisitionToRp;
@@ -2813,7 +2831,7 @@ window.fetch = (input, init = {}) => {
       restatedROUClosing = Math.max(0, restatedGrossROU - restatedAccumDep);
 
       nominalLiabilityClosing =
-        lastRow ? lastRow.closingLiability : (calculateLeaseEngine(contract).liability || 0);
+        lastRow ? lastRow.closingLiability : (getPrivateCalculationForConsumer(contract).liability || 0);
     }
 
     const ratioAcquisitionToRp = getInflationRatio(acquisitionMonth, rp);
@@ -2847,7 +2865,7 @@ window.fetch = (input, init = {}) => {
 
       let liabilityOpeningNominal = priorRow
         ? priorRow.closingLiability
-        : (fullSchedule.length ? fullSchedule[0].openingLiability : (calculateLeaseEngine(contract).liability || 0));
+        : (fullSchedule.length ? fullSchedule[0].openingLiability : (getPrivateCalculationForConsumer(contract).liability || 0));
 
       // ROU tarafı için de aynı "dönem başından önceki son satır" mantığı
       // (moneter olmayan kalem — TMS 29.13 uyarınca dönem sonu satın alma
@@ -2908,7 +2926,7 @@ window.fetch = (input, init = {}) => {
         // Böylece 2026-01 dönemi için açılış snapshot'ı 31.12.2025 olur.
         const openingDate = new Date(Number(effectivePeriodStart.slice(0,4)), Number(effectivePeriodStart.slice(5,7)) - 1, 0);
         const closingDate = new Date(Number(rp.slice(0,4)), Number(rp.slice(5,7)), 0);
-        const accrualSchedule = calculateLeaseEngine(contract).schedule;
+        const accrualSchedule = getPrivateCalculationForConsumer(contract).schedule;
         const openingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, openingDate);
         const closingSnapshot = buildReportingDateAccrual(tms29AccrualContext.core, tms29AccrualContext.measurement, accrualSchedule, closingDate);
         const tx = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
@@ -3720,14 +3738,14 @@ window.fetch = (input, init = {}) => {
       currentSchedule,
       effectiveDate,
       "closingLiability",
-      calculateLeaseEngine(contract).liability
+      getPrivateCalculationForConsumer(contract).liability
     );
 
     const oldROU = getScheduleValueAsOfDate(
       currentSchedule,
       effectiveDate,
       "rouClosing",
-      calculateLeaseEngine(contract).rouAssets
+      getPrivateCalculationForConsumer(contract).rouAssets
     );
 
     const revised = calculateReassessmentLiability(
@@ -3851,7 +3869,7 @@ window.fetch = (input, init = {}) => {
     // modifications array for API/golden-output compatibility.
     ensureModificationState(contract);
     const baseContract = getModificationBaseContract(contract);
-    const baseEngine = calculateLeaseEngine(baseContract);
+    const baseEngine = getPrivateCalculationForConsumer(baseContract);
     const events = []
       .concat((contract?.modifications || []).filter(x => x?.status === "APPLIED").map(x => ({ ...x, __kind: "MODIFICATION" })))
       .concat((contract?.reassessments || []).filter(x => x?.status === "APPLIED").map(x => ({ ...x, __kind: "REASSESSMENT" })))
@@ -4986,7 +5004,7 @@ window.fetch = (input, init = {}) => {
     };
     const currentStateSchedule = buildScheduleFromChangeChain(historyContract);
     const baseContract = getModificationBaseContract(contract);
-    const baseEngine = calculateLeaseEngine(baseContract);
+    const baseEngine = getPrivateCalculationForConsumer(baseContract);
     let oldLeaseLiability = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "closingLiability", baseEngine.liability);
     let oldROU = getScheduleValueAsOfDate(currentStateSchedule, effectiveDate, "rouClosing", baseEngine.rouAssets);
 
@@ -5065,7 +5083,7 @@ window.fetch = (input, init = {}) => {
     const baseContract = getModificationBaseContract(contract);
 
     const baseEngine =
-      calculateLeaseEngine(baseContract);
+      getPrivateCalculationForConsumer(baseContract);
 
     let currentSchedule =
       (baseEngine.schedule || []).map(item => ({ ...item }));
@@ -5307,7 +5325,7 @@ window.fetch = (input, init = {}) => {
       );
 
     const baseEngine =
-      calculateLeaseEngine(getModificationBaseContract(contract));
+      getPrivateCalculationForConsumer(getModificationBaseContract(contract));
 
     const oldLeaseLiability =
       getScheduleValueAsOfDate(
@@ -5426,7 +5444,7 @@ window.fetch = (input, init = {}) => {
   ) {
 
     if (!storedModification) {
-      return calculateLeaseEngine(contract).schedule || [];
+      return getPrivateCalculationForConsumer(contract).schedule || [];
     }
 
     const modification = resolveAppliedModificationMeasurement(contract, storedModification);
@@ -6733,7 +6751,7 @@ window.fetch = (input, init = {}) => {
       consumers of calculateLease() now get the standard-compliant
       figures instead of a second, wrong set of numbers.
     */
-    return calculateLeaseEngine(contract);
+    return getPrivateCalculationForConsumer(contract);
   }
 
 
@@ -7006,21 +7024,24 @@ window.fetch = (input, init = {}) => {
    * @returns {Object} Hesaplama sonucu (bkz. calculateLeaseEngineImpl)
    */
   function calculateLeaseEngine(contract) {
-    // Once the async API warm-up has completed, all synchronous consumers of
-    // the engine transparently receive the private result. Before that point,
-    // or after an API error, the unchanged local engine remains the fallback.
+    // API-primary is a hard privacy boundary. Every production consumer that
+    // reaches this wrapper must use the warmed private result; silently
+    // falling back to the public calculation would keep the proprietary
+    // engine as a hidden dependency. The local implementation is available
+    // only through the explicit ?api=0 rollback path.
     if (isPrivateCalculationApiReady()) {
       const privateResult = PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract));
       if (privateResult) {
         setCachedCalculation(contract, privateResult);
         return privateResult;
       }
+      const error = new Error("Private hesaplama sonucu henüz hazır değil");
+      error.code = "PRIVATE_CALCULATION_NOT_READY";
+      throw error;
     }
 
-    // Önce yerel önbelleğe bak — kontrat değişmediyse tüm tabloyu
-    // yeniden hesaplamak yerine önceki sonucu döndür. Private sonuç
-    // yukarıda kontrol edildiği için API-primary geçişinde eski yerel
-    // sonuç yeni remote sonucu gölgeleyemez.
+    // Explicit rollback mode (?api=0): retain the local cache and engine so
+    // the previous Pages artifact remains a tested emergency path.
     const cached = getCachedCalculation(contract);
     if (cached) {
       return cached;
@@ -7038,7 +7059,7 @@ window.fetch = (input, init = {}) => {
    * @returns {Array<{date, payment, basePayment, escalationMultiplier}>}
    */
   function getEscalatedPayments(contract) {
-    const engine = calculateLeaseEngine(contract);
+    const engine = getPrivateCalculationForConsumer(contract);
     const basePayment = Number(contract?.monthlyPayment) || 0;
     return (engine.schedule || []).map(row => ({
       date: row.date,
@@ -8466,7 +8487,7 @@ window.fetch = (input, init = {}) => {
           const modified = buildModifiedSchedule(contract, latestModification);
           if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
       }
-      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
+      const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
       return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
     } catch (error) {
       return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
@@ -8494,7 +8515,7 @@ window.fetch = (input, init = {}) => {
     // fallback'tir.
     const engine =
       resolved.engine ||
-      calculateLeaseEngine(contract);
+      getPrivateCalculationForConsumer(contract);
 
     if (!normalizedReportingDate) {
       return {
@@ -8641,7 +8662,7 @@ window.fetch = (input, init = {}) => {
     const rawAccrualContext = resolveLeaseAccrualContext(contract);
     const scheduleData = Array.isArray(scheduleOverride) && !rawAccrualContext
       ? {
-          engine: calculateLeaseEngine(contract),
+          engine: getPrivateCalculationForConsumer(contract),
           closedPeriods: scheduleOverride.filter(item => {
             const itemDate = parseDate(item.date);
             return itemDate && normalizedReportingDate && itemDate.getTime() <= normalizedReportingDate.getTime();
@@ -8657,7 +8678,7 @@ window.fetch = (input, init = {}) => {
             });
             return closed.length
               ? Math.max(0, Number(closed[closed.length - 1].closingLiability) || 0)
-              : Math.max(0, Number(calculateLeaseEngine(contract).liability) || 0);
+              : Math.max(0, Number(getPrivateCalculationForConsumer(contract).liability) || 0);
           })(),
           valid: true
         }
@@ -12147,7 +12168,7 @@ ${renderAccountingCenterBulkPromo()}
   function auditCalculationRun(contract, calculationType = "TFRS16") {
     if (!contract) return null;
     try {
-      const engine = calculateLeaseEngine(contract);
+      const engine = getPrivateCalculationForConsumer(contract);
       return recordAuditEvent({
         action: "CALCULATION_RUN",
         entityType: "CALCULATION",
@@ -13067,7 +13088,7 @@ ${renderPaymentScheduleFooterContainers()}
       ? privateResult
       : typeof cfoBuildSchedule === "function"
         ? cfoBuildSchedule(contract)
-        : calculateLeaseEngine(contract);
+        : getPrivateCalculationForConsumer(contract);
 
     const filteredRows = filterSchedule(
       engine.schedule,
@@ -13326,29 +13347,36 @@ ${renderPaymentScheduleFooterContainers()}
       const validation = validateInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
       if (!result) return;
       let t = null;
-      let sourceLabel = "Yerel önizleme";
+      let sourceLabel = "Private API";
       const facade = window.LeaseQantPrivateTfrs16Facade;
       const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
         && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
         && (!periodStart || periodStart <= period);
+      if (!validation.valid) {
+        result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+        return;
+      }
       if (basicPeriodValid && isPrivateCalculationApiReady() && typeof facade?.loadTms29 === "function") {
         try {
           const privateResult = await facade.loadTms29(contract, period, periodStart || null);
           if (privateResult?.tms29Version === 1 && privateResult.totals) {
             t = privateResult.totals;
-            sourceLabel = "Private API";
+          } else {
+            throw new Error("Private TMS 29 sonucu beklenen biçimde dönmedi");
           }
         } catch (error) {
-          // Existing local validation/result remains the explicit fallback.
-          console.warn("Private TMS29 önizlemesi alınamadı; yerel sonuç gösteriliyor.", error);
+          result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı. ${escapeHtml(error?.message || String(error))}</div>`;
+          return;
         }
-      }
-      if (!t) {
-        if (!validation.valid) {
-          result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+      } else {
+        // API-primary is the production path. Local TMS 29 math is available
+        // only for the explicit ?api=0 emergency rollback.
+        if (window.LEASEQANT_CALCULATION_API_PRIMARY === true) {
+          result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 API hazır değil; yerel hesaplama kapalı.</div>`;
           return;
         }
         t = validation.restatement.totals;
+        sourceLabel = "Yerel geri dönüş";
       }
       const hasMonetary = Number.isFinite(t.liabilityMonetaryGainLoss);
       result.innerHTML = `
@@ -13543,10 +13571,19 @@ ${renderPaymentScheduleFooterContainers()}
             ? refreshPrivateCalculationAfterMutation(contract)
             : loadPrivateReadOnlyResult(contract))
           : loadPrivateReadOnlyResult(contract));
-        const result = privateResult?.specialFlowsVersion === 1
-          && privateResult.specialFlows?.saleAndLeaseback
-          ? privateResult.specialFlows.saleAndLeaseback
-          : calculateSaleAndLeaseback(input);
+        let result;
+        if (isPrivateCalculationApiReady()) {
+          result = privateResult?.specialFlowsVersion === 1
+            ? privateResult.specialFlows?.saleAndLeaseback || null
+            : null;
+          if (!result) {
+            const unavailable = new Error("Private satış ve geri kiralama sonucu henüz hazır değil");
+            unavailable.code = "PRIVATE_SPECIAL_FLOW_NOT_READY";
+            throw unavailable;
+          }
+        } else {
+          result = calculateSaleAndLeaseback(input);
+        }
         resultBox.innerHTML = renderSlbResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
@@ -13746,10 +13783,19 @@ ${renderPaymentScheduleFooterContainers()}
             ? refreshPrivateCalculationAfterMutation(contract)
             : loadPrivateReadOnlyResult(contract))
           : loadPrivateReadOnlyResult(contract));
-        const result = privateResult?.specialFlowsVersion === 1
-          && privateResult.specialFlows?.sublease
-          ? privateResult.specialFlows.sublease
-          : calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        let result;
+        if (isPrivateCalculationApiReady()) {
+          result = privateResult?.specialFlowsVersion === 1
+            ? privateResult.specialFlows?.sublease || null
+            : null;
+          if (!result) {
+            const unavailable = new Error("Private alt kiralama sonucu henüz hazır değil");
+            unavailable.code = "PRIVATE_SPECIAL_FLOW_NOT_READY";
+            throw unavailable;
+          }
+        } else {
+          result = calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        }
         resultBox.innerHTML = renderSubleaseResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
@@ -13919,7 +13965,7 @@ ${renderPaymentScheduleFooterContainers()}
     presentationCurrency = String(presentationCurrency || document.getElementById("schedulePresentationCurrency")?.value || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
 
     const baseEngine =
-      calculateLeaseEngine(
+      getPrivateCalculationForConsumer(
         contract
       );
 
@@ -14213,10 +14259,10 @@ ${renderPaymentScheduleFooterContainers()}
       const calculationSourceHtml = String(sessionUserRole || "").toUpperCase() === "ADMIN"
         ? calculationSource === "private-api"
           ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
-          : calculationSource === "local-fallback"
-            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:12px;font-weight:700;">⚠️ Private API yanıt vermedi; yerel fallback sonucu gösteriliyor.</div>`
-            : calculationSource === "local-warming"
-              ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API hazırlanıyor; geçici olarak yerel sonuç gösteriliyor.</div>`
+          : calculationSource === "private-error"
+            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;font-weight:700;">⚠️ Private API sonucu alınamadı; hesaplama kapatıldı.</div>`
+          : calculationSource === "local-warming"
+              ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`
               : ""
         : "";
 
@@ -17826,7 +17872,7 @@ ${renderPaymentScheduleFooterContainers()}
         if (Array.isArray(modified) && modified.length) return modified;
       }
 
-      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
+      const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
       return Array.isArray(engine?.schedule) ? engine.schedule : [];
     } catch (error) {
       return [];
@@ -17918,7 +17964,7 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlCalculation(contract, config) {
     try {
-      const engine = calculateLeaseEngine(contract);
+      const engine = getPrivateCalculationForConsumer(contract);
       const schedule = Array.isArray(engine?.schedule) ? engine.schedule : [];
       if (!engine || engine.error) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Professional calculation engine returned an error.", "Valid calculation result", engine?.error || null, "Review contract assumptions and calculation inputs.");
       if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Recognition exemption is active; liability control is not applicable in the normal recognition model.", "Exemption-aware calculation", { shortTermLease: contract.shortTermLease, lowValueAsset: contract.lowValueAsset }, "No action required.");
@@ -17935,7 +17981,7 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlROU(contract, config) {
     try {
-      const engine = calculateLeaseEngine(contract);
+      const engine = getPrivateCalculationForConsumer(contract);
       if (!engine) return controlResult(config, contract, CONTROL_STATUS.RED, false, "ROU calculation result is unavailable.", "Valid ROU result", null, "Run the calculation engine and review the contract assumptions.");
       const schedule = Array.isArray(engine.schedule) ? engine.schedule : [];
       const negative = schedule.find(row => Number(row?.rouClosing) < -CONTROL_TOLERANCE || Number(row?.rouOpening) < -CONTROL_TOLERANCE);
@@ -19248,7 +19294,7 @@ ${renderPaymentScheduleFooterContainers()}
   function rptBuildSchedule(contract) {
     try {
       if (typeof cfoBuildSchedule === "function") return cfoBuildSchedule(contract);
-      const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
+      const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
       return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
     } catch (error) {
       return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
@@ -23421,7 +23467,7 @@ ${renderPaymentScheduleFooterContainers()}
     const rows = [];
     getIntegrationContractData(options).forEach(contract => {
       try {
-        const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : (typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null);
+        const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null);
         const schedule = Array.isArray(built?.schedule) ? built.schedule : [];
         (Array.isArray(schedule) ? schedule : []).forEach(item => {
           const date = item.date || item.paymentDate || item.periodDate;
@@ -23986,7 +24032,7 @@ ${renderPaymentScheduleFooterContainers()}
     const schedule = (built.schedule || []).slice().sort((a, b) => rptDate(a.date) - rptDate(b.date));
     const first = schedule[0] || {};
     const commencement = rptDate(contract.startDate);
-    const initialTx = rptNumber(first.rouOpening || calculateLeaseEngine(contract).rouAssets || 0);
+    const initialTx = rptNumber(first.rouOpening || getPrivateCalculationForConsumer(contract).rouAssets || 0);
     const additions = [{ date: commencement, tx: initialTx, fn: initialTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement), kind: "initial" }];
     const changes = v191AppliedChanges(contract, null, end);
     const depreciationEvents = [];
@@ -25133,7 +25179,7 @@ ${renderPaymentScheduleFooterContainers()}
       ? privateResult.schedule
       : typeof cfoBuildSchedule === "function"
         ? (cfoBuildSchedule(contract)?.schedule || [])
-        : (typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : []);
+        : (typeof calculateLeaseEngine === "function" ? (getPrivateCalculationForConsumer(contract)?.schedule || []) : []);
     const journals = typeof getJournalSummaryReport === "function" ? (getJournalSummaryReport({ contractId: contract.id })?.rows || []) : [];
     const auditReport = typeof getAuditTrailReport === "function" ? getAuditTrailReport({ contractId: contract.id }) : null;
     const audit = Array.isArray(auditReport)
@@ -25854,7 +25900,7 @@ ${renderPaymentScheduleFooterContainers()}
           const result = cfoBuildSchedule(contract);
           schedule = v20SafeArray(result?.schedule);
         } else if (typeof calculateLeaseEngine === "function") {
-          const result = calculateLeaseEngine(contract);
+          const result = getPrivateCalculationForConsumer(contract);
           schedule = v20SafeArray(result?.schedule);
         }
       } catch (error) {
@@ -27938,7 +27984,7 @@ ${renderPaymentScheduleFooterContainers()}
     try {
       const engine = typeof cfoBuildSchedule === "function"
         ? cfoBuildSchedule(contract)
-        : (typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : {});
+        : (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : {});
       const schedule = v22SafeArray(engine?.schedule);
       const rows = schedule.filter(row => !date || !row.date || String(row.date) <= String(date));
       const latest = rows.length ? rows[rows.length - 1] : null;
@@ -29432,7 +29478,7 @@ ${renderPaymentScheduleFooterContainers()}
     if (!(saleProceeds >= 0)) throw Object.assign(new Error("Satış bedeli geçersiz."), { code: "SLB_INVALID_PROCEEDS" });
     if (!leasebackContract) throw Object.assign(new Error("Geri kiralama kontratı belirtilmedi."), { code: "SLB_MISSING_LEASEBACK_CONTRACT" });
 
-    const leasebackEngine = calculateLeaseEngine(leasebackContract);
+    const leasebackEngine = getPrivateCalculationForConsumer(leasebackContract);
     if (!leasebackEngine.schedule || !leasebackEngine.schedule.length) {
       throw Object.assign(new Error("Geri kiralama için ödeme planı hesaplanamadı."), { code: "SLB_EMPTY_LEASEBACK_SCHEDULE" });
     }
@@ -29654,7 +29700,7 @@ ${renderPaymentScheduleFooterContainers()}
 
     // --- OPERATING alt kiralama (TFRS 16.B58) ---
     if (classification === "OPERATING") {
-      const subEngine = calculateLeaseEngine(subleaseContract);
+      const subEngine = getPrivateCalculationForConsumer(subleaseContract);
       const n = subEngine.schedule.length;
       const totalContractualIncome = v23Round(subEngine.schedule.reduce((s, r) => s + v23Num(r.payment), 0), 2);
       const straightLineIncome = n > 0 ? v23Round(totalContractualIncome / n, 2) : 0;
@@ -29683,7 +29729,7 @@ ${renderPaymentScheduleFooterContainers()}
     }
 
     // --- FINANCE alt kiralama (TFRS 16.B58, 100-103'e paralel mantık) ---
-    const subEngine = calculateLeaseEngine(subleaseContract);
+    const subEngine = getPrivateCalculationForConsumer(subleaseContract);
     const netInvestment = subEngine.liability; // alt kiralama ödemelerinin bugünkü değeri = net yatırım
     const sellingProfitLoss = v23Round(netInvestment - allocatedRouCarryingAmount, 2);
     const monthlyRate = resolveContractMonthlyRate(
@@ -31195,7 +31241,7 @@ ${renderPaymentScheduleFooterContainers()}
    */
   function getEffectiveSchedule(contract) {
     if (contract?.earlyPaymentSchedule?.length) {
-      const engine = calculateLeaseEngine(contract);
+      const engine = getPrivateCalculationForConsumer(contract);
       const cutoff = parseDate(contract.earlyPaymentScheduleAsOf);
       const closedPeriods = cutoff
         ? engine.schedule.filter(period => {
@@ -31205,7 +31251,7 @@ ${renderPaymentScheduleFooterContainers()}
         : [];
       return [...closedPeriods, ...contract.earlyPaymentSchedule];
     }
-    return calculateLeaseEngine(contract).schedule;
+    return getPrivateCalculationForConsumer(contract).schedule;
   }
 
 
@@ -31408,7 +31454,7 @@ ${renderPaymentScheduleFooterContainers()}
         return { valid: false };
       }
 
-      const engine = calculateLeaseEngine(contract);
+      const engine = getPrivateCalculationForConsumer(contract);
       const html = buildReportHtml(contract, engine);
 
       if (format === "html") {
