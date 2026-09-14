@@ -37,9 +37,21 @@
 
   function normalizeDate(value) {
     if (value == null || value === "") return null;
-    if (typeof value?.toISOString === "function") {
-      const iso = value.toISOString();
-      if (iso) return iso.slice(0, 10);
+    // Local engine schedule rows are Date objects at local midnight. Using
+    // toISOString() converts them to the previous UTC day in Istanbul and
+    // creates a false one-day shadow mismatch against the API's date string.
+    if (
+      value instanceof Date ||
+      (typeof value?.getFullYear === "function" &&
+        typeof value?.getMonth === "function" &&
+        typeof value?.getDate === "function")
+    ) {
+      if (typeof value.getTime === "function" && Number.isNaN(value.getTime())) return null;
+      return [
+        value.getFullYear(),
+        String(value.getMonth() + 1).padStart(2, "0"),
+        String(value.getDate()).padStart(2, "0")
+      ].join("-");
     }
     const text = String(value);
     const isoDate = text.match(/^\d{4}-\d{2}-\d{2}/);
@@ -162,11 +174,7 @@
         ...comparison
       });
       if (!comparison.matched && global.LEASEQANT_CALCULATION_SHADOW_DEBUG === true) {
-        const mismatches = Object.entries(comparison.fields)
-          .filter(([, field]) => field && field.matched === false)
-          .map(([field, detail]) => field + "=" + String(detail.local) + "|" + String(detail.private))
-          .join(", ");
-        console.warn("LeaseQant hesaplama gölge karşılaştırması uyuşmuyor: " + mismatches);
+        console.warn("LeaseQant hesaplama gölge karşılaştırması uyuşmuyor", report);
       }
       return report;
     } catch (error) {
