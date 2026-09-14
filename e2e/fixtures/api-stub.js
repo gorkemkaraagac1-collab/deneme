@@ -163,7 +163,21 @@ async function installApiStub(page, options = {}) {
       let payload = {};
       try { payload = JSON.parse(request.postData() || "{}"); } catch (_) { payload = {}; }
       const employees = Array.isArray(payload.employees) ? payload.employees : [];
-      store.tms19Calculations.push({ employees, assumptions: payload.assumptions || {} });
+      const assumptions = payload.assumptions || {};
+      if (payload.mode === "employee" && payload.employee) {
+        const employee = payload.employee;
+        store.tms19Calculations.push({ mode: "employee", employee, assumptions });
+        return route.fulfill(json({
+          success: true,
+          data: {
+            personelId: employee.personelId,
+            puc: { dbo: 1200 },
+            quality: { dboPositive: true },
+            auditTrail: [{ adim: 1, alan: "DBO", deger: 1200, birim: "TRY", aciklama: "E2E" }]
+          }
+        }));
+      }
+      store.tms19Calculations.push({ mode: "portfolio", employees, assumptions });
       const results = employees.map((employee, index) => ({
         index,
         personelId: employee.personelId || `TMS19-E2E-${index + 1}`,

@@ -3368,20 +3368,14 @@
      TMS 19 ENGINE
 ============================================================== -->
 
-<script src="js/private-tms19-api.js?v=20260914-1"></script>
+<script src="js/private-tms19-api.js?v=20260914-2"></script>
 <script>
-    // API birincildir; ?api=0 yalnızca acil geri dönüş içindir.
+    // TMS19 hesaplama motoru yalnızca private API üzerinde çalışır.
+    // ?api=0, acil durumlarda API çağrısını bilinçli olarak kapatır.
     window.LEASEQANT_TMS19_API_PRIMARY =
         new URLSearchParams(window.location.search).get("api") !== "0";
 </script>
 
- <script src="js/tms19-actuarial-engine.js"></script>
-
-<script src="js/tms19-data-engine.js"></script>
-
-<script src="js/tms19-portfolio-engine.js"></script>
-
-<script src="js/tms19-data-ui.js"></script>
 
 
 <!-- =============================================================
@@ -3407,7 +3401,7 @@ let dboChart = null;
 
 let costChart = null;
 
-// API hesaplamasından gelen rapor ve analiz görünümü. Yerel geri dönüşte null kalır.
+// API hesaplamasından gelen rapor ve analiz görünümü.
 let privateView = null;
 
 
@@ -3670,120 +3664,67 @@ function personelEkle() {
 
 async function hesapla() {
 
+    let hesaplamaKaynak = "private-api-error";
+
     try {
 
-        if (
-            !window.TMS19
-        ) {
-
-            throw new Error(
-                "TMS 19 Engine yüklenemedi."
-            );
+        if (!personeller.length) {
+            throw new Error("Hesaplama için personel verisi bulunmuyor.");
         }
 
-
-        if (
-            !personeller.length
-        ) {
-
-            throw new Error(
-                "Hesaplama için personel verisi bulunmuyor."
-            );
-        }
-
-
-        const varsayimlar =
-            varsayimlariAl();
-
-        let topluSonuc;
-        let hesaplamaKaynak = "local";
+        const varsayimlar = varsayimlariAl();
         const apiPrimary =
             window.LEASEQANT_TMS19_API_PRIMARY !== false &&
             typeof window.LeaseQantPrivateTms19Calculation?.calculate === "function";
 
-        if (apiPrimary) {
-            try {
-                const privateEnvelope = await window.LeaseQantPrivateTms19Calculation.calculate(
-                    personeller,
-                    varsayimlar
-                );
-                if (!privateEnvelope?.actuarial?.success) {
-                    throw new Error("TMS 19 private API geçerli bir sonuç döndürmedi");
-                }
-                topluSonuc = privateEnvelope.ui || privateEnvelope.actuarial;
-                privateView = privateEnvelope.view || null;
-                hesaplamaKaynak = "private-api";
-            } catch (apiError) {
-                // API kesintisi ekranı kullanılmaz hâle getirmesin; yalnızca
-                // açık geri dönüşte yerel motor devreye girer.
-                console.warn("TMS 19 private API kullanılamadı; yerel geri dönüş çalışıyor", apiError);
-                topluSonuc = TMS19.topluHesapla(
-                    personeller,
-                    varsayimlar
-                );
-                privateView = null;
-                hesaplamaKaynak = "local-fallback";
-            }
-        } else {
-            topluSonuc = TMS19.topluHesapla(
-                personeller,
-                varsayimlar
-            );
-            privateView = null;
+        if (!apiPrimary) {
+            hesaplamaKaynak = "api-disabled";
+            throw new Error("Özel hesaplama API'si bu modda devre dışı.");
         }
 
+        const privateEnvelope = await window.LeaseQantPrivateTms19Calculation.calculate(
+            personeller,
+            varsayimlar
+        );
+
+        if (!privateEnvelope?.actuarial?.success || !privateEnvelope?.ui?.results) {
+            throw new Error("TMS 19 private API geçerli bir sonuç döndürmedi");
+        }
+
+        const topluSonuc = privateEnvelope.ui;
+        privateView = privateEnvelope.view || null;
+
+        if (!privateView?.summary || !privateView?.controls || !privateView?.risk || !privateView?.sensitivity || !privateView?.report) {
+            throw new Error("TMS 19 private API görünüm verisi eksik");
+        }
+
+        hesaplamaKaynak = "private-api";
         window.LEASEQANT_TMS19_CALCULATION_SOURCE = hesaplamaKaynak;
 
-        hesaplamaSonuclari =
-            topluSonuc.results;
-
-        portfoyOzeti =
-            privateView?.summary ||
-            TMS19.ozetOlustur(
-                hesaplamaSonuclari
-            );
-
+        hesaplamaSonuclari = topluSonuc.results;
+        portfoyOzeti = privateView.summary;
         portfoyOzeti.basariliPersonelSayisi =
             topluSonuc.calculated ?? topluSonuc.summary?.hesaplananPersonel ?? hesaplamaSonuclari.length;
-
         portfoyOzeti.hataliPersonelSayisi =
             topluSonuc.failed ?? topluSonuc.summary?.hataliPersonel ?? 0;
 
-
         dashboardGuncelle();
-
-        renderPersonelTablosu(
-            hesaplamaSonuclari
-        );
-
+        renderPersonelTablosu(hesaplamaSonuclari);
         renderKontroller();
-
         renderRisk();
-
         renderSensitivity();
-
         renderCharts();
-
         updateAccountingView();
-
         updateEngineStatus();
 
+        showToast("TMS 19 hesaplaması tamamlandı.");
 
-        showToast(
-            "TMS 19 hesaplaması tamamlandı."
-        );
+    } catch (error) {
 
-    }
-    catch (error) {
-
-        console.error(
-            error
-        );
-
-        showToast(
-            "Hesaplama hatası: " +
-            error.message
-        );
+        window.LEASEQANT_TMS19_CALCULATION_SOURCE = hesaplamaKaynak;
+        privateView = null;
+        console.error(error);
+        showToast("Hesaplama hatası: " + error.message);
     }
 }
 
@@ -4142,7 +4083,7 @@ function renderPersonelTablosu(
    DETAIL
 ================================================================ */
 
-function personelDetay(
+async function personelDetay(
     encodedId
 ) {
 
@@ -4187,21 +4128,42 @@ function personelDetay(
         sonuc.pozisyon;
 
 
-    const audit =
-        TMS19.auditTrail(
-            personeller.find(
-                function (p) {
+    const employee =
+        personeller.find(
+            function (p) {
 
-                    return (
-                        String(
-                            p.personelId
-                        ) ===
-                        String(id)
-                    );
-                }
-            ),
-            varsayimlariAl()
+                return (
+                    String(
+                        p.personelId
+                    ) ===
+                    String(id)
+                );
+            }
         );
+
+    if (!employee) {
+        return;
+    }
+
+    const modalBody = document.getElementById("modalBody");
+    const detailModal = document.getElementById("detailModal");
+    modalBody.innerHTML =
+        "<div class=\"empty-state\"><p>Personel detayı private API'den yükleniyor...</p></div>";
+    detailModal.classList.add("show");
+
+    let audit = [];
+    try {
+        const calculateEmployee =
+            window.LeaseQantPrivateTms19Calculation?.calculateEmployee;
+        if (typeof calculateEmployee !== "function") {
+            throw new Error("Özel hesaplama API'si hazır değil");
+        }
+        const detail = await calculateEmployee(employee, varsayimlariAl());
+        audit = Array.isArray(detail?.auditTrail) ? detail.auditTrail : [];
+    } catch (error) {
+        console.error(error);
+        showToast("Personel detayı yüklenemedi: " + error.message);
+    }
 
 
     let html = `
@@ -4438,38 +4400,16 @@ function tms19RaporGoster() {
     }
 
     try {
+        if (!privateView?.report) {
+            throw new Error("Özel API rapor sonucu bulunmuyor; önce hesaplama yapın.");
+        }
 
-        const varsayimlar =
-            varsayimlariAl();
-
-        tms19SonRapor =
-            privateView?.report ||
-            (TMS19.faz7RaporOlustur
-                ? TMS19.faz7RaporOlustur(
-                    personeller,
-                    varsayimlar
-                )
-                : TMS19.tms19RaporOlustur(
-                    personeller,
-                    varsayimlar
-                ));
-
-        tms19RaporRender(
-            tms19SonRapor
-        );
-
-        showToast(
-            "TMS 19 raporu oluşturuldu."
-        );
-
+        tms19SonRapor = privateView.report;
+        tms19RaporRender(tms19SonRapor);
+        showToast("TMS 19 raporu oluşturuldu.");
     } catch (error) {
-
         console.error(error);
-
-        showToast(
-            "Rapor hatası: " +
-            error.message
-        );
+        showToast("Rapor hatası: " + error.message);
     }
 }
 
@@ -4547,6 +4487,8 @@ function tms19RaporRender(rapor) {
         document.getElementById(
             "tms19NetBenefitSummary"
         );
+    const planDbo = Number(plan.dbo) || 0;
+    const planAsset = Number(plan.closingPlanAsset) || 0;
 
     if (planBox) {
         planBox.innerHTML = `
@@ -4616,16 +4558,8 @@ function tms19RaporRender(rapor) {
                 <span class="metric-name">Fonlama Oranı</span>
                 <strong class="metric-value">
                     ${
-                        plan.dbo
-                            ? (
-                                TMS19.sayi(
-                                    plan.closingPlanAsset
-                                ) /
-                                TMS19.sayi(
-                                    plan.dbo
-                                ) *
-                                100
-                            ).toFixed(2) + "%"
+                        planDbo
+                            ? (planAsset / planDbo * 100).toFixed(2) + "%"
                             : "0.00%"
                     }
                 </strong>
@@ -4712,12 +4646,7 @@ function tms19JsonIndir() {
 
     if (!tms19SonRapor) return;
 
-    const json = privateView?.report
-        ? JSON.stringify(privateView.report, null, 2)
-        : TMS19.tms19RaporJson(
-            personeller,
-            varsayimlariAl()
-        );
+    const json = JSON.stringify(privateView.report, null, 2);
 
     const blob =
         new Blob(
@@ -4799,9 +4728,7 @@ function renderKontroller() {
 
     const kontrol =
         privateView?.controls ||
-        TMS19.kontrolMotoru(
-            hesaplamaSonuclari
-        );
+        { durum: "BEKLENİYOR", toplamKontrol: 0, kontroller: [] };
 
 
     let html = `
@@ -4970,25 +4897,7 @@ function renderRisk() {
 
 
     const riskler =
-        (privateView?.risk ||
-        hesaplamaSonuclari
-            .filter(
-                function (x) {
-
-                    return (
-                        x.hesaplamaDurumu ===
-                        "BAŞARILI"
-                    );
-                }
-            )
-            .map(
-                function (x) {
-
-                    return TMS19.riskAnalizi(
-                        x
-                    );
-                }
-            )).filter(Boolean);
+        (Array.isArray(privateView?.risk) ? privateView.risk : []).filter(Boolean);
 
 
     const yuksek =
@@ -5154,16 +5063,10 @@ function renderSensitivity() {
     }
 
 
-    const varsayimlar =
-        varsayimlariAl();
-
-
     const senaryolar =
-        privateView?.sensitivity ||
-        TMS19.senaryoMatrisi(
-            personeller,
-            varsayimlar
-        );
+        Array.isArray(privateView?.sensitivity)
+            ? privateView.sensitivity
+            : [];
 
 
     let html = `
@@ -5598,9 +5501,7 @@ function updateEngineStatus() {
 
     const kontrol =
         privateView?.controls ||
-        TMS19.kontrolMotoru(
-            hesaplamaSonuclari
-        );
+        { durum: "BEKLENİYOR", toplamKontrol: 0, kontroller: [] };
 
 
     if (
@@ -6471,20 +6372,18 @@ window.TMS19Dashboard = {
     exportDataset:
         function () {
 
-            return TMS19.exportDataset(
-                personeller,
-                varsayimlariAl()
-            );
+            return {
+                employees: personeller,
+                assumptions: varsayimlariAl(),
+                results: hesaplamaSonuclari
+            };
 
         },
 
     portfoyRaporu:
         function () {
 
-            return TMS19.portfoyRaporu(
-                personeller,
-                varsayimlariAl()
-            );
+            return privateView?.report || null;
 
         }
 

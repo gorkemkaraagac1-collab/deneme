@@ -19,11 +19,7 @@
     }
   }
 
-  async function calculate(employees, assumptions, options) {
-    if (!Array.isArray(employees) || employees.length === 0) {
-      throw new TypeError("employees must be a non-empty array");
-    }
-
+  async function request(payload, options) {
     const config = options || {};
     const controller = typeof global.AbortController === "function" ? new global.AbortController() : null;
     const timeout = controller
@@ -38,7 +34,7 @@
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify({ mode: "portfolio", employees, assumptions: assumptions || {} }),
+        body: JSON.stringify(payload),
         signal: controller ? controller.signal : undefined
       });
       const text = await response.text();
@@ -65,5 +61,19 @@
     }
   }
 
-  global.LeaseQantPrivateTms19Calculation = Object.freeze({ calculate, apiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
+  async function calculate(employees, assumptions, options) {
+    if (!Array.isArray(employees) || employees.length === 0) {
+      throw new TypeError("employees must be a non-empty array");
+    }
+    return request({ mode: "portfolio", employees, assumptions: assumptions || {} }, options);
+  }
+
+  async function calculateEmployee(employee, assumptions, options) {
+    if (!employee || typeof employee !== "object" || Array.isArray(employee)) {
+      throw new TypeError("employee must be an object");
+    }
+    return request({ mode: "employee", employee, assumptions: assumptions || {} }, options);
+  }
+
+  global.LeaseQantPrivateTms19Calculation = Object.freeze({ calculate, calculateEmployee, apiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
 })(window);
