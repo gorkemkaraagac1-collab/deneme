@@ -3368,6 +3368,13 @@
      TMS 19 ENGINE
 ============================================================== -->
 
+<script src="js/private-tms19-api.js?v=20260914-1"></script>
+<script>
+    // API birincildir; ?api=0 yalnızca acil geri dönüş içindir.
+    window.LEASEQANT_TMS19_API_PRIMARY =
+        new URLSearchParams(window.location.search).get("api") !== "0";
+</script>
+
  <script src="js/tms19-actuarial-engine.js"></script>
 
 <script src="js/tms19-data-engine.js"></script>
@@ -3658,7 +3665,7 @@ function personelEkle() {
    CALCULATION
 ================================================================ */
 
-function hesapla() {
+async function hesapla() {
 
     try {
 
@@ -3685,12 +3692,41 @@ function hesapla() {
         const varsayimlar =
             varsayimlariAl();
 
+        let topluSonuc;
+        let hesaplamaKaynak = "local";
+        const apiPrimary =
+            window.LEASEQANT_TMS19_API_PRIMARY !== false &&
+            typeof window.LeaseQantPrivateTms19Calculation?.calculate === "function";
 
-        const topluSonuc =
-            TMS19.topluHesapla(
+        if (apiPrimary) {
+            try {
+                const privateEnvelope = await window.LeaseQantPrivateTms19Calculation.calculate(
+                    personeller,
+                    varsayimlar
+                );
+                if (!privateEnvelope?.actuarial?.success) {
+                    throw new Error("TMS 19 private API geçerli bir sonuç döndürmedi");
+                }
+                topluSonuc = privateEnvelope.ui || privateEnvelope.actuarial;
+                hesaplamaKaynak = "private-api";
+            } catch (apiError) {
+                // API kesintisi ekranı kullanılmaz hâle getirmesin; yalnızca
+                // açık geri dönüşte yerel motor devreye girer.
+                console.warn("TMS 19 private API kullanılamadı; yerel geri dönüş çalışıyor", apiError);
+                topluSonuc = TMS19.topluHesapla(
+                    personeller,
+                    varsayimlar
+                );
+                hesaplamaKaynak = "local-fallback";
+            }
+        } else {
+            topluSonuc = TMS19.topluHesapla(
                 personeller,
                 varsayimlar
             );
+        }
+
+        window.LEASEQANT_TMS19_CALCULATION_SOURCE = hesaplamaKaynak;
 
         hesaplamaSonuclari =
             topluSonuc.results;
@@ -3701,10 +3737,10 @@ function hesapla() {
             );
 
         portfoyOzeti.basariliPersonelSayisi =
-            topluSonuc.calculated;
+            topluSonuc.calculated ?? topluSonuc.summary?.hesaplananPersonel ?? hesaplamaSonuclari.length;
 
         portfoyOzeti.hataliPersonelSayisi =
-            topluSonuc.failed;
+            topluSonuc.failed ?? topluSonuc.summary?.hataliPersonel ?? 0;
 
 
         dashboardGuncelle();
@@ -3743,7 +3779,6 @@ function hesapla() {
         );
     }
 }
-
 
 
 /* ================================================================

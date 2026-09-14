@@ -56,7 +56,7 @@ const DEFAULT_LICENSE = {
 
 /** Bellek içi kontrat deposu — her test kendi örneğini alır. */
 function createStore(seedContracts = []) {
-  return { contracts: seedContracts.map(c => ({ ...c })), calculations: [] };
+  return { contracts: seedContracts.map(c => ({ ...c })), calculations: [], tms19Calculations: [] };
 }
 
 function json(body, status = 200) {
@@ -154,6 +154,40 @@ async function installApiStub(page, options = {}) {
             depreciation: 100,
             rouClosing: 900
           }]
+        }
+      }));
+    }
+
+    // --- Private TMS 19 hesaplama API'si ---
+    if (path === "/api/calculations/tms19" && method === "POST") {
+      let payload = {};
+      try { payload = JSON.parse(request.postData() || "{}"); } catch (_) { payload = {}; }
+      const employees = Array.isArray(payload.employees) ? payload.employees : [];
+      store.tms19Calculations.push({ employees, assumptions: payload.assumptions || {} });
+      const results = employees.map((employee, index) => ({
+        index,
+        personelId: employee.personelId || `TMS19-E2E-${index + 1}`,
+        adSoyad: employee.adSoyad || `E2E Personel ${index + 1}`,
+        departman: employee.departman || "Finance",
+        pozisyon: employee.pozisyon || "Specialist",
+        mevcutMaas: Number(employee.mevcutMaas) || 0,
+        yas: 40,
+        hizmetSuresi: 5,
+        emekliligeKalanYil: 20,
+        dbo: 1200,
+        cariHizmetMaliyeti: 100,
+        faizMaliyeti: 30,
+        hesaplamaDurumu: "BAŞARILI",
+        sgkRejimEtiketi: "Kademeli (5510)",
+        sgkRejimAciklamasi: "E2E",
+        eytUygulandi: false
+      }));
+      return route.fulfill(json({
+        success: true,
+        data: {
+          success: true,
+          ui: { results, errors: [], total: results.length, calculated: results.length, failed: 0 },
+          actuarial: { success: true, results: [], summary: { personelSayisi: results.length } }
         }
       }));
     }
