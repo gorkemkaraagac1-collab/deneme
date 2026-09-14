@@ -14254,6 +14254,28 @@ ${renderPaymentScheduleFooterContainers()}
       "hidden"
     );
 
+    // Read-only summary/report consumers use the same stable result envelope
+    // as the payment-plan tab. If the portfolio warm-up has not completed by
+    // the time a user opens a contract, request the private result on demand
+    // and redraw the existing detail modal once it arrives. The active tab is
+    // preserved by gkDetailActiveTab; an API failure keeps the local result
+    // already rendered above as the rollback-safe fallback.
+    const shouldRefreshFromPrivate =
+      !detailOptions.skipPrivateRefresh &&
+      !detailOptions.calculationOverride &&
+      isPrivateCalculationApiReady() &&
+      getCalculationSource(contract) !== "private-api";
+    if (shouldRefreshFromPrivate) {
+      loadPrivateReadOnlyResult(contract).then(privateResult => {
+        if (privateResult && selectedContractId === contract.id) {
+          openDetail(contract.id, {
+            skipPrivateRefresh: true,
+            calculationOverride: privateResult
+          });
+        }
+      }).catch(() => {});
+    }
+
 
     setTimeout(
       () => {
