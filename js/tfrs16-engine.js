@@ -13809,6 +13809,12 @@ ${renderPaymentScheduleFooterContainers()}
         contract
       );
 
+    // Shadow doğrulama yalnızca açık bayrakla çalışır; ekrandaki sonucu,
+    // kayıt akışını veya performanslı yerel hesaplamayı değiştirmez.
+    if (window.LeaseQantCalculationShadow?.observe) {
+      window.LeaseQantCalculationShadow.observe(contract, engine).catch(() => {});
+    }
+
     const contractAuditEvents =
       typeof getAuditTrail === "function"
         ? getAuditTrail(contract.id)
