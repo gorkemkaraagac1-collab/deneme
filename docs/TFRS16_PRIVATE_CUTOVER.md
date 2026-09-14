@@ -77,6 +77,11 @@ exports remain in the structural extraction inventory below; the public engine
 must stay in place until those consumers have equivalent private result
 readers and the clean-cache/rollback smoke evidence is recorded.
 
+The apply step is now private-gated as well: API-primary calls the authenticated
+modification/reassessment apply endpoints and merges their applied event,
+contract patch and refreshed schedule before persisting the contract. A live
+apply smoke is still required before the public engine can be removed.
+
 ## Removal criteria
 
 The public engine may be removed in a separate, reversible pull request only

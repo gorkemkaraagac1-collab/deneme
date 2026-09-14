@@ -1332,6 +1332,92 @@ window.fetch = (input, init = {}) => {
     return result;
   }
 
+  // Apply mutations cross the same private boundary as calculation previews.
+  // The server returns the authoritative APPLIED event, contract patch and
+  // refreshed schedule; the browser only merges that envelope and persists
+  // the resulting contract record. The local implementation remains the
+  // explicit ?api=0 rollback path.
+  async function applyPrivateChange(kind, contract, eventId) {
+    if (!isPrivateCalculationApiReady()) return null;
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    const loader = kind === "modification"
+      ? facade?.applyModification
+      : facade?.applyReassessment;
+    if (typeof loader !== "function") {
+      const error = new Error(`Private ${kind} apply is unavailable`);
+      error.code = "PRIVATE_CHANGE_APPLY_UNAVAILABLE";
+      throw error;
+    }
+
+    const collectionName = kind === "modification" ? "modifications" : "reassessments";
+    const collection = Array.isArray(contract?.[collectionName]) ? contract[collectionName] : [];
+    const localEvent = collection.find(item => String(item?.id) === String(eventId));
+    if (!localEvent) return { valid: false, errors: [kind === "modification" ? "Modification bulunamadı." : "Reassessment bulunamadı."] };
+    const before = cloneModificationValue(contract);
+
+    let result;
+    try {
+      result = await loader.call(facade, contract, eventId);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [`Private ${kind} uygulanamadı: ${error?.message || error}`]
+      };
+    }
+    if (!result || typeof result !== "object") {
+      return { valid: false, errors: [`Private ${kind} geçersiz sonuç döndürdü.`] };
+    }
+    if (!result.valid) return result;
+
+    if (result.event && typeof result.event === "object") {
+      Object.keys(localEvent).forEach(key => delete localEvent[key]);
+      Object.assign(localEvent, cloneModificationValue(result.event));
+    }
+    const patch = result.contractPatch && typeof result.contractPatch === "object"
+      ? result.contractPatch
+      : {};
+    ["monthlyPayment", "endDate", "discountRate", "renewalOption", "terminationOption", "purchaseOption"]
+      .forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) contract[key] = patch[key];
+      });
+
+    saveContracts(contracts);
+    try {
+      // The apply endpoint is deliberately pure with respect to persistence;
+      // this write stores the returned APPLIED event and contract patch.
+      await persistContractToApi(contract, true);
+    } catch (error) {
+      Object.keys(contract).forEach(key => delete contract[key]);
+      Object.assign(contract, before);
+      saveContracts(contracts);
+      return {
+        valid: false,
+        errors: [`Backend'e uygulanmış ${kind} kaydı yazılamadı: ${error?.message || error}`]
+      };
+    }
+
+    const calculation = result.calculation && typeof result.calculation === "object"
+      ? result.calculation
+      : null;
+    if (calculation) {
+      const cacheKey = getCalculationCacheKey(contract);
+      PRIVATE_CALCULATION_CACHE.set(cacheKey, calculation);
+      PRIVATE_CALCULATION_ERRORS.delete(cacheKey);
+      setCachedCalculation(contract, calculation);
+    }
+
+    return {
+      valid: true,
+      private: true,
+      alreadyApplied: result.alreadyApplied === true,
+      event: localEvent,
+      [kind]: localEvent,
+      schedule: Array.isArray(result.schedule)
+        ? result.schedule
+        : (calculation?.schedule || [])
+    };
+  }
+
   // Synchronous read-only views (controls and legacy reporting panels) cannot
   // await the API. Once the page warm-up has populated the private cache,
   // they must read that result; API-primary never falls through to local math.
@@ -4096,6 +4182,10 @@ window.fetch = (input, init = {}) => {
       };
     }
 
+    if (isPrivateCalculationApiReady()) {
+      return applyPrivateChange("reassessment", contract, reassessmentIdValue);
+    }
+
     const snapshot = {
       endDate: contract.endDate,
       monthlyPayment: contract.monthlyPayment,
@@ -5812,6 +5902,10 @@ window.fetch = (input, init = {}) => {
         errors: ["Bu ekonomik modifikasyon daha önce uygulanmış (" + appliedDuplicate.id + ")."],
         duplicateId: appliedDuplicate.id
       };
+    }
+
+    if (isPrivateCalculationApiReady()) {
+      return applyPrivateChange("modification", contract, modificationIdValue);
     }
 
     const snapshot =

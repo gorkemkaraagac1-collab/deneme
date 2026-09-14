@@ -173,12 +173,40 @@
     return requestCalculation("/api/calculations/lease/reassessment", { contract, input }, options);
   }
 
+  async function applyModification(contract, modificationId, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (modificationId == null || String(modificationId).trim() === "") {
+      throw new TypeError("modificationId is required");
+    }
+    return requestCalculation("/api/calculations/lease/modification/apply", {
+      contract,
+      modificationId: String(modificationId)
+    }, options);
+  }
+
+  async function applyReassessment(contract, reassessmentId, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (reassessmentId == null || String(reassessmentId).trim() === "") {
+      throw new TypeError("reassessmentId is required");
+    }
+    return requestCalculation("/api/calculations/lease/reassessment/apply", {
+      contract,
+      reassessmentId: String(reassessmentId)
+    }, options);
+  }
+
   global.LeaseQantPrivateCalculation = Object.freeze({
     calculate,
     calculateMany,
     calculateTms29,
     calculateModificationPreview,
     calculateReassessmentPreview,
+    applyModification,
+    applyReassessment,
     apiBase: getApiBase,
     timeoutMs: DEFAULT_TIMEOUT_MS
   });
