@@ -35,6 +35,23 @@
 
   function normalizeCalculationResult(result) {
     if (!result || typeof result !== "object" || !Array.isArray(result.schedule)) return result;
+    function normalizeNestedDates(value) {
+      if (!value || typeof value !== "object") return value;
+      if (Array.isArray(value)) return value.map(normalizeNestedDates);
+      const normalized = { ...value };
+      ["date", "paymentDate", "openingDate", "closingDate"].forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(normalized, key)) {
+          normalized[key] = normalizeCalendarDate(normalized[key]);
+        }
+      });
+      Object.keys(normalized).forEach(key => {
+        if (normalized[key] && typeof normalized[key] === "object") {
+          normalized[key] = normalizeNestedDates(normalized[key]);
+        }
+      });
+      return normalized;
+    }
+
     return {
       ...result,
       schedule: result.schedule.map(row => {
@@ -56,7 +73,10 @@
           }
           return normalized;
         })
-        : []
+        : [],
+      specialFlows: result.specialFlows && typeof result.specialFlows === "object"
+        ? normalizeNestedDates(result.specialFlows)
+        : {}
     };
   }
 

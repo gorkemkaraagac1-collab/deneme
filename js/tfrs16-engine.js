@@ -13478,7 +13478,15 @@ ${renderPaymentScheduleFooterContainers()}
 
       if (!resultBox) return;
       try {
-        const result = calculateSaleAndLeaseback(input);
+        const privateResult = await (persist
+          ? (typeof refreshPrivateCalculationAfterMutation === "function"
+            ? refreshPrivateCalculationAfterMutation(contract)
+            : loadPrivateReadOnlyResult(contract))
+          : loadPrivateReadOnlyResult(contract));
+        const result = privateResult?.specialFlowsVersion === 1
+          && privateResult.specialFlows?.saleAndLeaseback
+          ? privateResult.specialFlows.saleAndLeaseback
+          : calculateSaleAndLeaseback(input);
         resultBox.innerHTML = renderSlbResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
@@ -13673,7 +13681,15 @@ ${renderPaymentScheduleFooterContainers()}
 
       if (!resultBox) return;
       try {
-        const result = calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        const privateResult = await (persist
+          ? (typeof refreshPrivateCalculationAfterMutation === "function"
+            ? refreshPrivateCalculationAfterMutation(contract)
+            : loadPrivateReadOnlyResult(contract))
+          : loadPrivateReadOnlyResult(contract));
+        const result = privateResult?.specialFlowsVersion === 1
+          && privateResult.specialFlows?.sublease
+          ? privateResult.specialFlows.sublease
+          : calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
         resultBox.innerHTML = renderSubleaseResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
