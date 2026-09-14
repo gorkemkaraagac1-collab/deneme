@@ -978,7 +978,7 @@ window.fetch = (input, init = {}) => {
     // cache before any KPI/table/detail consumer is allowed to render. This
     // prevents a first paint from touching the public calculation engine.
     if (isPrivateCalculationApiReady()) {
-      const hydration = await hydratePrivateCalculationCache(contracts);
+      const hydration = await ensurePrivateCalculationCache(contracts);
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
@@ -1287,6 +1287,28 @@ window.fetch = (input, init = {}) => {
       succeeded: results.filter(Boolean).length,
       failed: results.filter(value => !value).length
     };
+  }
+
+  // Keep page-level consumers from racing the initial portfolio warm-up.
+  // A report can be opened while the dashboard is still loading contracts;
+  // share one in-flight hydration instead of rendering a misleading
+  // PRIVATE_CALCULATION_NOT_READY error or issuing duplicate batch requests.
+  let privatePortfolioHydrationPromise = null;
+  function ensurePrivateCalculationCache(list) {
+    if (!isPrivateCalculationApiReady()) {
+      return Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
+    }
+    const items = Array.isArray(list) ? list : [];
+    if (!items.length) {
+      return Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
+    }
+    if (!privatePortfolioHydrationPromise) {
+      privatePortfolioHydrationPromise = hydratePrivateCalculationCache(items)
+        .finally(() => {
+          privatePortfolioHydrationPromise = null;
+        });
+    }
+    return privatePortfolioHydrationPromise;
   }
 
   // Read-only consumers can request the private result on demand when a
@@ -36395,6 +36417,8 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
+    let privateHydrationStarted = false;
+    let privateHydrationCompleted = false;
     const render = () => {
       // Bu sayfa aktifken drill-down/detay-toggle tıklamalarının
       // (v191FilterDetail vb.) DOĞRU ekranı (bu sayfayı) yenilemesi
@@ -36405,32 +36429,51 @@ const V26_FX_UI_PAGE_SIZE = 50;
       const effectivePeriodStart = new Date(effectivePeriodEnd.getFullYear(), 0, 1);
 
       let tabContentHtml = "";
-      try {
-        const prepared = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
-        if (v26FootnotesActiveTab === "asset") {
-          tabContentHtml = v191RenderAssetNoteHtml({
-            rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
-            rouByAssetClass: prepared.rouByAssetClass, rouByCurrency: prepared.rouByCurrency,
-            rouDetailColumns: prepared.rouDetailColumns, rouReport: prepared.rouReport,
-            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
-            tms29: prepared.tms29
-          });
-        } else if (v26FootnotesActiveTab === "liability") {
-          tabContentHtml = v191RenderLiabilityNoteHtml({
-            liabRows: prepared.liabRows, liabTotalsRow: prepared.liabTotalsRow,
-            liabByAssetClass: prepared.liabByAssetClass, liabByCurrency: prepared.liabByCurrency,
-            liabDetailColumns: prepared.liabDetailColumns, liabReport: prepared.liabReport,
-            periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
-            tms29: prepared.tms29
-          });
-        } else {
-          tabContentHtml = v191RenderLiquidityNoteHtml({
-            liquidityRows: prepared.liquidityRows, liquidityDisclosure: prepared.liquidityDisclosure,
-            effectivePeriodEnd
+      const privateResultsNeedHydration = isPrivateCalculationApiReady() &&
+        Array.isArray(contracts) && contracts.length > 0 &&
+        contracts.some(contract => !PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)));
+      if (privateResultsNeedHydration && !privateHydrationCompleted) {
+        if (!privateHydrationStarted) {
+          privateHydrationStarted = true;
+          ensurePrivateCalculationCache(contracts).then(() => {
+            privateHydrationCompleted = true;
+            render();
+          }).catch(() => {
+            // The cache loader records per-contract errors; render the normal
+            // fail-closed message below after the one allowed retry settles.
+            privateHydrationCompleted = true;
+            render();
           });
         }
-      } catch (error) {
-        tabContentHtml = `<div style="color:#991b1b;padding:12px 0;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
+        tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private hesaplama sonuçları yükleniyor...</div>`;
+      } else {
+        try {
+          const prepared = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
+          if (v26FootnotesActiveTab === "asset") {
+            tabContentHtml = v191RenderAssetNoteHtml({
+              rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
+              rouByAssetClass: prepared.rouByAssetClass, rouByCurrency: prepared.rouByCurrency,
+              rouDetailColumns: prepared.rouDetailColumns, rouReport: prepared.rouReport,
+              periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
+              tms29: prepared.tms29
+            });
+          } else if (v26FootnotesActiveTab === "liability") {
+            tabContentHtml = v191RenderLiabilityNoteHtml({
+              liabRows: prepared.liabRows, liabTotalsRow: prepared.liabTotalsRow,
+              liabByAssetClass: prepared.liabByAssetClass, liabByCurrency: prepared.liabByCurrency,
+              liabDetailColumns: prepared.liabDetailColumns, liabReport: prepared.liabReport,
+              periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
+              tms29: prepared.tms29
+            });
+          } else {
+            tabContentHtml = v191RenderLiquidityNoteHtml({
+              liquidityRows: prepared.liquidityRows, liquidityDisclosure: prepared.liquidityDisclosure,
+              effectivePeriodEnd
+            });
+          }
+        } catch (error) {
+          tabContentHtml = `<div style="color:#991b1b;padding:12px 0;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
+        }
       }
 
       const tabBtn = (key, label) => {
