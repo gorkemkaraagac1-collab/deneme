@@ -8409,6 +8409,11 @@ window.fetch = (input, init = {}) => {
    * bir modification varsa MODIFIED_SCHEDULE; hiçbiri yoksa ham
    * LEASE_SCHEDULE (calculateLeaseEngine).
    *
+   * Private API parity gate: unchanged contracts use the warmed private
+   * schedule, and event-aware contracts use it only when the backend marks
+   * the versioned event-aware envelope as complete. Until then each event
+   * type keeps its established local fallback.
+   *
    * FAZ 4.1 DÜZELTMESİ (GC-18, Görkem onayı — bkz. PROJECT_CONTEXT.md
    * bölüm 33 ve 37): Bu fonksiyon önceden yalnızca `cfoBuildSchedule`
    * (CFO Dashboard katmanı) içinde vardı; `getScheduleAsOfReportingDate`
@@ -8426,26 +8431,34 @@ window.fetch = (input, init = {}) => {
       const latestReassessment = typeof getCurrentReassessmentState === "function"
         ? getCurrentReassessmentState(contract)
         : null;
+      const latestModification = typeof getCurrentAppliedModification === "function"
+        ? getCurrentAppliedModification(contract)
+        : null;
+      const expectedPrivateSource = latestReassessment?.status === "APPLIED"
+        ? "REASSESSED_SCHEDULE"
+        : latestModification
+          ? "MODIFIED_SCHEDULE"
+          : "PRIVATE_SCHEDULE";
+      const privateResult = getPrivateCachedCalculationResult(contract);
+      if (Array.isArray(privateResult?.schedule) && privateResult.schedule.length) {
+        const eventAwarePrivate = privateResult.eventAwareScheduleVersion === 1
+          && privateResult.scheduleSource === expectedPrivateSource;
+        const unchangedPrivate = expectedPrivateSource === "PRIVATE_SCHEDULE";
+        if (eventAwarePrivate || unchangedPrivate) {
+          return {
+            schedule: privateResult.schedule,
+            engine: privateResult,
+            source: privateResult.scheduleSource || expectedPrivateSource
+          };
+        }
+      }
       if (latestReassessment?.status === "APPLIED" && typeof buildReassessedSchedule === "function") {
           const reassessed = buildReassessedSchedule(contract, latestReassessment);
           if (Array.isArray(reassessed) && reassessed.length) return { schedule: reassessed, engine: null, source: "REASSESSED_SCHEDULE" };
       }
-      const latestModification = typeof getCurrentAppliedModification === "function"
-        ? getCurrentAppliedModification(contract)
-        : null;
       if (latestModification && typeof buildModifiedSchedule === "function") {
           const modified = buildModifiedSchedule(contract, latestModification);
           if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
-      }
-      // Once the private API warm-up has completed, reporting and database
-      // read models should consume its schedule directly for unchanged
-      // contracts. Event-aware contracts stay on the established local
-      // modification/reassessment chain until their private parity is closed.
-      if (latestReassessment?.status !== "APPLIED" && !latestModification) {
-        const privateResult = getPrivateCachedCalculationResult(contract);
-        if (Array.isArray(privateResult?.schedule) && privateResult.schedule.length) {
-          return { schedule: privateResult.schedule, engine: privateResult, source: "PRIVATE_SCHEDULE" };
-        }
       }
       const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
       return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
