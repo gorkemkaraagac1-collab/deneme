@@ -41,6 +41,14 @@
     return results.map(copyResult);
   }
 
+  async function loadTms29(contract, reportingPeriod, periodStart, options) {
+    const value = adapter();
+    if (typeof value.calculateTms29 !== "function") {
+      throw new Error("TMS29 private calculation adapter is unavailable");
+    }
+    return copyResult(await value.calculateTms29(contract, reportingPeriod, periodStart, options));
+  }
+
   function project(result) {
     const value = copyResult(result);
     return {
@@ -65,5 +73,5 @@
     };
   }
 
-  global.LeaseQantPrivateTfrs16Facade = Object.freeze({ load, loadMany, project });
+  global.LeaseQantPrivateTfrs16Facade = Object.freeze({ load, loadMany, loadTms29, project });
 })(window);

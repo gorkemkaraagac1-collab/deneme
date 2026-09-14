@@ -137,5 +137,16 @@
     return results;
   }
 
-  global.LeaseQantPrivateCalculation = Object.freeze({ calculate, calculateMany, apiBase: getApiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
+  async function calculateTms29(contract, reportingPeriod, periodStart, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    return requestCalculation("/api/calculations/lease/tms29", {
+      contract,
+      reportingPeriod,
+      periodStart: periodStart || null
+    }, options);
+  }
+
+  global.LeaseQantPrivateCalculation = Object.freeze({ calculate, calculateMany, calculateTms29, apiBase: getApiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
 })(window);
