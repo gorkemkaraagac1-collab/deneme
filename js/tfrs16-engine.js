@@ -13951,13 +13951,18 @@ ${renderPaymentScheduleFooterContainers()}
              🔒 ${escapeHtml(lockBannerCheck.message)}
            </div>`
         : "";
-      const calculationSourceHtml = calculationSource === "private-api"
-        ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
-        : calculationSource === "local-fallback"
-          ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:12px;font-weight:700;">⚠️ Private API yanıt vermedi; yerel fallback sonucu gösteriliyor.</div>`
-          : calculationSource === "local-warming"
-            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API hazırlanıyor; geçici olarak yerel sonuç gösteriliyor.</div>`
-            : "";
+      // Hesaplama kaynağı yalnızca gerçek ADMIN oturumunda gösterilir.
+      // Kullanıcıya motorun nerede çalıştığına dair iç mimari bilgisi açılmaz;
+      // admin ise kontrollü rollout/fallback durumunu teşhis edebilir.
+      const calculationSourceHtml = isAdminApprovalGranted()
+        ? calculationSource === "private-api"
+          ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
+          : calculationSource === "local-fallback"
+            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:12px;font-weight:700;">⚠️ Private API yanıt vermedi; yerel fallback sonucu gösteriliyor.</div>`
+            : calculationSource === "local-warming"
+              ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API hazırlanıyor; geçici olarak yerel sonuç gösteriliyor.</div>`
+              : ""
+        : "";
 
       content.innerHTML = `
         ${v26StdHtml}
