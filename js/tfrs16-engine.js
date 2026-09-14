@@ -959,9 +959,10 @@ window.fetch = (input, init = {}) => {
     updateKPIs();
     renderTable();
 
-    // The API-primary path is opt-in for the first rollout. It runs in the
-    // background so opening the portfolio never waits on a remote calculation.
-    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true) {
+    // API-primary runs after the authenticated session is hydrated. It stays
+    // in the background so opening the portfolio never waits on a remote
+    // calculation; local results remain the immediate and error fallback.
+    if (isPrivateCalculationApiReady()) {
       hydratePrivateCalculationCache(contracts).then(() => {
         updateKPIs();
         renderTable();
@@ -1190,6 +1191,7 @@ window.fetch = (input, init = {}) => {
 
   function isPrivateCalculationApiReady() {
     return window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+      Boolean(sessionUserRole) &&
       typeof window.LeaseQantPrivateCalculation?.calculate === "function";
   }
 
