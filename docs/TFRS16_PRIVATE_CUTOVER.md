@@ -34,11 +34,13 @@ turn a calculation fallback into a blank or partially rendered production page.
 
 The source-level scan reports 60 references to `calculateLeaseEngine(`. That
 number includes 13 comments, 10 built-in self-tests and the function
-declaration itself. The actionable production inventory is **36 call sites**;
-all 36 now pass through the private-gated wrapper in API-primary mode. The
-remaining work is to replace those 36 wrapper calls with dedicated UI readers
-and then remove the public implementation. This distinction is recorded so a
-comment or self-test cannot be mistaken for a live UI dependency.
+declaration itself. The actionable production inventory is **36 call sites**.
+All 36 now pass through the explicit `getPrivateCalculationForConsumer`
+boundary in API-primary mode, and the source gate reports zero direct
+production calls to the engine. The remaining work is structural: extract the
+UI-only functions from this bundle, prove every screen still reads the private
+envelope, and then remove the public implementation. This distinction is
+recorded so a comment or self-test cannot be mistaken for a live UI dependency.
 
 ## Release gate
 
