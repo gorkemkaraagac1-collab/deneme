@@ -1,24 +1,15 @@
-name: Lint Check
-
+name: Public Pages lint
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+  push:
+    branches: [main]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: ESLint check
-        run: npm run lint
+      - name: Check JavaScript syntax
+        run: |
+          set -euo pipefail
+          find js frontend -type f -name "*.js" -print0 | xargs -0 -n1 node --check

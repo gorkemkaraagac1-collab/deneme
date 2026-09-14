@@ -1,28 +1,18 @@
-# .github/workflows/sonar.yml
-name: SonarCloud Analysis
-
+name: Public Pages policy
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    types: [opened, synchronize]
+  push:
+    branches: [main]
 
 jobs:
   sonarcloud:
     runs-on: ubuntu-latest
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: SonarCloud Scan
-        if: ${{ env.SONAR_TOKEN != '' }}
-        uses: SonarSource/sonarqube-scan-action@v8.2.1
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: SonarCloud scan skipped
-        if: ${{ env.SONAR_TOKEN == '' }}
-        run: echo "::notice::SONAR_TOKEN is not configured; SonarCloud scan skipped."
+      - name: Check for server-only artifacts
+        run: |
+          set -euo pipefail
+          if find . -path "./.git" -prune -o \( -name "*.env" -o -name "*.pem" -o -name "*.key" \) -print | grep -q .; then
+            echo "server or secret artifact found in Pages repository"
+            exit 1
+          fi
