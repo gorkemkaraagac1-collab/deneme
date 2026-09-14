@@ -1313,6 +1313,16 @@ window.fetch = (input, init = {}) => {
     return PRIVATE_CALCULATION_INFLIGHT.get(key);
   }
 
+  // Synchronous read-only views (controls and legacy reporting panels) cannot
+  // await the API. Once the page warm-up has populated the private cache,
+  // they must read that result before considering the local engine fallback.
+  // Keeping this lookup in one helper makes the remaining synchronous
+  // consumers auditable during the final engine-removal gate.
+  function getPrivateCachedCalculationResult(contract) {
+    if (!contract || !isPrivateCalculationApiReady()) return null;
+    return PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract)) || null;
+  }
+
   // Mutations invalidate the calculation cache. Warm the new private result
   // before redrawing the host view so modification/reassessment screens do
   // not briefly show a stale local calculation after a successful write.
@@ -17761,6 +17771,11 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlSchedule(contract) {
     try {
+      const privateResult = getPrivateCachedCalculationResult(contract);
+      if (Array.isArray(privateResult?.schedule) && privateResult.schedule.length) {
+        return privateResult.schedule;
+      }
+
       if (typeof getReassessmentBaseSchedule === "function") {
         const resolved = getReassessmentBaseSchedule(contract);
         if (Array.isArray(resolved) && resolved.length) return resolved;
@@ -25082,7 +25097,14 @@ ${renderPaymentScheduleFooterContainers()}
     if (!selectedContractId) return `<div class="empty-state"><h3>Sözleşme seçilmedi</h3><p>Payment Schedule, Journal ve Audit Trail için önce bir sözleşme detayını açın.</p></div>`;
     const contract = contracts.find(c => c.id === selectedContractId);
     if (!contract) return `<div class="empty-state"><h3>Sözleşme bulunamadı</h3><p>Seçili sözleşme artık portföyde mevcut değil.</p></div>`;
-    const schedule = typeof cfoBuildSchedule === "function" ? (cfoBuildSchedule(contract)?.schedule || []) : (typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : []);
+    const privateResult = typeof getPrivateCachedCalculationResult === "function"
+      ? getPrivateCachedCalculationResult(contract)
+      : null;
+    const schedule = Array.isArray(privateResult?.schedule) && privateResult.schedule.length
+      ? privateResult.schedule
+      : typeof cfoBuildSchedule === "function"
+        ? (cfoBuildSchedule(contract)?.schedule || [])
+        : (typeof calculateLeaseEngine === "function" ? (calculateLeaseEngine(contract)?.schedule || []) : []);
     const journals = typeof getJournalSummaryReport === "function" ? (getJournalSummaryReport({ contractId: contract.id })?.rows || []) : [];
     const auditReport = typeof getAuditTrailReport === "function" ? getAuditTrailReport({ contractId: contract.id }) : null;
     const audit = Array.isArray(auditReport)
