@@ -50,10 +50,7 @@
     };
   }
 
-  async function calculate(contract, options) {
-    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
-      throw new TypeError("contract must be an object");
-    }
+  async function requestCalculation(path, payload, options) {
     const config = options || {};
     const timeoutMs = Number.isFinite(config.timeoutMs) ? Math.max(1000, config.timeoutMs) : DEFAULT_TIMEOUT_MS;
     const controller = typeof AbortController === "function" ? new AbortController() : null;
@@ -62,8 +59,8 @@
     const token = getBearerToken();
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     try {
-      const response = await global.fetch(getApiBase() + "/api/calculations/lease", {
-        method: "POST", credentials: "include", headers, body: JSON.stringify({ contract }),
+      const response = await global.fetch(getApiBase() + path, {
+        method: "POST", credentials: "include", headers, body: JSON.stringify(payload),
         signal: controller ? controller.signal : undefined,
       });
       const text = await response.text();
@@ -85,5 +82,30 @@
     }
   }
 
-  global.LeaseQantPrivateCalculation = Object.freeze({ calculate, apiBase: getApiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
+  async function calculate(contract, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    return requestCalculation("/api/calculations/lease", { contract }, options);
+  }
+
+  // The backend accepts up to 20 contracts per batch. Split larger lists
+  // here so the UI has no artificial contract-count limit.
+  async function calculateMany(contracts, options) {
+    if (!Array.isArray(contracts)) throw new TypeError("contracts must be an array");
+    if (contracts.length === 0) return [];
+    const results = [];
+    for (let offset = 0; offset < contracts.length; offset += 20) {
+      const chunk = contracts.slice(offset, offset + 20);
+      if (chunk.some(contract => !contract || typeof contract !== "object" || Array.isArray(contract))) {
+        throw new TypeError("contracts must contain only objects");
+      }
+      const response = await requestCalculation("/api/calculations/lease/batch", { contracts: chunk }, options);
+      if (!Array.isArray(response)) throw new Error("Toplu hesaplama API boş sonuç döndürdü");
+      results.push(...response);
+    }
+    return results;
+  }
+
+  global.LeaseQantPrivateCalculation = Object.freeze({ calculate, calculateMany, apiBase: getApiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
 })(window);
