@@ -153,5 +153,33 @@
     }, options);
   }
 
-  global.LeaseQantPrivateCalculation = Object.freeze({ calculate, calculateMany, calculateTms29, apiBase: getApiBase, timeoutMs: DEFAULT_TIMEOUT_MS });
+  async function calculateModificationPreview(contract, input, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new TypeError("input must be an object");
+    }
+    return requestCalculation("/api/calculations/lease/modification", { contract, input }, options);
+  }
+
+  async function calculateReassessmentPreview(contract, input, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new TypeError("input must be an object");
+    }
+    return requestCalculation("/api/calculations/lease/reassessment", { contract, input }, options);
+  }
+
+  global.LeaseQantPrivateCalculation = Object.freeze({
+    calculate,
+    calculateMany,
+    calculateTms29,
+    calculateModificationPreview,
+    calculateReassessmentPreview,
+    apiBase: getApiBase,
+    timeoutMs: DEFAULT_TIMEOUT_MS
+  });
 })(window);

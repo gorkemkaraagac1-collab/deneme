@@ -1312,6 +1312,26 @@ window.fetch = (input, init = {}) => {
     return PRIVATE_CALCULATION_INFLIGHT.get(key);
   }
 
+  async function loadPrivateChangePreview(kind, contract, input) {
+    if (!isPrivateCalculationApiReady()) return null;
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    const loader = kind === "modification"
+      ? facade?.loadModificationPreview
+      : facade?.loadReassessmentPreview;
+    if (typeof loader !== "function") {
+      const error = new Error(`Private ${kind} preview is unavailable`);
+      error.code = "PRIVATE_CHANGE_PREVIEW_UNAVAILABLE";
+      throw error;
+    }
+    const result = await loader.call(facade, contract, input);
+    if (!result || typeof result !== "object") {
+      const error = new Error(`Private ${kind} preview returned an invalid result`);
+      error.code = "PRIVATE_CHANGE_PREVIEW_INVALID";
+      throw error;
+    }
+    return result;
+  }
+
   // Synchronous read-only views (controls and legacy reporting panels) cannot
   // await the API. Once the page warm-up has populated the private cache,
   // they must read that result; API-primary never falls through to local math.
@@ -3975,7 +3995,17 @@ window.fetch = (input, init = {}) => {
     if (lockCheck.locked) {
       return { valid: false, errors: [lockCheck.message] };
     }
-    const result = calculateReassessment(contract, input);
+    let result;
+    try {
+      result = isPrivateCalculationApiReady()
+        ? await loadPrivateChangePreview("reassessment", contract, input)
+        : calculateReassessment(contract, input);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [`Private reassessment önizlemesi alınamadı: ${error?.message || error}`]
+      };
+    }
     if (!result.valid) return result;
 
     // Aynı ekonomik olayı tekrar tekrar oluşturmaya izin verme. Özellikle
@@ -4260,12 +4290,23 @@ window.fetch = (input, init = {}) => {
       return { valid: false, errors: ["APPLIED reassessment güncellenemez."] };
     }
 
-    const result = calculateReassessment(contract, {
+    const previewInput = {
       ...input,
       id: existing.id,
       createdAt: existing.createdAt,
       status: existing.status
-    });
+    };
+    let result;
+    try {
+      result = isPrivateCalculationApiReady()
+        ? await loadPrivateChangePreview("reassessment", contract, previewInput)
+        : calculateReassessment(contract, previewInput);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [`Private reassessment önizlemesi alınamadı: ${error?.message || error}`]
+      };
+    }
 
     if (!result.valid) return result;
 
@@ -5648,11 +5689,17 @@ window.fetch = (input, init = {}) => {
       return { valid: false, errors: [lockCheck.message] };
     }
 
-    const result =
-      calculateModification(
-        contract,
-        input
-      );
+    let result;
+    try {
+      result = isPrivateCalculationApiReady()
+        ? await loadPrivateChangePreview("modification", contract, input)
+        : calculateModification(contract, input);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [`Private modifikasyon önizlemesi alınamadı: ${error?.message || error}`]
+      };
+    }
 
     if (!result.valid) {
       return result;
@@ -6001,16 +6048,23 @@ window.fetch = (input, init = {}) => {
       };
     }
 
-    const result =
-      calculateModification(
-        contract,
-        {
-          ...input,
-          id: existing.id,
-          createdAt: existing.createdAt,
-          status: existing.status
-        }
-      );
+    const previewInput = {
+      ...input,
+      id: existing.id,
+      createdAt: existing.createdAt,
+      status: existing.status
+    };
+    let result;
+    try {
+      result = isPrivateCalculationApiReady()
+        ? await loadPrivateChangePreview("modification", contract, previewInput)
+        : calculateModification(contract, previewInput);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [`Private modifikasyon önizlemesi alınamadı: ${error?.message || error}`]
+      };
+    }
 
     if (!result.valid) {
       return result;
