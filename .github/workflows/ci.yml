@@ -1,0 +1,16 @@
+name: Public Pages checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Pages surface
+        run: |
+          set -euo pipefail
+          for f in index.html tfrs16.html js/shell.js js/admin.js js/tfrs16-engine.js frontend/admin/index.html; do test -f "$f"; done
+          for p in backend test package.json package-lock.json cloudbuild.yaml; do test ! -e "$p"; done
