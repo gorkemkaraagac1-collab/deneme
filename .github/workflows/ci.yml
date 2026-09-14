@@ -14,3 +14,5 @@ jobs:
           set -euo pipefail
           for f in index.html tfrs16.html js/shell.js js/admin.js js/tfrs16-engine.js frontend/admin/index.html; do test -f "$f"; done
           for p in backend test package.json package-lock.json cloudbuild.yaml; do test ! -e "$p"; done
+      - name: Verify TFRS16 private cutover gate
+        run: node scripts/check-tfrs16-cutover.js
