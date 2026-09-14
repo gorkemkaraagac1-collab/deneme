@@ -44,6 +44,11 @@ recorded so a comment or self-test cannot be mistaken for a live UI dependency.
 
 ## Release gate
 
+The exact 36-row production inventory is maintained in
+`docs/TFRS16_PRIVATE_CONSUMER_INVENTORY.md`. The inventory is regenerated from
+the engine source when the migration slice changes; it is the checklist for
+the remaining structural extraction and screen-level smoke evidence.
+
 Every frontend pull request and `main` push runs:
 
 ```text
