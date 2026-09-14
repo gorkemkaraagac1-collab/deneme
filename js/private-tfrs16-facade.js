@@ -20,7 +20,14 @@
         : [],
       periodEffects: Array.isArray(result.periodEffects)
         ? result.periodEffects.map(effect => effect && typeof effect === "object" ? { ...effect } : effect)
-        : []
+        : [],
+      specialFlowsVersion: result.specialFlowsVersion,
+      specialFlows: result.specialFlows && typeof result.specialFlows === "object"
+        ? Object.fromEntries(Object.entries(result.specialFlows).map(([key, value]) => [
+          key,
+          value && typeof value === "object" ? { ...value } : value
+        ]))
+        : {}
     };
   }
 
@@ -52,7 +59,9 @@
       exempt: value.exempt,
       schedule: value.schedule,
       periodEffectsVersion: value.periodEffectsVersion,
-      periodEffects: value.periodEffects
+      periodEffects: value.periodEffects,
+      specialFlowsVersion: value.specialFlowsVersion,
+      specialFlows: value.specialFlows
     };
   }
 
