@@ -162,7 +162,11 @@
         ...comparison
       });
       if (!comparison.matched && global.LEASEQANT_CALCULATION_SHADOW_DEBUG === true) {
-        console.warn("LeaseQant hesaplama gölge karşılaştırması uyuşmuyor", report);
+        const mismatches = Object.entries(comparison.fields)
+          .filter(([, field]) => field && field.matched === false)
+          .map(([field, detail]) => field + "=" + String(detail.local) + "|" + String(detail.private))
+          .join(", ");
+        console.warn("LeaseQant hesaplama gölge karşılaştırması uyuşmuyor: " + mismatches);
       }
       return report;
     } catch (error) {
