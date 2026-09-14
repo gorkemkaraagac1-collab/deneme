@@ -8423,18 +8423,28 @@ window.fetch = (input, init = {}) => {
    */
   function resolveContractScheduleSource(contract) {
     try {
-      if (typeof getCurrentReassessmentState === "function" && typeof buildReassessedSchedule === "function") {
-        const latest = getCurrentReassessmentState(contract);
-        if (latest && latest.status === "APPLIED") {
-          const reassessed = buildReassessedSchedule(contract, latest);
+      const latestReassessment = typeof getCurrentReassessmentState === "function"
+        ? getCurrentReassessmentState(contract)
+        : null;
+      if (latestReassessment?.status === "APPLIED" && typeof buildReassessedSchedule === "function") {
+          const reassessed = buildReassessedSchedule(contract, latestReassessment);
           if (Array.isArray(reassessed) && reassessed.length) return { schedule: reassessed, engine: null, source: "REASSESSED_SCHEDULE" };
-        }
       }
-      if (typeof getCurrentAppliedModification === "function" && typeof buildModifiedSchedule === "function") {
-        const latestModification = getCurrentAppliedModification(contract);
-        if (latestModification) {
+      const latestModification = typeof getCurrentAppliedModification === "function"
+        ? getCurrentAppliedModification(contract)
+        : null;
+      if (latestModification && typeof buildModifiedSchedule === "function") {
           const modified = buildModifiedSchedule(contract, latestModification);
           if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
+      }
+      // Once the private API warm-up has completed, reporting and database
+      // read models should consume its schedule directly for unchanged
+      // contracts. Event-aware contracts stay on the established local
+      // modification/reassessment chain until their private parity is closed.
+      if (latestReassessment?.status !== "APPLIED" && !latestModification) {
+        const privateResult = getPrivateCachedCalculationResult(contract);
+        if (Array.isArray(privateResult?.schedule) && privateResult.schedule.length) {
+          return { schedule: privateResult.schedule, engine: privateResult, source: "PRIVATE_SCHEDULE" };
         }
       }
       const engine = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(contract) : null;
