@@ -20,6 +20,36 @@
     return error;
   }
 
+  // The backend serializes schedule dates as JSON strings, while the public
+  // UI's reporting and journal helpers intentionally operate on Date objects.
+  // Rebuild date-only values in local calendar time so Istanbul (and other
+  // non-UTC zones) cannot shift a period to the previous day.
+  function normalizeCalendarDate(value) {
+    if (value instanceof Date) return value;
+    if (typeof value !== "string") return value;
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return value;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return Number.isNaN(date.getTime()) ? value : date;
+  }
+
+  function normalizeCalculationResult(result) {
+    if (!result || typeof result !== "object" || !Array.isArray(result.schedule)) return result;
+    return {
+      ...result,
+      schedule: result.schedule.map(row => {
+        if (!row || typeof row !== "object") return row;
+        const normalized = { ...row };
+        ["date", "paymentDate", "openingDate", "closingDate"].forEach(key => {
+          if (Object.prototype.hasOwnProperty.call(normalized, key)) {
+            normalized[key] = normalizeCalendarDate(normalized[key]);
+          }
+        });
+        return normalized;
+      })
+    };
+  }
+
   async function calculate(contract, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -41,7 +71,8 @@
       try { body = text ? JSON.parse(text) : null; } catch (_) { body = text; }
       if (!response.ok) throw createRequestError(response.status, body);
       if (body && body.success === false) throw createRequestError(response.status, body);
-      return body && Object.prototype.hasOwnProperty.call(body, "data") ? body.data : body;
+      const result = body && Object.prototype.hasOwnProperty.call(body, "data") ? body.data : body;
+      return normalizeCalculationResult(result);
     } catch (error) {
       if (error && error.name === "AbortError") {
         const timeoutError = new Error("Hesaplama API zaman aşımına uğradı");
