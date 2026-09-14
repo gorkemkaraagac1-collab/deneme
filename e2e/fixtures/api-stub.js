@@ -187,7 +187,34 @@ async function installApiStub(page, options = {}) {
         data: {
           success: true,
           ui: { results, errors: [], total: results.length, calculated: results.length, failed: 0 },
-          actuarial: { success: true, results: [], summary: { personelSayisi: results.length } }
+          actuarial: { success: true, results: [], summary: { personelSayisi: results.length } },
+          view: {
+            summary: {
+              personelSayisi: results.length,
+              toplamDBO: results.length * 1200,
+              toplamCariHizmetMaliyeti: results.length * 100,
+              toplamFaizMaliyeti: results.length * 30,
+              toplamFayda: 0,
+              ortalamaYas: 40,
+              ortalamaHizmet: 5,
+              tavanUygulananPersonel: 0
+            },
+            controls: { durum: "TEMİZ", toplamKontrol: 0, kontroller: [] },
+            risk: results.map((result) => ({ personelId: result.personelId, genelRisk: "DÜŞÜK", skor: 0 })),
+            sensitivity: [{ ad: "Baz Senaryo", dbo: results.length * 1200, fark: 0, farkYuzde: 0 }],
+            report: {
+              kpi: {
+                personelSayisi: results.length,
+                toplamDBO: results.length * 1200,
+                toplamCSC: results.length * 100,
+                toplamNetInterest: results.length * 30,
+                toplamPnL: results.length * 130,
+                toplamOCI: 0
+              },
+              dboRollForward: { reconciled: true },
+              toplam: { dbo: results.length * 1200, closingPlanAsset: 0, netDefinedBenefitLiability: results.length * 1200 }
+            }
+          }
         }
       }));
     }

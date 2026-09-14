@@ -3407,6 +3407,9 @@ let dboChart = null;
 
 let costChart = null;
 
+// API hesaplamasından gelen rapor ve analiz görünümü. Yerel geri dönüşte null kalır.
+let privateView = null;
+
 
 
 /* ================================================================
@@ -3708,6 +3711,7 @@ async function hesapla() {
                     throw new Error("TMS 19 private API geçerli bir sonuç döndürmedi");
                 }
                 topluSonuc = privateEnvelope.ui || privateEnvelope.actuarial;
+                privateView = privateEnvelope.view || null;
                 hesaplamaKaynak = "private-api";
             } catch (apiError) {
                 // API kesintisi ekranı kullanılmaz hâle getirmesin; yalnızca
@@ -3717,6 +3721,7 @@ async function hesapla() {
                     personeller,
                     varsayimlar
                 );
+                privateView = null;
                 hesaplamaKaynak = "local-fallback";
             }
         } else {
@@ -3724,6 +3729,7 @@ async function hesapla() {
                 personeller,
                 varsayimlar
             );
+            privateView = null;
         }
 
         window.LEASEQANT_TMS19_CALCULATION_SOURCE = hesaplamaKaynak;
@@ -3732,6 +3738,7 @@ async function hesapla() {
             topluSonuc.results;
 
         portfoyOzeti =
+            privateView?.summary ||
             TMS19.ozetOlustur(
                 hesaplamaSonuclari
             );
@@ -4436,7 +4443,8 @@ function tms19RaporGoster() {
             varsayimlariAl();
 
         tms19SonRapor =
-            TMS19.faz7RaporOlustur
+            privateView?.report ||
+            (TMS19.faz7RaporOlustur
                 ? TMS19.faz7RaporOlustur(
                     personeller,
                     varsayimlar
@@ -4444,7 +4452,7 @@ function tms19RaporGoster() {
                 : TMS19.tms19RaporOlustur(
                     personeller,
                     varsayimlar
-                );
+                ));
 
         tms19RaporRender(
             tms19SonRapor
@@ -4704,8 +4712,9 @@ function tms19JsonIndir() {
 
     if (!tms19SonRapor) return;
 
-    const json =
-        TMS19.tms19RaporJson(
+    const json = privateView?.report
+        ? JSON.stringify(privateView.report, null, 2)
+        : TMS19.tms19RaporJson(
             personeller,
             varsayimlariAl()
         );
@@ -4789,6 +4798,7 @@ function renderKontroller() {
 
 
     const kontrol =
+        privateView?.controls ||
         TMS19.kontrolMotoru(
             hesaplamaSonuclari
         );
@@ -4960,6 +4970,7 @@ function renderRisk() {
 
 
     const riskler =
+        (privateView?.risk ||
         hesaplamaSonuclari
             .filter(
                 function (x) {
@@ -4977,7 +4988,7 @@ function renderRisk() {
                         x
                     );
                 }
-            );
+            )).filter(Boolean);
 
 
     const yuksek =
@@ -5148,6 +5159,7 @@ function renderSensitivity() {
 
 
     const senaryolar =
+        privateView?.sensitivity ||
         TMS19.senaryoMatrisi(
             personeller,
             varsayimlar
@@ -5585,6 +5597,7 @@ function updateEngineStatus() {
 
 
     const kontrol =
+        privateView?.controls ||
         TMS19.kontrolMotoru(
             hesaplamaSonuclari
         );

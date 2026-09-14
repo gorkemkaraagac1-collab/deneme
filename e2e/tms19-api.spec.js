@@ -11,6 +11,10 @@ test.describe("TMS19 private API geçişi", () => {
     expect(store.tms19Calculations).toHaveLength(1);
     expect(store.tms19Calculations[0].employees).toHaveLength(5);
     expect(await page.evaluate(() => window.LEASEQANT_TMS19_CALCULATION_SOURCE)).toBe("private-api");
+
+    await page.getByRole("button", { name: "Rapor" }).click();
+    await expect(page.locator("#tms19ReportSummary")).toContainText("Toplam DBO");
+    await expect(page.locator("#tms19RollForward")).toContainText("Reconciliation");
   });
 
   test("api=0 acil geri dönüşünde private endpoint çağrılmaz", async ({ page }) => {
