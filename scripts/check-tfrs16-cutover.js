@@ -47,6 +47,7 @@ const checks = [
   ["synchronous consumers have a private-cache lookup", /function getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["control schedule prefers the warmed private result", /function controlSchedule\(contract\)\s*\{[\s\S]{0,500}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["contract tools prefer the warmed private schedule", /function v191RenderContractTools\(\)[\s\S]{0,900}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
+  ["report schedule source prefers private result for unchanged contracts", /function resolveContractScheduleSource\(contract\)[\s\S]{0,1800}latestReassessment\?\.status !== "APPLIED"[\s\S]{0,500}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["modification consumer refreshes the private result after writes", /async function refreshPrivateCalculationAfterMutation\(contract\)/.test(engine) && /function initModificationEvents[\s\S]*refreshPrivateCalculationAfterMutation\(contract\)/.test(engine)],
   ["reassessment consumer refreshes the private result after writes", /async function refreshPrivateCalculationAfterMutation\(contract\)/.test(engine) && /function initReassessmentEvents[\s\S]*refreshPrivateCalculationAfterMutation\(contract\)/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
