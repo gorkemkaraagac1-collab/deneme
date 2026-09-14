@@ -1206,6 +1206,38 @@ window.fetch = (input, init = {}) => {
   async function hydratePrivateCalculationCache(list) {
     if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0 };
     const items = Array.isArray(list) ? list : [];
+
+    // Prefer the bounded batch endpoint for portfolio hydration. The adapter
+    // splits larger portfolios into chunks, so the UI never exposes a count
+    // limit while the backend keeps each request bounded.
+    if (typeof window.LeaseQantPrivateCalculation.calculateMany === "function" && items.length > 0) {
+      try {
+        const batchResults = await window.LeaseQantPrivateCalculation.calculateMany(items);
+        if (!Array.isArray(batchResults) || batchResults.length !== items.length) {
+          throw new Error("Toplu hesaplama API eksik sonuç döndürdü");
+        }
+        let succeeded = 0;
+        batchResults.forEach((result, index) => {
+          const key = getCalculationCacheKey(items[index]);
+          if (!result || typeof result !== "object") {
+            PRIVATE_CALCULATION_ERRORS.set(key, {
+              code: "CALCULATION_API_EMPTY_RESULT",
+              status: null,
+              message: "Hesaplama API boş sonuç döndürdü"
+            });
+            return;
+          }
+          PRIVATE_CALCULATION_CACHE.set(key, result);
+          PRIVATE_CALCULATION_ERRORS.delete(key);
+          succeeded += 1;
+        });
+        return { attempted: items.length, succeeded, failed: items.length - succeeded };
+      } catch (_) {
+        // Fall back to the proven single-request path if a batch is rejected
+        // or unavailable during a rolling backend deployment.
+      }
+    }
+
     const results = await Promise.all(items.map(async contract => {
       const key = getCalculationCacheKey(contract);
       try {

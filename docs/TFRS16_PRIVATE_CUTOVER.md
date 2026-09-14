@@ -18,6 +18,12 @@ areas still read the engine result synchronously or use engine helpers directly:
 - TMS29/inflation adjustment and audit/footnote helpers;
 - built-in self-tests and compatibility exports.
 
+The adapter now supports the authenticated `/api/calculations/lease/batch`
+endpoint and automatically splits portfolios into groups of 20. This removes
+any user-facing contract-count limit while the backend keeps each request
+bounded; the current hydration path uses it when available and falls back to
+single requests during a rolling deployment.
+
 Removing the file before these consumers use the private result envelope would
 turn a calculation fallback into a blank or partially rendered production page.
 
