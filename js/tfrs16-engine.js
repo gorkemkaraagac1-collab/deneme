@@ -218,6 +218,7 @@ window.fetch = (input, init = {}) => {
     return (
       localStorage.getItem("access_token") ||
       localStorage.getItem("gk_backend_jwt") ||
+      sessionStorage.getItem("gk_session_token") ||
       null
     );
   }
@@ -237,6 +238,10 @@ window.fetch = (input, init = {}) => {
     }
     if (localStorage.getItem("gk_backend_jwt") !== null) {
       localStorage.setItem("gk_backend_jwt", newToken);
+      wrote = true;
+    }
+    if (sessionStorage.getItem("gk_session_token") !== null) {
+      sessionStorage.setItem("gk_session_token", newToken);
       wrote = true;
     }
     if (!wrote) {
