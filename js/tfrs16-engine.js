@@ -1206,13 +1206,20 @@ window.fetch = (input, init = {}) => {
   async function hydratePrivateCalculationCache(list) {
     if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0 };
     const items = Array.isArray(list) ? list : [];
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    const batchLoader = typeof facade?.loadMany === "function"
+      ? facade.loadMany.bind(facade)
+      : window.LeaseQantPrivateCalculation.calculateMany;
+    const singleLoader = typeof facade?.load === "function"
+      ? facade.load.bind(facade)
+      : window.LeaseQantPrivateCalculation.calculate;
 
     // Prefer the bounded batch endpoint for portfolio hydration. The adapter
     // splits larger portfolios into chunks, so the UI never exposes a count
     // limit while the backend keeps each request bounded.
-    if (typeof window.LeaseQantPrivateCalculation.calculateMany === "function" && items.length > 0) {
+    if (typeof batchLoader === "function" && items.length > 0) {
       try {
-        const batchResults = await window.LeaseQantPrivateCalculation.calculateMany(items);
+        const batchResults = await batchLoader(items);
         if (!Array.isArray(batchResults) || batchResults.length !== items.length) {
           throw new Error("Toplu hesaplama API eksik sonuç döndürdü");
         }
@@ -1241,7 +1248,7 @@ window.fetch = (input, init = {}) => {
     const results = await Promise.all(items.map(async contract => {
       const key = getCalculationCacheKey(contract);
       try {
-        const result = await window.LeaseQantPrivateCalculation.calculate(contract);
+        const result = await singleLoader(contract);
         if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
         PRIVATE_CALCULATION_CACHE.set(key, result);
         PRIVATE_CALCULATION_ERRORS.delete(key);
