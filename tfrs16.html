@@ -424,16 +424,15 @@
  <script src="js/tfrs16-engine.js?v=20260914-244"></script>
   <script>
     // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
-    // Parametre yokken gölge karşılaştırması ve ek ağ çağrısı kapalıdır.
+    // Hesaplama API'si artık doğrulanmış oturumlarda varsayılan kaynaktır;
+    // ?api=0 yalnızca acil geri dönüş için yerel motoru seçer.
     (() => {
       const params = new URLSearchParams(window.location.search);
       if (params.get("shadow") === "1") {
         window.LEASEQANT_CALCULATION_SHADOW = true;
         window.LEASEQANT_CALCULATION_SHADOW_DEBUG = true;
       }
-      if (params.get("api") === "1") {
-        window.LEASEQANT_CALCULATION_API_PRIMARY = true;
-      }
+      window.LEASEQANT_CALCULATION_API_PRIMARY = params.get("api") !== "0";
     })();
   </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
