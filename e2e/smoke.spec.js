@@ -211,6 +211,21 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
+  test("acil geri dönüş modu API çağrısı yapmadan yerel planı korur", async ({ stubbedPage, apiStore }) => {
+    await stubbedPage.goto("/tfrs16.html?api=0");
+    await createContract(stubbedPage, {
+      ...CONTRACT,
+      contractId: "API-ROLLBACK-001"
+    });
+
+    // api=0 yalnızca geri dönüş kapısıdır: sözleşme kaydı normal API'ye
+    // gider, ancak hesaplama endpoint'i çağrılmamalıdır.
+    await expect(stubbedPage.locator("#detailTitle")).toContainText("API-ROLLBACK-001");
+    await expect(stubbedPage.locator("#scheduleTableBody tr")).toHaveCount(36);
+    expect(apiStore.calculations).toHaveLength(0);
+    expect(stubbedPage.consoleErrors).toEqual([]);
+  });
+
   test("dışa aktarma yeni pencerede rapor açar", async ({ stubbedPage }) => {
     await stubbedPage.goto("/tfrs16.html");
 
