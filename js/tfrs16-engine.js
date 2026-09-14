@@ -13280,19 +13280,40 @@ ${renderPaymentScheduleFooterContainers()}
       </div>
     `;
 
-    const runInflationPreview = () => {
+    const runInflationPreview = async () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
       const periodStart = document.getElementById("inflPeriodStart")?.value || "";
       const result = document.getElementById("inflPreviewResult");
       const validation = validateInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
       if (!result) return;
-      if (!validation.valid) {
-        result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
-        return;
+      let t = null;
+      let sourceLabel = "Yerel önizleme";
+      const facade = window.LeaseQantPrivateTfrs16Facade;
+      const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
+        && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
+        && (!periodStart || periodStart <= period);
+      if (basicPeriodValid && isPrivateCalculationApiReady() && typeof facade?.loadTms29 === "function") {
+        try {
+          const privateResult = await facade.loadTms29(contract, period, periodStart || null);
+          if (privateResult?.tms29Version === 1 && privateResult.totals) {
+            t = privateResult.totals;
+            sourceLabel = "Private API";
+          }
+        } catch (error) {
+          // Existing local validation/result remains the explicit fallback.
+          console.warn("Private TMS29 önizlemesi alınamadı; yerel sonuç gösteriliyor.", error);
+        }
       }
-      const t = validation.restatement.totals;
+      if (!t) {
+        if (!validation.valid) {
+          result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+          return;
+        }
+        t = validation.restatement.totals;
+      }
       const hasMonetary = Number.isFinite(t.liabilityMonetaryGainLoss);
       result.innerHTML = `
+        <span style="color:#64748b;font-size:11px;">Hesaplama kaynağı: ${sourceLabel}</span><br>
         Nominal ROU: ${formatCurrency(t.nominalROUClosing)} → Düzeltilmiş: ${formatCurrency(t.restatedROUClosing)} ·
         Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
         ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
@@ -13302,7 +13323,7 @@ ${renderPaymentScheduleFooterContainers()}
       `;
     };
 
-    document.getElementById("inflPreviewBtn")?.addEventListener("click", runInflationPreview);
+    document.getElementById("inflPreviewBtn")?.addEventListener("click", () => { runInflationPreview(); });
 
     // TMS 29 paneli açıldığında sözleşmenin kayıtlı raporlama tarihi varsa
     // tarihleri otomatik doldur ve önizlemeyi çalıştır. Tarih kayıtlı değilse
