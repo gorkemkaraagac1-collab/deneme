@@ -422,6 +422,17 @@
   <!-- TFRS 16 calculation & UI engine -->
   <script src="js/private-calculation-api.js?v=20260914-1"></script>
  <script src="js/tfrs16-engine.js?v=20260911-2215"></script>
+  <script>
+    // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
+    // Parametre yokken gölge karşılaştırması ve ek ağ çağrısı kapalıdır.
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("shadow") === "1") {
+        window.LEASEQANT_CALCULATION_SHADOW = true;
+        window.LEASEQANT_CALCULATION_SHADOW_DEBUG = true;
+      }
+    })();
+  </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
 </body>
 </html>
