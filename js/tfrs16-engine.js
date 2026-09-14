@@ -7006,21 +7006,24 @@ window.fetch = (input, init = {}) => {
    * @returns {Object} Hesaplama sonucu (bkz. calculateLeaseEngineImpl)
    */
   function calculateLeaseEngine(contract) {
-    // Once the async API warm-up has completed, all synchronous consumers of
-    // the engine transparently receive the private result. Before that point,
-    // or after an API error, the unchanged local engine remains the fallback.
+    // API-primary is a hard privacy boundary. Every production consumer that
+    // reaches this wrapper must use the warmed private result; silently
+    // falling back to the public calculation would keep the proprietary
+    // engine as a hidden dependency. The local implementation is available
+    // only through the explicit ?api=0 rollback path.
     if (isPrivateCalculationApiReady()) {
       const privateResult = PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract));
       if (privateResult) {
         setCachedCalculation(contract, privateResult);
         return privateResult;
       }
+      const error = new Error("Private hesaplama sonucu henüz hazır değil");
+      error.code = "PRIVATE_CALCULATION_NOT_READY";
+      throw error;
     }
 
-    // Önce yerel önbelleğe bak — kontrat değişmediyse tüm tabloyu
-    // yeniden hesaplamak yerine önceki sonucu döndür. Private sonuç
-    // yukarıda kontrol edildiği için API-primary geçişinde eski yerel
-    // sonuç yeni remote sonucu gölgeleyemez.
+    // Explicit rollback mode (?api=0): retain the local cache and engine so
+    // the previous Pages artifact remains a tested emergency path.
     const cached = getCachedCalculation(contract);
     if (cached) {
       return cached;

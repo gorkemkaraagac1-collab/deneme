@@ -1,14 +1,17 @@
 # TFRS16 private calculation cutover
 
 The production page uses the private calculation API as its primary source for
-authenticated sessions. The local `js/tfrs16-engine.js` file remains in the
-Pages artifact as a compatibility fallback while the rest of the TFRS16 view
-stack is migrated.
+authenticated sessions. API-primary is now a hard privacy boundary: a missing
+private result fails closed instead of silently invoking the public calculation
+implementation. The local `js/tfrs16-engine.js` implementation is reachable
+only through the explicit `?api=0` rollback path while the view layer is being
+separated.
 
 ## Why the public engine is still present
 
-The calculation wrapper is already private-first, but the following public UI
-areas still read the engine result synchronously or use engine helpers directly:
+The calculation wrapper is private-gated, but the following public UI areas
+still contain synchronous call sites that must be replaced with UI-only result
+readers before the file can be removed:
 
 - payment schedule and reporting-date accrual views;
 - KPI and detail panels;
@@ -26,6 +29,16 @@ single requests during a rolling deployment.
 
 Removing the file before these consumers use the private result envelope would
 turn a calculation fallback into a blank or partially rendered production page.
+
+## Consumer inventory (2026-09-14)
+
+The source-level scan reports 60 references to `calculateLeaseEngine(`. That
+number includes 13 comments, 10 built-in self-tests and the function
+declaration itself. The actionable production inventory is **36 call sites**;
+all 36 now pass through the private-gated wrapper in API-primary mode. The
+remaining work is to replace those 36 wrapper calls with dedicated UI readers
+and then remove the public implementation. This distinction is recorded so a
+comment or self-test cannot be mistaken for a live UI dependency.
 
 ## Release gate
 
