@@ -13954,7 +13954,7 @@ ${renderPaymentScheduleFooterContainers()}
       // Hesaplama kaynağı yalnızca gerçek ADMIN oturumunda gösterilir.
       // Kullanıcıya motorun nerede çalıştığına dair iç mimari bilgisi açılmaz;
       // admin ise kontrollü rollout/fallback durumunu teşhis edebilir.
-      const calculationSourceHtml = isAdminApprovalGranted()
+      const calculationSourceHtml = String(sessionUserRole || "").toUpperCase() === "ADMIN"
         ? calculationSource === "private-api"
           ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
           : calculationSource === "local-fallback"
