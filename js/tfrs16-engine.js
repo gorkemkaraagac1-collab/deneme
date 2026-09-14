@@ -13347,29 +13347,36 @@ ${renderPaymentScheduleFooterContainers()}
       const validation = validateInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
       if (!result) return;
       let t = null;
-      let sourceLabel = "Yerel önizleme";
+      let sourceLabel = "Private API";
       const facade = window.LeaseQantPrivateTfrs16Facade;
       const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
         && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
         && (!periodStart || periodStart <= period);
+      if (!validation.valid) {
+        result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+        return;
+      }
       if (basicPeriodValid && isPrivateCalculationApiReady() && typeof facade?.loadTms29 === "function") {
         try {
           const privateResult = await facade.loadTms29(contract, period, periodStart || null);
           if (privateResult?.tms29Version === 1 && privateResult.totals) {
             t = privateResult.totals;
-            sourceLabel = "Private API";
+          } else {
+            throw new Error("Private TMS 29 sonucu beklenen biçimde dönmedi");
           }
         } catch (error) {
-          // Existing local validation/result remains the explicit fallback.
-          console.warn("Private TMS29 önizlemesi alınamadı; yerel sonuç gösteriliyor.", error);
+          result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı. ${escapeHtml(error?.message || String(error))}</div>`;
+          return;
         }
-      }
-      if (!t) {
-        if (!validation.valid) {
-          result.innerHTML = `<div style="color:#991b1b;">${escapeHtml(validation.errors.join(" "))}</div>`;
+      } else {
+        // API-primary is the production path. Local TMS 29 math is available
+        // only for the explicit ?api=0 emergency rollback.
+        if (window.LEASEQANT_CALCULATION_API_PRIMARY === true) {
+          result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 API hazır değil; yerel hesaplama kapalı.</div>`;
           return;
         }
         t = validation.restatement.totals;
+        sourceLabel = "Yerel geri dönüş";
       }
       const hasMonetary = Number.isFinite(t.liabilityMonetaryGainLoss);
       result.innerHTML = `
@@ -13564,10 +13571,19 @@ ${renderPaymentScheduleFooterContainers()}
             ? refreshPrivateCalculationAfterMutation(contract)
             : loadPrivateReadOnlyResult(contract))
           : loadPrivateReadOnlyResult(contract));
-        const result = privateResult?.specialFlowsVersion === 1
-          && privateResult.specialFlows?.saleAndLeaseback
-          ? privateResult.specialFlows.saleAndLeaseback
-          : calculateSaleAndLeaseback(input);
+        let result;
+        if (isPrivateCalculationApiReady()) {
+          result = privateResult?.specialFlowsVersion === 1
+            ? privateResult.specialFlows?.saleAndLeaseback || null
+            : null;
+          if (!result) {
+            const unavailable = new Error("Private satış ve geri kiralama sonucu henüz hazır değil");
+            unavailable.code = "PRIVATE_SPECIAL_FLOW_NOT_READY";
+            throw unavailable;
+          }
+        } else {
+          result = calculateSaleAndLeaseback(input);
+        }
         resultBox.innerHTML = renderSlbResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
@@ -13767,10 +13783,19 @@ ${renderPaymentScheduleFooterContainers()}
             ? refreshPrivateCalculationAfterMutation(contract)
             : loadPrivateReadOnlyResult(contract))
           : loadPrivateReadOnlyResult(contract));
-        const result = privateResult?.specialFlowsVersion === 1
-          && privateResult.specialFlows?.sublease
-          ? privateResult.specialFlows.sublease
-          : calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        let result;
+        if (isPrivateCalculationApiReady()) {
+          result = privateResult?.specialFlowsVersion === 1
+            ? privateResult.specialFlows?.sublease || null
+            : null;
+          if (!result) {
+            const unavailable = new Error("Private alt kiralama sonucu henüz hazır değil");
+            unavailable.code = "PRIVATE_SPECIAL_FLOW_NOT_READY";
+            throw unavailable;
+          }
+        } else {
+          result = calculateSublease({ headLeaseContract: contract, subleaseContract, classification, rouAllocationRatio });
+        }
         resultBox.innerHTML = renderSubleaseResultHtml(result);
       } catch (error) {
         resultBox.innerHTML = `
