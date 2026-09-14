@@ -132,7 +132,12 @@
       }
       const response = await requestCalculation("/api/calculations/lease/batch", { contracts: chunk }, options);
       if (!Array.isArray(response)) throw new Error("Toplu hesaplama API boş sonuç döndürdü");
-      results.push(...response);
+      // A batch response is an array, so requestCalculation cannot apply the
+      // object-level normalizer to each item automatically. Normalize every
+      // result here before it reaches the portfolio cache; otherwise schedule
+      // dates remain JSON strings and reporting helpers that call getTime()
+      // fail for API-primary portfolio views.
+      results.push(...response.map(normalizeCalculationResult));
     }
     return results;
   }
