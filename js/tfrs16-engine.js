@@ -1292,12 +1292,19 @@ window.fetch = (input, init = {}) => {
   // Read-only consumers can request the private result on demand when a
   // user opens a detail tab before the portfolio warm-up has finished. The
   // existing local engine remains the explicit fallback for API failures.
-  async function loadPrivateReadOnlyResult(contract) {
+  async function loadPrivateReadOnlyResult(contract, options = {}) {
     if (!isPrivateCalculationApiReady()) return null;
     const key = getCalculationCacheKey(contract);
     const cached = PRIVATE_CALCULATION_CACHE.get(key);
     if (cached) return cached;
-    if (PRIVATE_CALCULATION_ERRORS.has(key)) return null;
+    // A hydration failure can be transient (for example, the session token
+    // may still be settling while the portfolio is loaded). Keep the normal
+    // fail-closed behavior for background consumers, but let an explicit
+    // detail click retry once instead of silently reusing that stale error.
+    if (PRIVATE_CALCULATION_ERRORS.has(key)) {
+      if (options.retryOnError !== true) return null;
+      PRIVATE_CALCULATION_ERRORS.delete(key);
+    }
 
     const facade = window.LeaseQantPrivateTfrs16Facade;
     const loader = typeof facade?.load === "function"
@@ -14705,7 +14712,7 @@ ${renderPaymentScheduleFooterContainers()}
       isPrivateCalculationApiReady() &&
       getCalculationSource(contract) !== "private-api";
     if (shouldRefreshFromPrivate) {
-      loadPrivateReadOnlyResult(contract).then(privateResult => {
+      loadPrivateReadOnlyResult(contract, { retryOnError: true }).then(privateResult => {
         if (privateResult && selectedContractId === contract.id) {
           openDetail(contract.id, {
             skipPrivateRefresh: true,
