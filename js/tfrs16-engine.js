@@ -920,6 +920,13 @@ window.fetch = (input, init = {}) => {
   const CALCULATION_CACHE = new Map();
   const CALCULATION_CACHE_MAX_SIZE = 200;
 
+  // Async API cutover cache. The public engine remains available as a
+  // controlled fallback while the private calculation API is warming up.
+  // Results are keyed with the same contract signature as the local cache so
+  // a mutation can never reuse a stale remote result.
+  const PRIVATE_CALCULATION_CACHE = new Map();
+  const PRIVATE_CALCULATION_ERRORS = new Map();
+
   // FAZ 4.1 — getCfoAggregateMetrics()'in reportingDate başına
   // önbelleği. CALCULATION_CACHE ile AYNI TDZ nedeniyle burada
   // (loadContracts()'tan önce) tanımlanmak zorunda. clearCalculationCache()
@@ -951,6 +958,20 @@ window.fetch = (input, init = {}) => {
     await refreshFxRateCacheFromBackend();
     updateKPIs();
     renderTable();
+
+    // The API-primary path is opt-in for the first rollout. It runs in the
+    // background so opening the portfolio never waits on a remote calculation.
+    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true) {
+      hydratePrivateCalculationCache(contracts).then(() => {
+        updateKPIs();
+        renderTable();
+        if (selectedContractId && contracts.some(item => item.id === selectedContractId)) {
+          openDetail(selectedContractId, { skipPrivateRefresh: true });
+        }
+      }).catch(error => {
+        console.warn("Private hesaplama API önbelleği doldurulamadı:", error);
+      });
+    }
   }
 
   if (document.readyState === "loading") {
@@ -1120,15 +1141,28 @@ window.fetch = (input, init = {}) => {
     return `${id}-${stamp}-${signature.length}-${hash}`;
   }
 
-  function clearCalculationCache(contractId) {
+  function clearCalculationCache(contractId, options) {
+    const preservePrivate = options?.preservePrivate === true;
     if (contractId) {
       for (const key of CALCULATION_CACHE.keys()) {
         if (key.startsWith(`${contractId}-`)) {
           CALCULATION_CACHE.delete(key);
         }
       }
+      if (!preservePrivate) {
+        for (const key of PRIVATE_CALCULATION_CACHE.keys()) {
+          if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_CACHE.delete(key);
+        }
+        for (const key of PRIVATE_CALCULATION_ERRORS.keys()) {
+          if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_ERRORS.delete(key);
+        }
+      }
     } else {
       CALCULATION_CACHE.clear();
+      if (!preservePrivate) {
+        PRIVATE_CALCULATION_CACHE.clear();
+        PRIVATE_CALCULATION_ERRORS.clear();
+      }
     }
     // FAZ 4.1 — aggregate önbellek reportingDate bazlı, TEK bir
     // kontratın değişmesi bile o tarihteki toplamları geçersiz kılar
@@ -1152,6 +1186,46 @@ window.fetch = (input, init = {}) => {
     }
 
     CALCULATION_CACHE.set(key, result);
+  }
+
+  function isPrivateCalculationApiReady() {
+    return window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+      typeof window.LeaseQantPrivateCalculation?.calculate === "function";
+  }
+
+  function getCalculationSource(contract) {
+    if (!isPrivateCalculationApiReady()) return "local";
+    const key = getCalculationCacheKey(contract);
+    if (PRIVATE_CALCULATION_CACHE.has(key)) return "private-api";
+    if (PRIVATE_CALCULATION_ERRORS.has(key)) return "local-fallback";
+    return "local-warming";
+  }
+
+  async function hydratePrivateCalculationCache(list) {
+    if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0 };
+    const items = Array.isArray(list) ? list : [];
+    const results = await Promise.all(items.map(async contract => {
+      const key = getCalculationCacheKey(contract);
+      try {
+        const result = await window.LeaseQantPrivateCalculation.calculate(contract);
+        if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
+        PRIVATE_CALCULATION_CACHE.set(key, result);
+        PRIVATE_CALCULATION_ERRORS.delete(key);
+        return true;
+      } catch (error) {
+        PRIVATE_CALCULATION_ERRORS.set(key, {
+          code: error?.code || "CALCULATION_API_ERROR",
+          status: error?.status ?? null,
+          message: String(error?.message || error)
+        });
+        return false;
+      }
+    }));
+    return {
+      attempted: results.length,
+      succeeded: results.filter(Boolean).length,
+      failed: results.filter(value => !value).length
+    };
   }
 
 
@@ -6788,8 +6862,21 @@ window.fetch = (input, init = {}) => {
    * @returns {Object} Hesaplama sonucu (bkz. calculateLeaseEngineImpl)
    */
   function calculateLeaseEngine(contract) {
-    // Önce önbelleğe bak — kontrat değişmediyse tüm tabloyu
-    // yeniden hesaplamak yerine önceki sonucu döndür.
+    // Once the async API warm-up has completed, all synchronous consumers of
+    // the engine transparently receive the private result. Before that point,
+    // or after an API error, the unchanged local engine remains the fallback.
+    if (isPrivateCalculationApiReady()) {
+      const privateResult = PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract));
+      if (privateResult) {
+        setCachedCalculation(contract, privateResult);
+        return privateResult;
+      }
+    }
+
+    // Önce yerel önbelleğe bak — kontrat değişmediyse tüm tabloyu
+    // yeniden hesaplamak yerine önceki sonucu döndür. Private sonuç
+    // yukarıda kontrol edildiği için API-primary geçişinde eski yerel
+    // sonuç yeni remote sonucu gölgeleyemez.
     const cached = getCachedCalculation(contract);
     if (cached) {
       return cached;
@@ -13788,7 +13875,9 @@ ${renderPaymentScheduleFooterContainers()}
      DETAIL MODAL
   ========================================================== */
 
-  function openDetail(id) {
+  function openDetail(id, options) {
+
+    const detailOptions = options || {};
 
     const contract =
       contracts.find(
@@ -13802,12 +13891,12 @@ ${renderPaymentScheduleFooterContainers()}
 
     // Bu kontratın önbelleğini tazele (detay ekranı her zaman
     // en güncel hesaplamayı göstermeli).
-    clearCalculationCache(id);
+    // Detay açılışında yerel sonucu tazele; API-primary önbelleğini silme.
+    // Aksi halde remote sonuç her yeniden çizimde kaybolup fallback'e döner.
+    clearCalculationCache(id, { preservePrivate: true });
 
-    const engine =
-      calculateLease(
-        contract
-      );
+    const engine = detailOptions.calculationOverride || calculateLease(contract);
+    const calculationSource = getCalculationSource(contract);
 
     // Shadow doğrulama yalnızca açık bayrakla çalışır; ekrandaki sonucu,
     // kayıt akışını veya performanslı yerel hesaplamayı değiştirmez.
@@ -13862,10 +13951,18 @@ ${renderPaymentScheduleFooterContainers()}
              🔒 ${escapeHtml(lockBannerCheck.message)}
            </div>`
         : "";
+      const calculationSourceHtml = calculationSource === "private-api"
+        ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
+        : calculationSource === "local-fallback"
+          ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:12px;font-weight:700;">⚠️ Private API yanıt vermedi; yerel fallback sonucu gösteriliyor.</div>`
+          : calculationSource === "local-warming"
+            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API hazırlanıyor; geçici olarak yerel sonuç gösteriliyor.</div>`
+            : "";
 
       content.innerHTML = `
         ${v26StdHtml}
         ${lockBannerHtml}
+        ${calculationSourceHtml}
 
         <div class="gk-detail-tabs" role="tablist">
           <button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button>

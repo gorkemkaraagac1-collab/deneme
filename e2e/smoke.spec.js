@@ -197,6 +197,20 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     await expect(stubbedPage.locator("#kpiRou")).not.toHaveText(/^\s*(₺\s*)?0([.,]00)?\s*$/);
   });
 
+  test("API-primary modu private hesaplama sonucunu ısıtır ve kullanır", async ({ stubbedPage, apiStore }) => {
+    await stubbedPage.goto("/tfrs16.html?api=1");
+    await createContract(stubbedPage, {
+      ...CONTRACT,
+      contractId: "API-PRIMARY-001"
+    });
+
+    // Önbellek ısınması arka planda tamamlanınca detay yeniden çizilir.
+    await expect.poll(() => apiStore.calculations.length, { timeout: 15000 }).toBe(1);
+    await expect(stubbedPage.locator("#detailModal")).toContainText("Hesaplama kaynağı: Private API");
+    await expect(stubbedPage.locator("#detailTitle")).toContainText("API-PRIMARY-001");
+    expect(stubbedPage.consoleErrors).toEqual([]);
+  });
+
   test("dışa aktarma yeni pencerede rapor açar", async ({ stubbedPage }) => {
     await stubbedPage.goto("/tfrs16.html");
 
