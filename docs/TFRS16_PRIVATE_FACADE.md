@@ -34,6 +34,16 @@ logic and does not expose the proprietary engine.
   the contract for the normal local-fallback path. No public engine code is
   removed in this slice.
 
+## Modification and reassessment consumers
+
+- Successful create, update, apply and cancel operations invalidate the local
+  calculation cache and warm the updated contract through the private API
+  before the host view is redrawn.
+- A private refresh failure still redraws the existing local fallback, so a
+  temporary API or deployment issue does not block the user's workflow.
+- This keeps modification and reassessment on the same private result envelope
+  as the summary and payment-plan consumers.
+
 This package is intentionally behavior-preserving. It establishes the seam for
 moving read-only detail, report, journal, modification and sublease consumers
 one group at a time. The public engine remains in the Pages artifact until each

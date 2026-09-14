@@ -1313,6 +1313,17 @@ window.fetch = (input, init = {}) => {
     return PRIVATE_CALCULATION_INFLIGHT.get(key);
   }
 
+  // Mutations invalidate the calculation cache. Warm the new private result
+  // before redrawing the host view so modification/reassessment screens do
+  // not briefly show a stale local calculation after a successful write.
+  async function refreshPrivateCalculationAfterMutation(contract) {
+    if (!contract || !isPrivateCalculationApiReady()) return null;
+    const key = getCalculationCacheKey(contract);
+    PRIVATE_CALCULATION_CACHE.delete(key);
+    PRIVATE_CALCULATION_ERRORS.delete(key);
+    return loadPrivateReadOnlyResult(contract);
+  }
+
 
   /* ==========================================================
      VERİ TEMİZLEME (DATA RETENTION)
@@ -12274,6 +12285,12 @@ ${renderAccountingCenterBulkPromo()}
     // tarafa bırakılmış olur.
     const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
 
+    function refreshAfterMutation() {
+      refreshPrivateCalculationAfterMutation(contract)
+        .catch(() => null)
+        .finally(() => refreshHost());
+    }
+
     let editingModificationId = null;
     const createButton = document.getElementById("createModificationButton");
 
@@ -12346,7 +12363,7 @@ ${renderAccountingCenterBulkPromo()}
           }
 
           resetModificationFormMode();
-          refreshHost();
+          refreshAfterMutation();
         }
       );
 
@@ -12384,7 +12401,7 @@ ${renderAccountingCenterBulkPromo()}
                 }
 
                 refresh();
-                refreshHost();
+                refreshAfterMutation();
                 return;
               }
 
@@ -12399,7 +12416,7 @@ ${renderAccountingCenterBulkPromo()}
                   return;
                 }
 
-                refreshHost();
+                refreshAfterMutation();
               }
             }
           );
@@ -12493,6 +12510,12 @@ ${renderAccountingCenterBulkPromo()}
   function initReassessmentEvents(contract, onChanged) {
     const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
 
+    function refreshAfterMutation() {
+      refreshPrivateCalculationAfterMutation(contract)
+        .catch(() => null)
+        .finally(() => refreshHost());
+    }
+
     let editingReassessmentId = null;
     const createButton = document.getElementById("createReassessmentButton");
 
@@ -12549,7 +12572,7 @@ ${renderAccountingCenterBulkPromo()}
         return;
       }
       resetReassessmentFormMode();
-      refreshHost();
+      refreshAfterMutation();
     });
 
     document.querySelectorAll("[data-reass-action]").forEach(button => {
@@ -12578,7 +12601,7 @@ ${renderAccountingCenterBulkPromo()}
             return;
           }
           refresh();
-          refreshHost();
+          refreshAfterMutation();
           return;
         }
 
@@ -12590,7 +12613,7 @@ ${renderAccountingCenterBulkPromo()}
             showAlert(result.errors.join("\n"));
             return;
           }
-          refreshHost();
+          refreshAfterMutation();
         }
       });
     });
