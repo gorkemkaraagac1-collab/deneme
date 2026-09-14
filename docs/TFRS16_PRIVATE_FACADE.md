@@ -23,6 +23,17 @@ logic and does not expose the proprietary engine.
 - If the private request fails, the existing CFO/local schedule path remains
   available as the rollback-safe fallback.
 
+## Summary and report read-only consumers
+
+- Opening a contract detail now requests the private result on demand when the
+  portfolio warm-up has not finished yet.
+- The existing summary cards and synchronous report/journal readers are
+  redrawn from that same private result envelope when it arrives; the active
+  detail tab is preserved.
+- A failed request leaves the already rendered local result in place and marks
+  the contract for the normal local-fallback path. No public engine code is
+  removed in this slice.
+
 This package is intentionally behavior-preserving. It establishes the seam for
 moving read-only detail, report, journal, modification and sublease consumers
 one group at a time. The public engine remains in the Pages artifact until each
