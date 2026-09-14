@@ -13261,9 +13261,20 @@ ${renderPaymentScheduleFooterContainers()}
 
     // The payment-plan tab is a read-only consumer: ask the private facade
     // on demand so a fast tab click cannot accidentally pin the local engine
-    // as the source. If the request fails, keep the existing CFO/local path
-    // as a visible, rollback-safe fallback.
+    // as the source. API-primary must fail closed when the result is absent;
+    // the public engine is available only through the explicit ?api=0 path.
     const privateResult = await loadPrivateReadOnlyResult(contract);
+    if (isPrivateCalculationApiReady() && !privateResult) {
+      tbody.innerHTML = "";
+      const empty = document.getElementById("scheduleEmptyState");
+      if (empty) {
+        empty.textContent = "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek.";
+        empty.style.display = "block";
+      }
+      const fxStatus = document.getElementById("scheduleFxStatus");
+      if (fxStatus) fxStatus.textContent = "Kurlar doğrulanıp private hesaplama tamamlandıktan sonra tekrar deneyin.";
+      return;
+    }
     const engine = privateResult?.schedule
       ? privateResult
       : typeof cfoBuildSchedule === "function"
@@ -14377,7 +14388,24 @@ ${renderPaymentScheduleFooterContainers()}
     // Aksi halde remote sonuç her yeniden çizimde kaybolup fallback'e döner.
     clearCalculationCache(id, { preservePrivate: true });
 
-    const engine = detailOptions.calculationOverride || calculateLease(contract);
+    // API-primary modunda private sonuç henüz hazır değilse hesaplama hatası
+    // modalın açılmasını engellememeli. Kullanıcı sözleşmenin durumunu görüp
+    // kur doğrulamasından sonra yeniden deneyebilmeli; yerel motor sessizce
+    // devreye sokulmaz.
+    let calculationError = null;
+    let engine;
+    try {
+      engine = detailOptions.calculationOverride || calculateLease(contract);
+    } catch (error) {
+      calculationError = error;
+      engine = {
+        rouAssets: null,
+        liability: null,
+        depreciation: null,
+        exempt: false,
+        schedule: []
+      };
+    }
     const calculationSource = getCalculationSource(contract);
 
     // Shadow doğrulama yalnızca açık bayrakla çalışır; ekrandaki sonucu,
@@ -14445,11 +14473,18 @@ ${renderPaymentScheduleFooterContainers()}
               ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`
               : ""
         : "";
+      const calculationErrorHtml = calculationError
+        ? `<div role="status" style="margin-bottom:12px;padding:11px 14px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:600;">⏳ Bu sözleşmenin private hesaplama sonucu henüz hazır değil. Kurlar doğrulandıktan sonra tekrar açın; ödeme planı ve muhasebe fişi sonuç hazır olduğunda gösterilecektir.</div>`
+        : "";
+      const detailMetric = (value, currency) => calculationError
+        ? "—"
+        : formatPresentationCurrency(value, currency);
 
       content.innerHTML = `
         ${v26StdHtml}
         ${lockBannerHtml}
         ${calculationSourceHtml}
+        ${calculationErrorHtml}
 
         <div class="gk-detail-tabs" role="tablist">
           <button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button>
@@ -14519,7 +14554,7 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatPresentationCurrency(
+              ${detailMetric(
                 engine.rouAssets,
                 contract.currency
               )}
@@ -14536,7 +14571,7 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatPresentationCurrency(
+              ${detailMetric(
                 engine.liability,
                 contract.currency
               )}
@@ -14553,7 +14588,7 @@ ${renderPaymentScheduleFooterContainers()}
             </span>
 
             <strong>
-              ${formatPresentationCurrency(
+              ${detailMetric(
                 engine.depreciation,
                 contract.currency
               )}
@@ -14583,7 +14618,11 @@ ${renderPaymentScheduleFooterContainers()}
             contract
           )}
 
-          ${engine.exempt ? `
+          ${calculationError ? `
+            <div style="margin-top:22px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:14px 16px;color:#9a3412;font-size:12px;">
+              Ödeme planı ve ilk muhasebeleştirme fişi private hesaplama sonucu hazır olduğunda görüntülenecek.
+            </div>
+          ` : engine.exempt ? `
             <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px 16px;">
               <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
               <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
