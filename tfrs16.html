@@ -431,6 +431,9 @@
         window.LEASEQANT_CALCULATION_SHADOW = true;
         window.LEASEQANT_CALCULATION_SHADOW_DEBUG = true;
       }
+      if (params.get("api") === "1") {
+        window.LEASEQANT_CALCULATION_API_PRIMARY = true;
+      }
     })();
   </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>

@@ -56,7 +56,7 @@ const DEFAULT_LICENSE = {
 
 /** Bellek içi kontrat deposu — her test kendi örneğini alır. */
 function createStore(seedContracts = []) {
-  return { contracts: seedContracts.map(c => ({ ...c })) };
+  return { contracts: seedContracts.map(c => ({ ...c })), calculations: [] };
 }
 
 function json(body, status = 200) {
@@ -125,6 +125,37 @@ async function installApiStub(page, options = {}) {
         if (index >= 0) store.contracts.splice(index, 1);
         return route.fulfill(json({ success: true }));
       }
+    }
+
+    // --- Private hesaplama API'si ---
+    // API-primary UI testleri gerçek Cloud Run'a gitmez; bunun yerine
+    // deterministik bir sonuç döndürür ve isteğin gerçekten yapıldığını
+    // store.calculations üzerinden görünür kılar.
+    if (path === "/api/calculations/lease" && method === "POST") {
+      let payload = {};
+      try { payload = JSON.parse(request.postData() || "{}"); } catch (_) { payload = {}; }
+      const contract = payload.contract || {};
+      store.calculations.push({ contract });
+      return route.fulfill(json({
+        success: true,
+        data: {
+          liability: 1000,
+          rouAssets: 1000,
+          depreciation: 100,
+          monthlyInterest: 10,
+          advancePaymentAtCommencement: 0,
+          months: 1,
+          schedule: [{
+            date: "2026-01-31",
+            payment: 110,
+            interest: 10,
+            principal: 100,
+            closingLiability: 900,
+            depreciation: 100,
+            rouClosing: 900
+          }]
+        }
+      }));
     }
 
     // --- Lisans / şirket / endeks ---
