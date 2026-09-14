@@ -15,14 +15,19 @@ test.describe("TMS19 private API geçişi", () => {
     await page.getByRole("button", { name: "Rapor" }).click();
     await expect(page.locator("#tms19ReportSummary")).toContainText("Toplam DBO");
     await expect(page.locator("#tms19RollForward")).toContainText("Reconciliation");
+
+    await page.locator('button[onclick^="personelDetay"]').first().click();
+    await expect(page.locator("#modalBody")).toContainText("Audit Trail");
+    expect(store.tms19Calculations).toHaveLength(2);
+    expect(store.tms19Calculations[1].mode).toBe("employee");
   });
 
-  test("api=0 acil geri dönüşünde private endpoint çağrılmaz", async ({ page }) => {
+  test("api=0 modunda private endpoint çağrılmaz ve kontrollü hata gösterilir", async ({ page }) => {
     const store = await installApiStub(page);
 
     await page.goto("/tms19.html?api=0");
-    await expect(page.locator("#kpiEmployees")).toHaveText("5");
+    await expect(page.locator("#toast")).toContainText("Özel hesaplama API'si");
     expect(store.tms19Calculations).toHaveLength(0);
-    expect(await page.evaluate(() => window.LEASEQANT_TMS19_CALCULATION_SOURCE)).toBe("local");
+    expect(await page.evaluate(() => window.LEASEQANT_TMS19_CALCULATION_SOURCE)).toBe("api-disabled");
   });
 });
