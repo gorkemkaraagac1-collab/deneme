@@ -7812,16 +7812,20 @@ window.fetch = (input, init = {}) => {
     // Yükümlülük: asOf'tan önceki/eşit en son ödeme satırını bul.
     let lastEventIndex = -1;
     for (let i = 0; i < schedule.length; i++) {
-      if (schedule[i].date.getTime() <= asOf.getTime()) {
+      const eventDate = parseDate(schedule[i]?.date);
+      if (eventDate && eventDate.getTime() <= asOf.getTime()) {
         lastEventIndex = i;
       } else {
         break;
       }
     }
 
+    const lastEventDate = lastEventIndex >= 0
+      ? parseDate(schedule[lastEventIndex]?.date)
+      : null;
     const isExactPaymentDate =
-      lastEventIndex >= 0 &&
-      schedule[lastEventIndex].date.getTime() === asOf.getTime();
+      Boolean(lastEventDate) &&
+      lastEventDate.getTime() === asOf.getTime();
 
     if (isExactPaymentDate) {
       const row = schedule[lastEventIndex];
@@ -7831,7 +7835,7 @@ window.fetch = (input, init = {}) => {
         rouAsset,
         interestSinceLastEvent: 0,
         depreciationSinceCommencement,
-        lastEventDate: row.date,
+        lastEventDate,
         isExactPaymentDate: true,
         monthsElapsedTotal
       };
@@ -7944,7 +7948,9 @@ window.fetch = (input, init = {}) => {
     const startTime = periodStartExclusive.getTime();
     const endTime = periodEndInclusive.getTime();
     const rowsInPeriod = schedule.filter(row => {
-      const t = row.date.getTime();
+      const rowDate = parseDate(row?.date);
+      if (!rowDate) return false;
+      const t = rowDate.getTime();
       return t > startTime && t <= endTime;
     });
 
