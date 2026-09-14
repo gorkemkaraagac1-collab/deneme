@@ -17,6 +17,9 @@
       ...result,
       schedule: Array.isArray(result.schedule)
         ? result.schedule.map(row => row && typeof row === "object" ? { ...row } : row)
+        : [],
+      periodEffects: Array.isArray(result.periodEffects)
+        ? result.periodEffects.map(effect => effect && typeof effect === "object" ? { ...effect } : effect)
         : []
     };
   }
@@ -47,7 +50,9 @@
       totalVariableExpense: value.totalVariableExpense,
       assumptions: value.assumptions,
       exempt: value.exempt,
-      schedule: value.schedule
+      schedule: value.schedule,
+      periodEffectsVersion: value.periodEffectsVersion,
+      periodEffects: value.periodEffects
     };
   }
 

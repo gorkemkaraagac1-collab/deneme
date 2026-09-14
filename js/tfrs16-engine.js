@@ -1324,6 +1324,44 @@ window.fetch = (input, init = {}) => {
     return loadPrivateReadOnlyResult(contract);
   }
 
+  // Period journals may consume the private period projection when its
+  // schedule has the same calendar rows as the event-aware UI schedule. If a
+  // legacy or event-specific schedule cannot be reconciled, the established
+  // local fallback remains in charge for that journal preview.
+  function getPrivatePeriodEffectsForContract(contract) {
+    if (!isPrivateCalculationApiReady()) return null;
+    const result = PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract));
+    const effects = result?.periodEffects;
+    if (result?.periodEffectsVersion !== 1 || !Array.isArray(effects) || !effects.length) return null;
+
+    const localSchedule = typeof cfoBuildSchedule === "function"
+      ? cfoBuildSchedule(contract)?.schedule
+      : null;
+    if (!Array.isArray(localSchedule) || localSchedule.length !== effects.length) return null;
+
+    const sameCalendarRows = effects.every((effect, index) => {
+      const privateDate = effect?.date instanceof Date ? effect.date : new Date(effect?.date);
+      const localDate = localSchedule[index]?.date instanceof Date
+        ? localSchedule[index].date
+        : new Date(localSchedule[index]?.date);
+      return !Number.isNaN(privateDate.getTime()) && !Number.isNaN(localDate.getTime())
+        && privateDate.getFullYear() === localDate.getFullYear()
+        && privateDate.getMonth() === localDate.getMonth()
+        && privateDate.getDate() === localDate.getDate();
+    });
+    return sameCalendarRows ? effects : null;
+  }
+
+  function periodEffectAsScheduleRow(effect) {
+    const date = effect?.date instanceof Date ? effect.date : new Date(effect?.date);
+    return {
+      ...effect,
+      date,
+      year: Number.isNaN(date.getTime()) ? null : date.getFullYear(),
+      month: Number.isNaN(date.getTime()) ? null : date.getMonth() + 1
+    };
+  }
+
 
   /* ==========================================================
      VERİ TEMİZLEME (DATA RETENTION)
@@ -11660,15 +11698,35 @@ ${renderAccountingCenterBulkPromo()}
       selected = getScheduleForYear(contract, year, month, period);
     }
 
+    let privateJournalRows = null;
+    const privatePeriodEffects = getPrivatePeriodEffectsForContract(contract);
+    if (privatePeriodEffects) {
+      const privateRows = privatePeriodEffects
+        .map(periodEffectAsScheduleRow)
+        .filter(item => {
+          const itemDate = item.date;
+          return itemDate instanceof Date && !Number.isNaN(itemDate.getTime())
+            && itemDate > periodStartExclusive && itemDate <= periodEndInclusive;
+        });
+      // Use the private projection only when it covers the same selected
+      // calendar rows. This keeps custom/event-aware schedules fail-safe.
+      if (privateRows.length === selected.length) {
+        privateJournalRows = privateRows;
+        selected = privateRows;
+      }
+    }
+
     const accrualSummary =
-      journalAccrualContext
-        ? buildAccrualJournalSummary(
-            journalAccrualContext,
-            scheduleSourceForJournal.schedule,
-            periodStartExclusive,
-            periodEndInclusive
-          )
-        : null;
+      privateJournalRows
+        ? null
+        : (journalAccrualContext
+          ? buildAccrualJournalSummary(
+              journalAccrualContext,
+              scheduleSourceForJournal.schedule,
+              periodStartExclusive,
+              periodEndInclusive
+            )
+          : null);
 
     const journalPeriodStart = new Date(periodStartExclusive.getTime() + 1);
     const journalChangeEntries = buildAppliedChangeJournalEntries(
@@ -11706,10 +11764,12 @@ ${renderAccountingCenterBulkPromo()}
     // varsa onun dönem aralığına göre bulduğu satırlar (accrual
     // yönteminin kendi filtresiyle TUTARLI), yoksa eski selected.
     const journalRows =
-      accrualSummary ? accrualSummary.rowsInPeriod : selected;
+      privateJournalRows || (accrualSummary ? accrualSummary.rowsInPeriod : selected);
 
     const interest =
-      accrualSummary
+      privateJournalRows
+        ? privateJournalRows.reduce((total, item) => total + (Number(item.interest) || 0), 0)
+        : accrualSummary
         ? accrualSummary.interest
         : selected.reduce(
             (total, item) =>
@@ -11718,7 +11778,9 @@ ${renderAccountingCenterBulkPromo()}
           );
 
     const principal =
-      accrualSummary
+      privateJournalRows
+        ? privateJournalRows.reduce((total, item) => total + (Number(item.principal) || 0), 0)
+        : accrualSummary
         ? accrualSummary.principal
         : selected.reduce(
             (total, item) =>
@@ -11727,7 +11789,9 @@ ${renderAccountingCenterBulkPromo()}
           );
 
     const payment =
-      accrualSummary
+      privateJournalRows
+        ? privateJournalRows.reduce((total, item) => total + (Number(item.payment) || 0), 0)
+        : accrualSummary
         // GC-2026-09: 301 kaydı, advance ilk taksit gibi ZATEN initial
         // entry'de banka'ya karşılık kaydedilmiş nakit hareketlerini
         // TEKRAR içermemeli — bu yüzden `payment` DEĞİL,
@@ -11743,7 +11807,9 @@ ${renderAccountingCenterBulkPromo()}
       accrualSummary ? accrualSummary.liabilityGrowthCredit : 0;
 
     const depreciation =
-      accrualSummary
+      privateJournalRows
+        ? privateJournalRows.reduce((total, item) => total + (Number(item.depreciation) || 0), 0)
+        : accrualSummary
         ? accrualSummary.depreciation
         : selected.reduce(
             (total, item) =>

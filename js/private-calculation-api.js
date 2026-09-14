@@ -46,7 +46,17 @@
           }
         });
         return normalized;
-      })
+      }),
+      periodEffects: Array.isArray(result.periodEffects)
+        ? result.periodEffects.map(effect => {
+          if (!effect || typeof effect !== "object") return effect;
+          const normalized = { ...effect };
+          if (Object.prototype.hasOwnProperty.call(normalized, "date")) {
+            normalized.date = normalizeCalendarDate(normalized.date);
+          }
+          return normalized;
+        })
+        : []
     };
   }
 
