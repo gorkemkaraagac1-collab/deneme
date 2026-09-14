@@ -65,10 +65,30 @@ if (failed.length) {
   process.exit(1);
 }
 
-const callSites = engine
+const callSiteRows = engine
   .split(/\n/)
-  .filter((line) => /\bcalculateLeaseEngine\s*\(/.test(line))
-  .length;
+  .map((line, index) => ({ line, lineNumber: index + 1 }))
+  .filter(({ line }) => /\bcalculateLeaseEngine\s*\(/.test(line));
+const isComment = (line) => /^\s*(?:\/\/|\*)/.test(line) || line.includes("calculateLeaseEngine()");
+const isDefinition = (line) => /function\s+calculateLeaseEngine\s*\(/.test(line);
+const isSelfTest = (lineNumber) => lineNumber >= 32300 && lineNumber <= 34700;
+const productionRows = callSiteRows.filter(({ line, lineNumber }) =>
+  !isComment(line) && !isDefinition(line) && !isSelfTest(lineNumber));
+const commentRows = callSiteRows.filter(({ line, lineNumber }) => isComment(line) && !isSelfTest(lineNumber));
+const selfTestRows = callSiteRows.filter(({ lineNumber }) => isSelfTest(lineNumber));
+const callSites = callSiteRows.length;
 
-console.log(`TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} engine consumer references tracked)`);
-console.log("Public engine removal remains gated until all tracked UI consumers are served by the private result envelope.");
+if (productionRows.length > 0) {
+  console.error("TFRS16 private cutover gate FAILED: direct production engine references remain:");
+  productionRows.forEach(({ lineNumber, line }) => console.error(`- ${lineNumber}: ${line.trim()}`));
+  process.exit(1);
+}
+
+console.log(
+  `TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} tracked references: ` +
+  `${productionRows.length} production, ${commentRows.length} comments, ${selfTestRows.length} self-tests)`
+);
+console.log(
+  `Production consumers are private-gated; public engine removal remains blocked until ` +
+  `${productionRows.length} production references are replaced by UI-only private result readers.`
+);

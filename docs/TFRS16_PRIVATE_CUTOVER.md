@@ -1,14 +1,17 @@
 # TFRS16 private calculation cutover
 
 The production page uses the private calculation API as its primary source for
-authenticated sessions. The local `js/tfrs16-engine.js` file remains in the
-Pages artifact as a compatibility fallback while the rest of the TFRS16 view
-stack is migrated.
+authenticated sessions. API-primary is now a hard privacy boundary: a missing
+private result fails closed instead of silently invoking the public calculation
+implementation. The local `js/tfrs16-engine.js` implementation is reachable
+only through the explicit `?api=0` rollback path while the view layer is being
+separated.
 
 ## Why the public engine is still present
 
-The calculation wrapper is already private-first, but the following public UI
-areas still read the engine result synchronously or use engine helpers directly:
+The calculation wrapper is private-gated, but the following public UI areas
+still contain synchronous call sites that must be replaced with UI-only result
+readers before the file can be removed:
 
 - payment schedule and reporting-date accrual views;
 - KPI and detail panels;
@@ -27,7 +30,24 @@ single requests during a rolling deployment.
 Removing the file before these consumers use the private result envelope would
 turn a calculation fallback into a blank or partially rendered production page.
 
+## Consumer inventory (2026-09-14)
+
+The source-level scan reports 60 references to `calculateLeaseEngine(`. That
+number includes 13 comments, 10 built-in self-tests and the function
+declaration itself. The actionable production inventory is **36 call sites**.
+All 36 now pass through the explicit `getPrivateCalculationForConsumer`
+boundary in API-primary mode, and the source gate reports zero direct
+production calls to the engine. The remaining work is structural: extract the
+UI-only functions from this bundle, prove every screen still reads the private
+envelope, and then remove the public implementation. This distinction is
+recorded so a comment or self-test cannot be mistaken for a live UI dependency.
+
 ## Release gate
+
+The exact 36-row production inventory is maintained in
+`docs/TFRS16_PRIVATE_CONSUMER_INVENTORY.md`. The inventory is regenerated from
+the engine source when the migration slice changes; it is the checklist for
+the remaining structural extraction and screen-level smoke evidence.
 
 Every frontend pull request and `main` push runs:
 
