@@ -926,6 +926,7 @@ window.fetch = (input, init = {}) => {
   // a mutation can never reuse a stale remote result.
   const PRIVATE_CALCULATION_CACHE = new Map();
   const PRIVATE_CALCULATION_ERRORS = new Map();
+  const PRIVATE_CALCULATION_INFLIGHT = new Map();
 
   // FAZ 4.1 — getCfoAggregateMetrics()'in reportingDate başına
   // önbelleği. CALCULATION_CACHE ile AYNI TDZ nedeniyle burada
@@ -1154,6 +1155,9 @@ window.fetch = (input, init = {}) => {
         for (const key of PRIVATE_CALCULATION_CACHE.keys()) {
           if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_CACHE.delete(key);
         }
+        for (const key of PRIVATE_CALCULATION_INFLIGHT.keys()) {
+          if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_INFLIGHT.delete(key);
+        }
         for (const key of PRIVATE_CALCULATION_ERRORS.keys()) {
           if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_ERRORS.delete(key);
         }
@@ -1162,6 +1166,7 @@ window.fetch = (input, init = {}) => {
       CALCULATION_CACHE.clear();
       if (!preservePrivate) {
         PRIVATE_CALCULATION_CACHE.clear();
+        PRIVATE_CALCULATION_INFLIGHT.clear();
         PRIVATE_CALCULATION_ERRORS.clear();
       }
     }
@@ -1267,6 +1272,45 @@ window.fetch = (input, init = {}) => {
       succeeded: results.filter(Boolean).length,
       failed: results.filter(value => !value).length
     };
+  }
+
+  // Read-only consumers can request the private result on demand when a
+  // user opens a detail tab before the portfolio warm-up has finished. The
+  // existing local engine remains the explicit fallback for API failures.
+  async function loadPrivateReadOnlyResult(contract) {
+    if (!isPrivateCalculationApiReady()) return null;
+    const key = getCalculationCacheKey(contract);
+    const cached = PRIVATE_CALCULATION_CACHE.get(key);
+    if (cached) return cached;
+    if (PRIVATE_CALCULATION_ERRORS.has(key)) return null;
+
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    const loader = typeof facade?.load === "function"
+      ? facade.load.bind(facade)
+      : window.LeaseQantPrivateCalculation.calculate;
+    if (typeof loader !== "function") return null;
+
+    if (!PRIVATE_CALCULATION_INFLIGHT.has(key)) {
+      PRIVATE_CALCULATION_INFLIGHT.set(key, (async () => {
+        try {
+          const result = await loader(contract);
+          if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
+          PRIVATE_CALCULATION_CACHE.set(key, result);
+          PRIVATE_CALCULATION_ERRORS.delete(key);
+          return result;
+        } catch (error) {
+          PRIVATE_CALCULATION_ERRORS.set(key, {
+            code: error?.code || "CALCULATION_API_ERROR",
+            status: error?.status ?? null,
+            message: String(error?.message || error)
+          });
+          return null;
+        } finally {
+          PRIVATE_CALCULATION_INFLIGHT.delete(key);
+        }
+      })());
+    }
+    return PRIVATE_CALCULATION_INFLIGHT.get(key);
   }
 
 
@@ -12886,8 +12930,14 @@ ${renderPaymentScheduleFooterContainers()}
         "scheduleSubPeriod"
       )?.value;
 
-    const engine =
-      typeof cfoBuildSchedule === "function"
+    // The payment-plan tab is a read-only consumer: ask the private facade
+    // on demand so a fast tab click cannot accidentally pin the local engine
+    // as the source. If the request fails, keep the existing CFO/local path
+    // as a visible, rollback-safe fallback.
+    const privateResult = await loadPrivateReadOnlyResult(contract);
+    const engine = privateResult?.schedule
+      ? privateResult
+      : typeof cfoBuildSchedule === "function"
         ? cfoBuildSchedule(contract)
         : calculateLeaseEngine(contract);
 

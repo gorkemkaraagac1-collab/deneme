@@ -43,6 +43,7 @@ const checks = [
   ["engine checks the private cache before local fallback", /if \(isPrivateCalculationApiReady\(\)\)\s*\{[\s\S]{0,500}PRIVATE_CALCULATION_CACHE\.get/.test(engine)],
   ["engine prefers batch hydration when available", /LeaseQantPrivateCalculation\.calculateMany/.test(engine)],
   ["engine hydrates through the private facade when available", /LeaseQantPrivateTfrs16Facade/.test(engine) && /batchLoader/.test(engine)],
+  ["payment-plan consumer requests the private read-only result", /async function loadPrivateReadOnlyResult\(/.test(engine) && /const privateResult = await loadPrivateReadOnlyResult\(contract\)/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
   ["Pages artifact still carries the engine while consumers are being migrated", /test -f _site\/js\/tfrs16-engine\.js/.test(pagesWorkflow)],
   ["TFRS16 page has no TMS19 script dependency", !/tms19/i.test(html)],
