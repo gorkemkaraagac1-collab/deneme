@@ -14688,8 +14688,9 @@ ${renderPaymentScheduleFooterContainers()}
     // as the payment-plan tab. If the portfolio warm-up has not completed by
     // the time a user opens a contract, request the private result on demand
     // and redraw the existing detail modal once it arrives. The active tab is
-    // preserved by gkDetailActiveTab; an API failure keeps the local result
-    // already rendered above as the rollback-safe fallback.
+    // preserved by gkDetailActiveTab; an API failure leaves the explicit
+    // waiting state above in place until the user retries after fixing the
+    // underlying data (for example, a missing verified FX rate).
     const shouldRefreshFromPrivate =
       !detailOptions.skipPrivateRefresh &&
       !detailOptions.calculationOverride &&
