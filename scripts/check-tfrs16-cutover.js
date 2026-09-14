@@ -78,6 +78,12 @@ const commentRows = callSiteRows.filter(({ line, lineNumber }) => isComment(line
 const selfTestRows = callSiteRows.filter(({ lineNumber }) => isSelfTest(lineNumber));
 const callSites = callSiteRows.length;
 
+if (productionRows.length > 0) {
+  console.error("TFRS16 private cutover gate FAILED: direct production engine references remain:");
+  productionRows.forEach(({ lineNumber, line }) => console.error(`- ${lineNumber}: ${line.trim()}`));
+  process.exit(1);
+}
+
 console.log(
   `TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} tracked references: ` +
   `${productionRows.length} production, ${commentRows.length} comments, ${selfTestRows.length} self-tests)`
