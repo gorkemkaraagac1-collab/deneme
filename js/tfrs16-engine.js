@@ -32717,6 +32717,13 @@ ${renderPaymentScheduleFooterContainers()}
     const groupIds = [...new Set(companies.map(c => c.groupId).filter(Boolean))];
     const groupId = options.groupId || groupIds[0] || "GRP-1";
     const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
+    let v22EliminationRows = [];
+    let v22EliminationTotalPresentation = 0;
+    try {
+      v22EliminationRows = getEliminations(groupId).filter(r => String(r.reportingDate || "") === String(reportingDate) && String(r.status || "") !== "REJECTED");
+      v22EliminationTotalPresentation = v22EliminationRows.reduce((sum, r) => sum + v26ConvertToPresentation(Number(r.amount) || 0, r.currency || "TRY", presentationCurrency, reportingDate).amount, 0);
+    } catch (e) {}
+    const v26ConsolidatedLeaseAfterElimination = Math.max(0, Number(data.totals.leaseLiabilityPres || 0) - v22EliminationTotalPresentation);
     const fmt = typeof formatCurrency === "function" ? formatCurrency : n => Number(n || 0).toFixed(0);
     const fxMissing = data.rows.some(r => !r.fxOk && r.currency !== presentationCurrency);
 
@@ -33780,7 +33787,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
      fonksiyonlarının (renderModificationManagementSection vb.) KENDİSİNE
      dokunulmadı — yalnızca NEREDE render edildikleri değişti.
   ========================================================== */
-  let v26SelectedModReassContractId = null;
+  var v26SelectedModReassContractId = null;
 
   /**
    * Seçili sözleşmeyi belirgin şekilde gösteren banner — Modifikasyon
@@ -33968,7 +33975,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
      document.getElementById("slbSectionContainer") arıyor. Bu sayfa
      sadece o container'ı KENDİ İÇİNDE oluşturup fonksiyonu çağırıyor.
   ========================================================== */
-  let v26SelectedSlbContractId = null;
+  var v26SelectedSlbContractId = null;
 
   function renderSlbManagementPage(container) {
     if (!container) return;
@@ -34026,7 +34033,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
   /* ==========================================================
      ALT KİRALAMA (SUBLEASE) — AYRI SAYFA (onaylı plan)
   ========================================================== */
-  let v26SelectedSubleaseContractId = null;
+  var v26SelectedSubleaseContractId = null;
 
   function renderSubleaseManagementPage(container) {
     if (!container) return;
@@ -34096,7 +34103,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
      Sublease'te bulunan "backend'e yazmıyor" sorunu BURADA GEÇERLİ
      DEĞİL (yazılacak bir state değişikliği yok).
   ========================================================== */
-  let v26SelectedAccountingContractId = null;
+  var v26SelectedAccountingContractId = null;
 
   function renderAccountingCenterPage(container) {
     if (!container) return;
