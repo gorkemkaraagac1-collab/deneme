@@ -69,6 +69,7 @@ const checks = [
   ["adapter normalizes every private batch result before caching", /response\.map\(normalizeCalculationResult\)/.test(adapter)],
   ["reporting accrual parses schedule dates defensively", /const eventDate = parseDate\(schedule\[i\]\?\.date\)/.test(engine) && /const rowDate = parseDate\(row\?\.date\)/.test(engine)],
   ["engine gates private results behind API-primary", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*===\s*true/.test(engine)],
+  ["initial refresh waits for private cache hydration", /function refresh\(\)\s*\{[\s\S]{0,500}Array\.isArray\(contracts\)[\s\S]{0,180}PRIVATE_CALCULATION_CACHE\.size === 0/.test(engine)],
   // FAZ 2 (2026-09-15): local fallback dalı kaldırıldığı için artık
   // koşullu bir "if (isPrivateCalculationApiReady())" sarmalayıcısı yok —
   // hem getPrivateCalculationForConsumer hem calculateLeaseEngine
