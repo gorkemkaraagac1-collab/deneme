@@ -14497,6 +14497,19 @@ ${renderPaymentScheduleFooterContainers()}
 
 
     if (content) {
+      // Görüntüle düzeltmesi: bu bloktaki render* çağrılarının HİÇBİRİ
+      // kendi try/catch'ine sahip değildi. Herhangi biri belirli bir
+      // sözleşmenin verisiyle (ör. beklenmeyen bir modification/SLB alan
+      // şekli) senkron olarak throw ederse, content.innerHTML hiç
+      // atanmıyor VE aşağıdaki modal?.classList.remove("hidden") satırına
+      // hiç ulaşılmıyordu — modal açılmıyor, konsola sessizce bir hata
+      // düşüyor, kullanıcı için "Görüntüle butonu hiçbir şey yapmıyor"
+      // olarak görünüyordu (ve SADECE o veri şekline sahip sözleşmelerde
+      // — diğerleri normal açılıyordu, tam olarak bildirilen semptom).
+      // Artık render hatası olsa bile modal her zaman açılıyor ve hatayı
+      // (teknik mesajıyla) gösteriyor — mobil tarayıcıda konsol erişimi
+      // olmadan bile hangi sözleşmenin neden kırıldığı görülebiliyor.
+      try {
       const v26StdHtml = typeof renderContractStandardsPanel === "function"
         ? renderContractStandardsPanel(contract)
         : (typeof v26StandardsBadgeHtml === "function"
@@ -14725,6 +14738,22 @@ ${renderPaymentScheduleFooterContainers()}
         </div>
 
       `;
+      } catch (renderError) {
+        console.error("Detay modalı render hatası:", contract.id, renderError);
+        content.innerHTML = `
+          <div role="alert" style="margin-bottom:12px;padding:14px 16px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;">
+            <strong>Bu sözleşmenin detayı görüntülenirken bir hata oluştu.</strong>
+            <p style="margin:8px 0 0;font-size:12px;color:#7f1d1d;">
+              Sözleşme: ${escapeHtml(contract.id || "")}<br>
+              Teknik hata: ${escapeHtml(renderError?.message || String(renderError))}
+            </p>
+            <p style="margin:8px 0 0;font-size:12px;color:#7f1d1d;">
+              Bu ekran görüntüsünü reis'e iletebilirsiniz — daha önce sessizce
+              kapanan "Görüntüle" hatasının kök nedenini teşhis etmeye yeter.
+            </p>
+          </div>
+        `;
+      }
     }
 
 
