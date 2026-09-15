@@ -8151,7 +8151,8 @@ window.fetch = (input, init = {}) => {
     // hesaplama önbelleği hydrate edildikten sonra hydrateTfrs16BackendData
     // zaten aynı refresh akışını çağırır; ilk resmi bu arada ertele.
     if (isPrivateCalculationApiReady() &&
-        !backendContractsHydrated &&
+        Array.isArray(contracts) &&
+        contracts.length > 0 &&
         PRIVATE_CALCULATION_CACHE.size === 0) {
       return;
     }
