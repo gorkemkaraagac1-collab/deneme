@@ -1240,10 +1240,12 @@ window.fetch = (input, init = {}) => {
     const items = [];
     const seenKeys = new Set();
     sourceItems.forEach(contract => {
-      [contract, ((contract?.modifications || []).some(item => item?.status === "APPLIED") ||
-        (contract?.reassessments || []).some(item => item?.status === "APPLIED"))
-        ? getModificationBaseContract(contract)
-        : null]
+      // Detail/event-aware consumers always read the immutable base schedule,
+      // even when the contract has no applied events (the base clone has a
+      // distinct cache signature because event/audit fields are removed).
+      // Warm it for every contract so a read-only detail click never depends
+      // on which event history happens to be present.
+      [contract, getModificationBaseContract(contract)]
         .filter(Boolean)
         .forEach(item => {
           const key = getCalculationCacheKey(item);
