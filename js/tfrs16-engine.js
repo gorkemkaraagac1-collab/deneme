@@ -8557,7 +8557,12 @@ window.fetch = (input, init = {}) => {
         totals.set(presentationCurrency, group);
         } catch (error) {
           totalsError = "Hesaplama hatası — toplam gösterilemiyor";
-          if (error?.code === "KPI_CURRENT_BALANCE_UNAVAILABLE") {
+          // The KPI metrics helper historically threw a plain Error with
+          // this message (without assigning `code`). Treat both forms as a
+          // transient private-data hydration state so the browser console
+          // does not report a false red calculation failure.
+          if (error?.code === "KPI_CURRENT_BALANCE_UNAVAILABLE" ||
+              error?.message === "KPI_CURRENT_BALANCE_UNAVAILABLE") {
             console.warn("Portfolio KPI data pending:", contract.id);
           } else {
             console.error("Portfolio KPI calculation error:", contract.id, error);
@@ -19908,9 +19913,22 @@ ${renderPaymentScheduleFooterContainers()}
   function getModificationReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Modification Report",d,"MODIFICATION_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>(Array.isArray(contract.modifications)?contract.modifications:[]).forEach(storedItem=>{
-      const item = storedItem?.status === "APPLIED"
-        ? resolveAppliedModificationMeasurement(contract, storedItem)
-        : storedItem;
+      let item = storedItem;
+      if (storedItem?.status === "APPLIED") {
+        try {
+          item = resolveAppliedModificationMeasurement(contract, storedItem);
+        } catch (error) {
+          // Historical APPLIED events can exist before their private base
+          // result has been hydrated. Keep the report and management page
+          // usable from the persisted event values; never fall back to the
+          // removed local calculation path.
+          if (error?.code === "PRIVATE_CALCULATION_NOT_READY") {
+            report.warnings.push(`Private hesaplama sonucu bekleniyor: ${contract.id}`);
+          } else {
+            report.warnings.push(`Modifikasyon ölçümü kullanılamadı: ${contract.id}`);
+          }
+        }
+      }
       if(filters.company&&String(contract.company||"")!==String(filters.company))return;
       if(filters.contractId&&contract.id!==filters.contractId)return;
       if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
