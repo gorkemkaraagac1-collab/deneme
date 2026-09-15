@@ -13742,11 +13742,22 @@ ${renderPaymentScheduleFooterContainers()}
     // calculation result is already cached. Keep the detail modal usable
     // when that auxiliary preview cannot be generated yet.
     let initialJournalEntries = null;
+    let initialJournalCurrency = resolveContractFunctionalCurrency(contract) || contract.currency || "TRY";
     if (!calculationError && !engine.exempt) {
       try {
         initialJournalEntries = generateInitialEntryForFunctionalCurrency(contract);
       } catch (error) {
-        calculationError = error;
+        // Private calculation is already available here. Functional-currency
+        // journal conversion is an auxiliary presentation layer and may lack
+        // a historical FX row, so do not surface a false private-result error
+        // for the entire detail modal. Keep the opening journal in its
+        // transaction currency until the FX history is completed.
+        try {
+          initialJournalEntries = generateInitialEntry(contract);
+          initialJournalCurrency = String(contract.currency || "TRY").toUpperCase();
+        } catch (_) {
+          initialJournalEntries = [];
+        }
       }
     }
 
@@ -13956,7 +13967,7 @@ ${renderPaymentScheduleFooterContainers()}
           ` : renderJournalEntry(
             "İlk Muhasebeleştirme Fişi",
             initialJournalEntries || [],
-            resolveContractFunctionalCurrency(contract) || contract.currency || "TRY"
+            initialJournalCurrency
           )}
         </div>
 
