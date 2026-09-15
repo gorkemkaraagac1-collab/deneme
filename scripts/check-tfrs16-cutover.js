@@ -25,6 +25,7 @@ const engine = read("js/tfrs16-engine.js");
 const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
+const reportingUi = read("js/tfrs16-reporting-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 
 const checks = [
@@ -37,6 +38,9 @@ const checks = [
   ["Portfolio UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
   ["Portfolio table markup lives outside the public engine", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
   ["Portfolio UI has a private read-only bridge", /getPortfolioContracts/.test(engine) && /openDetail/.test(engine) && /formatPortfolioAmount/.test(engine)],
+  ["Reporting UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-reporting-ui.js") && html.includes('src="js/tfrs16-reporting-ui.js')],
+  ["Reporting page shells live outside the public engine", reportingUi.includes("renderFinancialReporting") && reportingUi.includes("renderRiskControls") && !engine.includes("Portföy genelinde bilanço/gelir tablosu KPI'ları")],
+  ["Reporting UI uses the private-result bridge", /renderFinancialReportingBody/.test(reportingUi) && /renderFinancialReportingBody:/.test(engine) && /renderRiskControlsBody:/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
@@ -64,7 +68,7 @@ const checks = [
   ["private TMS29 preview fills the adjustment table", /const previewBody = container\.querySelector\("table tbody"\)/.test(engine) && /Taslak oluşturulmadı/.test(engine)],
   ["TMS29 export uses the private batch facade", /async function exportTms29InflationNote\([\s\S]{0,2600}loadTms29Many/.test(engine) && !/async function exportTms29InflationNote\([\s\S]{0,2600}v191ComputePortfolioTms29\(rouRows/.test(engine)],
   ["TMS29 journal consumers use the private journal envelope", /async function buildTms29BulkJournalEntries[\s\S]{0,900}loadTms29\(/.test(engine) && !/async function buildTms29BulkJournalEntries[\s\S]{0,900}applyTMS29Restatement\(/.test(engine)],
-  ["financial reporting consumers load the private TMS29 portfolio envelope", /async function v191RenderFinancialReportingPrivate[\s\S]{0,700}v191LoadPrivatePortfolioTms29/.test(engine) && /renderFinancialReportingPage[\s\S]{0,2600}v191LoadPrivatePortfolioTms29/.test(engine)],
+  ["financial reporting consumers load the private TMS29 portfolio envelope", /async function v191RenderFinancialReportingPrivate[\s\S]{0,700}v191LoadPrivatePortfolioTms29/.test(engine) && /renderFinancialReportingBody/.test(reportingUi)],
   ["financial reporting exports load the private TMS29 portfolio envelope", /async function exportRouAssetMovementNote[\s\S]{0,500}v191LoadPrivatePortfolioTms29/.test(engine) && /async function exportLeaseLiabilityMovementNote[\s\S]{0,500}v191LoadPrivatePortfolioTms29/.test(engine)],
   ["no production calls remain to the legacy TMS29 portfolio calculator", !engine.split(/\n/).some(line => /v191ComputePortfolioTms29\s*\(/.test(line) && !/function\s+v191ComputePortfolioTms29\s*\(/.test(line) && !/^\s*(?:\/\/|\*)/.test(line))],
   ["private facade exposes modification preview loading", /loadModificationPreview/.test(facade)],
