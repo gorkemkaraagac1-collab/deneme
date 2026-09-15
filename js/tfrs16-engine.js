@@ -1226,7 +1226,28 @@ window.fetch = (input, init = {}) => {
 
   async function hydratePrivateCalculationCache(list) {
     if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0 };
-    const items = Array.isArray(list) ? list : [];
+    const sourceItems = Array.isArray(list) ? list : [];
+    // Event-aware consumers rebuild a contract from its immutable pre-change
+    // terms before applying APPLIED modification/reassessment events. That
+    // base contract has a different cache signature from the current record,
+    // so warm both signatures during the same private batch hydration. Without
+    // this, a contract with an applied change could load its current result
+    // successfully but fail when the detail modal asked for its base schedule.
+    const items = [];
+    const seenKeys = new Set();
+    sourceItems.forEach(contract => {
+      [contract, ((contract?.modifications || []).some(item => item?.status === "APPLIED") ||
+        (contract?.reassessments || []).some(item => item?.status === "APPLIED"))
+        ? getModificationBaseContract(contract)
+        : null]
+        .filter(Boolean)
+        .forEach(item => {
+          const key = getCalculationCacheKey(item);
+          if (seenKeys.has(key)) return;
+          seenKeys.add(key);
+          items.push(item);
+        });
+    });
     const facade = window.LeaseQantPrivateTfrs16Facade;
     const batchLoader = typeof facade?.loadMany === "function"
       ? facade.loadMany.bind(facade)
@@ -1500,7 +1521,9 @@ window.fetch = (input, init = {}) => {
     const key = getCalculationCacheKey(contract);
     PRIVATE_CALCULATION_CACHE.delete(key);
     PRIVATE_CALCULATION_ERRORS.delete(key);
-    return loadPrivateReadOnlyResult(contract);
+    const hydration = await hydratePrivateCalculationCache([contract]);
+    if (hydration.failed > 0) return null;
+    return PRIVATE_CALCULATION_CACHE.get(key) || null;
   }
 
   // Period journals may consume the private period projection when its
