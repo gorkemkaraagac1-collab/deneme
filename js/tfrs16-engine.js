@@ -12798,8 +12798,8 @@ ${renderPaymentScheduleFooterContainers()}
 
   /**
    * V18 Parça 2 — "Enflasyon Düzeltmesi (TMS 29)" paneli. Dönem
-   * seçimi, önizleme (validateInflationAdjustment → applyTMS29Restatement),
-   * DRAFT oluşturma, uygula/iptal ve jurnal görünümü.
+   * seçimi ve private TMS29 önizleme sonucu; DRAFT oluşturma, uygula/iptal
+   * ve jurnal görünümü private API zarfı üzerinden yürütülür.
    * SINIR notu UI'da da gösterilir (belge şartı).
    */
   function renderInflationAdjustmentSection(contract) {
@@ -12883,6 +12883,20 @@ ${renderPaymentScheduleFooterContainers()}
       </div>
     `;
 
+    let lastPrivateTms29Result = null;
+
+    const loadPrivateTms29Result = async (period, periodStart) => {
+      const facade = window.LeaseQantPrivateTfrs16Facade;
+      if (!isPrivateCalculationApiReady() || typeof facade?.loadTms29 !== "function") {
+        throw new Error("Private TMS 29 API hazır değil; yerel hesaplama kapalı.");
+      }
+      const privateResult = await facade.loadTms29(contract, period, periodStart || null);
+      if (privateResult?.tms29Version !== 1 || !privateResult.totals) {
+        throw new Error("Private TMS 29 sonucu beklenen biçimde dönmedi.");
+      }
+      return privateResult;
+    };
+
     const runInflationPreview = async () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
       const periodStart = document.getElementById("inflPeriodStart")?.value || "";
@@ -12890,7 +12904,6 @@ ${renderPaymentScheduleFooterContainers()}
       if (!result) return;
       let t = null;
       let sourceLabel = "Private API";
-      const facade = window.LeaseQantPrivateTfrs16Facade;
       const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
         && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
         && (!periodStart || periodStart <= period);
@@ -12910,19 +12923,17 @@ ${renderPaymentScheduleFooterContainers()}
         result.innerHTML = `<div style="color:#991b1b;">Raporlama dönemi formatı YYYY-MM olmalı${periodStart ? " ve Dönem Başlangıcı raporlama döneminden sonra olamaz." : "."}</div>`;
         return;
       }
-      if (basicPeriodValid && isPrivateCalculationApiReady() && typeof facade?.loadTms29 === "function") {
+      if (basicPeriodValid) {
         try {
-          const privateResult = await facade.loadTms29(contract, period, periodStart || null);
-          if (privateResult?.tms29Version === 1 && privateResult.totals) {
-            t = privateResult.totals;
-          } else {
-            throw new Error("Private TMS 29 sonucu beklenen biçimde dönmedi");
-          }
+          lastPrivateTms29Result = await loadPrivateTms29Result(period, periodStart);
+          t = lastPrivateTms29Result.totals;
         } catch (error) {
+          lastPrivateTms29Result = null;
           result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı. ${escapeHtml(error?.message || String(error))}</div>`;
           return;
         }
       } else {
+        lastPrivateTms29Result = null;
         result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 API hazır değil; yerel hesaplama kapalı.</div>`;
         return;
       }
@@ -12975,31 +12986,140 @@ ${renderPaymentScheduleFooterContainers()}
       }
     });
 
-    document.getElementById("inflCreateBtn")?.addEventListener("click", () => {
+    document.getElementById("inflCreateBtn")?.addEventListener("click", async () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
       const periodStart = document.getElementById("inflPeriodStart")?.value || "";
-      const created = createInflationAdjustment(contract, { reportingPeriod: period, periodStart: periodStart || null });
-      if (!created.valid) {
-        showAlert(created.errors.join("\n"));
+      const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
+        && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
+        && (!periodStart || periodStart <= period);
+      if (!basicPeriodValid) {
+        showAlert("Raporlama dönemi formatı YYYY-MM olmalı ve Dönem Başlangıcı raporlama döneminden sonra olamaz.");
         return;
       }
-      renderInflationAdjustmentSection(contract);
+      const lockCheck = assertPeriodWritable(contract, period);
+      if (lockCheck.locked) {
+        showAlert(lockCheck.message);
+        return;
+      }
+
+      const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
+      const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
+      const button = document.getElementById("inflCreateBtn");
+      if (button) { button.disabled = true; button.textContent = "Private API hesaplıyor..."; }
+      try {
+        // TMS29 numbers and the eventual journal come from the private
+        // service. The public page only creates a UI record and persists it.
+        const privateResult = await loadPrivateTms29Result(period, periodStart);
+        const now = new Date().toISOString();
+        const prefix = String(contract?.id || "LEASE").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 24) || "LEASE";
+        const adjustment = {
+          id: `${prefix}-INFL-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          period: privateResult.reportingPeriod || period,
+          periodStart: privateResult.liabilityRollForward?.periodStart || periodStart || null,
+          testedAt: now,
+          reason: "TMS 29 enflasyon düzeltmesi (kiralama portföyü)",
+          status: "DRAFT",
+          restatedFigures: privateResult.totals,
+          journal: [],
+          calculationSource: "PRIVATE_API",
+          createdAt: now,
+          updatedAt: now
+        };
+        ensureInflationAdjustmentState(contract);
+        contract.inflationAdjustments.push(adjustment);
+        recordAuditEvent({
+          action: "INFLATION_ADJUSTMENT_CREATED",
+          entityType: "INFLATION_ADJUSTMENT",
+          entityId: adjustment.id,
+          contractId: contract.id,
+          reason: adjustment.reason,
+          metadata: { source: "PRIVATE_API" },
+          newValue: adjustment
+        });
+        saveContracts(contracts);
+        await persistContractToApi(contract, true);
+        renderInflationAdjustmentSection(contract);
+      } catch (error) {
+        contract.inflationAdjustments = previousAdjustments;
+        contract.auditTrail = previousAuditTrail;
+        saveContracts(contracts);
+        showAlert(`Private TMS 29 taslağı kaydedilemedi: ${error?.message || String(error)}`);
+      } finally {
+        if (button) { button.disabled = false; button.textContent = "Taslak Oluştur"; }
+      }
     });
 
     container.querySelectorAll(".infl-apply-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const result = applyInflationAdjustment(contract, btn.dataset.id);
-        if (!result.valid) { showAlert(result.errors.join("\n")); return; }
-        renderInflationAdjustmentSection(contract);
+      btn.addEventListener("click", async () => {
+        const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
+        if (!adjustment) { showAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+        if (adjustment.status === "APPLIED") return;
+        if (adjustment.status === "CANCELLED") { showAlert("CANCELLED düzeltme uygulanamaz."); return; }
+        const lockCheck = assertPeriodWritable(contract, adjustment.period || new Date());
+        if (lockCheck.locked) { showAlert(lockCheck.message); return; }
+        const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
+        const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
+        btn.disabled = true;
+        btn.textContent = "Private API uyguluyor...";
+        try {
+          const privateResult = await loadPrivateTms29Result(adjustment.period, adjustment.periodStart || null);
+          adjustment.restatedFigures = privateResult.totals;
+          adjustment.journal = Array.isArray(privateResult.journal) ? privateResult.journal : [];
+          adjustment.calculationSource = "PRIVATE_API";
+          adjustment.status = "APPLIED";
+          adjustment.updatedAt = new Date().toISOString();
+          recordAuditEvent({
+            action: "INFLATION_ADJUSTMENT_APPLIED",
+            entityType: "INFLATION_ADJUSTMENT",
+            entityId: adjustment.id,
+            contractId: contract.id,
+            reason: adjustment.reason,
+            metadata: { source: "PRIVATE_API" },
+            newValue: adjustment
+          });
+          saveContracts(contracts);
+          await persistContractToApi(contract, true);
+          renderInflationAdjustmentSection(contract);
+        } catch (error) {
+          contract.inflationAdjustments = previousAdjustments;
+          contract.auditTrail = previousAuditTrail;
+          saveContracts(contracts);
+          showAlert(`Private TMS 29 uygulanamadı: ${error?.message || String(error)}`);
+          btn.disabled = false;
+          btn.textContent = "Uygula";
+        }
       });
     });
 
     container.querySelectorAll(".infl-cancel-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         if (!confirm("Bu taslak enflasyon düzeltmesi iptal edilecek. Emin misiniz?")) return;
-        const result = cancelInflationAdjustment(contract, btn.dataset.id);
-        if (!result.valid) { showAlert(result.errors.join("\n")); return; }
-        renderInflationAdjustmentSection(contract);
+        const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
+        if (!adjustment) { showAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+        if (adjustment.status !== "DRAFT") { showAlert("Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."); return; }
+        const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
+        const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
+        btn.disabled = true;
+        try {
+          adjustment.status = "CANCELLED";
+          adjustment.updatedAt = new Date().toISOString();
+          recordAuditEvent({
+            action: "INFLATION_ADJUSTMENT_CANCELLED",
+            entityType: "INFLATION_ADJUSTMENT",
+            entityId: adjustment.id,
+            contractId: contract.id,
+            reason: "Kullanıcı tarafından iptal edildi"
+          });
+          saveContracts(contracts);
+          await persistContractToApi(contract, true);
+          renderInflationAdjustmentSection(contract);
+        } catch (error) {
+          contract.inflationAdjustments = previousAdjustments;
+          contract.auditTrail = previousAuditTrail;
+          saveContracts(contracts);
+          showAlert(`Private TMS 29 taslağı iptal edilemedi: ${error?.message || String(error)}`);
+          btn.disabled = false;
+        }
       });
     });
   }
