@@ -50,3 +50,14 @@ Bu envanter public motorun üretim UI tüketicilerini izler. Her satır `getPriv
 | 31432 | `async function exportReport(contractId, format, options =` | `const engine = getPrivateCalculationForConsumer(contract);` |
 
 Kalan `calculateLeaseEngine(` referansları yalnızca yorumlar, self-testler ve fonksiyon tanımıdır; CI kapısı doğrudan üretim çağrısı eklenmesini reddeder.
+
+## Yapısal temizleme dilimi (2026-09-15)
+
+Public bundle'dan artık kullanılmayan yerel TMS 29 restatement, portföy
+hesaplayıcı ve taslak/uygulama yazma gövdeleri çıkarıldı. TMS 29 sonuçları,
+journal ve kalıcı yazma akışları private API zarfından geliyor; public dosyada
+yalnızca private sonucu ekrana taşıyan UI ve admin endeks yönetimi kaldı.
+
+Bu dilim, `tfrs16-engine.js` dosyasının tamamen kaldırılması değildir. Ödeme
+planı, detay ve diğer UI işlevlerinin ayrı UI-only dosyaya taşınması ve canlı
+smoke tekrarının ardından dosya kaldırma PR'ı açılacaktır.
