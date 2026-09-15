@@ -209,7 +209,6 @@ window.fetch = (input, init = {}) => {
   return _nativeFetch(input, init);
 };
 
-
   let sessionCompanies = []; // [{ id, name }]
   let sessionCompanyIds = [];
   let sessionUserRole = null; // P1 uyum: gerçek backend rolü (/api/auth/me)
@@ -891,7 +890,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   const ASSET_CLASS_STORAGE_KEY = "gk_tfrs16_asset_classes_v1";
   const ASSET_CLASS_PREDEFINED = ["Arsa", "Makine", "Taşıt", "Diğer"];
   const ASSET_CLASS_UNCLASSIFIED = "Sınıflandırılmamış";
@@ -1027,7 +1025,6 @@ window.fetch = (input, init = {}) => {
   let selectedContractId = null;
   let bulkJournalData = [];
 
-
   /* ==========================================================
      DEMO DATA
   ========================================================== */
@@ -1076,7 +1073,6 @@ window.fetch = (input, init = {}) => {
     ];
   }
 
-
   /* ==========================================================
      STORAGE
   ========================================================== */
@@ -1116,7 +1112,6 @@ window.fetch = (input, init = {}) => {
     // — fail-closed: veri yoksa boş liste, sahte veri YOK.
     return [];
   }
-
 
   /* ==========================================================
      PERFORMANS ÖNBELLEĞİ (CALCULATION CACHE)
@@ -1547,7 +1542,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   /* ==========================================================
      VERİ TEMİZLEME (DATA RETENTION)
      ----------------------------------------------------------
@@ -1659,7 +1653,6 @@ window.fetch = (input, init = {}) => {
     console.log("✅ Veri temizliği tamamlandı.");
   }
 
-
   /**
    * Sözleşme dizisini localStorage'a (veya varsa V20 storage adapter'ına)
    * kaydeder ve hesaplama önbelleğini geçersiz kılar.
@@ -1693,7 +1686,6 @@ window.fetch = (input, init = {}) => {
       throw error;
     }
   }
-
 
   /* ==========================================================
      AUDIT TRAIL ENGINE (V16.7)
@@ -1981,7 +1973,6 @@ window.fetch = (input, init = {}) => {
 
   migrateLegacyAuditTrail();
 
-
   /* ==========================================================
      MODIFICATION MANAGEMENT (V16.5)
      ----------------------------------------------------------
@@ -2006,7 +1997,6 @@ window.fetch = (input, init = {}) => {
 
     return contract;
   }
-
 
   /* ==========================================================
      REASSESSMENT MANAGEMENT (V16.6)
@@ -2034,7 +2024,6 @@ window.fetch = (input, init = {}) => {
     return contract;
   }
 
-
   function reassessmentId(contract) {
     const prefix = String(contract?.id || "LEASE")
       .replace(/[^A-Za-z0-9_-]/g, "")
@@ -2042,7 +2031,6 @@ window.fetch = (input, init = {}) => {
 
     return `${prefix}-REASS-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   }
-
 
   function recordReassessmentAuditEvent(
     contract,
@@ -2072,7 +2060,6 @@ window.fetch = (input, init = {}) => {
     });
   }
 
-
   function getCurrentReassessmentState(contract) {
     ensureReassessmentState(contract);
 
@@ -2090,7 +2077,6 @@ window.fetch = (input, init = {}) => {
       ? applied[applied.length - 1]
       : null;
   }
-
 
   function getReassessmentBaseSchedule(contract) {
     return buildScheduleFromChangeChain(contract);
@@ -2127,7 +2113,6 @@ window.fetch = (input, init = {}) => {
       });
     return terms;
   }
-
 
   /* ==========================================================
      V18 Parça 2 — TMS 29 ENFLASYON DÜZELTMESİ
@@ -3616,7 +3601,6 @@ window.fetch = (input, init = {}) => {
     return { valid: true, adjustment };
   }
 
-
   function validateReassessment(contract, input) {
     const errors = [];
 
@@ -3711,7 +3695,6 @@ window.fetch = (input, init = {}) => {
     return { valid: errors.length === 0, errors };
   }
 
-
   function buildReassessmentFuturePayments(contract, effectiveDate, newTerms) {
     return buildModificationFuturePayments(
       contract,
@@ -3723,7 +3706,6 @@ window.fetch = (input, init = {}) => {
       }
     );
   }
-
 
   function calculateReassessmentLiability(contract, effectiveDate, newTerms) {
     const payments = buildReassessmentFuturePayments(
@@ -3813,7 +3795,6 @@ window.fetch = (input, init = {}) => {
     return { liability, monthlyRate, periodRate, payments, schedule };
   }
 
-
   function calculateReassessmentROUAdjustment(
     oldROU,
     liabilityAdjustment,
@@ -3846,7 +3827,6 @@ window.fetch = (input, init = {}) => {
       gainLoss: liabilityReduction - rouReduction
     };
   }
-
 
   function calculateReassessment(contract, input) {
     ensureReassessmentState(contract);
@@ -3963,7 +3943,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function buildReassessedScheduleFromResult(
     currentSchedule,
     effectiveDate,
@@ -4019,7 +3998,6 @@ window.fetch = (input, init = {}) => {
     ].join("|");
   }
 
-
   function buildReassessmentHistorySchedule(contract, excludeId) {
     return buildScheduleFromChangeChain(contract, excludeId);
   }
@@ -4060,7 +4038,6 @@ window.fetch = (input, init = {}) => {
       : null;
     return buildScheduleFromChangeChain(contract, excludeId);
   }
-
 
   /**
    * buildJournalLine — modification/reassessment fiş üreticilerinde
@@ -4129,7 +4106,6 @@ window.fetch = (input, init = {}) => {
       : entries;
   }
 
-
   async function createReassessment(contract, input) {
     ensureReassessmentState(contract);
     const lockCheck = assertPeriodWritable(contract, input?.effectiveDate || new Date());
@@ -4197,7 +4173,6 @@ window.fetch = (input, init = {}) => {
       revisedSchedule: result.revisedSchedule
     };
   }
-
 
   async function applyReassessment(contract, reassessmentIdValue) {
     ensureReassessmentState(contract);
@@ -4348,7 +4323,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   async function cancelReassessment(contract, reassessmentIdValue, options = {}) {
     ensureReassessmentState(contract);
 
@@ -4419,7 +4393,6 @@ window.fetch = (input, init = {}) => {
     return { valid: true, reassessment };
   }
 
-
   async function updateReassessment(contract, reassessmentIdValue, input) {
     ensureReassessmentState(contract);
 
@@ -4487,7 +4460,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function calculateReassessmentClassification(contract, reportingDate) {
     ensureReassessmentState(contract);
     const latest = getCurrentReassessmentState(contract);
@@ -4506,7 +4478,6 @@ window.fetch = (input, init = {}) => {
     );
   }
 
-
   function modificationId(contract) {
     const prefix = String(contract?.id || "LEASE")
       .replace(/[^A-Za-z0-9_-]/g, "")
@@ -4515,12 +4486,10 @@ window.fetch = (input, init = {}) => {
     return `${prefix}-MOD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   }
 
-
   /** @deprecated-name Kalıcı: cloneModificationValue — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreCloneOrOriginal. Hata durumunda ORİJİNAL değeri döner, null DEĞİL — v20Clone ile aynı aile. */
   function cloneModificationValue(value) {
     return coreCloneOrOriginal(value);
   }
-
 
   // Resolve the immutable pre-modification terms. Older persisted contracts
   // can have an originalContractSnapshot contaminated by a later change;
@@ -4580,11 +4549,9 @@ window.fetch = (input, init = {}) => {
     return terms;
   }
 
-
   function getModificationEffectiveDate(modification) {
     return parseDate(modification?.effectiveDate);
   }
-
 
   function recordModificationAuditEvent(
     contract,
@@ -4612,7 +4579,6 @@ window.fetch = (input, init = {}) => {
       }
     });
   }
-
 
   function validateModification(
     contract,
@@ -4778,7 +4744,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function getScheduleValueAsOfDate(
     schedule,
     date,
@@ -4813,7 +4778,6 @@ window.fetch = (input, init = {}) => {
     );
   }
 
-
   function getModificationROUAsOf(
     contract,
     effectiveDate,
@@ -4827,7 +4791,6 @@ window.fetch = (input, init = {}) => {
       engine?.rouAssets || 0
     );
   }
-
 
   function buildModificationFuturePayments(
     contract,
@@ -5012,7 +4975,6 @@ window.fetch = (input, init = {}) => {
     return result;
   }
 
-
   function calculateModifiedLeaseLiability(
     contract,
     effectiveDate,
@@ -5129,7 +5091,6 @@ window.fetch = (input, init = {}) => {
       schedule
     };
   }
-
 
   function modificationEconomicKey(modification) {
     if (!modification) return "";
@@ -5365,7 +5326,6 @@ window.fetch = (input, init = {}) => {
     return currentSchedule;
   }
 
-
   function calculateROUAdjustment(
     modification,
     oldROU,
@@ -5418,7 +5378,6 @@ window.fetch = (input, init = {}) => {
       gainLoss: 0
     };
   }
-
 
   function calculateModification(
     contract,
@@ -5623,7 +5582,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function buildModifiedSchedule(
     contract,
     storedModification
@@ -5721,7 +5679,6 @@ window.fetch = (input, init = {}) => {
 
     return historical.concat(future);
   }
-
 
   function generateModificationJournal(
     contract,
@@ -5821,7 +5778,6 @@ window.fetch = (input, init = {}) => {
       : entries;
   }
 
-
   async function createModification(
     contract,
     input
@@ -5901,7 +5857,6 @@ window.fetch = (input, init = {}) => {
       revisedSchedule: result.revisedSchedule
     };
   }
-
 
   async function applyModification(
     contract,
@@ -6089,7 +6044,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   async function cancelModification(
     contract,
     modificationIdValue,
@@ -6168,7 +6122,6 @@ window.fetch = (input, init = {}) => {
       modification
     };
   }
-
 
   async function updateModification(
     contract,
@@ -6256,7 +6209,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function getCurrentAppliedModification(contract) {
     ensureModificationState(contract);
 
@@ -6270,7 +6222,6 @@ window.fetch = (input, init = {}) => {
       ? applied[applied.length - 1]
       : null;
   }
-
 
   /* ==========================================================
      HELPERS
@@ -6289,7 +6240,6 @@ window.fetch = (input, init = {}) => {
       .replace(/'/g, "&#039;");
   }
 
-
   function formatNumber(value) {
     return Number(value || 0).toLocaleString(
       "tr-TR",
@@ -6299,7 +6249,6 @@ window.fetch = (input, init = {}) => {
       }
     );
   }
-
 
   function formatCurrency(value) {
     return `₺${formatNumber(value)}`;
@@ -6328,7 +6277,6 @@ window.fetch = (input, init = {}) => {
     if (item?.presentationFxOk === false) return `<span title="Kur bulunamadı — tutar gösterilemiyor" style="color:#b45309;">—</span>`;
     return formatPresentationCurrency(item?.[field], currency);
   }
-
 
   /* ==========================================================
      DRY YARDIMCI FONKSİYONLAR (Code Quality Pass)
@@ -6398,7 +6346,6 @@ window.fetch = (input, init = {}) => {
     const check = typeof predicate === "function" ? predicate(value) : true;
     return check ? value : defaultValue;
   }
-
 
   /* ==========================================================
      KULLANICI GERİ BİLDİRİMİ (Toast Bildirimleri)
@@ -6510,7 +6457,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   /* ==========================================================
      UX — LOADING / PROGRESS OVERLAY
      ----------------------------------------------------------
@@ -6596,7 +6542,6 @@ window.fetch = (input, init = {}) => {
     __gkLoadingOverlay.setAttribute("aria-busy", "false");
   }
 
-
   function parseDate(value) {
 
     if (!value) return null;
@@ -6654,7 +6599,6 @@ window.fetch = (input, init = {}) => {
       : null;
   }
 
-
   function normalizeDate(value) {
 
     const date = parseDate(value);
@@ -6668,7 +6612,6 @@ window.fetch = (input, init = {}) => {
     ].join("-");
   }
 
-
   function formatDate(value) {
 
     const date = parseDate(value);
@@ -6677,7 +6620,6 @@ window.fetch = (input, init = {}) => {
 
     return date.toLocaleDateString("tr-TR");
   }
-
 
   function getMonthName(month) {
 
@@ -6698,7 +6640,6 @@ window.fetch = (input, init = {}) => {
 
     return months[month - 1] || "";
   }
-
 
   function setText(id, value) {
 
@@ -6723,7 +6664,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   function setInput(id, value) {
 
     const input =
@@ -6734,7 +6674,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   function getInput(id) {
 
     return (
@@ -6742,14 +6681,12 @@ window.fetch = (input, init = {}) => {
     );
   }
 
-
   function getCheckbox(id) {
 
     return (
       document.getElementById(id)?.checked === true
     );
   }
-
 
   function setCheckbox(id, value) {
 
@@ -6760,7 +6697,6 @@ window.fetch = (input, init = {}) => {
       input.checked = value === true;
     }
   }
-
 
   // Maps the contractForm's <select id="paymentFrequency"> values
   // ("1"/"3"/"12", i.e. months per payment) to the word-based
@@ -6778,7 +6714,6 @@ window.fetch = (input, init = {}) => {
     quarterly: "3",
     annual: "12"
   };
-
 
   /* ==========================================================
      DATE / PERIOD ENGINE
@@ -6809,7 +6744,6 @@ window.fetch = (input, init = {}) => {
     );
   }
 
-
   /* ==========================================================
      PAYMENT FREQUENCY / TIMING HELPERS (V16.3 fix)
      ----------------------------------------------------------
@@ -6825,11 +6759,9 @@ window.fetch = (input, init = {}) => {
     return 1; // monthly / "1" / unknown
   }
 
-
   function isAdvancePaymentTiming(timing) {
     return String(timing || "arrears").trim().toLowerCase() === "advance";
   }
-
 
   /**
    * resolveDiscountRateConvention — kira sözleşmesindeki discountRate
@@ -6876,7 +6808,6 @@ window.fetch = (input, init = {}) => {
     return Math.pow(1 + annual / 100, 1 / 12) - 1;
   }
 
-
   function buildLeasePaymentDates(startDate, endDate, stepMonths, advance) {
     const start = parseDate(startDate);
     const end = parseDate(endDate);
@@ -6912,7 +6843,6 @@ window.fetch = (input, init = {}) => {
     return dates;
   }
 
-
   function monthsFromCommencement(startDate, paymentDate) {
     const start = parseDate(startDate);
     const pay = parseDate(paymentDate);
@@ -6922,7 +6852,6 @@ window.fetch = (input, init = {}) => {
       (pay.getMonth() - start.getMonth())
     );
   }
-
 
   /* ==========================================================
      TFRS 16 CALCULATION ENGINE
@@ -6956,7 +6885,6 @@ window.fetch = (input, init = {}) => {
     */
     return getPrivateCalculationForConsumer(contract);
   }
-
 
   /* ==========================================================
      PROFESSIONAL CALCULATION ENGINE (V16.1)
@@ -7049,7 +6977,6 @@ window.fetch = (input, init = {}) => {
     return basePayment;
   }
 
-
   /* ==========================================================
      V18 Parça 1 — GENİŞLETİLMİŞ ENDEKSLİ ÖDEME HESABI
      ----------------------------------------------------------
@@ -7110,7 +7037,6 @@ window.fetch = (input, init = {}) => {
       ? basePayment * (1 + r * k)          // basit / kümülatif olmayan
       : basePayment * Math.pow(1 + r, k);  // bileşik (fixedRate ile aynı formül)
   }
-
 
   /* ==========================================================
      V18 Parça 1 — CPI ENDEKS TABLOSU
@@ -8440,7 +8366,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   function buildQuarterOptions() {
 
     return [1, 2, 3, 4]
@@ -8450,7 +8375,6 @@ window.fetch = (input, init = {}) => {
       )
       .join("");
   }
-
 
   function filterSchedule(
     schedule,
@@ -8508,7 +8432,6 @@ window.fetch = (input, init = {}) => {
     return schedule;
   }
 
-
   /* ==========================================================
      PERIOD SELECTION
   ========================================================== */
@@ -8541,7 +8464,6 @@ window.fetch = (input, init = {}) => {
       );
     }
 
-
     if (period === "quarterly") {
 
       const quarter =
@@ -8561,7 +8483,6 @@ window.fetch = (input, init = {}) => {
       );
     }
 
-
     if (period === "annual") {
 
       return schedule.filter(
@@ -8570,10 +8491,8 @@ window.fetch = (input, init = {}) => {
       );
     }
 
-
     return [];
   }
-
 
   /* ==========================================================
      LIABILITY
@@ -8595,7 +8514,6 @@ window.fetch = (input, init = {}) => {
       );
   }
 
-
   function calculateNonCurrentLiability(
     contract
   ) {
@@ -8613,7 +8531,6 @@ window.fetch = (input, init = {}) => {
       engine.liability - current
     );
   }
-
 
   /* ==========================================================
      CURRENT / NON-CURRENT — REPORTING DATE BASED (V16.3 / Faz 6)
@@ -8851,7 +8768,6 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-
   function calculateLiabilitySplitAsOf(
     contract,
     reportingDate,
@@ -9054,7 +8970,6 @@ window.fetch = (input, init = {}) => {
     ).current;
   }
 
-
   function calculateNonCurrentLiabilityAsOf(
     contract,
     reportingDate
@@ -9065,7 +8980,6 @@ window.fetch = (input, init = {}) => {
       reportingDate
     ).nonCurrent;
   }
-
 
   function calculateNext12Months(
     contract,
@@ -9093,7 +9007,6 @@ window.fetch = (input, init = {}) => {
       resolvedDate
     ).next12Payments;
   }
-
 
   /* ==========================================================
      RENEWAL
@@ -9137,7 +9050,6 @@ window.fetch = (input, init = {}) => {
       days <= 90
     );
   }
-
 
   /* ==========================================================
      KPI
@@ -9273,7 +9185,6 @@ window.fetch = (input, init = {}) => {
     setText("kpiDataAsOf", asOfText);
   }
 
-
   /* ==========================================================
      COMPANY FILTER
   ========================================================== */
@@ -9331,7 +9242,6 @@ window.fetch = (input, init = {}) => {
         current;
     }
   }
-
 
   /* ==========================================================
      TABLE
@@ -9641,7 +9551,6 @@ window.fetch = (input, init = {}) => {
     renderTable({ resetPage: false });
   }
 
-
   /* ==========================================================
      REFRESH
   ========================================================== */
@@ -9654,7 +9563,6 @@ window.fetch = (input, init = {}) => {
 
     renderTable();
   }
-
 
   /* ==========================================================
      CONTRACT MODAL
@@ -9974,7 +9882,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-
   function closeContractModal() {
 
     document
@@ -9985,7 +9892,6 @@ window.fetch = (input, init = {}) => {
         "hidden"
       );
   }
-
 
   function injectAssetClassField(contract) {
     const form = document.getElementById("contractForm");
@@ -10188,14 +10094,11 @@ window.fetch = (input, init = {}) => {
     return select.value || "";
   }
 
-
   const closeModalButton = document.getElementById("closeModal");
   if (closeModalButton) closeModalButton.onclick = closeContractModal;
 
-
   const cancelModalButton = document.getElementById("cancelModal");
   if (cancelModalButton) cancelModalButton.onclick = closeContractModal;
-
 
   /* ==========================================================
      CONTRACT VALIDATION
@@ -10329,7 +10232,6 @@ window.fetch = (input, init = {}) => {
       errors
     };
   }
-
 
   /* ==========================================================
      SAVE CONTRACT
@@ -10660,7 +10562,6 @@ window.fetch = (input, init = {}) => {
             null
         };
 
-
         const validation =
           validateContract(
             contract
@@ -10676,7 +10577,6 @@ window.fetch = (input, init = {}) => {
 
           return;
         }
-
 
         if (
           !existing &&
@@ -10781,7 +10681,6 @@ window.fetch = (input, init = {}) => {
           });
         }
 
-
         saveContracts(
           contracts
         );
@@ -10811,7 +10710,6 @@ window.fetch = (input, init = {}) => {
         }
       }
     );
-
 
   /* ==========================================================
      JOURNAL HELPERS
@@ -10964,7 +10862,6 @@ window.fetch = (input, init = {}) => {
     return entries;
   }
 
-
   async function generateReclassificationEntry(
     contract,
     reportingDate
@@ -11045,7 +10942,6 @@ window.fetch = (input, init = {}) => {
 
     return entries;
   }
-
 
   function getJournalForPeriod(
     contract,
@@ -11144,7 +11040,6 @@ window.fetch = (input, init = {}) => {
       : entries;
   }
 
-
   function generateInitialEntryForFunctionalCurrency(contract) {
     const entries = generateInitialEntry(contract);
     if (!contractNeedsFxTranslation(contract)) return entries;
@@ -11203,7 +11098,6 @@ window.fetch = (input, init = {}) => {
     const balanced =
       difference < 0.01;
 
-
     return `
 
       <div
@@ -11236,7 +11130,6 @@ window.fetch = (input, init = {}) => {
           </span>
 
         </div>
-
 
         <div style="overflow:auto;">
 
@@ -11282,7 +11175,6 @@ window.fetch = (input, init = {}) => {
               </tr>
 
             </thead>
-
 
             <tbody>
 
@@ -11355,7 +11247,6 @@ window.fetch = (input, init = {}) => {
 
             </tbody>
 
-
             <tfoot>
 
               <tr>
@@ -11406,7 +11297,6 @@ window.fetch = (input, init = {}) => {
 
         </div>
 
-
         <div
           style="
             padding:10px 14px;
@@ -11436,7 +11326,6 @@ window.fetch = (input, init = {}) => {
       </div>
     `;
   }
-
 
   /* ==========================================================
      ACCOUNTING CENTER
@@ -11483,7 +11372,6 @@ window.fetch = (input, init = {}) => {
     return html;
   }
 
-
   function buildMonthOptions() {
 
     const months = [
@@ -11514,7 +11402,6 @@ window.fetch = (input, init = {}) => {
       )
       .join("");
   }
-
 
   /**
    * renderAccountingCenterHeader — Muhasebe Fiş Merkezi başlığı/
@@ -11613,7 +11500,6 @@ window.fetch = (input, init = {}) => {
 
           </div>
 
-
           <div
             style="
               background:#f8fafc;
@@ -11667,7 +11553,6 @@ window.fetch = (input, init = {}) => {
 
           </div>
 
-
           <div
             style="
               background:#f8fafc;
@@ -11701,7 +11586,6 @@ window.fetch = (input, init = {}) => {
             </select>
 
           </div>
-
 
           <div
             style="
@@ -11829,7 +11713,6 @@ ${renderAccountingCenterBulkPromo()}
     `;
   }
 
-
   /* ==========================================================
      SINGLE JOURNAL
   ========================================================== */
@@ -11935,7 +11818,6 @@ ${renderAccountingCenterBulkPromo()}
 
       return;
     }
-
 
     let selected = [];
 
@@ -12096,7 +11978,6 @@ ${renderAccountingCenterBulkPromo()}
             0
           );
 
-
     const entries = [
 
       {
@@ -12160,7 +12041,6 @@ ${renderAccountingCenterBulkPromo()}
     }
     // V19 mapping applied below after FX append if any
 
-
     const normalJournalDebit = entries.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
     const normalJournalCredit = entries.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
     recordAuditEvent({
@@ -12210,7 +12090,6 @@ ${renderAccountingCenterBulkPromo()}
     } else {
       title = "Muhasebe Fişi";
     }
-
 
     if (preview) {
 
@@ -12288,7 +12167,6 @@ ${renderAccountingCenterBulkPromo()}
       );
     }
   }
-
 
   async function appendFxJournalLines(contract, selectedRows, baseEntries, title, preview, options = {}) {
     if (!preview || !contractNeedsFxTranslation(contract)) return;
@@ -12383,7 +12261,6 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-
   function auditCalculationRun(contract, calculationType = "TFRS16") {
     if (!contract) return null;
     try {
@@ -12431,7 +12308,6 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-
   /* ==========================================================
      PAYMENT SCHEDULE — "Kira Ödeme Planı" (V16.1 / Faz 3)
      ----------------------------------------------------------
@@ -12440,7 +12316,6 @@ ${renderAccountingCenterBulkPromo()}
      Does not touch renderAccountingCenter() or any journal
      generation logic above.
   ========================================================== */
-
 
   function renderModificationManagementSection(contract) {
 
@@ -12619,7 +12494,6 @@ ${renderAccountingCenterBulkPromo()}
     `;
   }
 
-
   function initModificationEvents(contract, onChanged) {
 
     // onChanged verilmezse eski davranış korunur (contract detail
@@ -12769,7 +12643,6 @@ ${renderAccountingCenterBulkPromo()}
       );
   }
 
-
   function renderReassessmentManagementSection(contract) {
     ensureReassessmentState(contract);
 
@@ -12850,7 +12723,6 @@ ${renderAccountingCenterBulkPromo()}
       </div>
     `;
   }
-
 
   function initReassessmentEvents(contract, onChanged) {
     const refreshHost = typeof onChanged === "function" ? onChanged : () => openDetail(contract.id);
@@ -12964,7 +12836,6 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-
   /**
    * renderPaymentScheduleHeader — ödeme planı başlığı/açıklaması.
    * Saf template-string, DOM'a dokunmaz. Çıktısı orijinalin bu
@@ -13060,7 +12931,6 @@ ${renderAccountingCenterBulkPromo()}
             </select>
           </div>
 
-
           <div
             style="
               background:#f8fafc;
@@ -13092,7 +12962,6 @@ ${renderAccountingCenterBulkPromo()}
               ${buildYearOptions(contract)}
             </select>
           </div>
-
 
           <div
             style="
@@ -13127,7 +12996,6 @@ ${renderAccountingCenterBulkPromo()}
               ${buildMonthOptions()}
             </select>
           </div>
-
 
           <div style="display:flex;align-items:end;">
             <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
@@ -13264,7 +13132,6 @@ ${renderPaymentScheduleFooterContainers()}
     `;
   }
 
-
   function getScheduleReportingDate() {
     const selected = document.getElementById("scheduleReportingDate")?.value;
     if (selected) return selected;
@@ -13384,7 +13251,6 @@ ${renderPaymentScheduleFooterContainers()}
           : "block";
     }
   }
-
 
   async function renderFxTranslationSection(contract) {
     const container = document.getElementById("fxTranslationContainer");
@@ -13685,7 +13551,6 @@ ${renderPaymentScheduleFooterContainers()}
       });
     });
   }
-
 
   function renderSlbSection(contract) {
     const container = document.getElementById("slbSectionContainer");
@@ -14125,7 +13990,6 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   function initPaymentScheduleEvents(contract) {
 
     updateScheduleSubPeriodUI();
@@ -14188,7 +14052,6 @@ ${renderPaymentScheduleFooterContainers()}
           exportPaymentSchedule(contract)
       );
   }
-
 
   async function exportPaymentSchedule(contract, presentationCurrency) {
 
@@ -14402,7 +14265,6 @@ ${renderPaymentScheduleFooterContainers()}
     );
   }
 
-
   /* ==========================================================
      DETAIL MODAL
   ========================================================== */
@@ -14495,7 +14357,6 @@ ${renderPaymentScheduleFooterContainers()}
         .filter(Boolean).join(" — ");
     }
 
-
     if (content) {
       // Görüntüle düzeltmesi: bu bloktaki render* çağrılarının HİÇBİRİ
       // kendi try/catch'ine sahip değildi. Herhangi biri belirli bir
@@ -14577,7 +14438,6 @@ ${renderPaymentScheduleFooterContainers()}
 
           </div>
 
-
           <div class="detail-item">
 
             <span>
@@ -14591,7 +14451,6 @@ ${renderPaymentScheduleFooterContainers()}
             </strong>
 
           </div>
-
 
           <div class="detail-item">
 
@@ -14609,7 +14468,6 @@ ${renderPaymentScheduleFooterContainers()}
 
           </div>
 
-
           <div class="detail-item">
 
             <span>
@@ -14626,7 +14484,6 @@ ${renderPaymentScheduleFooterContainers()}
 
           </div>
 
-
           <div class="detail-item">
 
             <span>
@@ -14642,7 +14499,6 @@ ${renderPaymentScheduleFooterContainers()}
             </strong>
 
           </div>
-
 
           <div class="detail-item">
 
@@ -14661,7 +14517,6 @@ ${renderPaymentScheduleFooterContainers()}
           </div>
 
         </div>
-
 
         <!-- FAZ B: sözleşme detayı artık TAB'lara bölünmüş. Yukarıdaki
              .detail-grid "Özet" tab'ının içeriği; aşağıdaki her blok
@@ -14756,7 +14611,6 @@ ${renderPaymentScheduleFooterContainers()}
       }
     }
 
-
     modal?.classList.remove(
       "hidden"
     );
@@ -14783,7 +14637,6 @@ ${renderPaymentScheduleFooterContainers()}
       }).catch(() => {});
     }
 
-
     setTimeout(
       () => {
 
@@ -14794,7 +14647,6 @@ ${renderPaymentScheduleFooterContainers()}
               .then(ok => { if (!ok) showAlert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı."); })
               .catch(error => showAlert(`Denetim izi dışa aktarılamadı: ${error?.message || error}`));
           });
-
 
         initPaymentScheduleEvents(
           contract
@@ -14871,7 +14723,6 @@ ${renderPaymentScheduleFooterContainers()}
     });
   }
 
-
   function closeDetail() {
 
     document
@@ -14886,7 +14737,6 @@ ${renderPaymentScheduleFooterContainers()}
       null;
   }
 
-
   document
     .getElementById(
       "closeDetailModal"
@@ -14896,7 +14746,6 @@ ${renderPaymentScheduleFooterContainers()}
       closeDetail
     );
 
-
   document
     .getElementById(
       "detailCloseButton"
@@ -14905,7 +14754,6 @@ ${renderPaymentScheduleFooterContainers()}
       "click",
       closeDetail
     );
-
 
   /* ==========================================================
      BULK JOURNAL MODAL
@@ -14953,7 +14801,6 @@ ${renderPaymentScheduleFooterContainers()}
         ].join("-");
     }
 
-
     updateBulkPeriodUI();
 
     updateBulkVoucherDefaults();
@@ -14962,7 +14809,6 @@ ${renderPaymentScheduleFooterContainers()}
 
     setBulkPreview("");
   }
-
 
   /**
    * buildBulkJournalModalHtml — Toplu Muhasebe Fiş Merkezi modalının
@@ -15021,7 +14867,6 @@ ${renderPaymentScheduleFooterContainers()}
 
           </div>
 
-
           <button
             id="closeBulkJournalModal"
             type="button"
@@ -15039,7 +14884,6 @@ ${renderPaymentScheduleFooterContainers()}
           </button>
 
         </div>
-
 
         <div
           style="
@@ -15081,7 +14925,6 @@ ${renderPaymentScheduleFooterContainers()}
               ></select>
 
             </div>
-
 
             <div>
 
@@ -15127,7 +14970,6 @@ ${renderPaymentScheduleFooterContainers()}
 
             </div>
 
-
             <div>
 
               <label
@@ -15164,7 +15006,6 @@ ${renderPaymentScheduleFooterContainers()}
               </div>
             </div>
 
-
             <div>
 
               <label
@@ -15193,7 +15034,6 @@ ${renderPaymentScheduleFooterContainers()}
             </div>
 
           </div>
-
 
           <div
             style="
@@ -15231,7 +15071,6 @@ ${renderPaymentScheduleFooterContainers()}
 
             </div>
 
-
             <div>
 
               <label
@@ -15261,14 +15100,12 @@ ${renderPaymentScheduleFooterContainers()}
 
           </div>
 
-
           <div
             id="bulkJournalSummary"
             style="
               margin-top:18px;
             "
           ></div>
-
 
           <div
             id="bulkJournalPreview"
@@ -15278,7 +15115,6 @@ ${renderPaymentScheduleFooterContainers()}
           ></div>
 
         </div>
-
 
         <div
           style="
@@ -15305,7 +15141,6 @@ ${renderPaymentScheduleFooterContainers()}
           >
             Toplu Fişleri Oluştur
           </button>
-
 
           <button
             id="exportBulkJournals"
@@ -15351,7 +15186,6 @@ ${renderPaymentScheduleFooterContainers()}
         closeBulkJournalModal
       );
 
-
     document
       .getElementById(
         "generateBulkJournals"
@@ -15372,7 +15206,6 @@ ${renderPaymentScheduleFooterContainers()}
         }
       );
 
-
     document
       .getElementById(
         "exportBulkJournals"
@@ -15381,7 +15214,6 @@ ${renderPaymentScheduleFooterContainers()}
         "click",
         exportBulkJournals
       );
-
 
     document
       .getElementById(
@@ -15397,7 +15229,6 @@ ${renderPaymentScheduleFooterContainers()}
         }
       );
 
-
     document
       .getElementById(
         "bulkAccountingYear"
@@ -15406,7 +15237,6 @@ ${renderPaymentScheduleFooterContainers()}
         "change",
         updateBulkVoucherDefaults
       );
-
 
     document
       .getElementById(
@@ -15434,7 +15264,6 @@ ${renderPaymentScheduleFooterContainers()}
       return;
     }
 
-
     const modal =
       document.createElement(
         "div"
@@ -15457,11 +15286,7 @@ ${renderPaymentScheduleFooterContainers()}
       padding:20px;
     `;
 
-
     modal.innerHTML = buildBulkJournalModalHtml();
-
-
-
 
     document.body.appendChild(
       modal
@@ -15469,7 +15294,6 @@ ${renderPaymentScheduleFooterContainers()}
 
     wireBulkJournalModalEvents();
   }
-
 
   function closeBulkJournalModal() {
 
@@ -15490,7 +15314,6 @@ ${renderPaymentScheduleFooterContainers()}
     bulkJournalData = [];
   }
 
-
   function populateBulkYears() {
 
     const select =
@@ -15502,7 +15325,6 @@ ${renderPaymentScheduleFooterContainers()}
 
     const years =
       new Set();
-
 
     contracts.forEach(
       contract => {
@@ -15538,7 +15360,6 @@ ${renderPaymentScheduleFooterContainers()}
       }
     );
 
-
     const sorted =
       [...years].sort(
         (a, b) => a - b
@@ -15546,7 +15367,6 @@ ${renderPaymentScheduleFooterContainers()}
 
     const currentYear =
       new Date().getFullYear();
-
 
     select.innerHTML =
       sorted
@@ -15567,7 +15387,6 @@ ${renderPaymentScheduleFooterContainers()}
         )
         .join("");
 
-
     if (!sorted.length) {
 
       select.innerHTML =
@@ -15580,7 +15399,6 @@ ${renderPaymentScheduleFooterContainers()}
         `;
     }
   }
-
 
   function updateBulkPeriodUI() {
 
@@ -15611,7 +15429,6 @@ ${renderPaymentScheduleFooterContainers()}
         : "1";
   }
 
-
   function updateBulkVoucherDefaults() {
 
     const year =
@@ -15635,7 +15452,6 @@ ${renderPaymentScheduleFooterContainers()}
         `TFRS16-${year}-0001`;
     }
 
-
     const description =
       document.getElementById(
         "bulkVoucherDescription"
@@ -15652,7 +15468,6 @@ ${renderPaymentScheduleFooterContainers()}
           "bulkAccountingMonth"
         )?.value
       );
-
 
     if (
       description &&
@@ -15686,7 +15501,6 @@ ${renderPaymentScheduleFooterContainers()}
       }
     }
   }
-
 
   /* ==========================================================
      BULK JOURNAL GENERATION
@@ -16250,7 +16064,6 @@ ${renderPaymentScheduleFooterContainers()}
     hideLoading();
   }
 
-
     function createVoucherNumber(
     base,
     sequence
@@ -16261,7 +16074,6 @@ ${renderPaymentScheduleFooterContainers()}
         .match(
           /^(.*?)(\d+)$/
         );
-
 
     if (!match) {
 
@@ -16274,7 +16086,6 @@ ${renderPaymentScheduleFooterContainers()}
           )
       );
     }
-
 
     const prefix =
       match[1];
@@ -16291,7 +16102,6 @@ ${renderPaymentScheduleFooterContainers()}
     const start =
       Number(number);
 
-
     return (
       prefix +
       String(
@@ -16304,7 +16114,6 @@ ${renderPaymentScheduleFooterContainers()}
       )
     );
   }
-
 
   /* ==========================================================
      BULK JOURNAL RESULT
@@ -16325,13 +16134,11 @@ ${renderPaymentScheduleFooterContainers()}
           item.balanced
       );
 
-
     const unbalanced =
       data.filter(
         item =>
           !item.balanced
       );
-
 
     const totalDebit =
       data.reduce(
@@ -16340,7 +16147,6 @@ ${renderPaymentScheduleFooterContainers()}
           item.totalDebit,
         0
       );
-
 
     const totalCredit =
       data.reduce(
@@ -16399,7 +16205,6 @@ ${renderPaymentScheduleFooterContainers()}
 
         </div>
 
-
         <div
           style="
             padding:14px;
@@ -16427,7 +16232,6 @@ ${renderPaymentScheduleFooterContainers()}
           </strong>
 
         </div>
-
 
         <div
           style="
@@ -16457,7 +16261,6 @@ ${renderPaymentScheduleFooterContainers()}
 
         </div>
 
-
         <div
           style="
             padding:14px;
@@ -16483,7 +16286,6 @@ ${renderPaymentScheduleFooterContainers()}
           </strong>
 
         </div>
-
 
         <div
           style="
@@ -16679,7 +16481,6 @@ ${renderPaymentScheduleFooterContainers()}
 
           </thead>
 
-
           <tbody>
 
             ${bulkJournalData
@@ -16813,14 +16614,12 @@ ${renderPaymentScheduleFooterContainers()}
         "exportBulkJournals"
       );
 
-
     if (
       !summary ||
       !preview
     ) {
       return;
     }
-
 
     if (
       !bulkJournalData.length
@@ -16857,13 +16656,10 @@ ${renderPaymentScheduleFooterContainers()}
       return;
     }
 
-
     const stats = computeBulkJournalSummary(bulkJournalData);
     const { balanced, unbalanced, totalDebit, totalCredit } = stats;
 
-
     summary.innerHTML = renderBulkJournalSummaryCards(bulkJournalData, stats);
-
 
     if (bulkJournalData.length > BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD) {
       // FAZ 4.4 — büyük listede sanal kaydırma. Mevcut sabit tablo yolu
@@ -16880,7 +16676,6 @@ ${renderPaymentScheduleFooterContainers()}
       preview.innerHTML = renderBulkJournalPreviewTable(bulkJournalData);
     }
 
-
     if (exportButton) {
 
       const allowed =
@@ -16895,7 +16690,6 @@ ${renderPaymentScheduleFooterContainers()}
           : ".5";
     }
   }
-
 
   function setBulkPreview(
     html
@@ -16935,7 +16729,6 @@ ${renderPaymentScheduleFooterContainers()}
         ".5";
     }
   }
-
 
   /* ==========================================================
      EXCEL EXPORT
@@ -17199,7 +16992,6 @@ ${renderPaymentScheduleFooterContainers()}
     return ok;
   }
 
-
   function normalizeHeader(
     value
   ) {
@@ -17235,7 +17027,6 @@ ${renderPaymentScheduleFooterContainers()}
       );
   }
 
-
   function findImportValue(
     row,
     aliases
@@ -17267,7 +17058,6 @@ ${renderPaymentScheduleFooterContainers()}
 
     return "";
   }
-
 
   function mapImportedContract(
     row
@@ -17397,7 +17187,6 @@ ${renderPaymentScheduleFooterContainers()}
     };
   }
 
-
   function validateImportedContract(
     contract
   ) {
@@ -17406,7 +17195,6 @@ ${renderPaymentScheduleFooterContainers()}
       contract
     );
   }
-
 
   function openBulkImportModal() {
 
@@ -17420,7 +17208,6 @@ ${renderPaymentScheduleFooterContainers()}
     modal.classList.remove(
       "hidden"
     );
-
 
     const preview =
       document.getElementById(
@@ -17453,7 +17240,6 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   function closeBulkImportModal() {
 
     document
@@ -17465,18 +17251,14 @@ ${renderPaymentScheduleFooterContainers()}
       );
   }
 
-
   const bulkImportButton = document.getElementById("bulkImportButton");
   if (bulkImportButton) bulkImportButton.onclick = openBulkImportModal;
-
 
   const closeBulkModalButton = document.getElementById("closeBulkModal");
   if (closeBulkModalButton) closeBulkModalButton.onclick = closeBulkImportModal;
 
-
   const cancelBulkImportButton = document.getElementById("cancelBulkImport");
   if (cancelBulkImportButton) cancelBulkImportButton.onclick = closeBulkImportModal;
-
 
   const bulkFileInput = document.getElementById("bulkFileInput");
   if (bulkFileInput) {
@@ -17486,7 +17268,6 @@ ${renderPaymentScheduleFooterContainers()}
       readBulkImportFile(file);
     };
   }
-
 
   async function readBulkImportFile(
     file
@@ -17595,10 +17376,8 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   const confirmBulkImportButton = document.getElementById("confirmBulkImport");
   if (confirmBulkImportButton) confirmBulkImportButton.onclick = confirmBulkImport;
-
 
   async function confirmBulkImport() {
     const context = window.__GK_V191_IMPORT_CONTEXT__;
@@ -17699,14 +17478,12 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   /* ==========================================================
      TEMPLATE DOWNLOAD
   ========================================================== */
 
   const downloadTemplateButton = document.getElementById("downloadTemplateButton");
   if (downloadTemplateButton) downloadTemplateButton.onclick = downloadTemplate;
-
 
   /**
    * LEASE_IMPORT_TEMPLATE_ROWS — Excel/CSV şablon indirmesinde
@@ -17789,7 +17566,6 @@ ${renderPaymentScheduleFooterContainers()}
     URL.revokeObjectURL(url);
   }
 
-
   /* ==========================================================
      SEARCH / FILTER EVENTS
   ========================================================== */
@@ -17803,7 +17579,6 @@ ${renderPaymentScheduleFooterContainers()}
       renderTable
     );
 
-
   document
     .getElementById(
       "statusFilter"
@@ -17813,7 +17588,6 @@ ${renderPaymentScheduleFooterContainers()}
       renderTable
     );
 
-
   document
     .getElementById(
       "companyFilter"
@@ -17822,7 +17596,6 @@ ${renderPaymentScheduleFooterContainers()}
       "change",
       renderTable
     );
-
 
   /* ==========================================================
      DELETE CONTRACT
@@ -17842,14 +17615,12 @@ ${renderPaymentScheduleFooterContainers()}
           return;
         }
 
-
         const contract =
           contracts.find(
             item =>
               item.id ===
               selectedContractId
           );
-
 
         if (!contract) {
           return;
@@ -17878,17 +17649,14 @@ ${renderPaymentScheduleFooterContainers()}
           return;
         }
 
-
         const confirmed =
           confirm(
             `${contract.id} sözleşmesini silmek istediğinizden emin misiniz?`
           );
 
-
         if (!confirmed) {
           return;
         }
-
 
         const deletedId = selectedContractId;
 
@@ -17942,7 +17710,6 @@ ${renderPaymentScheduleFooterContainers()}
         refresh();
       }
     );
-
 
   /* ==========================================================
      RISK & CONTROL ENGINE (V16.8)
@@ -19455,7 +19222,6 @@ ${renderPaymentScheduleFooterContainers()}
     } catch(error) { return {passed:false,summary:{total:results.length+1,passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length+1},results,error:error?.message||String(error)}; }
   }
 
-
   /* ==========================================================
      FINANCIAL REPORTING ENGINE (V16.10)
      ----------------------------------------------------------
@@ -20780,7 +20546,6 @@ ${renderPaymentScheduleFooterContainers()}
     }catch(error){return {passed:false,summary:{total:results.length+1,passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length+1},results,error:error?.message||String(error)};}
   }
 
-
   /* ==========================================================
      MONTH-END CLOSE ENGINE (V17)
      ----------------------------------------------------------
@@ -21993,7 +21758,6 @@ ${renderPaymentScheduleFooterContainers()}
     render();
   }
 
-
   function requestMonthEndClose(reportingDate, input = {}) {
     v21RequirePermission("close.execute", { action: "CLOSE_EXECUTE" });
     const d = closeResolveDate(reportingDate), period = closePeriod(d), readiness = getCloseReadiness(d);
@@ -22855,7 +22619,6 @@ ${renderPaymentScheduleFooterContainers()}
       return { passed: false, summary: { total: results.length + 1, passed: results.filter(item => item.passed).length, failed: results.filter(item => !item.passed).length + 1 }, results, error: error?.message || String(error) };
     }
   }
-
 
   /* ==========================================================
      ERP / EXCEL INTEGRATION & DATA EXCHANGE ENGINE (V19)
@@ -24068,8 +23831,6 @@ ${renderPaymentScheduleFooterContainers()}
       return { passed: false, summary: { total: results.length + 1, passed: results.filter(item => item.passed).length, failed: results.filter(item => !item.passed).length + 1 }, results, error: error?.message || String(error) };
     }
   }
-
-
 
   /* ==========================================================
      V19.1 UI INTEGRATION & FUNCTIONAL WIRING
@@ -25621,7 +25382,6 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   /* ==========================================================
      V20 — BACKEND & DATABASE ARCHITECTURE
      ----------------------------------------------------------
@@ -27029,8 +26789,6 @@ ${renderPaymentScheduleFooterContainers()}
     };
   }
 
-
-
   /* ==========================================================
      V21 USER / ROLE / COMPANY SECURITY ARCHITECTURE
      Additive security foundation. Existing V20 engines remain
@@ -27663,7 +27421,6 @@ ${renderPaymentScheduleFooterContainers()}
     }
     return { version: V21_SECURITY_VERSION, passed: results.every(item => item.passed), results };
   }
-
 
   /* V16.9 public API — V16.8 API is preserved and extended. */
 
@@ -28956,7 +28713,6 @@ ${renderPaymentScheduleFooterContainers()}
     pass("Pagination model", v22Paginate([1, 2, 3], { page: 1, pageSize: 2 }).metadata.total === 3);
     return { version: V22_SCHEMA_VERSION, passed: results.every(item => item.passed), results };
   }
-
 
   /* ==========================================================
      V23 FX / MULTI-CURRENCY ENGINE
@@ -30851,8 +30607,6 @@ ${renderPaymentScheduleFooterContainers()}
     runV19IntegrationTests
   });
 
-
-
   /* ==========================================================
      V24 BUDGET / FORECAST / FINANCIAL PLANNING ENGINE
      ----------------------------------------------------------
@@ -31179,7 +30933,6 @@ ${renderPaymentScheduleFooterContainers()}
     console.error("V24 planning data migration error:", error);
   }
 
-
   /* ==========================================================
      V23 INITIALIZATION
   ========================================================== */
@@ -31360,7 +31113,6 @@ ${renderPaymentScheduleFooterContainers()}
     );
   }
 
-
   /* ---------- 2) KİRA DÖNEMİ ERKEN UYARI (180/90/30 gün) ---------- */
 
   /**
@@ -31429,7 +31181,6 @@ ${renderPaymentScheduleFooterContainers()}
       .map(contract => ({ contractId: contract.id, ...checkLeaseTermWarning(contract) }))
       .filter(item => item.applicable);
   }
-
 
   /* ---------- 3) KISMİ / ERKEN ÖDEME DESTEĞİ ---------- */
 
@@ -31580,7 +31331,6 @@ ${renderPaymentScheduleFooterContainers()}
     return getPrivateCalculationForConsumer(contract).schedule;
   }
 
-
   /* ---------- 4) GELECEK BAŞLANGIÇ TARİHLİ KİRALAMALAR ---------- */
 
   /**
@@ -31698,7 +31448,6 @@ ${renderPaymentScheduleFooterContainers()}
       console.error("updateFutureLeaseKPI error:", error);
     }
   }
-
 
   /* ---------- 5) RAPORLAMA FORMATLARI (PDF / HTML) ---------- */
 
@@ -31827,7 +31576,6 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-
   /* ---------- V25 REFRESH ENTEGRASYONU (monkey-patch, additive) ---------- */
 
   const __gkOriginalRefreshV25 = refresh;
@@ -31840,7 +31588,6 @@ ${renderPaymentScheduleFooterContainers()}
       checkAllIndexReassessments().catch(error => console.error("checkAllIndexReassessments error:", error));
     } catch (error) { console.error("checkAllIndexReassessments error:", error); }
   };
-
 
   /* ---------- V25 GLOBAL EXPOSURE (window.GK_TFRS16) ---------- */
 
@@ -31869,9 +31616,6 @@ ${renderPaymentScheduleFooterContainers()}
     // butonların onclick'leri buna göre güncellendi.
     getSelectedContractId: () => selectedContractId
   });
-
-
-
 
   /* ==========================================================
      UX — V24.2 ADDITIVE LAYER: 2–7
@@ -32036,7 +31780,6 @@ ${renderPaymentScheduleFooterContainers()}
     setTimeout(() => modal.querySelector("[data-error-close]")?.focus(), 50);
   }
 
-
   /* ---------- 3. RESPONSIVE — MOBİL MENÜ ---------- */
   function initMobileMenuV242() {
     const sidebar = document.querySelector(".sidebar");
@@ -32107,7 +31850,6 @@ ${renderPaymentScheduleFooterContainers()}
     document.head.appendChild(style);
   }
 
-
   /* ---------- 4. KEYBOARD SHORTCUTS ---------- */
   function closeAllModalsV242() {
     document.querySelectorAll('.modal:not(.hidden):not(.error-modal-v242):not(.confirm-modal-v242)').forEach(modal => {
@@ -32154,7 +31896,6 @@ ${renderPaymentScheduleFooterContainers()}
     });
   }
 
-
   /* ---------- 5. ARIA / ERİŞİLEBİLİRLİK ---------- */
   function enhanceAccessibilityV242() {
     document.querySelectorAll("button:not([aria-label])").forEach(btn => {
@@ -32195,7 +31936,6 @@ ${renderPaymentScheduleFooterContainers()}
       loading.setAttribute("aria-live", "polite");
     }
   }
-
 
   /* ---------- 6. BUTON LOADING STATE ---------- */
   const __gkButtonStatesV242 = new Map();
@@ -32248,7 +31988,6 @@ ${renderPaymentScheduleFooterContainers()}
     }, true);
   }
 
-
   /* ---------- 7. MODAL CONFIRMATION ---------- */
   function showConfirm(message, options = {}) {
     return new Promise(resolve => {
@@ -32299,7 +32038,6 @@ ${renderPaymentScheduleFooterContainers()}
       setTimeout(() => modal.querySelector(".confirm-ok-v242")?.focus(), 50);
     });
   }
-
 
   /* ---------- V24.2 UX INITIALIZATION ---------- */
   try { initMobileMenuV242(); } catch (error) { console.error("Mobile menu UX init error:", error); }
@@ -32712,690 +32450,6 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   /* ==========================================================
-     V18 Parça 1 — SELF-TEST SUITE
-     ========================================================== */
-  async function runSelfTestsV18Part1() {
-    const results = [];
-    function check(name, expected, actual, tolerance = 0.01) {
-      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
-      results.push({ name, pass, expected, actual });
-      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
-      return pass;
-    }
-
-    const baseContract = {
-      id: "SELFTEST-V18-1",
-      monthlyPayment: 100000,
-      discountRate: 18,
-      // GC-2026-09: bu test NOMİNAL yıllık oran varsayımıyla (18/100/12)
-      // yazılmıştı; motor varsayılanı artık "effective" olduğundan bu
-      // regresyon testinin orijinal anlamını korumak için convention
-      // açıkça "nominal" olarak sabitlendi (bkz. engine-decisions-and-
-      // learnings.md — rate convention migration notu).
-      discountRateConvention: "nominal",
-      startDate: "2026-01-01",
-      endDate: "2030-12-01", // 60 ay
-      paymentFrequency: "monthly",
-      paymentTiming: "arrears"
-    };
-
-    // ---- VAKA 1: REGRESYON (KRİTİK) — bağımsız kapalı-form PV ----
-    const monthlyRate = 18 / 100 / 12;
-    const manualAnnuityPV =
-      100000 * ((1 - Math.pow(1 + monthlyRate, -60)) / monthlyRate);
-    const noEscalationResult = calculateLeaseEngine({ ...baseContract });
-    check("Vaka 1 — Regresyon (kapalı-form PV eşleşmesi)", manualAnnuityPV, noEscalationResult.liability, 0.5);
-
-    // ---- VAKA 2: %20 yıllık compound artış ----
-    const contract2 = {
-      ...baseContract,
-      id: "SELFTEST-V18-2",
-      leaseIncreaseType: "fixedRate",
-      leaseIncreaseRate: 20,
-      escalationBase: "compound"
-    };
-    const result2 = calculateLeaseEngine(contract2);
-
-    let manualPV2 = 0;
-    for (let m = 1; m <= 60; m++) {
-      const yearIndex = Math.floor((m - 1) / 12);
-      const pay = 100000 * Math.pow(1.20, yearIndex);
-      manualPV2 += pay / Math.pow(1 + monthlyRate, m);
-    }
-    const pass2a = result2.liability > noEscalationResult.liability;
-    results.push({ name: "Vaka 2 — liability > Vaka 1", pass: pass2a });
-    console.log(`${pass2a ? "✅" : "❌"} Vaka 2 — liability > Vaka 1 — ${result2.liability.toFixed(2)} > ${noEscalationResult.liability.toFixed(2)}`);
-    check("Vaka 2 — bağımsız PV formülü ile eşleşme", manualPV2, result2.liability, 1);
-
-    // ---- VAKA 3: "initial" baz ≤ compound ----
-    const contract3 = { ...contract2, id: "SELFTEST-V18-3", escalationBase: "initial", escalationFrequencyMonths: 12 };
-    const result3 = calculateLeaseEngine(contract3);
-    const pass3 = result3.liability <= result2.liability + 0.01;
-    results.push({ name: "Vaka 3 — initial ≤ compound", pass: pass3 });
-    console.log(`${pass3 ? "✅" : "❌"} Vaka 3 — initial ≤ compound — initial: ${result3.liability.toFixed(2)}, compound: ${result2.liability.toFixed(2)}`);
-
-    // ---- VAKA 4: CPI → INDEX_RATE_CHANGE reassessment ----
-    let vaka4Pass = false;
-    try {
-      const contract4 = {
-        ...baseContract,
-        id: "SELFTEST-V18-4",
-        leaseIncreaseType: "index",
-        indexBaseRate: 1000,
-        indexReviewMonth: 0,
-        indexReviewDay: 1
-      };
-      ensureReassessmentState(contract4);
-      addOrUpdateCpiIndexEntry("2026-01", 1200); // %20 artış → %5 eşiği aşılır
-      const sync = await syncIndexCurrentRateFromCpiTable(contract4, "2026-01");
-      vaka4Pass =
-        sync.ok === true &&
-        sync.checkResult?.reassessmentCreated === true &&
-        Array.isArray(contract4.reassessments) &&
-        contract4.reassessments.length > 0;
-      deleteCpiIndexEntry("2026-01");
-    } catch (error) {
-      console.error("Vaka 4 hata:", error);
-      vaka4Pass = false;
-    }
-    results.push({ name: "Vaka 4 — CPI → INDEX_RATE_CHANGE reassessment", pass: vaka4Pass });
-    console.log(`${vaka4Pass ? "✅" : "❌"} Vaka 4 — CPI endeks → reassessment oluşumu`);
-
-    const totalPass = results.filter(r => r.pass).length;
-    console.log(`\nV18 Parça 1 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
-    return results;
-  }
-
-
-  /* ==========================================================
-     V18 Parça 2 — SELF-TEST SUITE
-     ----------------------------------------------------------
-     Belgede istenen fonksiyon adı runSelfTestsV25Part2 idi; dosyanın
-     gerçek versiyonlama şeması "V18" olduğundan (Parça 1 onaylı
-     tasarım kararı) fonksiyon runSelfTestsV18Part2 olarak adlandırıldı.
-     window.__TFRS16_TEST__ üzerinden her iki isimle de erişilebilir.
-     ========================================================== */
-  function runSelfTestsV18Part2() {
-    const results = [];
-    function check(name, expected, actual, tolerance = 0.01) {
-      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
-      results.push({ name, pass, expected, actual });
-      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
-      return pass;
-    }
-
-    const baseContract = {
-      id: "SELFTEST-V18P2-1",
-      monthlyPayment: 100000,
-      discountRate: 18,
-      startDate: "2026-01-01",
-      endDate: "2027-12-01", // 24 ay
-      paymentFrequency: "monthly",
-      paymentTiming: "arrears"
-    };
-
-    // ---- VAKA 1: REGRESYON — inflationAdjustments boşken Parça 1
-    // sonuçlarıyla (liability/ROU/schedule) birebir aynı olmalı ----
-    const contract1 = { ...baseContract };
-    ensureInflationAdjustmentState(contract1);
-    const before = calculateLeaseEngine({ ...baseContract, id: "SELFTEST-V18P2-1B" });
-    const after = calculateLeaseEngine(contract1);
-    check("Vaka 1 — Regresyon (liability)", before.liability, after.liability, 0.01);
-    check("Vaka 1 — Regresyon (rouAssets)", before.rouAssets, after.rouAssets, 0.01);
-    const schedMatch =
-      before.schedule.length === after.schedule.length &&
-      before.schedule.every((row, i) => Math.abs(row.payment - after.schedule[i].payment) < 0.01);
-    results.push({ name: "Vaka 1 — Regresyon (schedule)", pass: schedMatch });
-    console.log(`${schedMatch ? "✅" : "❌"} Vaka 1 — Regresyon (schedule) — ${schedMatch ? "eşleşti" : "FARKLI"}`);
-
-    // ---- VAKA 2: endekste %5 artış → ROU artmış, jurnal dengeli,
-    // yükümlülük farkı 0 (VARSAYIM — onaylandı: moneter kalem) ----
-    let vaka2Pass = false;
-    try {
-      // FIX (V18 Parça 2 — Vaka 2 hatası): motor, edinim ayından raporlama
-      // dönemine kadar HER ay için endeks satırı arıyor (interpolasyon
-      // kasıtlı olarak yapılmıyor — bkz. getInflationIndex). Eskiden yalnızca
-      // 3 ay girildiği için test her seferinde "endeks eksik" hatasıyla
-      // düşüyor ve asıl doğrulama (ROU artışı/jurnal dengesi) hiç
-      // çalışmıyordu. Şimdi 2026-01 → 2027-06 arasındaki TÜM aylara sabit
-      // endeks (1000) veriliyor, yalnızca raporlama ayı 2027-06 %5 yüksek
-      // (1050) — böylece "düz bazda %5 artış" senaryosu gerçekten test edilir.
-      const v2Months = [];
-      for (let y = 2026; y <= 2027; y++) {
-        for (let m = 1; m <= 12; m++) {
-          const mo = `${y}-${String(m).padStart(2, "0")}`;
-          if (mo <= "2027-06") v2Months.push(mo);
-        }
-      }
-      v2Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
-
-      const contract2 = { ...baseContract, id: "SELFTEST-V18P2-2" };
-      ensureInflationAdjustmentState(contract2);
-
-      const created = createInflationAdjustment(contract2, { reportingPeriod: "2027-06" });
-      const applied = created.valid
-        ? applyInflationAdjustment(contract2, created.adjustment.id)
-        : { valid: false, errors: created.errors };
-
-      if (applied.valid) {
-        const t = applied.adjustment.restatedFigures;
-        const journal = applied.adjustment.journal;
-        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
-        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
-        const balanced = Math.abs(debit - credit) < 0.01;
-        const rouIncreased = t.restatedROUClosing > t.nominalROUClosing;
-        const liabilityUnchanged = Math.abs(t.liabilityDifference) < 0.01;
-        const journalOnGainLossAccount = journal.some(j => j.account === TFRS29_ACCOUNTS.inflationGainLoss);
-
-        check("Vaka 2 — düzeltilmiş ROU > nominal ROU", 1, rouIncreased ? 1 : 0, 0);
-        check("Vaka 2 — jurnal borç = alacak", debit, credit, 0.01);
-        check("Vaka 2 — yükümlülük farkı = 0 (moneter, VARSAYIM)", 0, t.liabilityDifference, 0.01);
-        results.push({ name: "Vaka 2 — net fark enflasyon K/Z hesabında", pass: journalOnGainLossAccount });
-        console.log(`${journalOnGainLossAccount ? "✅" : "❌"} Vaka 2 — net fark ${TFRS29_ACCOUNTS.inflationGainLoss} hesabında`);
-
-        vaka2Pass = balanced && rouIncreased && liabilityUnchanged && journalOnGainLossAccount;
-      } else {
-        console.error("Vaka 2 — düzeltme uygulanamadı:", applied.errors);
-      }
-
-      v2Months.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 2 hata:", error);
-    }
-    results.push({ name: "Vaka 2 — genel", pass: vaka2Pass });
-
-    // ---- VAKA 3: endeks tablosunda eksik ay → validateInflationAdjustment
-    // hata listesi döndürmeli (throw ETMEMELİ) ----
-    let vaka3Pass = false;
-    try {
-      const contract3 = { ...baseContract, id: "SELFTEST-V18P2-3" };
-      ensureInflationAdjustmentState(contract3);
-      // Kasıtlı olarak endeks tablosuna hiç kayıt eklenmedi.
-      const validation = validateInflationAdjustment(contract3, { reportingPeriod: "2099-01" });
-      vaka3Pass = validation.valid === false && Array.isArray(validation.errors) && validation.errors.length > 0;
-    } catch (error) {
-      console.error("Vaka 3 — beklenmedik throw (hata döndürmesi gerekirdi):", error);
-      vaka3Pass = false;
-    }
-    results.push({ name: "Vaka 3 — eksik endeks ayı → hata listesi (throw yok)", pass: vaka3Pass });
-    console.log(`${vaka3Pass ? "✅" : "❌"} Vaka 3 — eksik endeks ayı → hata listesi (throw yok)`);
-
-    const totalPass = results.filter(r => r.pass).length;
-    console.log(`\nV18 Parça 2 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
-    return results;
-  }
-  const runSelfTestsV25Part2 = runSelfTestsV18Part2; // belge uyumluluğu için takma ad
-
-  function runSelfTestsMovementControls() {
-    const results = [];
-    const assert = (name, pass, details = {}) => {
-      results.push({ name, pass: !!pass, ...details });
-    };
-
-    const baseContract = {
-      id: "SELFTEST-MOVEMENT-BASE",
-      monthlyPayment: 100000,
-      discountRate: 18,
-      startDate: "2026-01-01",
-      endDate: "2027-12-01",
-      paymentFrequency: "monthly",
-      paymentTiming: "arrears"
-    };
-    const base = calculateLeaseEngine({ ...baseContract });
-
-    const modificationA = {
-      id: "MOD-A", status: "APPLIED", modificationType: "PAYMENT_INCREASE",
-      effectiveDate: "2026-07-01",
-      newTerms: { payment: 120000, leaseEndDate: "2027-12-01", discountRate: 18 },
-      liabilityAdjustment: 1000, rouAdjustment: 1000
-    };
-    const modificationB = { ...cloneModificationValue(modificationA), id: "MOD-B" };
-    assert(
-      "Modifikasyon — farklı ID'li aynı ekonomik olay tekilleştirilir",
-      dedupeAppliedModifications([modificationA, modificationB]).length === 1
-    );
-
-    assert(
-      "Manuel düzeltme — açıklanamayan Diğer satırı WARNING olur",
-      rptRollForwardStatus(0, -394798.49) === "WARNING",
-      { demoOtherAdjustment: -394798.49 }
-    );
-    assert(
-      "Yuvarlama toleransı — küçük fark READY kalır",
-      rptRollForwardStatus(0, REPORTING_TOLERANCE / 2) === "READY"
-    );
-
-    const fxOnly = calculateLeaseEngine({ ...baseContract, id: "SELFTEST-MOVEMENT-FX", currency: "USD" });
-    assert(
-      "Kur — para birimi etiketi nominal TFRS 16 planını değiştirmez",
-      Math.abs(base.liability - fxOnly.liability) <= 0.01 &&
-        Math.abs(base.rouAssets - fxOnly.rouAssets) <= 0.01
-    );
-
-    const inflationOnly = calculateLeaseEngine({
-      ...baseContract,
-      id: "SELFTEST-MOVEMENT-INFLATION",
-      inflationAdjustments: [{ id: "INF-DEMO", status: "APPLIED", reportingPeriod: "2026-12" }]
-    });
-    assert(
-      "Enflasyon — TMS 29 kaydı nominal TFRS 16 planına sızmaz",
-      Math.abs(base.liability - inflationOnly.liability) <= 0.01 &&
-        Math.abs(base.rouAssets - inflationOnly.rouAssets) <= 0.01
-    );
-
-    return results;
-  }
-
-  /* ==========================================================
-     TAM KAPSAMLI TMS 29 (Kiralama Portföyü) — SELF-TEST SUITE
-     ----------------------------------------------------------
-     Bu paket, V18 Parça 2'de zaten var olan ama UI'da hiç
-     tetiklenmeyen "Parasal Kazanç/(Kayıp), net" (kiralama
-     yükümlülüğü — TMS 29.28 net moneter pozisyon) hesaplamasının
-     uçtan uca (createInflationAdjustment → applyInflationAdjustment
-     → journal) doğru çalıştığını doğrular. applyTMS29Restatement()
-     ve generateInflationAdjustmentJournal() içindeki formüller
-     değiştirilmedi — yalnızca kontrat paneli artık periodStart
-     alanını bu fonksiyonlara iletiyor (bkz. renderInflationAdjustmentSection).
-     Kapsam sınırı korunuyor: yalnızca kiralama ROU + kiralama
-     yükümlülüğü. İşletmenin kiralama dışı moneter/gayri moneter
-     kalemleri (nakit, ticari alacak/borç, stok vb.) bu paketin
-     dışındadır — tam finansal tablo TMS 29 için ayrı bir çalışma
-     gerekir (bkz. panel içi SINIR notu).
-     ========================================================== */
-  async function runSelfTestsV19FullTms29() {
-    // İZOLASYON SARMALAYICISI (fonksiyonun İÇ MANTIĞINA dokunulmadı):
-    // Bu self-test, kendi test verisini addOrUpdateInflationIndexEntry()
-    // ile (tarihsel olarak localStorage'a) yazıyordu. loadInflationIndexTable()
-    // artık fail-closed olduğu için (bkz. yukarısı — admin panelinden
-    // VERIFIED gelmeyen hiçbir veri hesaplamaya girmiyor) bu iç test verisi
-    // artık motor tarafından GÖRÜLMÜYORDU. Çözüm: self-test SIRASINDA
-    // backendInflationIndexCache'i geçici olarak devreye alıp (addOrUpdate/
-    // deleteInflationIndexEntry çağrılarının ADRESLEDİĞİ kaynağı buraya
-    // yönlendirerek), test bitince GERÇEK production cache'ini (varsa)
-    // aynen geri yüklüyoruz — gerçek backend verisi asla kaybolmaz/ezilmez.
-    //
-    // async'e çevrildi (kritik düzeltme, bkz. PROJECT_CONTEXT.md bölüm 23
-    // madde 14): createModification/createReassessment artık backend'e
-    // yazmayı bekliyor.
-    const __savedBackendInflationIndexCache = backendInflationIndexCache;
-    backendInflationIndexCache = [];
-    try {
-      return await runSelfTestsV19FullTms29Body();
-    } finally {
-      backendInflationIndexCache = __savedBackendInflationIndexCache;
-    }
-  }
-
-  async function runSelfTestsV19FullTms29Body() {
-    const results = [];
-    function check(name, expected, actual, tolerance = 0.01) {
-      const pass = Math.abs(Number(expected) - Number(actual)) <= tolerance;
-      results.push({ name, pass, expected, actual });
-      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
-      return pass;
-    }
-    function assertTrue(name, condition) {
-      results.push({ name, pass: !!condition });
-      console.log(`${condition ? "✅" : "❌"} ${name}`);
-      return !!condition;
-    }
-
-    const baseContract = {
-      monthlyPayment: 100000,
-      discountRate: 18,
-      startDate: "2026-01-01",
-      endDate: "2027-12-01", // 24 ay
-      paymentFrequency: "monthly",
-      paymentTiming: "arrears"
-    };
-    const months2026to2027 = [];
-    for (let y = 2026; y <= 2027; y++) {
-      for (let m = 1; m <= 12; m++) months2026to2027.push(`${y}-${String(m).padStart(2, "0")}`);
-    }
-
-    // ---- VAKA 1: Endeks TAMAMEN SABİT (enflasyon yok) → hem ROU net
-    // düzeltmesi hem de yükümlülük Parasal K/Z sıfır olmalı ----
-    let vaka1Pass = false;
-    try {
-      months2026to2027.forEach(mo => addOrUpdateInflationIndexEntry(mo, 1000));
-      const contract1 = { ...baseContract, id: "SELFTEST-V19-1" };
-      ensureInflationAdjustmentState(contract1);
-      const restatement = applyTMS29Restatement(contract1, "2027-06", "2027-01");
-      const t = restatement.totals;
-      const okNet = check("Vaka 1 — enflasyon yokken ROU net düzeltme = 0", 0, t.netAdjustment, 0.01);
-      const okMon = check("Vaka 1 — enflasyon yokken Parasal K/Z = 0", 0, t.liabilityMonetaryGainLoss, 0.01);
-      vaka1Pass = okNet && okMon;
-      months2026to2027.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 1 hata:", error);
-      months2026to2027.forEach(mo => { try { deleteInflationIndexEntry(mo); } catch (e) {} });
-    }
-    results.push({ name: "Vaka 1 — genel (sıfır enflasyon)", pass: vaka1Pass });
-
-    // ---- VAKA 2: Uçtan uca — createInflationAdjustment(periodStart ile)
-    // → applyInflationAdjustment → journal, Parasal K/Z hesaba yansımalı
-    // ve jurnal dengeli olmalı ----
-    let vaka2Pass = false;
-    try {
-      const v2Months = months2026to2027.filter(mo => mo <= "2027-06");
-      v2Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
-
-      const contract2 = { ...baseContract, id: "SELFTEST-V19-2" };
-      ensureInflationAdjustmentState(contract2);
-
-      const created = createInflationAdjustment(contract2, { reportingPeriod: "2027-06", periodStart: "2027-01" });
-      const periodStartStored = assertTrue(
-        "Vaka 2 — periodStart taslakta saklandı",
-        created.valid && created.adjustment.periodStart === "2027-01"
-      );
-
-      const applied = created.valid
-        ? applyInflationAdjustment(contract2, created.adjustment.id)
-        : { valid: false, errors: created.errors };
-
-      let journalHasMonetaryLines = false, balanced = false, monetaryFinite = false;
-      if (applied.valid) {
-        const journal = applied.adjustment.journal;
-        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
-        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
-        balanced = Math.abs(debit - credit) < 0.01;
-        journalHasMonetaryLines = journal.some(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING" || j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_PERIOD");
-        monetaryFinite = Number.isFinite(applied.adjustment.restatedFigures.liabilityMonetaryGainLoss);
-
-        assertTrue("Vaka 2 — jurnal borç = alacak (dengeli)", balanced);
-        assertTrue("Vaka 2 — jurnal Parasal K/Z satırlarını içeriyor", journalHasMonetaryLines);
-        assertTrue("Vaka 2 — restatedFigures.liabilityMonetaryGainLoss sayısal", monetaryFinite);
-      } else {
-        console.error("Vaka 2 — düzeltme uygulanamadı:", applied.errors);
-      }
-
-      vaka2Pass = periodStartStored && applied.valid && balanced && journalHasMonetaryLines && monetaryFinite;
-      v2Months.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 2 hata:", error);
-    }
-    results.push({ name: "Vaka 2 — genel (uçtan uca, periodStart ile)", pass: vaka2Pass });
-
-    // ---- VAKA 3: periodStart VERİLMEDEN oluşturulan taslak — geriye
-    // dönük uyumluluk: Parasal K/Z null kalmalı, jurnal yine dengeli
-    // olmalı (regresyon — mevcut kullanıcı akışı bozulmamalı) ----
-    let vaka3Pass = false;
-    try {
-      const v3Months = months2026to2027.filter(mo => mo <= "2027-06");
-      v3Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
-
-      const contract3 = { ...baseContract, id: "SELFTEST-V19-3" };
-      ensureInflationAdjustmentState(contract3);
-      const created = createInflationAdjustment(contract3, { reportingPeriod: "2027-06" }); // periodStart YOK
-      const applied = created.valid
-        ? applyInflationAdjustment(contract3, created.adjustment.id)
-        : { valid: false, errors: created.errors };
-
-      if (applied.valid) {
-        const journal = applied.adjustment.journal;
-        const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
-        const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
-        const balanced = Math.abs(debit - credit) < 0.01;
-        const noMonetaryLines = !journal.some(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING" || j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_PERIOD");
-        const monetaryIsNull = applied.adjustment.restatedFigures.liabilityMonetaryGainLoss === null;
-        assertTrue("Vaka 3 — jurnal borç = alacak (dengeli)", balanced);
-        assertTrue("Vaka 3 — Parasal K/Z jurnal satırı YOK (regresyon)", noMonetaryLines);
-        assertTrue("Vaka 3 — restatedFigures.liabilityMonetaryGainLoss = null (regresyon)", monetaryIsNull);
-        vaka3Pass = balanced && noMonetaryLines && monetaryIsNull;
-      } else {
-        console.error("Vaka 3 — düzeltme uygulanamadı:", applied.errors);
-      }
-      v3Months.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 3 hata:", error);
-    }
-    results.push({ name: "Vaka 3 — genel (periodStart yok, regresyon)", pass: vaka3Pass });
-
-    // ---- VAKA 4: Portföy düzeyi ile kontrat düzeyi TUTARLILIĞI —
-    // v191ComputePortfolioTms29 toplamı, tek tek kontratların
-    // applyTMS29Restatement sonuçlarının toplamına eşit olmalı ----
-    let vaka4Pass = false;
-    try {
-      const v4Months = months2026to2027.filter(mo => mo <= "2027-06");
-      v4Months.forEach(mo => addOrUpdateInflationIndexEntry(mo, mo === "2027-06" ? 1050 : 1000));
-
-      const contractA = { ...baseContract, id: "SELFTEST-V19-4A" };
-      const contractB = { ...baseContract, id: "SELFTEST-V19-4B", monthlyPayment: 50000 };
-      [contractA, contractB].forEach(ensureInflationAdjustmentState);
-
-      const restA = applyTMS29Restatement(contractA, "2027-06", "2027-01");
-      const restB = applyTMS29Restatement(contractB, "2027-06", "2027-01");
-      const expectedTotal =
-        (restA.totals.liabilityMonetaryGainLoss || 0) +
-        (restB.totals.liabilityMonetaryGainLoss || 0);
-
-      const savedContracts = typeof contracts !== "undefined" ? contracts : null;
-      if (savedContracts) {
-        const before = savedContracts.slice();
-        savedContracts.length = 0;
-        savedContracts.push(contractA, contractB);
-        try {
-          const rows = [
-            { contractId: contractA.id, assetClass: "TEST" },
-            { contractId: contractB.id, assetClass: "TEST" }
-          ];
-          const portfolio = v191ComputePortfolioTms29(rows, "2027-01", "2027-06");
-          vaka4Pass = check(
-            "Vaka 4 — portföy toplamı = kontrat toplamı (Parasal K/Z)",
-            expectedTotal,
-            portfolio.totals.liabilityMonetaryGainLoss,
-            0.01
-          );
-        } finally {
-          savedContracts.length = 0;
-          before.forEach(c => savedContracts.push(c));
-        }
-      } else {
-        results.push({ name: "Vaka 4 — atlandı (contracts kapsam dışında erişilemiyor)", pass: true });
-        vaka4Pass = true;
-      }
-      v4Months.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 4 hata:", error);
-    }
-    results.push({ name: "Vaka 4 — genel (portföy/kontrat tutarlılığı)", pass: vaka4Pass });
-
-    // ---- VAKA 5: TEK NET PARASAL K/Z — TMS 29.9 uyarınca sonuç cari
-    // dönem K/Z'de tek kalemdir; 580/açılış özkaynak satırı üretilmez. ----
-    let vaka5Pass = false;
-    try {
-      const v5Months = months2026to2027.filter(mo => mo <= "2027-06");
-      v5Months.forEach((mo, i) => addOrUpdateInflationIndexEntry(mo, 1000 + i * 20));
-
-      const contract5 = { ...baseContract, id: "SELFTEST-V19-5" };
-      ensureInflationAdjustmentState(contract5);
-      const restatement = applyTMS29Restatement(contract5, "2027-06", "2026-07");
-      const t = restatement.totals;
-
-      const journal = generateInflationAdjustmentJournal(restatement);
-      const debit = journal.reduce((s, j) => s + (Number(j.debit) || 0), 0);
-      const credit = journal.reduce((s, j) => s + (Number(j.credit) || 0), 0);
-      const journalBalanced = assertTrue("Vaka 5 — jurnal borç = alacak", Math.abs(debit - credit) < 0.01);
-
-      const openingLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_OPENING");
-      const periodLines = journal.filter(j => j.source === "INFLATION_ADJUSTMENT_LIABILITY_MONETARY_PERIOD");
-      const noOpeningEquity = assertTrue(
-        "Vaka 5 — 580/açılış özkaynak satırı üretilmiyor",
-        openingLines.length === 0 && !journal.some(j => j.accountKey === "liabilityMonetaryGainLossOpeningEquity")
-      );
-      const netHitsCorrectAccount = assertTrue(
-        "Vaka 5 — net parasal K/Z yalnızca 698.02/590 hesaplarında",
-        periodLines.length > 0 &&
-          periodLines.every(j => j.accountKey === "liabilityMonetaryGainLoss" || j.accountKey === "monetaryPositionOffset")
-      );
-
-      vaka5Pass = Number.isFinite(t.liabilityMonetaryGainLoss) && journalBalanced && noOpeningEquity && netHitsCorrectAccount;
-      v5Months.forEach(mo => deleteInflationIndexEntry(mo));
-    } catch (error) {
-      console.error("Vaka 5 hata:", error);
-    }
-    results.push({ name: "Vaka 5 — genel (tek net parasal K/Z)", pass: vaka5Pass });
-
-    const totalPass = results.filter(r => r.pass).length;
-    console.log(`\nTam Kapsamlı TMS 29 Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
-    return results;
-  }
-
-  /* ==========================================================
-     V19 SELF-TEST — Hesap Planı Mapping + Period Locking
-     ----------------------------------------------------------
-     Kapsam:
-     1) default mapping yüklenir
-     2) şirket özel mapping kaydedilir / okunur
-     3) applyAccountMappingToJournal accountKey → accountCode çevirir
-     4) kilitli dönemde applyModification / applyReassessment hata döner
-     Kullanım: window.GK_TFRS16.runSelfTestsV19AccountMapping()
-     veya window.__TFRS16_TEST__.runSelfTestsV19AccountMapping()
-     ========================================================== */
-  async function runSelfTestsV19AccountMapping() {
-    const results = [];
-    function assertTrue(name, condition) {
-      const pass = !!condition;
-      results.push({ name, pass });
-      console.log(`${pass ? "✅" : "❌"} ${name}`);
-      return pass;
-    }
-    function assertEqual(name, expected, actual) {
-      const pass = String(expected) === String(actual);
-      results.push({ name, pass, expected, actual });
-      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
-      return pass;
-    }
-
-    const TEST_COMPANY_ID = "SELFTEST-V19-COMPANY";
-
-    // ---- 1) Default mapping yüklenir ----
-    try {
-      const def = getDefaultAccountMapping();
-      assertTrue("1a — getDefaultAccountMapping() boş değil", def && Object.keys(def).length > 0);
-      assertTrue("1b — default mapping rouAsset içeriyor", typeof def.rouAsset === "string" && def.rouAsset.length > 0);
-
-      // Kayıtlı özel mapping'i olmayan (rastgele) bir şirket için
-      // loadAccountMapping default'a düşmeli.
-      const loaded = loadAccountMapping("SELFTEST-V19-NONEXISTENT-COMPANY-" + Date.now());
-      assertEqual("1c — özel mapping yokken loadAccountMapping = default (rouAsset)", def.rouAsset, loaded.rouAsset);
-    } catch (error) {
-      console.error("Test 1 hata:", error);
-      results.push({ name: "1 — default mapping (genel)", pass: false });
-    }
-
-    // ---- 2) Şirket özel mapping kaydedilir / okunur ----
-    let savedOk = false;
-    try {
-      const customCode = "999.TEST." + Date.now();
-      savedOk = saveAccountMapping(TEST_COMPANY_ID, { interestExpense: customCode });
-      assertTrue("2a — saveAccountMapping başarılı döndü", savedOk);
-
-      const reloaded = loadAccountMapping(TEST_COMPANY_ID);
-      assertEqual("2b — kaydedilen özel kod geri okunuyor (interestExpense)", customCode, reloaded.interestExpense);
-
-      // Belirtilmeyen alanlar default'tan gelmeye devam etmeli.
-      assertEqual(
-        "2c — belirtilmeyen alan default'tan geliyor (rouAsset)",
-        getDefaultAccountMapping().rouAsset,
-        reloaded.rouAsset
-      );
-
-      assertEqual(
-        "2d — getAccountCode şirket özel kodu döndürüyor",
-        customCode,
-        getAccountCode(TEST_COMPANY_ID, "interestExpense")
-      );
-    } catch (error) {
-      console.error("Test 2 hata:", error);
-      results.push({ name: "2 — özel mapping kaydet/oku (genel)", pass: false });
-    }
-
-    // ---- 3) applyAccountMappingToJournal accountKey → accountCode çevirir ----
-    try {
-      const entries = [
-        { accountKey: "interestExpense", account: "PLACEHOLDER", debit: 100, credit: 0 },
-        { accountKey: "leaseLiability", account: "PLACEHOLDER", debit: 0, credit: 100 }
-      ];
-      const mapped = applyAccountMappingToJournal(entries, TEST_COMPANY_ID);
-      assertTrue("3a — applyAccountMappingToJournal 2 satır döndürüyor", Array.isArray(mapped) && mapped.length === 2);
-      const interestLine = mapped.find(e => e.accountKey === "interestExpense");
-      assertTrue(
-        "3b — interestExpense satırı şirket özel koda çevrildi (PLACEHOLDER değil)",
-        interestLine && interestLine.accountCode && interestLine.accountCode !== "PLACEHOLDER"
-      );
-      const liabilityLine = mapped.find(e => e.accountKey === "leaseLiability");
-      assertEqual(
-        "3c — leaseLiability satırı default koda çevrildi",
-        getDefaultAccountMapping().leaseLiability,
-        liabilityLine?.accountCode
-      );
-    } catch (error) {
-      console.error("Test 3 hata:", error);
-      results.push({ name: "3 — applyAccountMappingToJournal (genel)", pass: false });
-    }
-
-    // Test 2'de yazılan localStorage kaydını temizle (gerçek şirket
-    // verisini kirletmemek için).
-    try {
-      const raw = localStorage.getItem(ACCOUNT_MAPPING_STORAGE_KEY);
-      if (raw) {
-        const all = JSON.parse(raw) || {};
-        delete all[TEST_COMPANY_ID];
-        localStorage.setItem(ACCOUNT_MAPPING_STORAGE_KEY, JSON.stringify(all));
-      }
-    } catch (_) {}
-
-    // ---- 4) Kilitli dönemde applyModification / applyReassessment hata döner ----
-    const TEST_LOCK_PERIOD = "2099-01"; // gerçek verilerle çakışmayacak uzak bir dönem
-    try {
-      const testContract = {
-        id: "SELFTEST-V19-LOCK-1",
-        monthlyPayment: 10000,
-        discountRate: 15,
-        startDate: `${TEST_LOCK_PERIOD}-01`,
-        endDate: "2100-12-01",
-        paymentFrequency: "monthly",
-        paymentTiming: "arrears",
-        modifications: [],
-        reassessments: []
-      };
-
-      // Önce kilitsizken deneme yapılamayacağını (locked:false) doğrula.
-      const preLock = assertPeriodWritable(testContract, `${TEST_LOCK_PERIOD}-15`);
-      assertTrue("4a — dönem kilitlenmeden önce assertPeriodWritable.locked === false", preLock.locked === false);
-
-      const lockResult = lockPeriod(TEST_LOCK_PERIOD, { reason: "Self-test kilidi" });
-      assertTrue("4b — lockPeriod başarılı", Boolean(lockResult?.success));
-      assertTrue("4c — isPeriodLocked true dönüyor", isPeriodLocked(TEST_LOCK_PERIOD) === true);
-
-      const modResult = await createModification(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15`, description: "Self-test" });
-      assertTrue("4d — kilitli dönemde createModification valid:false döner", modResult.valid === false);
-      assertTrue("4e — kilitli dönemde createModification hata mesajı içeriyor", Array.isArray(modResult.errors) && modResult.errors.length > 0);
-
-      const reassResult = await createReassessment(testContract, { effectiveDate: `${TEST_LOCK_PERIOD}-15` });
-      assertTrue("4f — kilitli dönemde createReassessment valid:false döner", reassResult.valid === false);
-
-      const lockedPeriodsList = getLockedPeriods();
-      assertTrue(
-        "4g — getLockedPeriods() listesinde test dönemi var",
-        lockedPeriodsList.some(s => s.period === TEST_LOCK_PERIOD)
-      );
-    } catch (error) {
-      console.error("Test 4 hata:", error);
-      results.push({ name: "4 — kilitli dönem guard (genel)", pass: false });
-    } finally {
-      // Test dönemini her koşulda kilitten çıkar (temizlik).
-      try { unlockPeriod(TEST_LOCK_PERIOD, { reason: "Self-test temizliği" }); } catch (_) {}
-    }
-
-    const totalPass = results.filter(r => r.pass).length;
-    console.log(`\nV19 Hesap Planı Mapping + Period Locking Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
-    return results;
-  }
-
-  /* ==========================================================
      V26 — ÇOKLU PARA BİRİMİ / TMS21 / TMS29 / KONSOLİDASYON UI
      (ADDITIVE)
      ========================================================== */
@@ -33690,160 +32744,6 @@ ${renderPaymentScheduleFooterContainers()}
         host.__v26LastRenderer(host);
       }
     } catch (error) {}
-  }
-
-  /* ==========================================================
-     V27 — SELF-TEST: MULTI-COMPANY / MULTI-CURRENCY
-     ----------------------------------------------------------
-     Kapsam: aktif şirket context'i, unified company options
-     birleştirmesi, Close Dashboard şirket filtresi (ALL vs
-     belirli şirket), raporlama PB çevrimi (TRY→TRY no-op,
-     TRY→EUR conversion). Gerçek kullanıcı verisini (aktif şirket
-     seçimi, raporlama PB tercihi) test sonunda `finally` ile
-     olduğu gibi geri yükler — kalıcı yan etki bırakmaz.
-     ========================================================== */
-  function runSelfTestsV27MultiCompany() {
-    const results = [];
-    function assertTrue(name, condition) {
-      const pass = !!condition;
-      results.push({ name, pass });
-      console.log(`${pass ? "✅" : "❌"} ${name}`);
-      return pass;
-    }
-    function assertEqual(name, expected, actual) {
-      const pass = String(expected) === String(actual);
-      results.push({ name, pass, expected, actual });
-      console.log(`${pass ? "✅" : "❌"} ${name} — beklenen: ${expected}, gerçek: ${actual}`);
-      return pass;
-    }
-
-    // ---- 1) Aktif şirket context'i ----
-    const originalActiveCompanyId = (() => {
-      try { return getActiveCompanyId(); } catch (error) { return "ALL"; }
-    })();
-    try {
-      assertTrue("1a — getActiveCompanyId() bir string döndürüyor", typeof originalActiveCompanyId === "string" && originalActiveCompanyId.length > 0);
-
-      const TEST_COMPANY_ID = "SELFTEST-V27-COMPANY";
-      const setResult = setActiveCompanyId(TEST_COMPANY_ID);
-      assertEqual("1b — setActiveCompanyId ayarlanan değeri döndürüyor", TEST_COMPANY_ID, setResult);
-      assertEqual("1c — getActiveCompanyId ayarlanan değeri geri okuyor", TEST_COMPANY_ID, getActiveCompanyId());
-
-      setActiveCompanyId("ALL");
-      assertEqual("1d — setActiveCompanyId('ALL') → getActiveCompanyId() === 'ALL'", "ALL", getActiveCompanyId());
-    } catch (error) {
-      console.error("Test 1 hata:", error);
-      results.push({ name: "1 — aktif şirket context (genel)", pass: false });
-    } finally {
-      // Kullanıcının gerçek aktif şirket seçimini her koşulda geri yükle.
-      try { setActiveCompanyId(originalActiveCompanyId); } catch (error) {}
-    }
-
-    // ---- 2) getUnifiedCompanyOptions birleştirmesi ----
-    try {
-      const before = getUnifiedCompanyOptions();
-      assertTrue("2a — getUnifiedCompanyOptions() bir dizi döndürüyor", Array.isArray(before));
-
-      const ids = before.map(c => c.id);
-      const uniqueIds = new Set(ids);
-      assertEqual("2b — birleştirilmiş listede tekrar eden id yok", ids.length, uniqueIds.size);
-
-      // sessionCompanies mevcutsa: v26'da olmayan geçici bir kayıt ekleyip
-      // birleşik listede göründüğünü doğrula (sadece bellek içi, kalıcı
-      // localStorage yazımı yok — test sonunda diziden çıkarılıyor).
-      if (typeof sessionCompanies !== "undefined" && Array.isArray(sessionCompanies)) {
-        const TEST_SESSION_ID = "SELFTEST-V27-SESSION-COMPANY";
-        sessionCompanies.push({ id: TEST_SESSION_ID, name: "Selftest Session Şirket" });
-        try {
-          const after = getUnifiedCompanyOptions();
-          assertTrue(
-            "2c — sadece session'da olan yeni şirket birleşik listeye ekleniyor",
-            after.some(c => c.id === TEST_SESSION_ID)
-          );
-        } finally {
-          const idx = sessionCompanies.findIndex(c => c.id === TEST_SESSION_ID);
-          if (idx >= 0) sessionCompanies.splice(idx, 1);
-        }
-      } else {
-        console.log("ℹ️ 2c atlandı — sessionCompanies bu ortamda tanımlı değil");
-      }
-    } catch (error) {
-      console.error("Test 2 hata:", error);
-      results.push({ name: "2 — getUnifiedCompanyOptions (genel)", pass: false });
-    }
-
-    // ---- 2d) Şirket para birimi sözleşme değerine üstün gelir ----
-    try {
-      const currencyProbe = getApplicableStandards(
-        { currency: "EUR", functionalCurrency: "EUR", reportingCurrency: "EUR" },
-        { id: "SELFTEST-V27-COMPANY", functionalCurrency: "TRY", baseCurrency: "TRY" }
-      );
-      assertEqual("2d — şirket TL ise EUR sözleşmede fonksiyonel PB TRY", "TRY", currencyProbe.functionalCurrency);
-      assertEqual("2e — şirket TL ise sunum PB TRY", "TRY", currencyProbe.reportingCurrency);
-      assertTrue("2f — EUR işlem/TL şirket için TMS21 uygulanıyor", currencyProbe.tms21 === true);
-    } catch (error) {
-      console.error("Test 2d hata:", error);
-      results.push({ name: "2d — şirket para birimi otoritesi", pass: false });
-    }
-
-    // ---- 3) Close Dashboard şirket filtresi (ALL vs belirli şirket) ----
-    try {
-      const today = new Date();
-      const dashboardAll = typeof getMonthEndCloseDashboardData === "function"
-        ? getMonthEndCloseDashboardData(today)
-        : null;
-      assertTrue("3a — getMonthEndCloseDashboardData (ALL) çalışıyor", Boolean(dashboardAll));
-
-      const companyBreakdown = dashboardAll?.companies || [];
-      if (companyBreakdown.length > 0) {
-        const targetCompany = companyBreakdown[0].company;
-        const scoped = getCompanyMonthEndCloseStatus(targetCompany, today);
-        assertEqual("3b — belirli şirket sorgusu doğru şirketi döndürüyor", targetCompany, scoped.company);
-        assertTrue(
-          "3c — belirli şirketin sözleşme sayısı ALL kırılımındaki ile tutarlı",
-          scoped.contractCount === companyBreakdown[0].contractCount
-        );
-        assertTrue(
-          "3d — belirli şirket sorgusu ALL toplamından farklı/daralmış bir alt küme (regresyon: fonksiyon şirkete özel filtreliyor)",
-          scoped.activeContractCount <= (dashboardAll?.activeContracts ?? Infinity)
-        );
-      } else {
-        console.log("ℹ️ 3b/3c/3d atlandı — bu ortamda henüz sözleşmeye bağlı bir şirket yok");
-      }
-    } catch (error) {
-      console.error("Test 3 hata:", error);
-      results.push({ name: "3 — Close Dashboard şirket filtresi (genel)", pass: false });
-    }
-
-    // ---- 4) Raporlama PB çevrimi (TRY→TRY no-op, TRY→EUR conversion) ----
-    const originalReportingCurrency = (() => {
-      try { return getReportingCurrency(); } catch (error) { return "TRY"; }
-    })();
-    try {
-      setReportingCurrency("TRY");
-      const noop = convertAmountToReportingCurrency(1000, "TRY", new Date(), "TRY");
-      assertTrue("4a — TRY→TRY çevrim uygulanmıyor (applied:false)", noop.applied === false);
-      assertEqual("4b — TRY→TRY tutar değişmiyor", 1000, noop.value);
-
-      const eur = convertAmountToReportingCurrency(1000, "TRY", new Date(), "EUR");
-      assertTrue("4c — convertAmountToReportingCurrency hata fırlatmadan sonuç döndürüyor", eur && typeof eur === "object");
-      if (eur.applied) {
-        assertTrue("4d — kur bulunduğunda TRY→EUR tutarı değişiyor", eur.value !== 1000 && typeof eur.rate === "number");
-      } else {
-        assertTrue("4d — kur bulunamadığında hata alanı dolu, ham tutara düşülüyor", Boolean(eur.error) && eur.value === 1000);
-        console.log("ℹ️ 4d — TRY→EUR kuru tanımlı değil, no-op/fallback davranışı doğrulandı (kur tanımlıysa gerçek çevrim ayrıca test edilmeli)");
-      }
-    } catch (error) {
-      console.error("Test 4 hata:", error);
-      results.push({ name: "4 — raporlama PB çevrimi (genel)", pass: false });
-    } finally {
-      // Kullanıcının gerçek raporlama PB tercihini her koşulda geri yükle.
-      try { setReportingCurrency(originalReportingCurrency); } catch (error) {}
-    }
-
-    const totalPass = results.filter(r => r.pass).length;
-    console.log(`\nV27 Multi-Company/Multi-Currency Self-Test Özeti: ${totalPass}/${results.length} geçti.`);
-    return results;
   }
 
   function v26StandardsBadgeHtml(contract) {
@@ -34503,7 +33403,6 @@ ${renderPaymentScheduleFooterContainers()}
     return true;
   }
 
-
   /* ==========================================================
      V26 — V22 GRUP / ELİMİNASYON YÖNETİM UI
      ----------------------------------------------------------
@@ -35009,7 +33908,6 @@ ${renderPaymentScheduleFooterContainers()}
     lockPeriod,
     unlockPeriod,
     getLockedPeriods,
-    runSelfTestsV19AccountMapping,
     getApplicableStandards,
     v26LoadCompanies,
     v26SaveCompanies,
@@ -35036,119 +33934,7 @@ ${renderPaymentScheduleFooterContainers()}
     getReportingCurrency,
     setReportingCurrency,
     convertAmountToReportingCurrency,
-    runSelfTestsV27MultiCompany
   });
-
-  function runAcceptanceTestLease020() {
-    const expectedLiability = 332989.2615689249;
-    const expectedAdvance = 95000;
-    const expectedROU = 427989.2615689249;
-    const contract = {
-      id: "LEASE-020",
-      startDate: "2026-03-01",
-      endDate: "2031-02-28",
-      monthlyPayment: 95000,
-      paymentFrequency: "annual",
-      paymentTiming: "advance",
-      discountRate: 5.5,
-      discountRateConvention: "effectiveAnnual",
-      currency: "USD",
-      commencementFxRate: 43.8
-    };
-    const engine = calculateLeaseEngine(contract);
-    const context = resolveLeaseAccrualContext(contract);
-    const asOf = context ? buildReportingDateAccrual(context.core, context.measurement, engine.schedule, "2026-06-30") : null;
-    const expectedAsOfLiability = 338985.4425842508;
-    const expectedAsOfROU = expectedROU * 56 / 60;
-    const tolerance = 1e-7;
-    const checks = {
-      initialLiability: Math.abs(engine.liability - expectedLiability) <= tolerance,
-      advancePaymentAtCommencement: Math.abs(engine.advancePaymentAtCommencement - expectedAdvance) <= tolerance,
-      initialROU: Math.abs(engine.rouAssets - expectedROU) <= tolerance,
-      fiveAnnualPayments: engine.schedule.length === 5 && engine.schedule.every(row => Math.abs(row.payment - 95000) <= tolerance),
-      advanceNotDeductedTwice: !!engine.schedule[0] && Math.abs(engine.schedule[0].closingLiability - expectedLiability) <= tolerance && Math.abs(engine.schedule[0].principal) <= tolerance,
-      reportingDateLiability: !!asOf && Math.abs(asOf.liability - expectedAsOfLiability) <= tolerance,
-      reportingDateROU: !!asOf && Math.abs(asOf.rouAsset - expectedAsOfROU) <= tolerance
-    };
-    return {name:"LEASE-020 acceptance",passed:Object.values(checks).every(Boolean),checks,actual:{initialLiability:engine.liability,advancePaymentAtCommencement:engine.advancePaymentAtCommencement,initialROU:engine.rouAssets,firstClosingLiability:engine.schedule[0]?.closingLiability,asOfLiability:asOf?.liability,asOfROU:asOf?.rouAsset,paymentCount:engine.schedule.length}};
-  }
-
-  /* ==========================================================
-     TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
-     ========================================================== */
-  try {
-    window.__TFRS16_TEST__ = {
-      // V19 Account Mapping
-      getDefaultAccountMapping,
-      loadAccountMapping,
-      saveAccountMapping,
-      getAccountCode,
-      applyAccountMappingToJournal,
-      exportBulkJournals,
-      exportJournalEntries,
-      formatCurrency,
-      parseDate,
-      calculateLeaseEngine,
-      calculateLiabilitySplitAsOf,
-      buildReportingDateAccrual,
-      resolveLeaseAccrualContext,
-      runAcceptanceTestLease020,
-      validateContract,
-      calculateVariance,
-      calculateVariancePercent,
-      checkIndexReassessment,
-      applyEarlyPayment,
-      getEscalatedPayments,
-      computeEscalatedPaymentV18,
-      addOrUpdateCpiIndexEntry,
-      deleteCpiIndexEntry,
-      getCpiIndexForMonth,
-      syncIndexCurrentRateFromCpiTable,
-      runSelfTestsV18Part1,
-      getInflationIndex,
-      getInflationRatio,
-      applyTMS29Restatement,
-      validateInflationAdjustment,
-      createInflationAdjustment,
-      applyInflationAdjustment,
-      cancelInflationAdjustment,
-      addOrUpdateInflationIndexEntry,
-      addInflationIndexBulk,
-      deleteInflationIndexEntry,
-      loadInflationIndexTable,
-      refreshInflationIndexCacheFromBackend,
-      runSelfTestsV18Part2,
-      runSelfTestsV25Part2,
-      runSelfTestsMovementControls,
-      runSelfTestsV19FullTms29,
-      runSelfTestsV19AccountMapping,
-      v191RenderFinancialReporting,
-      v191OpenFinancialReporting,
-      getRuoAssetRollForwardReport,
-      getLeaseLiabilityRollForwardReport,
-      exportTms29InflationNote,
-      getLeaseLiquidityRiskDisclosure,
-      exportLeaseLiquidityRiskNote,
-      recordAuditEvent,
-      loadPendingAuditSync,
-      flushAuditBackendSync,
-      getApplicableStandards,
-      v26LoadCompanies,
-      v26StandardsBadgeHtml,
-      v26BuildConsolidationRows,
-      v26ExportConsolidationExcel,
-      // V27 Multi-Company/Multi-Currency
-      getActiveCompanyId,
-      setActiveCompanyId,
-      getUnifiedCompanyOptions,
-      getReportingCurrency,
-      setReportingCurrency,
-      convertAmountToReportingCurrency,
-      runSelfTestsV27MultiCompany
-    };
-  } catch (error) {
-    console.error("Test export shim error:", error);
-  }
 
   function v26HookContractDetail() {
     if (window.__GK_TFRS16_V26_DETAIL_HOOK__) return;
@@ -35194,7 +33980,6 @@ ${renderPaymentScheduleFooterContainers()}
     lockPeriod,
     unlockPeriod,
     getLockedPeriods,
-    runSelfTestsV19AccountMapping,
     getApplicableStandards,
     v26LoadCompanies,
     v26SaveCompanies,
@@ -35215,190 +34000,7 @@ ${renderPaymentScheduleFooterContainers()}
     getReportingCurrency,
     setReportingCurrency,
     convertAmountToReportingCurrency,
-    runSelfTestsV27MultiCompany
   });
-
-  /* ==========================================================
-     TEST EXPORT SHIM (ADDITIVE — Jest birim testleri içindir)
-     ========================================================== */
-  try {
-    window.__TFRS16_TEST__ = {
-      renderTable,
-      updateKPIs,
-      formatCurrency,
-      parseDate,
-      calculateLeaseEngine,
-      cfoBuildSchedule,
-      validateContract,
-      calculateVariance,
-      calculateVariancePercent,
-      checkIndexReassessment,
-      generateInitialEntry,
-      generateInitialEntryForFunctionalCurrency,
-      resolveContractScheduleSource,
-      renderBulkJournalSummaryCards,
-      applyEarlyPayment,
-      getEscalatedPayments,
-      computeEscalatedPaymentV18,
-      addOrUpdateCpiIndexEntry,
-      deleteCpiIndexEntry,
-      getCpiIndexForMonth,
-      syncIndexCurrentRateFromCpiTable,
-      runSelfTestsV18Part1,
-      getInflationIndex,
-      getInflationRatio,
-      applyTMS29Restatement,
-      validateInflationAdjustment,
-      createInflationAdjustment,
-      applyInflationAdjustment,
-      cancelInflationAdjustment,
-      addOrUpdateInflationIndexEntry,
-      addInflationIndexBulk,
-      deleteInflationIndexEntry,
-      loadInflationIndexTable,
-      refreshInflationIndexCacheFromBackend,
-      runSelfTestsV18Part2,
-      runSelfTestsV25Part2,
-      runSelfTestsV19FullTms29,
-      runSelfTestsV19AccountMapping,
-      v191RenderFinancialReporting,
-      v191OpenFinancialReporting,
-      getRuoAssetRollForwardReport,
-      getLeaseLiabilityRollForwardReport,
-      exportTms29InflationNote,
-      getLeaseLiquidityRiskDisclosure,
-      exportLeaseLiquidityRiskNote,
-      recordAuditEvent,
-      loadPendingAuditSync,
-      flushAuditBackendSync,
-      getApplicableStandards,
-      v26LoadCompanies,
-      v26StandardsBadgeHtml,
-      v26BuildConsolidationRows,
-      v26ExportConsolidationExcel,
-      // V27 Multi-Company/Multi-Currency
-      getActiveCompanyId,
-      setActiveCompanyId,
-      getUnifiedCompanyOptions,
-      getReportingCurrency,
-      setReportingCurrency,
-      convertAmountToReportingCurrency,
-      runSelfTestsV27MultiCompany,
-      // Modifikasyon & Reassessment (test kapsamı genişletildi — bu 8
-      // fonksiyon önceden BU shim'de export edilmiyordu; İKİ AYRI
-      // window.__TFRS16_TEST__ ataması var, ikincisi birincisini
-      // sessizce eziyordu ve createModification/applyModification/
-      // createReassessment/applyReassessment gibi fonksiyonlar
-      // test-erişilebilir DEĞİLDİ.
-      createModification,
-      applyModification,
-      updateModification,
-      cancelModification,
-      createReassessment,
-      applyReassessment,
-      updateReassessment,
-      cancelReassessment,
-      ensureModificationState,
-      ensureReassessmentState,
-      saveContracts,
-      persistContractToApi,
-      mapDbContractToUi,
-      lockPeriod,
-      renderSlbSection,
-      renderSubleaseSection,
-      calculateSaleAndLeaseback,
-      calculateSublease,
-      v26SelectedContractBanner,
-      renderFootnotesPage,
-      renderRiskControlsPage,
-      v191RenderRiskControls,
-      renderModificationReassessmentPage,
-      renderSlbManagementPage,
-      renderSubleaseManagementPage,
-      renderAccountingCenterPage,
-      renderAccountingCenter,
-      generateSelectedJournal,
-      buildFunctionalCurrencyJournalEntries,
-      appendFxToBulkJournal,
-      buildTms29BulkJournalEntries,
-      buildAppliedChangeJournalEntries,
-      openBulkJournalModal,
-      v191PrepareFinancialReportingData,
-      v191RenderAssetNoteHtml,
-      v191RenderLiabilityNoteHtml,
-      v191RenderLiquidityNoteHtml,
-      v191Tms29RouSummaryHtml,
-      v191Tms29LiabilitySummaryHtml,
-      v191FilterDetail,
-      v191ToggleRouDetail,
-      v191ToggleLiabDetail,
-      v191ClearRouFilter,
-      v191ClearLiabFilter,
-      renderCompanyManagementPage,
-      renderGroupManagementPage,
-      renderEliminationManagementPage,
-      renderFinancialReportingPage,
-      openDetail,
-      v191RenderContractTools,
-      renderPaymentScheduleSection,
-      renderPaymentScheduleTable,
-      renderAccountingCenter,
-      renderBulkJournalResults,
-      createBulkJournalModal,
-      gkApplyDetailTab,
-      v191ApplyPeriod,
-      v191ResetPeriod,
-      contracts,
-
-      /* ------------------------------------------------------
-         FAZ 0.2 — GOLDEN-OUTPUT BASELINE HEDEF FONKSİYONLARI
-         (ADDITIVE — yalnızca export listesine eklendi, hiçbir
-         fonksiyonun gövdesine dokunulmadı.)
-
-         Refaktör planının Faz 0.2 maddesi bu 6 fonksiyonun
-         çıktısını dondurmayı gerektiriyor; bunlar bugüne kadar
-         shim üzerinden test-erişilebilir DEĞİLDİ. calculateLease-
-         EngineImpl ayrıca cache'i bypass ederek ham (deterministik)
-         çıktı almayı mümkün kılar — calculateLeaseEngine cache
-         dönerse aynı referans geldiği için golden karşılaştırma
-         yanıltıcı olabilirdi.
-         ------------------------------------------------------ */
-      calculateLeaseEngineImpl,
-      calculateLiabilitySplitAsOf,
-      generateModificationJournal,
-      generateReassessmentJournal,
-      getCfoContractMetrics,
-      runContractControls,
-
-      // Faz 4 (performans) ölçümü ve invariant doğrulaması için
-      // gereken CFO toplayıcıları — yine yalnızca export.
-      getTotalLeaseLiability,
-      getCurrentLeaseLiability,
-      getNonCurrentLeaseLiability,
-      getTotalRuoAssets,
-
-      // Golden harness'in global `contracts` dizisini yerinde
-      // (in-place) tohumlayabilmesi için. Diziyi YENİDEN ATAMAZ —
-      // closure değişkenini bozmaz, sadece içeriğini değiştirir.
-      __seedContractsForTest(list) {
-        contracts.length = 0;
-        (Array.isArray(list) ? list : []).forEach(item => contracts.push(item));
-        try { clearCalculationCache(); } catch (_) {}
-        return contracts.length;
-      },
-
-      // Aynı desen — renderBulkJournalResults'ın SRP bölmesini
-      // doğrulamak için bulkJournalData'yı yerinde tohumlar.
-      __seedBulkJournalDataForTest(list) {
-        bulkJournalData.length = 0;
-        (Array.isArray(list) ? list : []).forEach(item => bulkJournalData.push(item));
-        return bulkJournalData.length;
-      }
-    };
-  } catch (error) {
-    console.error("Test export shim error:", error);
-  }
-
 
   /* ==========================================================
      V27 ADDITIVE UI MERGE — V23 FX + TMS29 INFLATION
@@ -35413,7 +34015,6 @@ const V26_FX_UI_SOURCES = ["MANUAL","IMPORT","SYSTEM","CENTRAL_BANK","ERP"];
 const V26_FX_UI_STATUSES = ["DRAFT","REVIEWED","APPROVED","REJECTED"];
 
 const V26_FX_UI_PAGE_SIZE = 50;
-
 
   function injectV26FxUiStyles() {
     if (document.getElementById("gk-v26-fx-ui-styles")) return;
@@ -35435,7 +34036,6 @@ const V26_FX_UI_PAGE_SIZE = 50;
     `;
     document.head.appendChild(style);
   }
-
 
   function v26FxUiEscape(value) {
     if (typeof escapeHtml === "function") return escapeHtml(value == null ? "" : String(value));
