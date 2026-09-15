@@ -1,6 +1,12 @@
 # TFRS16 private consumer inventory
 
-Bu envanter public motorun üretim UI tüketicilerini izler. Her satır `getPrivateCalculationForConsumer` sınırından geçer; API-primary modunda yalnızca private sonuç önbelleği okunur. `?api=0` açık rollback yoludur.
+> **Aktif karar (2026-09-15):** Bu envanter, public motoru koruma gerekçesi
+> olarak değil, public UI ayrıştırma kontrol listesi olarak kullanılacaktır.
+> Hedef tamamlandığında public `js/tfrs16-engine.js` dosyası ve üretim script
+> bağımlılığı bulunmayacaktır. TMS29 taslak/uygulama kayıtları da private
+> backend'e kalıcı yazılmadan bu kapı kapanmış sayılmayacaktır.
+
+Bu envanter public motorun üretim UI tüketicilerini izler. Her satır `getPrivateCalculationForConsumer` sınırından geçer; API-primary modunda yalnızca private sonuç önbelleği okunur. URL ile yerel hesaplamayı açan bir rollback yolu yoktur.
 
 **Üretim tüketicisi: 36 · Son tarama: 2026-09-14**
 

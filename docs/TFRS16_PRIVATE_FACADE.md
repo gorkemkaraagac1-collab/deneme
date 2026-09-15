@@ -1,5 +1,12 @@
 # TFRS16 private facade
 
+## Kaldırma hedefi (2026-09-15)
+
+Facade, geçici bir API-primary köprüsü olarak değil, public UI'nin tek hesaplama
+kapısı olarak kullanılacaktır. Public `tfrs16-engine.js` kaldırılmadan önce
+facade şu iki işi de tamamlamalıdır: tüm salt-okuma sonuçlarını sunmak ve TMS29
+taslak/uygulama yazmalarının private backend'de kalıcı olmasını sağlamak.
+
 `js/private-tfrs16-facade.js` is the small browser boundary between the UI and
 the authenticated private calculation adapter. It contains no calculation
 logic and does not expose the proprietary engine.

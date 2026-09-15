@@ -1,11 +1,23 @@
 # TFRS16 private calculation cutover
 
+## 2026-09-15 karar ve öncelik
+
+Public `js/tfrs16-engine.js` kalıcı olarak kaldırılacak. Public Pages ağacında
+yalnızca UI, kimlik doğrulama ve private API istemci/facade kodu kalabilir;
+TFRS16 hesaplama motoru, TMS29 ve değişiklik hesapları yalnızca
+`leaseqant-backend` içindeki private engine'den üretilecektir. Kullanıcının
+eski yedeği yalnızca karşılaştırma kaynağıdır; public ağaca geri alınmayacak.
+
+Bu kapı kapanana kadar yeni release özelliği açılmayacak. Önce UI-only ayrımı,
+private yazma kalıcılığı ve temiz-cache canlı doğrulaması tamamlanacak; sonra
+motor script etiketi ve dosyası aynı geri alınabilir PR'da kaldırılacak.
+
 The production page uses the private calculation API as its primary source for
 authenticated sessions. API-primary is now a hard privacy boundary: a missing
 private result fails closed instead of silently invoking the public calculation
-implementation. The local `js/tfrs16-engine.js` implementation is reachable
-only through the explicit `?api=0` rollback path while the view layer is being
-separated.
+implementation. The remaining public engine bundle is a temporary structural
+compatibility layer and is scheduled for removal; it is not a supported
+calculation source.
 
 ## Why the public engine is still present
 
@@ -55,8 +67,8 @@ Every frontend pull request and `main` push runs:
 node scripts/check-tfrs16-cutover.js
 ```
 
-The gate verifies the API adapter and script order, the API-primary flag and
-`?api=0` rollback, the private-cache-first wrapper, shadow comparator presence,
+The gate verifies the API adapter and script order, the API-primary flag with
+no URL override, the private-cache-first wrapper, shadow comparator presence,
 Pages artifact boundary, and the absence of a TMS19 dependency in `tfrs16.html`.
 
 The gate is deliberately source-level and dependency-free so it also runs in
@@ -68,8 +80,8 @@ TMS 29 preview, sale-and-leaseback, and sublease views now fail closed in
 API-primary mode. They render only the versioned private result envelope;
 when that envelope is unavailable they show an explicit unavailable state
 instead of invoking the browser calculation implementation. The local
-calculation path remains available only through the explicit `?api=0`
-emergency rollback.
+calculation path is not an accepted fallback; a missing private result remains
+an explicit error until the UI-only split is complete.
 
 This closes three of the remaining production fallback paths. Modification
 and reassessment previews, journal construction, and the legacy compatibility
@@ -92,8 +104,9 @@ after all of the following are true:
    private result envelope or a dedicated private view endpoint.
 2. The API-primary e2e flow covers a full multi-period schedule and every
    detail tab used in production.
-3. The rollback flow (`?api=0`) is green and a previous Pages artifact is
-   recorded as the rollback target.
+3. A previous Pages artifact is recorded as the rollback target. Rollback is a
+   deployment/artifact action; a browser `?api=0` local-calculation path is
+   not part of the target architecture.
 4. A clean-cache live smoke test passes for an admin account and a normal user.
 
 TMS19 is independent of this gate and remains private/frozen until the TFRS16
