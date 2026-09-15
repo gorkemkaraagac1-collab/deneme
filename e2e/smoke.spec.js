@@ -140,7 +140,16 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
-  test("toplu fiş önizlemesi büyük veri setinde sanal kaydırmaya geçer (Faz 4.4 refaktör hedefi)", async ({ stubbedPage }) => {
+  // FAZ 1 (2026-09-15): window.__TFRS16_TEST__ (bu testin
+  // __seedBulkJournalDataForTest/renderBulkJournalResults seed kancası)
+  // IP-koruması kapsamında kaldırıldı — motoru konsoldan tam olarak
+  // çağrılabilir kılıyordu. Bu test artık var olmayan bir global'e
+  // bağımlı; skip edip görünür bırakıyoruz. Geri açmak istersen iki yol
+  // var: (1) sadece bu iki UI-test kancasını (hesaplama motorunu DEĞİL)
+  // dar bir window.GK_TFRS16 eklentisi olarak geri koy, ya da (2) testi
+  // gerçek generateBulkJournals() + 51+ sentetik sözleşme API stub'ıyla
+  // yeniden yaz (yavaş ama özel bir kanca gerektirmez).
+  test.skip("toplu fiş önizlemesi büyük veri setinde sanal kaydırmaya geçer (FAZ 1'de kaldırılan test-shim'e bağımlı — bkz. yukarıdaki not)", async ({ stubbedPage }) => {
     await stubbedPage.goto("/tfrs16.html");
 
     // NOT: gerçek generateBulkJournals() akışı 51+ sözleşme gerektirir
@@ -211,7 +220,13 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
-  test("acil geri dönüş modu API çağrısı yapmadan yerel planı korur", async ({ stubbedPage, apiStore }) => {
+  // FAZ 2 (2026-09-15): ?api=0 acil geri dönüş modu tamamen kaldırıldı
+  // (Burhan'ın kararı — private backend'e tam bağımlılık). Bu test artık
+  // var olmayan bir özelliği doğruluyordu; skip edip görünür bırakıyoruz.
+  // ?api=0 artık sıradan bir sorgu parametresi gibi yok sayılır, normal
+  // (private-primary) akış çalışır — "yerel plan" senaryosu diye bir şey
+  // kalmadı.
+  test.skip("acil geri dönüş modu API çağrısı yapmadan yerel planı korur (FAZ 2'de kaldırıldı — bkz. yukarıdaki not)", async ({ stubbedPage, apiStore }) => {
     await stubbedPage.goto("/tfrs16.html?api=0");
     await createContract(stubbedPage, {
       ...CONTRACT,
