@@ -24089,6 +24089,96 @@ ${renderPaymentScheduleFooterContainers()}
     return { results, totals, byAssetClass, totalNetAdjustment, totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss, computedCount, missingCount, outOfScopeCount, totalCount: inScopeRows.length };
   }
 
+  // Private API counterpart for the portfolio TMS29 path. The browser only
+  // assembles the already-computed private envelopes; it never invokes the
+  // public applyTMS29Restatement() implementation for this screen.
+  function v191ComputePrivatePortfolioTms29(contractList, apiResults, periodStartMonth, rpMonth) {
+    const sourceContracts = Array.isArray(contractList) ? contractList : [];
+    const results = new Map();
+    const flatRows = [];
+    const totals = {
+      rouOpeningNominal: 0, rouOpeningRestated: 0,
+      rouEntriesNominal: 0, rouEntriesRestated: 0,
+      rouModificationNominal: 0, rouModificationRestated: 0,
+      rouReassessmentNominal: 0, rouReassessmentRestated: 0,
+      rouDepreciationNominal: 0, rouDepreciationRestated: 0,
+      rouClosingNominalPeriod: 0, rouClosingRestatedPeriod: 0,
+      liabilityOpeningNominal: 0, liabilityOpeningRestated: 0,
+      liabilityEntriesNominal: 0, liabilityEntriesRestated: 0,
+      liabilityInterestNominal: 0, liabilityInterestRestated: 0,
+      liabilityPaymentsNominal: 0, liabilityPaymentsRestated: 0,
+      liabilityFxTranslationNominal: 0, liabilityFxTranslationRestated: 0,
+      liabilityModificationNominal: 0, liabilityModificationRestated: 0,
+      liabilityReassessmentNominal: 0, liabilityReassessmentRestated: 0,
+      liabilityMonetaryGainLoss: 0, liabilityClosingNominal: 0
+    };
+    const sumKeys = Object.keys(totals);
+    const add = (key, value) => { totals[key] += Number.isFinite(Number(value)) ? Number(value) : 0; };
+    const acquisitionMonth = contract => {
+      const date = parseDate(contract?.startDate);
+      return date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` : null;
+    };
+    const inScopeContracts = sourceContracts.filter(contract => {
+      const month = acquisitionMonth(contract);
+      return !month || month <= String(rpMonth || "").trim();
+    });
+    const responseRows = Array.isArray(apiResults) ? apiResults : [];
+    let totalNetAdjustment = 0;
+    let computedCount = 0;
+    let missingCount = 0;
+
+    inScopeContracts.forEach((contract, index) => {
+      const id = contract?.id;
+      const envelope = responseRows[index];
+      if (!envelope || typeof envelope !== "object") {
+        results.set(id, { ok: false, error: "Private TMS29 sonucu boş döndü." });
+        missingCount++;
+        return;
+      }
+      const rrf = envelope.rouRollForward && typeof envelope.rouRollForward === "object"
+        ? envelope.rouRollForward : null;
+      const lrf = envelope.liabilityRollForward && typeof envelope.liabilityRollForward === "object"
+        ? envelope.liabilityRollForward : null;
+      const netAdjustment = Number.isFinite(Number(envelope.totals?.netAdjustment))
+        ? Number(envelope.totals.netAdjustment)
+        : (rrf ? Number(rrf.rouClosingRestatedPeriod || 0) - Number(rrf.rouClosingNominalPeriod || 0) : 0);
+      const monetaryGainLoss = lrf && Number.isFinite(Number(lrf.liabilityMonetaryGainLoss))
+        ? Number(lrf.liabilityMonetaryGainLoss) : null;
+      results.set(id, {
+        ok: true,
+        netAdjustment,
+        monetaryGainLoss,
+        rouClosingRestatedPeriod: rrf ? rrf.rouClosingRestatedPeriod : null,
+        rouClosingNominalPeriod: rrf ? rrf.rouClosingNominalPeriod : null,
+        rouRollForward: rrf,
+        liabilityRollForward: lrf
+      });
+      totalNetAdjustment += netAdjustment;
+      computedCount++;
+      if (rrf && lrf) {
+        const flatRow = { assetClass: getContractAssetClass(contract), ...rrf, ...lrf };
+        flatRows.push(flatRow);
+        sumKeys.forEach(key => add(key, flatRow[key]));
+      }
+    });
+
+    const byAssetClass = v191GroupRollForwardByAssetClass(flatRows, sumKeys);
+    return {
+      results,
+      totals,
+      byAssetClass,
+      totalNetAdjustment,
+      totalMonetaryGainLoss: totals.liabilityMonetaryGainLoss,
+      computedCount,
+      missingCount,
+      outOfScopeCount: sourceContracts.length - inScopeContracts.length,
+      totalCount: inScopeContracts.length,
+      periodStart: periodStartMonth,
+      reportingPeriod: rpMonth,
+      source: "private-api"
+    };
+  }
+
   // ARTIK ÇAĞRILMIYOR (bkz. aşağıdaki v191Tms29RouSummaryHtml/
   // v191Tms29LiabilitySummaryHtml — bölünmüş hali). Bilinçli olarak
   // SİLİNMEDİ (minimal risk), sadece hiçbir yerden referans verilmiyor.
@@ -24268,7 +24358,7 @@ ${renderPaymentScheduleFooterContainers()}
    * hem o fonksiyon hem yeni "Dipnotlar" sayfası (renderFootnotesPage)
    * bunu kullanıyor.
    */
-  function v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd) {
+  function v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options = {}) {
     const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
@@ -24297,7 +24387,9 @@ ${renderPaymentScheduleFooterContainers()}
 
     const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
     const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
-    const tms29 = v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth, rawLiabRows);
+    const tms29 = options && options.tms29
+      ? options.tms29
+      : v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth, rawLiabRows);
     // Nominal roll-forward engines retain transaction-currency amounts for
     // FX leases. Financial statement notes, however, must be presented in
     // the company's presentation currency. TMS 21 requires balance-sheet
@@ -34431,6 +34523,11 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
     let privateHydrationStarted = false;
     let privateHydrationCompleted = false;
+    let privateTms29HydrationStarted = false;
+    let privateTms29HydrationCompleted = false;
+    let privateTms29Result = null;
+    let privateTms29Error = null;
+    let privateTms29PeriodKey = null;
     const render = () => {
       // Bu sayfa aktifken drill-down/detay-toggle tıklamalarının
       // (v191FilterDetail vb.) DOĞRU ekranı (bu sayfayı) yenilemesi
@@ -34439,6 +34536,14 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
       const effectivePeriodEnd = v26FootnotesPeriodEndOverride ? parseDate(v26FootnotesPeriodEndOverride) : new Date();
       const effectivePeriodStart = new Date(effectivePeriodEnd.getFullYear(), 0, 1);
+      const currentPrivateTms29PeriodKey = `${effectivePeriodStart.getFullYear()}-${String(effectivePeriodStart.getMonth() + 1).padStart(2, "0")}|${effectivePeriodEnd.getFullYear()}-${String(effectivePeriodEnd.getMonth() + 1).padStart(2, "0")}`;
+      if (privateTms29PeriodKey !== currentPrivateTms29PeriodKey) {
+        privateTms29PeriodKey = currentPrivateTms29PeriodKey;
+        privateTms29HydrationStarted = false;
+        privateTms29HydrationCompleted = false;
+        privateTms29Result = null;
+        privateTms29Error = null;
+      }
 
       let tabContentHtml = "";
       const privateResultsNeedHydration = isPrivateCalculationApiReady() &&
@@ -34458,9 +34563,41 @@ const V26_FX_UI_PAGE_SIZE = 50;
           });
         }
         tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private hesaplama sonuçları yükleniyor...</div>`;
+      } else if (isPrivateCalculationApiReady() && !privateTms29HydrationCompleted) {
+        if (!privateTms29HydrationStarted) {
+          privateTms29HydrationStarted = true;
+          const reportingPeriod = `${effectivePeriodEnd.getFullYear()}-${String(effectivePeriodEnd.getMonth() + 1).padStart(2, "0")}`;
+          const periodStart = `${effectivePeriodStart.getFullYear()}-${String(effectivePeriodStart.getMonth() + 1).padStart(2, "0")}`;
+          const eligibleContracts = (Array.isArray(contracts) ? contracts : []).filter(contract => {
+            if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return false;
+            const start = parseDate(contract?.startDate);
+            if (!start) return true;
+            const acquisitionMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+            return acquisitionMonth <= reportingPeriod;
+          });
+          const facade = window.LeaseQantPrivateTfrs16Facade;
+          const load = typeof facade?.loadTms29Many === "function"
+            ? facade.loadTms29Many(eligibleContracts, reportingPeriod, periodStart)
+            : Promise.reject(new Error("TMS29 private batch calculation facade is unavailable"));
+          load.then(results => {
+            privateTms29Result = v191ComputePrivatePortfolioTms29(eligibleContracts, results, periodStart, reportingPeriod);
+            privateTms29HydrationCompleted = true;
+            render();
+          }).catch(error => {
+            privateTms29Error = error;
+            privateTms29HydrationCompleted = true;
+            render();
+          });
+        }
+        tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private TMS29 portföy sonuçları yükleniyor...</div>`;
       } else {
         try {
-          const prepared = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
+          if (privateTms29Error) throw privateTms29Error;
+          const prepared = v191PrepareFinancialReportingData(
+            effectivePeriodStart,
+            effectivePeriodEnd,
+            { tms29: privateTms29Result }
+          );
           if (v26FootnotesActiveTab === "asset") {
             tabContentHtml = v191RenderAssetNoteHtml({
               rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
