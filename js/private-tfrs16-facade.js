@@ -49,6 +49,16 @@
     return copyResult(await value.calculateTms29(contract, reportingPeriod, periodStart, options));
   }
 
+  async function loadTms29Many(contracts, reportingPeriod, periodStart, options) {
+    const value = adapter();
+    if (typeof value.calculateTms29Many !== "function") {
+      throw new Error("TMS29 private batch calculation adapter is unavailable");
+    }
+    const results = await value.calculateTms29Many(contracts, reportingPeriod, periodStart, options);
+    if (!Array.isArray(results)) throw new Error("TMS29 private batch returned an invalid result");
+    return results.map(copyResult);
+  }
+
   async function loadModificationPreview(contract, input, options) {
     const value = adapter();
     if (typeof value.calculateModificationPreview !== "function") {
@@ -109,6 +119,7 @@
     load,
     loadMany,
     loadTms29,
+    loadTms29Many,
     loadModificationPreview,
     loadReassessmentPreview,
     applyModification,
