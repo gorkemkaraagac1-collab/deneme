@@ -11885,101 +11885,14 @@ ${renderPaymentScheduleFooterContainers()}
     }
   }
 
-  async function renderFxTranslationSection(contract) {
+  function renderFxTranslationSection(contract) {
     const container = document.getElementById("fxTranslationContainer");
-    if (!container) return;
-    if (!contractNeedsFxTranslation(contract)) {
-      container.innerHTML = "";
-      return;
+    const renderer = window.LeaseQantTfrs16FxUi?.render;
+    if (typeof renderer === "function") return renderer(container, contract);
+    if (container) {
+      container.innerHTML = `<div role="status" style="margin-top:20px;padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:12px;">TMS 21 arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
     }
-
-    container.innerHTML = `
-      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
-        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
-        <p style="margin:6px 0 0;color:#64748b;font-size:11px;">Kur bilgisi alınıyor...</p>
-      </div>
-    `;
-
-    try {
-      if (!Array.isArray(backendFxRateCache) || backendFxRateCache.length === 0) {
-      await refreshFxRateCacheFromBackend();
-    }
-
-    const engineResult = cfoBuildSchedule(contract);
-      // GC-2026-09 (Madde 4): seçili rapor tarihini ve (yalnızca HAM
-      // motor kaynaklı, reassessed/modified OLMAYAN kontratlar için)
-      // tahakkuk bağlamını motora açıkça taşı — artık yalnızca ödeme
-      // tarihleri değil, seçili rapor tarihi de çevriliyor.
-      const fxReportingDate =
-        typeof getScheduleReportingDate === "function"
-          ? getScheduleReportingDate()
-          : null;
-      const fxAccrualContext =
-        engineResult.source === "LEASE_SCHEDULE"
-          ? resolveLeaseAccrualContext(contract)
-          : null;
-      const fx = await buildTms21FxTranslation(contract, engineResult, {
-        reportingDate: fxReportingDate,
-        accrualContext: fxAccrualContext
-      });
-      if (!fx.applicable) { container.innerHTML = ""; return; }
-
-      const rowsHtml = fx.schedule.map(row => `
-        <tr>
-          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${row.period}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${formatDate(parseDate(row.date))}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${row.closingRate.toFixed(4)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.openingLiabilityFx)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.interestFx)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.paymentFx)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.closingLiabilityFx)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;color:${row.fxGainLoss > 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(row.fxGainLoss)}</td>
-          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(row.rouClosingFx)}</td>
-        </tr>
-      `).join("");
-
-      container.innerHTML = `
-        <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
-          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
-          <h3 style="margin:5px 0 0;font-size:16px;">${fx.transactionCurrency} → ${fx.functionalCurrency}</h3>
-          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
-            İşlem (kira) para birimi: <strong>${fx.transactionCurrency}</strong> · Fonksiyonel para birimi: <strong>${fx.functionalCurrency}</strong> ·
-            Başlangıç kuru: <strong>${fx.commencementRate.toFixed(4)}</strong> (${fx.commencementRateDate}) ·
-            Kümülatif kur farkı: <strong style="color:${fx.totals.cumulativeFxGainLoss > 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(fx.totals.cumulativeFxGainLoss)} ${fx.functionalCurrency}</strong>
-          </p>
-          <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
-            Kira yükümlülüğü (parasal kalem) her dönem kapanış kuruyla yeniden çevrilir, fark K/Z'ye yazılır. ROU varlığı (parasal olmayan) sadece başlangıç kuruyla çevrilir, yeniden değerlenmez.
-          </p>
-          <div style="overflow:auto;margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;">
-            <table style="width:100%;border-collapse:collapse;min-width:900px;">
-              <thead>
-                <tr style="background:#f8fafc;">
-                  <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
-                  <th style="padding:9px;text-align:left;font-size:11px;">Tarih</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Kur</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Açılış Yük. (${fx.functionalCurrency})</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Faiz (${fx.functionalCurrency})</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Ödeme (${fx.functionalCurrency})</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Kapanış Yük. (${fx.functionalCurrency})</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">Kur Farkı</th>
-                  <th style="padding:9px;text-align:right;font-size:11px;">ROU (${fx.functionalCurrency})</th>
-                </tr>
-              </thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </div>
-        </div>
-      `;
-    } catch (error) {
-      container.innerHTML = `
-        <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
-          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ</div>
-          <div style="margin-top:8px;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">
-            Kur farkı hesaplanamadı: ${escapeHtml(error.message || String(error))}
-          </div>
-        </div>
-      `;
-    }
+    return null;
   }
 
   /**
@@ -28164,7 +28077,11 @@ ${renderPaymentScheduleFooterContainers()}
     if (!contractNeedsFxTranslation(contract)) {
       return { contractId: contract.id, engine: engineResult, fx: { applicable: false, transactionCurrency: v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY), functionalCurrency: resolveContractFunctionalCurrency(contract) } };
     }
-    const fx = await buildTms21FxTranslation(contract, engineResult, options);
+    const fxOptions = { ...options };
+    if (!fxOptions.accrualContext && engineResult?.source === "LEASE_SCHEDULE") {
+      fxOptions.accrualContext = resolveLeaseAccrualContext(contract);
+    }
+    const fx = await buildTms21FxTranslation(contract, engineResult, fxOptions);
     return { contractId: contract.id, engine: engineResult, fx };
   }
 
@@ -28679,6 +28596,9 @@ ${renderPaymentScheduleFooterContainers()}
     contractNeedsFxTranslation,
     buildTms21FxTranslation,
     getContractFxTranslatedSchedule,
+    formatCurrency,
+    formatDate,
+    parseDate,
     SLB_ASSESSMENT_INDICATORS,
     assessSaleAndLeaseback,
     renderSlbSection,
