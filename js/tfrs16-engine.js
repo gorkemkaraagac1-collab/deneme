@@ -1146,8 +1146,12 @@ window.fetch = (input, init = {}) => {
         // alanlarıyla eski (yanlış) önbellek sonucunu döndürebilirdi.
         `${contract?.escalationFrequencyMonths || ""}|${contract?.escalationBase || ""}|` +
         `${contract?.escalationFirstDate || ""}|` +
-        `${JSON.stringify(contract?.modifications || "")}|` +
-        `${JSON.stringify(contract?.reassessments || "")}|` +
+        // Treat absent and empty event collections identically. The detail
+        // renderer initializes missing collections before reading the cache;
+        // keeping the signature normalized prevents that UI preparation from
+        // invalidating an already hydrated private result.
+        `${JSON.stringify(Array.isArray(contract?.modifications) ? contract.modifications : [])}|` +
+        `${JSON.stringify(Array.isArray(contract?.reassessments) ? contract.reassessments : [])}|` +
         // V18 Parça 2 — TMS 29 enflasyon düzeltme eventleri de
         // hesaplamayı (restatement önizlemesini) etkileyebileceğinden
         // önbellek imzasına eklenir.
