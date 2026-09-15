@@ -19405,7 +19405,7 @@ ${renderPaymentScheduleFooterContainers()}
     ], "Kullanim_Hakki_Varligi_Hareket_Tablosu");
   }
 
-  function exportTms29InflationNote(startDate, endDate) {
+  async function exportTms29InflationNote(startDate, endDate) {
     const start = rptDate(startDate), end = rptDate(endDate);
     if (!start || !end || end < start) return false;
     const rouReport = getRuoAssetRollForwardReport(start, end) || {};
@@ -19426,8 +19426,27 @@ ${renderPaymentScheduleFooterContainers()}
     if (!rouRows.length) return false;
 
     const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
-    // rpMonth zaten satır 16813'te tanımlandı
-    const tms29 = v191ComputePortfolioTms29(rouRows, periodStartMonth, rpMonth);
+    // Export da ekrandaki dipnot önizlemesiyle aynı private batch sonucunu
+    // kullanır. Public motorun TMS29 hesaplaması burada çağrılmaz.
+    if (!isPrivateCalculationApiReady()) {
+      showAlert("TMS 29 dipnotu dışa aktarılamadı: Private API hazır değil veya oturum açılmamış.");
+      return false;
+    }
+    const eligibleContracts = rouRows
+      .map(row => rptSafeContracts().find(contract => String(contract?.id) === String(row?.contractId)))
+      .filter(Boolean);
+    let tms29;
+    try {
+      const facade = window.LeaseQantPrivateTfrs16Facade;
+      if (typeof facade?.loadTms29Many !== "function") {
+        throw new Error("Private TMS29 toplu API kullanılamıyor");
+      }
+      const apiResults = await facade.loadTms29Many(eligibleContracts, rpMonth, periodStartMonth);
+      tms29 = v191ComputePrivatePortfolioTms29(eligibleContracts, apiResults, periodStartMonth, rpMonth);
+    } catch (error) {
+      showAlert(`TMS 29 dipnotu dışa aktarılamadı: ${error?.message || error}`);
+      return false;
+    }
     if (tms29.computedCount === 0 && tms29.missingCount > 0) {
       showAlert("TMS 29 dipnotu dışa aktarılamadı: seçilen dönem için doğrulanmış enflasyon endeksi eksik. Nominal tablolar etkilenmedi.");
       return false;
