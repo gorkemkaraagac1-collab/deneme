@@ -8557,7 +8557,11 @@ window.fetch = (input, init = {}) => {
         totals.set(presentationCurrency, group);
         } catch (error) {
           totalsError = "Hesaplama hatası — toplam gösterilemiyor";
-          console.error("Portfolio KPI calculation error:", contract.id, error);
+          if (error?.code === "KPI_CURRENT_BALANCE_UNAVAILABLE") {
+            console.warn("Portfolio KPI data pending:", contract.id);
+          } else {
+            console.error("Portfolio KPI calculation error:", contract.id, error);
+          }
         }
       }
     );
@@ -11771,6 +11775,21 @@ ${renderAccountingCenterBulkPromo()}
             const rowDisabledAttr = itemLockCheck.locked
               ? `disabled title="${escapeHtml(itemLockCheck.message)}"`
               : "";
+            // An older APPLIED event may predate the private base
+            // calculation cache. Keep this page usable and show its
+            // persisted delta instead of failing the whole render.
+            let displayedLiabilityAdjustment = Number(item.liabilityAdjustment) || 0;
+            if (item.status === "APPLIED") {
+              try {
+                displayedLiabilityAdjustment = Number(
+                  resolveAppliedModificationMeasurement(contract, item).liabilityAdjustment
+                ) || displayedLiabilityAdjustment;
+              } catch (error) {
+                if (error?.code !== "PRIVATE_CALCULATION_NOT_READY") {
+                  console.warn("Modification measurement unavailable:", contract?.id, item?.id, error);
+                }
+              }
+            }
             return `
             <div
               style="
@@ -11786,7 +11805,7 @@ ${renderAccountingCenterBulkPromo()}
               <span>${escapeHtml(item.modificationType || "OTHER")}</span>
               <span>${escapeHtml(item.effectiveDate || "")}</span>
               <span>${escapeHtml(item.status || "DRAFT")}</span>
-              <strong>${formatPresentationCurrency((item.status === "APPLIED" ? resolveAppliedModificationMeasurement(contract, item).liabilityAdjustment : item.liabilityAdjustment) || 0, contract.currency)}</strong>
+              <strong>${formatPresentationCurrency(displayedLiabilityAdjustment, contract.currency)}</strong>
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
