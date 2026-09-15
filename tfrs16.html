@@ -422,18 +422,25 @@
   <!-- TFRS 16 calculation & UI engine -->
   <script src="js/private-calculation-api.js?v=20260914-3"></script>
  <script src="js/private-tfrs16-facade.js?v=20260914-2"></script>
- <script src="js/tfrs16-engine.js?v=20260915-faz1-selftest-removal"></script>
+ <script src="js/tfrs16-engine.js?v=20260915-faz2-final"></script>
   <script>
     // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
-    // Hesaplama API'si artık doğrulanmış oturumlarda varsayılan kaynaktır;
-    // ?api=0 yalnızca acil geri dönüş için yerel motoru seçer.
+    // FAZ 2 (2026-09-15): ?api=0 acil geri dönüş kaldırıldı — Burhan'ın
+    // açık kararıyla (private backend'e tam bağımlılık kabul edildi).
+    // window.LEASEQANT_CALCULATION_API_PRIMARY artık sabit true; URL
+    // parametresiyle geçersiz kılınamaz. Yerel hesaplama motorunun
+    // gövdeleri (calculateLeaseEngineImpl ve türevleri) bu commit'te
+    // js/tfrs16-engine.js'ten tamamen kaldırıldı — bu bayrağı konsoldan
+    // false yapmak artık hiçbir yerel hesaplamayı YENİDEN AÇMAZ, sadece
+    // isPrivateCalculationApiReady() kontrollerini false döndürür ve
+    // ilgili özellikler "henüz hazır değil" hatası verir.
     (() => {
       const params = new URLSearchParams(window.location.search);
       if (params.get("shadow") === "1") {
         window.LEASEQANT_CALCULATION_SHADOW = true;
         window.LEASEQANT_CALCULATION_SHADOW_DEBUG = true;
       }
-      window.LEASEQANT_CALCULATION_API_PRIMARY = params.get("api") !== "0";
+      window.LEASEQANT_CALCULATION_API_PRIMARY = true;
     })();
   </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>

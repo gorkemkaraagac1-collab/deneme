@@ -31,7 +31,12 @@ const checks = [
   ["private adapter loads before the legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-engine.js")],
   ["private facade loads between adapter and legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-engine.js")],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
-  ["API-primary defaults on and api=0 remains an emergency rollback", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*=\s*params\.get\("api"\)\s*!==\s*"0"/.test(html)],
+  // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
+  // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
+  // geçersiz kılınamaz, ve getPrivateCalculationForConsumer()'da artık local
+  // fallback dalı yok — aşağıdaki check bunu doğruluyor.
+  ["API-primary is hardcoded true — no more api=0 URL override", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*=\s*true\s*;/.test(html) && !/params\.get\("api"\)/.test(html)],
+  ["consumer boundary has no local calculation fallback branch", !/function getPrivateCalculationForConsumer\(contract\)\s*\{[\s\S]{0,600}calculateLeaseEngineImpl\(contract\)/.test(engine)],
   ["adapter targets the private lease calculation endpoint", /\/api\/calculations\/lease/.test(adapter)],
   ["adapter targets the bounded private batch endpoint", /\/api\/calculations\/lease\/batch/.test(adapter)],
   ["adapter targets the private modification preview endpoint", /\/api\/calculations\/lease\/modification/.test(adapter)],
@@ -50,7 +55,12 @@ const checks = [
   ["adapter normalizes every private batch result before caching", /response\.map\(normalizeCalculationResult\)/.test(adapter)],
   ["reporting accrual parses schedule dates defensively", /const eventDate = parseDate\(schedule\[i\]\?\.date\)/.test(engine) && /const rowDate = parseDate\(row\?\.date\)/.test(engine)],
   ["engine gates private results behind API-primary", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*===\s*true/.test(engine)],
-  ["engine checks the private cache before local fallback", /if \(isPrivateCalculationApiReady\(\)\)\s*\{[\s\S]{0,500}PRIVATE_CALCULATION_CACHE\.get/.test(engine)],
+  // FAZ 2 (2026-09-15): local fallback dalı kaldırıldığı için artık
+  // koşullu bir "if (isPrivateCalculationApiReady())" sarmalayıcısı yok —
+  // hem getPrivateCalculationForConsumer hem calculateLeaseEngine
+  // KOŞULSUZ olarak önce private cache'e bakıyor, yoksa fail-closed
+  // throw ediyor. Aşağıdaki check bu deseni doğruluyor.
+  ["engine reads the private cache unconditionally, with no local fallback", /PRIVATE_CALCULATION_NOT_READY/.test(engine) && !/[=(]\s*calculateLeaseEngineImpl\(contract\)/.test(engine)],
   ["engine prefers batch hydration when available", /LeaseQantPrivateCalculation\.calculateMany/.test(engine)],
   ["engine hydrates through the private facade when available", /LeaseQantPrivateTfrs16Facade/.test(engine) && /batchLoader/.test(engine)],
   ["payment-plan consumer requests the private read-only result", /async function loadPrivateReadOnlyResult\(/.test(engine) && /const privateResult = await loadPrivateReadOnlyResult\(contract\)/.test(engine)],
@@ -80,23 +90,45 @@ if (failed.length) {
   process.exit(1);
 }
 
+// FAZ 2 (2026-09-15) update: calculateLeaseEngine() is no longer "the local
+// implementation" — it was rewritten above to fail closed against the
+// private cache exactly like getPrivateCalculationForConsumer(), so a
+// production call to calculateLeaseEngine(...) is now as safe as one to
+// getPrivateCalculationForConsumer(...). The thing that must never be
+// called outside its own definition is the raw, ungated implementation:
+// calculateLeaseEngineImpl(). Track that instead.
 const callSiteRows = engine
   .split(/\n/)
   .map((line, index) => ({ line, lineNumber: index + 1 }))
-  .filter(({ line }) => /\bcalculateLeaseEngine\s*\(/.test(line));
-const isComment = (line) => /^\s*(?:\/\/|\*)/.test(line) || line.includes("calculateLeaseEngine()");
-const isDefinition = (line) => /function\s+calculateLeaseEngine\s*\(/.test(line);
-// Keep the self-test boundary anchored to the export shim instead of a fixed
-// line number; adding a guarded UI branch must not turn a test-only call into
-// a false production dependency.
-const firstTestShimLine = engine
-  .split(/\n/)
-  .findIndex((line) => line.includes("TEST EXPORT SHIM")) + 1;
-const isSelfTest = (lineNumber) => lineNumber >= 32300 && lineNumber <= firstTestShimLine;
-const productionRows = callSiteRows.filter(({ line, lineNumber }) =>
-  !isComment(line) && !isDefinition(line) && !isSelfTest(lineNumber));
-const commentRows = callSiteRows.filter(({ line, lineNumber }) => isComment(line) && !isSelfTest(lineNumber));
-const selfTestRows = callSiteRows.filter(({ lineNumber }) => isSelfTest(lineNumber));
+  .filter(({ line }) => /\bcalculateLeaseEngineImpl\s*\(/.test(line));
+const isComment = (line) => /^\s*(?:\/\/|\*)/.test(line);
+const isDefinition = (line) => /function\s+calculateLeaseEngineImpl\s*\(/.test(line);
+// FAZ 1 (2026-09-15): the embedded self-test suite (runSelfTestsV18Part1/2,
+// runSelfTestsV19FullTms29, runSelfTestsV19AccountMapping,
+// runSelfTestsV27MultiCompany, runAcceptanceTestLease020) and the
+// window.__TFRS16_TEST__ export shim were deleted from the public bundle —
+// they were unreachable dead weight (no test/ directory ships in this repo
+// anymore) that also handed the full calculation engine to anyone with a
+// browser console. There is no more self-test code in this file, so the old
+// line-range carve-out for it is gone too.
+//
+// FAZ 2 (2026-09-15): the ?api=0 rollback path was removed (Burhan's
+// decision — full dependency on the private backend). Both
+// getPrivateCalculationForConsumer() and calculateLeaseEngine() now fail
+// closed unconditionally; calculateLeaseEngineImpl() is unreachable from
+// either. That also fixed v26BuildConsolidationRows's direct
+// calculateLeaseEngine(ct) call, which FAZ 1 had uncovered and allowlisted
+// as known scope — it now goes through the same private-only gate as every
+// other consumer, so the allowlist below is empty again. Kept as an empty
+// Set (not deleted) so a future edit that reopens a local-fallback path
+// still fails the gate immediately rather than needing this comment
+// rewritten from scratch.
+const KNOWN_FAZ2_CALL_SITES = new Set([]);
+const isKnownFaz2Gap = (line) => KNOWN_FAZ2_CALL_SITES.has(line.trim());
+const productionRows = callSiteRows.filter(({ line }) =>
+  !isComment(line) && !isDefinition(line) && !isKnownFaz2Gap(line));
+const commentRows = callSiteRows.filter(({ line }) => isComment(line));
+const knownGapRows = callSiteRows.filter(({ line }) => isKnownFaz2Gap(line));
 const callSites = callSiteRows.length;
 
 if (productionRows.length > 0) {
@@ -107,9 +139,16 @@ if (productionRows.length > 0) {
 
 console.log(
   `TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} tracked references: ` +
-  `${productionRows.length} production, ${commentRows.length} comments, ${selfTestRows.length} self-tests)`
+  `${productionRows.length} production, ${commentRows.length} comments, ${knownGapRows.length} known FAZ 2 gap)`
 );
+if (knownGapRows.length > 0) {
+  console.log(
+    "NOTE: v26BuildConsolidationRows still calls calculateLeaseEngine() directly (not private-gated). " +
+    "This is tracked, allowlisted FAZ 2 work — see the comment above KNOWN_FAZ2_CALL_SITES."
+  );
+}
 console.log(
   `Production consumers are private-gated; public engine removal remains blocked until ` +
-  `${productionRows.length} production references are replaced by UI-only private result readers.`
+  `${productionRows.length} production references (plus the ${knownGapRows.length} known FAZ 2 gap above) ` +
+  `are replaced by UI-only private result readers.`
 );
