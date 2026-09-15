@@ -2537,15 +2537,19 @@ window.fetch = (input, init = {}) => {
   let backendInflationIndexCache = null; // null = backend henüz sorulmadı
 
   function getInflationIndexAuthToken() {
-    // P1 UYUMLULUK: gerçek login akışı token'ı "access_token" anahtarında
-    // saklar (bkz. dashboard.html/js/admin.js) — "gk_backend_jwt" yalnızca
-    // eski/test senaryoları için bir fallback'tir. Önceden bu fonksiyon
-    // SADECE "gk_backend_jwt"a bakıyordu, dolayısıyla gerçek bir oturumda
-    // (access_token doluyken) BİLE token bulunamıyor, cache hiç dolmuyor
-    // ve loadInflationIndexTable() sessizce localStorage'a düşüyordu. Artık
-    // dosyanın kendi tfrs16GetToken() yardımcısıyla AYNI sırayı kullanır.
+    // Bu fonksiyon önceden tfrs16GetToken() ile "aynı sırayı kullanıyor"
+    // sanılıyordu ama kendi bağımsız (ve eksik) listesini tutuyordu:
+    // sessionStorage.gk_session_token'ı hiç kontrol etmiyordu. Bu, "cross-site
+    // cookie kullanılamadığında" (bkz. tfrs16GetToken üzerindeki yorum) token
+    // sadece sessionStorage'da tutulan oturumlarda refreshFxRateCacheFromBackend()
+    // ve refreshInflationIndexCacheFromBackend()'in fetch'i HİÇ DENEMEDEN false
+    // dönmesine yol açıyordu — backendFxRateCache/backendInflationIndexCache hiç
+    // dolmuyor, KPI kartları ve dipnot akışları "kur/endeks bulunamadı" hatası
+    // veriyordu. private-calculation-api.js zaten aynı sorunu tfrs16GetToken()'a
+    // yönlenerek çözmüştü (bkz. PR #284); burada da tek doğruluk kaynağına
+    // (tfrs16GetToken) yönlendiriyoruz ki iki liste bir daha birbirinden sapmasın.
     try {
-      return localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt") || localStorage.getItem("token") || null;
+      return tfrs16GetToken();
     } catch (error) {
       return null;
     }
