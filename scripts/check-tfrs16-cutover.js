@@ -24,6 +24,7 @@ const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-engine.js");
 const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
+const portfolioUi = read("js/tfrs16-portfolio-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 
 const checks = [
@@ -33,6 +34,9 @@ const checks = [
   ["private facade loads between adapter and legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-engine.js")],
   ["TMS21 FX UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
   ["TMS21 FX UI markup lives outside the public engine", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
+  ["Portfolio UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
+  ["Portfolio table markup lives outside the public engine", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
+  ["Portfolio UI has a private read-only bridge", /getPortfolioContracts/.test(engine) && /openDetail/.test(engine) && /formatPortfolioAmount/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle

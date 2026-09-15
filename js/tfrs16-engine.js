@@ -7871,283 +7871,14 @@ window.fetch = (input, init = {}) => {
       .some(value => String(value).trim().toLowerCase() === selected);
   }
 
+  // Portfolio table markup lives in js/tfrs16-portfolio-ui.js. The engine
+  // keeps this compatibility bridge so existing refresh/filter listeners
+  // continue to call the same function while the UI module owns DOM work.
   function renderTable(renderOptions = {}) {
-
-    const tbody =
-      document.getElementById("contractsTableBody") ||
-      document.getElementById("contractTableBody");
-
-    if (!tbody) return;
-
-    // renderTable bir event listener olarak da bağlanıyor
-    // (input/change), o durumda ilk argüman bir Event nesnesidir —
-    // resetPage yalnızca açıkça false verildiğinde atlanır (goToTablePage).
-    const resetPage = renderOptions?.resetPage !== false;
-    if (resetPage) tableCurrentPage = 1;
-
-    const search =
-      (
-        document.getElementById(
-          "searchInput"
-        )?.value || ""
-      )
-        .trim()
-        .toLowerCase();
-
-    const status =
-      document.getElementById(
-        "statusFilter"
-      )?.value || "all";
-
-    const company =
-      document.getElementById(
-        "companyFilter"
-      )?.value || "all";
-
-    const filtered =
-      contracts.filter(
-        contract => {
-
-          const searchable =
-            `
-            ${contract.id}
-            ${contract.company}
-            ${contract.supplier}
-            `
-              .toLowerCase();
-
-          return (
-
-            (
-              !search ||
-              searchable.includes(
-                search
-              )
-            )
-
-            &&
-
-            (
-              status === "all" ||
-              contract.status === status
-            )
-
-            &&
-
-            (
-              company === "all" ||
-              contract.company === company
-            )
-
-            && v26ContractMatchesActiveCompany(contract)
-
-          );
-        }
-      );
-
-    // 🚀 Performans: DOM'a satır satır değil, bir kerede
-    // (DocumentFragment ile) eklenir; ayrıca sadece geçerli
-    // sayfadaki kayıtlar oluşturulur (binlerce satırda tüm tabloyu
-    // yeniden inşa etmek yerine).
-    const totalPages =
-      Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
-
-    if (tableCurrentPage > totalPages) tableCurrentPage = totalPages;
-    if (tableCurrentPage < 1) tableCurrentPage = 1;
-
-    const pageStart = (tableCurrentPage - 1) * TABLE_PAGE_SIZE;
-    const pageRows = filtered.slice(pageStart, pageStart + TABLE_PAGE_SIZE);
-
-    const fragment = document.createDocumentFragment();
-
-    pageRows.forEach(
-      contract => {
-
-        const renewal =
-          isRenewalWithin90Days(
-            contract
-          );
-
-        const row =
-          document.createElement(
-            "tr"
-          );
-
-        row.innerHTML = `
-
-          <td>
-            <div class="contract-id">
-              ${escapeHtml(
-                contract.id
-              )}
-            </div>
-          </td>
-
-          <td>
-            ${escapeHtml(
-              contract.company
-            )}
-            <div style="margin-top:4px;">
-              ${typeof v26StandardsBadgeHtml === "function" ? v26StandardsBadgeHtml(contract) : ""}
-              <span style="font-size:10px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "Para birimi eksik/geçersiz").toUpperCase())}</span>
-            </div>
-          </td>
-
-          <td>
-            <div class="supplier">
-              ${escapeHtml(
-                contract.supplier
-              )}
-            </div>
-          </td>
-
-          <td class="date">
-            ${formatDate(
-              contract.startDate
-            )}
-          </td>
-
-          <td class="date">
-            ${formatDate(
-              contract.endDate
-            )}
-          </td>
-
-          <td>
-            ${formatPortfolioAmount(contract.monthlyPayment, contract.currency, contract.currency)}
-          </td>
-
-          <td>
-            <span>${escapeHtml(String(contract.currency || "Para birimi eksik/geçersiz").toUpperCase())}</span>
-          </td>
-
-          <td>
-            <span class="status ${
-              contract.status
-            }">
-
-              ${
-                contract.status ===
-                "active"
-                  ? "Aktif"
-                  : "Pasif"
-              }
-
-            </span>
-          </td>
-
-          <td>
-            <span class="${
-              renewal
-                ? "renewal-warning"
-                : ""
-            }">
-
-              ${formatDate(
-                contract.renewalDate
-              )}
-
-              ${
-                renewal
-                  ? " ⚠"
-                  : ""
-              }
-
-            </span>
-          </td>
-
-          <td>
-
-            <button
-              class="row-action"
-              type="button"
-              data-id="${escapeHtml(
-                contract.id
-              )}"
-            >
-              Görüntüle
-            </button>
-
-          </td>
-
-        `;
-
-        row
-          .querySelector(
-            ".row-action"
-          )
-          ?.addEventListener(
-            "click",
-            () =>
-              openDetail(
-                contract.id
-              )
-          );
-
-        fragment.appendChild(
-          row
-        );
-      }
-    );
-
-    tbody.innerHTML = "";
-    tbody.appendChild(fragment);
-
-    setText(
-      "resultCount",
-      `${filtered.length} kayıt`
-    );
-
-    document
-      .getElementById(
-        "emptyState"
-      )
-      ?.classList.toggle(
-        "hidden",
-        filtered.length > 0
-      );
-
-    renderTablePagination(tbody, filtered.length, totalPages);
-  }
-
-  function renderTablePagination(tbody, totalRows, totalPages) {
-
-    let container = document.getElementById("paginationContainer");
-
-    if (!container) {
-      container = document.createElement("div");
-      container.id = "paginationContainer";
-      const table = tbody.closest("table");
-      const parent = table?.parentNode || tbody.parentNode;
-      parent.insertBefore(container, table ? table.nextSibling : null);
-    }
-
-    if (totalRows <= TABLE_PAGE_SIZE) {
-      container.innerHTML = "";
-      return;
-    }
-
-    container.innerHTML = `
-      <div style="display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;">
-        <button type="button" class="secondary-button" data-page-nav="prev" ${tableCurrentPage <= 1 ? "disabled" : ""}>← Önceki</button>
-        <span>${tableCurrentPage} / ${totalPages} (${totalRows} kayıt)</span>
-        <button type="button" class="secondary-button" data-page-nav="next" ${tableCurrentPage >= totalPages ? "disabled" : ""}>Sonraki →</button>
-      </div>
-    `;
-
-    container
-      .querySelector('[data-page-nav="prev"]')
-      ?.addEventListener("click", () => goToTablePage(tableCurrentPage - 1));
-
-    container
-      .querySelector('[data-page-nav="next"]')
-      ?.addEventListener("click", () => goToTablePage(tableCurrentPage + 1));
-  }
-
-  function goToTablePage(page) {
-    if (!Number.isFinite(page) || page < 1) return;
-    tableCurrentPage = page;
-    renderTable({ resetPage: false });
+    const renderer = window.LeaseQantTfrs16PortfolioUi?.renderTable;
+    if (typeof renderer === "function") return renderer(renderOptions);
+    const tbody = document.getElementById("contractsTableBody") || document.getElementById("contractTableBody");
+    if (tbody) tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">Portföy arayüzü yüklenemedi. Sayfayı yenileyin.</div></td></tr>`;
   }
 
   /* ==========================================================
@@ -32372,6 +32103,20 @@ ${renderPaymentScheduleFooterContainers()}
     getReportingCurrency,
     setReportingCurrency,
     convertAmountToReportingCurrency,
+  });
+
+  // Read-only portfolio UI bridge. No calculation or persistence logic is
+  // exposed; the external module receives a snapshot and invokes openDetail
+  // only for the existing detail flow.
+  Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
+    getPortfolioContracts: () => (Array.isArray(contracts) ? contracts.map(contract => ({ ...contract })) : []),
+    openDetail,
+    isRenewalWithin90Days,
+    formatPortfolioAmount,
+    formatDate,
+    escapeHtml,
+    v26ContractMatchesActiveCompany,
+    v26StandardsBadgeHtml
   });
 
   /* ==========================================================
