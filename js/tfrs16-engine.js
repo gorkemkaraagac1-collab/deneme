@@ -8146,6 +8146,16 @@ window.fetch = (input, init = {}) => {
 
   function refresh() {
 
+    // API-primary başlangıcında private sonuçlar henüz ısınmadan KPI'ları
+    // çizmek geçici "hesaplama bekliyor" uyarıları üretir. Sözleşme ve
+    // hesaplama önbelleği hydrate edildikten sonra hydrateTfrs16BackendData
+    // zaten aynı refresh akışını çağırır; ilk resmi bu arada ertele.
+    if (isPrivateCalculationApiReady() &&
+        !backendContractsHydrated &&
+        PRIVATE_CALCULATION_CACHE.size === 0) {
+      return;
+    }
+
     updateKPIs();
 
     populateCompanyFilter();
