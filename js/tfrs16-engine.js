@@ -945,6 +945,13 @@ window.fetch = (input, init = {}) => {
   // Results are keyed with the same contract signature as the local cache so
   // a mutation can never reuse a stale remote result.
   const PRIVATE_CALCULATION_CACHE = new Map();
+  // Keep a bounded identity alias alongside the full signature. The contract
+  // record can be normalized after portfolio hydration (for example when an
+  // optional event collection is materialized), which changes the signature
+  // even though the private batch response is still for the same contract.
+  // This alias never calculates locally; it only reconnects an already
+  // returned private result to its stable contract id.
+  const PRIVATE_CALCULATION_CACHE_BY_ID = new Map();
   const PRIVATE_CALCULATION_ERRORS = new Map();
   const PRIVATE_CALCULATION_INFLIGHT = new Map();
 
@@ -1175,6 +1182,7 @@ window.fetch = (input, init = {}) => {
         for (const key of PRIVATE_CALCULATION_CACHE.keys()) {
           if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_CACHE.delete(key);
         }
+        PRIVATE_CALCULATION_CACHE_BY_ID.delete(String(contractId));
         for (const key of PRIVATE_CALCULATION_INFLIGHT.keys()) {
           if (key.startsWith(`${contractId}-`)) PRIVATE_CALCULATION_INFLIGHT.delete(key);
         }
@@ -1186,6 +1194,7 @@ window.fetch = (input, init = {}) => {
       CALCULATION_CACHE.clear();
       if (!preservePrivate) {
         PRIVATE_CALCULATION_CACHE.clear();
+        PRIVATE_CALCULATION_CACHE_BY_ID.clear();
         PRIVATE_CALCULATION_INFLIGHT.clear();
         PRIVATE_CALCULATION_ERRORS.clear();
       }
@@ -1223,9 +1232,21 @@ window.fetch = (input, init = {}) => {
   function getCalculationSource(contract) {
     if (!isPrivateCalculationApiReady()) return "local";
     const key = getCalculationCacheKey(contract);
-    if (PRIVATE_CALCULATION_CACHE.has(key)) return "private-api";
+    if (PRIVATE_CALCULATION_CACHE.has(key) || PRIVATE_CALCULATION_CACHE_BY_ID.has(String(contract?.id || ""))) return "private-api";
     if (PRIVATE_CALCULATION_ERRORS.has(key)) return "private-error";
     return "local-warming";
+  }
+
+  function setPrivateCalculationResult(contract, result, options = {}) {
+    if (!contract || !result || typeof result !== "object") return;
+    PRIVATE_CALCULATION_CACHE.set(getCalculationCacheKey(contract), result);
+    const id = String(contract.id || "").trim();
+    // The first result for an id is the current contract (hydration queues it
+    // before its immutable base). Preserve that identity if the base alias is
+    // warmed afterwards, so a signature miss cannot show an older base plan.
+    if (id && (options.replace === true || !PRIVATE_CALCULATION_CACHE_BY_ID.has(id))) {
+      PRIVATE_CALCULATION_CACHE_BY_ID.set(id, result);
+    }
   }
 
   async function hydratePrivateCalculationCache(list) {
@@ -1282,7 +1303,7 @@ window.fetch = (input, init = {}) => {
             });
             return;
           }
-          PRIVATE_CALCULATION_CACHE.set(key, result);
+          setPrivateCalculationResult(items[index], result);
           PRIVATE_CALCULATION_ERRORS.delete(key);
           succeeded += 1;
         });
@@ -1298,7 +1319,7 @@ window.fetch = (input, init = {}) => {
       try {
         const result = await singleLoader(contract);
         if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
-        PRIVATE_CALCULATION_CACHE.set(key, result);
+        setPrivateCalculationResult(contract, result);
         PRIVATE_CALCULATION_ERRORS.delete(key);
         return true;
       } catch (error) {
@@ -1367,7 +1388,7 @@ window.fetch = (input, init = {}) => {
         try {
           const result = await loader(contract);
           if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
-          PRIVATE_CALCULATION_CACHE.set(key, result);
+          setPrivateCalculationResult(contract, result);
           PRIVATE_CALCULATION_ERRORS.delete(key);
           return result;
         } catch (error) {
@@ -1474,7 +1495,7 @@ window.fetch = (input, init = {}) => {
       : null;
     if (calculation) {
       const cacheKey = getCalculationCacheKey(contract);
-      PRIVATE_CALCULATION_CACHE.set(cacheKey, calculation);
+      setPrivateCalculationResult(contract, calculation, { replace: true });
       PRIVATE_CALCULATION_ERRORS.delete(cacheKey);
       setCachedCalculation(contract, calculation);
     }
@@ -1498,7 +1519,9 @@ window.fetch = (input, init = {}) => {
   // consumers auditable during the final engine-removal gate.
   function getPrivateCachedCalculationResult(contract) {
     if (!contract || !isPrivateCalculationApiReady()) return null;
-    return PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract)) || null;
+    return PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract))
+      || PRIVATE_CALCULATION_CACHE_BY_ID.get(String(contract.id || ""))
+      || null;
   }
 
   // All production UI consumers call this boundary instead of reaching the
@@ -1526,10 +1549,13 @@ window.fetch = (input, init = {}) => {
     if (!contract || !isPrivateCalculationApiReady()) return null;
     const key = getCalculationCacheKey(contract);
     PRIVATE_CALCULATION_CACHE.delete(key);
+    PRIVATE_CALCULATION_CACHE_BY_ID.delete(String(contract.id || ""));
     PRIVATE_CALCULATION_ERRORS.delete(key);
     const hydration = await hydratePrivateCalculationCache([contract]);
     if (hydration.failed > 0) return null;
-    return PRIVATE_CALCULATION_CACHE.get(key) || null;
+    return PRIVATE_CALCULATION_CACHE.get(key)
+      || PRIVATE_CALCULATION_CACHE_BY_ID.get(String(contract.id || ""))
+      || null;
   }
 
   // Period journals may consume the private period projection when its
