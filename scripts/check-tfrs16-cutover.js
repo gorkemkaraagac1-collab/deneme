@@ -26,6 +26,7 @@ const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
 const reportingUi = read("js/tfrs16-reporting-ui.js");
+const operationsUi = read("js/tfrs16-operations-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 
 const checks = [
@@ -44,6 +45,11 @@ const checks = [
   ["Consolidation page entry lives in the reporting UI module", /renderConsolidation/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderConsolidation/.test(engine)],
   ["Audit trail page entry lives in the reporting UI module", /renderAuditTrail/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderAuditTrail/.test(engine)],
   ["Governance UI reads through explicit engine bridges", /renderConsolidationBody/.test(reportingUi) && /renderAuditTrailBody/.test(reportingUi) && /renderConsolidationBody:/.test(engine) && /renderAuditTrailBody:/.test(engine)],
+  ["Operations UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
+  ["Change management entrypoint lives outside the public engine", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
+  ["Special-flow entrypoints live outside the public engine", /renderSaleAndLeaseback/.test(operationsUi) && /renderSublease/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSaleAndLeaseback/.test(engine) && /LeaseQantTfrs16OperationsUi\?\.renderSublease/.test(engine)],
+  ["Accounting center entrypoint lives outside the public engine", /renderAccountingCenter/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderAccountingCenter/.test(engine)],
+  ["Operations UI uses explicit engine bridges", /renderModificationReassessmentBody/.test(operationsUi) && /renderSaleAndLeasebackBody/.test(operationsUi) && /renderSubleaseBody/.test(operationsUi) && /renderAccountingCenterBody/.test(operationsUi) && /renderModificationReassessmentBody:/.test(engine) && /renderAccountingCenterBody:/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle

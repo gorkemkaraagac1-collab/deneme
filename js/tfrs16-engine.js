@@ -32130,6 +32130,10 @@ ${renderPaymentScheduleFooterContainers()}
     renderRiskControlsBody: v191RenderRiskControls,
     renderConsolidationBody: v26RenderConsolidationReportBody,
     renderAuditTrailBody: v26RenderAuditTrailBody,
+    renderModificationReassessmentBody: v26RenderModificationReassessmentBody,
+    renderSaleAndLeasebackBody: v26RenderSlbManagementBody,
+    renderSubleaseBody: v26RenderSubleaseManagementBody,
+    renderAccountingCenterBody: v26RenderAccountingCenterBody,
     getFinancialReportingPeriodKey: () => `${v191PeriodStartOverride || ""}|${v191PeriodEndOverride || ""}`,
     setActiveScreenRefreshCallback: callback => { v191ActiveScreenRefreshCallback = callback; }
   });
@@ -32732,6 +32736,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
   }
 
   function renderModificationReassessmentPage(container) {
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderModificationReassessment;
+    if (typeof renderer === "function") return renderer(container);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Modifikasyon ve reassessment arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
+  }
+
+  function v26RenderModificationReassessmentBody(container) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
@@ -32901,6 +32912,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
   var v26SelectedSlbContractId = null;
 
   function renderSlbManagementPage(container) {
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderSaleAndLeaseback;
+    if (typeof renderer === "function") return renderer(container);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Satış ve geri kiralama arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
+  }
+
+  function v26RenderSlbManagementBody(container) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
@@ -32959,6 +32977,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
   var v26SelectedSubleaseContractId = null;
 
   function renderSubleaseManagementPage(container) {
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderSublease;
+    if (typeof renderer === "function") return renderer(container);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Alt kiralama arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
+  }
+
+  function v26RenderSubleaseManagementBody(container) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
@@ -33029,6 +33054,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
   var v26SelectedAccountingContractId = null;
 
   function renderAccountingCenterPage(container) {
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderAccountingCenter;
+    if (typeof renderer === "function") return renderer(container);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Toplu fiş arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
+  }
+
+  function v26RenderAccountingCenterBody(container) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
