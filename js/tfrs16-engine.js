@@ -19282,8 +19282,12 @@ ${renderPaymentScheduleFooterContainers()}
      source of truth; no new calculation logic is introduced here.
   ========================================================== */
 
-  function exportRouAssetMovementNote(startDate, endDate) {
-    const prepared = v191PrepareFinancialReportingData(rptResolveDate(startDate), rptResolveDate(endDate));
+  async function exportRouAssetMovementNote(startDate, endDate) {
+    const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
+    let tms29;
+    try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
+    catch (error) { showAlert(`ROU hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
+    const prepared = v191PrepareFinancialReportingData(start, end, { tms29 });
     const report = prepared.rouReport;
     const dataRows = prepared.rouRows || [];
     if (!dataRows.length) return false;
@@ -19455,8 +19459,12 @@ ${renderPaymentScheduleFooterContainers()}
     ], "TMS29_Enflasyon_Duzeltmeli_Hareket_Tablosu");
   }
 
-  function exportLeaseLiabilityMovementNote(startDate, endDate) {
-    const prepared = v191PrepareFinancialReportingData(rptResolveDate(startDate), rptResolveDate(endDate));
+  async function exportLeaseLiabilityMovementNote(startDate, endDate) {
+    const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
+    let tms29;
+    try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
+    catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
+    const prepared = v191PrepareFinancialReportingData(start, end, { tms29 });
     const report = prepared.liabReport;
     const dataRows = prepared.liabRows || [];
     if (!dataRows.length) return false;
@@ -23493,7 +23501,16 @@ ${renderPaymentScheduleFooterContainers()}
     modal.classList.remove("hidden");
     try {
       const output = renderer(v191LastReportingDate);
-      content.innerHTML = output || `<div class="empty-state"><h3>Veri bulunamadı</h3><p>Bu görünüm için mevcut veri bulunmuyor.</p></div>`;
+      if (output && typeof output.then === "function") {
+        output.then(html => {
+          content.innerHTML = html || `<div class="empty-state"><h3>Veri bulunamadı</h3><p>Bu görünüm için mevcut veri bulunmuyor.</p></div>`;
+        }).catch(error => {
+          console.error(`V19.1 ${title} error:`, error);
+          content.innerHTML = `<div class="empty-state"><h3>Veri yüklenemedi</h3><p>${v191Escape(error?.message || String(error))}</p></div>`;
+        });
+      } else {
+        content.innerHTML = output || `<div class="empty-state"><h3>Veri bulunamadı</h3><p>Bu görünüm için mevcut veri bulunmuyor.</p></div>`;
+      }
     } catch (error) {
       console.error(`V19.1 ${title} error:`, error);
       content.innerHTML = `<div class="empty-state"><h3>Veri yüklenemedi</h3><p>${v191Escape(error?.message || String(error))}</p></div>`;
@@ -24143,6 +24160,38 @@ ${renderPaymentScheduleFooterContainers()}
     };
   }
 
+  // All portfolio TMS29 consumers share one private batch envelope.  Keeping
+  // the promise/result here prevents the reporting modal and spreadsheet
+  // exports from independently rebuilding the old public calculation.
+  const v191PrivateTms29PortfolioCache = new Map();
+  async function v191LoadPrivatePortfolioTms29(periodStart, periodEnd) {
+    const start = rptResolveDate(periodStart);
+    const end = rptResolveDate(periodEnd);
+    if (!start || !end || end < start) throw new Error("Geçersiz TMS 29 raporlama dönemi.");
+    if (!isPrivateCalculationApiReady()) throw new Error("Private TMS 29 API hazır değil; yerel hesaplama kapalı.");
+    const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
+    const cacheKey = `${periodStartMonth}|${rpMonth}`;
+    const cached = v191PrivateTms29PortfolioCache.get(cacheKey);
+    if (cached) return cached;
+    const eligibleContracts = (Array.isArray(contracts) ? contracts : []).filter(contract => {
+      if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return false;
+      const date = parseDate(contract?.startDate);
+      if (!date) return true;
+      const acquisitionMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      return acquisitionMonth <= rpMonth;
+    });
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (typeof facade?.loadTms29Many !== "function") throw new Error("Private TMS29 toplu API kullanılamıyor.");
+    const promise = facade.loadTms29Many(eligibleContracts, rpMonth, periodStartMonth)
+      .then(results => v191ComputePrivatePortfolioTms29(eligibleContracts, results, periodStartMonth, rpMonth));
+    v191PrivateTms29PortfolioCache.set(cacheKey, promise);
+    try { return await promise; } catch (error) {
+      v191PrivateTms29PortfolioCache.delete(cacheKey);
+      throw error;
+    }
+  }
+
   // ARTIK ÇAĞRILMIYOR (bkz. aşağıdaki v191Tms29RouSummaryHtml/
   // v191Tms29LiabilitySummaryHtml — bölünmüş hali). Bilinçli olarak
   // SİLİNMEDİ (minimal risk), sadece hiçbir yerden referans verilmiyor.
@@ -24353,7 +24402,7 @@ ${renderPaymentScheduleFooterContainers()}
     const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
     const tms29 = options && options.tms29
       ? options.tms29
-      : v191ComputePortfolioTms29(rawRouRows, periodStartMonth, rpMonth, rawLiabRows);
+      : (() => { throw new Error("Private TMS 29 sonucu hazır değil; yerel hesaplama kapalı."); })();
     // Nominal roll-forward engines retain transaction-currency amounts for
     // FX leases. Financial statement notes, however, must be presented in
     // the company's presentation currency. TMS 21 requires balance-sheet
@@ -24574,7 +24623,7 @@ ${renderPaymentScheduleFooterContainers()}
     };
   }
 
-  function v191RenderFinancialReporting(date) {
+  function v191RenderFinancialReporting(date, options = {}) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
 
@@ -24585,7 +24634,7 @@ ${renderPaymentScheduleFooterContainers()}
       rouTotalsRow, rouByCurrency, rouByAssetClass,
       liabTotalsRow, liabByCurrency, liabByAssetClass,
       rouDetailColumns, liabDetailColumns
-    } = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd);
+    } = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options);
 
     return v191PeriodPickerHtml(effectivePeriodStart, effectivePeriodEnd) + v191Kpis([
       { label: "Lease Liability", value: v191Value(bs.leaseLiability), description: "Financial reporting balance sheet" },
@@ -24915,7 +24964,13 @@ ${renderPaymentScheduleFooterContainers()}
     v191ClearLiabFilter
   });
 
-  function v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReporting); v191OpenView(); }
+  async function v191RenderFinancialReportingPrivate(date) {
+    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
+    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
+    const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
+    return v191RenderFinancialReporting(date, { tms29 });
+  }
+  function v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReportingPrivate); v191OpenView(); }
   function v191OpenRiskControls() { v191OpenView = () => v191Show("Risk & Kontroller", "Existing V16.8 Risk & Control Engine", v191RenderRiskControls); v191OpenView(); }
   function v191OpenMonthEndClose() { v191OpenView = () => v191Show("Ay Sonu Kapanış", "Existing V17 Month-End Close Engine", v191RenderClose); v191OpenView(); }
   function v191OpenCfoDashboard() { v191OpenView = () => v191Show("CFO Dashboard", "Existing V18 CFO Data Layer", v191RenderCfo); v191OpenView(); }
@@ -34433,12 +34488,44 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
+    let privateTms29PeriodKey = null;
+    let privateTms29Result = null;
+    let privateTms29Error = null;
+    let privateTms29Loading = false;
     const render = () => {
       v191ActiveScreenRefreshCallback = render;
 
+      const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(new Date().getFullYear(), 0, 1);
+      const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : new Date();
+      const periodKey = `${rptLocalIsoDate(effectivePeriodStart)}|${rptLocalIsoDate(effectivePeriodEnd)}`;
+      if (periodKey !== privateTms29PeriodKey) {
+        privateTms29PeriodKey = periodKey;
+        privateTms29Result = null;
+        privateTms29Error = null;
+        privateTms29Loading = false;
+      }
+      if (!privateTms29Result && !privateTms29Error && !privateTms29Loading) {
+        privateTms29Loading = true;
+        v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd).then(result => {
+          privateTms29Result = result;
+          privateTms29Loading = false;
+          render();
+        }).catch(error => {
+          privateTms29Error = error;
+          privateTms29Loading = false;
+          render();
+        });
+      }
+
       let bodyHtml = "";
       try {
-        bodyHtml = v191RenderFinancialReporting(new Date());
+        if (privateTms29Loading) {
+          bodyHtml = `<div class="empty-state">Private TMS 29 portföy sonuçları yükleniyor...</div>`;
+        } else if (privateTms29Error) {
+          throw privateTms29Error;
+        } else {
+          bodyHtml = v191RenderFinancialReporting(effectivePeriodEnd, { tms29: privateTms29Result });
+        }
       } catch (error) {
         bodyHtml = `<div style="color:#991b1b;padding:12px 0;">Finansal Raporlama yüklenemedi: ${escapeHtml(error?.message || String(error))}</div>`;
       }
