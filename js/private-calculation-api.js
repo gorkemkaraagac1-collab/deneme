@@ -153,6 +153,28 @@
     }, options);
   }
 
+  // Keep the private TMS29 portfolio request bounded to the backend's
+  // 20-contract limit while allowing the UI to submit larger portfolios.
+  async function calculateTms29Many(contracts, reportingPeriod, periodStart, options) {
+    if (!Array.isArray(contracts)) throw new TypeError("contracts must be an array");
+    if (contracts.length === 0) return [];
+    const results = [];
+    for (let offset = 0; offset < contracts.length; offset += 20) {
+      const chunk = contracts.slice(offset, offset + 20);
+      if (chunk.some(contract => !contract || typeof contract !== "object" || Array.isArray(contract))) {
+        throw new TypeError("contracts must contain only objects");
+      }
+      const response = await requestCalculation("/api/calculations/lease/tms29/batch", {
+        contracts: chunk,
+        reportingPeriod,
+        periodStart: periodStart || null
+      }, options);
+      if (!Array.isArray(response)) throw new Error("Toplu TMS29 API boş sonuç döndürdü");
+      results.push(...response);
+    }
+    return results;
+  }
+
   async function calculateModificationPreview(contract, input, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -203,6 +225,7 @@
     calculate,
     calculateMany,
     calculateTms29,
+    calculateTms29Many,
     calculateModificationPreview,
     calculateReassessmentPreview,
     applyModification,
