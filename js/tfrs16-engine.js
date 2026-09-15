@@ -32116,7 +32116,13 @@ ${renderPaymentScheduleFooterContainers()}
     formatDate,
     escapeHtml,
     v26ContractMatchesActiveCompany,
-    v26StandardsBadgeHtml
+    v26StandardsBadgeHtml,
+    // External reporting UI bridge: the engine supplies private-result body
+    // data while the page shell and error/loading markup live outside it.
+    renderFinancialReportingBody: v191RenderFinancialReportingPrivate,
+    renderRiskControlsBody: v191RenderRiskControls,
+    getFinancialReportingPeriodKey: () => `${v191PeriodStartOverride || ""}|${v191PeriodEndOverride || ""}`,
+    setActiveScreenRefreshCallback: callback => { v191ActiveScreenRefreshCallback = callback; }
   });
 
   /* ==========================================================
@@ -33117,88 +33123,20 @@ const V26_FX_UI_PAGE_SIZE = 50;
      period "Uygula"/"Reset" butonları artık DOĞRU ekranı (bu
      sayfayı) yeniliyor.
   ========================================================== */
+  // Financial Reporting and Risk Controls page shells live in the dedicated UI
+  // module. Keep a small compatibility fallback while the module is loading.
   function renderFinancialReportingPage(container) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderFinancialReporting;
+    if (typeof renderer === "function") return renderer(container);
     if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    let privateTms29PeriodKey = null;
-    let privateTms29Result = null;
-    let privateTms29Error = null;
-    let privateTms29Loading = false;
-    const render = () => {
-      v191ActiveScreenRefreshCallback = render;
-
-      const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(new Date().getFullYear(), 0, 1);
-      const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : new Date();
-      const periodKey = `${rptLocalIsoDate(effectivePeriodStart)}|${rptLocalIsoDate(effectivePeriodEnd)}`;
-      if (periodKey !== privateTms29PeriodKey) {
-        privateTms29PeriodKey = periodKey;
-        privateTms29Result = null;
-        privateTms29Error = null;
-        privateTms29Loading = false;
-      }
-      if (!privateTms29Result && !privateTms29Error && !privateTms29Loading) {
-        privateTms29Loading = true;
-        v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd).then(result => {
-          privateTms29Result = result;
-          privateTms29Loading = false;
-          render();
-        }).catch(error => {
-          privateTms29Error = error;
-          privateTms29Loading = false;
-          render();
-        });
-      }
-
-      let bodyHtml = "";
-      try {
-        if (privateTms29Loading) {
-          bodyHtml = `<div class="empty-state">Private TMS 29 portföy sonuçları yükleniyor...</div>`;
-        } else if (privateTms29Error) {
-          throw privateTms29Error;
-        } else {
-          bodyHtml = v191RenderFinancialReporting(effectivePeriodEnd, { tms29: privateTms29Result });
-        }
-      } catch (error) {
-        bodyHtml = `<div style="color:#991b1b;padding:12px 0;">Finansal Raporlama yüklenemedi: ${escapeHtml(error?.message || String(error))}</div>`;
-      }
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;">
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Finansal Raporlama</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              Portföy genelinde bilanço/gelir tablosu KPI'ları ve dipnot hareket tabloları.
-            </p>
-          </div>
-          <div class="gk-v26-card">${bodyHtml}</div>
-        </div>`;
-    };
-
-    render();
+    container.innerHTML = `<div class="gk-v26-card">Finansal raporlama arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function renderRiskControlsPage(container) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderRiskControls;
+    if (typeof renderer === "function") return renderer(container);
     if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    let bodyHtml = "";
-    try {
-      bodyHtml = v191RenderRiskControls(new Date());
-    } catch (error) {
-      bodyHtml = `<div style="color:#991b1b;padding:12px 0;">Risk &amp; Kontroller yüklenemedi: ${escapeHtml(error?.message || String(error))}</div>`;
-    }
-
-    container.innerHTML = `
-      <div class="gk-v26-page">
-        <div style="margin-bottom:16px;">
-          <h2 style="margin:0;font-size:20px;color:#0f172a;">Risk &amp; Kontroller</h2>
-          <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-            Portföy genelinde çalışan sözleşme kontrolleri ve açık istisnalar.
-          </p>
-        </div>
-        <div class="gk-v26-card">${bodyHtml}</div>
-      </div>`;
+    container.innerHTML = `<div class="gk-v26-card">Risk arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function renderFootnotesPage(container) {
