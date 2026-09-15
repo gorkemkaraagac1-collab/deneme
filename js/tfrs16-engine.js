@@ -7655,6 +7655,16 @@ window.fetch = (input, init = {}) => {
 
   function updateKPIs() {
 
+    // updateKPIs() is also called directly by backend hydration and legacy
+    // UI bridges, so the refresh() guard alone is not sufficient. Keep every
+    // direct entry point quiet until private results are ready.
+    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+        Array.isArray(contracts) &&
+        contracts.length > 0 &&
+        PRIVATE_CALCULATION_CACHE.size === 0) {
+      return;
+    }
+
     const active =
       contracts.filter(
         c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE"
@@ -8150,7 +8160,7 @@ window.fetch = (input, init = {}) => {
     // çizmek geçici "hesaplama bekliyor" uyarıları üretir. Sözleşme ve
     // hesaplama önbelleği hydrate edildikten sonra hydrateTfrs16BackendData
     // zaten aynı refresh akışını çağırır; ilk resmi bu arada ertele.
-    if (isPrivateCalculationApiReady() &&
+    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
         PRIVATE_CALCULATION_CACHE.size === 0) {
