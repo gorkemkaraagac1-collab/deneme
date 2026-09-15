@@ -11552,11 +11552,19 @@ ${renderAccountingCenterBulkPromo()}
     // yapıyı görür: nominal/TMS 21 fişi + enflasyon fişi.
     if (preview) {
       const tms29StartDate = new Date(periodStartExclusive.getTime() + 24 * 60 * 60 * 1000);
-      const tms29Entries = buildTms29BulkJournalEntries(
-        contract,
-        tms29StartDate,
-        periodEndInclusive
-      );
+      let tms29Entries = [];
+      try {
+        tms29Entries = await buildTms29BulkJournalEntries(
+          contract,
+          tms29StartDate,
+          periodEndInclusive
+        );
+      } catch (error) {
+        preview.insertAdjacentHTML(
+          "beforeend",
+          `<div style="margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">TMS 29 private hesaplama yapılamadı: ${escapeHtml(error?.message || String(error))}</div>`
+        );
+      }
       if (tms29Entries.length) {
         const mappedTms29 = typeof applyAccountMappingToJournal === "function"
           ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
@@ -15351,120 +15359,27 @@ ${renderPaymentScheduleFooterContainers()}
    * gayrimoneter endeksleme farkı ile yükümlülüğün parasal pozisyon
    * kazanç/kaybı birbirine karışmaz.
    */
-  function buildTms29BulkJournalEntries(contract, periodStart, periodEnd) {
+  // TMS 29 fişi yalnızca private motorun ürettiği muhasebe zarfından alınır.
+  // Public bundle'da aynı hesabı yeniden kuran bir yedek yol bulunmaz.
+  async function buildTms29BulkJournalEntries(contract, periodStart, periodEnd) {
     if (!contract || !periodEnd) return [];
-
+    if (!isPrivateCalculationApiReady()) {
+      throw new Error("TMS 29 private hesaplama API'si hazır değil");
+    }
     const reportingPeriod = v23DateKey(periodEnd)?.slice(0, 7);
     const periodStartMonth = v23DateKey(periodStart)?.slice(0, 7);
     if (!reportingPeriod || !periodStartMonth) return [];
-
-    let restatement;
-    try {
-      restatement = applyTMS29Restatement(contract, reportingPeriod, periodStartMonth);
-    } catch (error) {
-      // Endeks tablosu eksikse nominal fiş yine üretilebilmeli. Eksik
-      // TMS 29 verisi, mevcut toplu fişi sessizce bozmadan atlanır.
-      console.warn(`TMS 29 bulk düzeltmesi hesaplanamadı (${contract.id}):`, error);
-      return [];
-    }
-
-    // The base restatement function works directly from the transaction-
-    // currency schedule for multi-layer leases. For a foreign-currency lease,
-    // use the same historical-rate ROU layers and TMS 21-aware liability
-    // movements as the financial-statement note, so the journal reconciles to
-    // the displayed TRY roll-forward.
-    if (contractNeedsFxTranslation(contract)) {
-      try {
-        const presentationCurrency = resolveContractFunctionalCurrency(contract) || getReportingCurrency() || DEFAULT_FUNCTIONAL_CURRENCY;
-        const rawRou = (getRuoAssetRollForwardReport(periodStart, periodEnd).rows || [])
-          .find(row => String(row.contractId) === String(contract.id) && row.status !== "ERROR");
-        const rawLiab = (getLeaseLiabilityRollForwardReport(periodStart, periodEnd).rows || [])
-          .find(row => String(row.contractId) === String(contract.id) && row.status !== "ERROR");
-        if (rawRou && rawLiab) {
-          const rouRollForward = v191BuildFxRouRollForward(contract, rawRou, periodStartMonth, reportingPeriod, presentationCurrency);
-          const liabilityRollForward = v191BuildFxLiabilityRollForward(contract, rawLiab, periodStartMonth, reportingPeriod, presentationCurrency);
-          restatement = {
-            ...restatement,
-            rouRollForward,
-            liabilityRollForward,
-            totals: {
-              ...(restatement.totals || {}),
-              netAdjustment: rouRollForward.rouClosingRestatedPeriod - rouRollForward.rouClosingNominalPeriod,
-              liabilityMonetaryGainLoss: liabilityRollForward.liabilityMonetaryGainLoss
-            }
-          };
-        }
-      } catch (_) {
-        return [];
-      }
-    }
-
-    const entries = [];
-    const rou = restatement.rouRollForward;
-    const liab = restatement.liabilityRollForward;
-    const netAdjustment = Number(restatement.totals?.netAdjustment) || 0;
-    const depreciationDelta = rou
-      ? (Number(rou.rouDepreciationRestated) || 0) - (Number(rou.rouDepreciationNominal) || 0)
-      : 0;
-    // Net ROU farkı = brüt ROU farkı - amortisman farkı.
-    const grossRouDelta = netAdjustment + depreciationDelta;
-    const interestDelta = liab
-      ? (Number(liab.liabilityInterestRestated) || 0) - (Number(liab.liabilityInterestNominal) || 0)
-      : 0;
-
-    const addPair = (debitAccount, creditAccount, amount, source) => {
-      const value = Number(amount) || 0;
-      if (Math.abs(value) < 0.005) return;
-      const positive = value > 0;
-      entries.push({
-        account: positive ? debitAccount : creditAccount,
-        debit: positive ? Math.abs(value) : 0,
-        credit: positive ? 0 : Math.abs(value),
-        source,
-        journalType: "TMS29_INFLATION",
-        controlStatus: "VALID"
-      });
-      entries.push({
-        account: positive ? creditAccount : debitAccount,
-        debit: positive ? 0 : Math.abs(value),
-        credit: positive ? Math.abs(value) : 0,
-        source,
-        journalType: "TMS29_INFLATION",
-        controlStatus: "VALID"
-      });
-    };
-
-    addPair(
-      TFRS29_ACCOUNTS.rouAsset,
-      TFRS29_ACCOUNTS.inflationGainLoss,
-      grossRouDelta,
-      "INFLATION_ADJUSTMENT_ROU_GROSS"
+    const result = await window.LeaseQantPrivateTfrs16Facade.loadTms29(
+      contract,
+      reportingPeriod,
+      periodStartMonth
     );
-    addPair(
-      "770 / 730 Amortisman Giderleri",
-      "268 Birikmiş Amortismanlar",
-      depreciationDelta,
-      "INFLATION_ADJUSTMENT_ROU_DEPRECIATION"
-    );
-    addPair(
-      "780 Finansman Giderleri",
-      TFRS29_ACCOUNTS.leaseLiability,
-      interestDelta,
-      "INFLATION_ADJUSTMENT_LIABILITY_INTEREST"
-    );
-
-    const monetaryGL = Number(restatement.totals?.liabilityMonetaryGainLoss);
-    if (Number.isFinite(monetaryGL) && Math.abs(monetaryGL) >= 0.005) {
-      const gain = -monetaryGL;
-      addPair(
-        TFRS29_ACCOUNTS.monetaryPositionOffset,
-        TFRS29_ACCOUNTS.liabilityMonetaryGainLoss,
-        gain,
-        "INFLATION_ADJUSTMENT_LIABILITY_MONETARY"
-      );
-    }
-
-    return entries;
+    const entries = Array.isArray(result?.journal) ? result.journal : [];
+    return entries.map(entry => ({
+      ...entry,
+      journalType: entry.journalType || "TMS29_INFLATION",
+      controlStatus: entry.controlStatus || "VALID"
+    }));
   }
 
   function buildAppliedChangeJournalEntries(contract, periodStart, periodEnd) {
@@ -15539,11 +15454,18 @@ ${renderPaymentScheduleFooterContainers()}
         periodDates.periodEnd
       );
 
-      const tms29Entries = buildTms29BulkJournalEntries(
-        contract,
-        periodDates.periodStart,
-        periodDates.periodEnd
-      );
+      let tms29Entries;
+      try {
+        tms29Entries = await buildTms29BulkJournalEntries(
+          contract,
+          periodDates.periodStart,
+          periodDates.periodEnd
+        );
+      } catch (error) {
+        hideLoading();
+        showAlert(`${contract.id} sözleşmesinin TMS 29 private fişi oluşturulamadı: ${error?.message || error}`);
+        return;
+      }
 
       if (!selected.length && !changeEntries.length && !tms29Entries.length) {
         if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {

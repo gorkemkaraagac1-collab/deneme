@@ -53,6 +53,7 @@ const checks = [
   ["footnotes page renders with the private TMS29 envelope", /renderFootnotesPage\([\s\S]{0,11000}\{ tms29: privateTms29Result \}/.test(engine)],
   ["private TMS29 preview fills the adjustment table", /const previewBody = container\.querySelector\("table tbody"\)/.test(engine) && /Taslak oluşturulmadı/.test(engine)],
   ["TMS29 export uses the private batch facade", /async function exportTms29InflationNote\([\s\S]{0,2600}loadTms29Many/.test(engine) && !/async function exportTms29InflationNote\([\s\S]{0,2600}v191ComputePortfolioTms29\(rouRows/.test(engine)],
+  ["TMS29 journal consumers use the private journal envelope", /async function buildTms29BulkJournalEntries[\s\S]{0,900}loadTms29\(/.test(engine) && !/async function buildTms29BulkJournalEntries[\s\S]{0,900}applyTMS29Restatement\(/.test(engine)],
   ["private facade exposes modification preview loading", /loadModificationPreview/.test(facade)],
   ["private facade exposes reassessment preview loading", /loadReassessmentPreview/.test(facade)],
   ["private facade exposes modification apply loading", /applyModification/.test(facade)],
