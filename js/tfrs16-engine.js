@@ -31593,7 +31593,7 @@ ${renderPaymentScheduleFooterContainers()}
     document.body.appendChild(modal);modal.querySelector('#cancel').onclick=()=>modal.remove();modal.querySelector('#save').onclick=()=>v26UiRun(()=>{const input={groupId:modal.querySelector('#group').value,fromCompanyId:modal.querySelector('#from').value,toCompanyId:modal.querySelector('#to').value,account:modal.querySelector('#account').value,amount:Number(modal.querySelector('#amount').value),currency:modal.querySelector('#currency').value,eliminationType:modal.querySelector('#type').value,reportingDate:modal.querySelector('#date').value,reason:modal.querySelector('#reason').value,status:modal.querySelector('#status').value}; if(row)updateElimination(row.id,input);else createElimination(input);modal.remove();onDone();});
   }
 
-  function renderConsolidationReportPage(container, options = {}) {
+  function v26RenderConsolidationReportBody(container, options = {}) {
     if (!container) return;
     injectV26Styles();
     const presentationCurrency = options.presentationCurrency || "USD";
@@ -31827,7 +31827,7 @@ ${renderPaymentScheduleFooterContainers()}
       </div>`;
 
     const reRender = () => {
-      renderConsolidationReportPage(container, {
+      v26RenderConsolidationReportBody(container, {
         groupId: container.querySelector("#v26ConsolGroup")?.value || groupId,
         presentationCurrency: container.querySelector("#v26ConsolPresFx")?.value || presentationCurrency,
         reportingDate: container.querySelector("#v26ConsolDate")?.value || reportingDate
@@ -31871,6 +31871,13 @@ ${renderPaymentScheduleFooterContainers()}
       w.document.close();
       setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
     });
+  }
+
+  function renderConsolidationReportPage(container, options = {}) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderConsolidation;
+    if (typeof renderer === "function") return renderer(container, options);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Konsolidasyon arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function injectV26Navigation() {
@@ -32121,6 +32128,8 @@ ${renderPaymentScheduleFooterContainers()}
     // data while the page shell and error/loading markup live outside it.
     renderFinancialReportingBody: v191RenderFinancialReportingPrivate,
     renderRiskControlsBody: v191RenderRiskControls,
+    renderConsolidationBody: v26RenderConsolidationReportBody,
+    renderAuditTrailBody: v26RenderAuditTrailBody,
     getFinancialReportingPeriodKey: () => `${v191PeriodStartOverride || ""}|${v191PeriodEndOverride || ""}`,
     setActiveScreenRefreshCallback: callback => { v191ActiveScreenRefreshCallback = callback; }
   });
@@ -32230,7 +32239,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
   const AUDIT_TRAIL_PAGE_SIZE = 25;
 
-  function renderAuditTrailPage(container) {
+  function v26RenderAuditTrailBody(container) {
     if (!container) return;
     injectV26Styles();
     let page = 1;
@@ -32351,6 +32360,13 @@ const V26_FX_UI_PAGE_SIZE = 50;
     };
 
     render();
+  }
+
+  function renderAuditTrailPage(container) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderAuditTrail;
+    if (typeof renderer === "function") return renderer(container);
+    if (!container) return;
+    container.innerHTML = `<div class="gk-v26-card">Denetim izi arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function renderFxRateManagementPage(container) {

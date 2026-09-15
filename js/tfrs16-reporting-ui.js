@@ -106,5 +106,30 @@
     render();
   }
 
-  global.LeaseQantTfrs16ReportingUi = { renderFinancialReporting, renderRiskControls };
+  function renderConsolidation(container, options = {}) {
+    if (!container) return;
+    styles();
+    const api = bridge();
+    if (typeof api.renderConsolidationBody === "function") {
+      return api.renderConsolidationBody(container, options);
+    }
+    container.innerHTML = `<div class="gk-v26-card" style="color:#991b1b;">Konsolidasyon sonuç köprüsü hazır değil.</div>`;
+  }
+
+  function renderAuditTrail(container) {
+    if (!container) return;
+    styles();
+    const api = bridge();
+    if (typeof api.renderAuditTrailBody === "function") {
+      return api.renderAuditTrailBody(container);
+    }
+    container.innerHTML = `<div class="gk-v26-card" style="color:#991b1b;">Denetim izi veri köprüsü hazır değil.</div>`;
+  }
+
+  global.LeaseQantTfrs16ReportingUi = {
+    renderFinancialReporting,
+    renderRiskControls,
+    renderConsolidation,
+    renderAuditTrail
+  };
 })(window);
