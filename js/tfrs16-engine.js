@@ -12952,6 +12952,29 @@ ${renderPaymentScheduleFooterContainers()}
           ? ` · Parasal Kazanç/(Kayıp), net: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
           : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
       `;
+
+      // Önizleme, henüz kalıcı bir DRAFT oluşturmadan da kullanıcıya
+      // hesaplanan dönemi tabloda göstermeli. Önceki akış yalnızca üst özeti
+      // güncelliyor, tabloyu "Henüz TMS 29 hesaplanmadı" durumunda bırakıyordu.
+      // Satır doğrudan private API zarfından üretilir; public motor devreye
+      // girmez ve kalıcı kayıt ancak "Taslak Oluştur" ile yapılır.
+      const previewBody = container.querySelector("table tbody");
+      if (previewBody) {
+        const previewPeriod = escapeHtml(lastPrivateTms29Result.reportingPeriod || period);
+        const previewNetAdjustment = formatCurrency(t.netAdjustment || 0);
+        const previewGainLoss = Number.isFinite(t.liabilityMonetaryGainLoss)
+          ? formatCurrency(-t.liabilityMonetaryGainLoss)
+          : `<span style="color:#94a3b8;">—</span>`;
+        previewBody.innerHTML = `
+          <tr>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${previewPeriod}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">ÖNİZLEME</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${previewNetAdjustment}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${previewGainLoss}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;color:#64748b;">Taslak oluşturulmadı</td>
+          </tr>
+        `;
+      }
     };
 
     document.getElementById("inflPreviewBtn")?.addEventListener("click", () => { runInflationPreview(); });

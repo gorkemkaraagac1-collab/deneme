@@ -51,6 +51,7 @@ const checks = [
   ["private TMS29 portfolio result aggregation exists", /function v191ComputePrivatePortfolioTms29\(/.test(engine) && /source: "private-api"/.test(engine)],
   ["footnotes page hydrates TMS29 through the private batch facade", /renderFootnotesPage\([\s\S]{0,9000}loadTms29Many\(eligibleContracts/.test(engine)],
   ["footnotes page renders with the private TMS29 envelope", /renderFootnotesPage\([\s\S]{0,11000}\{ tms29: privateTms29Result \}/.test(engine)],
+  ["private TMS29 preview fills the adjustment table", /const previewBody = container\.querySelector\("table tbody"\)/.test(engine) && /Taslak oluşturulmadı/.test(engine)],
   ["private facade exposes modification preview loading", /loadModificationPreview/.test(facade)],
   ["private facade exposes reassessment preview loading", /loadReassessmentPreview/.test(facade)],
   ["private facade exposes modification apply loading", /applyModification/.test(facade)],
