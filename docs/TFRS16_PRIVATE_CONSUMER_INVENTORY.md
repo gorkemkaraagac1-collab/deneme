@@ -1,63 +1,58 @@
 # TFRS16 private consumer inventory
 
-> **Aktif karar (2026-09-15):** Bu envanter, public motoru koruma gerekçesi
+> **Aktif karar (2026-09-15):** Bu envanter public motoru koruma gerekçesi
 > olarak değil, public UI ayrıştırma kontrol listesi olarak kullanılacaktır.
 > Hedef tamamlandığında public `js/tfrs16-engine.js` dosyası ve üretim script
 > bağımlılığı bulunmayacaktır. TMS29 taslak/uygulama kayıtları da private
 > backend'e kalıcı yazılmadan bu kapı kapanmış sayılmayacaktır.
 
-Bu envanter public motorun üretim UI tüketicilerini izler. Her satır `getPrivateCalculationForConsumer` sınırından geçer; API-primary modunda yalnızca private sonuç önbelleği okunur. URL ile yerel hesaplamayı açan bir rollback yolu yoktur.
+Bu envanter, public motorun hâlâ aynı dosyada bulunan üretim UI tüketicilerini
+izler. Aşağıdaki her çağrı private sonuç önbelleği sınırından geçer; API-primary
+modunda sonuç yoksa yerel hesaplamaya dönmez ve açık bir bekleme/hata durumu
+gösterir. Bu liste, UI-only ayrıştırma sırasında ekran ekran kapatılacaktır.
 
-**Üretim tüketicisi: 36 · Son tarama: 2026-09-14**
+**Private sınırından geçen üretim çağrısı: 25 · Son tarama: 2026-09-15**
 
-| Satır | Tüketici | Okuma |
+| Satır | Tüketici | Private okuma |
 |---:|---|---|
-| 2733 | `function applyTMS29Restatement(contract, reportingPeriod, periodStart)` | `const engineForSchedule = getPrivateCalculationForConsumer(contract);` |
-| 2800 | `function applyTMS29Restatement(contract, reportingPeriod, periodStart)` | `: (getPrivateCalculationForConsumer(contract).rouAssets \|\| 0);` |
-| 2834 | `function applyTMS29Restatement(contract, reportingPeriod, periodStart)` | `lastRow ? lastRow.closingLiability : (getPrivateCalculationForConsumer(contract).liability \|\| 0);` |
-| 2868 | `function applyTMS29Restatement(contract, reportingPeriod, periodStart)` | `: (fullSchedule.length ? fullSchedule[0].openingLiability : (getPrivateCalculationForConsumer(contract).liability \|\| 0));` |
-| 2929 | `function applyTMS29Restatement(contract, reportingPeriod, periodStart)` | `const accrualSchedule = getPrivateCalculationForConsumer(contract).schedule;` |
-| 3741 | `function calculateReassessment(contract, input)` | `getPrivateCalculationForConsumer(contract).liability` |
-| 3748 | `function calculateReassessment(contract, input)` | `getPrivateCalculationForConsumer(contract).rouAssets` |
-| 3872 | `function buildScheduleFromChangeChain(contract, excludeId)` | `const baseEngine = getPrivateCalculationForConsumer(baseContract);` |
-| 5007 | `function resolveAppliedChangeMeasurement(contract, change, kind)` | `const baseEngine = getPrivateCalculationForConsumer(baseContract);` |
-| 5086 | `function buildScheduleFromModificationChain(` | `getPrivateCalculationForConsumer(baseContract);` |
-| 5328 | `function calculateModification(` | `getPrivateCalculationForConsumer(getModificationBaseContract(contract));` |
-| 5447 | `function buildModifiedSchedule(` | `return getPrivateCalculationForConsumer(contract).schedule \|\| [];` |
-| 6754 | `function calculateLease(contract)` | `return getPrivateCalculationForConsumer(contract);` |
-| 7062 | `function getEscalatedPayments(contract)` | `const engine = getPrivateCalculationForConsumer(contract);` |
-| 8490 | `function resolveContractScheduleSource(contract)` | `const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;` |
-| 8518 | `function getScheduleAsOfReportingDate(` | `getPrivateCalculationForConsumer(contract);` |
-| 8665 | `function calculateLiabilitySplitAsOf(` | `engine: getPrivateCalculationForConsumer(contract),` |
-| 8681 | `function calculateLiabilitySplitAsOf(` | `: Math.max(0, Number(getPrivateCalculationForConsumer(contract).liability) \|\| 0);` |
-| 12171 | `function auditCalculationRun(contract, calculationType = "TFRS16")` | `const engine = getPrivateCalculationForConsumer(contract);` |
-| 13091 | `async function renderPaymentScheduleTable(contract)` | `: getPrivateCalculationForConsumer(contract);` |
-| 13943 | `async function exportPaymentSchedule(contract, presentationCurrency)` | `getPrivateCalculationForConsumer(` |
-| 17850 | `function controlSchedule(contract)` | `const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;` |
-| 17942 | `function controlCalculation(contract, config)` | `const engine = getPrivateCalculationForConsumer(contract);` |
-| 17959 | `function controlROU(contract, config)` | `const engine = getPrivateCalculationForConsumer(contract);` |
-| 19272 | `function rptBuildSchedule(contract)` | `const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;` |
-| 23445 | `function getErpReadyPaymentData(reportingDate, options =` | `const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null);` |
-| 24010 | `function v191BuildFxRouRollForward(contract, rawRow, periodStartMonth, rpMonth, presentationCurrency)` | `const initialTx = rptNumber(first.rouOpening \|\| getPrivateCalculationForConsumer(contract).rouAssets \|\| 0);` |
-| 25157 | `function v191RenderContractTools()` | `: (typeof calculateLeaseEngine === "function" ? (getPrivateCalculationForConsumer(contract)?.schedule \|\| []) : []);` |
-| 25878 | `function v20GetDatabaseModel()` | `const result = getPrivateCalculationForConsumer(contract);` |
-| 27962 | `function v22ContractMetrics(contract, reportingDate)` | `: (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : {});` |
-| 29456 | `function calculateSaleAndLeaseback(input =` | `const leasebackEngine = getPrivateCalculationForConsumer(leasebackContract);` |
-| 29678 | `function calculateSublease(input =` | `const subEngine = getPrivateCalculationForConsumer(subleaseContract);` |
-| 29707 | `function calculateSublease(input =` | `const subEngine = getPrivateCalculationForConsumer(subleaseContract);` |
-| 31219 | `function getEffectiveSchedule(contract)` | `const engine = getPrivateCalculationForConsumer(contract);` |
-| 31229 | `function getEffectiveSchedule(contract)` | `return getPrivateCalculationForConsumer(contract).schedule;` |
-| 31432 | `async function exportReport(contractId, format, options =` | `const engine = getPrivateCalculationForConsumer(contract);` |
+| 3063 | `buildScheduleFromChangeChain` | `getPrivateCalculationForConsumer(baseContract)` |
+| 4103 | `resolveAppliedChangeMeasurement` | `getPrivateCalculationForConsumer(baseContract)` |
+| 4182 | `buildScheduleFromModificationChain` | `getPrivateCalculationForConsumer(baseContract)` |
+| 4337 | `buildModifiedSchedule` | `getPrivateCalculationForConsumer(contract).schedule` |
+| 5509 | `calculateLease` | `getPrivateCalculationForConsumer(contract)` |
+| 5799 | `getEscalatedPayments` | `getPrivateCalculationForConsumer(contract)` |
+| 7190 | `resolveContractScheduleSource` | `getPrivateCalculationForConsumer(contract)` |
+| 7218 | `getScheduleAsOfReportingDate` | `getPrivateCalculationForConsumer(contract)` |
+| 7364 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract)` |
+| 7380 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract).liability` |
+| 10885 | `auditCalculationRun` | `getPrivateCalculationForConsumer(contract)` |
+| 11821 | `renderPaymentScheduleTable` | `getPrivateCalculationForConsumer(contract)` |
+| 12833 | `exportPaymentSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 16635 | `controlSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 16727 | `controlCalculation` | `getPrivateCalculationForConsumer(contract)` |
+| 16744 | `controlROU` | `getPrivateCalculationForConsumer(contract)` |
+| 18056 | `rptBuildSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 22266 | `getErpReadyPaymentData` | `getPrivateCalculationForConsumer(contract)` |
+| 22836 | `v191BuildFxRouRollForward` | `getPrivateCalculationForConsumer(contract).rouAssets` |
+| 23907 | `v191RenderContractTools` | `getPrivateCalculationForConsumer(contract).schedule` |
+| 24636 | `v20GetDatabaseModel` | `getPrivateCalculationForConsumer(contract)` |
+| 26717 | `v22ContractMetrics` | `getPrivateCalculationForConsumer(contract)` |
+| 29764 | `getEffectiveSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 29774 | `getEffectiveSchedule` | `getPrivateCalculationForConsumer(contract).schedule` |
+| 29975 | `exportReport` | `getPrivateCalculationForConsumer(contract)` |
 
-Kalan `calculateLeaseEngine(` referansları yalnızca yorumlar, self-testler ve fonksiyon tanımıdır; CI kapısı doğrudan üretim çağrısı eklenmesini reddeder.
+`getPrivateCalculationForConsumer` fonksiyon tanımı (1531) tabloya dahil
+değildir. Eski TMS29 restatement/portfolio/write gövdeleri public bundle'dan
+çıkarılmıştır; bu taramada kalan satırlar UI ve raporlama tüketicileridir.
 
-## Yapısal temizleme dilimi (2026-09-15)
+## Ayrıştırma sırası
 
-Public bundle'dan artık kullanılmayan yerel TMS 29 restatement, portföy
-hesaplayıcı ve taslak/uygulama yazma gövdeleri çıkarıldı. TMS 29 sonuçları,
-journal ve kalıcı yazma akışları private API zarfından geliyor; public dosyada
-yalnızca private sonucu ekrana taşıyan UI ve admin endeks yönetimi kaldı.
+1. Salt-okuma sonuç okuyucuları: özet, ödeme planı, raporlama tarihi ve KPI.
+2. Muhasebe fişleri, dışa aktarma ve denetim izi.
+3. Modifikasyon, reassessment ve erken ödeme ekranları.
+4. TMS29, SLB ve sublease özel akışları.
+5. Her ekran için temiz-cache canlı smoke ve geri dönüş artefaktı.
+6. Son, ayrı ve geri alınabilir PR'da `js/tfrs16-engine.js` script etiketi ile
+   dosyasını kaldırma.
 
-Bu dilim, `tfrs16-engine.js` dosyasının tamamen kaldırılması değildir. Ödeme
-planı, detay ve diğer UI işlevlerinin ayrı UI-only dosyaya taşınması ve canlı
-smoke tekrarının ardından dosya kaldırma PR'ı açılacaktır.
+Public engine bu liste sıfırlanmadan kaldırılmayacaktır.

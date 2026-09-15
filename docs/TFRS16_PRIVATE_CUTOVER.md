@@ -31,7 +31,7 @@ readers before the file can be removed:
 - reassessment and contract modification flows;
 - early payment, sale-and-leaseback and sublease views;
 - TMS29/inflation adjustment and audit/footnote helpers;
-- built-in self-tests and compatibility exports.
+- compatibility exports and the remaining legacy UI helpers in this bundle.
 
 The adapter now supports the authenticated `/api/calculations/lease/batch`
 endpoint and automatically splits portfolios into groups of 20. This removes
@@ -39,24 +39,25 @@ any user-facing contract-count limit while the backend keeps each request
 bounded; the current hydration path uses it when available and falls back to
 single requests during a rolling deployment.
 
-Removing the file before these consumers use the private result envelope would
-turn a calculation fallback into a blank or partially rendered production page.
+Removing the file before these consumers use a UI-only private result reader
+would turn the affected screens into blank or partially rendered production
+pages.
 
-## Consumer inventory (2026-09-14)
+## Consumer inventory (2026-09-15)
 
-The source-level scan reports 60 references to `calculateLeaseEngine(`. That
-number includes 13 comments, 10 built-in self-tests and the function
-declaration itself. The actionable production inventory is **36 call sites**.
-All 36 now pass through the explicit `getPrivateCalculationForConsumer`
-boundary in API-primary mode, and the source gate reports zero direct
-production calls to the engine. The remaining work is structural: extract the
-UI-only functions from this bundle, prove every screen still reads the private
-envelope, and then remove the public implementation. This distinction is
-recorded so a comment or self-test cannot be mistaken for a live UI dependency.
+The current source-level scan has **25 production reads** through
+`getPrivateCalculationForConsumer`. The old 60/36 figure described the bundle
+before the self-test, rollback and dead TMS29 cleanup; it is no longer the
+current inventory. All 25 reads are private-gated in API-primary mode, and the
+source gate reports zero direct production calls to the raw engine. The
+remaining work is structural: extract the UI-only functions from this bundle,
+prove every screen still reads the private envelope, and then remove the public
+implementation. The current rows are maintained in
+`docs/TFRS16_PRIVATE_CONSUMER_INVENTORY.md`.
 
 ## Release gate
 
-The exact 36-row production inventory is maintained in
+The exact 25-row production inventory is maintained in
 `docs/TFRS16_PRIVATE_CONSUMER_INVENTORY.md`. The inventory is regenerated from
 the engine source when the migration slice changes; it is the checklist for
 the remaining structural extraction and screen-level smoke evidence.

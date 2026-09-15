@@ -18,8 +18,9 @@ logic and does not expose the proprietary engine.
   than 20 are split by `private-calculation-api.js`.
 - `project(result)` returns the stable read-only result fields that summary and
   payment-plan renderers consume.
-- `tfrs16-engine.js` uses the facade when it is present and retains the same
-  single-request fallback for a rolling deploy or a temporary API failure.
+- `tfrs16-engine.js` uses the facade when it is present. API-primary is a hard
+  boundary: a missing result is shown as loading/unavailable until the private
+  endpoint responds; it never reactivates the public calculation implementation.
 
 ## First consumer migration
 
@@ -27,8 +28,9 @@ logic and does not expose the proprietary engine.
   including the case where portfolio warm-up has not finished yet.
 - An in-flight request is shared per contract and invalidated with the normal
   calculation cache, so edits cannot reuse a stale read-only result.
-- If the private request fails, the existing CFO/local schedule path remains
-  available as the rollback-safe fallback.
+- If the private request fails, the UI shows an explicit unavailable state and
+  records the contract error for retry; it does not switch to browser
+  calculation.
 
 ## Summary and report read-only consumers
 
@@ -37,17 +39,16 @@ logic and does not expose the proprietary engine.
 - The existing summary cards and synchronous report/journal readers are
   redrawn from that same private result envelope when it arrives; the active
   detail tab is preserved.
-- A failed request leaves the already rendered local result in place and marks
-  the contract for the normal local-fallback path. No public engine code is
-  removed in this slice.
+- A failed request leaves an explicit unavailable state and records the
+  contract error for retry. No public engine code is removed in this slice.
 
 ## Modification and reassessment consumers
 
 - Successful create, update, apply and cancel operations invalidate the local
   calculation cache and warm the updated contract through the private API
   before the host view is redrawn.
-- A private refresh failure still redraws the existing local fallback, so a
-  temporary API or deployment issue does not block the user's workflow.
+- A private refresh failure shows a clear retryable error; it does not silently
+  switch to a browser calculation path.
 - This keeps modification and reassessment on the same private result envelope
   as the summary and payment-plan consumers.
 
@@ -60,9 +61,9 @@ logic and does not expose the proprietary engine.
 - The browser merges that envelope, persists the returned event through the
   existing contract write, and refreshes its private calculation cache. The
   input draft is never mutated by the server response.
-- The local apply implementation remains available only in the explicit
-  `?api=0` rollback path; the public engine removal gate stays closed until a
-  live apply smoke has passed.
+- The local apply implementation and the `?api=0` rollback path have been
+  removed; the public engine removal gate stays closed until a live apply smoke
+  has passed.
 
 This package is intentionally behavior-preserving. It establishes the seam for
 moving read-only detail, report, journal, modification and sublease consumers
