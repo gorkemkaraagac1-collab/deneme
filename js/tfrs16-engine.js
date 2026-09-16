@@ -12301,26 +12301,14 @@ ${renderPaymentScheduleFooterContainers()}
       const lockBannerCheck = typeof assertPeriodWritable === "function"
         ? assertPeriodWritable(contract, contract?.startDate || new Date())
         : { locked: false };
-      const lockBannerHtml = lockBannerCheck.locked
-        ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:700;">
-             🔒 ${escapeHtml(lockBannerCheck.message)}
-           </div>`
-        : "";
-      // Hesaplama kaynağı yalnızca gerçek ADMIN oturumunda gösterilir.
-      // Kullanıcıya motorun nerede çalıştığına dair iç mimari bilgisi açılmaz;
-      // admin ise kontrollü rollout/fallback durumunu teşhis edebilir.
-      const calculationSourceHtml = String(sessionUserRole || "").toUpperCase() === "ADMIN"
-        ? calculationSource === "private-api"
-          ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`
-          : calculationSource === "private-error"
-            ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;font-weight:700;">⚠️ Private API sonucu alınamadı; hesaplama kapatıldı.</div>`
-          : calculationSource === "local-warming"
-              ? `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`
-              : ""
-        : "";
-      const calculationErrorHtml = calculationError
-        ? `<div role="status" style="margin-bottom:12px;padding:11px 14px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:600;">⏳ Bu sözleşmenin private hesaplama sonucu henüz hazır değil. Kurlar doğrulandıktan sonra tekrar açın; ödeme planı ve muhasebe fişi sonuç hazır olduğunda gösterilecektir.</div>`
-        : "";
+      // Durum bantlarının HTML sunumu reporting UI modülündedir; motor yalnızca
+      // hesaplama sonucu ve dönem kilidi kararlarını sağlar.
+      const detailStatusHtml = global.LeaseQantTfrs16ReportingUi?.renderContractDetailStatus?.({
+        lockMessage: lockBannerCheck.locked ? lockBannerCheck.message : "",
+        calculationSource,
+        calculationError: Boolean(calculationError),
+        isAdmin: String(sessionUserRole || "").toUpperCase() === "ADMIN"
+      }) || "";
       const detailPanelsHtml = global.LeaseQantTfrs16ReportingUi?.renderContractDetailPanels?.({
         summaryHtml: global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || "",
         scheduleHtml: `${renderPaymentScheduleSection(contract)}${calculationError ? `
@@ -12350,9 +12338,7 @@ ${renderPaymentScheduleFooterContainers()}
       });
       content.innerHTML = `
         ${v26StdHtml}
-        ${lockBannerHtml}
-        ${calculationSourceHtml}
-        ${calculationErrorHtml}
+        ${detailStatusHtml}
 
         ${global.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
         ${detailPanelsHtml || ""}
