@@ -12419,29 +12419,14 @@ ${renderPaymentScheduleFooterContainers()}
       const calculationErrorHtml = calculationError
         ? `<div role="status" style="margin-bottom:12px;padding:11px 14px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:600;">⏳ Bu sözleşmenin private hesaplama sonucu henüz hazır değil. Kurlar doğrulandıktan sonra tekrar açın; ödeme planı ve muhasebe fişi sonuç hazır olduğunda gösterilecektir.</div>`
         : "";
-      content.innerHTML = `
-        ${v26StdHtml}
-        ${lockBannerHtml}
-        ${calculationSourceHtml}
-        ${calculationErrorHtml}
-
-        ${global.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
-
-        <div class="gk-detail-tab gk-detail-tab-active" data-detail-tab="summary">
-          ${global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || ""}
-        </div><!-- /gk-detail-tab[summary] -->
-
-        <div class="gk-detail-tab" data-detail-tab="schedule">
-          ${renderPaymentScheduleSection(
-            contract
-          )}
-
-          ${calculationError ? `
+      const detailPanelsHtml = global.LeaseQantTfrs16ReportingUi?.renderContractDetailPanels?.({
+        summaryHtml: global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || "",
+        scheduleHtml: `${renderPaymentScheduleSection(contract)}${calculationError ? `
             <div style="margin-top:22px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:14px 16px;color:#9a3412;font-size:12px;">
               Ödeme planı ve ilk muhasebeleştirme fişi private hesaplama sonucu hazır olduğunda görüntülenecek.
             </div>
           ` : engine.exempt ? `
-            <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px 16px;">
+            <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px;">
               <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
               <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
                 Bu sözleşme kısa vadeli ve/veya düşük değerli varlık istisnası kapsamında işaretlenmiştir.
@@ -12454,30 +12439,21 @@ ${renderPaymentScheduleFooterContainers()}
             "İlk Muhasebeleştirme Fişi",
             initialJournalEntries || [],
             initialJournalCurrency
-          )}
-        </div>
+          )}`,
+        modificationHtml: `${renderModificationManagementSection(contract)}${renderReassessmentManagementSection(contract)}`,
+        slbHtml: "",
+        subleaseHtml: "",
+        accountingHtml: renderAccountingCenter(contract),
+        auditHtml: renderContractAuditTab(contract, contractAuditEvents)
+      });
+      content.innerHTML = `
+        ${v26StdHtml}
+        ${lockBannerHtml}
+        ${calculationSourceHtml}
+        ${calculationErrorHtml}
 
-        <div class="gk-detail-tab" data-detail-tab="modification">
-          ${renderModificationManagementSection(contract)}
-          ${renderReassessmentManagementSection(contract)}
-        </div>
-
-        <div class="gk-detail-tab" data-detail-tab="slb">
-          <div id="slbSectionContainer"></div>
-        </div>
-
-        <div class="gk-detail-tab" data-detail-tab="sublease">
-          <div id="subleaseSectionContainer"></div>
-        </div>
-
-        <div class="gk-detail-tab" data-detail-tab="accounting">
-          ${renderAccountingCenter(contract)}
-        </div>
-
-        <div class="gk-detail-tab" data-detail-tab="audit">
-          ${renderContractAuditTab(contract, contractAuditEvents)}
-        </div>
-
+        ${global.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
+        ${detailPanelsHtml || ""}
       `;
       } catch (renderError) {
         console.error("Detay modalı render hatası:", contract.id, renderError);

@@ -160,6 +160,47 @@
     return `<div class="gk-detail-tabs" role="tablist"><button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="schedule" role="tab">Ödeme Planı</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="modification" role="tab">Modifikasyon &amp; Reassessment</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="slb" role="tab">Satış ve Geri Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="sublease" role="tab">Alt Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="accounting" role="tab">Fişler</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="audit" role="tab">Denetim İzi</button></div>`;
   }
 
+  /** Compose detail tab panels around HTML supplied by engine bridges. */
+  function renderContractDetailPanels({
+    summaryHtml = "",
+    scheduleHtml = "",
+    modificationHtml = "",
+    slbHtml = "",
+    subleaseHtml = "",
+    accountingHtml = "",
+    auditHtml = ""
+  } = {}) {
+    return `
+        <div class="gk-detail-tab gk-detail-tab-active" data-detail-tab="summary">
+          ${summaryHtml}
+        </div><!-- /gk-detail-tab[summary] -->
+
+        <div class="gk-detail-tab" data-detail-tab="schedule">
+          ${scheduleHtml}
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="modification">
+          ${modificationHtml}
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="slb">
+          <div id="slbSectionContainer">${slbHtml}</div>
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="sublease">
+          <div id="subleaseSectionContainer">${subleaseHtml}</div>
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="accounting">
+          ${accountingHtml}
+        </div>
+
+        <div class="gk-detail-tab" data-detail-tab="audit">
+          ${auditHtml}
+        </div>
+`;
+  }
+
   function bindContractAuditTab(contract) {
     const button = document.getElementById("exportContractAuditTrailButton");
     if (!button) return;
@@ -316,6 +357,7 @@
     renderContractAuditTab,
     renderContractSummaryTab,
     renderContractDetailTabs,
+    renderContractDetailPanels,
     bindContractAuditTab,
     renderFootnotes
   };
