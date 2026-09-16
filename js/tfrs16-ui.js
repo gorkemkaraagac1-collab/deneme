@@ -10526,57 +10526,32 @@ ${renderAccountingCenterBulkPromo()}
       // (teknik mesajıyla) gösteriyor — mobil tarayıcıda konsol erişimi
       // olmadan bile hangi sözleşmenin neden kırıldığı görülebiliyor.
       try {
-      const v26StdHtml = typeof renderContractStandardsPanel === "function"
-        ? renderContractStandardsPanel(contract)
-        : (typeof v26StandardsBadgeHtml === "function"
-          ? `<div style="margin-bottom:12px;">${v26StandardsBadgeHtml(contract)}</div>`
-          : "");
-
       const lockBannerCheck = typeof assertPeriodWritable === "function"
         ? assertPeriodWritable(contract, contract?.startDate || new Date())
         : { locked: false };
-      // Durum bantlarının HTML sunumu reporting UI modülündedir; motor yalnızca
-      // hesaplama sonucu ve dönem kilidi kararlarını sağlar.
-      const detailStatusHtml = window.LeaseQantTfrs16ReportingUi?.renderContractDetailStatus?.({
-        lockMessage: lockBannerCheck.locked ? lockBannerCheck.message : "",
-        calculationSource,
+      const detailRenderer = window.LeaseQantTfrs16DetailUi?.render;
+      if (typeof detailRenderer !== "function") {
+        throw new Error("TFRS16 detay arayüzü yüklenemedi.");
+      }
+      content.innerHTML = detailRenderer({
+        contract,
+        engine,
         calculationError: Boolean(calculationError),
-        isAdmin: String(sessionUserRole || "").toUpperCase() === "ADMIN"
-      }) || "";
-      const detailPanelsHtml = window.LeaseQantTfrs16ReportingUi?.renderContractDetailPanels?.({
-        summaryHtml: window.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || "",
-        scheduleHtml: `${renderPaymentScheduleSection(contract)}${calculationError ? `
-            <div style="margin-top:22px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:14px 16px;color:#9a3412;font-size:12px;">
-              Ödeme planı ve ilk muhasebeleştirme fişi private hesaplama sonucu hazır olduğunda görüntülenecek.
-            </div>
-          ` : engine.exempt ? `
-            <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px;">
-              <strong style="color:#92400e;">TFRS 16.5-8 Muafiyeti Uygulanıyor</strong>
-              <p style="margin:6px 0 0;color:#78350f;font-size:12px;line-height:1.5;">
-                Bu sözleşme kısa vadeli ve/veya düşük değerli varlık istisnası kapsamında işaretlenmiştir.
-                Kullanım hakkı varlığı ve kiralama yükümlülüğü tanınmaz; ödemeler kira süresi boyunca
-                genellikle doğrusal (straight-line) esasa göre gider olarak muhasebeleştirilir. Bu nedenle
-                bir "ilk muhasebeleştirme fişi" üretilmez.
-              </p>
-            </div>
-          ` : renderJournalEntry(
-            "İlk Muhasebeleştirme Fişi",
-            initialJournalEntries || [],
-            initialJournalCurrency
-          )}`,
-        modificationHtml: `${renderModificationManagementSection(contract)}${renderReassessmentManagementSection(contract)}`,
-        slbHtml: "",
-        subleaseHtml: "",
-        accountingHtml: renderAccountingCenter(contract),
-        auditHtml: renderContractAuditTab(contract, contractAuditEvents)
+        calculationSource,
+        lockBannerCheck,
+        isAdmin: String(sessionUserRole || "").toUpperCase() === "ADMIN",
+        initialJournalEntries,
+        initialJournalCurrency,
+        contractAuditEvents,
+        renderContractStandardsPanel,
+        v26StandardsBadgeHtml,
+        renderPaymentScheduleSection,
+        renderJournalEntry,
+        renderModificationManagementSection,
+        renderReassessmentManagementSection,
+        renderAccountingCenter,
+        renderContractAuditTab
       });
-      content.innerHTML = `
-        ${v26StdHtml}
-        ${detailStatusHtml}
-
-        ${window.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
-        ${detailPanelsHtml || ""}
-      `;
       } catch (renderError) {
         console.error("Detay modalı render hatası:", contract.id, renderError);
         content.innerHTML = `
