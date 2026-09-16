@@ -120,6 +120,18 @@
       </div>`;
   }
 
+  function renderInflationPreviewMessage(message, options = {}) {
+    const escape = typeof options.escapeHtml === "function" ? options.escapeHtml : esc;
+    const tone = options.tone === "info" ? "#475569" : "#991b1b";
+    return `<div role="status" style="color:${tone};">${escape(message || "")}</div>`;
+  }
+
+  function renderInflationPreviewError(error, options = {}) {
+    const detail = error?.message || String(error || "Bilinmeyen hata");
+    const prefix = options.prefix || "Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı.";
+    return renderInflationPreviewMessage(`${prefix} ${detail}`, options);
+  }
+
   function renderFinancialReporting(container) {
     if (!container) return;
     styles();
@@ -546,6 +558,8 @@
     renderInflationAdjustmentRows,
     renderInflationPreviewRow,
     renderInflationPreviewSummary,
-    renderInflationAdjustmentShell
+    renderInflationAdjustmentShell,
+    renderInflationPreviewMessage,
+    renderInflationPreviewError
   };
 })(window);
