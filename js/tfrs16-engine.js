@@ -9712,27 +9712,8 @@ ${renderAccountingCenterBulkPromo()}
    * koyuyor — bkz. PROJECT_CONTEXT.md bölüm 36.
    */
   function renderPaymentScheduleSection(contract) {
-
-    return `
-
-      <div
-        style="
-          margin-top:28px;
-          border-top:1px solid #e5e7eb;
-          padding-top:24px;
-        "
-      >
-
-${renderPaymentScheduleHeader()}
-
-${renderPaymentScheduleFilters(contract)}
-
-<p id="scheduleFxStatus" role="status" style="color:#64748b;font-size:12px;"></p>
-${renderPaymentScheduleTableShell()}
-${renderPaymentScheduleFooterContainers()}
-      </div>
-
-    `;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleSection;
+    return typeof renderer === "function" ? renderer(contract) : "";
   }
 
   function renderContractAuditTab(contract, events) {

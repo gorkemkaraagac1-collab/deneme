@@ -281,6 +281,38 @@
   }
 
   /**
+   * renderPaymentScheduleSection — ödeme planı bölümünün salt sunum
+   * kompozisyonu. Hesaplama, filtreleme ve veri yükleme motor köprüsünde
+   * kalır; bu modül yalnızca bölümün HTML kabuğunu bir araya getirir.
+   */
+  function renderPaymentScheduleSection(contract) {
+    const header = renderPaymentScheduleHeader();
+    const filters = renderPaymentScheduleFilters(contract);
+    const table = renderPaymentScheduleTableShell();
+    const footer = renderPaymentScheduleFooterContainers();
+    return `
+
+      <div
+        style="
+          margin-top:28px;
+          border-top:1px solid #e5e7eb;
+          padding-top:24px;
+        "
+      >
+
+${header}
+
+${filters}
+
+<p id="scheduleFxStatus" role="status" style="color:#64748b;font-size:12px;"></p>
+${table}
+${footer}
+      </div>
+
+    `;
+  }
+
+  /**
    * renderPaymentScheduleRows — ödeme planı satırlarının salt sunum HTML'i.
    * Satırlar private sonuç zarfından gelir; biçimlendiriciler açık engine
    * köprüsü üzerinden çağrılır, burada hesaplama yapılmaz.
@@ -778,5 +810,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents };
 })(window);
