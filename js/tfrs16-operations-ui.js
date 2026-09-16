@@ -21,6 +21,34 @@
     return typeof fn === "function" ? fn(value) : String(value ?? "");
   }
 
+  // Special-flow dates can arrive as date-only strings or plain calendar
+  // objects after the private API serializes them. Normalize both forms so
+  // the table never exposes a raw "[object Object]" value to users.
+  function formatOperationDate(value) {
+    const formatter = bridge().formatDate;
+    const format = candidate => typeof formatter === "function"
+      ? formatter(candidate)
+      : String(candidate ?? "-");
+    if (value instanceof Date || typeof value === "string" || typeof value === "number") {
+      return format(value);
+    }
+    if (value && typeof value === "object") {
+      const nested = value.$date || value.iso || value.value
+        || (typeof value.date === "string" ? value.date : null);
+      if (nested && nested !== value) return formatOperationDate(nested);
+      const year = Number(value.year ?? value.fullYear);
+      const monthIndex = Number(value.monthIndex);
+      const month = Number(value.month);
+      const day = Number(value.day ?? value.date);
+      if (Number.isInteger(year) && Number.isInteger(day)
+        && (Number.isInteger(monthIndex) || Number.isInteger(month))) {
+        const calendarMonth = Number.isInteger(monthIndex) ? monthIndex : month - 1;
+        return format(new Date(year, calendarMonth, day));
+      }
+    }
+    return format(value);
+  }
+
   // Payment schedule presentation shells live here so the public engine
   // remains a calculation/bridge layer. These functions are intentionally
   // read-only markup helpers; data and actions stay behind bridge methods.
@@ -684,7 +712,7 @@ ${footer}
       const rows = result.schedule.map(row => `
         <tr>
           <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.period}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.date}</td>
+          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${escapeHtml(formatOperationDate(row.date))}</td>
           <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.openingBalance)}</td>
           <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.interest)}</td>
           <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.payment)}</td>
