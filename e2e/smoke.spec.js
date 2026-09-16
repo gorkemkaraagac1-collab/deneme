@@ -215,7 +215,11 @@ test.describe("smoke — TFRS 16 ana akış", () => {
 
     // Önbellek ısınması arka planda tamamlanınca detay yeniden çizilir.
     await expect.poll(() => apiStore.calculations.length, { timeout: 15000 }).toBe(1);
-    await expect(stubbedPage.locator("#detailModal")).toContainText("Hesaplama kaynağı: Private API");
+    // The source banner is intentionally admin-only in production.  This
+    // fixture uses a finance-manager session, so verify the private result
+    // through the rendered summary value instead of requiring an admin-only
+    // label to be visible to every role.
+    await expect(stubbedPage.locator("#detailModal .detail-grid")).toContainText("1.000");
     await expect(stubbedPage.locator("#detailTitle")).toContainText("API-PRIMARY-001");
     expect(stubbedPage.consoleErrors).toEqual([]);
   });

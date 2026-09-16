@@ -136,6 +136,28 @@ async function installApiStub(page, options = {}) {
       try { payload = JSON.parse(request.postData() || "{}"); } catch (_) { payload = {}; }
       const contract = payload.contract || {};
       store.calculations.push({ contract });
+      const startDate = new Date(`${contract.startDate || "2026-01-01"}T00:00:00Z`);
+      const endDate = new Date(`${contract.endDate || "2026-01-31"}T00:00:00Z`);
+      const months = Number.isFinite(startDate.getTime()) && Number.isFinite(endDate.getTime())
+        ? Math.max(1, (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
+          endDate.getUTCMonth() - startDate.getUTCMonth() + 1)
+        : 1;
+      const schedule = Array.from({ length: months }, (_, index) => {
+        const date = new Date(Date.UTC(
+          startDate.getUTCFullYear(),
+          startDate.getUTCMonth() + index + 1,
+          0
+        ));
+        return {
+          date: date.toISOString().slice(0, 10),
+          payment: 110,
+          interest: 10,
+          principal: 100,
+          closingLiability: Math.max(0, 900 - index * 100),
+          depreciation: 100,
+          rouClosing: Math.max(0, 900 - index * 100)
+        };
+      });
       return route.fulfill(json({
         success: true,
         data: {
@@ -144,16 +166,8 @@ async function installApiStub(page, options = {}) {
           depreciation: 100,
           monthlyInterest: 10,
           advancePaymentAtCommencement: 0,
-          months: 1,
-          schedule: [{
-            date: "2026-01-31",
-            payment: 110,
-            interest: 10,
-            principal: 100,
-            closingLiability: 900,
-            depreciation: 100,
-            rouClosing: 900
-          }]
+          months,
+          schedule
         }
       }));
     }

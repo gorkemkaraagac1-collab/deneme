@@ -11576,6 +11576,13 @@ ${renderPaymentScheduleFooterContainers()}
             skipPrivateRefresh: true,
             calculationOverride: privateResult
           });
+          // A newly created contract can be added to the in-memory list
+          // before its first private result is ready.  API-primary refresh()
+          // intentionally waits while the cache is cold, so redraw the
+          // portfolio after this on-demand result arrives; otherwise the
+          // contract stays invisible in the table and KPI cards remain zero
+          // until a full page reload.
+          try { refresh(); } catch (_) { /* best-effort portfolio redraw */ }
         }
       }).catch(() => {});
     }
