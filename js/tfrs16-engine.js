@@ -12065,66 +12065,15 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function initPaymentScheduleEvents(contract) {
-
-    updateScheduleSubPeriodUI();
-    renderPaymentScheduleTable(contract);
-    renderFxTranslationSection(contract);
-    renderInflationAdjustmentSection(contract);
-    // renderSlbSection/renderSubleaseSection BURADAN KALDIRILDI —
-    // artık ayrı sayfalarda (bkz. yukarıdaki not).
-
-    document
-      .getElementById(
-        "schedulePeriodType"
-      )
-      ?.addEventListener(
-        "change",
-        () => {
-          updateScheduleSubPeriodUI();
-          renderPaymentScheduleTable(contract);
-        }
-      );
-
-    document
-      .getElementById(
-        "scheduleYear"
-      )
-      ?.addEventListener(
-        "change",
-        () =>
-          renderPaymentScheduleTable(contract)
-      );
-
-    document
-      .getElementById(
-        "scheduleSubPeriod"
-      )
-      ?.addEventListener(
-        "change",
-        () =>
-          renderPaymentScheduleTable(contract)
-      );
-
-    document.getElementById("scheduleReportingDate")?.addEventListener("change", () => {
-      renderPaymentScheduleTable(contract);
-      // GC-2026-09 (Madde 4): TMS 21 kur farkı bölümü daha önce rapor
-      // tarihi değişince YENİLENMİYORDU (yalnızca ödeme planı
-      // tablosu yenileniyordu) — artık ikisi birlikte tetikleniyor.
-      if (typeof renderFxTranslationSection === "function") {
-        renderFxTranslationSection(contract);
-      }
+    const binder = global.LeaseQantTfrs16OperationsUi?.bindPaymentScheduleEvents;
+    if (typeof binder !== "function") return;
+    binder(contract, {
+      updateSubPeriod: updateScheduleSubPeriodUI,
+      renderTable: renderPaymentScheduleTable,
+      renderFxTranslation: renderFxTranslationSection,
+      renderInflation: renderInflationAdjustmentSection,
+      exportSchedule: exportPaymentSchedule
     });
-    document.getElementById("schedulePresentationCurrency")?.addEventListener("change", () => renderPaymentScheduleTable(contract));
-
-    document
-      .getElementById(
-        "exportScheduleButton"
-      )
-      ?.addEventListener(
-        "click",
-        () =>
-          exportPaymentSchedule(contract)
-      );
   }
 
   async function exportPaymentSchedule(contract, presentationCurrency) {

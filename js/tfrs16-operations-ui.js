@@ -311,6 +311,48 @@
     }).join("");
   }
 
+  /**
+   * Bind payment-plan controls without moving calculation or private-result
+   * logic into the public UI module. The engine supplies the callbacks that
+   * perform those operations; this module owns only DOM wiring and the
+   * initial render sequence.
+   */
+  function bindPaymentScheduleEvents(contract, handlers = {}) {
+    const {
+      updateSubPeriod,
+      renderTable,
+      renderFxTranslation,
+      renderInflation,
+      exportSchedule
+    } = handlers;
+
+    updateSubPeriod?.();
+    renderTable?.(contract);
+    renderFxTranslation?.(contract);
+    renderInflation?.(contract);
+
+    document.getElementById("schedulePeriodType")?.addEventListener("change", () => {
+      updateSubPeriod?.();
+      renderTable?.(contract);
+    });
+    document.getElementById("scheduleYear")?.addEventListener("change", () => {
+      renderTable?.(contract);
+    });
+    document.getElementById("scheduleSubPeriod")?.addEventListener("change", () => {
+      renderTable?.(contract);
+    });
+    document.getElementById("scheduleReportingDate")?.addEventListener("change", () => {
+      renderTable?.(contract);
+      renderFxTranslation?.(contract);
+    });
+    document.getElementById("schedulePresentationCurrency")?.addEventListener("change", () => {
+      renderTable?.(contract);
+    });
+    document.getElementById("exportScheduleButton")?.addEventListener("click", () => {
+      exportSchedule?.(contract);
+    });
+  }
+
   function selectedBanner(contract) {
     const fn = bridge().v26SelectedContractBanner;
     return typeof fn === "function" ? fn(contract) : "";
@@ -577,5 +619,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, bindPaymentScheduleEvents };
 })(window);
