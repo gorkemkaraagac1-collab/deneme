@@ -9813,30 +9813,18 @@ ${renderAccountingCenterBulkPromo()}
       }
     };
 
-    document.getElementById("inflPreviewBtn")?.addEventListener("click", () => { runInflationPreview(); });
-
-    // TMS 29 paneli açıldığında sözleşmenin kayıtlı raporlama tarihi varsa
-    // tarihleri otomatik doldur ve önizlemeyi çalıştır. Tarih kayıtlı değilse
-    // kullanıcı seçimi korunur; hesaplama artık sessizce "Kayıt yok" demez.
+    // Aşağıdaki 5 handler (createDraft, applyAdjustment, cancelAdjustment,
+    // updateCreateBtnLockState, runInflationPreview zaten yukarıda) event
+    // bağlama mekaniğinden AYRI tutuluyor — asıl iş mantığı (private API
+    // çağrısı, kayıt, rollback) burada, hangi DOM elemanının hangi handler'ı
+    // tetiklediği ise reporting-ui.js'deki bindInflationAdjustmentEvents'te
+    // (bindPaymentScheduleEvents ile aynı desen, 2026-09-16 UI ayrıştırması).
     const savedReportingDate = parseDate(contract?.reportingDate || contract?.tms29ReportingDate);
-    const reportingInput = document.getElementById("inflReportingPeriod");
-    const startInput = document.getElementById("inflPeriodStart");
-    if (savedReportingDate && reportingInput && !reportingInput.value) {
-      const reportMonth = `${savedReportingDate.getFullYear()}-${String(savedReportingDate.getMonth() + 1).padStart(2, "0")}`;
-      reportingInput.value = reportMonth;
-      if (startInput && !startInput.value) {
-        startInput.value = `${savedReportingDate.getFullYear()}-01`;
-      }
-      runInflationPreview();
-    }
 
-    // V19 Kısa Vade Madde 1 (UI cilası): raporlama dönemi seçildiğinde
-    // o dönem kilitliyse "Taslak Oluştur" butonu proaktif disable edilir.
-    document.getElementById("inflReportingPeriod")?.addEventListener("change", (e) => {
+    const updateCreateBtnLockState = (periodValue) => {
       const createBtn = document.getElementById("inflCreateBtn");
       if (!createBtn) return;
-      const val = e.target.value || "";
-      const lockCheck = val ? assertPeriodWritable(contract, val) : { locked: false };
+      const lockCheck = periodValue ? assertPeriodWritable(contract, periodValue) : { locked: false };
       if (lockCheck.locked) {
         createBtn.disabled = true;
         createBtn.title = lockCheck.message;
@@ -9848,9 +9836,9 @@ ${renderAccountingCenterBulkPromo()}
         createBtn.style.opacity = "";
         createBtn.style.cursor = "";
       }
-    });
+    };
 
-    document.getElementById("inflCreateBtn")?.addEventListener("click", async () => {
+    const createDraft = async () => {
       const period = document.getElementById("inflReportingPeriod")?.value || "";
       const periodStart = document.getElementById("inflPeriodStart")?.value || "";
       const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
@@ -9911,81 +9899,108 @@ ${renderAccountingCenterBulkPromo()}
       } finally {
         if (button) { button.disabled = false; button.textContent = "Taslak Oluştur"; }
       }
-    });
+    };
 
-    container.querySelectorAll(".infl-apply-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
-        if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
-        if (adjustment.status === "APPLIED") return;
-        if (adjustment.status === "CANCELLED") { showInflationAdjustmentAlert("CANCELLED düzeltme uygulanamaz."); return; }
-        const lockCheck = assertPeriodWritable(contract, adjustment.period || new Date());
-        if (lockCheck.locked) { showInflationAdjustmentAlert(lockCheck.message); return; }
-        const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
-        const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
-        btn.disabled = true;
-        btn.textContent = "Private API uyguluyor...";
-        try {
-          const privateResult = await loadPrivateTms29Result(adjustment.period, adjustment.periodStart || null);
-          adjustment.restatedFigures = privateResult.totals;
-          adjustment.journal = Array.isArray(privateResult.journal) ? privateResult.journal : [];
-          adjustment.calculationSource = "PRIVATE_API";
-          adjustment.status = "APPLIED";
-          adjustment.updatedAt = new Date().toISOString();
-          recordAuditEvent({
-            action: "INFLATION_ADJUSTMENT_APPLIED",
-            entityType: "INFLATION_ADJUSTMENT",
-            entityId: adjustment.id,
-            contractId: contract.id,
-            reason: adjustment.reason,
-            metadata: { source: "PRIVATE_API" },
-            newValue: adjustment
-          });
-          saveContracts(contracts);
-          await persistContractToApi(contract, true);
-          renderInflationAdjustmentSection(contract);
-        } catch (error) {
-          contract.inflationAdjustments = previousAdjustments;
-          contract.auditTrail = previousAuditTrail;
-          saveContracts(contracts);
-          showInflationAdjustmentAlert(`Private TMS 29 uygulanamadı: ${error?.message || String(error)}`);
-          btn.disabled = false;
-          btn.textContent = "Uygula";
-        }
-      });
-    });
+    const applyAdjustment = async (adjustmentId, btn) => {
+      const adjustment = (contract.inflationAdjustments || []).find(a => a.id === adjustmentId);
+      if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+      if (adjustment.status === "APPLIED") return;
+      if (adjustment.status === "CANCELLED") { showInflationAdjustmentAlert("CANCELLED düzeltme uygulanamaz."); return; }
+      const lockCheck = assertPeriodWritable(contract, adjustment.period || new Date());
+      if (lockCheck.locked) { showInflationAdjustmentAlert(lockCheck.message); return; }
+      const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
+      const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
+      if (btn) { btn.disabled = true; btn.textContent = "Private API uyguluyor..."; }
+      try {
+        const privateResult = await loadPrivateTms29Result(adjustment.period, adjustment.periodStart || null);
+        adjustment.restatedFigures = privateResult.totals;
+        adjustment.journal = Array.isArray(privateResult.journal) ? privateResult.journal : [];
+        adjustment.calculationSource = "PRIVATE_API";
+        adjustment.status = "APPLIED";
+        adjustment.updatedAt = new Date().toISOString();
+        recordAuditEvent({
+          action: "INFLATION_ADJUSTMENT_APPLIED",
+          entityType: "INFLATION_ADJUSTMENT",
+          entityId: adjustment.id,
+          contractId: contract.id,
+          reason: adjustment.reason,
+          metadata: { source: "PRIVATE_API" },
+          newValue: adjustment
+        });
+        saveContracts(contracts);
+        await persistContractToApi(contract, true);
+        renderInflationAdjustmentSection(contract);
+      } catch (error) {
+        contract.inflationAdjustments = previousAdjustments;
+        contract.auditTrail = previousAuditTrail;
+        saveContracts(contracts);
+        showInflationAdjustmentAlert(`Private TMS 29 uygulanamadı: ${error?.message || String(error)}`);
+        if (btn) { btn.disabled = false; btn.textContent = "Uygula"; }
+      }
+    };
 
-    container.querySelectorAll(".infl-cancel-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        if (!confirm("Bu taslak enflasyon düzeltmesi iptal edilecek. Emin misiniz?")) return;
-        const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
-        if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
-        if (adjustment.status !== "DRAFT") { showInflationAdjustmentAlert("Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."); return; }
-        const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
-        const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
-        btn.disabled = true;
-        try {
-          adjustment.status = "CANCELLED";
-          adjustment.updatedAt = new Date().toISOString();
-          recordAuditEvent({
-            action: "INFLATION_ADJUSTMENT_CANCELLED",
-            entityType: "INFLATION_ADJUSTMENT",
-            entityId: adjustment.id,
-            contractId: contract.id,
-            reason: "Kullanıcı tarafından iptal edildi"
-          });
-          saveContracts(contracts);
-          await persistContractToApi(contract, true);
-          renderInflationAdjustmentSection(contract);
-        } catch (error) {
-          contract.inflationAdjustments = previousAdjustments;
-          contract.auditTrail = previousAuditTrail;
-          saveContracts(contracts);
-          showInflationAdjustmentAlert(`Private TMS 29 taslağı iptal edilemedi: ${error?.message || String(error)}`);
-          btn.disabled = false;
-        }
+    const cancelAdjustment = async (adjustmentId, btn) => {
+      if (!confirm("Bu taslak enflasyon düzeltmesi iptal edilecek. Emin misiniz?")) return;
+      const adjustment = (contract.inflationAdjustments || []).find(a => a.id === adjustmentId);
+      if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+      if (adjustment.status !== "DRAFT") { showInflationAdjustmentAlert("Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."); return; }
+      const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
+      const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
+      if (btn) btn.disabled = true;
+      try {
+        adjustment.status = "CANCELLED";
+        adjustment.updatedAt = new Date().toISOString();
+        recordAuditEvent({
+          action: "INFLATION_ADJUSTMENT_CANCELLED",
+          entityType: "INFLATION_ADJUSTMENT",
+          entityId: adjustment.id,
+          contractId: contract.id,
+          reason: "Kullanıcı tarafından iptal edildi"
+        });
+        saveContracts(contracts);
+        await persistContractToApi(contract, true);
+        renderInflationAdjustmentSection(contract);
+      } catch (error) {
+        contract.inflationAdjustments = previousAdjustments;
+        contract.auditTrail = previousAuditTrail;
+        saveContracts(contracts);
+        showInflationAdjustmentAlert(`Private TMS 29 taslağı iptal edilemedi: ${error?.message || String(error)}`);
+        if (btn) btn.disabled = false;
+      }
+    };
+
+    const binder = window.LeaseQantTfrs16ReportingUi?.bindInflationAdjustmentEvents;
+    if (typeof binder === "function") {
+      binder(contract, container, {
+        runPreview: runInflationPreview,
+        createDraft,
+        applyAdjustment,
+        cancelAdjustment,
+        updateCreateBtnLockState,
+        savedReportingDate
       });
-    });
+    } else {
+      // UI modülü yüklenemezse eski (doğrudan) bağlama davranışına düş.
+      document.getElementById("inflPreviewBtn")?.addEventListener("click", () => { runInflationPreview(); });
+      const reportingInput = document.getElementById("inflReportingPeriod");
+      const startInput = document.getElementById("inflPeriodStart");
+      if (savedReportingDate && reportingInput && !reportingInput.value) {
+        const reportMonth = `${savedReportingDate.getFullYear()}-${String(savedReportingDate.getMonth() + 1).padStart(2, "0")}`;
+        reportingInput.value = reportMonth;
+        if (startInput && !startInput.value) startInput.value = `${savedReportingDate.getFullYear()}-01`;
+        runInflationPreview();
+      }
+      document.getElementById("inflReportingPeriod")?.addEventListener("change", (e) => {
+        updateCreateBtnLockState(e.target.value || "");
+      });
+      document.getElementById("inflCreateBtn")?.addEventListener("click", () => { createDraft(); });
+      container.querySelectorAll(".infl-apply-btn").forEach(btn => {
+        btn.addEventListener("click", () => applyAdjustment(btn.dataset.id, btn));
+      });
+      container.querySelectorAll(".infl-cancel-btn").forEach(btn => {
+        btn.addEventListener("click", () => cancelAdjustment(btn.dataset.id, btn));
+      });
+    }
   }
 
   function renderSlbSection(contract) {
@@ -10098,9 +10113,14 @@ ${renderAccountingCenterBulkPromo()}
       }
     }
 
-    document.getElementById("slbCalculateButton")?.addEventListener("click", () => runAndRenderSlb(true));
-
-    if (saved) runAndRenderSlb(false);
+    const binder = window.LeaseQantTfrs16OperationsUi?.bindSlbEvents;
+    if (typeof binder === "function") {
+      binder(contract, { calculateAndRender: runAndRenderSlb, autoRun: !!saved });
+    } else {
+      // UI modülü yüklenemezse eski (doğrudan) bağlama davranışına düş.
+      document.getElementById("slbCalculateButton")?.addEventListener("click", () => runAndRenderSlb(true));
+      if (saved) runAndRenderSlb(false);
+    }
   }
 
   function renderSlbResultHtml(...args) {
@@ -10209,9 +10229,13 @@ ${renderAccountingCenterBulkPromo()}
       }
     }
 
-    document.getElementById("subleaseCalculateButton")?.addEventListener("click", () => runAndRenderSublease(true));
-
-    if (saved) runAndRenderSublease(false);
+    const binder = window.LeaseQantTfrs16OperationsUi?.bindSubleaseEvents;
+    if (typeof binder === "function") {
+      binder(contract, { calculateAndRender: runAndRenderSublease, autoRun: !!saved });
+    } else {
+      document.getElementById("subleaseCalculateButton")?.addEventListener("click", () => runAndRenderSublease(true));
+      if (saved) runAndRenderSublease(false);
+    }
   }
 
   function renderSubleaseResultHtml(...args) {

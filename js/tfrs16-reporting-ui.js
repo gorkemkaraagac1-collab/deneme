@@ -428,6 +428,58 @@
     });
   }
 
+  /**
+   * bindInflationAdjustmentEvents — TMS29 enflasyon düzeltmesi panelindeki
+   * TÜM buton/olay bağlamalarını (Önizle, Taslak Oluştur, dönem-kilit UI'ı,
+   * her taslağın Uygula/İptal butonları) tek yerde toplar. Asıl iş mantığı
+   * (private API çağrısı, kayıt, hata durumunda rollback) engine.js'te
+   * kalır, buraya isimlendirilmiş fonksiyon referansları olarak geçirilir
+   * — bindPaymentScheduleEvents/bindSlbEvents ile BİREBİR aynı desen
+   * (2026-09-16, UI orchestration ayrıştırması).
+   */
+  function bindInflationAdjustmentEvents(contract, container, handlers = {}) {
+    const {
+      runPreview,
+      createDraft,
+      applyAdjustment,
+      cancelAdjustment,
+      updateCreateBtnLockState,
+      savedReportingDate
+    } = handlers;
+    if (!container) return;
+
+    document.getElementById("inflPreviewBtn")?.addEventListener("click", () => { runPreview?.(); });
+
+    // TMS 29 paneli açıldığında sözleşmenin kayıtlı raporlama tarihi varsa
+    // tarihleri otomatik doldur ve önizlemeyi çalıştır.
+    const reportingInput = document.getElementById("inflReportingPeriod");
+    const startInput = document.getElementById("inflPeriodStart");
+    if (savedReportingDate && reportingInput && !reportingInput.value) {
+      const reportMonth = `${savedReportingDate.getFullYear()}-${String(savedReportingDate.getMonth() + 1).padStart(2, "0")}`;
+      reportingInput.value = reportMonth;
+      if (startInput && !startInput.value) {
+        startInput.value = `${savedReportingDate.getFullYear()}-01`;
+      }
+      runPreview?.();
+    }
+
+    // V19 Kısa Vade Madde 1 (UI cilası): raporlama dönemi seçildiğinde
+    // o dönem kilitliyse "Taslak Oluştur" butonu proaktif disable edilir.
+    document.getElementById("inflReportingPeriod")?.addEventListener("change", (e) => {
+      updateCreateBtnLockState?.(e.target.value || "");
+    });
+
+    document.getElementById("inflCreateBtn")?.addEventListener("click", () => { createDraft?.(); });
+
+    container.querySelectorAll(".infl-apply-btn").forEach(btn => {
+      btn.addEventListener("click", () => applyAdjustment?.(btn.dataset.id, btn));
+    });
+
+    container.querySelectorAll(".infl-cancel-btn").forEach(btn => {
+      btn.addEventListener("click", () => cancelAdjustment?.(btn.dataset.id, btn));
+    });
+  }
+
   function renderFootnotes(container) {
     if (!container) return;
     styles();
@@ -566,6 +618,7 @@
     applyContractDetailTab,
     bindContractDetailTabs,
     bindContractAuditTab,
+    bindInflationAdjustmentEvents,
     renderFootnotes,
     renderInflationAdjustmentRows,
     renderInflationPreviewRow,
