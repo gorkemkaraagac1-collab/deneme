@@ -5997,7 +5997,8 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
-        PRIVATE_CALCULATION_CACHE.size === 0) {
+        (PRIVATE_CALCULATION_CACHE.size === 0 || privatePortfolioHydrationPromise)) {
+      setKpiPendingState();
       return;
     }
 
@@ -6055,16 +6056,7 @@ window.fetch = (input, init = {}) => {
         totals.set(presentationCurrency, group);
         } catch (error) {
           totalsError = "Hesaplama hatası — toplam gösterilemiyor";
-          // The KPI metrics helper historically threw a plain Error with
-          // this message (without assigning `code`). Treat both forms as a
-          // transient private-data hydration state so the browser console
-          // does not report a false red calculation failure.
-          if (error?.code === "KPI_CURRENT_BALANCE_UNAVAILABLE" ||
-              error?.message === "KPI_CURRENT_BALANCE_UNAVAILABLE") {
-            console.warn("Portfolio KPI data pending:", contract.id);
-          } else {
-            console.error("Portfolio KPI calculation error:", contract.id, error);
-          }
+          console.error("Portfolio KPI calculation error:", contract.id, error);
         }
       }
     );
@@ -6118,6 +6110,20 @@ window.fetch = (input, init = {}) => {
       ? `Gösterge kurları: ${Array.from(fallbackDates).sort().join(", ")} (son geçerli veri)`
       : "";
     setText("kpiDataAsOf", asOfText);
+  }
+
+  // Private results are hydrated in a batch after the contract list arrives.
+  // During that short window, showing the final KPI cards as a calculation
+  // error is misleading: there is no calculation failure, only data that is
+  // still being fetched. Keep the count visible and give the amount cards an
+  // explicit loading state until the authoritative private results are ready.
+  function setKpiPendingState() {
+    const activeCount = Array.isArray(contracts)
+      ? contracts.filter(c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE").length
+      : 0;
+    setText("contractCount", activeCount);
+    ["leaseLiability", "rouAssets", "next12Months"].forEach(id => setText(id, "Yükleniyor…"));
+    setText("kpiDataAsOf", "Private hesaplamalar yükleniyor…");
   }
 
   /* ==========================================================
@@ -6230,7 +6236,8 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
-        PRIVATE_CALCULATION_CACHE.size === 0) {
+        (PRIVATE_CALCULATION_CACHE.size === 0 || privatePortfolioHydrationPromise)) {
+      setKpiPendingState();
       return;
     }
 
