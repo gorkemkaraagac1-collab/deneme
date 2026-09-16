@@ -71,6 +71,55 @@
           </tr>`;
   }
 
+  function renderInflationAdjustmentShell(rowsHtml = "") {
+    const body = rowsHtml || `<tr><td colspan="5" style="padding:10px;color:#94a3b8;font-size:12px;">Henüz TMS 29 hesaplanmadı. Raporlama dönemini seçip Önizle'ye basın.</td></tr>`;
+    return `
+      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
+        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TMS 29 — ENFLASYON DÜZELTMESİ</div>
+        <p style="margin:6px 0 0;color:#94a3b8;font-size:10px;">
+          SINIR: Bu panel, kiralama portföyü (ROU + kiralama yükümlülüğü) için TAM KAPSAMLI bir
+          TMS 29 düzeltmesi uygular: ROU (gayri moneter, edinim ayından raporlama dönemine
+          endekslenir) ve — "Dönem Başlangıcı" girilirse — kiralama yükümlülüğü hareket tablosu
+          üzerinden hesaplanan "Parasal Kazanç/(Kayıp), net" (TMS 29.28, moneter kalemin taşıdığı
+          net parasal pozisyon etkisi). Kapsam dışı kalan tek şey: işletmenin kiralama dışı diğer
+          moneter/gayri moneter kalemlerinin (nakit, ticari alacak/borç, stoklar vb.) düzeltilmesi —
+          bunlar için ayrı bir tam finansal tablo TMS 29 çalışması gerekir.
+        </p>
+        <div style="display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap;">
+          <div class="form-group" style="margin:0;">
+            <label for="inflReportingPeriod" style="font-size:11px;">Raporlama Dönemi</label>
+            <input id="inflReportingPeriod" type="month" style="padding:6px;">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label for="inflPeriodStart" style="font-size:11px;">Dönem Başlangıcı (opsiyonel — Parasal K/Z için)</label>
+            <input id="inflPeriodStart" type="month" style="padding:6px;">
+          </div>
+          <button type="button" id="inflPreviewBtn" style="font-size:12px;padding:6px 12px;">Önizle</button>
+          <button type="button" id="inflCreateBtn" style="font-size:12px;padding:6px 12px;">Taslak Oluştur</button>
+        </div>
+        <p style="margin:4px 0 0;color:#94a3b8;font-size:10px;">
+          Dönem Başlangıcı boş bırakılırsa yalnızca ROU düzeltmesi (kapanış bazlı) hesaplanır;
+          kiralama yükümlülüğü Parasal Kazanç/(Kayıp) satırı boş kalır (V18 Parça 2 geriye dönük
+          uyumluluğu — mevcut taslaklar etkilenmez).
+        </p>
+        <div id="inflPreviewResult" style="margin-top:10px;font-size:12px;"></div>
+        <div style="overflow:auto;margin-top:14px;border:1px solid #e5e7eb;border-radius:10px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">Durum</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">ROU Net Düzeltme</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Parasal K/Z (Yükümlülük)</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
   function renderFinancialReporting(container) {
     if (!container) return;
     styles();
@@ -478,6 +527,7 @@
     bindContractAuditTab,
     renderFootnotes,
     renderInflationAdjustmentRows,
-    renderInflationPreviewRow
+    renderInflationPreviewRow,
+    renderInflationAdjustmentShell
   };
 })(window);
