@@ -11352,32 +11352,13 @@ ${renderPaymentScheduleFooterContainers()}
         : `${sourceCurrency}/${presentationCurrency}: ${conversion.asOfDate} için kur bulunamadı. Raporlama Tarihi alanından kayıtlı kur tarihini seçin.`;
     }
 
-    // V18 Parça 1 — önceki satıra göre tutar sıçraması varsa 🔺 rozeti.
+    // V18 Parça 1 — satır sunumu operations UI modülündedir; motor yalnızca
+    // private sonuçları ve dönüşüm verisini köprü üzerinden sağlar.
     const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
-
-    tbody.innerHTML =
-      rows
-        .map((item, i) => {
-          const prevPayment = i > 0 ? rows[i - 1].payment : basePaymentV18;
-          const escalationBadge =
-            basePaymentV18 > 0 && Math.abs(item.payment - prevPayment) > 0.01
-              ? ` <span title="Endeksli/artışlı ödeme" style="color:#d97706;">🔺</span>`
-              : "";
-          return `
-            <tr>
-              <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${item.period}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${getMonthName(item.month)} ${item.year}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "openingLiability", presentationCurrency)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "payment", presentationCurrency)}${escalationBadge}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "interest", presentationCurrency)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "principal", presentationCurrency)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "closingLiability", presentationCurrency)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "depreciation", presentationCurrency)}</td>
-              <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatScheduleMoney(item, "rouClosing", presentationCurrency)}</td>
-            </tr>
-          `;
-        })
-        .join("");
+    const rowRenderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleRows;
+    tbody.innerHTML = typeof rowRenderer === "function"
+      ? rowRenderer(rows, presentationCurrency, basePaymentV18)
+      : "";
 
     const empty =
       document.getElementById(
@@ -31803,6 +31784,10 @@ ${renderPaymentScheduleFooterContainers()}
     buildPaymentScheduleMonthOptions: () => buildMonthOptions(),
     buildPaymentScheduleCurrencyOptions: selected => v26CurrencyOptions(selected),
     getScheduleReportingDate,
+    formatScheduleMoney,
+    getMonthName,
+    // Payment schedule row markup lives in operations-ui; these helpers are
+    // explicit read-only bridges for presentation formatting only.
     injectV26Styles,
     v26SelectedContractBanner,
     renderSlbSection,
