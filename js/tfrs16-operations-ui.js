@@ -460,6 +460,31 @@ ${footer}
     });
   }
 
+  /**
+   * bindSlbEvents / bindSubleaseEvents — "Hesapla ve Kaydet" butonuna
+   * tıklama olayını bağlar ve daha önce kaydedilmiş bir sonuç varsa
+   * sayfa açılışında otomatik yeniden hesaplar. Asıl hesapla/kaydet/
+   * geri-al mantığı (`calculateAndRender` — private API çağrısı,
+   * backend'e yazma, hata durumunda rollback) hâlâ engine.js'te yaşıyor
+   * ve buraya bir callback olarak geçiriliyor — bindPaymentScheduleEvents
+   * ile BİREBİR aynı desen (2026-09-16, UI orchestration ayrıştırması).
+   */
+  function bindSlbEvents(contract, handlers = {}) {
+    const { calculateAndRender, autoRun } = handlers;
+    document.getElementById("slbCalculateButton")?.addEventListener("click", () => {
+      calculateAndRender?.(true);
+    });
+    if (autoRun) calculateAndRender?.(false);
+  }
+
+  function bindSubleaseEvents(contract, handlers = {}) {
+    const { calculateAndRender, autoRun } = handlers;
+    document.getElementById("subleaseCalculateButton")?.addEventListener("click", () => {
+      calculateAndRender?.(true);
+    });
+    if (autoRun) calculateAndRender?.(false);
+  }
+
   function selectedBanner(contract) {
     const fn = bridge().v26SelectedContractBanner;
     return typeof fn === "function" ? fn(contract) : "";
@@ -821,5 +846,5 @@ ${footer}
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbEvents, bindSubleaseEvents };
 })(window);
