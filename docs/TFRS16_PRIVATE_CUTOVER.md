@@ -109,6 +109,18 @@ engine. The fallback builder functions remain as an isolated removal candidate
 until the final production-reference scan proves that no compatibility helper
 still needs them; this slice deliberately does not delete the public bundle.
 
+## Classification private-source slice (2026-09-16)
+
+Reporting-date current/non-current classification now consumes the same
+`resolveContractScheduleSource()` result as the payment plan and control views.
+An applied modification or reassessment therefore cannot silently re-enter the
+browser reassessment builder; if the private event-aware envelope is incomplete,
+classification returns an explicit unavailable result for the UI to surface.
+
+The public gate now checks this boundary in addition to the schedule source
+boundary. The public engine remains in place while the remaining compatibility
+helpers and live mutation flows are retired in later slices.
+
 ## Removal criteria
 
 The public engine may be removed in a separate, reversible pull request only

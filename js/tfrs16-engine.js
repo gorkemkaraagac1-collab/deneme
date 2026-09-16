@@ -3428,21 +3428,38 @@ window.fetch = (input, init = {}) => {
   }
 
   function calculateReassessmentClassification(contract, reportingDate) {
-    ensureReassessmentState(contract);
-    const latest = getCurrentReassessmentState(contract);
-    if (!latest) return calculateLiabilitySplitAsOf(contract, reportingDate);
-
-    const effectiveDate = parseDate(latest.effectiveDate);
-    const targetDate = parseDate(reportingDate);
-    if (!effectiveDate || !targetDate || targetDate < effectiveDate) {
-      return calculateLiabilitySplitAsOf(contract, reportingDate);
+    // Classification must use the same private event-aware envelope as the
+    // payment-plan and control consumers.  The former browser-side schedule
+    // builder could silently replace a missing/incomplete private result and
+    // therefore kept one production path dependent on the public engine.
+    const resolved = resolveContractScheduleSource(contract);
+    if (resolved?.source === "ERROR") {
+      return {
+        reportingDate,
+        totalLeaseLiability: 0,
+        currentLiability: 0,
+        nonCurrentLiability: 0,
+        next12MonthPrincipal: 0,
+        next12MonthInterest: 0,
+        next12MonthPayments: 0,
+        outstandingLiability: 0,
+        current: 0,
+        nonCurrent: 0,
+        total: 0,
+        next12Payments: 0,
+        next12Interest: 0,
+        next12Principal: 0,
+        valid: false,
+        error: resolved.error || "Private API event-aware schedule is not ready"
+      };
     }
 
-    return calculateLiabilitySplitAsOf(
-      contract,
-      reportingDate,
-      buildReassessedSchedule(contract, latest)
-    );
+    const scheduleOverride = ["MODIFIED_SCHEDULE", "REASSESSED_SCHEDULE"].includes(resolved?.source) &&
+      Array.isArray(resolved.schedule) && resolved.schedule.length
+      ? resolved.schedule
+      : undefined;
+
+    return calculateLiabilitySplitAsOf(contract, reportingDate, scheduleOverride);
   }
 
   function modificationId(contract) {
