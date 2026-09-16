@@ -61,6 +61,164 @@
 `;
   }
 
+  /**
+   * renderPaymentScheduleFilters — ödeme planı filtre kontrolleri.
+   * Yalnızca HTML kabuğunu üretir; seçeneklerin sözleşme tarihleri ve para
+   * birimleri engine köprüsünden okunur, hesaplama verisi burada tutulmaz.
+   */
+  function renderPaymentScheduleFilters(contract) {
+    const yearOptions = bridge().buildPaymentScheduleYearOptions;
+    const monthOptions = bridge().buildPaymentScheduleMonthOptions;
+    const currencyOptions = bridge().buildPaymentScheduleCurrencyOptions;
+    const reportingDate = bridge().getScheduleReportingDate;
+    const selectedCurrency = String(contract?.currency || "TRY").toUpperCase();
+    const today = new Date();
+    const fallbackDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return `        <div
+          style="
+            display:grid;
+            grid-template-columns:
+              repeat(auto-fit,minmax(150px,1fr));
+            gap:12px;
+            margin-top:16px;
+          "
+        >
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Periyot
+            </label>
+
+            <select
+              id="schedulePeriodType"
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+              <option value="all">Tümü</option>
+              <option value="monthly">Aylık</option>
+              <option value="quarterly">Çeyreklik</option>
+              <option value="annual">Yıllık</option>
+            </select>
+          </div>
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Yıl
+            </label>
+
+            <select
+              id="scheduleYear"
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+              "
+            >
+              ${typeof yearOptions === "function" ? yearOptions(contract) : ""}
+            </select>
+          </div>
+
+          <div
+            style="
+              background:#f8fafc;
+              border:1px solid #e5e7eb;
+              border-radius:10px;
+              padding:12px;
+            "
+          >
+            <label
+              style="
+                display:block;
+                font-size:10px;
+                color:#64748b;
+                margin-bottom:6px;
+              "
+            >
+              Ay / Çeyrek
+            </label>
+
+            <select
+              id="scheduleSubPeriod"
+              disabled
+              style="
+                width:100%;
+                padding:8px;
+                border:1px solid #d1d5db;
+                border-radius:7px;
+                opacity:.5;
+              "
+            >
+              ${typeof monthOptions === "function" ? monthOptions() : ""}
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:end;">
+            <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
+              Raporlama Tarihi
+              <input id="scheduleReportingDate" type="date" value="${typeof reportingDate === "function" ? reportingDate() : fallbackDate}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
+            </label>
+          </div>
+          <div style="display:flex;align-items:end;">
+            <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
+              Sunum Para Birimi
+              <select id="schedulePresentationCurrency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
+                ${typeof currencyOptions === "function" ? currencyOptions(selectedCurrency) : ""}
+              </select>
+            </label>
+          </div>
+          <div
+            style="display:flex;align-items:end;"
+          >
+            <button
+              id="exportScheduleButton"
+              type="button"
+              class="primary-button"
+              style="
+                width:100%;
+                min-height:38px;
+              "
+            >
+              Excel'e Aktar
+            </button>
+          </div>
+
+        </div>
+`;
+  }
+
   function renderPaymentScheduleTableShell() {
     return `        <div
           style="
@@ -388,5 +546,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers };
 })(window);

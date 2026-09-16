@@ -11218,149 +11218,8 @@ ${renderAccountingCenterBulkPromo()}
    * kontrolleri ve "Excel'e Aktar" butonu.
    */
   function renderPaymentScheduleFilters(contract) {
-    return `        <div
-          style="
-            display:grid;
-            grid-template-columns:
-              repeat(auto-fit,minmax(150px,1fr));
-            gap:12px;
-            margin-top:16px;
-          "
-        >
-
-          <div
-            style="
-              background:#f8fafc;
-              border:1px solid #e5e7eb;
-              border-radius:10px;
-              padding:12px;
-            "
-          >
-            <label
-              style="
-                display:block;
-                font-size:10px;
-                color:#64748b;
-                margin-bottom:6px;
-              "
-            >
-              Periyot
-            </label>
-
-            <select
-              id="schedulePeriodType"
-              style="
-                width:100%;
-                padding:8px;
-                border:1px solid #d1d5db;
-                border-radius:7px;
-              "
-            >
-              <option value="all">Tümü</option>
-              <option value="monthly">Aylık</option>
-              <option value="quarterly">Çeyreklik</option>
-              <option value="annual">Yıllık</option>
-            </select>
-          </div>
-
-          <div
-            style="
-              background:#f8fafc;
-              border:1px solid #e5e7eb;
-              border-radius:10px;
-              padding:12px;
-            "
-          >
-            <label
-              style="
-                display:block;
-                font-size:10px;
-                color:#64748b;
-                margin-bottom:6px;
-              "
-            >
-              Yıl
-            </label>
-
-            <select
-              id="scheduleYear"
-              style="
-                width:100%;
-                padding:8px;
-                border:1px solid #d1d5db;
-                border-radius:7px;
-              "
-            >
-              ${buildYearOptions(contract)}
-            </select>
-          </div>
-
-          <div
-            style="
-              background:#f8fafc;
-              border:1px solid #e5e7eb;
-              border-radius:10px;
-              padding:12px;
-            "
-          >
-            <label
-              style="
-                display:block;
-                font-size:10px;
-                color:#64748b;
-                margin-bottom:6px;
-              "
-            >
-              Ay / Çeyrek
-            </label>
-
-            <select
-              id="scheduleSubPeriod"
-              disabled
-              style="
-                width:100%;
-                padding:8px;
-                border:1px solid #d1d5db;
-                border-radius:7px;
-                opacity:.5;
-              "
-            >
-              ${buildMonthOptions()}
-            </select>
-          </div>
-
-          <div style="display:flex;align-items:end;">
-            <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
-              Raporlama Tarihi
-              <input id="scheduleReportingDate" type="date" value="${getScheduleReportingDate()}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-            </label>
-          </div>
-          <div style="display:flex;align-items:end;">
-            <label style="width:100%;font-size:11px;color:#64748b;font-weight:600;">
-              Sunum Para Birimi
-              <select id="schedulePresentationCurrency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:7px;">
-                ${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}
-              </select>
-            </label>
-          </div>
-          <div
-            style="display:flex;align-items:end;"
-          >
-            <button
-              id="exportScheduleButton"
-              type="button"
-              class="primary-button"
-              style="
-                width:100%;
-                min-height:38px;
-              "
-            >
-              Excel'e Aktar
-            </button>
-          </div>
-
-        </div>
-`;
+    const renderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleFilters;
+    return typeof renderer === "function" ? renderer(contract) : "";
   }
 
   /**
@@ -31938,6 +31797,12 @@ ${renderPaymentScheduleFooterContainers()}
     // Operation-page bridge: external UI owns page markup and event wiring;
     // the engine supplies private-result render/actions and contract state.
     getOperationContracts: () => (Array.isArray(contracts) ? contracts.map(contract => JSON.parse(JSON.stringify(contract))) : []),
+    // Payment schedule filter options are pure engine helpers exposed through
+    // an explicit bridge; the visible filter markup lives in operations-ui.
+    buildPaymentScheduleYearOptions: contract => buildYearOptions(contract),
+    buildPaymentScheduleMonthOptions: () => buildMonthOptions(),
+    buildPaymentScheduleCurrencyOptions: selected => v26CurrencyOptions(selected),
+    getScheduleReportingDate,
     injectV26Styles,
     v26SelectedContractBanner,
     renderSlbSection,
