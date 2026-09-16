@@ -399,7 +399,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-danger btn-sm" id="deleteContract">Sözleşmeyi sil</button>
         <button type="button" class="btn btn-secondary" id="closeDetailModalFooter">Kapat</button>
-        <!-- Legacy action hooks retained for compatibility; the engine renders
+        <!-- Legacy action hooks retained for compatibility; the UI runtime renders
              the visible actions inside the detail content. -->
         <div hidden>
           <button id="applyEarlyPaymentButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.applyEarlyPayment(cid);">Erken ödeme</button>
@@ -419,10 +419,10 @@
 
   <!-- Shell helpers (before engine) -->
   <script src="js/shell.js?v=20260916-bootfix"></script>
-  <!-- TFRS 16 calculation & UI engine -->
+  <!-- TFRS 16 private-result UI runtime -->
   <script src="js/private-calculation-api.js?v=20260914-3"></script>
  <script src="js/private-tfrs16-facade.js?v=20260914-2"></script>
-<script src="js/tfrs16-engine.js?v=20260916-bootfix"></script>
+<script src="js/tfrs16-ui.js?v=20260916-bootfix"></script>
   <script src="js/tfrs16-inflation-ui.js?v=20260915-ui-slice1"></script>
   <script src="js/tfrs16-fx-ui.js?v=20260916-ui-slice3"></script>
   <script src="js/tfrs16-portfolio-ui.js?v=20260915-ui-slice3"></script>
@@ -435,7 +435,7 @@
     // window.LEASEQANT_CALCULATION_API_PRIMARY artık sabit true; URL
     // parametresiyle geçersiz kılınamaz. Yerel hesaplama motorunun
     // gövdeleri (calculateLeaseEngineImpl ve türevleri) bu commit'te
-    // js/tfrs16-engine.js'ten tamamen kaldırıldı — bu bayrağı konsoldan
+    // js/tfrs16-ui.js'ten tamamen kaldırıldı — bu bayrağı konsoldan
     // false yapmak artık hiçbir yerel hesaplamayı YENİDEN AÇMAZ, sadece
     // isPrivateCalculationApiReady() kontrollerini false döndürür ve
     // ilgili özellikler "henüz hazır değil" hatası verir.

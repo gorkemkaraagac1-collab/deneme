@@ -3,7 +3,7 @@
 ## Kaldırma hedefi (2026-09-15)
 
 Facade, geçici bir API-primary köprüsü olarak değil, public UI'nin tek hesaplama
-kapısı olarak kullanılacaktır. Public `tfrs16-engine.js` kaldırılmadan önce
+kapısı olarak kullanılacaktır. Public `tfrs16-ui.js` kaldırılmadan önce
 facade şu iki işi de tamamlamalıdır: tüm salt-okuma sonuçlarını sunmak ve TMS29
 taslak/uygulama yazmalarının private backend'de kalıcı olmasını sağlamak.
 
@@ -18,7 +18,7 @@ logic and does not expose the proprietary engine.
   than 20 are split by `private-calculation-api.js`.
 - `project(result)` returns the stable read-only result fields that summary and
   payment-plan renderers consume.
-- `tfrs16-engine.js` uses the facade when it is present. API-primary is a hard
+- `tfrs16-ui.js` uses the facade when it is present. API-primary is a hard
   boundary: a missing result is shown as loading/unavailable until the private
   endpoint responds; it never reactivates the public calculation implementation.
 

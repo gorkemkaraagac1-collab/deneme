@@ -22,7 +22,7 @@ window.fetch = (input, init = {}) => {
   const isProtectedEnginePage = /\/tfrs16\.html$/i.test(window.location.pathname);
 
   // Engine pages must never render their local cache without a valid backend
-  // session. The redirect runs before the engine script is loaded.
+  // session. The redirect runs before the UI runtime script is loaded.
   if (isProtectedEnginePage) {
     document.documentElement.style.visibility = "hidden";
     const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
@@ -157,7 +157,7 @@ window.fetch = (input, init = {}) => {
     setActiveNav(key);
     setTitle(key);
 
-    // Prefer engine deep-link API (injected by tfrs16-engine)
+    // Prefer UI-runtime deep-link API (injected by tfrs16-ui)
     if (typeof window.__gkOpenInMainByKey === "function") {
       window.__gkOpenInMainByKey(key);
       const host = document.getElementById("v26PageHost");
@@ -374,7 +374,7 @@ window.fetch = (input, init = {}) => {
         // TFRS16 engine owns the KPI cards and applies the correct reporting
         // currency/available FX date. The legacy bridge exposes raw functional
         // currency amounts and would overwrite them with a forced TRY symbol.
-        // Leave the engine-owned cards untouched.
+        // Leave the UI runtime-owned cards untouched.
         if (document.getElementById("kpiDataAsOf")) return;
         syncCompanySelector();
         // Best-effort: some engines expose aggregate helpers

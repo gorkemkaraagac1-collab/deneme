@@ -2,7 +2,7 @@
 
 > **Aktif karar (2026-09-15):** Bu envanter public motoru koruma gerekçesi
 > olarak değil, public UI ayrıştırma kontrol listesi olarak kullanılacaktır.
-> Hedef tamamlandığında public `js/tfrs16-engine.js` dosyası ve üretim script
+> Hedef tamamlandığında public `js/tfrs16-ui.js` dosyası ve üretim script
 > bağımlılığı bulunmayacaktır. TMS29 taslak/uygulama kayıtları da private
 > backend'e kalıcı yazılmadan bu kapı kapanmış sayılmayacaktır.
 
@@ -49,7 +49,7 @@ tüketicileridir.
 3. Modifikasyon, reassessment ve erken ödeme ekranları.
 4. TMS29, SLB ve sublease özel akışları.
 5. Her ekran için temiz-cache canlı smoke ve geri dönüş artefaktı.
-6. Son, ayrı ve geri alınabilir PR'da `js/tfrs16-engine.js` script etiketi ile
+6. Son, ayrı ve geri alınabilir PR'da `js/tfrs16-ui.js` script etiketi ile
    dosyasını kaldırma.
 
 Public engine bu liste sıfırlanmadan kaldırılmayacaktır.

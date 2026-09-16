@@ -48,12 +48,12 @@ jobs:
           text = page.read_text(encoding='utf-8')
           sha = os.environ['DEPLOY_SHA']
           updated, count = re.subn(
-              r'js/tfrs16-engine\.js\?v=[^"\']+',
-              f'js/tfrs16-engine.js?v={sha}',
+              r'js/tfrs16-ui\.js\?v=[^"\']+',
+              f'js/tfrs16-ui.js?v={sha}',
               text,
           )
           if count != 1:
-              raise SystemExit(f'Expected one engine asset reference, found {count}')
+              raise SystemExit(f'Expected one TFRS16 UI asset reference, found {count}')
           page.write_text(updated, encoding='utf-8')
           PY
 
@@ -72,7 +72,7 @@ jobs:
 
           test -f _site/index.html
           test -f _site/tfrs16.html
-          test -f _site/js/tfrs16-engine.js
+          test -f _site/js/tfrs16-ui.js
           test -f _site/frontend/admin/index.html
 
       - name: Upload site

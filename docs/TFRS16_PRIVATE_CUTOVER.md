@@ -2,7 +2,7 @@
 
 ## 2026-09-15 karar ve öncelik
 
-Public `js/tfrs16-engine.js` kalıcı olarak kaldırılacak. Public Pages ağacında
+Public `js/tfrs16-ui.js` kalıcı olarak kaldırılacak. Public Pages ağacında
 yalnızca UI, kimlik doğrulama ve private API istemci/facade kodu kalabilir;
 TFRS16 hesaplama motoru, TMS29 ve değişiklik hesapları yalnızca
 `leaseqant-backend` içindeki private engine'den üretilecektir. Kullanıcının
@@ -15,11 +15,11 @@ motor script etiketi ve dosyası aynı geri alınabilir PR'da kaldırılacak.
 The production page uses the private calculation API as its primary source for
 authenticated sessions. API-primary is now a hard privacy boundary: a missing
 private result fails closed instead of silently invoking the public calculation
-implementation. The remaining public engine bundle is a temporary structural
+implementation. The remaining public UI runtime bundle is a temporary structural
 compatibility layer and is scheduled for removal; it is not a supported
 calculation source.
 
-## Why the public engine is still present
+## Why the public UI runtime is still present
 
 The calculation wrapper is private-gated, but the following public UI areas
 still contain synchronous call sites that must be replaced with UI-only result
@@ -59,7 +59,7 @@ implementation. The current rows are maintained in
 
 The exact 25-row production inventory is maintained in
 `docs/TFRS16_PRIVATE_CONSUMER_INVENTORY.md`. The inventory is regenerated from
-the engine source when the migration slice changes; it is the checklist for
+the UI runtime source when the migration slice changes; it is the checklist for
 the remaining structural extraction and screen-level smoke evidence.
 
 Every frontend pull request and `main` push runs:
@@ -86,14 +86,14 @@ an explicit error until the UI-only split is complete.
 
 This closes three of the remaining production fallback paths. Modification
 and reassessment previews, journal construction, and the legacy compatibility
-exports remain in the structural extraction inventory below; the public engine
+exports remain in the structural extraction inventory below; the public UI runtime
 must stay in place until those consumers have equivalent private result
 readers and the clean-cache/rollback smoke evidence is recorded.
 
 The apply step is now private-gated as well: API-primary calls the authenticated
 modification/reassessment apply endpoints and merges their applied event,
 contract patch and refreshed schedule before persisting the contract. A live
-apply smoke is still required before the public engine can be removed.
+apply smoke is still required before the public UI runtime can be removed.
 
 ## Private-only schedule source slice (2026-09-16)
 
@@ -118,7 +118,7 @@ browser reassessment builder; if the private event-aware envelope is incomplete,
 classification returns an explicit unavailable result for the UI to surface.
 
 The public gate now checks this boundary in addition to the schedule source
-boundary. The public engine remains in place while the remaining compatibility
+boundary. The public UI runtime remains in place while the remaining compatibility
 helpers and live mutation flows are retired in later slices.
 
 The now-unused browser `buildReassessedSchedule()` and
@@ -138,7 +138,7 @@ checks that the local change-chain/future-payment calculators are absent.
 
 ## Removal criteria
 
-The public engine may be removed in a separate, reversible pull request only
+The public UI runtime may be removed in a separate, reversible pull request only
 after all of the following are true:
 
 1. Payment plan, KPI, reports, journals/exports, modifications,
