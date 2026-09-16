@@ -11,37 +11,36 @@ izler. Aşağıdaki her çağrı private sonuç önbelleği sınırından geçer
 modunda sonuç yoksa yerel hesaplamaya dönmez ve açık bir bekleme/hata durumu
 gösterir. Bu liste, UI-only ayrıştırma sırasında ekran ekran kapatılacaktır.
 
-**Private sınırından geçen üretim çağrısı: 24 · Son tarama: 2026-09-16**
+**Private sınırından geçen üretim çağrısı: 20 · Son tarama: 2026-09-16**
 
 | Satır | Tüketici | Private okuma |
 |---:|---|---|
-| 3073 | `buildScheduleFromChangeChain` | `getPrivateCalculationForConsumer(baseContract)` |
-| 4123 | `resolveAppliedChangeMeasurement` | `getPrivateCalculationForConsumer(baseContract)` |
-| 5274 | `calculateLease` | `getPrivateCalculationForConsumer(contract)` |
-| 5564 | `getEscalatedPayments` | `getPrivateCalculationForConsumer(contract)` |
-| 5964 | `resolveLeaseAccrualContext` | `getPrivateCalculationForConsumer(contract)` |
-| 6230 | `resolveContractScheduleSource` | `getPrivateCalculationForConsumer(contract)` |
-| 6266 | `getScheduleAsOfReportingDate` | `getPrivateCalculationForConsumer(contract)` |
-| 6412 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract)` |
-| 6428 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract).liability` |
-| 9664 | `auditCalculationRun` | `getPrivateCalculationForConsumer(contract)` |
-| 10384 | `renderPaymentScheduleTable` | `getPrivateCalculationForConsumer(contract)` |
-| 11010 | `exportPaymentSchedule` | `getPrivateCalculationForConsumer(contract)` |
-| 14584 | `controlCalculation` | `getPrivateCalculationForConsumer(contract)` |
-| 14601 | `controlROU` | `getPrivateCalculationForConsumer(contract)` |
-| 15921 | `rptBuildSchedule` | `getPrivateCalculationForConsumer(contract)` |
-| 20131 | `getErpReadyPaymentData` | `getPrivateCalculationForConsumer(contract)` |
-| 20701 | `v191BuildFxRouRollForward` | `getPrivateCalculationForConsumer(contract).rouAssets` |
-| 21772 | `v191RenderContractTools` | `getPrivateCalculationForConsumer(contract).schedule` |
-| 22501 | `v20GetDatabaseModel` | `getPrivateCalculationForConsumer(contract)` |
-| 24582 | `v22ContractMetrics` | `getPrivateCalculationForConsumer(contract)` |
-| 27636 | `getEffectiveSchedule` | `getPrivateCalculationForConsumer(contract)` |
-| 27646 | `getEffectiveSchedule` | `getPrivateCalculationForConsumer(contract).schedule` |
-| 27847 | `exportReport` | `getPrivateCalculationForConsumer(contract)` |
+| 4677 | `calculateLease` | `getPrivateCalculationForConsumer(contract)` |
+| 4967 | `getEscalatedPayments` | `getPrivateCalculationForConsumer(contract)` |
+| 5367 | `resolveLeaseAccrualContext` | `getPrivateCalculationForConsumer(contract)` |
+| 5633 | `resolveContractScheduleSource` | `getPrivateCalculationForConsumer(contract)` |
+| 5669 | `getScheduleAsOfReportingDate` | `getPrivateCalculationForConsumer(contract)` |
+| 5815 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract)` |
+| 5831 | `calculateLiabilitySplitAsOf` | `getPrivateCalculationForConsumer(contract).liability` |
+| 9067 | `auditCalculationRun` | `getPrivateCalculationForConsumer(contract)` |
+| 9787 | `renderPaymentScheduleTable` | `getPrivateCalculationForConsumer(contract)` |
+| 10413 | `exportPaymentSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 13987 | `controlCalculation` | `getPrivateCalculationForConsumer(contract)` |
+| 14004 | `controlROU` | `getPrivateCalculationForConsumer(contract)` |
+| 15324 | `rptBuildSchedule` | `getPrivateCalculationForConsumer(contract)` |
+| 20104 | `getErpReadyPaymentData` | `getPrivateCalculationForConsumer(contract)` |
+| 21175 | `v191BuildFxRouRollForward` | `getPrivateCalculationForConsumer(contract).rouAssets` |
+| 21904 | `v191RenderContractTools` | `getPrivateCalculationForConsumer(contract).schedule` |
+| 23985 | `v20GetDatabaseModel` | `getPrivateCalculationForConsumer(contract)` |
+| 27039 | `v22ContractMetrics` | `getPrivateCalculationForConsumer(contract)` |
+| 27049 | `getEffectiveSchedule` | `getPrivateCalculationForConsumer(contract).schedule` |
+| 27250 | `exportReport` | `getPrivateCalculationForConsumer(contract)` |
 
 `getPrivateCalculationForConsumer` fonksiyon tanımı (1531) tabloya dahil
 değildir. Eski TMS29 restatement/portfolio/write gövdeleri public bundle'dan
-çıkarılmıştır; bu taramada kalan satırlar UI ve raporlama tüketicileridir.
+çıkarılmıştır; uygulanan değişikliklerin ölçüm zinciri de private event
+zarfına taşınmıştır. Bu taramada kalan satırlar yalnızca UI ve raporlama
+tüketicileridir.
 
 ## Ayrıştırma sırası
 

@@ -122,9 +122,19 @@ boundary. The public engine remains in place while the remaining compatibility
 helpers and live mutation flows are retired in later slices.
 
 The now-unused browser `buildReassessedSchedule()` and
-`buildModifiedSchedule()` definitions were removed from the public bundle in
-the follow-up slice. The shared change-chain and draft-preview helpers remain
-only where their report or preview consumers still reference them.
+`buildModifiedSchedule()` definitions were removed from the public bundle. The
+applied modification/reassessment journal readers now consume the measurement
+fields persisted by the private event envelope; the browser change-chain
+calculators and future-payment builders were removed as well. Draft previews
+still use the dedicated private preview endpoints.
+
+## Private event measurement slice (2026-09-16)
+
+Applied modification and reassessment events now carry their measurement
+fields and journal inputs from the private apply response. Public journal and
+report consumers read those persisted fields directly; they do not rebuild an
+applied event against a browser-side chronological chain. The source gate now
+checks that the local change-chain/future-payment calculators are absent.
 
 ## Removal criteria
 
