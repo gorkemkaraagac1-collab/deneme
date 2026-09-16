@@ -11427,11 +11427,18 @@ ${renderPaymentScheduleFooterContainers()}
       // sıra kontrolüdür. Gösterilen rakamlar private API zarfından gelir;
       // public dosyada yerel TMS 29 hesaplama veya yazma yedeği yoktur.
       if (!period) {
-        result.innerHTML = `<div style="color:#991b1b;">Raporlama dönemi seçin.</div>`;
+        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        result.innerHTML = typeof renderer === "function"
+          ? renderer("Raporlama dönemi seçin.", { escapeHtml })
+          : "";
         return;
       }
       if (!basicPeriodValid) {
-        result.innerHTML = `<div style="color:#991b1b;">Raporlama dönemi formatı YYYY-MM olmalı${periodStart ? " ve Dönem Başlangıcı raporlama döneminden sonra olamaz." : "."}</div>`;
+        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        const message = `Raporlama dönemi formatı YYYY-MM olmalı${periodStart ? " ve Dönem Başlangıcı raporlama döneminden sonra olamaz." : "."}`;
+        result.innerHTML = typeof renderer === "function"
+          ? renderer(message, { escapeHtml })
+          : "";
         return;
       }
       if (basicPeriodValid) {
@@ -11440,12 +11447,18 @@ ${renderPaymentScheduleFooterContainers()}
           t = lastPrivateTms29Result.totals;
         } catch (error) {
           lastPrivateTms29Result = null;
-          result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı. ${escapeHtml(error?.message || String(error))}</div>`;
+          const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewError;
+          result.innerHTML = typeof renderer === "function"
+            ? renderer(error, { escapeHtml })
+            : "";
           return;
         }
       } else {
         lastPrivateTms29Result = null;
-        result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 API hazır değil; yerel hesaplama kapalı.</div>`;
+        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        result.innerHTML = typeof renderer === "function"
+          ? renderer("Private TMS 29 API hazır değil; yerel hesaplama kapalı.", { escapeHtml })
+          : "";
         return;
       }
       const summaryRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewSummary;
