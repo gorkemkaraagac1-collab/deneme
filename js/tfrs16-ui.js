@@ -4643,32 +4643,11 @@ window.fetch = (input, init = {}) => {
   ========================================================== */
 
   function calculateLease(contract) {
-
-    /*
-      V16.5 FIX — GK Advisory review, 21.08.2026
-      -------------------------------------------------------
-      This function used to run its own stripped-down annuity
-      calculation (ROU = Liability, no initial direct costs, no
-      prepayments, no lease incentives, no restoration obligation,
-      and no TFRS 16.5-8 short-term/low-value exemption). Because
-      calculateLease() was still the engine behind the initial
-      journal entry, the current/non-current split, the dashboard
-      KPIs, and the contract detail modal, contracts with any of
-      those components — or ones flagged as exempt — produced
-      numbers there that silently disagreed with the "professional"
-      schedule shown elsewhere (calculateLeaseEngine()).
-
-      Fix: delegate fully to calculateLeaseEngine(), which is a
-      strict superset — for a legacy contract (no IDC/incentives/
-      prepayments/restoration/escalation/exemption fields set) it
-      returns numerically identical months/liability/rouAssets/
-      depreciation/monthlyInterest/schedule values, so every
-      existing call site keeps working unchanged. For contracts
-      that DO use the extended TFRS 16 fields, all downstream
-      consumers of calculateLease() now get the standard-compliant
-      figures instead of a second, wrong set of numbers.
-    */
-    return getPrivateCalculationForConsumer(contract);
+    const bridge = window.LeaseQantTfrs16PrivateResultBridge;
+    if (typeof bridge?.calculate !== "function") {
+      throw new Error("Private TFRS16 sonuç köprüsü hazır değil");
+    }
+    return bridge.calculate(contract);
   }
 
   /* ==========================================================
@@ -4808,50 +4787,20 @@ window.fetch = (input, init = {}) => {
     return { ok: true, month, currentIndex, oldValue, checkResult };
   }
 
-  /**
-   * TFRS 16 kiralama hesaplama motoru (önbellekli sarmalayıcı).
-   * Sözleşme değişmediyse önceki hesaplama sonucunu önbellekten döndürür;
-   * aksi halde calculateLeaseEngineImpl() ile yeniden hesaplar.
-   *
-   * @param {Object} contract - Kiralama sözleşmesi
-   * @param {string} contract.id - Sözleşme ID
-   * @param {number} contract.monthlyPayment - Dönemsel kira tutarı
-   * @param {string} contract.startDate - Başlangıç tarihi (YYYY-MM-DD)
-   * @param {string} contract.endDate - Bitiş tarihi (YYYY-MM-DD)
-   * @param {number} contract.discountRate - Yıllık iskonto oranı (%)
-   * @param {string} [contract.paymentFrequency="monthly"] - Ödeme frekansı
-   * @param {string} [contract.paymentTiming="arrears"] - Ödeme zamanı (advance/arrears)
-   * @returns {Object} Hesaplama sonucu (bkz. calculateLeaseEngineImpl)
-   */
-  // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — bkz.
-  // getPrivateCalculationForConsumer() üzerindeki aynı not. Bu fonksiyon da
-  // aynı local-fallback desenini taşıyordu, aynı şekilde kaldırıldı.
   function calculateLeaseEngine(contract) {
-    const privateResult = PRIVATE_CALCULATION_CACHE.get(getCalculationCacheKey(contract));
-    if (privateResult) {
-      setCachedCalculation(contract, privateResult);
-      return privateResult;
+    const bridge = window.LeaseQantTfrs16PrivateResultBridge;
+    if (typeof bridge?.calculateEngine !== "function") {
+      throw new Error("Private TFRS16 sonuç köprüsü hazır değil");
     }
-    const error = new Error("Private hesaplama sonucu henüz hazır değil");
-    error.code = "PRIVATE_CALCULATION_NOT_READY";
-    throw error;
+    return bridge.calculateEngine(contract);
   }
 
-  /**
-   * calculateLeaseEngine() sonucundaki ödeme planından, UI'da artış
-   * rozeti (🔺) göstermek için sadeleştirilmiş bir liste türetir.
-   * Hesaplamayı TEKRARLAMAZ — mevcut schedule üzerinden okur.
-   * @returns {Array<{date, payment, basePayment, escalationMultiplier}>}
-   */
   function getEscalatedPayments(contract) {
-    const engine = getPrivateCalculationForConsumer(contract);
-    const basePayment = Number(contract?.monthlyPayment) || 0;
-    return (engine.schedule || []).map(row => ({
-      date: row.date,
-      payment: row.payment,
-      basePayment,
-      escalationMultiplier: basePayment > 0 ? row.payment / basePayment : 1
-    }));
+    const bridge = window.LeaseQantTfrs16PrivateResultBridge;
+    if (typeof bridge?.getEscalatedPayments !== "function") {
+      throw new Error("Private TFRS16 sonuç köprüsü hazır değil");
+    }
+    return bridge.getEscalatedPayments(contract);
   }
 
   /**
@@ -29644,6 +29593,7 @@ ${renderAccountingCenterBulkPromo()}
     resolvePaymentFrequencyLabel,
     privateCalculationCacheHas: contract => PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)),
     isPrivateCalculationApiReady,
+    getPrivateCalculationForConsumer,
     ensurePrivateCalculationCache,
     loadTms29Many: (...args) => window.LeaseQantPrivateTfrs16Facade?.loadTms29Many(...args),
     computePrivatePortfolioTms29: v191ComputePrivatePortfolioTms29,
