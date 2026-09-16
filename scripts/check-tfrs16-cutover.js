@@ -24,6 +24,7 @@ const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
 const coordinator = read("js/tfrs16-ui-coordinator.js");
+const privateResultBridge = read("js/tfrs16-private-result-bridge.js");
 const detailUi = read("js/tfrs16-detail-ui.js");
 const detailEventsUi = read("js/tfrs16-detail-events-ui.js");
 const shadow = read("js/private-calculation-shadow.js");
@@ -40,6 +41,11 @@ const checks = [
   ["private TFRS16 facade is loaded", html.includes('src="js/private-tfrs16-facade.js')],
   ["private adapter loads before the TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-ui.js")],
   ["private facade loads between adapter and TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-ui.js")],
+  ["private result bridge exists", exists("js/tfrs16-private-result-bridge.js") && /LeaseQantTfrs16PrivateResultBridge/.test(privateResultBridge)],
+  ["private result bridge loads before the TFRS16 UI runtime", html.indexOf("tfrs16-private-result-bridge.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-private-result-bridge.js')],
+  ["private result bridge exposes all compatibility readers", /function calculate\(/.test(privateResultBridge) && /function calculateEngine\(/.test(privateResultBridge) && /function getEscalatedPayments\(/.test(privateResultBridge)],
+  ["compatibility calculation wrappers delegate to the private result bridge", /LeaseQantTfrs16PrivateResultBridge/.test(engine) && /bridge\.calculate\(contract\)/.test(engine) && /bridge\.calculateEngine\(contract\)/.test(engine) && /bridge\.getEscalatedPayments\(contract\)/.test(engine)],
+  ["private calculation consumer is exported for the result bridge", /getPrivateCalculationForConsumer,/.test(engine)],
   ["TFRS16 UI coordinator exists", exists("js/tfrs16-ui-coordinator.js")],
   ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
   ["TFRS16 detail UI module exists", exists("js/tfrs16-detail-ui.js") && /LeaseQantTfrs16DetailUi/.test(detailUi)],
