@@ -2144,10 +2144,6 @@ window.fetch = (input, init = {}) => {
       : null;
   }
 
-  function getReassessmentBaseSchedule(contract) {
-    return buildScheduleFromChangeChain(contract);
-  }
-
   function getReassessmentCurrentTerms(contract, asOfDate = null) {
     // Reassessment must start from the effective modification chain. Reading
     // headline contract fields here caused a later rate/payment reassessment
@@ -2202,9 +2198,8 @@ window.fetch = (input, init = {}) => {
          kâr/zararın kaynağı budur.
        - Net düzeltme farkı (tamamı ROU tarafından gelir) TFRS29_
          ACCOUNTS.inflationGainLoss hesabına gider.
-       - getReassessmentBaseSchedule() kullanılır — bu, contract'ın
-         ETKİN planını (escalation + modification + reassessment
-         uygulanmış) zaten döndürür; ikinci bir hesaplama motoru
+       - Private sonuç zarfındaki ETKİN plan (escalation + modification +
+         reassessment uygulanmış) kullanılır; ikinci bir hesaplama motoru
          YAZILMADI.
      ========================================================== */
 
@@ -3066,10 +3061,6 @@ window.fetch = (input, init = {}) => {
       item?.effectiveDate || item?.reassessmentDate || "",
       reassessmentStableStringify(item?.newTerms || {})
     ].join("|");
-  }
-
-  function buildReassessmentHistorySchedule(contract, excludeId) {
-    return buildScheduleFromChangeChain(contract, excludeId);
   }
 
   // Modification and reassessment events share one chronological stream.
@@ -4198,163 +4189,6 @@ window.fetch = (input, init = {}) => {
       : "WARNING";
   }
 
-  function buildScheduleFromModificationChain(
-    contract,
-    appliedModifications,
-    preserveStoredMeasurements = false
-  ) {
-
-    const baseContract = getModificationBaseContract(contract);
-
-    const baseEngine =
-      getPrivateCalculationForConsumer(baseContract);
-
-    let currentSchedule =
-      (baseEngine.schedule || []).map(item => ({ ...item }));
-
-    const ordered =
-      dedupeAppliedModifications(appliedModifications)
-        .slice()
-        .sort(
-          (a, b) =>
-            String(a.effectiveDate || "").localeCompare(
-              String(b.effectiveDate || "")
-            )
-        );
-
-    ordered.forEach(storedModification => {
-
-      const modification = preserveStoredMeasurements
-        ? storedModification
-        : resolveAppliedModificationMeasurement(contract, storedModification);
-
-      const effectiveDate =
-        parseDate(modification.effectiveDate);
-
-      if (!effectiveDate) return;
-
-      const oldROU =
-        getScheduleValueAsOfDate(
-          currentSchedule,
-          effectiveDate,
-          "rouClosing",
-          baseEngine.rouAssets
-        );
-
-      const futureResult =
-        calculateModifiedLeaseLiability(
-          baseContract,
-          effectiveDate,
-          modification.newTerms
-        );
-
-      const historical =
-        currentSchedule.filter(
-          item => {
-            const date = parseDate(item.date);
-            return date &&
-              date.getTime() <= effectiveDate.getTime();
-          }
-        );
-
-      let rouOpening =
-        Math.max(
-          0,
-          oldROU + (Number(modification.rouAdjustment) || 0)
-        );
-
-      const remainingMonths =
-        futureResult.schedule.length;
-
-      const depreciation =
-        remainingMonths > 0
-          ? rouOpening / remainingMonths
-          : 0;
-
-      let rou = rouOpening;
-
-      const future =
-        futureResult.schedule.map(
-          (item, index) => {
-            const rouDepreciation =
-              Math.min(depreciation, rou);
-
-            const rouClosing =
-              Math.max(0, rou - rouDepreciation);
-
-            const row = {
-              ...item,
-              period:
-                historical.length + index + 1,
-              rouOpening: rou,
-              depreciation: rouDepreciation,
-              rouClosing
-            };
-
-            rou = rouClosing;
-            return row;
-          }
-        );
-
-      currentSchedule =
-        historical.concat(future);
-    });
-
-    return currentSchedule;
-  }
-
-  function calculateROUAdjustment(
-    modification,
-    oldROU,
-    liabilityAdjustment,
-    oldLeaseLiability,
-    revisedLeaseLiability
-  ) {
-
-    const type =
-      modification.modificationType;
-
-    if (type === "SCOPE_DECREASE") {
-      const pct =
-        Math.min(
-          100,
-          Math.max(
-            0,
-            Number(modification.scopeReductionPercent) || 0
-          )
-        ) / 100;
-
-      const rouReduction =
-        oldROU * pct;
-
-      const liabilityReduction =
-        Math.max(
-          0,
-          oldLeaseLiability - revisedLeaseLiability
-        );
-
-      return {
-        rouAdjustment: -rouReduction,
-        rouReduction,
-        gainLoss:
-          liabilityReduction - rouReduction
-      };
-    }
-
-    if (type === "SCOPE_INCREASE") {
-      return {
-        rouAdjustment: Math.max(0, liabilityAdjustment),
-        rouReduction: 0,
-        gainLoss: 0
-      };
-    }
-
-    return {
-      rouAdjustment: liabilityAdjustment,
-      rouReduction: 0,
-      gainLoss: 0
-    };
-  }
 
   function generateModificationJournal(
     contract,
@@ -6344,7 +6178,7 @@ window.fetch = (input, init = {}) => {
    * "doğru" olduğuna karar veren TEK kaynak. Öncelik: uygulanmış
    * (APPLIED) bir reassessment varsa REASSESSED_SCHEDULE (bu, kendi
    * içinde uygulanmış modification'ı da tarihsel taban olarak
-   * kapsar — bkz. buildReassessmentHistorySchedule); yoksa uygulanmış
+   * kapsar); yoksa uygulanmış
    * bir modification varsa MODIFIED_SCHEDULE; hiçbiri yoksa ham
    * LEASE_SCHEDULE (calculateLeaseEngine).
    *
