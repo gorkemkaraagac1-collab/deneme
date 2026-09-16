@@ -16,6 +16,61 @@
     if (typeof fn === "function") fn(render);
   }
 
+  // Contract-detail TMS 29 table rows are presentation only.  Keep the
+  // private-result and period-lock decisions in the engine, while this module
+  // owns the DOM markup for saved adjustments and the preview row.
+  function renderInflationAdjustmentRows(adjustments, options = {}) {
+    const escape = typeof options.escapeHtml === "function" ? options.escapeHtml : esc;
+    const money = typeof options.formatCurrency === "function"
+      ? options.formatCurrency
+      : value => String(value ?? "—");
+    const lockFor = typeof options.assertPeriodWritable === "function"
+      ? options.assertPeriodWritable
+      : () => ({ locked: false });
+    return (Array.isArray(adjustments) ? adjustments : []).map(adjustment => {
+      const gl = adjustment?.restatedFigures?.liabilityMonetaryGainLoss;
+      const glCell = Number.isFinite(gl)
+        ? money(-gl)
+        : `<span style="color:#94a3b8;">—</span>`;
+      const lockCheck = lockFor(adjustment?.period || options.defaultPeriod || new Date());
+      const disabled = lockCheck?.locked
+        ? `disabled title="${escape(lockCheck.message)}"`
+        : "";
+      return `
+      <tr>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escape(adjustment?.period)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escape(adjustment?.status)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${money(adjustment?.restatedFigures?.netAdjustment || 0)}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${glCell}</td>
+        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">
+          ${adjustment?.status === "DRAFT" ? `
+            <button type="button" class="infl-apply-btn" data-id="${escape(adjustment?.id)}" style="font-size:11px;padding:3px 8px;" ${disabled}>Uygula</button>
+            <button type="button" class="infl-cancel-btn" data-id="${escape(adjustment?.id)}" style="font-size:11px;padding:3px 8px;" ${disabled}>İptal</button>
+          ` : ""}
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderInflationPreviewRow(result, options = {}) {
+    const escape = typeof options.escapeHtml === "function" ? options.escapeHtml : esc;
+    const money = typeof options.formatCurrency === "function"
+      ? options.formatCurrency
+      : value => String(value ?? "—");
+    const totals = result?.totals || {};
+    const gainLoss = Number.isFinite(totals.liabilityMonetaryGainLoss)
+      ? money(-totals.liabilityMonetaryGainLoss)
+      : `<span style="color:#94a3b8;">—</span>`;
+    return `
+          <tr>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escape(result?.reportingPeriod || options.period || "")}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">ÖNİZLEME</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${money(totals.netAdjustment || 0)}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${gainLoss}</td>
+            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;color:#64748b;">Taslak oluşturulmadı</td>
+          </tr>`;
+  }
+
   function renderFinancialReporting(container) {
     if (!container) return;
     styles();
@@ -421,6 +476,8 @@
     applyContractDetailTab,
     bindContractDetailTabs,
     bindContractAuditTab,
-    renderFootnotes
+    renderFootnotes,
+    renderInflationAdjustmentRows,
+    renderInflationPreviewRow
   };
 })(window);
