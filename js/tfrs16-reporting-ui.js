@@ -132,6 +132,18 @@
     return renderInflationPreviewMessage(`${prefix} ${detail}`, options);
   }
 
+  // TMS 29 taslak/uygula/iptal akışlarında kullanıcıya gösterilen uyarılar
+  // da reporting UI katmanından geçer. Mesajın içeriğini private akış
+  // belirler; modal/uyarı sunumunu engine'e geri taşımayız.
+  function showInflationActionAlert(message) {
+    const fn = bridge().showAlert;
+    if (typeof fn === "function") {
+      fn(message);
+      return true;
+    }
+    return false;
+  }
+
   function renderFinancialReporting(container) {
     if (!container) return;
     styles();
@@ -560,6 +572,7 @@
     renderInflationPreviewSummary,
     renderInflationAdjustmentShell,
     renderInflationPreviewMessage,
-    renderInflationPreviewError
+    renderInflationPreviewError,
+    showInflationActionAlert
   };
 })(window);
