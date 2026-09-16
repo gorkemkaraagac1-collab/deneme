@@ -23,6 +23,7 @@ const html = read("tfrs16.html");
 const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
+const coordinator = read("js/tfrs16-ui-coordinator.js");
 const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
@@ -37,6 +38,10 @@ const checks = [
   ["private TFRS16 facade is loaded", html.includes('src="js/private-tfrs16-facade.js')],
   ["private adapter loads before the TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-ui.js")],
   ["private facade loads between adapter and TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-ui.js")],
+  ["TFRS16 UI coordinator exists", exists("js/tfrs16-ui-coordinator.js")],
+  ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
+  ["UI runtime exposes the coordinator boot hook", /window\.__GK_TFRS16_UI_BOOT__\s*=\s*__gkTfrs16Boot/.test(engine)],
+  ["UI coordinator guards duplicate startup", /__GK_TFRS16_UI_COORDINATOR_RAN__/.test(coordinator) && /DOMContentLoaded/.test(coordinator)],
   ["TMS21 FX UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
   ["TMS21 FX UI markup lives outside the public UI runtime", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
   ["TMS21 FX loading fallback lives outside the public UI runtime", /function mount\(container, contract\)/.test(fxUi) && /LeaseQantTfrs16FxUi\?\.mount/.test(engine) && !/TMS 21 arayüzü yüklenemedi/.test(engine)],
