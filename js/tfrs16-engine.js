@@ -1401,7 +1401,18 @@ window.fetch = (input, init = {}) => {
   }
 
   async function loadPrivateChangePreview(kind, contract, input) {
-    if (!isPrivateCalculationApiReady()) return null;
+    // DÜZELTME: "hazır değilse null dön" burada tek başına yanlıştı —
+    // createModification/createReassessment (ve update varyantları) bu
+    // sonucu doğrudan `result.valid` diye okuyor; null dönünce
+    // TypeError ile çöküyordu (jsdom audit'inde yakalandı). Kod
+    // tabanındaki HER ŞEY (getPrivateCalculationForConsumer,
+    // calculateLeaseEngine, applyTMS29 vb.) "hazır değilse throw et"
+    // sözleşmesini kullanıyor — burayı da aynı sözleşmeye getiriyoruz.
+    if (!isPrivateCalculationApiReady()) {
+      const error = new Error("Private hesaplama sonucu henüz hazır değil");
+      error.code = "PRIVATE_CALCULATION_NOT_READY";
+      throw error;
+    }
     const facade = window.LeaseQantPrivateTfrs16Facade;
     const loader = kind === "modification"
       ? facade?.loadModificationPreview
@@ -1426,7 +1437,14 @@ window.fetch = (input, init = {}) => {
   // the resulting contract record. The local implementation remains the
   // explicit ?api=0 rollback path.
   async function applyPrivateChange(kind, contract, eventId) {
-    if (!isPrivateCalculationApiReady()) return null;
+    // DÜZELTME: aynı null-dönüş hatası burada da vardı — çağıranlar
+    // (ör. applyModification sonrası "if (!result.valid)") null'da
+    // çöküyordu. loadPrivateChangePreview'daki gibi throw'a çevrildi.
+    if (!isPrivateCalculationApiReady()) {
+      const error = new Error("Private hesaplama sonucu henüz hazır değil");
+      error.code = "PRIVATE_CALCULATION_NOT_READY";
+      throw error;
+    }
     const facade = window.LeaseQantPrivateTfrs16Facade;
     const loader = kind === "modification"
       ? facade?.applyModification
@@ -5607,7 +5625,7 @@ window.fetch = (input, init = {}) => {
      fonksiyon onun yanına eklenir ve yalnızca
      contract.escalationFrequencyMonths / escalationBase /
      escalationFirstDate alanlarından EN AZ BİRİ tanımlıysa
-     çağrılır (bkz. applyLeaseEscalation() içindeki çağrı noktası —
+     çağrılır (bkz. buildModificationFuturePayments() içindeki çağrı
      yaması). Hiçbiri tanımlı değilse eski yol aynen çalışır.
      ========================================================== */
 
@@ -5804,647 +5822,6 @@ window.fetch = (input, init = {}) => {
       basePayment,
       escalationMultiplier: basePayment > 0 ? row.payment / basePayment : 1
     }));
-  }
-
-  /**
-   * TFRS 16 kiralama hesaplama motorunun asıl uygulaması. Kira
-   * yükümlülüğü, kullanım hakkı (ROU) varlığı, amortisman ve ödeme
-   * planını hesaplar. Doğrudan çağrılmak yerine calculateLeaseEngine()
-   * üzerinden (önbellekli) kullanılması önerilir.
-   *
-   * @param {Object} contract - Kiralama sözleşmesi
-   * @returns {Object} result
-   * @returns {number} result.months - Toplam ay sayısı
-   * @returns {number} result.liability - Başlangıç kira yükümlülüğü
-   * @returns {number} result.rouAssets - Başlangıç ROU varlığı
-   * @returns {number} result.depreciation - Aylık amortisman
-   * @returns {boolean} result.usesUsefulLifeDepreciation - Faydalı ömre göre mi amortize ediliyor
-   * @returns {string} result.paymentFrequency - Ödeme frekansı
-   * @returns {string} result.paymentTiming - Ödeme zamanı
-   * @returns {number} result.totalVariableExpense - TFRS 16.53(e) değişken kira gideri toplamı
-   * @returns {Array<Object>} result.schedule - Dönemsel ödeme planı
-   * @returns {Object} result.assumptions - Hesaplamada kullanılan varsayımlar
-   * @returns {boolean} result.exempt - Kısa vadeli/düşük değerli istisna uygulanıp uygulanmadığı
-   */
-  /**
-   * buildLeaseEngineAssumptions — kontrat alanlarından motorun
-   * kullanacağı normalize edilmiş varsayımlar (assumptions) objesini
-   * üretir. Saf veri dönüşümüdür, yan etkisi yoktur.
-   *
-   * FAZ 3 — SRP BÖLMESİ (calculateLeaseEngineImpl'den extract edildi,
-   * davranış BİREBİR korunarak — bkz. PROJECT_CONTEXT.md bölüm 36).
-   */
-  function buildLeaseEngineAssumptions(contract) {
-    return {
-
-      paymentFrequency:
-        contract.paymentFrequency || "monthly",
-
-      paymentTiming:
-        contract.paymentTiming || "arrears",
-
-      leaseIncreaseType:
-        contract.leaseIncreaseType || "none",
-
-      leaseIncreaseRate:
-        Number(contract.leaseIncreaseRate) || 0,
-
-      fixedIncrease:
-        Number(contract.fixedIncrease) || 0,
-
-      // V18 Parça 1 — undefined/null ise null bırakılır (0 DEĞİL);
-      // "tanımsız" (eski davranış) ile "0" (geçerli bir V18 değeri
-      // olabilir) birbirinden ayrılmak zorunda.
-      escalationFrequencyMonths:
-        contract.escalationFrequencyMonths !== undefined &&
-        contract.escalationFrequencyMonths !== null &&
-        contract.escalationFrequencyMonths !== ""
-          ? Number(contract.escalationFrequencyMonths)
-          : null,
-
-      escalationBase:
-        contract.escalationBase || null,
-
-      escalationFirstDate:
-        contract.escalationFirstDate || null,
-
-      variablePayment:
-        Number(contract.variablePayment) || 0,
-
-      renewalOption:
-        contract.renewalOption === true,
-
-      terminationOption:
-        contract.terminationOption === true,
-
-      initialDirectCosts:
-        Number(contract.initialDirectCosts) || 0,
-
-      leaseIncentives:
-        Number(contract.leaseIncentives) || 0,
-
-      prepayments:
-        Number(contract.prepayments) || 0,
-
-      restorationObligation:
-        Number(contract.restorationObligation) || 0,
-
-      shortTermLease:
-        contract.shortTermLease === true,
-
-      lowValueAsset:
-        contract.lowValueAsset === true,
-
-      // TFRS 16.32: ROU is depreciated over the shorter of lease
-      // term and useful life UNLESS ownership transfers at the end
-      // of the lease term, or the lease liability reflects a
-      // purchase option reasonably certain to be exercised — in
-      // either of those cases it is depreciated over the useful
-      // life of the underlying asset instead. usefulLifeMonths is
-      // an optional field (not present on any legacy contract), so
-      // when it is absent behavior is unchanged: full lease term.
-      ownershipTransfer:
-        contract.ownershipTransfer === true,
-
-      purchaseOption:
-        contract.purchaseOption === true,
-
-      usefulLifeMonths:
-        contract.usefulLifeMonths !== undefined &&
-        contract.usefulLifeMonths !== null &&
-        contract.usefulLifeMonths !== ""
-          ? Number(contract.usefulLifeMonths)
-          : null
-    };
-  }
-
-  /**
-   * buildExemptLeaseResult — TFRS 16.5-8 tanıma istisnası (kısa vadeli /
-   * düşük değerli kira). Uygulanabilirse tam motor sonucunu (doğrusal
-   * gider planıyla) döner; uygulanamazsa `null` döner ve normal motor
-   * akışı (calculateLeaseEngineImpl içinde) devam eder.
-   */
-  function buildExemptLeaseResult(contract, assumptions) {
-    if (
-      !assumptions.shortTermLease &&
-      !assumptions.lowValueAsset
-    ) {
-      return null;
-    }
-
-    const payment =
-      Number(contract.monthlyPayment) || 0;
-
-    const months =
-      monthsBetween(
-        contract.startDate,
-        contract.endDate
-      );
-
-    const contractStart =
-      parseDate(contract.startDate);
-
-    const schedule = [];
-
-    if (
-      payment > 0 &&
-      months > 0 &&
-      contractStart
-    ) {
-
-      for (
-        let i = 1;
-        i <= months;
-        i++
-      ) {
-
-        const periodDate =
-          new Date(
-            contractStart.getFullYear(),
-            contractStart.getMonth() +
-              i -
-              1,
-            1
-          );
-
-        schedule.push({
-          period: i,
-          date: periodDate,
-          year: periodDate.getFullYear(),
-          month: periodDate.getMonth() + 1,
-          openingLiability: 0,
-          payment,
-          interest: 0,
-          principal: 0,
-          closingLiability: 0,
-          rouOpening: 0,
-          depreciation: 0,
-          rouClosing: 0,
-          straightLineExpense: payment
-        });
-      }
-    }
-
-    return {
-      months,
-      liability: 0,
-      rouAssets: 0,
-      depreciation: 0,
-      monthlyInterest: 0,
-      schedule,
-      assumptions,
-      exempt: true
-    };
-  }
-
-  /**
-   * resolveLeaseEngineCore — istisna dışı kontratlar için temel motor
-   * parametrelerini (ödeme, oran, ay sayısı, sıklık, timing, dönem
-   * oranı) ve ödeme tarihleri dizisini çözer.
-   *
-   * Geçersiz girdi (ödeme<=0, ay<=0, veya boş tarih dizisi) durumunda
-   * `{ earlyReturn: <hazır sonuç objesi> }` döner — çağıran
-   * (`calculateLeaseEngineImpl`) bunu kontrol edip erken dönmelidir;
-   * aksi halde tüm çözülmüş alanları içeren obje döner.
-   */
-  function resolveLeaseEngineCore(contract, assumptions) {
-    const payment =
-      Number(contract.monthlyPayment) || 0;
-
-    const annualRate =
-      Number(contract.discountRate) || 0;
-
-    const monthlyRate =
-      resolveContractMonthlyRate(
-        annualRate,
-        contract.effectiveMonthlyRate,
-        resolveDiscountRateConvention(contract)
-      );
-
-    const months =
-      monthsBetween(
-        contract.startDate,
-        contract.endDate
-      );
-
-    const stepMonths =
-      resolveFrequencyStepMonths(
-        assumptions.paymentFrequency
-      );
-
-    const advance =
-      isAdvancePaymentTiming(
-        assumptions.paymentTiming
-      );
-
-    if (
-      payment <= 0 ||
-      months <= 0
-    ) {
-      return {
-        earlyReturn: {
-          months: 0,
-          liability: 0,
-          rouAssets: 0,
-          depreciation: 0,
-          monthlyInterest: 0,
-          schedule: [],
-          assumptions,
-          exempt: false
-        }
-      };
-    }
-
-    const paymentDates = buildLeasePaymentDates(
-      contract.startDate,
-      contract.endDate,
-      stepMonths,
-      advance
-    );
-
-    if (!paymentDates.length) {
-      return {
-        earlyReturn: {
-          months,
-          liability: 0,
-          rouAssets: 0,
-          depreciation: 0,
-          monthlyInterest: 0,
-          schedule: [],
-          assumptions,
-          exempt: false
-        }
-      };
-    }
-
-    // Period rate for interest between payment events.
-    // Monthly legacy: monthlyRate. Quarterly/annual: compound.
-    const periodRate =
-      stepMonths === 1
-        ? monthlyRate
-        : (monthlyRate === 0
-            ? 0
-            : Math.pow(1 + monthlyRate, stepMonths) - 1);
-
-    return {
-      payment,
-      annualRate,
-      monthlyRate,
-      months,
-      effectiveMonths:
-        stepMonths === 1 && !advance
-          ? paymentDates.length
-          : months,
-      stepMonths,
-      advance,
-      paymentDates,
-      periodRate,
-      nPayments: paymentDates.length,
-      // GC-2026-09 (tahakkuk motoru): rapor tarihi tahakkuklarının
-      // (buildReportingDateAccrual) ay sayımı için kontrat başlangıcı.
-      commencementDate: parseDate(contract.startDate)
-    };
-  }
-
-  /**
-   * applyLeaseEscalation — her ödeme tarihi için (varsa) eskalasyon
-   * uygulanmış ödeme tutarını hesaplar. `hasEscalation` bayrağı da
-   * döner çünkü `calculateInitialLeaseMeasurement` PV hesabında hangi
-   * yolun (kapalı form vs döngü) kullanılacağına karar vermek için
-   * buna ihtiyaç duyar.
-   */
-  function applyLeaseEscalation(contract, assumptions, core) {
-    const { payment, paymentDates, stepMonths } = core;
-
-    const hasEscalation =
-      assumptions.leaseIncreaseType === "fixedRate" ||
-      assumptions.leaseIncreaseType === "fixedAmount" ||
-      assumptions.leaseIncreaseType === "index";
-
-    // periodsPerYear for escalation year buckets:
-    // monthly → 12, quarterly → 4, annual → 1
-    const periodsPerYear =
-      stepMonths === 1 ? 12 :
-      stepMonths === 3 ? 4 : 1;
-
-    // V18 Parça 1 — üç yeni alandan biri TANIMLIYSA genişletilmiş
-    // hesap kullanılır; hiçbiri tanımlı değilse eski yol AYNEN
-    // çalışır (legacy kontratlarda davranış birebir korunur).
-    // fixedAmount kendi TL-artış mantığını korur (VARSAYIM).
-    const usesV18Escalation =
-      hasEscalation &&
-      assumptions.leaseIncreaseType !== "fixedAmount" &&
-      (
-        assumptions.escalationFrequencyMonths !== null ||
-        assumptions.escalationBase !== null ||
-        assumptions.escalationFirstDate !== null
-      );
-
-    // Build per-payment amounts (with escalation when requested)
-    const paymentAmounts = paymentDates.map((date, index) => {
-      if (!hasEscalation) return payment;
-      if (usesV18Escalation) {
-        return computeEscalatedPaymentV18(
-          payment,
-          date,
-          contract.startDate,
-          assumptions.leaseIncreaseType,
-          assumptions.leaseIncreaseRate,
-          assumptions.escalationFrequencyMonths,
-          assumptions.escalationBase,
-          assumptions.escalationFirstDate
-        );
-      }
-      // Use payment ordinal (1-based) so quarterly/annual still
-      // step once per contract year via periodsPerYear.
-      return computeEscalatedPayment(
-        payment,
-        index + 1,
-        assumptions.leaseIncreaseType,
-        assumptions.leaseIncreaseRate,
-        assumptions.fixedIncrease,
-        periodsPerYear
-      );
-    });
-
-    return { paymentAmounts, hasEscalation };
-  }
-
-  /**
-   * calculateInitialLeaseMeasurement — TFRS 16.24 başlangıç ölçümü:
-   * kira yükümlülüğünün bugünkü değeri (initialLiability) ve buna
-   * bağlı ROU/amortisman parametreleri (initialROU, depreciation vb.)
-   */
-  function calculateInitialLeaseMeasurement(assumptions, core, esc) {
-    const { payment, monthlyRate, stepMonths, advance, paymentDates, months, effectiveMonths } = core;
-    const { paymentAmounts, hasEscalation } = esc;
-
-    // Discount exponents in MONTHS from commencement:
-    // - arrears legacy monthly: period i → exponent i (unchanged)
-    // - arrears non-monthly: payment at start+k*step → exponent k*step
-    // - advance: first payment at t=0 → exponent 0, then step, 2*step...
-    let liability = 0;
-
-    if (monthlyRate === 0) {
-      liability = paymentAmounts.reduce((t, p) => t + p, 0);
-    } else if (stepMonths === 1 && !advance && !hasEscalation) {
-      // Closed-form ordinary annuity — identical to pre-fix path
-      liability =
-        payment *
-        (
-          (
-            1 -
-            Math.pow(
-              1 + monthlyRate,
-              -effectiveMonths
-            )
-          ) /
-          monthlyRate
-        );
-    } else {
-      paymentDates.forEach((date, index) => {
-        // GC-2026-09 (çift sayım düzeltmesi): advance timing'te index=0
-        // ödemesi başlangıçta ZATEN nakden ödenmiştir — TFRS 16.24
-        // uyarınca muhasebe başlangıç YÜKÜMLÜLÜĞÜ yalnızca başlangıçta
-        // henüz ÖDENMEMİŞ kiraların bugünkü değeridir. Bu yüzden PV
-        // toplamına dahil edilmez (aşağıda advancePaymentAtCommencement
-        // olarak ayrıca taşınıp ROU'ya eklenir — ödeme planından/
-        // amortisman tablosundan İKİNCİ KEZ düşülmez, bkz.
-        // calculateAmortizationTable isFirstAdvancePayment dalı).
-        if (advance && index === 0) return;
-
-        let exponent;
-        if (stepMonths === 1 && !advance) {
-          // Legacy monthly arrears: 1..n
-          exponent = index + 1;
-        } else if (advance) {
-          exponent = index * stepMonths; // 0, step, 2*step, ...
-        } else {
-          exponent = (index + 1) * stepMonths;
-        }
-        liability +=
-          paymentAmounts[index] /
-          Math.pow(1 + monthlyRate, Math.max(0, exponent));
-      });
-    }
-
-    liability = Math.max(0, liability);
-
-    const initialLiability =
-      liability;
-
-    // Advance timing'te başlangıçta zaten ödenmiş ilk taksit — bu bir
-    // yükümlülük DEĞİL, ROU'nun bir bileşenidir (peşin ödenmiş kira).
-    // Kapalı-form (stepMonths===1 && !advance) ve monthlyRate===0
-    // dallarında advance hiç yok/ilgisiz olduğundan 0 kalır.
-    const advancePaymentAtCommencement =
-      advance && paymentAmounts.length
-        ? paymentAmounts[0]
-        : 0;
-
-    // Initial ROU measurement per TFRS 16.24:
-    // liability (henüz ödenmemiş kiraların PV'si)
-    // + başlangıçta ödenmiş kira (advance ilk taksit)
-    // + initial direct costs + prepayments
-    // - lease incentives + restoration/dismantling obligation.
-    // Legacy arrears kontratlarda advancePaymentAtCommencement=0
-    // olduğundan bu, initialLiability'ye eşit kalmaya devam eder —
-    // davranış birebir korunur.
-    const initialROU =
-      initialLiability +
-      advancePaymentAtCommencement +
-      assumptions.initialDirectCosts +
-      assumptions.prepayments -
-      assumptions.leaseIncentives +
-      assumptions.restorationObligation;
-
-    // TFRS 16.32: depreciate over useful life instead of lease term
-    // when ownership transfers, or a purchase option is reasonably
-    // certain to be exercised — but only once a useful life has
-    // actually been provided (usefulLifeMonths). Without it, this
-    // falls back to the lease term exactly as before, so contracts
-    // that don't set the new field are unaffected. Depreciation
-    // never uses a period SHORTER than the lease term here, since
-    // useful life is by definition expected to be >= lease term in
-    // the ownership-transfer/purchase-option case.
-    // Import şablonundaki "Varlığın Faydalı Ömrü" alanı kullanıcıya yıl
-    // olarak sunuluyor (LEASE-018 gibi kayıtlarda 20). Motor içindeki
-    // alan ay cinsinden tutulduğundan, eski içe aktarımlardaki küçük
-    // yıl değerlerini ay'a çevir. Zaten ay cinsinden girilmiş 96/120
-    // gibi değerler aynen korunur.
-    const suppliedUsefulLife = Number(assumptions.usefulLifeMonths);
-    const usefulLifeMonths =
-      Number.isFinite(suppliedUsefulLife) && suppliedUsefulLife > 0 && suppliedUsefulLife <= 50
-        ? suppliedUsefulLife * 12
-        : suppliedUsefulLife;
-
-    const usesUsefulLife =
-      (
-        assumptions.ownershipTransfer ||
-        assumptions.purchaseOption
-      ) &&
-      Number.isFinite(usefulLifeMonths) &&
-      usefulLifeMonths > months;
-
-    const depreciationMonths =
-      usesUsefulLife
-        ? usefulLifeMonths
-        : effectiveMonths;
-
-    const depreciation =
-      initialROU / depreciationMonths;
-
-    return {
-      initialLiability,
-      initialROU,
-      advancePaymentAtCommencement,
-      usesUsefulLife,
-      depreciationMonths,
-      depreciation
-    };
-  }
-
-  /**
-   * calculateAmortizationTable — dönem dönem yükümlülük/ROU
-   * roll-forward tablosu (schedule). `openingLiability`/`rouOpening`
-   * her satırda bir öncekinin kapanışından devralınır (sıralı/stateful
-   * fold) — bu fonksiyon SRP bölmesinde başka bir parçaya
-   * BÖLÜNMEDİ, çünkü bu roll-forward zinciri doğası gereği ayrılamaz.
-   *
-   * ADVANCE (peşin) ödeme timing'inde 1. dönem özel işlenir (annuity-
-   * due düzeltmesi — bkz. PROJECT_CONTEXT.md bölüm 33). Bu mantık ve
-   * yorumu, orijinal calculateLeaseEngineImpl'den BİREBİR (satır
-   * satır) buraya taşındı — hiçbir karakter değişmedi. `i===0`
-   * kontrolünün doğruluğu, `paymentAmounts`/`paymentDates`'in bu
-   * fonksiyona SIFIR yeniden sıralama/filtreleme/padding olmadan,
-   * `applyLeaseEscalation`'ın ürettiği HALİYLE geçirilmesine bağlıdır
-   * (bkz. PROJECT_CONTEXT.md bölüm 36 — Faz 3 SRP riski notu).
-   */
-  function calculateAmortizationTable(assumptions, core, esc, measurement) {
-    const { paymentDates, periodRate, advance, stepMonths, months, nPayments } = core;
-    const { paymentAmounts } = esc;
-    const { initialLiability, initialROU, depreciation } = measurement;
-
-    const schedule = [];
-
-    let openingLiability =
-      initialLiability;
-
-    let rouOpening =
-      initialROU;
-
-    // ROU is still depreciated over calendar months (lease term),
-    // but schedule rows exist only on payment dates. Allocate
-    // depreciation for the months covered by each payment interval.
-    for (
-      let i = 0;
-      i < nPayments;
-      i++
-    ) {
-
-      const periodPayment =
-        paymentAmounts[i];
-
-      // ANNUITY-DUE (ADVANCE) 1. ÖDEME DÜZELTMESİ — GÜNCELLEME (GC-2026-09,
-      // çift sayım düzeltmesiyle birlikte): calculateInitialLeaseMeasurement
-      // artık advance'de index=0 ödemesini initialLiability PV toplamına HİÇ
-      // DAHİL ETMİYOR (bkz. advancePaymentAtCommencement — ROU'ya ayrıca
-      // eklenir, initial fişte ayrı banka kaydı olarak muhasebeleşir).
-      // Dolayısıyla bu ilk satırda liability üzerinde YAPILACAK BİR ŞEY
-      // YOKTUR: faiz tahakkuk etmez (ödeme zaten yapılmıştır, borç hiç
-      // doğmamıştır) VE anapara da düşülmez (düşülecek bir şey liability'de
-      // zaten yoktur — eskiden buradaki "principal = min(payment,opening)"
-      // düşüşü, yükümlülüğü ÇİFT kez küçültüyordu). Bu satır yalnızca
-      // bilgi amaçlı "payment" tutarını gösterir; openingLiability =
-      // closingLiability olarak sabit kalır. 2. ödemeden itibaren mevcut
-      // arrears formülü AYNEN doğrudur (bkz. GC-01 arrears float toleransı).
-      // Arrears yolu (advance=false) bu dalı hiç görmez — davranışı
-      // BİREBİR korunur.
-      const isFirstAdvancePayment =
-        advance && i === 0;
-
-      const interest =
-        isFirstAdvancePayment
-          ? 0
-          : openingLiability * periodRate;
-
-      let principal =
-        isFirstAdvancePayment
-          ? 0
-          : periodPayment - interest;
-
-      if (
-        principal >
-        openingLiability
-      ) {
-        principal =
-          openingLiability;
-      }
-
-      const closingLiability =
-        Math.max(
-          0,
-          openingLiability - principal
-        );
-
-      // Months covered by this schedule row for ROU depreciation
-      let monthsCovered;
-      if (stepMonths === 1 && !advance) {
-        monthsCovered = 1;
-      } else if (i === nPayments - 1) {
-        // Last row: remaining months so total dep matches term
-        const used = schedule.reduce((s, r) => s + (r.monthsCovered || stepMonths), 0);
-        monthsCovered = Math.max(1, months - used);
-      } else {
-        monthsCovered = stepMonths;
-      }
-
-      const rouDepreciation =
-        Math.min(
-          depreciation * monthsCovered,
-          rouOpening
-        );
-
-      const rouClosing =
-        Math.max(
-          0,
-          rouOpening -
-          rouDepreciation
-        );
-
-      const periodDate =
-        paymentDates[i];
-
-      schedule.push({
-        period: i + 1,
-        date: periodDate,
-        year: periodDate.getFullYear(),
-        month: periodDate.getMonth() + 1,
-        openingLiability,
-        payment: periodPayment,
-        interest,
-        principal,
-        closingLiability,
-        rouOpening,
-        depreciation: rouDepreciation,
-        rouClosing,
-        monthsCovered,
-        // TFRS 16.28 / 53(e): payments that vary with something
-        // other than an index or a rate (e.g. % of sales, usage)
-        // are NOT part of the lease liability/ROU — they are
-        // expensed as incurred and disclosed separately.
-        variableExpense:
-          assumptions.variablePayment * (stepMonths === 1 ? 1 : monthsCovered)
-      });
-
-      openingLiability =
-        closingLiability;
-
-      rouOpening =
-        rouClosing;
-    }
-
-    return schedule;
   }
 
   /**
@@ -6802,130 +6179,30 @@ window.fetch = (input, init = {}) => {
   }
 
   /**
-   * Apply an approved migration closing balance to the forward schedule.
-   * Historical periods are deliberately removed from the displayed schedule:
-   * the imported closing balance is the authoritative starting point for the
-   * first period after the cut-over date. This stays synchronous and leaves
-   * legacy contracts unchanged when no approved balance exists.
-   */
-  function applyApprovedOpeningBalance(contract, schedule, core) {
-    const opening = contract && contract.openingBalance;
-    if (!opening || String(opening.status || "").toUpperCase() !== "APPROVED" || !schedule.length) {
-      return { schedule, openingLiability: null, openingROU: null, depreciation: null };
-    }
-    const transition = parseDate(opening.next_payment_date || opening.opening_date);
-    if (!transition) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
-    const firstIndex = schedule.findIndex(row => row.date >= transition);
-    if (firstIndex < 0) return { schedule, openingLiability: null, openingROU: null, depreciation: null };
-
-    const openingLiability = Math.max(0, Number(opening.opening_lease_liability) || 0);
-    const openingROU = Math.max(0, Number(opening.opening_rou_asset) || 0);
-    const sourceRows = schedule.slice(firstIndex);
-    const forward = [];
-    let liability = openingLiability;
-    let rou = openingROU;
-    sourceRows.forEach((row, index) => {
-      const previous = liability;
-      const interest = Math.max(0, previous * core.periodRate);
-      const payment = Math.max(0, Number(row.payment) || 0);
-      const principal = Math.min(previous, payment - interest);
-      const monthsCovered = row.monthsCovered || core.stepMonths || 1;
-      const rouOpening = rou;
-      const rouDepreciation = index === sourceRows.length - 1
-        ? rouOpening
-        : Math.min(openingROU / sourceRows.length * monthsCovered, rouOpening);
-      forward.push({
-        ...row,
-        period: index + 1,
-        openingLiability: previous,
-        interest,
-        principal,
-        closingLiability: Math.max(0, previous - principal),
-        rouOpening,
-        depreciation: rouDepreciation,
-        rouClosing: Math.max(0, rouOpening - rouDepreciation)
-      });
-      liability = Math.max(0, previous - principal);
-      rou = Math.max(0, rouOpening - rouDepreciation);
-    });
-    return {
-      schedule: forward,
-      openingLiability,
-      openingROU,
-      depreciation: forward.length ? forward[0].depreciation : 0
-    };
-  }
-
-  /**
-   * assembleLeaseEngineResult — motorun nihai dönüş objesini
-   * (liability, rouAssets, schedule, assumptions vb.) paketler.
-   */
-  function assembleLeaseEngineResult(assumptions, core, measurement, schedule) {
-    const { months, stepMonths } = core;
-    const { initialLiability, initialROU, advancePaymentAtCommencement, depreciation, depreciationMonths, usesUsefulLife } = measurement;
-
-    return {
-      months,
-      liability: initialLiability,
-      rouAssets: initialROU,
-      // GC-2026-09: advance timing'te başlangıçta nakden ödenen ilk
-      // taksit — initialLiability'ye dahil DEĞİL, initialROU'ya dahil.
-      // generateInitialEntry bu tutarı ayrı bir banka/kasa kaydı olarak
-      // muhasebeleştirmek için kullanır (0 ise arrears/legacy davranış
-      // birebir korunur, ek kayıt üretilmez).
-      advancePaymentAtCommencement: advancePaymentAtCommencement || 0,
-      depreciation,
-      depreciationMonths,
-      usesUsefulLifeDepreciation: usesUsefulLife,
-      monthlyInterest:
-        schedule[0]?.interest || 0,
-      paymentFrequency: assumptions.paymentFrequency,
-      paymentTiming: assumptions.paymentTiming,
-      stepMonths,
-      // TFRS 16.53(e) disclosure input: total expense over the
-      // schedule relating to variable lease payments not included
-      // in the measurement of the lease liability.
-      totalVariableExpense:
-        assumptions.variablePayment * months,
-      schedule,
-      assumptions,
-      exempt: false
-    };
-  }
-
-  /**
-   * calculateLeaseEngineImpl — TFRS 16 kiralama motorunun ana
-   * giriş noktası. PUBLIC API imzası (tek parametre: contract,
-   * dönüş şekli) HİÇ DEĞİŞMEDİ — yalnızca içi, her biri tek
-   * sorumluluğa sahip 6 fonksiyona bölündü (Faz 3 — SRP, bkz.
-   * PROJECT_CONTEXT.md bölüm 36). window.GK_TFRS16 üzerinden veya
-   * başka bir yerden bu isimle çağıran hiçbir kod fark etmez.
-   */
-
-  /**
-   * resolveLeaseAccrualContext — GC-2026-09 (Madde 4): tekrar kullanılabilir
-   * core/measurement bağlamı üretir. `buildTms21FxTranslation` (rapor
-   * tarihi için sentetik tahakkuk satırı) ve `getScheduleAsOfReportingDate`
-   * (current/non-current split) TEK bir bu fonksiyona bağımlıdır — motorun
-   * kendisi (calculateLeaseEngineImpl) ile birebir aynı adımları izler,
-   * böylece iki yer arasında sessizce farklı sonuç üretilmesi imkansız hale
-   * gelir.
+   * resolveLeaseAccrualContext — GC-2026-09 (Madde 4) tarafından tanıtıldı,
+   * FAZ 2.5'te (2026-09-16) YENİDEN YAZILDI. Eskiden `buildLeaseEngineAssumptions`
+   * → `resolveLeaseEngineCore` → `applyLeaseEscalation` →
+   * `calculateInitialLeaseMeasurement` zincirini ÇALIŞTIRARAK (yani motorun
+   * PV/eskalasyon matematiğini TEKRARLAYARAK) core/measurement üretiyordu —
+   * bu 4 fonksiyon + calculateAmortizationTable + applyApprovedOpeningBalance
+   * + assembleLeaseEngineResult artık public dosyada YOK.
    *
-   * DÖNÜŞ: null ise (exempt kontrat, earlyReturn, veya migration/opening
-   * balance uygulanmış kontrat) çağıran taraf ESKİ (yalnızca ödeme
-   * tarihli satır) davranışına düşer — GC-18 migration senaryosunda
-   * "commencement" kavramı geçiş tarihine kaydığından, sentetik tahakkuk
-   * bu sürümde migration bakiyeleri için KASITLI OLARAK desteklenmiyor
-   * (ayrı bir görev — bkz. rapor).
+   * Artık HİÇBİR hesaplama yapmıyor: private backend'in ZATEN hesaplayıp
+   * schedule'ın ilk satırına yazdığı openingLiability/rouOpening/depreciation
+   * değerlerini okuyor. `buildReportingDateAccrual`'ın (aşağıda, DEĞİŞMEDİ)
+   * enterpolasyon formülü birebir aynı kaldı — tek değişen, girdilerin
+   * NEREDEN geldiği (yerel yeniden hesaplama değil, zaten private'ten gelen
+   * schedule'ın okunması). 3 farklı sözleşme tipinde (aylık/arrears,
+   * aylık/advance, üç aylık/arrears) eski ve yeni yöntem sayısal olarak
+   * birebir karşılaştırıldı — fark yok.
+   *
+   * DÖNÜŞ: null ise (exempt kontrat, private sonuç henüz hazır değil, veya
+   * migration/opening-balance/reassessment/modification uygulanmış kontrat)
+   * çağıran taraf ESKİ (yalnızca ödeme tarihli satır) davranışına düşer —
+   * bu davranış DEĞİŞMEDİ.
    */
   function resolveLeaseAccrualContext(contract) {
     try {
-      const assumptions = buildLeaseEngineAssumptions(contract);
-      if (buildExemptLeaseResult(contract, assumptions)) return null;
-
-      const core = resolveLeaseEngineCore(contract, assumptions);
-      if (core.earlyReturn) return null;
-
       // Migration/opening-balance uygulanmış kontratlarda commencement
       // artık geçiş tarihidir — bu sürümde sentetik tahakkuk desteklenmiyor.
       if (contract?.openingBalance && String(contract.openingBalance.status || "").toUpperCase() === "APPROVED") {
@@ -6937,10 +6214,33 @@ window.fetch = (input, init = {}) => {
         (contract?.modifications || []).some(x => String(x?.status || "").toUpperCase() === "APPLIED");
       if (hasAppliedLayer) return null;
 
-      const esc = applyLeaseEscalation(contract, assumptions, core);
-      const measurement = calculateInitialLeaseMeasurement(assumptions, core, esc);
+      const engine = getPrivateCalculationForConsumer(contract);
+      if (!engine || engine.exempt) return null;
 
-      return { core, measurement, esc };
+      const schedule = engine.schedule;
+      if (!Array.isArray(schedule) || !schedule.length) return null;
+
+      const firstRow = schedule[0];
+      if (!firstRow || typeof firstRow.openingLiability !== "number") return null;
+
+      const commencementDate = parseDate(contract.startDate);
+      if (!commencementDate) return null;
+
+      const monthsCoveredFirst = Number(firstRow.monthsCovered) || 1;
+
+      const core = {
+        annualRate: Number(contract.discountRate) || 0,
+        commencementDate,
+        advance: isAdvancePaymentTiming(contract.paymentTiming)
+      };
+      const measurement = {
+        initialLiability: Number(firstRow.openingLiability) || 0,
+        initialROU: Number(firstRow.rouOpening) || 0,
+        depreciation: (Number(firstRow.depreciation) || 0) / monthsCoveredFirst,
+        depreciationMonths: monthsBetween(contract.startDate, contract.endDate)
+      };
+
+      return { core, measurement };
     } catch (error) {
       return null;
     }
@@ -10974,8 +10274,14 @@ ${renderAccountingCenterBulkPromo()}
 
               if (action === "apply") {
                 button.disabled = true;
-                const result =
-                  await applyModification(contract, id);
+                let result;
+                try {
+                  result = await applyModification(contract, id);
+                } catch (error) {
+                  button.disabled = false;
+                  showAlert(`Modifikasyon uygulanamadı: ${error?.message || String(error)}`);
+                  return;
+                }
                 button.disabled = false;
 
                 if (!result.valid) {
@@ -11175,7 +10481,14 @@ ${renderAccountingCenterBulkPromo()}
 
         if (action === "apply") {
           button.disabled = true;
-          const result = await applyReassessment(contract, id);
+          let result;
+          try {
+            result = await applyReassessment(contract, id);
+          } catch (error) {
+            button.disabled = false;
+            showAlert(`Reassessment uygulanamadı: ${error?.message || String(error)}`);
+            return;
+          }
           button.disabled = false;
           if (!result.valid) {
             showAlert(result.errors.join("\n"));
@@ -11209,7 +10522,7 @@ ${renderAccountingCenterBulkPromo()}
    * FAZ 3 — SRP BÖLMESİ.
    */
   function renderPaymentScheduleHeader() {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleHeader;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleHeader;
     return typeof renderer === "function" ? renderer() : "";
   }
 
@@ -11218,7 +10531,7 @@ ${renderAccountingCenterBulkPromo()}
    * kontrolleri ve "Excel'e Aktar" butonu.
    */
   function renderPaymentScheduleFilters(contract) {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleFilters;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleFilters;
     return typeof renderer === "function" ? renderer(contract) : "";
   }
 
@@ -11227,7 +10540,7 @@ ${renderAccountingCenterBulkPromo()}
    * başlık satırı ve boş gövdesi.
    */
   function renderPaymentScheduleTableShell() {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleTableShell;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleTableShell;
     return typeof renderer === "function" ? renderer() : "";
   }
 
@@ -11236,7 +10549,7 @@ ${renderAccountingCenterBulkPromo()}
    * FX/enflasyon düzeltmesi konteynerleri.
    */
   function renderPaymentScheduleFooterContainers() {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleFooterContainers;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleFooterContainers;
     return typeof renderer === "function" ? renderer() : "";
   }
 
@@ -11273,7 +10586,7 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function renderContractAuditTab(contract, events) {
-    const renderer = global.LeaseQantTfrs16ReportingUi?.renderContractAuditTab;
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderContractAuditTab;
     return typeof renderer === "function"
       ? renderer(contract, events)
       : `<div class="gk-v26-card" style="color:#991b1b;">Denetim izi arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
@@ -11310,7 +10623,7 @@ ${renderPaymentScheduleFooterContainers()}
     // the public engine is available only through the explicit ?api=0 path.
     const privateResult = await loadPrivateReadOnlyResult(contract);
     if (isPrivateCalculationApiReady() && !privateResult) {
-      global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
+      window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
         emptyMessage: "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek.",
         fxMessage: "Kurlar doğrulanıp private hesaplama tamamlandıktan sonra tekrar deneyin."
       });
@@ -11347,11 +10660,11 @@ ${renderPaymentScheduleFooterContainers()}
     // V18 Parça 1 — satır sunumu operations UI modülündedir; motor yalnızca
     // private sonuçları ve dönüşüm verisini köprü üzerinden sağlar.
     const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
-    const rowRenderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleRows;
+    const rowRenderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleRows;
     const rowsHtml = typeof rowRenderer === "function"
       ? rowRenderer(rows, presentationCurrency, basePaymentV18)
       : "";
-    global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
+    window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
       rowsHtml,
       fxMessage,
       hasRows: rows.length
@@ -11383,7 +10696,7 @@ ${renderPaymentScheduleFooterContainers()}
     const adjustments = (contract.inflationAdjustments || []).slice()
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-    const rowsRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationAdjustmentRows;
+    const rowsRenderer = window.LeaseQantTfrs16ReportingUi?.renderInflationAdjustmentRows;
     const rowsHtml = typeof rowsRenderer === "function"
       ? rowsRenderer(adjustments, {
           escapeHtml,
@@ -11393,7 +10706,7 @@ ${renderPaymentScheduleFooterContainers()}
         })
       : "";
 
-    const shellRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationAdjustmentShell;
+    const shellRenderer = window.LeaseQantTfrs16ReportingUi?.renderInflationAdjustmentShell;
     if (typeof shellRenderer === "function") {
       container.innerHTML = shellRenderer(rowsHtml);
     } else {
@@ -11402,7 +10715,7 @@ ${renderPaymentScheduleFooterContainers()}
 
     let lastPrivateTms29Result = null;
     const showInflationAdjustmentAlert = message => {
-      const renderer = global.LeaseQantTfrs16ReportingUi?.showInflationActionAlert;
+      const renderer = window.LeaseQantTfrs16ReportingUi?.showInflationActionAlert;
       if (typeof renderer === "function") return renderer(message);
       // Reporting UI yüklenemezse mevcut genel uyarı davranışını koru.
       return showAlert(message);
@@ -11433,14 +10746,14 @@ ${renderPaymentScheduleFooterContainers()}
       // sıra kontrolüdür. Gösterilen rakamlar private API zarfından gelir;
       // public dosyada yerel TMS 29 hesaplama veya yazma yedeği yoktur.
       if (!period) {
-        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        const renderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
         result.innerHTML = typeof renderer === "function"
           ? renderer("Raporlama dönemi seçin.", { escapeHtml })
           : "";
         return;
       }
       if (!basicPeriodValid) {
-        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        const renderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
         const message = `Raporlama dönemi formatı YYYY-MM olmalı${periodStart ? " ve Dönem Başlangıcı raporlama döneminden sonra olamaz." : "."}`;
         result.innerHTML = typeof renderer === "function"
           ? renderer(message, { escapeHtml })
@@ -11453,7 +10766,7 @@ ${renderPaymentScheduleFooterContainers()}
           t = lastPrivateTms29Result.totals;
         } catch (error) {
           lastPrivateTms29Result = null;
-          const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewError;
+          const renderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewError;
           result.innerHTML = typeof renderer === "function"
             ? renderer(error, { escapeHtml })
             : "";
@@ -11461,13 +10774,13 @@ ${renderPaymentScheduleFooterContainers()}
         }
       } else {
         lastPrivateTms29Result = null;
-        const renderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
+        const renderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewMessage;
         result.innerHTML = typeof renderer === "function"
           ? renderer("Private TMS 29 API hazır değil; yerel hesaplama kapalı.", { escapeHtml })
           : "";
         return;
       }
-      const summaryRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewSummary;
+      const summaryRenderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewSummary;
       result.innerHTML = typeof summaryRenderer === "function"
         ? summaryRenderer(lastPrivateTms29Result, { formatCurrency })
         : "";
@@ -11479,7 +10792,7 @@ ${renderPaymentScheduleFooterContainers()}
       // girmez ve kalıcı kayıt ancak "Taslak Oluştur" ile yapılır.
       const previewBody = container.querySelector("table tbody");
       if (previewBody) {
-        const previewRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewRow;
+        const previewRenderer = window.LeaseQantTfrs16ReportingUi?.renderInflationPreviewRow;
         if (typeof previewRenderer === "function") {
           previewBody.innerHTML = previewRenderer(lastPrivateTms29Result, { escapeHtml, formatCurrency, period });
         }
@@ -11665,7 +10978,15 @@ ${renderPaymentScheduleFooterContainers()}
     const container = document.getElementById("slbSectionContainer");
     if (!container) return;
 
-    const formRenderer = global.LeaseQantTfrs16OperationsUi?.renderSlbForm;
+    // DÜZELTME: PR #348'de SLB form markup'ı operations-ui modülüne
+    // taşınırken bu satır yanlışlıkla silinmiş — aşağıdaki
+    // "if (saved) runAndRenderSlb(false)" satırı `saved` tanımsız
+    // olduğu için ReferenceError fırlatıyordu (SLB sekmesi hiç
+    // açılamıyordu). Sublease karşılığıyla (renderSubleaseSection)
+    // birebir aynı desen.
+    const saved = contract.saleAndLeaseback || null;
+
+    const formRenderer = window.LeaseQantTfrs16OperationsUi?.renderSlbForm;
     const formHtml = typeof formRenderer === "function"
       ? formRenderer(contract)
       : "";
@@ -11769,12 +11090,12 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function renderSlbResultHtml(...args) {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSlbResultHtml;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderSlbResultHtml;
     return typeof renderer === "function" ? renderer(...args) : "";
   }
 
   function renderSlbJournalHtml(...args) {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSlbJournalHtml;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderSlbJournalHtml;
     return typeof renderer === "function" ? renderer(...args) : "";
   }
 
@@ -11784,7 +11105,7 @@ ${renderPaymentScheduleFooterContainers()}
 
     const saved = contract.sublease || null;
 
-    const formRenderer = global.LeaseQantTfrs16OperationsUi?.renderSubleaseForm;
+    const formRenderer = window.LeaseQantTfrs16OperationsUi?.renderSubleaseForm;
     const formHtml = typeof formRenderer === "function"
       ? formRenderer(contract)
       : "";
@@ -11880,7 +11201,7 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function renderSubleaseResultHtml(...args) {
-    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSubleaseResultHtml;
+    const renderer = window.LeaseQantTfrs16OperationsUi?.renderSubleaseResultHtml;
     return typeof renderer === "function" ? renderer(...args) : "";
   }
 
@@ -11922,7 +11243,7 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   function initPaymentScheduleEvents(contract) {
-    const binder = global.LeaseQantTfrs16OperationsUi?.bindPaymentScheduleEvents;
+    const binder = window.LeaseQantTfrs16OperationsUi?.bindPaymentScheduleEvents;
     if (typeof binder !== "function") return;
     binder(contract, {
       updateSubPeriod: updateScheduleSubPeriodUI,
@@ -12041,7 +11362,7 @@ ${renderPaymentScheduleFooterContainers()}
           [`ROU Kapanış (${fx.functionalCurrency})`]: row.rouClosingFx
         }))
       : [];
-    const exporter = global.LeaseQantTfrs16OperationsUi?.exportPaymentScheduleFile;
+    const exporter = window.LeaseQantTfrs16OperationsUi?.exportPaymentScheduleFile;
     if (typeof exporter === "function") {
       exporter({ contractId: contract.id, presentationCurrency, assumptionRows, scheduleRows, fxRows });
     }
@@ -12175,14 +11496,14 @@ ${renderPaymentScheduleFooterContainers()}
         : { locked: false };
       // Durum bantlarının HTML sunumu reporting UI modülündedir; motor yalnızca
       // hesaplama sonucu ve dönem kilidi kararlarını sağlar.
-      const detailStatusHtml = global.LeaseQantTfrs16ReportingUi?.renderContractDetailStatus?.({
+      const detailStatusHtml = window.LeaseQantTfrs16ReportingUi?.renderContractDetailStatus?.({
         lockMessage: lockBannerCheck.locked ? lockBannerCheck.message : "",
         calculationSource,
         calculationError: Boolean(calculationError),
         isAdmin: String(sessionUserRole || "").toUpperCase() === "ADMIN"
       }) || "";
-      const detailPanelsHtml = global.LeaseQantTfrs16ReportingUi?.renderContractDetailPanels?.({
-        summaryHtml: global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || "",
+      const detailPanelsHtml = window.LeaseQantTfrs16ReportingUi?.renderContractDetailPanels?.({
+        summaryHtml: window.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || "",
         scheduleHtml: `${renderPaymentScheduleSection(contract)}${calculationError ? `
             <div style="margin-top:22px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:14px 16px;color:#9a3412;font-size:12px;">
               Ödeme planı ve ilk muhasebeleştirme fişi private hesaplama sonucu hazır olduğunda görüntülenecek.
@@ -12212,7 +11533,7 @@ ${renderPaymentScheduleFooterContainers()}
         ${v26StdHtml}
         ${detailStatusHtml}
 
-        ${global.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
+        ${window.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
         ${detailPanelsHtml || ""}
       `;
       } catch (renderError) {
@@ -12262,7 +11583,7 @@ ${renderPaymentScheduleFooterContainers()}
     setTimeout(
       () => {
 
-        global.LeaseQantTfrs16ReportingUi?.bindContractAuditTab?.(contract);
+        window.LeaseQantTfrs16ReportingUi?.bindContractAuditTab?.(contract);
 
         initPaymentScheduleEvents(
           contract
@@ -12293,7 +11614,7 @@ ${renderPaymentScheduleFooterContainers()}
           ?.addEventListener("click", openBulkJournalModal);
 
         // Tab geçişleri ve aktif panel DOM yazımı reporting UI modülündedir.
-        global.LeaseQantTfrs16ReportingUi?.bindContractDetailTabs?.({
+        window.LeaseQantTfrs16ReportingUi?.bindContractDetailTabs?.({
           getActiveTab: () => gkDetailActiveTab,
           setActiveTab: value => { gkDetailActiveTab = value; }
         });
