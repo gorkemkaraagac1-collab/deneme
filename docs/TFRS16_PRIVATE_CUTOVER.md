@@ -95,6 +95,20 @@ modification/reassessment apply endpoints and merges their applied event,
 contract patch and refreshed schedule before persisting the contract. A live
 apply smoke is still required before the public engine can be removed.
 
+## Private-only schedule source slice (2026-09-16)
+
+`resolveContractScheduleSource()` now fails closed when an applied modification
+or reassessment does not carry the versioned private event-aware envelope. The
+previous browser-side schedule fallback is no longer reachable from report,
+classification and control consumers. The control schedule, modification
+control and reassessment control all read the resolved private schedule and
+surface an unavailable/error state when the backend result is incomplete.
+
+The source gate is **120/120** with zero direct production calls to the raw
+engine. The fallback builder functions remain as an isolated removal candidate
+until the final production-reference scan proves that no compatibility helper
+still needs them; this slice deliberately does not delete the public bundle.
+
 ## Removal criteria
 
 The public engine may be removed in a separate, reversible pull request only

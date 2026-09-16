@@ -6438,8 +6438,9 @@ window.fetch = (input, init = {}) => {
    *
    * Private API parity gate: unchanged contracts use the warmed private
    * schedule, and event-aware contracts use it only when the backend marks
-   * the versioned event-aware envelope as complete. Until then each event
-   * type keeps its established local fallback.
+   * the versioned event-aware envelope as complete. There is deliberately no
+   * browser schedule fallback here; an applied event without a complete
+   * private envelope is an explicit calculation error.
    *
    * FAZ 4.1 DÜZELTMESİ (GC-18, Görkem onayı — bkz. PROJECT_CONTEXT.md
    * bölüm 33 ve 37): Bu fonksiyon önceden yalnızca `cfoBuildSchedule`
@@ -6479,16 +6480,16 @@ window.fetch = (input, init = {}) => {
           };
         }
       }
-      if (latestReassessment?.status === "APPLIED" && typeof buildReassessedSchedule === "function") {
-          const reassessed = buildReassessedSchedule(contract, latestReassessment);
-          if (Array.isArray(reassessed) && reassessed.length) return { schedule: reassessed, engine: null, source: "REASSESSED_SCHEDULE" };
-      }
-      if (latestModification && typeof buildModifiedSchedule === "function") {
-          const modified = buildModifiedSchedule(contract, latestModification);
-          if (Array.isArray(modified) && modified.length) return { schedule: modified, engine: null, source: "MODIFIED_SCHEDULE" };
-      }
       const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
-      return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
+      const appliedEvent = latestReassessment?.status === "APPLIED" || Boolean(latestModification);
+      return {
+        schedule: Array.isArray(engine?.schedule) ? engine.schedule : [],
+        engine,
+        source: appliedEvent ? "ERROR" : "LEASE_SCHEDULE",
+        ...(appliedEvent ? {
+          error: "Private API event-aware schedule is not ready"
+        } : {})
+      };
     } catch (error) {
       return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
     }
@@ -14741,34 +14742,8 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlSchedule(contract) {
     try {
-      const privateResult = getPrivateCachedCalculationResult(contract);
-      if (Array.isArray(privateResult?.schedule) && privateResult.schedule.length) {
-        return privateResult.schedule;
-      }
-
-      if (typeof getReassessmentBaseSchedule === "function") {
-        const resolved = getReassessmentBaseSchedule(contract);
-        if (Array.isArray(resolved) && resolved.length) return resolved;
-      }
-
-      const latestReassessment = typeof getCurrentReassessmentState === "function"
-        ? getCurrentReassessmentState(contract)
-        : null;
-      if (latestReassessment && latestReassessment.status === "APPLIED" && typeof buildReassessedSchedule === "function") {
-        const reassessed = buildReassessedSchedule(contract, latestReassessment);
-        if (Array.isArray(reassessed) && reassessed.length) return reassessed;
-      }
-
-      const latestModification = typeof getCurrentAppliedModification === "function"
-        ? getCurrentAppliedModification(contract)
-        : null;
-      if (latestModification && typeof buildModifiedSchedule === "function") {
-        const modified = buildModifiedSchedule(contract, latestModification);
-        if (Array.isArray(modified) && modified.length) return modified;
-      }
-
-      const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
-      return Array.isArray(engine?.schedule) ? engine.schedule : [];
+      const resolved = resolveContractScheduleSource(contract);
+      return Array.isArray(resolved?.schedule) ? resolved.schedule : [];
     } catch (error) {
       return [];
     }
@@ -14930,11 +14905,15 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlModification(contract, config) {
     const items = Array.isArray(contract?.modifications) ? contract.modifications : [];
+    const resolved = resolveContractScheduleSource(contract);
+    const privateScheduleReady = Array.isArray(resolved?.schedule) &&
+      resolved.schedule.length > 0 &&
+      (resolved.source === "MODIFIED_SCHEDULE" || resolved.source === "REASSESSED_SCHEDULE");
     for (const item of items) {
       if (!item?.id) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing its ID.", "Modification ID", item, "Repair the modification record.");
       if (typeof getModificationEffectiveDate === "function" && !getModificationEffectiveDate(item)) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing a valid effective date.", "Modification effective date", item.id, "Set a valid effective date on the modification record.");
       if (item.status === "APPLIED") {
-        const hasSchedule = typeof buildModifiedSchedule === "function" && Array.isArray(buildModifiedSchedule(contract, item)) && buildModifiedSchedule(contract, item).length > 0;
+        const hasSchedule = privateScheduleReady;
         if (!hasSchedule) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied modification has no revised schedule.", "Applied modification with revised schedule", item.id, "Regenerate the modified schedule and review the effective date.");
         if (!Array.isArray(item.journal) || !item.journal.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied modification has no journal.", "Applied modification with journal", item.id, "Generate the modification journal.");
       }
@@ -14944,10 +14923,14 @@ ${renderPaymentScheduleFooterContainers()}
 
   function controlReassessment(contract, config) {
     const items = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
+    const resolved = resolveContractScheduleSource(contract);
+    const privateScheduleReady = Array.isArray(resolved?.schedule) &&
+      resolved.schedule.length > 0 &&
+      resolved.source === "REASSESSED_SCHEDULE";
     for (const item of items) {
       if (!item?.id) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Reassessment is missing its ID.", "Reassessment ID", item, "Repair the reassessment record.");
       if (item.status === "APPLIED") {
-        const hasSchedule = typeof buildReassessedSchedule === "function" && Array.isArray(buildReassessedSchedule(contract, item)) && buildReassessedSchedule(contract, item).length > 0;
+        const hasSchedule = privateScheduleReady;
         if (!hasSchedule) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied reassessment has no revised schedule.", "Applied reassessment with revised schedule", item.id, "Regenerate the reassessed schedule and review the effective date.");
         if (!Array.isArray(item.journal) || !item.journal.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied reassessment has no journal.", "Applied reassessment with journal", item.id, "Generate the reassessment journal.");
       }
