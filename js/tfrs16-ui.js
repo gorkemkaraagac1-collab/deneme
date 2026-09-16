@@ -996,10 +996,8 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  // DOM timing is owned by the public coordinator. Its guarded boot hook
-  // runs after DOM readiness, so hydration starts once without a duplicate
-  // DOMContentLoaded/setTimeout race inside the runtime.
-  void hydrateTfrs16BackendData();
+  // Hydration invocation is owned by the public coordinator. The runtime
+  // exposes only this hook; private-cache and UI implementation stay here.
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
   // kontrol/entegrasyon kayıtlarını arka planda temizle (UI'ı bloklamaz).
@@ -30313,6 +30311,10 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     container.innerHTML = `<div class="gk-v26-card">Enflasyon endeksleri arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
+
+  // The coordinator invokes this after runtime boot has completed, so all
+  // runtime declarations are ready before the first private hydration.
+  window.__GK_TFRS16_UI_HYDRATE__ = hydrateTfrs16BackendData;
 };
 
 // Bootstrap scheduling lives in the small public coordinator module. Keep

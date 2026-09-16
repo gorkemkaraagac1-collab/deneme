@@ -16,6 +16,12 @@
       return;
     }
     runtimeBoot();
+    const hydrate = window.__GK_TFRS16_UI_HYDRATE__;
+    if (typeof hydrate !== "function") {
+      console.error("TFRS16 UI hydration hook bulunamadı.");
+      return;
+    }
+    void hydrate();
   };
 
   if (document.readyState === "loading") {
