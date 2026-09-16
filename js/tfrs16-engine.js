@@ -11401,6 +11401,12 @@ ${renderPaymentScheduleFooterContainers()}
     }
 
     let lastPrivateTms29Result = null;
+    const showInflationAdjustmentAlert = message => {
+      const renderer = global.LeaseQantTfrs16ReportingUi?.showInflationActionAlert;
+      if (typeof renderer === "function") return renderer(message);
+      // Reporting UI yüklenemezse mevcut genel uyarı davranışını koru.
+      return showAlert(message);
+    };
 
     const loadPrivateTms29Result = async (period, periodStart) => {
       const facade = window.LeaseQantPrivateTfrs16Facade;
@@ -11529,7 +11535,7 @@ ${renderPaymentScheduleFooterContainers()}
       }
       const lockCheck = assertPeriodWritable(contract, period);
       if (lockCheck.locked) {
-        showAlert(lockCheck.message);
+        showInflationAdjustmentAlert(lockCheck.message);
         return;
       }
 
@@ -11574,7 +11580,7 @@ ${renderPaymentScheduleFooterContainers()}
         contract.inflationAdjustments = previousAdjustments;
         contract.auditTrail = previousAuditTrail;
         saveContracts(contracts);
-        showAlert(`Private TMS 29 taslağı kaydedilemedi: ${error?.message || String(error)}`);
+        showInflationAdjustmentAlert(`Private TMS 29 taslağı kaydedilemedi: ${error?.message || String(error)}`);
       } finally {
         if (button) { button.disabled = false; button.textContent = "Taslak Oluştur"; }
       }
@@ -11583,11 +11589,11 @@ ${renderPaymentScheduleFooterContainers()}
     container.querySelectorAll(".infl-apply-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
-        if (!adjustment) { showAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+        if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
         if (adjustment.status === "APPLIED") return;
-        if (adjustment.status === "CANCELLED") { showAlert("CANCELLED düzeltme uygulanamaz."); return; }
+        if (adjustment.status === "CANCELLED") { showInflationAdjustmentAlert("CANCELLED düzeltme uygulanamaz."); return; }
         const lockCheck = assertPeriodWritable(contract, adjustment.period || new Date());
-        if (lockCheck.locked) { showAlert(lockCheck.message); return; }
+        if (lockCheck.locked) { showInflationAdjustmentAlert(lockCheck.message); return; }
         const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
         const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
         btn.disabled = true;
@@ -11615,7 +11621,7 @@ ${renderPaymentScheduleFooterContainers()}
           contract.inflationAdjustments = previousAdjustments;
           contract.auditTrail = previousAuditTrail;
           saveContracts(contracts);
-          showAlert(`Private TMS 29 uygulanamadı: ${error?.message || String(error)}`);
+          showInflationAdjustmentAlert(`Private TMS 29 uygulanamadı: ${error?.message || String(error)}`);
           btn.disabled = false;
           btn.textContent = "Uygula";
         }
@@ -11626,8 +11632,8 @@ ${renderPaymentScheduleFooterContainers()}
       btn.addEventListener("click", async () => {
         if (!confirm("Bu taslak enflasyon düzeltmesi iptal edilecek. Emin misiniz?")) return;
         const adjustment = (contract.inflationAdjustments || []).find(a => a.id === btn.dataset.id);
-        if (!adjustment) { showAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
-        if (adjustment.status !== "DRAFT") { showAlert("Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."); return; }
+        if (!adjustment) { showInflationAdjustmentAlert("Enflasyon düzeltme kaydı bulunamadı."); return; }
+        if (adjustment.status !== "DRAFT") { showInflationAdjustmentAlert("Yalnızca DRAFT durumundaki düzeltmeler iptal edilebilir."); return; }
         const previousAdjustments = cloneModificationValue(contract.inflationAdjustments || []);
         const previousAuditTrail = cloneModificationValue(contract.auditTrail || []);
         btn.disabled = true;
@@ -11648,7 +11654,7 @@ ${renderPaymentScheduleFooterContainers()}
           contract.inflationAdjustments = previousAdjustments;
           contract.auditTrail = previousAuditTrail;
           saveContracts(contracts);
-          showAlert(`Private TMS 29 taslağı iptal edilemedi: ${error?.message || String(error)}`);
+          showInflationAdjustmentAlert(`Private TMS 29 taslağı iptal edilemedi: ${error?.message || String(error)}`);
           btn.disabled = false;
         }
       });
