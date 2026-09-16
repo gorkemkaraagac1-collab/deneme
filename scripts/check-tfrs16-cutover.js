@@ -58,6 +58,9 @@ const checks = [
   ["SLB result markup lives outside the public engine", /function renderSlbResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbResultHtml/.test(engine) && !/TFRS 16\.100-102 — Satış ve Geri Kiralama/.test(engine)],
   ["SLB journal markup lives outside the public engine", /function renderSlbJournalHtml\(entries\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbJournalHtml/.test(engine) && !/BAŞLANGIÇ FİŞİ/.test(engine)],
   ["Sublease result markup lives outside the public engine", /function renderSubleaseResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseResultHtml/.test(engine) && !/TFRS 16\.B58 — Operating Alt Kiralama/.test(engine)],
+  ["Payment schedule header markup lives outside the public engine", /function renderPaymentScheduleHeader\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleHeader/.test(engine) && !/ÖDEME PLANI/.test(engine)],
+  ["Payment schedule table shell lives outside the public engine", /function renderPaymentScheduleTableShell\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleTableShell/.test(engine) && !/<tbody id="scheduleTableBody"><\/tbody>/.test(engine)],
+  ["Payment schedule footer markup lives outside the public engine", /function renderPaymentScheduleFooterContainers\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFooterContainers/.test(engine) && !/<div id="fxTranslationContainer"><\/div>/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle

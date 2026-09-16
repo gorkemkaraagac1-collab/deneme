@@ -21,6 +21,107 @@
     return typeof fn === "function" ? fn(value) : String(value ?? "");
   }
 
+  // Payment schedule presentation shells live here so the public engine
+  // remains a calculation/bridge layer. These functions are intentionally
+  // read-only markup helpers; data and actions stay behind bridge methods.
+  function renderPaymentScheduleHeader() {
+    return `        <div>
+
+          <div
+            style="
+              font-size:10px;
+              color:#64748b;
+              font-weight:800;
+              letter-spacing:1px;
+            "
+          >
+            ÖDEME PLANI
+          </div>
+
+          <h3
+            style="
+              margin:5px 0 0;
+              font-size:18px;
+            "
+          >
+            Kira Ödeme Planı
+          </h3>
+
+          <p
+            style="
+              margin:5px 0 0;
+              color:#64748b;
+              font-size:11px;
+            "
+          >
+            Her dönem için açılış/kapanış yükümlülüğü, faiz, anapara, amortisman ve ROU net defter değeri.
+          </p>
+
+        </div>
+`;
+  }
+
+  function renderPaymentScheduleTableShell() {
+    return `        <div
+          style="
+            overflow:auto;
+            margin-top:16px;
+            border:1px solid #e5e7eb;
+            border-radius:10px;
+          "
+        >
+          <table
+            style="
+              width:100%;
+              border-collapse:collapse;
+              min-width:820px;
+            "
+          >
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:9px;text-align:left;font-size:11px;">Dönem</th>
+                <th style="padding:9px;text-align:left;font-size:11px;">Tarih</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Açılış Yükümlülüğü</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Ödeme</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Faiz</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Anapara</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Kapanış Yükümlülüğü</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">Amortisman</th>
+                <th style="padding:9px;text-align:right;font-size:11px;">ROU Net Defter Değeri</th>
+              </tr>
+            </thead>
+            <tbody id="scheduleTableBody"></tbody>
+          </table>
+        </div>
+`;
+  }
+
+  function renderPaymentScheduleFooterContainers() {
+    return `        <div
+          id="scheduleEmptyState"
+          style="
+            display:none;
+            padding:14px;
+            text-align:center;
+            color:#64748b;
+            font-size:12px;
+          "
+        >
+          Seçilen dönem için ödeme planı kaydı bulunmuyor.
+        </div>
+
+        <div id="fxTranslationContainer"></div>
+
+        <div id="inflationAdjustmentContainer"></div>
+
+        <!-- SLB & Sublease BURADAN KALDIRILDI (onaylı plan, Modifikasyon
+             & Reassessment ile aynı desen): artık ayrı "Satış ve Geri
+             Kiralama" ve "Alt Kiralama" sayfalarında, sözleşme seçici
+             ile yönetiliyor. Bkz. renderSlbManagementPage /
+             renderSubleaseManagementPage ve dashboard.html'deki linkler. -->
+`;
+  }
+
   function selectedBanner(contract) {
     const fn = bridge().v26SelectedContractBanner;
     return typeof fn === "function" ? fn(contract) : "";
@@ -287,5 +388,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers };
 })(window);
