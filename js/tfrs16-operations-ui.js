@@ -337,6 +337,45 @@
   }
 
   /**
+   * Export the already-prepared payment-plan rows. Calculation, FX conversion
+   * and audit recording stay in the engine bridge; this module owns only the
+   * workbook/CSV presentation and browser download.
+   */
+  function exportPaymentScheduleFile({ contractId, presentationCurrency, assumptionRows = [], scheduleRows = [], fxRows = [] } = {}) {
+    if (!Array.isArray(scheduleRows) || !scheduleRows.length) return false;
+    const safeId = String(contractId || "CONTRACT");
+    const currency = String(presentationCurrency || "TRY").toUpperCase();
+
+    if (typeof XLSX !== "undefined") {
+      try {
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(assumptionRows), "Varsayimlar");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(scheduleRows), "Odeme Plani");
+        if (Array.isArray(fxRows) && fxRows.length) {
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(fxRows), "Kur_Cevrimi_TMS21");
+        }
+        XLSX.writeFile(workbook, `${safeId}_Odeme_Plani_${currency}.xlsx`);
+        return true;
+      } catch (error) {
+        console.error("Payment schedule export error:", error);
+      }
+    }
+
+    const headers = Object.keys(scheduleRows[0]);
+    const csv = [headers.join(";"), ...scheduleRows.map(row => headers.map(header => row[header]).join(";"))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeId}_Odeme_Plani_${currency}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  }
+
+  /**
    * Bind payment-plan controls without moving calculation or private-result
    * logic into the public UI module. The engine supplies the callbacks that
    * perform those operations; this module owns only DOM wiring and the
@@ -644,5 +683,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, bindPaymentScheduleEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents };
 })(window);

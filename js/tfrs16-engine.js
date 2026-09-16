@@ -12152,125 +12152,27 @@ ${renderPaymentScheduleFooterContainers()}
         })
       );
 
-    if (typeof XLSX !== "undefined") {
-
-      try {
-
-        const workbook =
-          XLSX.utils.book_new();
-
-        const assumptionSheet =
-          XLSX.utils.json_to_sheet(
-            assumptionRows
-          );
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          assumptionSheet,
-          "Varsayimlar"
-        );
-
-        const scheduleSheet =
-          XLSX.utils.json_to_sheet(
-            scheduleRows
-          );
-
-        XLSX.utils.book_append_sheet(
-          workbook,
-          scheduleSheet,
-          "Odeme Plani"
-        );
-
-        if (fx?.applicable) {
-          const fxRows = fx.schedule.map(row => ({
-            "Dönem": row.period,
-            "Tarih": row.date,
-            "Kur (Kapanış)": row.closingRate,
-            "Kur Tarihi": row.rateDate,
-            [`Açılış Yükümlülüğü (${fx.functionalCurrency})`]: row.openingLiabilityFx,
-            [`Faiz (${fx.functionalCurrency})`]: row.interestFx,
-            [`Ödeme (${fx.functionalCurrency})`]: row.paymentFx,
-            [`Kapanış Yükümlülüğü (${fx.functionalCurrency})`]: row.closingLiabilityFx,
-            "Kur Farkı (Dönem)": row.fxGainLoss,
-            "Kur Farkı (Kümülatif)": row.cumulativeFxGainLoss,
-            [`ROU Açılış (${fx.functionalCurrency})`]: row.rouOpeningFx,
-            [`Amortisman (${fx.functionalCurrency})`]: row.depreciationFx,
-            [`ROU Kapanış (${fx.functionalCurrency})`]: row.rouClosingFx
-          }));
-
-          const fxSheet = XLSX.utils.json_to_sheet(fxRows);
-          XLSX.utils.book_append_sheet(workbook, fxSheet, "Kur_Cevrimi_TMS21");
-        }
-
-        XLSX.writeFile(
-          workbook,
-          `${contract.id}_Odeme_Plani_${presentationCurrency}.xlsx`
-        );
-
-        return;
-
-      } catch (error) {
-
-        console.error(
-          "Payment schedule export error:",
-          error
-        );
-      }
+    const fxRows = fx?.applicable
+      ? fx.schedule.map(row => ({
+          "Dönem": row.period,
+          "Tarih": row.date,
+          "Kur (Kapanış)": row.closingRate,
+          "Kur Tarihi": row.rateDate,
+          [`Açılış Yükümlülüğü (${fx.functionalCurrency})`]: row.openingLiabilityFx,
+          [`Faiz (${fx.functionalCurrency})`]: row.interestFx,
+          [`Ödeme (${fx.functionalCurrency})`]: row.paymentFx,
+          [`Kapanış Yükümlülüğü (${fx.functionalCurrency})`]: row.closingLiabilityFx,
+          "Kur Farkı (Dönem)": row.fxGainLoss,
+          "Kur Farkı (Kümülatif)": row.cumulativeFxGainLoss,
+          [`ROU Açılış (${fx.functionalCurrency})`]: row.rouOpeningFx,
+          [`Amortisman (${fx.functionalCurrency})`]: row.depreciationFx,
+          [`ROU Kapanış (${fx.functionalCurrency})`]: row.rouClosingFx
+        }))
+      : [];
+    const exporter = global.LeaseQantTfrs16OperationsUi?.exportPaymentScheduleFile;
+    if (typeof exporter === "function") {
+      exporter({ contractId: contract.id, presentationCurrency, assumptionRows, scheduleRows, fxRows });
     }
-
-    const headers =
-      Object.keys(
-        scheduleRows[0]
-      );
-
-    const csv =
-      [
-        headers.join(";"),
-        ...scheduleRows.map(
-          row =>
-            headers
-              .map(h => row[h])
-              .join(";")
-        )
-      ].join("\n");
-
-    const blob =
-      new Blob(
-        [
-          "\uFEFF" +
-          csv
-        ],
-        {
-          type:
-            "text/csv;charset=utf-8;"
-        }
-      );
-
-    const url =
-      URL.createObjectURL(
-        blob
-      );
-
-    const link =
-      document.createElement(
-        "a"
-      );
-
-    link.href = url;
-
-    link.download =
-      `${contract.id}_Odeme_Plani_${presentationCurrency}.csv`;
-
-    document.body.appendChild(
-      link
-    );
-
-    link.click();
-    link.remove();
-
-    URL.revokeObjectURL(
-      url
-    );
   }
 
   /* ==========================================================

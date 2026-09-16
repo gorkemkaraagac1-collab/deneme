@@ -77,6 +77,8 @@ const checks = [
   ["Payment schedule private and FX status messages use the UI bridge", /emptyMessage: "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek\."/.test(engine) && /fxMessage/.test(engine) && /renderPaymentScheduleState/.test(operationsUi)],
   ["Payment schedule event wiring lives outside the public engine", /function bindPaymentScheduleEvents\(contract, handlers = \{\}\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.bindPaymentScheduleEvents/.test(engine) && !/function initPaymentScheduleEvents\(contract\)[\s\S]{0,1800}addEventListener/.test(engine)],
   ["Payment schedule event bridge covers export and reporting refreshes", /exportSchedule\?\.\(contract\)/.test(operationsUi) && /renderFxTranslation\?\.\(contract\)/.test(operationsUi) && /exportSchedule: exportPaymentSchedule/.test(engine)],
+  ["Payment schedule export presentation lives outside the public engine", /function exportPaymentScheduleFile\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.exportPaymentScheduleFile/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}XLSX\.utils\.book_new/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}link\.download\s*=/.test(engine)],
+  ["Payment schedule export keeps XLSX and CSV fallback in the UI module", /XLSX\.utils\.book_new/.test(operationsUi) && /link\.download\s*=/.test(operationsUi) && /exportPaymentScheduleFile,/.test(operationsUi)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
