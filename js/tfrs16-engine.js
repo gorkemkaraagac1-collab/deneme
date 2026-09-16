@@ -9319,7 +9319,6 @@ ${renderAccountingCenterBulkPromo()}
           return;
         }
 
-        refresh();
         refreshAfterMutation();
         return;
       }
@@ -9531,7 +9530,6 @@ ${renderAccountingCenterBulkPromo()}
           showAlert(result.errors.join("\n"));
           return;
         }
-        refresh();
         refreshAfterMutation();
         return;
       }
