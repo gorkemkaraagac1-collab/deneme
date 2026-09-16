@@ -156,6 +156,31 @@
     return `<div class="detail-grid">${item("Şirket", esc(safeContract.company || ""))}${item("Tedarikçi", esc(safeContract.supplier || ""))}${item(`${esc(frequencyLabel)} Kira`, `${money(safeContract.monthlyPayment)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("ROU Varlığı", `${metric(metrics.rouAssets)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("İlk Kira Yükümlülüğü", `${metric(metrics.liability)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("Aylık Amortisman", `${metric(metrics.depreciation)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}</div>`;
   }
 
+  /**
+   * Render the read-only status banners shown above the contract detail tabs.
+   * Calculation and authorization decisions stay in the engine; this module
+   * owns the presentation of those decisions.
+   */
+  function renderContractDetailStatus({ lockMessage = "", calculationSource = "", calculationError = false, isAdmin = false } = {}) {
+    const lockHtml = lockMessage
+      ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:700;">🔒 ${esc(lockMessage)}</div>`
+      : "";
+    let sourceHtml = "";
+    if (isAdmin) {
+      if (calculationSource === "private-api") {
+        sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;">🔒 Hesaplama kaynağı: Private API</div>`;
+      } else if (calculationSource === "private-error") {
+        sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;font-weight:700;">⚠️ Private API sonucu alınamadı; hesaplama kapatıldı.</div>`;
+      } else if (calculationSource === "local-warming") {
+        sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`;
+      }
+    }
+    const errorHtml = calculationError
+      ? `<div role="status" style="margin-bottom:12px;padding:11px 14px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:600;">⏳ Bu sözleşmenin private hesaplama sonucu henüz hazır değil. Kurlar doğrulandıktan sonra tekrar açın; ödeme planı ve muhasebe fişi sonuç hazır olduğunda gösterilecektir.</div>`
+      : "";
+    return `${lockHtml}${sourceHtml}${errorHtml}`;
+  }
+
   function renderContractDetailTabs() {
     return `<div class="gk-detail-tabs" role="tablist"><button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="schedule" role="tab">Ödeme Planı</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="modification" role="tab">Modifikasyon &amp; Reassessment</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="slb" role="tab">Satış ve Geri Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="sublease" role="tab">Alt Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="accounting" role="tab">Fişler</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="audit" role="tab">Denetim İzi</button></div>`;
   }
@@ -390,6 +415,7 @@
     renderAuditTrailBody,
     renderContractAuditTab,
     renderContractSummaryTab,
+    renderContractDetailStatus,
     renderContractDetailTabs,
     renderContractDetailPanels,
     applyContractDetailTab,
