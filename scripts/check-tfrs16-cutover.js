@@ -55,6 +55,9 @@ const checks = [
   ["SLB page body selectors live outside the public engine", /v26SlbContractSelect/.test(operationsUi) && /slbSectionContainer/.test(operationsUi) && !/v26SlbContractSelect/.test(engine)],
   ["Sublease page body selectors live outside the public engine", /v26SubleaseContractSelect/.test(operationsUi) && /subleaseSectionContainer/.test(operationsUi) && !/v26SubleaseContractSelect/.test(engine)],
   ["Accounting page body selectors live outside the public engine", /v26AccountingContractSelect/.test(operationsUi) && /generateJournal/.test(operationsUi) && !/v26AccountingContractSelect/.test(engine)],
+  ["SLB result markup lives outside the public engine", /function renderSlbResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbResultHtml/.test(engine) && !/TFRS 16\.100-102 — Satış ve Geri Kiralama/.test(engine)],
+  ["SLB journal markup lives outside the public engine", /function renderSlbJournalHtml\(entries\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbJournalHtml/.test(engine) && !/BAŞLANGIÇ FİŞİ/.test(engine)],
+  ["Sublease result markup lives outside the public engine", /function renderSubleaseResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseResultHtml/.test(engine) && !/TFRS 16\.B58 — Operating Alt Kiralama/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
