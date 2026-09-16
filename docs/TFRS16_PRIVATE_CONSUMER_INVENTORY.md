@@ -11,14 +11,13 @@ izler. Aşağıdaki her çağrı private sonuç önbelleği sınırından geçer
 modunda sonuç yoksa yerel hesaplamaya dönmez ve açık bir bekleme/hata durumu
 gösterir. Bu liste, UI-only ayrıştırma sırasında ekran ekran kapatılacaktır.
 
-**Private sınırından geçen üretim çağrısı: 25 · Son tarama: 2026-09-15**
+**Private sınırından geçen üretim çağrısı: 24 · Son tarama: 2026-09-16**
 
 | Satır | Tüketici | Private okuma |
 |---:|---|---|
 | 3063 | `buildScheduleFromChangeChain` | `getPrivateCalculationForConsumer(baseContract)` |
 | 4103 | `resolveAppliedChangeMeasurement` | `getPrivateCalculationForConsumer(baseContract)` |
 | 4182 | `buildScheduleFromModificationChain` | `getPrivateCalculationForConsumer(baseContract)` |
-| 4337 | `buildModifiedSchedule` | `getPrivateCalculationForConsumer(contract).schedule` |
 | 5509 | `calculateLease` | `getPrivateCalculationForConsumer(contract)` |
 | 5799 | `getEscalatedPayments` | `getPrivateCalculationForConsumer(contract)` |
 | 7190 | `resolveContractScheduleSource` | `getPrivateCalculationForConsumer(contract)` |
