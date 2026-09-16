@@ -12425,15 +12425,7 @@ ${renderPaymentScheduleFooterContainers()}
         ${calculationSourceHtml}
         ${calculationErrorHtml}
 
-        <div class="gk-detail-tabs" role="tablist">
-          <button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="schedule" role="tab">Ödeme Planı</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="modification" role="tab">Modifikasyon &amp; Reassessment</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="slb" role="tab">Satış ve Geri Kiralama</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="sublease" role="tab">Alt Kiralama</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="accounting" role="tab">Fişler</button>
-          <button type="button" class="gk-detail-tab-btn" data-detail-tab-target="audit" role="tab">Denetim İzi</button>
-        </div>
+        ${global.LeaseQantTfrs16ReportingUi?.renderContractDetailTabs?.() || ""}
 
         <div class="gk-detail-tab gk-detail-tab-active" data-detail-tab="summary">
           ${global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || ""}
