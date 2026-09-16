@@ -30318,8 +30318,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
   }
 };
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", __gkTfrs16Boot, { once: true });
-} else {
-  __gkTfrs16Boot();
-}
+// Bootstrap scheduling lives in the small public coordinator module. Keep
+// the boot function private to this runtime and expose only the explicit
+// coordinator hook; no calculation or state implementation is moved here.
+window.__GK_TFRS16_UI_BOOT__ = __gkTfrs16Boot;
