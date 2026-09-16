@@ -156,6 +156,10 @@
     return `<div class="detail-grid">${item("Şirket", esc(safeContract.company || ""))}${item("Tedarikçi", esc(safeContract.supplier || ""))}${item(`${esc(frequencyLabel)} Kira`, `${money(safeContract.monthlyPayment)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("ROU Varlığı", `${metric(metrics.rouAssets)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("İlk Kira Yükümlülüğü", `${metric(metrics.liability)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("Aylık Amortisman", `${metric(metrics.depreciation)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}</div>`;
   }
 
+  function renderContractDetailTabs() {
+    return `<div class="gk-detail-tabs" role="tablist"><button type="button" class="gk-detail-tab-btn active" data-detail-tab-target="summary" role="tab">Özet</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="schedule" role="tab">Ödeme Planı</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="modification" role="tab">Modifikasyon &amp; Reassessment</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="slb" role="tab">Satış ve Geri Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="sublease" role="tab">Alt Kiralama</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="accounting" role="tab">Fişler</button><button type="button" class="gk-detail-tab-btn" data-detail-tab-target="audit" role="tab">Denetim İzi</button></div>`;
+  }
+
   function bindContractAuditTab(contract) {
     const button = document.getElementById("exportContractAuditTrailButton");
     if (!button) return;
@@ -311,6 +315,7 @@
     renderAuditTrailBody,
     renderContractAuditTab,
     renderContractSummaryTab,
+    renderContractDetailTabs,
     bindContractAuditTab,
     renderFootnotes
   };
