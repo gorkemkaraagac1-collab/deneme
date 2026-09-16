@@ -11272,6 +11272,13 @@ ${renderPaymentScheduleFooterContainers()}
     `;
   }
 
+  function renderContractAuditTab(contract, events) {
+    const renderer = global.LeaseQantTfrs16ReportingUi?.renderContractAuditTab;
+    return typeof renderer === "function"
+      ? renderer(contract, events)
+      : `<div class="gk-v26-card" style="color:#991b1b;">Denetim izi arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
+  }
+
   function getScheduleReportingDate() {
     const selected = document.getElementById("scheduleReportingDate")?.value;
     if (selected) return selected;
@@ -12587,21 +12594,7 @@ ${renderPaymentScheduleFooterContainers()}
         </div>
 
         <div class="gk-detail-tab" data-detail-tab="audit">
-          <div style="margin-top:8px;">
-            <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div>
-            <h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3>
-            <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p>
-            <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;">
-              <label style="font-size:11px;color:#64748b;font-weight:600;">Sunum Para Birimi<select id="auditPresentationCurrency" style="display:block;margin-top:4px;padding:7px;border:1px solid #d1d5db;border-radius:7px;">${v26CurrencyOptions(String(contract.currency || "TRY").toUpperCase())}</select></label>
-              <button type="button" id="exportContractAuditTrailButton" class="secondary-button">↓ Denetim İzini Dışa Aktar</button>
-            </div>
-            <div style="margin-top:14px;overflow:auto;">
-              <table class="gk-audit-table" style="width:100%;border-collapse:collapse;font-size:11px;">
-                <thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Tarih</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Kullanıcı</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">İşlem</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Neden</th></tr></thead>
-                <tbody>${contractAuditEvents.length ? contractAuditEvents.map(event => `<tr><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(formatDate(event.timestamp))}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(event.actor || "system")}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;font-weight:700;">${escapeHtml(event.action || "UNKNOWN")}</td><td style="padding:7px;border-bottom:1px solid #eef2f7;">${escapeHtml(event.reason || "")}</td></tr>`).join("") : `<tr><td colspan="4" style="padding:10px;color:#64748b;">Bu sözleşme için audit kaydı bulunmuyor.</td></tr>`}</tbody>
-              </table>
-            </div>
-          </div>
+          ${renderContractAuditTab(contract, contractAuditEvents)}
         </div>
 
       `;
@@ -12652,13 +12645,7 @@ ${renderPaymentScheduleFooterContainers()}
     setTimeout(
       () => {
 
-        document
-          .getElementById("exportContractAuditTrailButton")
-          ?.addEventListener("click", () => {
-            Promise.resolve(typeof exportAuditTrail === "function" ? exportAuditTrail(contract.id, document.getElementById("auditPresentationCurrency")?.value || contract.currency) : false)
-              .then(ok => { if (!ok) showAlert("Bu sözleşme için dışa aktarılacak denetim izi kaydı bulunamadı."); })
-              .catch(error => showAlert(`Denetim izi dışa aktarılamadı: ${error?.message || error}`));
-          });
+        global.LeaseQantTfrs16ReportingUi?.bindContractAuditTab?.(contract);
 
         initPaymentScheduleEvents(
           contract
@@ -31758,6 +31745,8 @@ ${renderPaymentScheduleFooterContainers()}
     renderRiskControlsBody: v191RenderRiskControls,
     getContractsSnapshot: () => (Array.isArray(contracts) ? contracts.map(contract => JSON.parse(JSON.stringify(contract))) : []),
     getAuditEvents: filters => typeof getAuditEvents === "function" ? getAuditEvents(filters) : [],
+    buildAuditPresentationCurrencyOptions: selected => v26CurrencyOptions(selected),
+    exportContractAuditTrail: (...args) => exportAuditTrail(...args),
     privateCalculationCacheHas: contract => PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)),
     isPrivateCalculationApiReady,
     ensurePrivateCalculationCache,
