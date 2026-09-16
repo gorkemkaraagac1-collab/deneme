@@ -12419,10 +12419,6 @@ ${renderPaymentScheduleFooterContainers()}
       const calculationErrorHtml = calculationError
         ? `<div role="status" style="margin-bottom:12px;padding:11px 14px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:600;">⏳ Bu sözleşmenin private hesaplama sonucu henüz hazır değil. Kurlar doğrulandıktan sonra tekrar açın; ödeme planı ve muhasebe fişi sonuç hazır olduğunda gösterilecektir.</div>`
         : "";
-      const detailMetric = (value, currency) => calculationError
-        ? "—"
-        : formatPresentationCurrency(value, currency);
-
       content.innerHTML = `
         ${v26StdHtml}
         ${lockBannerHtml}
@@ -12440,114 +12436,7 @@ ${renderPaymentScheduleFooterContainers()}
         </div>
 
         <div class="gk-detail-tab gk-detail-tab-active" data-detail-tab="summary">
-
-        <div class="detail-grid">
-
-          <div class="detail-item">
-
-            <span>
-              Şirket
-            </span>
-
-            <strong>
-              ${escapeHtml(
-                contract.company
-              )}
-            </strong>
-
-          </div>
-
-          <div class="detail-item">
-
-            <span>
-              Tedarikçi
-            </span>
-
-            <strong>
-              ${escapeHtml(
-                contract.supplier
-              )}
-            </strong>
-
-          </div>
-
-          <div class="detail-item">
-
-            <span>
-              ${resolvePaymentFrequencyLabel(contract.paymentFrequency)} Kira
-            </span>
-
-            <strong>
-              ${formatPresentationCurrency(
-                contract.monthlyPayment,
-                contract.currency
-              )}
-              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
-            </strong>
-
-          </div>
-
-          <div class="detail-item">
-
-            <span>
-              ROU Varlığı
-            </span>
-
-            <strong>
-              ${detailMetric(
-                engine.rouAssets,
-                contract.currency
-              )}
-              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
-            </strong>
-
-          </div>
-
-          <div class="detail-item">
-
-            <span>
-              İlk Kira Yükümlülüğü
-            </span>
-
-            <strong>
-              ${detailMetric(
-                engine.liability,
-                contract.currency
-              )}
-              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
-            </strong>
-
-          </div>
-
-          <div class="detail-item">
-
-            <span>
-              Aylık Amortisman
-            </span>
-
-            <strong>
-              ${detailMetric(
-                engine.depreciation,
-                contract.currency
-              )}
-              <span style="font-size:11px;color:#64748b;margin-left:4px;">${escapeHtml(String(contract.currency || "TRY").toUpperCase())}</span>
-            </strong>
-
-          </div>
-
-        </div>
-
-        <!-- FAZ B: sözleşme detayı artık TAB'lara bölünmüş. Yukarıdaki
-             .detail-grid "Özet" tab'ının içeriği; aşağıdaki her blok
-             kendi tab'ına ait. Modifikasyon & Reassessment / SLB /
-             Alt Kiralama, önceki fazlarda sidebar'a taşınmış AYRI
-             sayfalardan (her biri KENDİ sözleşme seçicisiyle) buraya
-             GERİ getirildi — dört ayrı, senkronize olmayan seçici
-             (v26SelectedModReassContractId, v26SelectedSlbContractId,
-             v26SelectedSubleaseContractId, v26SelectedAccountingContractId)
-             sorunu böylece kökünden çözüldü: TEK sözleşme seçimi
-             (openDetail'in id'si) tüm tab'lar için geçerli.
-             Render/iş mantığı fonksiyonlarının KENDİSİNE dokunulmadı. -->
+          ${global.LeaseQantTfrs16ReportingUi?.renderContractSummaryTab?.(contract, engine, { calculationError: Boolean(calculationError) }) || ""}
         </div><!-- /gk-detail-tab[summary] -->
 
         <div class="gk-detail-tab" data-detail-tab="schedule">
@@ -31747,6 +31636,8 @@ ${renderPaymentScheduleFooterContainers()}
     getAuditEvents: filters => typeof getAuditEvents === "function" ? getAuditEvents(filters) : [],
     buildAuditPresentationCurrencyOptions: selected => v26CurrencyOptions(selected),
     exportContractAuditTrail: (...args) => exportAuditTrail(...args),
+    formatPresentationCurrency,
+    resolvePaymentFrequencyLabel,
     privateCalculationCacheHas: contract => PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)),
     isPrivateCalculationApiReady,
     ensurePrivateCalculationCache,
