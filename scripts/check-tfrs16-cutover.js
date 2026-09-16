@@ -36,6 +36,7 @@ const checks = [
   ["private facade loads between adapter and legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-engine.js")],
   ["TMS21 FX UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
   ["TMS21 FX UI markup lives outside the public engine", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
+  ["TMS21 FX loading fallback lives outside the public engine", /function mount\(container, contract\)/.test(fxUi) && /LeaseQantTfrs16FxUi\?\.mount/.test(engine) && !/TMS 21 arayüzü yüklenemedi/.test(engine)],
   ["Portfolio UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
   ["Portfolio table markup lives outside the public engine", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
   ["Portfolio UI has a private read-only bridge", /getPortfolioContracts/.test(engine) && /openDetail/.test(engine) && /formatPortfolioAmount/.test(engine)],

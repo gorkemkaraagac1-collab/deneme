@@ -9803,13 +9803,10 @@ ${renderAccountingCenterBulkPromo()}
   }
 
   function renderFxTranslationSection(contract) {
-    const container = document.getElementById("fxTranslationContainer");
-    const renderer = window.LeaseQantTfrs16FxUi?.render;
-    if (typeof renderer === "function") return renderer(container, contract);
-    if (container) {
-      container.innerHTML = `<div role="status" style="margin-top:20px;padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:12px;">TMS 21 arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
-    }
-    return null;
+    const renderer = window.LeaseQantTfrs16FxUi?.mount || window.LeaseQantTfrs16FxUi?.render;
+    return typeof renderer === "function"
+      ? renderer(document.getElementById("fxTranslationContainer"), contract)
+      : null;
   }
 
   /**

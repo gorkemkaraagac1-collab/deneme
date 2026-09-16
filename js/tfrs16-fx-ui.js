@@ -114,5 +114,10 @@
     }
   }
 
-  window.LeaseQantTfrs16FxUi = { render };
+  // Public engine bridge: the FX module owns both rendering and its loading fallback.
+  function mount(container, contract) {
+    return render(container, contract);
+  }
+
+  window.LeaseQantTfrs16FxUi = { render, mount };
 })();
