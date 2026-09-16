@@ -32161,6 +32161,18 @@ ${renderPaymentScheduleFooterContainers()}
     // data while the page shell and error/loading markup live outside it.
     renderFinancialReportingBody: v191RenderFinancialReportingPrivate,
     renderRiskControlsBody: v191RenderRiskControls,
+    getContractsSnapshot: () => (Array.isArray(contracts) ? contracts.map(contract => JSON.parse(JSON.stringify(contract))) : []),
+    privateCalculationCacheHas: contract => PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)),
+    isPrivateCalculationApiReady,
+    ensurePrivateCalculationCache,
+    loadTms29Many: (...args) => window.LeaseQantPrivateTfrs16Facade?.loadTms29Many(...args),
+    computePrivatePortfolioTms29: v191ComputePrivatePortfolioTms29,
+    prepareFinancialReportingData: v191PrepareFinancialReportingData,
+    renderAssetNoteHtml: v191RenderAssetNoteHtml,
+    renderLiabilityNoteHtml: v191RenderLiabilityNoteHtml,
+    renderLiquidityNoteHtml: v191RenderLiquidityNoteHtml,
+    parseDate,
+    dateInputValue: v191DateInputValue,
     renderConsolidationBody: v26RenderConsolidationReportBody,
     renderAuditTrailBody: v26RenderAuditTrailBody,
     getFinancialReportingPeriodKey: () => `${v191PeriodStartOverride || ""}|${v191PeriodEndOverride || ""}`,
@@ -32874,165 +32886,10 @@ const V26_FX_UI_PAGE_SIZE = 50;
   }
 
   function renderFootnotesPage(container) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderFootnotes;
+    if (typeof renderer === "function") return renderer(container);
     if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    let privateHydrationStarted = false;
-    let privateHydrationCompleted = false;
-    let privateTms29HydrationStarted = false;
-    let privateTms29HydrationCompleted = false;
-    let privateTms29Result = null;
-    let privateTms29Error = null;
-    let privateTms29PeriodKey = null;
-    const render = () => {
-      // Bu sayfa aktifken drill-down/detay-toggle tıklamalarının
-      // (v191FilterDetail vb.) DOĞRU ekranı (bu sayfayı) yenilemesi
-      // için kendi render'ımızı kaydediyoruz — bkz. yukarıdaki not.
-      v191ActiveScreenRefreshCallback = render;
-
-      const effectivePeriodEnd = v26FootnotesPeriodEndOverride ? parseDate(v26FootnotesPeriodEndOverride) : new Date();
-      const effectivePeriodStart = new Date(effectivePeriodEnd.getFullYear(), 0, 1);
-      const currentPrivateTms29PeriodKey = `${effectivePeriodStart.getFullYear()}-${String(effectivePeriodStart.getMonth() + 1).padStart(2, "0")}|${effectivePeriodEnd.getFullYear()}-${String(effectivePeriodEnd.getMonth() + 1).padStart(2, "0")}`;
-      if (privateTms29PeriodKey !== currentPrivateTms29PeriodKey) {
-        privateTms29PeriodKey = currentPrivateTms29PeriodKey;
-        privateTms29HydrationStarted = false;
-        privateTms29HydrationCompleted = false;
-        privateTms29Result = null;
-        privateTms29Error = null;
-      }
-
-      let tabContentHtml = "";
-      const privateResultsNeedHydration = isPrivateCalculationApiReady() &&
-        Array.isArray(contracts) && contracts.length > 0 &&
-        contracts.some(contract => !PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)));
-      if (privateResultsNeedHydration && !privateHydrationCompleted) {
-        if (!privateHydrationStarted) {
-          privateHydrationStarted = true;
-          ensurePrivateCalculationCache(contracts).then(() => {
-            privateHydrationCompleted = true;
-            render();
-          }).catch(() => {
-            // The cache loader records per-contract errors; render the normal
-            // fail-closed message below after the one allowed retry settles.
-            privateHydrationCompleted = true;
-            render();
-          });
-        }
-        tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private hesaplama sonuçları yükleniyor...</div>`;
-      } else if (isPrivateCalculationApiReady() && !privateTms29HydrationCompleted) {
-        if (!privateTms29HydrationStarted) {
-          privateTms29HydrationStarted = true;
-          const reportingPeriod = `${effectivePeriodEnd.getFullYear()}-${String(effectivePeriodEnd.getMonth() + 1).padStart(2, "0")}`;
-          const periodStart = `${effectivePeriodStart.getFullYear()}-${String(effectivePeriodStart.getMonth() + 1).padStart(2, "0")}`;
-          const eligibleContracts = (Array.isArray(contracts) ? contracts : []).filter(contract => {
-            if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return false;
-            const start = parseDate(contract?.startDate);
-            if (!start) return true;
-            const acquisitionMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
-            return acquisitionMonth <= reportingPeriod;
-          });
-          const facade = window.LeaseQantPrivateTfrs16Facade;
-          const load = typeof facade?.loadTms29Many === "function"
-            ? facade.loadTms29Many(eligibleContracts, reportingPeriod, periodStart)
-            : Promise.reject(new Error("TMS29 private batch calculation facade is unavailable"));
-          load.then(results => {
-            privateTms29Result = v191ComputePrivatePortfolioTms29(eligibleContracts, results, periodStart, reportingPeriod);
-            privateTms29HydrationCompleted = true;
-            render();
-          }).catch(error => {
-            privateTms29Error = error;
-            privateTms29HydrationCompleted = true;
-            render();
-          });
-        }
-        tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private TMS29 portföy sonuçları yükleniyor...</div>`;
-      } else {
-        try {
-          if (privateTms29Error) throw privateTms29Error;
-          const prepared = v191PrepareFinancialReportingData(
-            effectivePeriodStart,
-            effectivePeriodEnd,
-            { tms29: privateTms29Result }
-          );
-          if (v26FootnotesActiveTab === "asset") {
-            tabContentHtml = v191RenderAssetNoteHtml({
-              rouRows: prepared.rouRows, rouTotalsRow: prepared.rouTotalsRow,
-              rouByAssetClass: prepared.rouByAssetClass, rouByCurrency: prepared.rouByCurrency,
-              rouDetailColumns: prepared.rouDetailColumns, rouReport: prepared.rouReport,
-              periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
-              tms29: prepared.tms29
-            });
-          } else if (v26FootnotesActiveTab === "liability") {
-            tabContentHtml = v191RenderLiabilityNoteHtml({
-              liabRows: prepared.liabRows, liabTotalsRow: prepared.liabTotalsRow,
-              liabByAssetClass: prepared.liabByAssetClass, liabByCurrency: prepared.liabByCurrency,
-              liabDetailColumns: prepared.liabDetailColumns, liabReport: prepared.liabReport,
-              periodStart: prepared.periodStart, periodEnd: prepared.periodEnd, periodLabel: prepared.periodLabel,
-              tms29: prepared.tms29
-            });
-          } else {
-            tabContentHtml = v191RenderLiquidityNoteHtml({
-              liquidityRows: prepared.liquidityRows, liquidityDisclosure: prepared.liquidityDisclosure,
-              effectivePeriodEnd
-            });
-          }
-        } catch (error) {
-          tabContentHtml = `<div style="color:#991b1b;padding:12px 0;">Dipnot hesaplanamadı: ${escapeHtml(error?.message || String(error))}</div>`;
-        }
-      }
-
-      const tabBtn = (key, label) => {
-        const active = v26FootnotesActiveTab === key;
-        return `<button type="button" data-footnote-tab="${key}" class="gk-v26-btn ${active ? "" : "gk-v26-btn-secondary"}" style="margin-right:8px;">${escapeHtml(label)}</button>`;
-      };
-
-      // DÜZELTME (görsel tutarlılık): önceden tab butonları hiçbir
-      // "kart" içinde değildi, dashboard'un krem-rengi arka planı
-      // (--paper-2) araya sızıyordu — diğer sayfalardan (Modifikasyon,
-      // SLB, Sublease) farklı görünüyordu. Artık period picker, tab
-      // butonları ve dipnot içeriğinin TAMAMI TEK bir beyaz kart
-      // içinde; dashboard'un genel arka planı yalnızca kartın DIŞINDA
-      // görünür (diğer sayfalarla tutarlı).
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;">
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Dipnotlar</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              TFRS 16 finansal raporlama dipnotları — varlık, yükümlülük ve likidite riski. Tüm portföy için, dönem sonuna göre hesaplanır.
-            </p>
-          </div>
-
-          <div class="gk-v26-card">
-            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label>
-            <input type="date" id="v26FootnotesPeriodEndInput" value="${v191DateInputValue(effectivePeriodEnd)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
-            <button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button>
-            <span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${effectivePeriodStart.toLocaleDateString("tr-TR")}</span>
-
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
-              ${tabBtn("asset", "Varlık")}
-              ${tabBtn("liability", "Yükümlülük")}
-              ${tabBtn("liquidity", "Likidite")}
-            </div>
-
-            ${tabContentHtml}
-          </div>
-        </div>`;
-
-      container.querySelectorAll("[data-footnote-tab]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          v26FootnotesActiveTab = btn.dataset.footnoteTab;
-          render();
-        });
-      });
-
-      container.querySelector("#v26FootnotesApplyPeriod")?.addEventListener("click", () => {
-        const val = container.querySelector("#v26FootnotesPeriodEndInput")?.value;
-        if (val) v26FootnotesPeriodEndOverride = val;
-        render();
-      });
-    };
-
-    render();
+    container.innerHTML = `<div class="gk-v26-card">Dipnotlar arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function renderInflationIndexManagementPage(container) {
