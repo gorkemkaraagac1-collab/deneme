@@ -11665,43 +11665,10 @@ ${renderPaymentScheduleFooterContainers()}
     const container = document.getElementById("slbSectionContainer");
     if (!container) return;
 
-    const saved = contract.saleAndLeaseback || null;
-
-    const formHtml = `
-      <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
-        <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TFRS 16.98-103 — SATIŞ VE GERİ KİRALAMA (SLB)</div>
-        <p style="margin:6px 0 10px;color:#64748b;font-size:11px;">
-          Bu kontrat bir satış-ve-geri-kiralama işleminin geri kiralama bacağıysa, aşağıdaki bilgileri girin.
-          Kontratın kendi ödeme/iskonto oranı bilgileri (aylık kira, süre, iskonto oranı) geri kiralamanın şartları olarak kullanılır.
-        </p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:520px;">
-          <label style="font-size:11px;color:#475569;">
-            Önceki Net Defter Değeri
-            <input id="slbCarryingAmount" type="number" step="0.01" value="${saved?.previousCarryingAmount ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
-          </label>
-          <label style="font-size:11px;color:#475569;">
-            Gerçeğe Uygun Değer
-            <input id="slbFairValue" type="number" step="0.01" value="${saved?.fairValueOfAsset ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
-          </label>
-          <label style="font-size:11px;color:#475569;">
-            Satış Bedeli (Tahsil Edilen)
-            <input id="slbSaleProceeds" type="number" step="0.01" value="${saved?.saleProceeds ?? ""}" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;" />
-          </label>
-          <label style="font-size:11px;color:#475569;display:flex;align-items:center;gap:6px;margin-top:16px;">
-            <input id="slbQualifiesAsSale" type="checkbox" ${saved?.qualifiesAsSale ? "checked" : ""} />
-            Devir TFRS 15 anlamında bir satış sayılıyor
-          </label>
-        </div>
-        <label style="font-size:11px;color:#475569;display:block;margin-top:10px;max-width:520px;">
-          Mesleki Muhakeme Notu (gerekçe)
-          <textarea id="slbNote" rows="2" style="width:100%;padding:6px;border:1px solid #e2e8f0;border-radius:6px;margin-top:3px;">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea>
-        </label>
-        <button id="slbCalculateButton" style="margin-top:10px;padding:8px 16px;background:#0f172a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
-          Hesapla ve Kaydet
-        </button>
-        <div id="slbResultContainer" style="margin-top:16px;"></div>
-      </div>
-    `;
+    const formRenderer = global.LeaseQantTfrs16OperationsUi?.renderSlbForm;
+    const formHtml = typeof formRenderer === "function"
+      ? formRenderer(contract)
+      : "";
 
     container.innerHTML = formHtml;
 
