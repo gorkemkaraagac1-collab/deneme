@@ -485,6 +485,29 @@ ${footer}
     if (autoRun) calculateAndRender?.(false);
   }
 
+  /**
+   * bindModificationEvents / bindReassessmentEvents — "Oluştur/Güncelle"
+   * form gönderimini ve satır bazlı [data-mod-action]/[data-reass-action]
+   * (edit/apply/cancel) butonlarını bağlar. Asıl form-gönder/apply/cancel
+   * mantığı (private API çağrısı, kayıt) engine.js'de kalır — aynı
+   * bindSlbEvents deseni (2026-09-16).
+   */
+  function bindModificationEvents(contract, handlers = {}) {
+    const { submitForm, handleAction } = handlers;
+    document.getElementById("createModificationButton")?.addEventListener("click", () => { submitForm?.(); });
+    document.querySelectorAll("[data-mod-action]").forEach(button => {
+      button.addEventListener("click", () => handleAction?.(button.dataset.modAction, button.dataset.modId, button));
+    });
+  }
+
+  function bindReassessmentEvents(contract, handlers = {}) {
+    const { submitForm, handleAction } = handlers;
+    document.getElementById("createReassessmentButton")?.addEventListener("click", () => { submitForm?.(); });
+    document.querySelectorAll("[data-reass-action]").forEach(button => {
+      button.addEventListener("click", () => handleAction?.(button.dataset.reassAction, button.dataset.reassId, button));
+    });
+  }
+
   function selectedBanner(contract) {
     const fn = bridge().v26SelectedContractBanner;
     return typeof fn === "function" ? fn(contract) : "";
@@ -846,5 +869,5 @@ ${footer}
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbEvents, bindSubleaseEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
 })(window);

@@ -9234,119 +9234,117 @@ ${renderAccountingCenterBulkPromo()}
       setValue("modificationReason", item.reason || "");
     }
 
-    createButton?.addEventListener(
-        "click",
-        async () => {
+    const submitModificationForm = async () => {
+      const input = {
+        modificationDate:
+          document.getElementById("modificationDate")?.value,
+        effectiveDate:
+          document.getElementById("modificationEffectiveDate")?.value,
+        reason:
+          document.getElementById("modificationReason")?.value || "",
+        modificationType:
+          document.getElementById("modificationType")?.value || "OTHER",
+        newPayment:
+          document.getElementById("modificationNewPayment")?.value,
+        newLeaseEndDate:
+          document.getElementById("modificationNewEndDate")?.value,
+        newDiscountRate:
+          document.getElementById("modificationNewDiscountRate")?.value,
+        scopeReductionPercent:
+          document.getElementById("modificationScopeReduction")?.value,
+        scopeIncreasePercent:
+          document.getElementById("modificationScopeIncrease")?.value,
+        status: "DRAFT"
+      };
 
-          const input = {
-            modificationDate:
-              document.getElementById("modificationDate")?.value,
-            effectiveDate:
-              document.getElementById("modificationEffectiveDate")?.value,
-            reason:
-              document.getElementById("modificationReason")?.value || "",
-            modificationType:
-              document.getElementById("modificationType")?.value || "OTHER",
-            newPayment:
-              document.getElementById("modificationNewPayment")?.value,
-            newLeaseEndDate:
-              document.getElementById("modificationNewEndDate")?.value,
-            newDiscountRate:
-              document.getElementById("modificationNewDiscountRate")?.value,
-            scopeReductionPercent:
-              document.getElementById("modificationScopeReduction")?.value,
-            scopeIncreasePercent:
-              document.getElementById("modificationScopeIncrease")?.value,
-            status: "DRAFT"
-          };
+      // createModification/updateModification artık backend'e
+      // yazmayı BEKLİYOR (async) — buton çift tıklamayı önlemek
+      // ve kullanıcıya bekleme durumunu göstermek için geçici
+      // olarak devre dışı bırakılır.
+      const originalLabel = createButton.textContent;
+      createButton.disabled = true;
+      createButton.textContent = "Kaydediliyor...";
 
-          // createModification/updateModification artık backend'e
-          // yazmayı BEKLİYOR (async) — buton çift tıklamayı önlemek
-          // ve kullanıcıya bekleme durumunu göstermek için geçici
-          // olarak devre dışı bırakılır.
-          const originalLabel = createButton.textContent;
-          createButton.disabled = true;
-          createButton.textContent = "Kaydediliyor...";
+      const result =
+        editingModificationId
+          ? await updateModification(contract, editingModificationId, input)
+          : await createModification(contract, input);
 
-          const result =
-            editingModificationId
-              ? await updateModification(contract, editingModificationId, input)
-              : await createModification(contract, input);
+      createButton.disabled = false;
+      createButton.textContent = originalLabel;
 
-          createButton.disabled = false;
-          createButton.textContent = originalLabel;
+      if (!result.valid) {
+        showAlert(result.errors.join("\n"));
+        return;
+      }
 
-          if (!result.valid) {
-            showAlert(result.errors.join("\n"));
-            return;
-          }
+      resetModificationFormMode();
+      refreshAfterMutation();
+    };
 
-          resetModificationFormMode();
-          refreshAfterMutation();
+    const handleModificationAction = async (action, id, button) => {
+      if (action === "edit") {
+        const item = (contract.modifications || []).find(m => m.id === id);
+        if (!item) return;
+        editingModificationId = id;
+        populateModificationForm(item);
+        if (createButton) {
+          createButton.textContent = "Modifikasyonu Güncelle";
+          createButton.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-      );
+        return;
+      }
 
-    document
-      .querySelectorAll("[data-mod-action]")
-      .forEach(
-        button => {
-          button.addEventListener(
-            "click",
-            async () => {
-              const action = button.dataset.modAction;
-              const id = button.dataset.modId;
-
-              if (action === "edit") {
-                const item = (contract.modifications || []).find(m => m.id === id);
-                if (!item) return;
-                editingModificationId = id;
-                populateModificationForm(item);
-                if (createButton) {
-                  createButton.textContent = "Modifikasyonu Güncelle";
-                  createButton.scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-                return;
-              }
-
-              if (action === "apply") {
-                button.disabled = true;
-                let result;
-                try {
-                  result = await applyModification(contract, id);
-                } catch (error) {
-                  button.disabled = false;
-                  showAlert(`Modifikasyon uygulanamadı: ${error?.message || String(error)}`);
-                  return;
-                }
-                button.disabled = false;
-
-                if (!result.valid) {
-                  showAlert(result.errors.join("\n"));
-                  return;
-                }
-
-                refresh();
-                refreshAfterMutation();
-                return;
-              }
-
-              if (action === "cancel") {
-                button.disabled = true;
-                const result =
-                  await cancelModification(contract, id);
-                button.disabled = false;
-
-                if (!result.valid) {
-                  showAlert(result.errors.join("\n"));
-                  return;
-                }
-
-                refreshAfterMutation();
-              }
-            }
-          );
+      if (action === "apply") {
+        button.disabled = true;
+        let result;
+        try {
+          result = await applyModification(contract, id);
+        } catch (error) {
+          button.disabled = false;
+          showAlert(`Modifikasyon uygulanamadı: ${error?.message || String(error)}`);
+          return;
         }
-      );
+        button.disabled = false;
+
+        if (!result.valid) {
+          showAlert(result.errors.join("\n"));
+          return;
+        }
+
+        refresh();
+        refreshAfterMutation();
+        return;
+      }
+
+      if (action === "cancel") {
+        button.disabled = true;
+        const result =
+          await cancelModification(contract, id);
+        button.disabled = false;
+
+        if (!result.valid) {
+          showAlert(result.errors.join("\n"));
+          return;
+        }
+
+        refreshAfterMutation();
+      }
+    };
+
+    // Olay bağlama mekaniği artık operations-ui.js'deki
+    // bindModificationEvents'te — bindSlbEvents/bindInflationAdjustmentEvents
+    // ile aynı desen (2026-09-16). Asıl form-gönder/edit/apply/cancel
+    // mantığı (yukarıda) burada kalıyor.
+    const binder = window.LeaseQantTfrs16OperationsUi?.bindModificationEvents;
+    if (typeof binder === "function") {
+      binder(contract, { submitForm: submitModificationForm, handleAction: handleModificationAction });
+    } else {
+      createButton?.addEventListener("click", submitModificationForm);
+      document.querySelectorAll("[data-mod-action]").forEach(button => {
+        button.addEventListener("click", () => handleModificationAction(button.dataset.modAction, button.dataset.modId, button));
+      });
+    }
   }
 
   function renderReassessmentManagementSection(contract) {
@@ -9464,7 +9462,7 @@ ${renderAccountingCenterBulkPromo()}
       setValue("reassessmentReason", item.reason || "");
     }
 
-    createButton?.addEventListener("click", async () => {
+    const submitReassessmentForm = async () => {
       const input = {
         reassessmentDate: document.getElementById("reassessmentDate")?.value,
         effectiveDate: document.getElementById("reassessmentEffectiveDate")?.value,
@@ -9496,57 +9494,62 @@ ${renderAccountingCenterBulkPromo()}
       }
       resetReassessmentFormMode();
       refreshAfterMutation();
-    });
+    };
 
-    document.querySelectorAll("[data-reass-action]").forEach(button => {
-      button.addEventListener("click", async () => {
-        const action = button.dataset.reassAction;
-        const id = button.dataset.reassId;
+    const handleReassessmentAction = async (action, id, button) => {
+      if (action === "edit") {
+        const item = (contract.reassessments || []).find(r => r.id === id);
+        if (!item) return;
+        editingReassessmentId = id;
+        populateReassessmentForm(item);
+        if (createButton) {
+          createButton.textContent = "Reassessmenti Güncelle";
+          createButton.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
 
-        if (action === "edit") {
-          const item = (contract.reassessments || []).find(r => r.id === id);
-          if (!item) return;
-          editingReassessmentId = id;
-          populateReassessmentForm(item);
-          if (createButton) {
-            createButton.textContent = "Reassessmenti Güncelle";
-            createButton.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
+      if (action === "apply") {
+        button.disabled = true;
+        let result;
+        try {
+          result = await applyReassessment(contract, id);
+        } catch (error) {
+          button.disabled = false;
+          showAlert(`Reassessment uygulanamadı: ${error?.message || String(error)}`);
           return;
         }
-
-        if (action === "apply") {
-          button.disabled = true;
-          let result;
-          try {
-            result = await applyReassessment(contract, id);
-          } catch (error) {
-            button.disabled = false;
-            showAlert(`Reassessment uygulanamadı: ${error?.message || String(error)}`);
-            return;
-          }
-          button.disabled = false;
-          if (!result.valid) {
-            showAlert(result.errors.join("\n"));
-            return;
-          }
-          refresh();
-          refreshAfterMutation();
+        button.disabled = false;
+        if (!result.valid) {
+          showAlert(result.errors.join("\n"));
           return;
         }
+        refresh();
+        refreshAfterMutation();
+        return;
+      }
 
-        if (action === "cancel") {
-          button.disabled = true;
-          const result = await cancelReassessment(contract, id);
-          button.disabled = false;
-          if (!result.valid) {
-            showAlert(result.errors.join("\n"));
-            return;
-          }
-          refreshAfterMutation();
+      if (action === "cancel") {
+        button.disabled = true;
+        const result = await cancelReassessment(contract, id);
+        button.disabled = false;
+        if (!result.valid) {
+          showAlert(result.errors.join("\n"));
+          return;
         }
+        refreshAfterMutation();
+      }
+    };
+
+    const binder = window.LeaseQantTfrs16OperationsUi?.bindReassessmentEvents;
+    if (typeof binder === "function") {
+      binder(contract, { submitForm: submitReassessmentForm, handleAction: handleReassessmentAction });
+    } else {
+      createButton?.addEventListener("click", submitReassessmentForm);
+      document.querySelectorAll("[data-reass-action]").forEach(button => {
+        button.addEventListener("click", () => handleReassessmentAction(button.dataset.reassAction, button.dataset.reassId, button));
       });
-    });
+    }
   }
 
   /**
