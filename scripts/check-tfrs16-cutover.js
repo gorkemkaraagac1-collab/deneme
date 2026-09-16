@@ -25,6 +25,7 @@ const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
 const coordinator = read("js/tfrs16-ui-coordinator.js");
 const detailUi = read("js/tfrs16-detail-ui.js");
+const detailEventsUi = read("js/tfrs16-detail-events-ui.js");
 const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
@@ -43,6 +44,9 @@ const checks = [
   ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
   ["TFRS16 detail UI module exists", exists("js/tfrs16-detail-ui.js") && /LeaseQantTfrs16DetailUi/.test(detailUi)],
   ["TFRS16 detail UI module loads before the runtime", html.indexOf("tfrs16-detail-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-ui.js')],
+  ["TFRS16 detail events UI module exists", exists("js/tfrs16-detail-events-ui.js") && /LeaseQantTfrs16DetailEvents/.test(detailEventsUi)],
+  ["TFRS16 detail events UI module loads before the runtime", html.indexOf("tfrs16-detail-events-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-events-ui.js')],
+  ["detail event wiring uses the external UI module", /LeaseQantTfrs16DetailEvents\?\.bind/.test(engine) && /initModificationEvents/.test(detailEventsUi) && /bindContractDetailTabs/.test(detailEventsUi) && !/setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]{0,2200}initModificationEvents\(contract/.test(engine)],
   ["UI runtime exposes the coordinator boot hook", /window\.__GK_TFRS16_UI_BOOT__\s*=\s*__gkTfrs16Boot/.test(engine)],
   ["UI coordinator guards duplicate startup", /__GK_TFRS16_UI_COORDINATOR_RAN__/.test(coordinator) && /DOMContentLoaded/.test(coordinator)],
   ["TMS21 FX UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
@@ -58,11 +62,11 @@ const checks = [
   ["Audit trail page entry lives in the reporting UI module", /renderAuditTrail/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderAuditTrail/.test(engine)],
   ["Audit trail page body lives in the reporting UI module", /function renderAuditTrailBody\(/.test(reportingUi) && /getAuditEvents/.test(reportingUi) && !/function v26RenderAuditTrailBody\([\s\S]{0,1200}getAuditEvents/.test(engine)],
   ["Contract audit tab markup lives outside the public UI runtime", /function renderContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractAuditTab/.test(engine) && !/id="exportContractAuditTrailButton"/.test(engine) && !/class="gk-audit-table"/.test(engine)],
-  ["Contract audit export wiring lives outside the public UI runtime", /function bindContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.bindContractAuditTab/.test(engine) && !/exportAuditTrail\(contract\.id, document\.getElementById\("auditPresentationCurrency"\)/.test(engine)],
+  ["Contract audit export wiring lives outside the public UI runtime", /function bindContractAuditTab\(/.test(reportingUi) && (/LeaseQantTfrs16ReportingUi\?\.bindContractAuditTab/.test(engine) || /bindContractAuditTab/.test(detailEventsUi)) && !/exportAuditTrail\(contract\.id, document\.getElementById\("auditPresentationCurrency"\)/.test(engine)],
   ["Contract summary markup lives outside the public UI runtime", /function renderContractSummaryTab\(/.test(reportingUi) && (/LeaseQantTfrs16ReportingUi\?\.renderContractSummaryTab/.test(engine) || /renderContractSummaryTab/.test(detailUi)) && !/class="detail-grid"/.test(engine)],
   ["Contract summary formatting uses explicit engine bridges", /formatPresentationCurrency/.test(reportingUi) && /resolvePaymentFrequencyLabel/.test(reportingUi) && /formatPresentationCurrency,/.test(engine) && /resolvePaymentFrequencyLabel,/.test(engine)],
   ["Contract detail tab navigation markup lives outside the public UI runtime", /function renderContractDetailTabs\(/.test(reportingUi) && (/LeaseQantTfrs16ReportingUi\?\.renderContractDetailTabs/.test(engine) || /renderContractDetailTabs/.test(detailUi)) && !/data-detail-tab-target="audit"/.test(engine)],
-  ["Contract detail tab navigation remains namespaced", /renderContractDetailTabs,/.test(reportingUi) && /gk-detail-tabs/.test(reportingUi) && /bindContractDetailTabs/.test(reportingUi) && /bindContractDetailTabs/.test(engine)],
+  ["Contract detail tab navigation remains namespaced", /renderContractDetailTabs,/.test(reportingUi) && /gk-detail-tabs/.test(reportingUi) && /bindContractDetailTabs/.test(reportingUi) && (/bindContractDetailTabs/.test(engine) || /bindContractDetailTabs/.test(detailEventsUi))],
   ["Contract detail tab panel shells live outside the public UI runtime", /function renderContractDetailPanels\(/.test(reportingUi) && (/LeaseQantTfrs16ReportingUi\?\.renderContractDetailPanels/.test(engine) || /renderContractDetailPanels/.test(detailUi)) && !/data-detail-tab="summary"/.test(engine)],
   ["Contract detail status banners live outside the public UI runtime", /function renderContractDetailStatus\(/.test(reportingUi) && (/LeaseQantTfrs16ReportingUi\?\.renderContractDetailStatus/.test(engine) || /renderContractDetailStatus/.test(detailUi)) && !/Hesaplama kaynağı: Private API/.test(engine) && !/Bu sözleşmenin private hesaplama sonucu henüz hazır değil/.test(engine)],
   ["TMS29 saved adjustment rows live outside the public UI runtime", /function renderInflationAdjustmentRows\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentRows/.test(engine) && !/class="infl-apply-btn"/.test(engine)],
@@ -72,7 +76,7 @@ const checks = [
   ["TMS29 action alerts use the reporting UI bridge", /function showInflationActionAlert\(/.test(reportingUi) && /showInflationActionAlert/.test(engine) && /showInflationAdjustmentAlert/.test(engine)],
   ["TMS29 adjustment panel shell lives outside the public UI runtime", /function renderInflationAdjustmentShell\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentShell/.test(engine) && !/id="inflReportingPeriod"/.test(engine) && !/id="inflPreviewBtn"/.test(engine)],
   ["Contract detail tab panel shells remain namespaced", /renderContractDetailPanels,/.test(reportingUi) && /gk-detail-tab/.test(reportingUi) && /slbSectionContainer/.test(reportingUi) && /subleaseSectionContainer/.test(reportingUi)],
-  ["Contract detail tab DOM state lives outside the public UI runtime", /function applyContractDetailTab\(/.test(reportingUi) && /function bindContractDetailTabs\(/.test(reportingUi) && /bindContractDetailTabs/.test(engine) && !/function gkApplyDetailTab\(/.test(engine) && !/querySelectorAll\("#detailContent \.gk-detail-tab-btn"\)/.test(engine)],
+  ["Contract detail tab DOM state lives outside the public UI runtime", /function applyContractDetailTab\(/.test(reportingUi) && /function bindContractDetailTabs\(/.test(reportingUi) && (/bindContractDetailTabs/.test(engine) || /bindContractDetailTabs/.test(detailEventsUi)) && !/function gkApplyDetailTab\(/.test(engine) && !/querySelectorAll\("#detailContent \.gk-detail-tab-btn"\)/.test(engine)],
   ["Governance UI reads through explicit engine bridges", /renderConsolidationBody/.test(reportingUi) && /renderAuditTrailBody/.test(reportingUi) && /renderConsolidationBody:/.test(engine) && /renderAuditTrailBody:/.test(engine)],
   ["Operations UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
   ["Change management entrypoint lives outside the public UI runtime", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],

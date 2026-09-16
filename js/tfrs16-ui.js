@@ -10603,48 +10603,24 @@ ${renderAccountingCenterBulkPromo()}
       }).catch(() => {});
     }
 
-    setTimeout(
-      () => {
-
-        window.LeaseQantTfrs16ReportingUi?.bindContractAuditTab?.(contract);
-
-        initPaymentScheduleEvents(
-          contract
-        );
-
-        // FAZ B: sözleşme detayına GERİ getirilen bölümlerin event
-        // wiring'i. Bu fonksiyonların KENDİSİNE dokunulmadı — yalnızca
-        // burada (tek sözleşme bağlamında) tekrar bağlanıyorlar.
-        // onChanged callback'i openDetail(contract.id) ile aynı
-        // sözleşmeyi yeniden açar; aktif tab korunur (aşağıdaki
-        // gkDetailActiveTab).
-        const reopenSameContract = () => openDetail(contract.id);
-
-        initModificationEvents(contract, reopenSameContract);
-        initReassessmentEvents(contract, reopenSameContract);
-
-        // SLB/Sublease kendi container'larını (slbSectionContainer /
-        // subleaseSectionContainer — yukarıda tab içine yerleştirildi)
-        // doldurur ve kendi event'lerini bağlar.
-        if (typeof renderSlbSection === "function") renderSlbSection(contract);
-        if (typeof renderSubleaseSection === "function") renderSubleaseSection(contract);
-
-        // Fişler tab'ı (renderAccountingCenter) — tekil fiş üretimi ve
-        // portföy geneli toplu fiş.
-        document.getElementById("generateJournal")
-          ?.addEventListener("click", () => generateSelectedJournal(contract));
-        document.getElementById("openBulkJournalButton")
-          ?.addEventListener("click", openBulkJournalModal);
-
-        // Tab geçişleri ve aktif panel DOM yazımı reporting UI modülündedir.
-        window.LeaseQantTfrs16ReportingUi?.bindContractDetailTabs?.({
-          getActiveTab: () => gkDetailActiveTab,
-          setActiveTab: value => { gkDetailActiveTab = value; }
-        });
-
-      },
-      0
-    );
+    const detailEvents = window.LeaseQantTfrs16DetailEvents?.bind;
+    if (typeof detailEvents !== "function") {
+      console.error("TFRS16 detay olay arayüzü yüklenemedi.");
+      return;
+    }
+    detailEvents({
+      contract,
+      initPaymentScheduleEvents,
+      initModificationEvents,
+      initReassessmentEvents,
+      renderSlbSection,
+      renderSubleaseSection,
+      generateSelectedJournal,
+      openBulkJournalModal,
+      reopenDetail: openDetail,
+      getActiveTab: () => gkDetailActiveTab,
+      setActiveTab: value => { gkDetailActiveTab = value; }
+    });
   }
 
   /* ==========================================================
