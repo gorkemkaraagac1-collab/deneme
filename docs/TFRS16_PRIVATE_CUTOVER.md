@@ -121,6 +121,11 @@ The public gate now checks this boundary in addition to the schedule source
 boundary. The public engine remains in place while the remaining compatibility
 helpers and live mutation flows are retired in later slices.
 
+The now-unused browser `buildReassessedSchedule()` and
+`buildModifiedSchedule()` definitions were removed from the public bundle in
+the follow-up slice. The shared change-chain and draft-preview helpers remain
+only where their report or preview consumers still reference them.
+
 ## Removal criteria
 
 The public engine may be removed in a separate, reversible pull request only

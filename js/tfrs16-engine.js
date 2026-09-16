@@ -3102,13 +3102,6 @@ window.fetch = (input, init = {}) => {
     return schedule;
   }
 
-  function buildReassessedSchedule(contract, reassessment) {
-    const excludeId = reassessment && reassessment.status !== "APPLIED"
-      ? reassessment.id
-      : null;
-    return buildScheduleFromChangeChain(contract, excludeId);
-  }
-
   /**
    * buildJournalLine — modification/reassessment fiş üreticilerinde
    * tekrarlanan {accountKey, account, debit, credit, source,
@@ -4361,104 +4354,6 @@ window.fetch = (input, init = {}) => {
       rouReduction: 0,
       gainLoss: 0
     };
-  }
-
-  function buildModifiedSchedule(
-    contract,
-    storedModification
-  ) {
-
-    if (!storedModification) {
-      return getPrivateCalculationForConsumer(contract).schedule || [];
-    }
-
-    const modification = resolveAppliedModificationMeasurement(contract, storedModification);
-
-    const priorApplied =
-      (contract.modifications || [])
-        .filter(
-          item =>
-            item.status === "APPLIED" &&
-            item.id !== modification.id
-        );
-
-    const chain =
-      buildScheduleFromModificationChain(
-        contract,
-        priorApplied
-      );
-
-    const effectiveDate =
-      parseDate(modification.effectiveDate);
-
-    if (!effectiveDate) {
-      return chain;
-    }
-
-    const oldROU =
-      getScheduleValueAsOfDate(
-        chain,
-        effectiveDate,
-        "rouClosing",
-        0
-      );
-
-    const futureResult =
-      calculateModifiedLeaseLiability(
-        getModificationBaseContract(contract),
-        effectiveDate,
-        modification.newTerms
-      );
-
-    const historical =
-      chain.filter(
-        item => {
-          const itemDate = parseDate(item.date);
-          return itemDate &&
-            itemDate.getTime() <= effectiveDate.getTime();
-        }
-      );
-
-    let rouOpening =
-      Math.max(
-        0,
-        oldROU + (Number(modification.rouAdjustment) || 0)
-      );
-
-    const remainingMonths =
-      futureResult.schedule.length;
-
-    const depreciation =
-      remainingMonths > 0
-        ? rouOpening / remainingMonths
-        : 0;
-
-    let rou = rouOpening;
-
-    const future =
-      futureResult.schedule.map(
-        (item, index) => {
-          const rouDepreciation =
-            Math.min(depreciation, rou);
-
-          const rouClosing =
-            Math.max(0, rou - rouDepreciation);
-
-          const row = {
-            ...item,
-            period:
-              historical.length + index + 1,
-            rouOpening: rou,
-            depreciation: rouDepreciation,
-            rouClosing
-          };
-
-          rou = rouClosing;
-          return row;
-        }
-      );
-
-    return historical.concat(future);
   }
 
   function generateModificationJournal(
