@@ -327,7 +327,24 @@
         <div class="gk-detail-tab" data-detail-tab="audit">
           ${auditHtml}
         </div>
-    `;
+      `;
+  }
+
+  function renderInflationPreviewSummary(result, options = {}) {
+    const money = typeof options.formatCurrency === "function"
+      ? options.formatCurrency
+      : value => String(value ?? "—");
+    const totals = result?.totals || {};
+    const hasMonetary = Number.isFinite(totals.liabilityMonetaryGainLoss);
+    return `
+        <span style="color:#64748b;font-size:11px;">Hesaplama kaynağı: Private API</span><br>
+        Nominal ROU: ${money(totals.nominalROUClosing)} → Düzeltilmiş: ${money(totals.restatedROUClosing)} ·
+        Yükümlülük (moneter, kapanış bakiyesi değişmez): ${money(totals.nominalLiabilityClosing)} ·
+        ROU Net Düzeltme: <strong>${money(totals.netAdjustment)}</strong>
+        ${hasMonetary
+          ? ` · Parasal Kazanç/(Kayıp), net: <strong>${money(totals.liabilityMonetaryGainLoss)}</strong>`
+          : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
+      `;
   }
 
   /**
@@ -528,6 +545,7 @@
     renderFootnotes,
     renderInflationAdjustmentRows,
     renderInflationPreviewRow,
+    renderInflationPreviewSummary,
     renderInflationAdjustmentShell
   };
 })(window);

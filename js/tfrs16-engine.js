@@ -11420,7 +11420,6 @@ ${renderPaymentScheduleFooterContainers()}
       const result = document.getElementById("inflPreviewResult");
       if (!result) return;
       let t = null;
-      let sourceLabel = "Private API";
       const basicPeriodValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
         && (!periodStart || /^\d{4}-(0[1-9]|1[0-2])$/.test(periodStart))
         && (!periodStart || periodStart <= period);
@@ -11449,16 +11448,10 @@ ${renderPaymentScheduleFooterContainers()}
         result.innerHTML = `<div style="color:#991b1b;">Private TMS 29 API hazır değil; yerel hesaplama kapalı.</div>`;
         return;
       }
-      const hasMonetary = Number.isFinite(t.liabilityMonetaryGainLoss);
-      result.innerHTML = `
-        <span style="color:#64748b;font-size:11px;">Hesaplama kaynağı: ${sourceLabel}</span><br>
-        Nominal ROU: ${formatCurrency(t.nominalROUClosing)} → Düzeltilmiş: ${formatCurrency(t.restatedROUClosing)} ·
-        Yükümlülük (moneter, kapanış bakiyesi değişmez): ${formatCurrency(t.nominalLiabilityClosing)} ·
-        ROU Net Düzeltme: <strong>${formatCurrency(t.netAdjustment)}</strong>
-        ${hasMonetary
-          ? ` · Parasal Kazanç/(Kayıp), net: <strong>${formatCurrency(t.liabilityMonetaryGainLoss)}</strong>`
-          : ` · <span style="color:#94a3b8;">Parasal K/Z: Dönem Başlangıcı girilmedi, hesaplanmadı.</span>`}
-      `;
+      const summaryRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewSummary;
+      result.innerHTML = typeof summaryRenderer === "function"
+        ? summaryRenderer(lastPrivateTms29Result, { formatCurrency })
+        : "";
 
       // Önizleme, henüz kalıcı bir DRAFT oluşturmadan da kullanıcıya
       // hesaplanan dönemi tabloda göstermeli. Önceki akış yalnızca üst özeti
@@ -11467,11 +11460,6 @@ ${renderPaymentScheduleFooterContainers()}
       // girmez ve kalıcı kayıt ancak "Taslak Oluştur" ile yapılır.
       const previewBody = container.querySelector("table tbody");
       if (previewBody) {
-        const previewPeriod = escapeHtml(lastPrivateTms29Result.reportingPeriod || period);
-        const previewNetAdjustment = formatCurrency(t.netAdjustment || 0);
-        const previewGainLoss = Number.isFinite(t.liabilityMonetaryGainLoss)
-          ? formatCurrency(-t.liabilityMonetaryGainLoss)
-          : `<span style="color:#94a3b8;">—</span>`;
         const previewRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewRow;
         if (typeof previewRenderer === "function") {
           previewBody.innerHTML = previewRenderer(lastPrivateTms29Result, { escapeHtml, formatCurrency, period });
