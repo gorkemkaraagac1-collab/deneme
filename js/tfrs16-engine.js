@@ -12434,17 +12434,11 @@ ${renderPaymentScheduleFooterContainers()}
         document.getElementById("openBulkJournalButton")
           ?.addEventListener("click", openBulkJournalModal);
 
-        // Tab geçişleri.
-        document.querySelectorAll("#detailContent .gk-detail-tab-btn").forEach(btn => {
-          btn.addEventListener("click", () => {
-            gkDetailActiveTab = btn.dataset.detailTabTarget;
-            gkApplyDetailTab();
-          });
+        // Tab geçişleri ve aktif panel DOM yazımı reporting UI modülündedir.
+        global.LeaseQantTfrs16ReportingUi?.bindContractDetailTabs?.({
+          getActiveTab: () => gkDetailActiveTab,
+          setActiveTab: value => { gkDetailActiveTab = value; }
         });
-
-        // Bir işlem sonrası openDetail tekrar çağrıldığında kullanıcının
-        // bulunduğu tab'a geri dön (yoksa Özet'te kalır).
-        gkApplyDetailTab();
 
       },
       0
@@ -12460,26 +12454,6 @@ ${renderPaymentScheduleFooterContainers()}
      halde her kayıtta "Özet"e geri fırlardı.
   ========================================================== */
   let gkDetailActiveTab = "summary";
-
-  function gkApplyDetailTab() {
-    const root = document.getElementById("detailContent");
-    if (!root) return;
-
-    const panels = root.querySelectorAll(".gk-detail-tab");
-    // Hedef tab DOM'da yoksa (ör. eski bir state) Özet'e düş.
-    const exists = Array.from(panels).some(p => p.dataset.detailTab === gkDetailActiveTab);
-    if (!exists) gkDetailActiveTab = "summary";
-
-    panels.forEach(panel => {
-      panel.classList.toggle("gk-detail-tab-active", panel.dataset.detailTab === gkDetailActiveTab);
-    });
-
-    root.querySelectorAll(".gk-detail-tab-btn").forEach(btn => {
-      const isActive = btn.dataset.detailTabTarget === gkDetailActiveTab;
-      btn.classList.toggle("active", isActive);
-      btn.setAttribute("aria-selected", isActive ? "true" : "false");
-    });
-  }
 
   function closeDetail() {
 

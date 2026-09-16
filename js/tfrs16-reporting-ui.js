@@ -198,7 +198,41 @@
         <div class="gk-detail-tab" data-detail-tab="audit">
           ${auditHtml}
         </div>
-`;
+    `;
+  }
+
+  /**
+   * Apply the active detail tab and bind its navigation. The engine keeps the
+   * selected tab value across modal refreshes; this module owns the DOM-only
+   * class and ARIA updates.
+   */
+  function applyContractDetailTab(activeTab = "summary") {
+    const root = document.getElementById("detailContent");
+    if (!root) return "summary";
+    const panels = root.querySelectorAll(".gk-detail-tab");
+    let selected = String(activeTab || "summary");
+    if (!Array.from(panels).some(panel => panel.dataset.detailTab === selected)) selected = "summary";
+    panels.forEach(panel => panel.classList.toggle("gk-detail-tab-active", panel.dataset.detailTab === selected));
+    root.querySelectorAll(".gk-detail-tab-btn").forEach(button => {
+      const active = button.dataset.detailTabTarget === selected;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    return selected;
+  }
+
+  function bindContractDetailTabs({ getActiveTab, setActiveTab } = {}) {
+    const root = document.getElementById("detailContent");
+    if (!root) return false;
+    const apply = () => setActiveTab?.(applyContractDetailTab(getActiveTab?.() || "summary"));
+    root.querySelectorAll(".gk-detail-tab-btn").forEach(button => {
+      button.addEventListener("click", () => {
+        setActiveTab?.(button.dataset.detailTabTarget || "summary");
+        apply();
+      });
+    });
+    apply();
+    return true;
   }
 
   function bindContractAuditTab(contract) {
@@ -358,6 +392,8 @@
     renderContractSummaryTab,
     renderContractDetailTabs,
     renderContractDetailPanels,
+    applyContractDetailTab,
+    bindContractDetailTabs,
     bindContractAuditTab,
     renderFootnotes
   };
