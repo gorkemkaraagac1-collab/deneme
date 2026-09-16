@@ -11383,30 +11383,15 @@ ${renderPaymentScheduleFooterContainers()}
     const adjustments = (contract.inflationAdjustments || []).slice()
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-    const rowsHtml = adjustments.map(a => {
-      const gl = a.restatedFigures?.liabilityMonetaryGainLoss;
-      const glCell = Number.isFinite(gl)
-        ? formatCurrency(-gl)
-        : `<span style="color:#94a3b8;">—</span>`;
-      // V19 Kısa Vade Madde 1 (UI cilası): kilitli dönemde Uygula/İptal
-      // proaktif disable + tooltip.
-      const rowLockCheck = assertPeriodWritable(contract, a.period || contract?.startDate || new Date());
-      const rowDisabledAttr = rowLockCheck.locked ? `disabled title="${escapeHtml(rowLockCheck.message)}"` : "";
-      return `
-      <tr>
-        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.period)}</td>
-        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${escapeHtml(a.status)}</td>
-        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatCurrency(a.restatedFigures?.netAdjustment || 0)}</td>
-        <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${glCell}</td>
-        <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">
-          ${a.status === "DRAFT" ? `
-            <button type="button" class="infl-apply-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;" ${rowDisabledAttr}>Uygula</button>
-            <button type="button" class="infl-cancel-btn" data-id="${escapeHtml(a.id)}" style="font-size:11px;padding:3px 8px;" ${rowDisabledAttr}>İptal</button>
-          ` : ""}
-        </td>
-      </tr>
-    `;
-    }).join("");
+    const rowsRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationAdjustmentRows;
+    const rowsHtml = typeof rowsRenderer === "function"
+      ? rowsRenderer(adjustments, {
+          escapeHtml,
+          formatCurrency,
+          assertPeriodWritable: (period) => assertPeriodWritable(contract, period),
+          defaultPeriod: contract?.startDate || new Date()
+        })
+      : "";
 
     container.innerHTML = `
       <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
@@ -11527,15 +11512,10 @@ ${renderPaymentScheduleFooterContainers()}
         const previewGainLoss = Number.isFinite(t.liabilityMonetaryGainLoss)
           ? formatCurrency(-t.liabilityMonetaryGainLoss)
           : `<span style="color:#94a3b8;">—</span>`;
-        previewBody.innerHTML = `
-          <tr>
-            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${previewPeriod}</td>
-            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">ÖNİZLEME</td>
-            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${previewNetAdjustment}</td>
-            <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${previewGainLoss}</td>
-            <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;color:#64748b;">Taslak oluşturulmadı</td>
-          </tr>
-        `;
+        const previewRenderer = global.LeaseQantTfrs16ReportingUi?.renderInflationPreviewRow;
+        if (typeof previewRenderer === "function") {
+          previewBody.innerHTML = previewRenderer(lastPrivateTms29Result, { escapeHtml, formatCurrency, period });
+        }
       }
     };
 
