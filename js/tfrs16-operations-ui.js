@@ -445,7 +445,18 @@ ${footer}
       renderTable?.(contract);
     });
     document.getElementById("exportScheduleButton")?.addEventListener("click", () => {
-      exportSchedule?.(contract);
+      // exportSchedule (exportPaymentSchedule) async'tir ve private sonuç
+      // hazır değilse reject eder; burada yakalanmazsa unhandled promise
+      // rejection olur (gerçek tarayıcıda sessizce yutulur — kullanıcı
+      // hiçbir şey görmez). DÜZELTME (2026-09-16, ikinci kez — bu satır
+      // PR #357'de dosya yeniden üretilirken bir önceki düzeltmemle
+      // birlikte kaybolmuş): try/catch/.catch() ile geri eklendi.
+      Promise.resolve(exportSchedule?.(contract)).catch((error) => {
+        const alertFn = bridge().showAlert;
+        const message = "Ödeme planı dışa aktarılamadı: " + (error?.message || String(error));
+        if (typeof alertFn === "function") alertFn(message);
+        else window.alert?.(message);
+      });
     });
   }
 

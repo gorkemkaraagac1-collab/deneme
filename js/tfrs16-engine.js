@@ -3593,7 +3593,6 @@ window.fetch = (input, init = {}) => {
       : "WARNING";
   }
 
-
   function generateModificationJournal(
     contract,
     storedModification
@@ -4714,119 +4713,6 @@ window.fetch = (input, init = {}) => {
      same code, same numbers as V16.1. Escalation only activates
      the alternate PV-summation path when explicitly requested.
   ========================================================== */
-
-  function computeEscalatedPayment(
-    basePayment,
-    periodIndex,
-    escalationType,
-    escalationRate,
-    fixedIncrease,
-    periodsPerYear
-  ) {
-
-    // Escalation steps up once per contract year from commencement.
-    // periodIndex is 1-based payment ordinal when called from the
-    // legacy monthly path; for non-monthly schedules the caller
-    // should pass months-from-commencement-based year index via
-    // periodsPerYear (default 12 = monthly periods per year).
-    const ppy =
-      Number(periodsPerYear) > 0
-        ? Number(periodsPerYear)
-        : 12;
-
-    const contractYearIndex =
-      Math.floor(
-        (Math.max(1, periodIndex) - 1) / ppy
-      );
-
-    const type =
-      String(escalationType || "none").toLowerCase();
-
-    if (type === "fixedrate" || type === "index") {
-      // index: expected/known index growth rate applied the same
-      // way as a fixed percentage escalation for projection and
-      // initial measurement. Subsequent actual index resets are
-      // handled via the reassessment engine.
-      return (
-        basePayment *
-        Math.pow(
-          1 + (Number(escalationRate) || 0) / 100,
-          contractYearIndex
-        )
-      );
-    }
-
-    if (type === "fixedamount") {
-
-      return (
-        basePayment +
-        ((Number(fixedIncrease) || 0) * contractYearIndex)
-      );
-    }
-
-    // "none" or anything else: flat payment.
-    return basePayment;
-  }
-
-  /* ==========================================================
-     V18 Parça 1 — GENİŞLETİLMİŞ ENDEKSLİ ÖDEME HESABI
-     ----------------------------------------------------------
-     computeEscalatedPayment() (yukarıda) DEĞİŞTİRİLMEDİ. Bu
-     fonksiyon onun yanına eklenir ve yalnızca
-     contract.escalationFrequencyMonths / escalationBase /
-     escalationFirstDate alanlarından EN AZ BİRİ tanımlıysa
-     çağrılır. Hiçbiri tanımlı değilse eski yol aynen çalışır.
-     ========================================================== */
-
-  function computeEscalatedPaymentV18(
-    basePayment,
-    paymentDate,
-    contractStartDate,
-    escalationType,
-    escalationRate,
-    escalationFrequencyMonths,
-    escalationBase,
-    escalationFirstDate
-  ) {
-    const type = String(escalationType || "none").toLowerCase();
-
-    // fixedAmount kendi TL-artış mantığını korur (VARSAYIM); çağrı
-    // noktasında zaten sadece fixedRate/index için tetiklenir, burada
-    // ikinci bir güvenlik kontrolü:
-    if (type !== "fixedrate" && type !== "index") {
-      return basePayment;
-    }
-
-    const freqMonths =
-      Number(escalationFrequencyMonths) > 0
-        ? Number(escalationFrequencyMonths)
-        : 12; // varsayılan: yılda bir — eski davranışla aynı kadans
-
-    const anchor =
-      parseDate(escalationFirstDate) ||
-      parseDate(contractStartDate);
-
-    const pay = parseDate(paymentDate);
-
-    if (!anchor || !pay) return basePayment;
-
-    const monthsSinceAnchor =
-      (pay.getFullYear() - anchor.getFullYear()) * 12 +
-      (pay.getMonth() - anchor.getMonth());
-
-    // Ankor tarihinden önceki ödemelerde artış uygulanmaz (k=0).
-    const k =
-      monthsSinceAnchor < 0
-        ? 0
-        : Math.floor(monthsSinceAnchor / freqMonths);
-
-    const base = String(escalationBase || "compound").toLowerCase();
-    const r = (Number(escalationRate) || 0) / 100;
-
-    return base === "initial"
-      ? basePayment * (1 + r * k)          // basit / kümülatif olmayan
-      : basePayment * Math.pow(1 + r, k);  // bileşik (fixedRate ile aynı formül)
-  }
 
   /* ==========================================================
      V18 Parça 1 — CPI ENDEKS TABLOSU
