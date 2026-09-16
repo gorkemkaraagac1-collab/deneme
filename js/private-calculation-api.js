@@ -37,6 +37,9 @@
     if (!result || typeof result !== "object" || !Array.isArray(result.schedule)) return result;
     function normalizeNestedDates(value) {
       if (!value || typeof value !== "object") return value;
+      // Date instances are already normalized. Spreading one would erase its
+      // internal value and turn it into an empty object in special-flow data.
+      if (value instanceof Date) return value;
       if (Array.isArray(value)) return value.map(normalizeNestedDates);
       const normalized = { ...value };
       ["date", "paymentDate", "openingDate", "closingDate"].forEach(key => {
