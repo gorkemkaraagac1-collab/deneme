@@ -280,6 +280,37 @@
 `;
   }
 
+  /**
+   * renderPaymentScheduleRows — ödeme planı satırlarının salt sunum HTML'i.
+   * Satırlar private sonuç zarfından gelir; biçimlendiriciler açık engine
+   * köprüsü üzerinden çağrılır, burada hesaplama yapılmaz.
+   */
+  function renderPaymentScheduleRows(rows, presentationCurrency, basePayment = 0) {
+    const formatMoney = bridge().formatScheduleMoney;
+    const monthName = bridge().getMonthName;
+    if (typeof formatMoney !== "function" || typeof monthName !== "function") return "";
+    return (Array.isArray(rows) ? rows : []).map((item, i) => {
+      const prevPayment = i > 0 ? rows[i - 1].payment : basePayment;
+      const escalationBadge =
+        basePayment > 0 && Math.abs(item.payment - prevPayment) > 0.01
+          ? ` <span title="Endeksli/artışlı ödeme" style="color:#d97706;">🔺</span>`
+          : "";
+      return `
+        <tr>
+          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${item.period}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;font-size:12px;">${monthName(item.month)} ${item.year}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "openingLiability", presentationCurrency)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "payment", presentationCurrency)}${escalationBadge}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "interest", presentationCurrency)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "principal", presentationCurrency)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "closingLiability", presentationCurrency)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "depreciation", presentationCurrency)}</td>
+          <td style="padding:8px;border-top:1px solid #edf0f4;text-align:right;font-size:12px;">${formatMoney(item, "rouClosing", presentationCurrency)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
   function selectedBanner(contract) {
     const fn = bridge().v26SelectedContractBanner;
     return typeof fn === "function" ? fn(contract) : "";
@@ -546,5 +577,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows };
 })(window);

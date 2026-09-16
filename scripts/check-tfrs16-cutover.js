@@ -63,6 +63,8 @@ const checks = [
   ["Payment schedule filter options use explicit engine bridges", /buildPaymentScheduleYearOptions/.test(operationsUi) && /buildPaymentScheduleMonthOptions/.test(operationsUi) && /buildPaymentScheduleCurrencyOptions/.test(operationsUi) && /buildPaymentScheduleYearOptions:/.test(engine) && /buildPaymentScheduleMonthOptions:/.test(engine) && /buildPaymentScheduleCurrencyOptions:/.test(engine)],
   ["Payment schedule table shell lives outside the public engine", /function renderPaymentScheduleTableShell\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleTableShell/.test(engine) && !/<tbody id="scheduleTableBody"><\/tbody>/.test(engine)],
   ["Payment schedule footer markup lives outside the public engine", /function renderPaymentScheduleFooterContainers\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFooterContainers/.test(engine) && !/<div id="fxTranslationContainer"><\/div>/.test(engine)],
+  ["Payment schedule row markup lives outside the public engine", /function renderPaymentScheduleRows\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleRows/.test(engine) && !/title="Endeksli\/artışlı ödeme"/.test(engine)],
+  ["Payment schedule row formatting uses explicit engine bridges", /formatScheduleMoney/.test(operationsUi) && /getMonthName/.test(operationsUi) && /formatScheduleMoney,/.test(engine) && /getMonthName,/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
