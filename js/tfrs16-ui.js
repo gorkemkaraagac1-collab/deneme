@@ -996,13 +996,10 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      hydrateTfrs16BackendData();
-    });
-  } else {
-    setTimeout(() => hydrateTfrs16BackendData(), 0);
-  }
+  // DOM timing is owned by the public coordinator. Its guarded boot hook
+  // runs after DOM readiness, so hydration starts once without a duplicate
+  // DOMContentLoaded/setTimeout race inside the runtime.
+  void hydrateTfrs16BackendData();
 
   // Performans: uygulama açıldıktan birkaç saniye sonra eski audit/
   // kontrol/entegrasyon kayıtlarını arka planda temizle (UI'ı bloklamaz).
