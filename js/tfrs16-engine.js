@@ -32117,6 +32117,16 @@ ${renderPaymentScheduleFooterContainers()}
   // only for the existing detail flow.
   Object.assign(window.GK_TFRS16 = window.GK_TFRS16 || {}, {
     getPortfolioContracts: () => (Array.isArray(contracts) ? contracts.map(contract => ({ ...contract })) : []),
+    // Operation-page bridge: external UI owns page markup and event wiring;
+    // the engine supplies private-result render/actions and contract state.
+    getOperationContracts: () => (Array.isArray(contracts) ? contracts.map(contract => JSON.parse(JSON.stringify(contract))) : []),
+    injectV26Styles,
+    v26SelectedContractBanner,
+    renderSlbSection,
+    renderSubleaseSection,
+    renderAccountingCenter,
+    generateSelectedJournal,
+    openBulkJournalModal,
     openDetail,
     isRenewalWithin90Days,
     formatPortfolioAmount,
@@ -32131,9 +32141,6 @@ ${renderPaymentScheduleFooterContainers()}
     renderConsolidationBody: v26RenderConsolidationReportBody,
     renderAuditTrailBody: v26RenderAuditTrailBody,
     renderModificationReassessmentBody: v26RenderModificationReassessmentBody,
-    renderSaleAndLeasebackBody: v26RenderSlbManagementBody,
-    renderSubleaseBody: v26RenderSubleaseManagementBody,
-    renderAccountingCenterBody: v26RenderAccountingCenterBody,
     getFinancialReportingPeriodKey: () => `${v191PeriodStartOverride || ""}|${v191PeriodEndOverride || ""}`,
     setActiveScreenRefreshCallback: callback => { v191ActiveScreenRefreshCallback = callback; }
   });
@@ -32902,14 +32909,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
     render();
   }
 
-  /* ==========================================================
-     SATIŞ VE GERİ KİRALAMA (SLB) — AYRI SAYFA (onaylı plan)
-     ----------------------------------------------------------
-     renderSlbSection'ın KENDİSİNE dokunulmadı — o hâlâ
-     document.getElementById("slbSectionContainer") arıyor. Bu sayfa
-     sadece o container'ı KENDİ İÇİNDE oluşturup fonksiyonu çağırıyor.
-  ========================================================== */
-  var v26SelectedSlbContractId = null;
+  /* SLB page shell lives in js/tfrs16-operations-ui.js. */
 
   function renderSlbManagementPage(container) {
     const renderer = window.LeaseQantTfrs16OperationsUi?.renderSaleAndLeaseback;
@@ -32918,63 +32918,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
     container.innerHTML = `<div class="gk-v26-card">Satış ve geri kiralama arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
-  function v26RenderSlbManagementBody(container) {
-    if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    const render = () => {
-      const activeContracts = (Array.isArray(contracts) ? contracts : [])
-        .slice()
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      if (!v26SelectedSlbContractId && activeContracts.length) {
-        v26SelectedSlbContractId = activeContracts[0].id;
-      }
-
-      const selectedContract = activeContracts.find(c => c.id === v26SelectedSlbContractId) || null;
-
-      const optionsHtml = activeContracts.map(c => {
-        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
-        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedSlbContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
-      }).join("");
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;">
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Satış ve Geri Kiralama (SLB)</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              TFRS 16.98-103 kapsamındaki satış-ve-geri-kiralama işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
-            </p>
-          </div>
-
-          <div class="gk-v26-card" style="margin-bottom:0;">
-            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
-            <select id="v26SlbContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
-              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
-            </select>
-            ${v26SelectedContractBanner(selectedContract)}
-          </div>
-
-          <div id="slbSectionContainer"></div>
-        </div>`;
-
-      container.querySelector("#v26SlbContractSelect")?.addEventListener("change", event => {
-        v26SelectedSlbContractId = event.target.value;
-        render();
-      });
-
-      if (selectedContract) {
-        renderSlbSection(selectedContract);
-      }
-    };
-
-    render();
-  }
-
-  /* ==========================================================
-     ALT KİRALAMA (SUBLEASE) — AYRI SAYFA (onaylı plan)
-  ========================================================== */
-  var v26SelectedSubleaseContractId = null;
+  /* Sublease page shell lives in js/tfrs16-operations-ui.js. */
 
   function renderSubleaseManagementPage(container) {
     const renderer = window.LeaseQantTfrs16OperationsUi?.renderSublease;
@@ -32983,75 +32927,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
     container.innerHTML = `<div class="gk-v26-card">Alt kiralama arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
-  function v26RenderSubleaseManagementBody(container) {
-    if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    const render = () => {
-      const activeContracts = (Array.isArray(contracts) ? contracts : [])
-        .slice()
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      if (!v26SelectedSubleaseContractId && activeContracts.length) {
-        v26SelectedSubleaseContractId = activeContracts[0].id;
-      }
-
-      const selectedContract = activeContracts.find(c => c.id === v26SelectedSubleaseContractId) || null;
-
-      const optionsHtml = activeContracts.map(c => {
-        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
-        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedSubleaseContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
-      }).join("");
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;">
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Alt Kiralama (Sublease)</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              TFRS 16.B58 kapsamındaki alt kiralama işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.
-            </p>
-          </div>
-
-          <div class="gk-v26-card" style="margin-bottom:0;">
-            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (Ana Kira)</label>
-            <select id="v26SubleaseContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
-              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
-            </select>
-            ${v26SelectedContractBanner(selectedContract)}
-          </div>
-
-          <div id="subleaseSectionContainer"></div>
-        </div>`;
-
-      container.querySelector("#v26SubleaseContractSelect")?.addEventListener("change", event => {
-        v26SelectedSubleaseContractId = event.target.value;
-        render();
-      });
-
-      if (selectedContract) {
-        renderSubleaseSection(selectedContract);
-      }
-    };
-
-    render();
-  }
-
-  /* ==========================================================
-     TOPLU FİŞ MERKEZİ — AYRI SAYFA (onaylı plan)
-     ----------------------------------------------------------
-     renderAccountingCenter'ın KENDİSİNE dokunulmadı — hâlâ aynı DOM
-     ID'lerini (accountingYear/accountingPeriod/accountingMonth/
-     generateJournal/journalPreview/openBulkJournalButton) üretiyor.
-     Bu sayfa sadece o HTML'i kendi içinde render edip, event
-     listener'ları (generateJournal → generateSelectedJournal,
-     openBulkJournalButton → openBulkJournalModal — ikincisi zaten
-     tüm portföy için çalışıyor, sözleşmeye bağımlı değil) bağlıyor.
-     generateSelectedJournal SADECE bir önizleme/rapor üretiyor —
-     sözleşmenin kendisini değiştirmiyor, bu yüzden Modification/SLB/
-     Sublease'te bulunan "backend'e yazmıyor" sorunu BURADA GEÇERLİ
-     DEĞİL (yazılacak bir state değişikliği yok).
-  ========================================================== */
-  var v26SelectedAccountingContractId = null;
+  /* Accounting center page shell lives in js/tfrs16-operations-ui.js. */
 
   function renderAccountingCenterPage(container) {
     const renderer = window.LeaseQantTfrs16OperationsUi?.renderAccountingCenter;
@@ -33059,67 +32935,6 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     container.innerHTML = `<div class="gk-v26-card">Toplu fiş arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
-
-  function v26RenderAccountingCenterBody(container) {
-    if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    const render = () => {
-      const activeContracts = (Array.isArray(contracts) ? contracts : [])
-        .map(c => JSON.parse(JSON.stringify(c)))
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      if (!v26SelectedAccountingContractId && activeContracts.length) {
-        v26SelectedAccountingContractId = activeContracts[0].id;
-      }
-
-      const selectedContract = activeContracts.find(c => c.id === v26SelectedAccountingContractId) || null;
-
-      const optionsHtml = activeContracts.map(c => {
-        const label = [c.id, c.company, c.supplier].filter(Boolean).join(" — ");
-        return `<option value="${escapeHtml(c.id)}" ${c.id === v26SelectedAccountingContractId ? "selected" : ""}>${escapeHtml(label)}</option>`;
-      }).join("");
-
-      const bodyHtml = !activeContracts.length
-        ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div>`
-        : !selectedContract
-          ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div>`
-          : renderAccountingCenter(selectedContract ? JSON.parse(JSON.stringify(selectedContract)) : selectedContract);
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;">
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Toplu Fiş Merkezi</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              Tek sözleşme veya portföydeki tüm aktif sözleşmeler için muhasebe fişi üretimi artık tek bir ekranda yönetiliyor.
-            </p>
-          </div>
-
-          <div class="gk-v26-card">
-            <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (tekil fiş için)</label>
-            <select id="v26AccountingContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
-              ${activeContracts.length ? optionsHtml : '<option value="">Sözleşme bulunamadı</option>'}
-            </select>
-            ${v26SelectedContractBanner(selectedContract)}
-
-            ${bodyHtml}
-          </div>
-        </div>`;
-
-      container.querySelector("#v26AccountingContractSelect")?.addEventListener("change", event => {
-        v26SelectedAccountingContractId = event.target.value;
-        render();
-      });
-
-      if (selectedContract) {
-        container.querySelector("#generateJournal")?.addEventListener("click", () => generateSelectedJournal(selectedContract));
-        container.querySelector("#openBulkJournalButton")?.addEventListener("click", openBulkJournalModal);
-      }
-    };
-
-    render();
-  }
-
   /* ==========================================================
      DİPNOTLAR — AYRI SAYFA, 3 TAB (Varlık / Yükümlülük / Likidite)
      ----------------------------------------------------------

@@ -49,7 +49,10 @@ const checks = [
   ["Change management entrypoint lives outside the public engine", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
   ["Special-flow entrypoints live outside the public engine", /renderSaleAndLeaseback/.test(operationsUi) && /renderSublease/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSaleAndLeaseback/.test(engine) && /LeaseQantTfrs16OperationsUi\?\.renderSublease/.test(engine)],
   ["Accounting center entrypoint lives outside the public engine", /renderAccountingCenter/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderAccountingCenter/.test(engine)],
-  ["Operations UI uses explicit engine bridges", /renderModificationReassessmentBody/.test(operationsUi) && /renderSaleAndLeasebackBody/.test(operationsUi) && /renderSubleaseBody/.test(operationsUi) && /renderAccountingCenterBody/.test(operationsUi) && /renderModificationReassessmentBody:/.test(engine) && /renderAccountingCenterBody:/.test(engine)],
+  ["Operations UI uses explicit engine bridges", /renderModificationReassessmentBody/.test(operationsUi) && /renderSlbSection/.test(operationsUi) && /renderSubleaseSection/.test(operationsUi) && /renderAccountingCenter/.test(operationsUi) && /renderModificationReassessmentBody:/.test(engine) && /getOperationContracts:/.test(engine) && /renderAccountingCenter[,:]/.test(engine)],
+  ["SLB page body selectors live outside the public engine", /v26SlbContractSelect/.test(operationsUi) && /slbSectionContainer/.test(operationsUi) && !/v26SlbContractSelect/.test(engine)],
+  ["Sublease page body selectors live outside the public engine", /v26SubleaseContractSelect/.test(operationsUi) && /subleaseSectionContainer/.test(operationsUi) && !/v26SubleaseContractSelect/.test(engine)],
+  ["Accounting page body selectors live outside the public engine", /v26AccountingContractSelect/.test(operationsUi) && /generateJournal/.test(operationsUi) && !/v26AccountingContractSelect/.test(engine)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
   // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
