@@ -32162,6 +32162,7 @@ ${renderPaymentScheduleFooterContainers()}
     renderFinancialReportingBody: v191RenderFinancialReportingPrivate,
     renderRiskControlsBody: v191RenderRiskControls,
     getContractsSnapshot: () => (Array.isArray(contracts) ? contracts.map(contract => JSON.parse(JSON.stringify(contract))) : []),
+    getAuditEvents: filters => typeof getAuditEvents === "function" ? getAuditEvents(filters) : [],
     privateCalculationCacheHas: contract => PRIVATE_CALCULATION_CACHE.has(getCalculationCacheKey(contract)),
     isPrivateCalculationApiReady,
     ensurePrivateCalculationCache,
@@ -32285,126 +32286,10 @@ const V26_FX_UI_PAGE_SIZE = 50;
   const AUDIT_TRAIL_PAGE_SIZE = 25;
 
   function v26RenderAuditTrailBody(container) {
+    const renderer = window.LeaseQantTfrs16ReportingUi?.renderAuditTrailBody;
+    if (typeof renderer === "function") return renderer(container);
     if (!container) return;
-    injectV26Styles();
-    let page = 1;
-
-    const contractLabel = id => {
-      if (!id) return "—";
-      const c = (typeof loadContracts === "function" ? loadContracts() : []).find(x => x.id === id);
-      return c ? `${escapeHtml(c.supplier || c.name || id)} (${escapeHtml(id)})` : escapeHtml(id);
-    };
-
-    const render = () => {
-      const filters = {
-        action: container.querySelector("#v26AuditActionFilter")?.value || "",
-        entityType: container.querySelector("#v26AuditEntityFilter")?.value || "",
-        dateFrom: container.querySelector("#v26AuditDateFrom")?.value || "",
-        dateTo: container.querySelector("#v26AuditDateTo")?.value || ""
-      };
-      const search = (container.querySelector("#v26AuditSearch")?.value || "").trim().toLowerCase();
-
-      let events = (typeof getAuditEvents === "function" ? getAuditEvents(filters) : []).slice();
-      if (search) {
-        events = events.filter(e =>
-          String(e.actor || "").toLowerCase().includes(search) ||
-          String(e.reason || "").toLowerCase().includes(search) ||
-          String(e.contractId || "").toLowerCase().includes(search) ||
-          String(e.entityId || "").toLowerCase().includes(search)
-        );
-      }
-      events.sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
-
-      const actionOptions = Array.from(new Set(
-        (typeof getAuditEvents === "function" ? getAuditEvents({}) : []).map(e => e.action).filter(Boolean)
-      )).sort();
-      const entityOptions = Array.from(new Set(
-        (typeof getAuditEvents === "function" ? getAuditEvents({}) : []).map(e => e.entityType).filter(Boolean)
-      )).sort();
-
-      const totalPages = Math.max(1, Math.ceil(events.length / AUDIT_TRAIL_PAGE_SIZE));
-      page = Math.min(Math.max(1, page), totalPages);
-      const start = (page - 1) * AUDIT_TRAIL_PAGE_SIZE;
-      const pageRows = events.slice(start, start + AUDIT_TRAIL_PAGE_SIZE);
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-            <div>
-              <h2 style="margin:0;font-size:20px;color:#0f172a;">Denetim İzi</h2>
-              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">Tüm sözleşme, hesaplama ve kapanış olaylarının kronolojik kaydı · ${escapeHtml(String(events.length))} kayıt</p>
-            </div>
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26AuditExportBtn">↓ CSV Aktar</button>
-          </div>
-
-          <div class="gk-v26-card">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-              <label style="font-size:12px;color:#64748b;">Ara<br><input id="v26AuditSearch" type="text" placeholder="Kullanıcı, sebep, sözleşme…" value="${escapeHtml(container.querySelector("#v26AuditSearch")?.value || "")}" style="padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"></label>
-              <label style="font-size:12px;color:#64748b;">İşlem<br><select id="v26AuditActionFilter" style="padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"><option value="">Tümü</option>${actionOptions.map(a => `<option value="${escapeHtml(a)}" ${filters.action === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}</select></label>
-              <label style="font-size:12px;color:#64748b;">Varlık Türü<br><select id="v26AuditEntityFilter" style="padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"><option value="">Tümü</option>${entityOptions.map(t => `<option value="${escapeHtml(t)}" ${filters.entityType === t ? "selected" : ""}>${escapeHtml(t)}</option>`).join("")}</select></label>
-              <label style="font-size:12px;color:#64748b;">Başlangıç<br><input id="v26AuditDateFrom" type="date" value="${escapeHtml(filters.dateFrom)}" style="padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"></label>
-              <label style="font-size:12px;color:#64748b;">Bitiş<br><input id="v26AuditDateTo" type="date" value="${escapeHtml(filters.dateTo)}" style="padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"></label>
-              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26AuditClearFilters">Temizle</button>
-            </div>
-          </div>
-
-          <div class="gk-v26-card gk-v26-table-wrap" style="overflow-x:auto;">
-            <table class="gk-v26-table">
-              <thead><tr><th>Zaman</th><th>Kullanıcı</th><th>İşlem</th><th>Varlık</th><th>Sözleşme</th><th>Sebep</th></tr></thead>
-              <tbody>
-                ${pageRows.length ? pageRows.map(e => `
-                  <tr>
-                    <td>${escapeHtml(e.timestamp ? new Date(e.timestamp).toLocaleString("tr-TR") : "—")}</td>
-                    <td>${escapeHtml(e.actor || "system")}</td>
-                    <td><span class="badge-tfrs16" style="font-family:var(--mono,monospace);font-size:10px;padding:2px 6px;border-radius:5px;">${escapeHtml(e.action || "—")}</span></td>
-                    <td>${escapeHtml(e.entityType || "—")}${e.entityId ? ` · ${escapeHtml(e.entityId)}` : ""}</td>
-                    <td>${contractLabel(e.contractId)}</td>
-                    <td>${escapeHtml(e.reason || "—")}</td>
-                  </tr>`).join("") : `<tr><td colspan="6" style="text-align:center;padding:34px 20px;color:#94a3b8;">Kayıt bulunamadı.</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-
-          ${totalPages > 1 ? `
-          <div style="display:flex;gap:10px;align-items:center;justify-content:center;padding:14px;">
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26AuditPrev" ${page <= 1 ? "disabled" : ""}>← Önceki</button>
-            <span style="font-size:12px;color:#64748b;">${page} / ${totalPages} (${events.length} kayıt)</span>
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26AuditNext" ${page >= totalPages ? "disabled" : ""}>Sonraki →</button>
-          </div>` : ""}
-        </div>`;
-
-      container.querySelector("#v26AuditSearch")?.addEventListener("input", () => { page = 1; render(); });
-      container.querySelector("#v26AuditActionFilter")?.addEventListener("change", () => { page = 1; render(); });
-      container.querySelector("#v26AuditEntityFilter")?.addEventListener("change", () => { page = 1; render(); });
-      container.querySelector("#v26AuditDateFrom")?.addEventListener("change", () => { page = 1; render(); });
-      container.querySelector("#v26AuditDateTo")?.addEventListener("change", () => { page = 1; render(); });
-      container.querySelector("#v26AuditClearFilters")?.addEventListener("click", () => {
-        container.querySelector("#v26AuditSearch").value = "";
-        container.querySelector("#v26AuditActionFilter").value = "";
-        container.querySelector("#v26AuditEntityFilter").value = "";
-        container.querySelector("#v26AuditDateFrom").value = "";
-        container.querySelector("#v26AuditDateTo").value = "";
-        page = 1; render();
-      });
-      container.querySelector("#v26AuditPrev")?.addEventListener("click", () => { page -= 1; render(); });
-      container.querySelector("#v26AuditNext")?.addEventListener("click", () => { page += 1; render(); });
-      container.querySelector("#v26AuditExportBtn")?.addEventListener("click", () => {
-        const data = events.map(e => ({
-          timestamp: e.timestamp || "", actor: e.actor || "system", action: e.action || "",
-          entityType: e.entityType || "", entityId: e.entityId || "", contractId: e.contractId || "",
-          reason: e.reason || ""
-        }));
-        if (!data.length) return;
-        const headers = Object.keys(data[0]);
-        const csv = [headers.join(";"), ...data.map(r => headers.map(h => String(r[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
-        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob), link = document.createElement("a");
-        link.href = url; link.download = `GK_Denetim_Izi_${Date.now()}.csv`;
-        document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-      });
-    };
-
-    render();
+    container.innerHTML = `<div class="gk-v26-card">Denetim izi arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
   function renderAuditTrailPage(container) {

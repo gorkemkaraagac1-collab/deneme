@@ -44,6 +44,7 @@ const checks = [
   ["Reporting UI uses the private-result bridge", /renderFinancialReportingBody/.test(reportingUi) && /renderFinancialReportingBody:/.test(engine) && /renderRiskControlsBody:/.test(engine)],
   ["Consolidation page entry lives in the reporting UI module", /renderConsolidation/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderConsolidation/.test(engine)],
   ["Audit trail page entry lives in the reporting UI module", /renderAuditTrail/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderAuditTrail/.test(engine)],
+  ["Audit trail page body lives in the reporting UI module", /function renderAuditTrailBody\(/.test(reportingUi) && /getAuditEvents/.test(reportingUi) && !/function v26RenderAuditTrailBody\([\s\S]{0,1200}getAuditEvents/.test(engine)],
   ["Governance UI reads through explicit engine bridges", /renderConsolidationBody/.test(reportingUi) && /renderAuditTrailBody/.test(reportingUi) && /renderConsolidationBody:/.test(engine) && /renderAuditTrailBody:/.test(engine)],
   ["Operations UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
   ["Change management entrypoint lives outside the public engine", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
