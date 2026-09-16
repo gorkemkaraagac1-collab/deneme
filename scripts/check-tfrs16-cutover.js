@@ -158,7 +158,12 @@ const checks = [
   ["reassessment apply uses the private API in API-primary mode", /applyPrivateChange\("reassessment"/.test(engine) && /Private \$\{kind\} uygulanamadı/.test(engine)],
   ["TMS29 preview fails closed in API-primary mode", (/Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı/.test(engine) || /function renderInflationPreviewError\(/.test(reportingUi)) && /window\.LEASEQANT_CALCULATION_API_PRIMARY === true/.test(engine)],
   ["TMS29 draft creation uses the private result envelope", /inflCreateBtn[\s\S]{0,2600}loadPrivateTms29Result\(period, periodStart\)/.test(engine) && !/inflCreateBtn[\s\S]{0,1800}createInflationAdjustment\(contract/.test(engine)],
-  ["TMS29 apply uses the private result and journal", /infl-apply-btn[\s\S]{0,3600}loadPrivateTms29Result\(adjustment\.period/.test(engine) && /privateResult\.journal/.test(engine)],
+  // FAZ UI ayrıştırması (2026-09-16): infl-apply-btn olay bağlama artık
+  // reporting-ui.js'deki bindInflationAdjustmentEvents'te, asıl private
+  // API + journal çağrısı (applyAdjustment) engine.js'de — iki dosyaya
+  // bölündüğü için eski tek-dosya yakınlık kontrolü yerine her ikisinin
+  // de varlığını ayrı ayrı doğruluyoruz.
+  ["TMS29 apply uses the private result and journal", /infl-apply-btn/.test(reportingUi) && /loadPrivateTms29Result\(adjustment\.period/.test(engine) && /privateResult\.journal/.test(engine)],
   ["TMS29 writes persist through the contracts API", /inflCreateBtn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-apply-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-cancel-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine)],
   ["sale-and-leaseback preview requires the private special-flow envelope", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.saleAndLeaseback/.test(engine)],
   ["sublease preview requires the private special-flow envelope", /Private alt kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.sublease/.test(engine)],
