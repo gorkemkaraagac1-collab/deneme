@@ -3,7 +3,7 @@
 /**
  * Release gate for the TFRS 16 private-calculation cutover.
  *
- * This is intentionally a source-level check.  The public engine is still
+ * This is intentionally a source-level check.  The public UI runtime is still
  * needed by the report, journal, modification and sublease views, so deleting
  * it before those consumers are migrated would create a silent Pages outage.
  * The gate makes the supported API-primary/rollback shape explicit and fails
@@ -17,11 +17,12 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath));
 
 const html = read("tfrs16.html");
 const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
-const engine = read("js/tfrs16-engine.js");
+const engine = read("js/tfrs16-ui.js");
 const shadow = read("js/private-calculation-shadow.js");
 const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
@@ -30,66 +31,68 @@ const operationsUi = read("js/tfrs16-operations-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 
 const checks = [
+  ["legacy public engine asset is removed", !exists("js/tfrs16-engine.js")],
+  ["TFRS16 page loads the UI runtime asset", html.includes('src="js/tfrs16-ui.js') && !html.includes("tfrs16-engine.js")],
   ["private adapter is loaded", html.includes('src="js/private-calculation-api.js')],
   ["private TFRS16 facade is loaded", html.includes('src="js/private-tfrs16-facade.js')],
-  ["private adapter loads before the legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-engine.js")],
-  ["private facade loads between adapter and legacy engine", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-engine.js")],
-  ["TMS21 FX UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
-  ["TMS21 FX UI markup lives outside the public engine", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
-  ["TMS21 FX loading fallback lives outside the public engine", /function mount\(container, contract\)/.test(fxUi) && /LeaseQantTfrs16FxUi\?\.mount/.test(engine) && !/TMS 21 arayüzü yüklenemedi/.test(engine)],
-  ["Portfolio UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
-  ["Portfolio table markup lives outside the public engine", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
+  ["private adapter loads before the TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-ui.js")],
+  ["private facade loads between adapter and TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-ui.js")],
+  ["TMS21 FX UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
+  ["TMS21 FX UI markup lives outside the public UI runtime", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
+  ["TMS21 FX loading fallback lives outside the public UI runtime", /function mount\(container, contract\)/.test(fxUi) && /LeaseQantTfrs16FxUi\?\.mount/.test(engine) && !/TMS 21 arayüzü yüklenemedi/.test(engine)],
+  ["Portfolio UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
+  ["Portfolio table markup lives outside the public UI runtime", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
   ["Portfolio UI has a private read-only bridge", /getPortfolioContracts/.test(engine) && /openDetail/.test(engine) && /formatPortfolioAmount/.test(engine)],
-  ["Reporting UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-reporting-ui.js") && html.includes('src="js/tfrs16-reporting-ui.js')],
-  ["Reporting page shells live outside the public engine", reportingUi.includes("renderFinancialReporting") && reportingUi.includes("renderRiskControls") && !engine.includes("Portföy genelinde bilanço/gelir tablosu KPI'ları")],
+  ["Reporting UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-reporting-ui.js") && html.includes('src="js/tfrs16-reporting-ui.js')],
+  ["Reporting page shells live outside the public UI runtime", reportingUi.includes("renderFinancialReporting") && reportingUi.includes("renderRiskControls") && !engine.includes("Portföy genelinde bilanço/gelir tablosu KPI'ları")],
   ["Reporting UI uses the private-result bridge", /renderFinancialReportingBody/.test(reportingUi) && /renderFinancialReportingBody:/.test(engine) && /renderRiskControlsBody:/.test(engine)],
   ["Consolidation page entry lives in the reporting UI module", /renderConsolidation/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderConsolidation/.test(engine)],
   ["Audit trail page entry lives in the reporting UI module", /renderAuditTrail/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderAuditTrail/.test(engine)],
   ["Audit trail page body lives in the reporting UI module", /function renderAuditTrailBody\(/.test(reportingUi) && /getAuditEvents/.test(reportingUi) && !/function v26RenderAuditTrailBody\([\s\S]{0,1200}getAuditEvents/.test(engine)],
-  ["Contract audit tab markup lives outside the public engine", /function renderContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractAuditTab/.test(engine) && !/id="exportContractAuditTrailButton"/.test(engine) && !/class="gk-audit-table"/.test(engine)],
-  ["Contract audit export wiring lives outside the public engine", /function bindContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.bindContractAuditTab/.test(engine) && !/exportAuditTrail\(contract\.id, document\.getElementById\("auditPresentationCurrency"\)/.test(engine)],
-  ["Contract summary markup lives outside the public engine", /function renderContractSummaryTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractSummaryTab/.test(engine) && !/class="detail-grid"/.test(engine)],
+  ["Contract audit tab markup lives outside the public UI runtime", /function renderContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractAuditTab/.test(engine) && !/id="exportContractAuditTrailButton"/.test(engine) && !/class="gk-audit-table"/.test(engine)],
+  ["Contract audit export wiring lives outside the public UI runtime", /function bindContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.bindContractAuditTab/.test(engine) && !/exportAuditTrail\(contract\.id, document\.getElementById\("auditPresentationCurrency"\)/.test(engine)],
+  ["Contract summary markup lives outside the public UI runtime", /function renderContractSummaryTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractSummaryTab/.test(engine) && !/class="detail-grid"/.test(engine)],
   ["Contract summary formatting uses explicit engine bridges", /formatPresentationCurrency/.test(reportingUi) && /resolvePaymentFrequencyLabel/.test(reportingUi) && /formatPresentationCurrency,/.test(engine) && /resolvePaymentFrequencyLabel,/.test(engine)],
-  ["Contract detail tab navigation markup lives outside the public engine", /function renderContractDetailTabs\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailTabs/.test(engine) && !/data-detail-tab-target="audit"/.test(engine)],
+  ["Contract detail tab navigation markup lives outside the public UI runtime", /function renderContractDetailTabs\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailTabs/.test(engine) && !/data-detail-tab-target="audit"/.test(engine)],
   ["Contract detail tab navigation remains namespaced", /renderContractDetailTabs,/.test(reportingUi) && /gk-detail-tabs/.test(reportingUi) && /bindContractDetailTabs/.test(reportingUi) && /bindContractDetailTabs/.test(engine)],
-  ["Contract detail tab panel shells live outside the public engine", /function renderContractDetailPanels\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailPanels/.test(engine) && !/data-detail-tab="summary"/.test(engine)],
-  ["Contract detail status banners live outside the public engine", /function renderContractDetailStatus\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailStatus/.test(engine) && !/Hesaplama kaynağı: Private API/.test(engine) && !/Bu sözleşmenin private hesaplama sonucu henüz hazır değil/.test(engine)],
-  ["TMS29 saved adjustment rows live outside the public engine", /function renderInflationAdjustmentRows\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentRows/.test(engine) && !/class="infl-apply-btn"/.test(engine)],
-  ["TMS29 preview row lives outside the public engine", /function renderInflationPreviewRow\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewRow/.test(engine) && !/ÖNİZLEME/.test(engine)],
-  ["TMS29 preview summary lives outside the public engine", /function renderInflationPreviewSummary\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewSummary/.test(engine) && !/Nominal ROU:/.test(engine)],
-  ["TMS29 preview status messages live outside the public engine", /function renderInflationPreviewMessage\(/.test(reportingUi) && /function renderInflationPreviewError\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewMessage/.test(engine) && !/Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı\. \$\{escapeHtml/.test(engine)],
+  ["Contract detail tab panel shells live outside the public UI runtime", /function renderContractDetailPanels\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailPanels/.test(engine) && !/data-detail-tab="summary"/.test(engine)],
+  ["Contract detail status banners live outside the public UI runtime", /function renderContractDetailStatus\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractDetailStatus/.test(engine) && !/Hesaplama kaynağı: Private API/.test(engine) && !/Bu sözleşmenin private hesaplama sonucu henüz hazır değil/.test(engine)],
+  ["TMS29 saved adjustment rows live outside the public UI runtime", /function renderInflationAdjustmentRows\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentRows/.test(engine) && !/class="infl-apply-btn"/.test(engine)],
+  ["TMS29 preview row lives outside the public UI runtime", /function renderInflationPreviewRow\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewRow/.test(engine) && !/ÖNİZLEME/.test(engine)],
+  ["TMS29 preview summary lives outside the public UI runtime", /function renderInflationPreviewSummary\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewSummary/.test(engine) && !/Nominal ROU:/.test(engine)],
+  ["TMS29 preview status messages live outside the public UI runtime", /function renderInflationPreviewMessage\(/.test(reportingUi) && /function renderInflationPreviewError\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationPreviewMessage/.test(engine) && !/Private TMS 29 sonucu alınamadı; yerel hesaplama kapalı\. \$\{escapeHtml/.test(engine)],
   ["TMS29 action alerts use the reporting UI bridge", /function showInflationActionAlert\(/.test(reportingUi) && /showInflationActionAlert/.test(engine) && /showInflationAdjustmentAlert/.test(engine)],
-  ["TMS29 adjustment panel shell lives outside the public engine", /function renderInflationAdjustmentShell\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentShell/.test(engine) && !/id="inflReportingPeriod"/.test(engine) && !/id="inflPreviewBtn"/.test(engine)],
+  ["TMS29 adjustment panel shell lives outside the public UI runtime", /function renderInflationAdjustmentShell\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderInflationAdjustmentShell/.test(engine) && !/id="inflReportingPeriod"/.test(engine) && !/id="inflPreviewBtn"/.test(engine)],
   ["Contract detail tab panel shells remain namespaced", /renderContractDetailPanels,/.test(reportingUi) && /gk-detail-tab/.test(reportingUi) && /slbSectionContainer/.test(reportingUi) && /subleaseSectionContainer/.test(reportingUi)],
-  ["Contract detail tab DOM state lives outside the public engine", /function applyContractDetailTab\(/.test(reportingUi) && /function bindContractDetailTabs\(/.test(reportingUi) && /bindContractDetailTabs/.test(engine) && !/function gkApplyDetailTab\(/.test(engine) && !/querySelectorAll\("#detailContent \.gk-detail-tab-btn"\)/.test(engine)],
+  ["Contract detail tab DOM state lives outside the public UI runtime", /function applyContractDetailTab\(/.test(reportingUi) && /function bindContractDetailTabs\(/.test(reportingUi) && /bindContractDetailTabs/.test(engine) && !/function gkApplyDetailTab\(/.test(engine) && !/querySelectorAll\("#detailContent \.gk-detail-tab-btn"\)/.test(engine)],
   ["Governance UI reads through explicit engine bridges", /renderConsolidationBody/.test(reportingUi) && /renderAuditTrailBody/.test(reportingUi) && /renderConsolidationBody:/.test(engine) && /renderAuditTrailBody:/.test(engine)],
-  ["Operations UI module is loaded after the engine", html.indexOf("tfrs16-engine.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
-  ["Change management entrypoint lives outside the public engine", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
-  ["Special-flow entrypoints live outside the public engine", /renderSaleAndLeaseback/.test(operationsUi) && /renderSublease/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSaleAndLeaseback/.test(engine) && /LeaseQantTfrs16OperationsUi\?\.renderSublease/.test(engine)],
-  ["Accounting center entrypoint lives outside the public engine", /renderAccountingCenter/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderAccountingCenter/.test(engine)],
+  ["Operations UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
+  ["Change management entrypoint lives outside the public UI runtime", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
+  ["Special-flow entrypoints live outside the public UI runtime", /renderSaleAndLeaseback/.test(operationsUi) && /renderSublease/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSaleAndLeaseback/.test(engine) && /LeaseQantTfrs16OperationsUi\?\.renderSublease/.test(engine)],
+  ["Accounting center entrypoint lives outside the public UI runtime", /renderAccountingCenter/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderAccountingCenter/.test(engine)],
   ["Operations UI uses explicit engine bridges", /renderModificationManagementSection/.test(operationsUi) && /renderReassessmentManagementSection/.test(operationsUi) && /renderSlbSection/.test(operationsUi) && /renderSubleaseSection/.test(operationsUi) && /renderAccountingCenter/.test(operationsUi) && /initModificationEventsById/.test(engine) && /initReassessmentEventsById/.test(engine) && /getModificationReport:/.test(engine) && /getOperationContracts:/.test(engine)],
-  ["Modification/reassessment page body lives outside the public engine", /v26PendingApprovalsApplyAll/.test(operationsUi) && /v26ModReassContractSelect/.test(operationsUi) && !/function v26RenderModificationReassessmentBody\(/.test(engine) && !/renderModificationReassessmentBody:/.test(engine)],
-  ["SLB page body selectors live outside the public engine", /v26SlbContractSelect/.test(operationsUi) && /slbSectionContainer/.test(operationsUi) && !/v26SlbContractSelect/.test(engine)],
-  ["Sublease page body selectors live outside the public engine", /v26SubleaseContractSelect/.test(operationsUi) && /subleaseSectionContainer/.test(operationsUi) && !/v26SubleaseContractSelect/.test(engine)],
-  ["Accounting page body selectors live outside the public engine", /v26AccountingContractSelect/.test(operationsUi) && /generateJournal/.test(operationsUi) && !/v26AccountingContractSelect/.test(engine)],
-  ["SLB result markup lives outside the public engine", /function renderSlbResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbResultHtml/.test(engine) && !/TFRS 16\.100-102 — Satış ve Geri Kiralama/.test(engine)],
-  ["SLB form markup lives outside the public engine", /function renderSlbForm\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbForm/.test(engine) && !/id=\"slbCarryingAmount\"/.test(engine)],
-  ["SLB journal markup lives outside the public engine", /function renderSlbJournalHtml\(entries\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbJournalHtml/.test(engine) && !/BAŞLANGIÇ FİŞİ/.test(engine)],
-  ["Sublease result markup lives outside the public engine", /function renderSubleaseResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseResultHtml/.test(engine) && !/TFRS 16\.B58 — Operating Alt Kiralama/.test(engine)],
-  ["Sublease form markup lives outside the public engine", /function renderSubleaseForm\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseForm/.test(engine) && !/id=\"subleaseMonthlyPayment\"/.test(engine)],
-  ["Payment schedule header markup lives outside the public engine", /function renderPaymentScheduleHeader\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleHeader/.test(engine) && !/ÖDEME PLANI/.test(engine)],
-  ["Payment schedule filter markup lives outside the public engine", /function renderPaymentScheduleFilters\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFilters/.test(engine) && !/id="schedulePeriodType"/.test(engine) && !/id="schedulePresentationCurrency"/.test(engine)],
+  ["Modification/reassessment page body lives outside the public UI runtime", /v26PendingApprovalsApplyAll/.test(operationsUi) && /v26ModReassContractSelect/.test(operationsUi) && !/function v26RenderModificationReassessmentBody\(/.test(engine) && !/renderModificationReassessmentBody:/.test(engine)],
+  ["SLB page body selectors live outside the public UI runtime", /v26SlbContractSelect/.test(operationsUi) && /slbSectionContainer/.test(operationsUi) && !/v26SlbContractSelect/.test(engine)],
+  ["Sublease page body selectors live outside the public UI runtime", /v26SubleaseContractSelect/.test(operationsUi) && /subleaseSectionContainer/.test(operationsUi) && !/v26SubleaseContractSelect/.test(engine)],
+  ["Accounting page body selectors live outside the public UI runtime", /v26AccountingContractSelect/.test(operationsUi) && /generateJournal/.test(operationsUi) && !/v26AccountingContractSelect/.test(engine)],
+  ["SLB result markup lives outside the public UI runtime", /function renderSlbResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbResultHtml/.test(engine) && !/TFRS 16\.100-102 — Satış ve Geri Kiralama/.test(engine)],
+  ["SLB form markup lives outside the public UI runtime", /function renderSlbForm\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbForm/.test(engine) && !/id=\"slbCarryingAmount\"/.test(engine)],
+  ["SLB journal markup lives outside the public UI runtime", /function renderSlbJournalHtml\(entries\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSlbJournalHtml/.test(engine) && !/BAŞLANGIÇ FİŞİ/.test(engine)],
+  ["Sublease result markup lives outside the public UI runtime", /function renderSubleaseResultHtml\(result\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseResultHtml/.test(engine) && !/TFRS 16\.B58 — Operating Alt Kiralama/.test(engine)],
+  ["Sublease form markup lives outside the public UI runtime", /function renderSubleaseForm\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSubleaseForm/.test(engine) && !/id=\"subleaseMonthlyPayment\"/.test(engine)],
+  ["Payment schedule header markup lives outside the public UI runtime", /function renderPaymentScheduleHeader\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleHeader/.test(engine) && !/ÖDEME PLANI/.test(engine)],
+  ["Payment schedule filter markup lives outside the public UI runtime", /function renderPaymentScheduleFilters\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFilters/.test(engine) && !/id="schedulePeriodType"/.test(engine) && !/id="schedulePresentationCurrency"/.test(engine)],
   ["Payment schedule filter options use explicit engine bridges", /buildPaymentScheduleYearOptions/.test(operationsUi) && /buildPaymentScheduleMonthOptions/.test(operationsUi) && /buildPaymentScheduleCurrencyOptions/.test(operationsUi) && /buildPaymentScheduleYearOptions:/.test(engine) && /buildPaymentScheduleMonthOptions:/.test(engine) && /buildPaymentScheduleCurrencyOptions:/.test(engine)],
-  ["Payment schedule table shell lives outside the public engine", /function renderPaymentScheduleTableShell\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleTableShell/.test(engine) && !/<tbody id="scheduleTableBody"><\/tbody>/.test(engine)],
-  ["Payment schedule footer markup lives outside the public engine", /function renderPaymentScheduleFooterContainers\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFooterContainers/.test(engine) && !/<div id="fxTranslationContainer"><\/div>/.test(engine)],
-  ["Payment schedule section composition lives outside the public engine", /function renderPaymentScheduleSection\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleSection/.test(engine) && !/function renderPaymentScheduleSection\(contract\)\s*\{[^}]*<div/.test(engine)],
-  ["Payment schedule row markup lives outside the public engine", /function renderPaymentScheduleRows\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleRows/.test(engine) && !/title="Endeksli\/artışlı ödeme"/.test(engine)],
+  ["Payment schedule table shell lives outside the public UI runtime", /function renderPaymentScheduleTableShell\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleTableShell/.test(engine) && !/<tbody id="scheduleTableBody"><\/tbody>/.test(engine)],
+  ["Payment schedule footer markup lives outside the public UI runtime", /function renderPaymentScheduleFooterContainers\(\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleFooterContainers/.test(engine) && !/<div id="fxTranslationContainer"><\/div>/.test(engine)],
+  ["Payment schedule section composition lives outside the public UI runtime", /function renderPaymentScheduleSection\(contract\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleSection/.test(engine) && !/function renderPaymentScheduleSection\(contract\)\s*\{[^}]*<div/.test(engine)],
+  ["Payment schedule row markup lives outside the public UI runtime", /function renderPaymentScheduleRows\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleRows/.test(engine) && !/title="Endeksli\/artışlı ödeme"/.test(engine)],
   ["Payment schedule row formatting uses explicit engine bridges", /formatScheduleMoney/.test(operationsUi) && /getMonthName/.test(operationsUi) && /formatScheduleMoney,/.test(engine) && /getMonthName,/.test(engine)],
-  ["Payment schedule state rendering lives outside the public engine", /function renderPaymentScheduleState\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleState/.test(engine) && !/document\.getElementById\("scheduleEmptyState"\)/.test(engine)],
+  ["Payment schedule state rendering lives outside the public UI runtime", /function renderPaymentScheduleState\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderPaymentScheduleState/.test(engine) && !/document\.getElementById\("scheduleEmptyState"\)/.test(engine)],
   ["Payment schedule private and FX status messages use the UI bridge", /emptyMessage: "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek\."/.test(engine) && /fxMessage/.test(engine) && /renderPaymentScheduleState/.test(operationsUi)],
-  ["Payment schedule event wiring lives outside the public engine", /function bindPaymentScheduleEvents\(contract, handlers = \{\}\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.bindPaymentScheduleEvents/.test(engine) && !/function initPaymentScheduleEvents\(contract\)[\s\S]{0,1800}addEventListener/.test(engine)],
+  ["Payment schedule event wiring lives outside the public UI runtime", /function bindPaymentScheduleEvents\(contract, handlers = \{\}\)/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.bindPaymentScheduleEvents/.test(engine) && !/function initPaymentScheduleEvents\(contract\)[\s\S]{0,1800}addEventListener/.test(engine)],
   ["Payment schedule event bridge covers export and reporting refreshes", /exportSchedule\?\.\(contract\)/.test(operationsUi) && /renderFxTranslation\?\.\(contract\)/.test(operationsUi) && /exportSchedule: exportPaymentSchedule/.test(engine)],
-  ["Payment schedule export presentation lives outside the public engine", /function exportPaymentScheduleFile\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.exportPaymentScheduleFile/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}XLSX\.utils\.book_new/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}link\.download\s*=/.test(engine)],
+  ["Payment schedule export presentation lives outside the public UI runtime", /function exportPaymentScheduleFile\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.exportPaymentScheduleFile/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}XLSX\.utils\.book_new/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}link\.download\s*=/.test(engine)],
   ["Payment schedule export keeps XLSX and CSV fallback in the UI module", /XLSX\.utils\.book_new/.test(operationsUi) && /link\.download\s*=/.test(operationsUi) && /exportPaymentScheduleFile,/.test(operationsUi)],
   ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
   // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
@@ -168,7 +171,7 @@ const checks = [
   ["sale-and-leaseback preview requires the private special-flow envelope", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.saleAndLeaseback/.test(engine)],
   ["sublease preview requires the private special-flow envelope", /Private alt kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.sublease/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
-  ["Pages artifact still carries the engine while consumers are being migrated", /test -f _site\/js\/tfrs16-engine\.js/.test(pagesWorkflow)],
+  ["Pages artifact carries the UI runtime", /test -f _site\/js\/tfrs16-ui\.js/.test(pagesWorkflow)],
   ["TFRS16 page has no TMS19 script dependency", !/tms19/i.test(html)],
 ];
 
@@ -237,7 +240,7 @@ if (knownGapRows.length > 0) {
   );
 }
 console.log(
-  `Production consumers are private-gated; public engine removal remains blocked until ` +
+  `Production consumers are private-gated; public UI runtime removal remains blocked until ` +
   `${productionRows.length} production references (plus the ${knownGapRows.length} known FAZ 2 gap above) ` +
   `are replaced by UI-only private result readers.`
 );
