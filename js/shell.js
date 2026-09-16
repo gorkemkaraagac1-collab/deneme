@@ -357,7 +357,7 @@ window.fetch = (input, init = {}) => {
   }
 
   /* ---------- Boot ---------- */
-  document.addEventListener("DOMContentLoaded", () => {
+  const __gkShellBoot = () => {
     initMobileMenu();
     initNav();
     initDetailClose();
@@ -392,7 +392,13 @@ window.fetch = (input, init = {}) => {
         }
       } catch (_) {}
     }, 2500);
-  });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", __gkShellBoot, { once: true });
+  } else {
+    __gkShellBoot();
+  }
 
   // Expose for engine / debugging
   window.__GK_SHELL__ = {

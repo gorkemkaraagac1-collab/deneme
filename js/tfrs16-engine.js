@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+const __gkTfrs16Boot = () => {
 
   /* ==========================================================
      EMERGENCY UI BRIDGE V2
@@ -30318,4 +30318,10 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     container.innerHTML = `<div class="gk-v26-card">Enflasyon endeksleri arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
-});
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", __gkTfrs16Boot, { once: true });
+} else {
+  __gkTfrs16Boot();
+}
