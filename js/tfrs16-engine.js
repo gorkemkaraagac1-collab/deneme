@@ -12112,71 +12112,14 @@ ${renderPaymentScheduleFooterContainers()}
     if (saved) runAndRenderSlb(false);
   }
 
-  function renderSlbResultHtml(result) {
-    if (!result.qualifiesAsSale) {
-      const rows = result.schedule.map(row => `
-        <tr>
-          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.period}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.date}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.openingBalance)}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.interest)}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.payment)}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.closingBalance)}</td>
-        </tr>
-      `).join("");
-      return `
-        <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-          <strong style="font-size:12px;">TFRS 16.103 — Finansman Düzenlemesi</strong>
-          <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
-          ${result.residualBalanceWarning ? `<div style="margin:8px 0;padding:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:11px;">${escapeHtml(result.residualBalanceWarning)}</div>` : ""}
-          <div style="margin-top:10px;overflow:auto;">
-            <table style="width:100%;border-collapse:collapse;min-width:560px;">
-              <thead><tr style="background:#f1f5f9;">
-                <th style="padding:6px;text-align:left;font-size:10px;">Dönem</th><th style="padding:6px;text-align:left;font-size:10px;">Tarih</th>
-                <th style="padding:6px;text-align:right;font-size:10px;">Açılış</th><th style="padding:6px;text-align:right;font-size:10px;">Faiz</th>
-                <th style="padding:6px;text-align:right;font-size:10px;">Ödeme</th><th style="padding:6px;text-align:right;font-size:10px;">Kapanış</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-          ${renderSlbJournalHtml(result.inceptionJournal)}
-        </div>
-      `;
-    }
-
-    return `
-      <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-        <strong style="font-size:12px;">TFRS 16.100-102 — Satış ve Geri Kiralama</strong>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;font-size:11px;">
-          <div>Toplam Kâr/Zarar<br><strong>${formatCurrency(result.totalGainLoss)}</strong></div>
-          <div>Tanınan Kâr/Zarar<br><strong style="color:${result.gainLossRecognized < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(result.gainLossRecognized)}</strong></div>
-          <div>ROU'ya Gömülü (Tanınmayan)<br><strong>${formatCurrency(result.gainLossOnRightsRetained)}</strong></div>
-          <div>Düzeltilmiş Kira Yükümlülüğü<br><strong>${formatCurrency(result.adjustedLeaseLiability)}</strong></div>
-          <div>Elde Tutulan ROU<br><strong>${formatCurrency(result.rouRetained)}</strong></div>
-          <div>${result.excessFinancing > 0 ? "İlave Finansman" : result.prepayment > 0 ? "Peşin Ödeme" : "Off-market Fark"}<br><strong>${formatCurrency(result.excessFinancing || result.prepayment || 0)}</strong></div>
-        </div>
-        ${renderSlbJournalHtml(result.inceptionJournal)}
-      </div>
-    `;
+  function renderSlbResultHtml(...args) {
+    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSlbResultHtml;
+    return typeof renderer === "function" ? renderer(...args) : "";
   }
 
-  function renderSlbJournalHtml(entries) {
-    const rows = entries.map(e => `
-      <tr>
-        <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${escapeHtml(e.account)}</td>
-        <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${e.debit ? formatCurrency(e.debit) : ""}</td>
-        <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${e.credit ? formatCurrency(e.credit) : ""}</td>
-      </tr>
-    `).join("");
-    return `
-      <div style="margin-top:12px;">
-        <div style="font-size:10px;color:#64748b;font-weight:700;">BAŞLANGIÇ FİŞİ</div>
-        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
-          <thead><tr style="background:#f1f5f9;"><th style="padding:6px;text-align:left;font-size:10px;">Hesap</th><th style="padding:6px;text-align:right;font-size:10px;">Borç</th><th style="padding:6px;text-align:right;font-size:10px;">Alacak</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
+  function renderSlbJournalHtml(...args) {
+    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSlbJournalHtml;
+    return typeof renderer === "function" ? renderer(...args) : "";
   }
 
   function renderSubleaseSection(contract) {
@@ -12322,51 +12265,9 @@ ${renderPaymentScheduleFooterContainers()}
     if (saved) runAndRenderSublease(false);
   }
 
-  function renderSubleaseResultHtml(result) {
-    if (result.classification === "OPERATING") {
-      const rows = result.schedule.slice(0, 12).map(row => `
-        <tr>
-          <td style="padding:6px;border-top:1px solid #edf0f4;font-size:11px;">${row.period}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.cashReceived)}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.incomeRecognized)}</td>
-          <td style="padding:6px;border-top:1px solid #edf0f4;text-align:right;font-size:11px;">${formatCurrency(row.deferredIncomeBalance)}</td>
-        </tr>
-      `).join("");
-      return `
-        <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-          <strong style="font-size:12px;">TFRS 16.B58 — Operating Alt Kiralama</strong>
-          <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
-            <div>Toplam Sözleşme Geliri<br><strong>${formatCurrency(result.totalContractualIncome)}</strong></div>
-            <div>Doğrusal Aylık Gelir<br><strong>${formatCurrency(result.straightLineMonthlyIncome)}</strong></div>
-          </div>
-          <div style="margin-top:10px;overflow:auto;">
-            <table style="width:100%;border-collapse:collapse;min-width:420px;">
-              <thead><tr style="background:#f1f5f9;">
-                <th style="padding:6px;text-align:left;font-size:10px;">Dönem</th><th style="padding:6px;text-align:right;font-size:10px;">Tahsilat</th>
-                <th style="padding:6px;text-align:right;font-size:10px;">Tanınan Gelir</th><th style="padding:6px;text-align:right;font-size:10px;">Ertelenmiş Gelir Bakiyesi</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-          <p style="margin-top:8px;color:#94a3b8;font-size:10px;">${result.periodicJournalNote}</p>
-        </div>
-      `;
-    }
-
-    return `
-      <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-        <strong style="font-size:12px;">TFRS 16.B58 — Finance Alt Kiralama</strong>
-        <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
-          <div>Ana Kira ROU (Tahsis Öncesi)<br><strong>${formatCurrency(result.headLeaseRouCarryingAmount)}</strong></div>
-          <div>Devredilen ROU (Tahsis: %${(result.rouAllocationRatio*100).toFixed(0)})<br><strong>${formatCurrency(result.allocatedRouCarryingAmount)}</strong></div>
-          <div>Net Yatırım (Alt Kiralama PV)<br><strong>${formatCurrency(result.netInvestment)}</strong></div>
-          <div>Satış Kâr/Zararı<br><strong style="color:${result.sellingProfitLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(result.sellingProfitLoss)}</strong></div>
-        </div>
-        ${renderSlbJournalHtml(result.inceptionJournal)}
-      </div>
-    `;
+  function renderSubleaseResultHtml(...args) {
+    const renderer = global.LeaseQantTfrs16OperationsUi?.renderSubleaseResultHtml;
+    return typeof renderer === "function" ? renderer(...args) : "";
   }
 
   function updateScheduleSubPeriodUI() {
