@@ -140,6 +140,22 @@
     return `<div style="margin-top:8px;"><div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">DENETİM İZİ</div><h3 style="margin:5px 0 0;font-size:18px;">Denetim İzi (Audit Trail)</h3><p style="margin:5px 0 0;color:#64748b;font-size:11px;">Bu sözleşmeye ait tüm oluşturma, güncelleme, modification, reassessment ve yevmiye kayıtlarını Excel/CSV olarak dışa aktarın.</p><div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;"><label style="font-size:11px;color:#64748b;font-weight:600;">Sunum Para Birimi<select id="auditPresentationCurrency" style="display:block;margin-top:4px;padding:7px;border:1px solid #d1d5db;border-radius:7px;">${currencyOptions}</select></label><button type="button" id="exportContractAuditTrailButton" class="secondary-button">↓ Denetim İzini Dışa Aktar</button></div><div style="margin-top:14px;overflow:auto;"><table class="gk-audit-table" style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Tarih</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Kullanıcı</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">İşlem</th><th style="text-align:left;padding:7px;border-bottom:1px solid #dbe3ef;">Neden</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
 
+  function renderContractSummaryTab(contract, metrics = {}, options = {}) {
+    const api = bridge();
+    const safeContract = contract || {};
+    const calculationError = options.calculationError === true;
+    const currency = String(safeContract.currency || "TRY").toUpperCase();
+    const money = value => typeof api.formatPresentationCurrency === "function"
+      ? api.formatPresentationCurrency(value, currency)
+      : String(value ?? "—");
+    const metric = value => calculationError ? "—" : money(value);
+    const frequencyLabel = typeof api.resolvePaymentFrequencyLabel === "function"
+      ? api.resolvePaymentFrequencyLabel(safeContract.paymentFrequency)
+      : "Aylık";
+    const item = (label, value) => `<div class="detail-item"><span>${esc(label)}</span><strong>${value}</strong></div>`;
+    return `<div class="detail-grid">${item("Şirket", esc(safeContract.company || ""))}${item("Tedarikçi", esc(safeContract.supplier || ""))}${item(`${esc(frequencyLabel)} Kira`, `${money(safeContract.monthlyPayment)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("ROU Varlığı", `${metric(metrics.rouAssets)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("İlk Kira Yükümlülüğü", `${metric(metrics.liability)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}${item("Aylık Amortisman", `${metric(metrics.depreciation)} <span style="font-size:11px;color:#64748b;margin-left:4px;">${esc(currency)}</span>`)}</div>`;
+  }
+
   function bindContractAuditTab(contract) {
     const button = document.getElementById("exportContractAuditTrailButton");
     if (!button) return;
@@ -294,6 +310,7 @@
     renderAuditTrail,
     renderAuditTrailBody,
     renderContractAuditTab,
+    renderContractSummaryTab,
     bindContractAuditTab,
     renderFootnotes
   };
