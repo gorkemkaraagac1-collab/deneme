@@ -312,6 +312,31 @@
   }
 
   /**
+   * Render the payment-plan body and its status containers.  The engine
+   * supplies already-rendered row HTML and status text; this module owns the
+   * remaining DOM writes for the table's empty/private/FX states.
+   */
+  function renderPaymentScheduleState({ rowsHtml = "", fxMessage = "", hasRows = false, emptyMessage = null } = {}) {
+    const tbody = document.getElementById("scheduleTableBody");
+    if (!tbody) return false;
+    tbody.innerHTML = rowsHtml;
+
+    const empty = document.getElementById("scheduleEmptyState");
+    if (empty) {
+      if (emptyMessage) {
+        empty.textContent = emptyMessage;
+        empty.style.display = "block";
+      } else {
+        empty.style.display = hasRows ? "none" : "block";
+      }
+    }
+
+    const fxStatus = document.getElementById("scheduleFxStatus");
+    if (fxStatus) fxStatus.textContent = fxMessage || "";
+    return true;
+  }
+
+  /**
    * Bind payment-plan controls without moving calculation or private-result
    * logic into the public UI module. The engine supplies the callbacks that
    * perform those operations; this module owns only DOM wiring and the
@@ -619,5 +644,5 @@
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, bindPaymentScheduleEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, bindPaymentScheduleEvents };
 })(window);

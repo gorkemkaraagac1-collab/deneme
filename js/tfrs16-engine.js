@@ -11280,14 +11280,6 @@ ${renderPaymentScheduleFooterContainers()}
   }
 
   async function renderPaymentScheduleTable(contract) {
-
-    const tbody =
-      document.getElementById(
-        "scheduleTableBody"
-      );
-
-    if (!tbody) return;
-
     const periodType =
       document.getElementById(
         "schedulePeriodType"
@@ -11311,14 +11303,10 @@ ${renderPaymentScheduleFooterContainers()}
     // the public engine is available only through the explicit ?api=0 path.
     const privateResult = await loadPrivateReadOnlyResult(contract);
     if (isPrivateCalculationApiReady() && !privateResult) {
-      tbody.innerHTML = "";
-      const empty = document.getElementById("scheduleEmptyState");
-      if (empty) {
-        empty.textContent = "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek.";
-        empty.style.display = "block";
-      }
-      const fxStatus = document.getElementById("scheduleFxStatus");
-      if (fxStatus) fxStatus.textContent = "Kurlar doğrulanıp private hesaplama tamamlandıktan sonra tekrar deneyin.";
+      global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
+        emptyMessage: "Private hesaplama sonucu hazır olduğunda ödeme planı görüntülenecek.",
+        fxMessage: "Kurlar doğrulanıp private hesaplama tamamlandıktan sonra tekrar deneyin."
+      });
       return;
     }
     const engine = privateResult?.schedule
@@ -11345,32 +11333,22 @@ ${renderPaymentScheduleFooterContainers()}
     getScheduleReportingDate()
   );
     const rows = conversion.schedule;
-    const fxStatus = document.getElementById("scheduleFxStatus");
-    if (fxStatus) {
-      fxStatus.textContent = sourceCurrency === presentationCurrency ? "" : conversion.ok
-        ? `${conversion.asOfDate} kuruyla gösterim: 1 ${sourceCurrency} = ${conversion.rate} ${presentationCurrency}. Gelecek ödemelerin bu karşılığı tahmin veya muhasebe kaydı değildir.`
-        : `${sourceCurrency}/${presentationCurrency}: ${conversion.asOfDate} için kur bulunamadı. Raporlama Tarihi alanından kayıtlı kur tarihini seçin.`;
-    }
+    const fxMessage = sourceCurrency === presentationCurrency ? "" : conversion.ok
+      ? `${conversion.asOfDate} kuruyla gösterim: 1 ${sourceCurrency} = ${conversion.rate} ${presentationCurrency}. Gelecek ödemelerin bu karşılığı tahmin veya muhasebe kaydı değildir.`
+      : `${sourceCurrency}/${presentationCurrency}: ${conversion.asOfDate} için kur bulunamadı. Raporlama Tarihi alanından kayıtlı kur tarihini seçin.`;
 
     // V18 Parça 1 — satır sunumu operations UI modülündedir; motor yalnızca
     // private sonuçları ve dönüşüm verisini köprü üzerinden sağlar.
     const basePaymentV18 = Number(contract?.monthlyPayment) || 0;
     const rowRenderer = global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleRows;
-    tbody.innerHTML = typeof rowRenderer === "function"
+    const rowsHtml = typeof rowRenderer === "function"
       ? rowRenderer(rows, presentationCurrency, basePaymentV18)
       : "";
-
-    const empty =
-      document.getElementById(
-        "scheduleEmptyState"
-      );
-
-    if (empty) {
-      empty.style.display =
-        rows.length
-          ? "none"
-          : "block";
-    }
+    global.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
+      rowsHtml,
+      fxMessage,
+      hasRows: rows.length
+    });
   }
 
   function renderFxTranslationSection(contract) {
