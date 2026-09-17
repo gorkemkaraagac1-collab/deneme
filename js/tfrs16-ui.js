@@ -991,6 +991,10 @@ window.fetch = (input, init = {}) => {
 
     updateKPIs();
     renderTable();
+    // Deep-linked reporting, close and risk screens can render before the
+    // asynchronous private batch has finished. Repaint the active host now
+    // that its synchronous consumers can see the warmed private results.
+    try { if (typeof v26RefreshActivePage === "function") v26RefreshActivePage(); } catch (_) { /* best effort */ }
     if (selectedContractId && contracts.some(item => item.id === selectedContractId)) {
       openDetail(selectedContractId, { skipPrivateRefresh: true });
     }
@@ -20861,9 +20865,12 @@ ${renderAccountingCenterBulkPromo()}
     const summary = typeof getControlSummary === "function" ? getControlSummary(date) : null;
     const risks = typeof getRiskSummary === "function" ? getRiskSummary(date) : null;
     const exceptions = typeof getOpenExceptions === "function" ? getOpenExceptions() : [];
+    const snapshots = Array.isArray(summary?.snapshots) ? summary.snapshots : [];
+    const measuredControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.length : 0), 0);
+    const passedControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.filter(control => control.status === CONTROL_STATUS.GREEN).length : 0), 0);
     return v191Kpis([
-      { label: "Controls", value: v191Value(summary?.totalControls ?? summary?.total ?? 0), description: "Existing control engine" },
-      { label: "Passed", value: v191Value(summary?.passed ?? 0), description: "Existing control results" },
+      { label: "Controls", value: v191Value(summary?.totalControls ?? summary?.total ?? measuredControls), description: "Existing control engine" },
+      { label: "Passed", value: v191Value(summary?.passed ?? passedControls), description: "Existing control results" },
       { label: "Open Exceptions", value: v191Value(Array.isArray(exceptions) ? exceptions.length : summary?.openExceptions ?? 0), description: "Open control exceptions" },
       { label: "Critical", value: v191Value(risks?.critical ?? risks?.criticalExceptions ?? 0), description: "Existing risk classification" }
     ]) + `<h3>Open Control Exceptions</h3>${v191Table(Array.isArray(exceptions) ? exceptions : [], [
