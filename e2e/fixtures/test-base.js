@@ -39,6 +39,31 @@ const test = base.test.extend({
     // Ana motor kabuğu yüklendiğinde yeni sözleşme eylemi hazırdır.
     await stubbedPage.waitForSelector("#newContractButton", { timeout: 15000 });
     await use(stubbedPage);
+  },
+
+  /** Derin bağlantıların private hydration yarışına girmediğini doğrulayan sayfa. */
+  delayedPrivatePage: async ({ page, apiStore }, use) => {
+    await seedSession(page, DEFAULT_USER);
+    apiStore.contracts.push({
+      id: "DEEP-LINK-E2E-001",
+      company: "E2E Test A.Ş.",
+      companyId: "E2E-CO-1",
+      supplier: "Hydration Test Supplier",
+      monthlyPayment: 100,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      discountRate: 10,
+      currency: "TRY",
+      status: "active"
+    });
+    await installApiStub(page, {
+      store: apiStore,
+      calculationDelayMs: 300
+    });
+    const consoleErrors = [];
+    page.on("pageerror", error => consoleErrors.push(String(error?.message || error)));
+    page.consoleErrors = consoleErrors;
+    await use(page);
   }
 });
 
