@@ -22,11 +22,13 @@ test.describe("TMS19 private API geçişi", () => {
     expect(store.tms19Calculations[1].mode).toBe("employee");
   });
 
-  test("api=0 modunda private endpoint çağrılmaz ve kontrollü hata gösterilir", async ({ page }) => {
+  test("api=0 modunda private endpoint çağrılmaz ve kontrollü kaynak durumu korunur", async ({ page }) => {
     const store = await installApiStub(page);
 
     await page.goto("/tms19.html?api=0");
-    await expect(page.locator("#toast")).toContainText("Özel hesaplama API'si");
+    // The page also announces that its sample data loaded, so the toast is
+    // intentionally not the source-of-truth for this asynchronous path.
+    await expect.poll(() => page.evaluate(() => window.LEASEQANT_TMS19_CALCULATION_SOURCE)).toBe("api-disabled");
     expect(store.tms19Calculations).toHaveLength(0);
     expect(await page.evaluate(() => window.LEASEQANT_TMS19_CALCULATION_SOURCE)).toBe("api-disabled");
   });
