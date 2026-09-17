@@ -80,6 +80,7 @@ function json(body, status = 200) {
 async function installApiStub(page, options = {}) {
   const store = options.store || createStore(options.contracts || []);
   const user = { ...DEFAULT_USER, ...(options.user || {}) };
+  const calculationDelayMs = Math.max(0, Number(options.calculationDelayMs) || 0);
 
   await page.route(`${API_ORIGIN}/**`, async route => {
     const request = route.request();
@@ -132,6 +133,9 @@ async function installApiStub(page, options = {}) {
     // deterministik bir sonuç döndürür ve isteğin gerçekten yapıldığını
     // store.calculations üzerinden görünür kılar.
     if (path === "/api/calculations/lease" && method === "POST") {
+      if (calculationDelayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, calculationDelayMs));
+      }
       let payload = {};
       try { payload = JSON.parse(request.postData() || "{}"); } catch (_) { payload = {}; }
       const contract = payload.contract || {};

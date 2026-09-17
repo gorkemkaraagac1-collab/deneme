@@ -224,6 +224,18 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
+  test("derin bağlantı private hydration tamamlanmadan kontrol ekranını çizmez", async ({ delayedPrivatePage }) => {
+    await delayedPrivatePage.goto("/tfrs16.html?open=riskControls");
+
+    // Hesaplama yanıtı bilerek geciktirildi. Kontrol ekranı bu aralıkta
+    // boş/eksik private sonuçlarla çizilmemeli; ilk görünür render hazır
+    // cache ile gelmeli.
+    await expect(delayedPrivatePage.locator("#v26PageHost")).toHaveText("");
+    await expect(delayedPrivatePage.locator("#v26PageHost")).toContainText("Risk & Kontroller", { timeout: 15000 });
+    await expect(delayedPrivatePage.locator("#v26PageHost")).not.toContainText("Private hesaplama sonucu henüz hazır değil");
+    expect(delayedPrivatePage.consoleErrors).toEqual([]);
+  });
+
   // FAZ 2 (2026-09-15): ?api=0 acil geri dönüş modu tamamen kaldırıldı
   // (Burhan'ın kararı — private backend'e tam bağımlılık). Bu test artık
   // var olmayan bir özelliği doğruluyordu; skip edip görünür bırakıyoruz.

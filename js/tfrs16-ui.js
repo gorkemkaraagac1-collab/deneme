@@ -29215,23 +29215,45 @@ ${renderAccountingCenterBulkPromo()}
       }
 
       const openInMain = renderer => { if (typeof v191ActiveScreenRefreshCallback !== "undefined") v191ActiveScreenRefreshCallback = null; let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
+
+      // Calculation-backed pages must not render while the private result
+      // cache is still warming.  A synchronous first paint used to run the
+      // control/close/reporting consumers against an empty cache, producing
+      // transient (and misleading) "no schedule" / "calculation missing"
+      // exceptions.  The hydration coordinator is shared with the normal
+      // page bootstrap, so calling run() here joins the existing request
+      // instead of issuing a second batch.  If hydration fails, render the
+      // page anyway so its explicit backend error state remains visible.
+      const openInMainWhenReady = renderer => {
+        const coordinator = window.__GK_TFRS16_PRIVATE_HYDRATION__;
+        if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+            typeof coordinator?.run === "function") {
+          return Promise.resolve(coordinator.run())
+            .then(() => openInMain(renderer))
+            .catch(error => {
+              console.error("Private hydration navigation beklenirken hata:", error);
+              return openInMain(renderer);
+            });
+        }
+        return openInMain(renderer);
+      };
       document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
-      document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMain(renderCloseDashboardPage));
-      document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMain(renderAccountMappingPage));
-      document.getElementById("v26NavCompanies")?.addEventListener("click",()=>openInMain(renderCompanyManagementPage));
-      document.getElementById("v26NavGroups")?.addEventListener("click",()=>openInMain(renderGroupManagementPage));
-      document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMain(renderEliminationManagementPage));
-      document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMain(renderFxRateManagementPage));
-      document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMain(renderInflationIndexManagementPage));
-      document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMain(renderModificationReassessmentPage));
-      document.getElementById("v26NavSlb")?.addEventListener("click",()=>openInMain(renderSlbManagementPage));
-      document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMain(renderSubleaseManagementPage));
-      document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMain(renderAccountingCenterPage));
-      document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMain(renderFootnotesPage));
-      document.getElementById("v26NavRiskControls")?.addEventListener("click",()=>openInMain(renderRiskControlsPage));
-      document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMain(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
-      document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMain(renderAuditTrailPage));
-      window.__gkOpenInMain = openInMain;
+      document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMainWhenReady(renderCloseDashboardPage));
+      document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMainWhenReady(renderAccountMappingPage));
+      document.getElementById("v26NavCompanies")?.addEventListener("click",()=>openInMainWhenReady(renderCompanyManagementPage));
+      document.getElementById("v26NavGroups")?.addEventListener("click",()=>openInMainWhenReady(renderGroupManagementPage));
+      document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMainWhenReady(renderEliminationManagementPage));
+      document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMainWhenReady(renderFxRateManagementPage));
+      document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMainWhenReady(renderInflationIndexManagementPage));
+      document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMainWhenReady(renderModificationReassessmentPage));
+      document.getElementById("v26NavSlb")?.addEventListener("click",()=>openInMainWhenReady(renderSlbManagementPage));
+      document.getElementById("v26NavSublease")?.addEventListener("click",()=>openInMainWhenReady(renderSubleaseManagementPage));
+      document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMainWhenReady(renderAccountingCenterPage));
+      document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMainWhenReady(renderFootnotesPage));
+      document.getElementById("v26NavRiskControls")?.addEventListener("click",()=>openInMainWhenReady(renderRiskControlsPage));
+      document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMainWhenReady(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
+      document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMainWhenReady(renderAuditTrailPage));
+      window.__gkOpenInMain = openInMainWhenReady;
       try {
         const deepLinkTarget = new URLSearchParams(window.location.search).get("open");
         const deepLinkMap = {
@@ -29258,11 +29280,16 @@ ${renderAccountingCenterBulkPromo()}
         // gibi bir çağrıyla, renderer fonksiyonuna doğrudan erişimi
         // olmadan (o closure-scope'ta) aynı sayfayı açabiliyorlar.
         window.__gkOpenInMainByKey = key => {
-          if (deepLinkMap[key]) openInMain(deepLinkMap[key]);
+          if (deepLinkMap[key]) return openInMainWhenReady(deepLinkMap[key]);
+          return undefined;
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
           window.__gkDeepLinkOpened = true;
-          openInMain(deepLinkMap[deepLinkTarget]);
+          // The runtime installs the hydration hook at the end of boot.
+          // Defer one task so the coordinator can join the same boot request;
+          // otherwise the deep link would be the one caller that paints
+          // before private results are available.
+          setTimeout(() => { void openInMainWhenReady(deepLinkMap[deepLinkTarget]); }, 0);
         }
       } catch (error) { console.error("V26 deep-link open error:", error); }
       return true;
