@@ -16370,10 +16370,13 @@ ${renderAccountingCenterBulkPromo()}
           const d = typeof rptDate === "function" ? rptDate(row?.date) : new Date(row?.date);
           return d && !Number.isNaN(d.getTime()) && d <= closeResolveDate(reportingDate);
         });
-        if (!validDates || !relevant.length) failures.push(contract.id);
+        if (!validDates) failures.push(contract.id);
         else {
+          // Annual/quarterly contracts can have their first payment after the
+          // selected close date. A valid schedule with no row at or before the
+          // close date is reviewable, but it is not missing or invalid data.
           const invalidCore = relevant.some(row => row?.closingLiability === undefined && row?.liabilityClosing === undefined && row?.payment === undefined);
-          if (invalidCore) warnings.push(contract.id);
+          if (invalidCore || !relevant.length) warnings.push(contract.id);
         }
       } catch (error) {
         failures.push(contract.id);
