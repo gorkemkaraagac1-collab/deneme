@@ -13604,7 +13604,11 @@ ${renderAccountingCenterBulkPromo()}
       const schedule = Array.isArray(engine.schedule) ? engine.schedule : [];
       const negative = schedule.find(row => Number(row?.rouClosing) < -CONTROL_TOLERANCE || Number(row?.rouOpening) < -CONTROL_TOLERANCE);
       if (negative) return controlResult(config, contract, CONTROL_STATUS.RED, false, "ROU schedule contains a negative balance.", "ROU >= 0", negative, "Review depreciation and modification/reassessment adjustments.");
-      const rou = Number(engine.rou);
+      // The private calculation API exposes the opening ROU as `rouAssets`
+      // (the same field used by KPI/reporting consumers). Keep `rou` as a
+      // compatibility fallback for any older event-aware response, but do
+      // not treat a valid private `rouAssets` value as missing.
+      const rou = Number(engine.rouAssets ?? engine.rou);
       if (!Number.isFinite(rou) || rou < -CONTROL_TOLERANCE) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Calculated ROU asset is invalid or negative.", ">= 0 and finite", rou, "Review ROU calculation and lease adjustments.");
       return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "ROU calculation is valid and non-negative.", ">= 0 and finite", rou, "No action required.");
     } catch (error) {
