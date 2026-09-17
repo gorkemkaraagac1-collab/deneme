@@ -987,6 +987,12 @@ window.fetch = (input, init = {}) => {
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
+      // Contract hydration can render reporting/close consumers once before
+      // the private batch is ready. That first render seeds the CFO aggregate
+      // cache with zero/empty balances; invalidate only derived local
+      // aggregates after private results arrive while preserving the warmed
+      // private result cache itself.
+      clearCalculationCache(undefined, { preservePrivate: true });
     }
 
     updateKPIs();
