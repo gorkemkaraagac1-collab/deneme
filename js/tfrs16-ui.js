@@ -1,96 +1,7 @@
 const __gkTfrs16Boot = () => {
 
-  /* ==========================================================
-     EMERGENCY UI BRIDGE V2
-     ----------------------------------------------------------
-     Capture-phase wiring is installed before the legacy UI wiring.
-     This guarantees that the existing V19.1/V24 handlers cannot
-     leave the core contract/import buttons inert if another init
-     block fails or overwrites an element handler.
-     ========================================================== */
-  if (!window.__GK_TFRS16_UI_BRIDGE_V2__) {
-    window.__GK_TFRS16_UI_BRIDGE_V2__ = true;
+  // Core form event bridge lives in the UI-only module loaded before this runtime.
 
-    document.addEventListener("click", event => {
-      const button = event.target?.closest?.("button");
-      if (!button) return;
-
-      const id = button.id;
-      try {
-        if (id === "newContractButton") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (button.dataset.writeBlocked === "true") {
-            (typeof showToast === "function" ? showToast : alert)(
-              "Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol)."
-            );
-            return;
-          }
-          if (typeof openContractModal === "function") openContractModal();
-          else document.getElementById("contractModal")?.classList.remove("hidden");
-          return;
-        }
-
-        if (id === "bulkImportButton") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (typeof openBulkImportModal === "function") openBulkImportModal();
-          else document.getElementById("bulkImportModal")?.classList.remove("hidden");
-          return;
-        }
-
-        if (id === "closeModal" || id === "cancelModal") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (typeof closeContractModal === "function") closeContractModal();
-          else document.getElementById("contractModal")?.classList.add("hidden");
-          return;
-        }
-
-        if (id === "closeBulkModal" || id === "cancelBulkImport") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (typeof closeBulkImportModal === "function") closeBulkImportModal();
-          else document.getElementById("bulkImportModal")?.classList.add("hidden");
-          return;
-        }
-
-        if (id === "downloadTemplateButton") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (typeof downloadTemplate === "function") downloadTemplate();
-          return;
-        }
-
-        if (id === "confirmBulkImport") {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (typeof confirmBulkImport === "function") confirmBulkImport();
-          return;
-        }
-      } catch (error) {
-        console.error("GK TFRS16 UI Bridge V2 error:", error);
-        showAlert(`İşlem başlatılamadı: ${error?.message || String(error)}`);
-      }
-    }, true);
-
-    document.addEventListener("change", event => {
-      const input = event.target;
-      if (!input || input.id !== "bulkFileInput") return;
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        event.stopImmediatePropagation();
-        if (typeof readBulkImportFile === "function") readBulkImportFile(file);
-        else if (typeof parseIntegrationFile === "function") parseIntegrationFile(file);
-        else throw new Error("Excel import fonksiyonu yüklenemedi.");
-      } catch (error) {
-        console.error("GK TFRS16 Excel import bridge error:", error);
-        const status = document.getElementById("bulkImportStatus");
-        if (status) status.textContent = `Excel aktarımı başlatılamadı: ${error?.message || String(error)}`;
-      }
-    }, true);
-  }
 
   /*
   ============================================================
@@ -30229,6 +30140,22 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!container) return;
     container.innerHTML = `<div class="gk-v26-card">Enflasyon endeksleri arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
+
+  // Form/import actions are delegated to the UI-only bridge loaded before this runtime.
+  // The bridge resolves these callbacks only after boot, so script order cannot
+  // expose calculation or persistence internals to the public page.
+  window.__GK_TFRS16_FORM_UI__ = {
+    openContractModal,
+    openBulkImportModal,
+    closeContractModal,
+    closeBulkImportModal,
+    downloadTemplate,
+    confirmBulkImport,
+    readBulkImportFile,
+    parseIntegrationFile,
+    showToast,
+    showAlert
+  };
 
   // The coordinator invokes this after runtime boot has completed, so all
   // runtime declarations are ready before the first private hydration.
