@@ -13589,7 +13589,20 @@ ${renderAccountingCenterBulkPromo()}
       if (!schedule.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Calculation returned an empty payment schedule.", "Non-empty schedule", 0, "Correct lease dates/payment assumptions and regenerate the calculation.");
       const invalid = schedule.find(row => !isFiniteNumber(Number(row?.openingLiability)) || !isFiniteNumber(Number(row?.interest)) || !isFiniteNumber(Number(row?.payment)) || !isFiniteNumber(Number(row?.principal)) || !isFiniteNumber(Number(row?.closingLiability)) || Number(row.closingLiability) < -CONTROL_TOLERANCE);
       if (invalid) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Lease liability schedule contains an invalid or negative balance.", "Finite non-negative liability balances", invalid, "Review the calculation inputs and schedule generation.");
-      const broken = schedule.find(row => Math.abs((safeNumber(row.openingLiability) + safeNumber(row.interest) - safeNumber(row.payment)) - safeNumber(row.closingLiability)) > CONTROL_TOLERANCE);
+      // The private engine records an advance payment made at commencement as
+      // a separate first schedule row. That cash payment is settled before the
+      // liability starts accruing, so the row intentionally keeps opening and
+      // closing liability equal with zero principal. It must not be judged by
+      // the normal opening + interest - payment reconciliation formula.
+      const reconciliationRows = schedule.filter((row, index) => {
+        const commencementAdvance = index === 0 &&
+          isAdvancePaymentTiming(contract?.paymentTiming) &&
+          safeNumber(row?.payment) > CONTROL_TOLERANCE &&
+          Math.abs(safeNumber(row?.principal)) <= CONTROL_TOLERANCE &&
+          Math.abs(safeNumber(row?.closingLiability) - safeNumber(row?.openingLiability)) <= CONTROL_TOLERANCE;
+        return !commencementAdvance;
+      });
+      const broken = reconciliationRows.find(row => Math.abs((safeNumber(row.openingLiability) + safeNumber(row.interest) - safeNumber(row.payment)) - safeNumber(row.closingLiability)) > CONTROL_TOLERANCE);
       if (broken) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Opening liability + interest - payment does not reconcile to closing liability.", "Opening + Interest - Payment = Closing", broken, "Review the liability amortisation calculation.");
       return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Lease liability calculation and schedule arithmetic reconcile.", "All schedule rows reconcile", { periods: schedule.length, liability: safeNumber(engine.liability) }, "No action required.");
     } catch (error) {
