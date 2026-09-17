@@ -16,12 +16,14 @@
       return;
     }
     runtimeBoot();
-    const hydrate = window.__GK_TFRS16_UI_HYDRATE__;
-    if (typeof hydrate !== "function") {
-      console.error("TFRS16 UI hydration hook bulunamadı.");
+    const privateHydration = window.__GK_TFRS16_PRIVATE_HYDRATION__;
+    if (typeof privateHydration?.run !== "function") {
+      console.error("TFRS16 private hydration koordinatörü bulunamadı.");
       return;
     }
-    void hydrate();
+    void privateHydration.run().catch(error => {
+      console.error("TFRS16 private hydration başarısız:", error);
+    });
   };
 
   if (document.readyState === "loading") {
