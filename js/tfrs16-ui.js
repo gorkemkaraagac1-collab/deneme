@@ -775,6 +775,7 @@ window.fetch = (input, init = {}) => {
       contracts = mapped;
       backendContractsHydrated = true;
       backendContractsHydrationError = null;
+      await hydrateAuditEventsFromApi();
       try {
         saveContracts(contracts);
       } catch (_) { /* Cache persistence is best-effort. */ }
@@ -1623,6 +1624,71 @@ window.fetch = (input, init = {}) => {
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Private audit rows use PostgreSQL snake_case columns while the browser
+   * audit model uses camelCase. Historical evidence also keeps the lifecycle
+   * id in metadata.eventId, so lift those identifiers before controls read
+   * the local trail.
+   */
+  function normalizeBackendAuditEvent(row) {
+    if (!row || typeof row !== "object") return null;
+    let metadata = row.metadata;
+    if (typeof metadata === "string") {
+      try { metadata = JSON.parse(metadata); } catch (_) { metadata = {}; }
+    }
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) metadata = {};
+
+    const action = String(row.action || "UNKNOWN");
+    const eventId = metadata.eventId || metadata.event_id || null;
+    const contractId = row.contractId ?? row.contract_id ?? metadata.contractId ?? metadata.contract_id ?? null;
+    const entityId = row.entityId ?? row.entity_id ?? metadata.entityId ?? metadata.entity_id ?? eventId ?? null;
+
+    return normalizeAuditEventData({
+      id: row.id,
+      timestamp: row.timestamp || row.created_at || row.createdAt,
+      actor: row.actor,
+      action,
+      entityType: row.entityType || row.entity_type || (action.endsWith("_APPLIED") ? action.replace(/_APPLIED$/, "") : "SYSTEM"),
+      entityId,
+      companyId: row.companyId ?? row.company_id ?? metadata.companyId ?? metadata.company_id ?? null,
+      contractId,
+      oldValue: row.oldValue ?? row.old_value ?? null,
+      newValue: row.newValue ?? row.new_value ?? null,
+      source: row.source || metadata.source || "PRIVATE_API",
+      modificationId: row.modificationId ?? row.modification_id ?? metadata.modificationId ?? metadata.modification_id ?? (action === "MODIFICATION_APPLIED" ? eventId : null),
+      reassessmentId: row.reassessmentId ?? row.reassessment_id ?? metadata.reassessmentId ?? metadata.reassessment_id ?? (action === "REASSESSMENT_APPLIED" ? eventId : null),
+      journalId: row.journalId ?? row.journal_id ?? metadata.journalId ?? metadata.journal_id ?? null,
+      reason: row.reason ?? metadata.reason ?? null,
+      metadata
+    });
+  }
+
+  /**
+   * Risk and reporting controls read the browser audit repository. Hydrate it
+   * from the authenticated private API so DB evidence is available after a
+   * fresh browser session. A temporary API failure remains non-fatal.
+   */
+  async function hydrateAuditEventsFromApi() {
+    if (typeof tfrs16ApiFetch !== "function" || !tfrs16GetToken()) return;
+    try {
+      const response = await tfrs16ApiFetch("/api/audit?limit=1000", { cache: "no-store" });
+      const rows = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : []);
+      if (!rows.length) return;
+
+      const existing = loadAuditEvents();
+      const byId = new Map(existing.map(event => [String(event?.id || ""), event]).filter(([id]) => id));
+      rows.forEach(row => {
+        const event = normalizeBackendAuditEvent(row);
+        if (!event?.id) return;
+        const id = String(event.id);
+        byId.set(id, { ...(byId.get(id) || {}), ...event });
+      });
+      saveAuditEvents(Array.from(byId.values()));
+    } catch (error) {
+      console.warn("[TFRS16] Private audit hydration failed:", error?.message || error);
     }
   }
 
