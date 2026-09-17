@@ -23,6 +23,7 @@ const html = read("tfrs16.html");
 const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
+const privateCacheUi = read("js/tfrs16-private-cache-ui.js");
 const coordinator = read("js/tfrs16-ui-coordinator.js");
 const privateResultBridge = read("js/tfrs16-private-result-bridge.js");
 const detailUi = read("js/tfrs16-detail-ui.js");
@@ -47,6 +48,8 @@ const checks = [
   ["compatibility calculation wrappers delegate to the private result bridge", /LeaseQantTfrs16PrivateResultBridge/.test(engine) && /bridge\.calculate\(contract\)/.test(engine) && /bridge\.calculateEngine\(contract\)/.test(engine) && /bridge\.getEscalatedPayments\(contract\)/.test(engine)],
   ["private calculation consumer is exported for the result bridge", /getPrivateCalculationForConsumer,/.test(engine)],
   ["TFRS16 UI coordinator exists", exists("js/tfrs16-ui-coordinator.js")],
+  ["TFRS16 private cache UI module exists", exists("js/tfrs16-private-cache-ui.js") && /LeaseQantTfrs16PrivateCacheUi/.test(privateCacheUi)],
+  ["TFRS16 private cache UI module loads before the runtime", html.indexOf("tfrs16-private-cache-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-private-cache-ui.js')],
   ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
   ["TFRS16 detail UI module exists", exists("js/tfrs16-detail-ui.js") && /LeaseQantTfrs16DetailUi/.test(detailUi)],
   ["TFRS16 detail UI module loads before the runtime", html.indexOf("tfrs16-detail-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-ui.js')],
@@ -158,9 +161,9 @@ const checks = [
   // KOŞULSUZ olarak önce private cache'e bakıyor, yoksa fail-closed
   // throw ediyor. Aşağıdaki check bu deseni doğruluyor.
   ["engine reads the private cache unconditionally, with no local fallback", /PRIVATE_CALCULATION_NOT_READY/.test(engine) && !/[=(]\s*calculateLeaseEngineImpl\(contract\)/.test(engine)],
-  ["engine prefers batch hydration when available", /LeaseQantPrivateCalculation\.calculateMany/.test(engine)],
-  ["engine hydrates through the private facade when available", /LeaseQantPrivateTfrs16Facade/.test(engine) && /batchLoader/.test(engine)],
-  ["payment-plan consumer requests the private read-only result", /async function loadPrivateReadOnlyResult\(/.test(engine) && /const privateResult = await loadPrivateReadOnlyResult\(contract\)/.test(engine)],
+  ["private cache module prefers batch hydration when available", /calculateMany/.test(privateCacheUi)],
+  ["private cache module hydrates through the private facade when available", /LeaseQantPrivateTfrs16Facade/.test(privateCacheUi) && /batchLoader/.test(privateCacheUi)],
+  ["payment-plan consumer requests the private read-only result", /function loadPrivateReadOnlyResult\(/.test(engine) && /loadReadOnly/.test(privateCacheUi) && /const privateResult = await loadPrivateReadOnlyResult\(contract\)/.test(engine)],
   ["synchronous consumers have a private-cache lookup", /function getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["control schedule resolves through the private-only source", /function controlSchedule\(contract\)\s*\{[\s\S]{0,500}resolveContractScheduleSource\(contract\)/.test(engine)],
   ["contract tools prefer the warmed private schedule", /function v191RenderContractTools\(\)[\s\S]{0,900}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
