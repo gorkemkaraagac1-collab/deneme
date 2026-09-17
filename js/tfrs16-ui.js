@@ -1672,7 +1672,9 @@ window.fetch = (input, init = {}) => {
    * fresh browser session. A temporary API failure remains non-fatal.
    */
   async function hydrateAuditEventsFromApi() {
-    if (typeof tfrs16ApiFetch !== "function" || !tfrs16GetToken()) return;
+    // The current session normally uses an HttpOnly cookie; a bearer token
+    // is only a legacy fallback. tfrs16ApiFetch already sends credentials.
+    if (typeof tfrs16ApiFetch !== "function") return;
     try {
       const response = await tfrs16ApiFetch("/api/audit?limit=1000", { cache: "no-store" });
       const rows = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : []);
