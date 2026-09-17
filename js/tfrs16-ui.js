@@ -1672,9 +1672,7 @@ window.fetch = (input, init = {}) => {
    * fresh browser session. A temporary API failure remains non-fatal.
    */
   async function hydrateAuditEventsFromApi() {
-    // The current session normally uses an HttpOnly cookie; a bearer token
-    // is only a legacy fallback. tfrs16ApiFetch already sends credentials.
-    if (typeof tfrs16ApiFetch !== "function") return;
+    if (typeof tfrs16ApiFetch !== "function" || !tfrs16GetToken()) return;
     try {
       const response = await tfrs16ApiFetch("/api/audit?limit=1000", { cache: "no-store" });
       const rows = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : []);
@@ -17145,6 +17143,30 @@ ${renderAccountingCenterBulkPromo()}
       container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${failed
         ? "Backend sözleşme verisi alınamadı. Kapanış sonuçları gösterilmiyor; Yenile ile tekrar deneyin."
         : "Backend sözleşme verisi yükleniyor… Kapanış sonuçları doğrulama tamamlanınca gösterilecek."}</div></div>`;
+      return;
+    }
+
+    // DÜZELTME (2026-09-17, Burhan'ın 30 kontratlık toplu içe aktarımından
+    // sonra bulundu): CLOSE-CALCULATION-COMPLETENESS/CLASSIFICATION gibi
+    // kontroller getPrivateCalculationForConsumer() çağırıyor — bu fonksiyon
+    // private sonuç henüz cache'te yoksa THROW EDER (bkz. controlCalculation,
+    // controlClassification). Portföydeki TÜM sözleşmelerin private sonucu
+    // henüz ısınmamışken bu sayfa açılırsa (ör. toplu import sonrası hemen
+    // Close Dashboard'a geçilirse), HER sözleşme CTRL-CALC-001/CTRL-CLS-001'i
+    // "unexpected error" ile RED döndürür — bu bir hesaplama hatası DEĞİL,
+    // bir hydration zamanlama boşluğu. updateKPIs()'in zaten kullandığı AYNI
+    // bekleme deseni burada da uygulanıyor; ensurePrivateCalculationCache
+    // tamamlanınca v26RefreshActivePage bu sayfayı otomatik yeniden çizer
+    // (host.__v26LastRenderer zaten bu fonksiyona işaret ediyor).
+    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+        Array.isArray(contracts) && contracts.length > 0 &&
+        (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
+      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">Private hesaplama sonuçları yükleniyor… Kapanış kontrolleri (CTRL-CALC-001, CTRL-CLS-001 vb.), portföydeki TÜM sözleşmelerin özel API sonucu hazır olunca gösterilecek — aksi halde her sözleşme geçici olarak "hata" gibi görünür.</div></div>`;
+      ensurePrivateCalculationCache(contracts).then(() => {
+        if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+      }).catch(() => {
+        if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+      });
       return;
     }
 
