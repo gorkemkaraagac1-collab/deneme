@@ -1263,6 +1263,7 @@ window.fetch = (input, init = {}) => {
     const localEvent = collection.find(item => String(item?.id) === String(eventId));
     if (!localEvent) return { valid: false, errors: [kind === "modification" ? "Modification bulunamadı." : "Reassessment bulunamadı."] };
     const before = cloneModificationValue(contract);
+    const beforeEvent = cloneModificationValue(localEvent);
 
     let result;
     try {
@@ -1303,6 +1304,36 @@ window.fetch = (input, init = {}) => {
         valid: false,
         errors: [`Backend'e uygulanmış ${kind} kaydı yazılamadı: ${error?.message || error}`]
       };
+    }
+
+    // The private apply endpoint owns the financial result, but the browser
+    // still owns the audit-sync boundary. Emit the two event-level evidence
+    // records only after the contract write succeeds, so a failed persistence
+    // attempt cannot leave a misleading APPLIED trail behind.
+    if (result.alreadyApplied !== true) {
+      if (kind === "modification") {
+        recordModificationAuditEvent(contract, "MODIFICATION_APPLIED", localEvent, beforeEvent, localEvent);
+        if (Array.isArray(localEvent.journal) && localEvent.journal.length) {
+          recordModificationAuditEvent(
+            contract,
+            "MODIFICATION_JOURNAL_GENERATED",
+            localEvent,
+            null,
+            localEvent.journal
+          );
+        }
+      } else {
+        recordReassessmentAuditEvent(contract, "REASSESSMENT_APPLIED", localEvent, beforeEvent, localEvent);
+        if (Array.isArray(localEvent.journal) && localEvent.journal.length) {
+          recordReassessmentAuditEvent(
+            contract,
+            "REASSESSMENT_JOURNAL_GENERATED",
+            localEvent,
+            null,
+            localEvent.journal
+          );
+        }
+      }
     }
 
     const calculation = result.calculation && typeof result.calculation === "object"
