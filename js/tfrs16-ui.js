@@ -2458,29 +2458,16 @@ window.fetch = (input, init = {}) => {
 
   async function refreshInflationIndexCacheFromBackend(months) {
     try {
-      const token = getInflationIndexAuthToken();
-      if (token === "__legacy_localstorage_disabled__") {
-        console.warn("TÜİK endeks cache'i yenilenemedi: backend JWT bulunamadı (frontend auth wiring tamamlanmamış). localStorage tablosu kullanılacak.");
-        return false;
-      }
-
       const query = Array.isArray(months) && months.length ? `?months=${encodeURIComponent(months.join(","))}` : "";
       // ÖNEMLİ DÜZELTME: relative "/api/inflation-indices" GitHub Pages'ten
       // (frontend origin) sunulduğunda backend'e DEĞİL, GitHub Pages'in
       // kendisine gider (404) — TFRS16_API_BASE (Cloud Run) ile aynı mutlak
       // URL şeması, dosyanın geri kalanındaki tfrs16ApiFetch()/TFRS16_API_BASE
       // kullanımıyla tutarlı hale getirildi.
-      const response = await fetch(`${TFRS16_API_BASE}/api/inflation-indices${query}`, {
- headers: { Authorization: token ? "Bearer " + token : "" },
-        cache: "no-store"
-      });
-
-      if (!response.ok) {
-        console.error(`TÜİK endeks cache'i yenilenemedi: HTTP ${response.status}. localStorage tablosu kullanılacak.`);
-        return false;
-      }
-
-      const body = await response.json();
+      // The authenticated browser session is represented by an HttpOnly
+      // cookie, so use the shared API helper instead of requiring a readable
+      // bearer token in local/session storage.
+      const body = await tfrs16ApiFetch(`/api/inflation-indices${query}`, { cache: "no-store" });
       const indices = Array.isArray(body?.indices) ? body.indices : null;
       if (!indices) {
         console.error("TÜİK endeks cache'i yenilenemedi: beklenmeyen yanıt formatı. localStorage tablosu kullanılacak.");
@@ -2503,18 +2490,14 @@ window.fetch = (input, init = {}) => {
   // mevcut fail-closed davranışı korunur.
   async function refreshFxRateCacheFromBackend() {
     try {
-      const token = getInflationIndexAuthToken();
-      if (!token) return false;
-      const responses = await Promise.all(["USD", "EUR"].map(currency =>
-        fetch(`${TFRS16_API_BASE}/api/fx-rates?from=${currency}&to=TRY`, {
-          headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
-        })
+      // Login uses the backend's HttpOnly session cookie.  Do not gate this
+      // refresh on a browser-readable bearer token: that made authenticated
+      // sessions with a cookie-only login skip the request entirely and left
+      // the synchronous FX cache empty, so KPI rendering reported a false
+      // FX_RATE_NOT_FOUND for every USD/EUR contract.
+      const bodies = await Promise.all(["USD", "EUR"].map(currency =>
+        tfrs16ApiFetch(`/api/fx-rates?from=${currency}&to=TRY`, { cache: "no-store" })
       ));
-      if (responses.some(response => !response.ok)) {
-        console.error("TCMB kur cache'i yenilenemedi: backend yanıtı başarısız.");
-        return false;
-      }
-      const bodies = await Promise.all(responses.map(response => response.json()));
       const rates = bodies.flatMap(body => Array.isArray(body?.rates) ? body.rates : [])
         .filter(row => row && (row.fromCurrency === "USD" || row.fromCurrency === "EUR") && row.toCurrency === "TRY"
           && row.verificationStatus === "VERIFIED" && Number(row.rate) > 0 && /^\d{4}-\d{2}-\d{2}/.test(String(row.rateDate)))
