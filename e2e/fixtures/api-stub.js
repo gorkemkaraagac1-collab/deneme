@@ -21,6 +21,7 @@
  *   GET    /api/customer/license
  *   GET    /api/admin/companies
  *   GET    /api/inflation-indices
+ *   GET    /api/fx-rates
  */
 
 "use strict";
@@ -262,6 +263,23 @@ async function installApiStub(page, options = {}) {
 
     if (path === "/api/inflation-indices") {
       return route.fulfill(json({ success: true, data: [] }));
+    }
+
+    if (path === "/api/fx-rates" && method === "GET") {
+      const fromCurrency = String(url.searchParams.get("from") || "").toUpperCase();
+      if (!["USD", "EUR"].includes(fromCurrency)) {
+        return route.fulfill(json({ success: false, error: "E2E FX para birimi desteklenmiyor." }, 400));
+      }
+      return route.fulfill(json({
+        rates: [{
+          fromCurrency,
+          toCurrency: "TRY",
+          rate: fromCurrency === "USD" ? 40 : 44,
+          rateDate: "2026-01-02",
+          rateType: "CLOSING",
+          verificationStatus: "VERIFIED"
+        }]
+      }));
     }
 
     // Kapsanmayan bir uç çağrılırsa SESSİZCE boş dönmek yerine
