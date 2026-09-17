@@ -5301,6 +5301,46 @@ window.fetch = (input, init = {}) => {
     }
   }
 
+  // Applied events can fall between dated payment rows. In that case the
+  // first future event-aware row carries the remeasured opening liability at
+  // the reporting cutoff; using only the last historical closing row
+  // understates the balance and breaks current/non-current reconciliation.
+  function eventAwareOutstandingLiability(contract, schedule, reportingDate, fallback) {
+    const target = parseDate(reportingDate);
+    const rows = Array.isArray(schedule) ? schedule : [];
+    if (!target || !rows.length) return Math.max(0, Number(fallback) || 0);
+
+    const closed = rows.filter(row => {
+      const date = parseDate(row?.date);
+      return date && date.getTime() <= target.getTime();
+    });
+    const future = rows.filter(row => {
+      const date = parseDate(row?.date);
+      return date && date.getTime() > target.getTime();
+    });
+    const latestAppliedChange = [
+      ...(Array.isArray(contract?.modifications) ? contract.modifications : []),
+      ...(Array.isArray(contract?.reassessments) ? contract.reassessments : [])
+    ]
+      .filter(item => String(item?.status || "").toUpperCase() === "APPLIED")
+      .map(item => ({ item, date: parseDate(item?.effectiveDate || item?.modificationDate || item?.reassessmentDate) }))
+      .filter(item => item.date && item.date.getTime() <= target.getTime())
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .pop();
+    const lastClosedDate = closed.length ? parseDate(closed[closed.length - 1]?.date) : null;
+
+    if (latestAppliedChange && future.length && (!lastClosedDate || latestAppliedChange.date.getTime() > lastClosedDate.getTime())) {
+      const opening = future[0]?.openingLiability ?? future[0]?.liabilityOpening;
+      if (Number.isFinite(Number(opening))) return Math.max(0, Number(opening));
+    }
+
+    if (closed.length) {
+      const closing = closed[closed.length - 1]?.closingLiability ?? closed[closed.length - 1]?.liabilityClosing;
+      if (Number.isFinite(Number(closing))) return Math.max(0, Number(closing));
+    }
+    return Math.max(0, Number(fallback) || 0);
+  }
+
   function getScheduleAsOfReportingDate(
     contract,
     reportingDate
@@ -5477,15 +5517,12 @@ window.fetch = (input, init = {}) => {
             const itemDate = parseDate(item.date);
             return itemDate && normalizedReportingDate && itemDate.getTime() > normalizedReportingDate.getTime();
           }),
-          outstandingLiability: (() => {
-            const closed = scheduleOverride.filter(item => {
-              const itemDate = parseDate(item.date);
-              return itemDate && normalizedReportingDate && itemDate.getTime() <= normalizedReportingDate.getTime();
-            });
-            return closed.length
-              ? Math.max(0, Number(closed[closed.length - 1].closingLiability) || 0)
-              : Math.max(0, Number(getPrivateCalculationForConsumer(contract).liability) || 0);
-          })(),
+          outstandingLiability: eventAwareOutstandingLiability(
+            contract,
+            scheduleOverride,
+            normalizedReportingDate,
+            getPrivateCalculationForConsumer(contract).liability
+          ),
           valid: true
         }
       : getScheduleAsOfReportingDate(contract, normalizedReportingDate);
