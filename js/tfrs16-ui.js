@@ -1159,161 +1159,48 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  async function hydratePrivateCalculationCache(list) {
-    if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0 };
-    const sourceItems = Array.isArray(list) ? list : [];
-    // Event-aware consumers rebuild a contract from its immutable pre-change
-    // terms before applying APPLIED modification/reassessment events. That
-    // base contract has a different cache signature from the current record,
-    // so warm both signatures during the same private batch hydration. Without
-    // this, a contract with an applied change could load its current result
-    // successfully but fail when the detail modal asked for its base schedule.
-    const items = [];
-    const seenKeys = new Set();
-    sourceItems.forEach(contract => {
-      // Detail/event-aware consumers always read the immutable base schedule,
-      // even when the contract has no applied events (the base clone has a
-      // distinct cache signature because event/audit fields are removed).
-      // Warm it for every contract so a read-only detail click never depends
-      // on which event history happens to be present.
-      [contract, getModificationBaseContract(contract)]
-        .filter(Boolean)
-        .forEach(item => {
-          const key = getCalculationCacheKey(item);
-          if (seenKeys.has(key)) return;
-          seenKeys.add(key);
-          items.push(item);
-        });
-    });
-    const facade = window.LeaseQantPrivateTfrs16Facade;
-    const batchLoader = typeof facade?.loadMany === "function"
-      ? facade.loadMany.bind(facade)
-      : window.LeaseQantPrivateCalculation.calculateMany;
-    const singleLoader = typeof facade?.load === "function"
-      ? facade.load.bind(facade)
-      : window.LeaseQantPrivateCalculation.calculate;
-
-    // Prefer the bounded batch endpoint for portfolio hydration. The adapter
-    // splits larger portfolios into chunks, so the UI never exposes a count
-    // limit while the backend keeps each request bounded.
-    if (typeof batchLoader === "function" && items.length > 0) {
-      try {
-        const batchResults = await batchLoader(items);
-        if (!Array.isArray(batchResults) || batchResults.length !== items.length) {
-          throw new Error("Toplu hesaplama API eksik sonuç döndürdü");
-        }
-        let succeeded = 0;
-        batchResults.forEach((result, index) => {
-          const key = getCalculationCacheKey(items[index]);
-          if (!result || typeof result !== "object") {
-            PRIVATE_CALCULATION_ERRORS.set(key, {
-              code: "CALCULATION_API_EMPTY_RESULT",
-              status: null,
-              message: "Hesaplama API boş sonuç döndürdü"
-            });
-            return;
-          }
-          setPrivateCalculationResult(items[index], result);
-          PRIVATE_CALCULATION_ERRORS.delete(key);
-          succeeded += 1;
-        });
-        return { attempted: items.length, succeeded, failed: items.length - succeeded };
-      } catch (_) {
-        // Fall back to the proven single-request path if a batch is rejected
-        // or unavailable during a rolling backend deployment.
-      }
-    }
-
-    const results = await Promise.all(items.map(async contract => {
-      const key = getCalculationCacheKey(contract);
-      try {
-        const result = await singleLoader(contract);
-        if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
-        setPrivateCalculationResult(contract, result);
-        PRIVATE_CALCULATION_ERRORS.delete(key);
-        return true;
-      } catch (error) {
-        PRIVATE_CALCULATION_ERRORS.set(key, {
-          code: error?.code || "CALCULATION_API_ERROR",
-          status: error?.status ?? null,
-          message: String(error?.message || error)
-        });
-        return false;
-      }
-    }));
+  function privateCacheRuntimeAdapter() {
     return {
-      attempted: results.length,
-      succeeded: results.filter(Boolean).length,
-      failed: results.filter(value => !value).length
+      isReady: isPrivateCalculationApiReady,
+      getKey: getCalculationCacheKey,
+      getBase: getModificationBaseContract,
+      get: key => PRIVATE_CALCULATION_CACHE.get(key),
+      setResult: setPrivateCalculationResult,
+      hasError: key => PRIVATE_CALCULATION_ERRORS.has(key),
+      clearError: key => PRIVATE_CALCULATION_ERRORS.delete(key),
+      setError: (key, value) => PRIVATE_CALCULATION_ERRORS.set(key, value),
+      hasInflight: key => PRIVATE_CALCULATION_INFLIGHT.has(key),
+      getInflight: key => PRIVATE_CALCULATION_INFLIGHT.get(key),
+      setInflight: (key, value) => PRIVATE_CALCULATION_INFLIGHT.set(key, value),
+      deleteInflight: key => PRIVATE_CALCULATION_INFLIGHT.delete(key)
     };
   }
 
-  // Keep page-level consumers from racing the initial portfolio warm-up.
-  // A report can be opened while the dashboard is still loading contracts;
-  // share one in-flight hydration instead of rendering a misleading
-  // PRIVATE_CALCULATION_NOT_READY error or issuing duplicate batch requests.
-  let privatePortfolioHydrationPromise = null;
-  function ensurePrivateCalculationCache(list) {
-    if (!isPrivateCalculationApiReady()) {
-      return Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
-    }
-    const items = Array.isArray(list) ? list : [];
-    if (!items.length) {
-      return Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
-    }
-    if (!privatePortfolioHydrationPromise) {
-      privatePortfolioHydrationPromise = hydratePrivateCalculationCache(items)
-        .finally(() => {
-          privatePortfolioHydrationPromise = null;
-        });
-    }
-    return privatePortfolioHydrationPromise;
+  // Private-cache hydration ve read-only tekrar yükleme koordinasyonu ayrı
+  // UI-only modüldedir; bu runtime yalnızca kendi cache adapter'ını sağlar.
+  function hydratePrivateCalculationCache(list) {
+    const api = window.LeaseQantTfrs16PrivateCacheUi;
+    return typeof api?.hydrate === "function"
+      ? api.hydrate(list, privateCacheRuntimeAdapter())
+      : Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
   }
 
-  // Read-only consumers can request the private result on demand when a
-  // user opens a detail tab before the portfolio warm-up has finished. The
-  // existing local engine remains the explicit fallback for API failures.
-  async function loadPrivateReadOnlyResult(contract, options = {}) {
-    if (!isPrivateCalculationApiReady()) return null;
-    const key = getCalculationCacheKey(contract);
-    const cached = PRIVATE_CALCULATION_CACHE.get(key);
-    if (cached) return cached;
-    // A hydration failure can be transient (for example, the session token
-    // may still be settling while the portfolio is loaded). Keep the normal
-    // fail-closed behavior for background consumers, but let an explicit
-    // detail click retry once instead of silently reusing that stale error.
-    if (PRIVATE_CALCULATION_ERRORS.has(key)) {
-      if (options.retryOnError !== true) return null;
-      PRIVATE_CALCULATION_ERRORS.delete(key);
-    }
+  function ensurePrivateCalculationCache(list) {
+    const api = window.LeaseQantTfrs16PrivateCacheUi;
+    return typeof api?.ensure === "function"
+      ? api.ensure(list, privateCacheRuntimeAdapter())
+      : Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
+  }
 
-    const facade = window.LeaseQantPrivateTfrs16Facade;
-    const loader = typeof facade?.load === "function"
-      ? facade.load.bind(facade)
-      : window.LeaseQantPrivateCalculation.calculate;
-    if (typeof loader !== "function") return null;
+  function privateCacheHydrationInFlight() {
+    return Boolean(window.LeaseQantTfrs16PrivateCacheUi?.isInFlight?.());
+  }
 
-    if (!PRIVATE_CALCULATION_INFLIGHT.has(key)) {
-      PRIVATE_CALCULATION_INFLIGHT.set(key, (async () => {
-        try {
-          const result = await loader(contract);
-          if (!result || typeof result !== "object") throw new Error("Hesaplama API boş sonuç döndürdü");
-          setPrivateCalculationResult(contract, result);
-          PRIVATE_CALCULATION_ERRORS.delete(key);
-          return result;
-        } catch (error) {
-          PRIVATE_CALCULATION_ERRORS.set(key, {
-            code: error?.code || "CALCULATION_API_ERROR",
-            status: error?.status ?? null,
-            message: String(error?.message || error)
-          });
-          return null;
-        } finally {
-          PRIVATE_CALCULATION_INFLIGHT.delete(key);
-        }
-      })());
-    }
-    return PRIVATE_CALCULATION_INFLIGHT.get(key);
+  function loadPrivateReadOnlyResult(contract, options = {}) {
+    const api = window.LeaseQantTfrs16PrivateCacheUi;
+    return typeof api?.loadReadOnly === "function"
+      ? api.loadReadOnly(contract, options, privateCacheRuntimeAdapter())
+      : Promise.resolve(null);
   }
 
   async function loadPrivateChangePreview(kind, contract, input) {
@@ -5862,7 +5749,7 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
-        (PRIVATE_CALCULATION_CACHE.size === 0 || privatePortfolioHydrationPromise)) {
+        (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
       setKpiPendingState();
       return;
     }
@@ -6101,7 +5988,7 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
-        (PRIVATE_CALCULATION_CACHE.size === 0 || privatePortfolioHydrationPromise)) {
+        (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
       setKpiPendingState();
       return;
     }
