@@ -1291,7 +1291,12 @@ window.fetch = (input, init = {}) => {
         if (Object.prototype.hasOwnProperty.call(patch, key)) contract[key] = patch[key];
       });
 
-    saveContracts(contracts);
+    // Persist the authoritative private apply envelope without evicting the
+    // already-warmed results for every other contract. Clearing the entire
+    // private cache here makes synchronous risk/close consumers temporarily
+    // report "no payment schedule" for the whole portfolio until a full
+    // batch hydration runs again.
+    saveContracts(contracts, { preservePrivate: true });
     try {
       // The apply endpoint is deliberately pure with respect to persistence;
       // this write stores the returned APPLIED event and contract patch.
@@ -1561,7 +1566,7 @@ window.fetch = (input, init = {}) => {
    * @throws {Error} localStorage/adapter yazma işlemi başarısız olursa
    * @returns {void}
    */
-  function saveContracts(data) {
+  function saveContracts(data, options) {
     try {
       const adapter =
         typeof V20StorageAdapters !== "undefined" &&
@@ -1580,7 +1585,7 @@ window.fetch = (input, init = {}) => {
 
       // Kontrat verisi değişti; önbellekteki eski hesaplama
       // sonuçları artık güvenilir değil.
-      clearCalculationCache();
+      clearCalculationCache(undefined, { preservePrivate: options?.preservePrivate === true });
     } catch (error) {
       console.error("TFRS 16 storage error:", error);
       throw error;
