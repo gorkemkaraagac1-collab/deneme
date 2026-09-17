@@ -29613,7 +29613,11 @@ ${renderAccountingCenterBulkPromo()}
      V27 ADDITIVE UI MERGE — V23 FX + TMS29 INFLATION
   ========================================================== */
 
-const V26_FX_UI_CURRENCIES = ["TRY","EUR","USD","GBP","CHF","JPY","AED","SAR"];
+// `?open=` deep-links can render a page while this late additive block is
+// still being initialized. Keep the declaration hoisted so early renderers
+// can safely use their built-in currency fallback instead of hitting the
+// temporal-dead-zone thrown by a `const` declaration.
+var V26_FX_UI_CURRENCIES = ["TRY","EUR","USD","GBP","CHF","JPY","AED","SAR"];
 
 const V26_FX_UI_RATE_TYPES = ["SPOT","CLOSING","AVERAGE","HISTORICAL","FORWARD"];
 
