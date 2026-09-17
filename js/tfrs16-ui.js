@@ -776,6 +776,14 @@ window.fetch = (input, init = {}) => {
       backendContractsHydrated = true;
       backendContractsHydrationError = null;
       await hydrateAuditEventsFromApi();
+      // DÜZELTME (2026-09-17): hostname kapısı yanlıştı (bkz.
+      // queueAuditBackendSync üzerindeki not) — bu yüzden önceki
+      // oturumlarda kuyruğa alınmış ama HİÇ backend'e gönderilmemiş
+      // denetim olayları (ör. Burhan'ın 30 kontratlık toplu import'u)
+      // localStorage'da takılı kalmış olabilir. Sayfa her açıldığında
+      // bu birikmiş kuyruğu da temizlemeye çalış — yeni bir olay
+      // beklemeden.
+      try { await flushAuditBackendSync(); } catch (_) { /* best effort */ }
       try {
         saveContracts(contracts);
       } catch (_) { /* Cache persistence is best-effort. */ }
@@ -1784,7 +1792,21 @@ window.fetch = (input, init = {}) => {
       pending.push(event);
       savePendingAuditSync(pending);
     }
-    if (window.location?.hostname === "gorkemkaraagac1-collab.github.io" && typeof tfrs16ApiFetch === "function") {
+    // DÜZELTME (2026-09-17, Burhan'ın Close Dashboard'da "25 kontratın
+    // denetim izi yok" bulgusundan bulundu): bu kapı önceden SADECE
+    // window.location.hostname === "gorkemkaraagac1-collab.github.io"
+    // ise flush ediyordu — GitHub Pages'in varsayılan alan adı. Ama repo
+    // kökünde bir CNAME dosyası var: site gerçekte "leaseqant.com"
+    // üzerinden yayında. Yani bu kontrol PRODUCTION'DA HİÇBİR ZAMAN
+    // doğru olmuyordu — denetim olayları asla backend'e senkronize
+    // olmuyor, sadece o an ki tarayıcının localStorage'ında kalıyordu.
+    // Farklı bir oturum/cihaz/temiz-cache ile bakıldığında (ki Close
+    // Dashboard kontrolü tam olarak bunu yapıyor) o sözleşmelerin hiç
+    // denetim kaydı yokmuş gibi görünüyordu — veri kaybı değildi, hiç
+    // gönderilmemiş olmasıydı. flushAuditBackendSync() zaten kendi
+    // içinde tfrs16GetToken() ile oturum kontrolü yapıyor — buradaki
+    // hostname kısıtı gereksiz ve yanlıştı, kaldırıldı.
+    if (typeof tfrs16ApiFetch === "function") {
       setTimeout(() => flushAuditBackendSync(), 0);
     }
   }
