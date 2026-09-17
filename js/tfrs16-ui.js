@@ -13702,8 +13702,23 @@ ${renderAccountingCenterBulkPromo()}
     const end = controlDate(contract?.endDate);
     const last = dates[dates.length - 1];
     const dayDifference = end && last ? Math.abs(controlDaysBetween(last, end)) : null;
-    if (dayDifference !== null && dayDifference > 62) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Payment schedule end date is materially different from contract end date.", "Schedule end aligned with lease end", { scheduleEnd: last.toISOString(), contractEnd: end.toISOString(), differenceDays: dayDifference }, "Review lease term, payment frequency and any applied modification/reassessment.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Lease term and schedule are consistent within tolerance.", "Schedule aligned with contract term", { periods: schedule.length, scheduleEnd: last.toISOString(), contractEnd: end ? end.toISOString() : null }, "No action required.");
+    // DÜZELTME (2026-09-17, Burhan'ın 30 kontratlık regresyon setinden
+    // bulundu): tolerans sabit 62 gündü — bu SADECE aylık ödemeli
+    // kontratlar için anlamlı bir eşik. Üç aylık (91 gün/dönem) veya
+    // yıllık (365 gün/dönem) kontratlarda, son planlı ödeme tarihi ile
+    // sözleşme bitiş tarihi arasında TEK BİR DÖNEM kadar doğal bir fark
+    // olması normaldir (dönem sözleşme bitişine tam bölünmüyorsa) — bu
+    // bir hata değildir. Sabit 62 gün eşiği, üç aylık/yıllık kontratların
+    // çoğunu YANLIŞ POZİTİF olarak işaretliyordu (regresyon matrisindeki
+    // 004,012,013,019,020,030 — hepsi üç aylık/yıllık). Tolerans artık
+    // ödeme frekansına göre ölçekleniyor: bir dönemin gün karşılığı +
+    // sabit bir tampon (yuvarlama/ay-sonu kaymaları için).
+    const stepMonths = typeof resolveFrequencyStepMonths === "function"
+      ? resolveFrequencyStepMonths(contract?.paymentFrequency)
+      : 1;
+    const toleranceDays = Math.round(stepMonths * 30.44) + 32; // bir dönem + ~1 aylık tampon
+    if (dayDifference !== null && dayDifference > toleranceDays) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Payment schedule end date is materially different from contract end date.", "Schedule end aligned with lease end", { scheduleEnd: last.toISOString(), contractEnd: end.toISOString(), differenceDays: dayDifference, toleranceDays, paymentFrequency: contract?.paymentFrequency || "monthly" }, "Review lease term, payment frequency and any applied modification/reassessment.");
+    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Lease term and schedule are consistent within tolerance.", "Schedule aligned with contract term", { periods: schedule.length, scheduleEnd: last.toISOString(), contractEnd: end ? end.toISOString() : null, toleranceDays }, "No action required.");
   }
 
   function controlEscalation(contract, config) {
