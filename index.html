@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LeaseQant — TFRS 16 Kiralama Muhasebesi</title>
-  <meta name="description" content="TFRS 16 kiralama, TMS 29 enflasyon ve TMS 21 kur çevrimi — tek platformda hesaplama, kapanış, yevmiye ve konsolidasyon." />
+  <title>LeaseQant — TFRS 16 Kapanış, Yevmiye ve Denetim Platformu</title>
+  <meta name="description" content="LeaseQant ile TFRS 16 kiralama muhasebesini Excel bağımlılığından çıkarın. Hesaplama, yeniden ölçüm, toplu yevmiye, TMS 29, TMS 21, kapanış ve denetim izi tek platformda." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
@@ -421,6 +421,65 @@
       .kpi-grid { grid-template-columns: 1fr; }
       .charts-row { grid-template-columns: 1fr; }
     }
+
+    /* ===== LeaseQant Premium 2026 ===== */
+    :root{
+      --primary:#2f6bff;
+      --primary-hover:#2459d8;
+      --navy:#07101f;
+      --navy-2:#0b1628;
+      --cyan:#53d7ff;
+    }
+    .nav-inner{min-height:68px}
+    .hero{padding-top:78px}
+    .hero::after{
+      content:""; position:absolute; width:420px; height:420px; border-radius:50%;
+      right:-180px; top:80px; background:rgba(83,215,255,.08); filter:blur(70px);
+      pointer-events:none;
+    }
+    .hero h1{font-size:clamp(40px,5.4vw,66px);max-width:12ch;line-height:1.02}
+    .hero .lead{font-size:17px;max-width:50ch}
+    .hero-actions .btn{padding:12px 22px}
+    .laptop{transform:rotateY(-3deg) rotateX(1deg);box-shadow:0 35px 80px rgba(0,0,0,.55),0 0 100px rgba(47,107,255,.16)}
+    .proof-band{background:#fff;border-bottom:1px solid var(--border)}
+    .proof-inner{display:grid;grid-template-columns:1.15fr repeat(3,1fr);gap:0;align-items:stretch}
+    .proof-item{padding:22px 24px;border-right:1px solid var(--border)}
+    .proof-item:last-child{border-right:0}
+    .proof-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;font-weight:700}
+    .proof-value{font-size:18px;font-weight:700;margin-top:5px;letter-spacing:-.02em}
+    .proof-copy{font-size:12.5px;color:#64748b;margin-top:3px}
+    .workflow{background:#fff}
+    .workflow-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;position:relative}
+    .workflow-card{position:relative;padding:22px 18px;border:1px solid var(--border);border-radius:14px;background:#fff;min-height:190px}
+    .workflow-step{width:30px;height:30px;border-radius:9px;background:#eaf1ff;color:var(--primary);display:grid;place-items:center;font-size:12px;font-weight:800}
+    .workflow-card h3{font-size:15px;margin-top:18px}
+    .workflow-card p{font-size:12.5px;color:var(--text-2);margin-top:8px;line-height:1.55}
+    .workflow-card::after{content:"→";position:absolute;right:-11px;top:27px;color:#94a3b8;font-weight:700;z-index:2}
+    .workflow-card:last-child::after{display:none}
+    .outcome-panel{margin-top:28px;border-radius:16px;background:linear-gradient(135deg,#07101f,#0d1b31);color:white;padding:28px;display:grid;grid-template-columns:1.1fr 1.9fr;gap:28px;align-items:center}
+    .outcome-panel h3{font-size:23px;letter-spacing:-.02em}
+    .outcome-panel p{font-size:13.5px;color:#94a3b8;margin-top:8px}
+    .outcome-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .outcome-list span{font-size:12.5px;padding:10px 12px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.035);color:#cbd5e1}
+    .section-head{max-width:650px}
+    .section-head h2{font-size:clamp(28px,3.2vw,40px)}
+    .card,.feat-card{border-radius:14px}
+    .cta{padding:84px 24px;background:
+      radial-gradient(600px 240px at 50% 0%,rgba(47,107,255,.24),transparent 70%),#07101f}
+    .cta h2{font-size:clamp(30px,4vw,44px)}
+    @media(max-width:980px){
+      .proof-inner{grid-template-columns:1fr 1fr}
+      .proof-item:nth-child(2){border-right:0}
+      .workflow-grid{grid-template-columns:1fr 1fr}
+      .workflow-card::after{display:none}
+      .outcome-panel{grid-template-columns:1fr}
+    }
+    @media(max-width:560px){
+      .hero{padding-top:52px}
+      .proof-inner,.workflow-grid,.outcome-list{grid-template-columns:1fr}
+      .proof-item{border-right:0;border-bottom:1px solid var(--border)}
+    }
+
   </style>
 </head>
 <body>
@@ -431,13 +490,12 @@
         <img src="logo-nav.png" alt="LeaseQant" />
       </a>
       <ul class="nav-links">
-        <li><a href="#urun">Ürün</a></li>
-        <li><a href="#standartlar">TFRS 16</a></li>
-        <li><a href="#standartlar">TMS 29</a></li>
-        <li><a href="#standartlar">TMS 21</a></li>
-        <li><a href="#ozellikler">Çözümler</a></li>
-        <li><a href="#sss">Kaynaklar</a></li>
-        <li><a href="#neden">Hakkımızda</a></li>
+        <li><a href="#urun">Platform</a></li>
+        <li><a href="#is-akisi">Kapanış Akışı</a></li>
+        <li><a href="#standartlar">Standartlar</a></li>
+        <li><a href="#ozellikler">Kontrol &amp; Raporlama</a></li>
+        <li><a href="#neden">Neden LeaseQant?</a></li>
+        <li><a href="#sss">SSS</a></li>
       </ul>
       <a href="login.html" class="btn btn-primary">Demo Talep Et →</a>
     </div>
@@ -447,21 +505,21 @@
   <header class="hero">
     <div class="container hero-inner">
       <div>
-        <div class="eyebrow">Kiralama muhasebesinde daha fazlası</div>
-        <h1>TFRS 16’yı <span>daha akıllı</span> yönetin.</h1>
+        <div class="eyebrow">FINANCE TEAMS · TFRS 16 · CLOSE &amp; CONTROL</div>
+        <h1>TFRS 16 kapanışını <span>Excel’den çıkarın.</span></h1>
         <p class="lead">
-          TFRS 16 kiralama, TMS 29 enflasyon ve TMS 21 kur çevrimi —
-          tek platformda hesaplama, kapanış, yevmiye ve konsolidasyon.
+          Sözleşmeden hesaplamaya, yeniden ölçümden toplu yevmiyeye ve denetim izine kadar
+          kiralama muhasebesini tek kontrollü çalışma alanında yönetin.
         </p>
         <div class="hero-actions">
           <a href="login.html" class="btn btn-primary">Demo Talep Et →</a>
-          <a href="#ozellikler" class="btn btn-ghost">Ürünü Keşfet</a>
+          <a href="#is-akisi" class="btn btn-ghost">Platformu Keşfet ↓</a>
         </div>
         <div class="hero-trust">
-          <span><span class="check">✓</span> Hızlı Kurulum</span>
-          <span><span class="check">✓</span> TFRS 16 Uyumlu</span>
-          <span><span class="check">✓</span> Kurumsal Ölçek</span>
-          <span><span class="check">✓</span> Güvenli ve Esnek</span>
+          <span><span class="check">✓</span> Toplu yevmiye</span>
+          <span><span class="check">✓</span> Çoklu şirket</span>
+          <span><span class="check">✓</span> Period lock</span>
+          <span><span class="check">✓</span> Tam denetim izi</span>
         </div>
       </div>
 
@@ -575,41 +633,124 @@
         <div class="strip-grid">
           <div class="strip-item">
             <div class="strip-icon">⊞</div>
-            <h4>Doğru Hesaplama</h4>
-            <p>PV, faiz, amortisman ve kiralama yükümlülüğü</p>
+            <h4>TFRS 16 Motoru</h4>
+            <p>PV, faiz, amortisman, ROU ve liability planları</p>
           </div>
           <div class="strip-item">
             <div class="strip-icon">▤</div>
-            <h4>Kapsamlı Raporlama</h4>
-            <p>Dipnotlar, açıklamalar ve yönetim raporları</p>
+            <h4>Kapanış Merkezi</h4>
+            <p>Aylık kapanış, toplu fiş ve kontrol akışı</p>
           </div>
           <div class="strip-item">
             <div class="strip-icon">▦</div>
-            <h4>Çoklu Standart Desteği</h4>
-            <p>TFRS 16, TMS 29, TMS 21 tek platformda</p>
+            <h4>TMS 29 + TMS 21</h4>
+            <p>Enflasyon ve kur etkisini aynı veri modelinde yönetin</p>
           </div>
           <div class="strip-item">
             <div class="strip-icon">☰</div>
-            <h4>Konsolidasyon Hazır</h4>
-            <p>Grup yapıları için ölçeklenebilir mimari</p>
+            <h4>Çoklu Şirket</h4>
+            <p>Şirket, grup ve konsolidasyon seviyesinde görünüm</p>
           </div>
           <div class="strip-item">
             <div class="strip-icon">⬡</div>
-            <h4>Güvenli Altyapı</h4>
-            <p>Veri güvenliği ve yetkilendirme kontrolü</p>
+            <h4>Audit-Ready</h4>
+            <p>Period lock, rol bazlı erişim ve değişiklik izi</p>
           </div>
         </div>
       </div>
     </div>
   </header>
 
+
+  <section class="proof-band" aria-label="LeaseQant ürün yaklaşımı">
+    <div class="container proof-inner">
+      <div class="proof-item">
+        <div class="proof-kicker">LEASEQANT CONTROL LAYER</div>
+        <div class="proof-value">Kiralama muhasebesi için tek doğruluk kaynağı</div>
+        <div class="proof-copy">Sözleşme, hesaplama, fiş, kapanış ve denetim izi aynı veri akışında.</div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-kicker">KAPANIŞ</div>
+        <div class="proof-value">Portföy bazlı işlem</div>
+        <div class="proof-copy">Tek tek sözleşme yerine dönem ve şirket bazlı toplu çalışma.</div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-kicker">YÖNETİŞİM</div>
+        <div class="proof-value">Kontrollü dönemler</div>
+        <div class="proof-copy">Period lock, yetkilendirme ve izlenebilir değişiklik geçmişi.</div>
+      </div>
+      <div class="proof-item">
+        <div class="proof-kicker">RAPORLAMA</div>
+        <div class="proof-value">ERP-ready çıktı</div>
+        <div class="proof-copy">Yevmiye, dipnot ve Excel çıktılarıyla finans ekibine hazır veri.</div>
+      </div>
+    </div>
+  </section>
+
+
+
+  <section class="workflow" id="is-akisi">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">UÇTAN UCA KİRALAMA YAŞAM DÖNGÜSÜ</div>
+        <h2>Sözleşmeden denetime kadar tek kontrollü akış.</h2>
+        <p>LeaseQant yalnızca bir hesap makinesi değil; finans ekibinin kiralama muhasebesi kapanış sürecini yönettiği operasyon ve kontrol katmanıdır.</p>
+      </div>
+      <div class="workflow-grid">
+        <article class="workflow-card">
+          <div class="workflow-step">01</div>
+          <h3>Veriyi alın</h3>
+          <p>Tekil giriş veya Excel toplu aktarım ile sözleşmeleri merkezi portföye taşıyın ve doğrulayın.</p>
+        </article>
+        <article class="workflow-card">
+          <div class="workflow-step">02</div>
+          <h3>Hesaplayın</h3>
+          <p>ROU, kiralama yükümlülüğü, faiz, amortisman ve ödeme planlarını standart mantıkla üretin.</p>
+        </article>
+        <article class="workflow-card">
+          <div class="workflow-step">03</div>
+          <h3>Değişiklikleri yönetin</h3>
+          <p>Modifikasyon, reassessment, CPI, erken ödeme ve kur/enflasyon etkilerini kontrollü işleyin.</p>
+        </article>
+        <article class="workflow-card">
+          <div class="workflow-step">04</div>
+          <h3>Kapanışı çalıştırın</h3>
+          <p>Şirket ve dönem bazında toplu yevmiye, dipnot ve raporlama çıktılarını hazırlayın.</p>
+        </article>
+        <article class="workflow-card">
+          <div class="workflow-step">05</div>
+          <h3>Kilitleyin &amp; denetleyin</h3>
+          <p>Onaylanan dönemi koruyun; kullanıcı, işlem ve değişiklik geçmişini denetime hazır tutun.</p>
+        </article>
+      </div>
+      <div class="outcome-panel">
+        <div>
+          <div class="eyebrow" style="margin-bottom:8px;color:#60a5fa">FINANCE OUTCOME</div>
+          <h3>Daha hızlı kapanış. Daha güçlü kontrol.</h3>
+          <p>Hedef; hesaplama yapmak değil, finansal raporlama sürecini tekrarlanabilir, izlenebilir ve ölçeklenebilir hale getirmek.</p>
+        </div>
+        <div class="outcome-list">
+          <span>✓ Toplu sözleşme operasyonları</span>
+          <span>✓ Şirket bazlı raporlama</span>
+          <span>✓ Kısa / uzun vadeli liability ayrımı</span>
+          <span>✓ Yenileme &amp; modification takibi</span>
+          <span>✓ TMS 29 enflasyon katmanı</span>
+          <span>✓ TMS 21 kur çevrimi</span>
+          <span>✓ Audit trail &amp; period lock</span>
+          <span>✓ Excel / ERP-ready çıktılar</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
   <!-- STANDARTLAR -->
   <section id="standartlar">
     <div class="container">
       <div class="section-head">
         <div class="eyebrow">Standartlar</div>
-        <h2>Üç standart, tek sözleşme üzerinde</h2>
-        <p>İşlem, fonksiyonel ve raporlama para birimi farklılaştığında hangi kuralların devreye girdiğini motor otomatik belirler.</p>
+        <h2>Yerel raporlama gerçekliğini aynı veri modelinde yönetin</h2>
+        <p>TFRS 16 çekirdeğini TMS 29 ve TMS 21 etkileriyle birlikte ele alın; aynı sözleşmenin farklı raporlama katmanlarını ayrı Excel modellerine bölmeyin.</p>
       </div>
       <div class="std-grid">
         <article class="card" id="urun">
@@ -636,8 +777,8 @@
     <div class="container">
       <div class="section-head">
         <div class="eyebrow">Kapsam</div>
-        <h2>Hesaptan kapanışa kadar</h2>
-        <p>Günlük operasyon ile CFO / denetçi ihtiyacı aynı üründe.</p>
+        <h2>Kapanış, raporlama ve kontrol aynı platformda</h2>
+        <p>Finans operasyonunun hız ihtiyacını; CFO, kontrolör ve denetçinin izlenebilirlik beklentisiyle aynı çalışma alanında birleştirin.</p>
       </div>
       <div class="feat-grid">
         <article class="feat-card">
@@ -673,7 +814,7 @@
     <div class="container">
       <div class="section-head">
         <div class="eyebrow">Neden LeaseQant</div>
-        <h2>Lisanslı kullanım için net sınırlar</h2>
+        <h2>Excel esnekliğini kaybetmeden kurumsal kontrol kazanın</h2>
       </div>
       <div class="why-grid">
         <div class="why-card">
@@ -773,8 +914,8 @@
 
   <!-- CTA -->
   <section class="cta">
-    <h2>Kapanışı açık bırakmayın.</h2>
-    <p>Lisanslı hesabınızla giriş yapın; sözleşmeler, kapanış ve raporlama tek yerde.</p>
+    <h2>Bir sonraki TFRS 16 kapanışını Excel’de yönetmeyin.</h2>
+    <p>Sözleşme portföyünüzü, hesaplamaları, toplu yevmiyeyi ve denetim izini tek kontrollü platformda yönetin.</p>
     <a href="login.html" class="btn btn-primary">Demo Talep Et →</a>
   </section>
 
