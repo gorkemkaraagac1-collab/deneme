@@ -488,8 +488,15 @@
                 <input type="number" id="initialDirectCosts" name="initialDirectCosts" min="0" step="0.01" value="0" />
               </div>
               <div class="form-field">
-                <label for="leaseIncentives">Kira teşvikleri</label>
+                <label for="leaseIncentives">Başlangıçta alınmış kira teşviki</label>
                 <input type="number" id="leaseIncentives" name="leaseIncentives" min="0" step="0.01" value="0" />
+                <small>Başlangıç tarihinde veya öncesinde alınmış teşvik; ROU varlığından düşülür.</small>
+              </div>
+              <div class="form-field">
+                <label for="leaseIncentiveReceivables">Gelecekte alınacak kira teşvikleri</label>
+                <textarea id="leaseIncentiveReceivables" name="leaseIncentiveReceivables" rows="4"
+                  placeholder="2027-03-31 | 200000 | Teşvik açıklaması"></textarea>
+                <small>Her satır: Tarih | Tutar | Açıklama. Gelecekte alınacak teşvikler ilgili tarihte lease cash flow'dan düşülür.</small>
               </div>
               <div class="form-field">
                 <label for="prepayments">Peşin ödemeler</label>
