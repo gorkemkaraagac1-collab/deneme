@@ -28373,7 +28373,9 @@ ${renderAccountingCenterBulkPromo()}
          Modifikasyon & Reassessment / SLB / Alt Kiralama / Fişler /
          Denetim İzi). injectV26Styles hem tfrs16.html hem dashboard'da
          çalıştığı için tek yerde tanımlanır. */
-      .gk-detail-tabs { display:flex; gap:2px; flex-wrap:wrap; margin:0 0 18px; border-bottom:1px solid #e5e7eb; }
+      .gk-detail-tabs { position:sticky; top:0; z-index:20; display:flex; gap:2px; flex-wrap:nowrap; margin:0 0 18px; border-bottom:1px solid #e5e7eb; overflow-x:auto; overflow-y:hidden; background:#fff; scrollbar-width:thin; -webkit-overflow-scrolling:touch; }
+      .gk-detail-tabs::-webkit-scrollbar { height:6px; }
+      .gk-detail-tabs .gk-detail-tab-btn { flex:0 0 auto; }
       .gk-detail-tab-btn { border:0; background:transparent; padding:9px 13px; font-size:12px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; font-family:inherit; }
       .gk-detail-tab-btn:hover { color:#0f172a; }
       .gk-detail-tab-btn.active { color:#0f172a; border-bottom-color:#0f172a; }
