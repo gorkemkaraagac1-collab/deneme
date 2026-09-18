@@ -398,7 +398,21 @@
     root.querySelectorAll(".gk-detail-tab-btn").forEach(button => {
       button.addEventListener("click", () => {
         setActiveTab?.(button.dataset.detailTabTarget || "summary");
-        apply();
+        const selected = apply();
+        button.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        const panel = root.querySelector(`.gk-detail-tab[data-detail-tab="${selected}"]`);
+        const scrollHost = root.closest(".modal-content");
+        if (panel && scrollHost) {
+          const hostTop = scrollHost.getBoundingClientRect().top;
+          const tabsHeight = root.querySelector(".gk-detail-tabs")?.offsetHeight || 0;
+          const panelTop = panel.getBoundingClientRect().top;
+          scrollHost.scrollTo({
+            top: Math.max(0, scrollHost.scrollTop + panelTop - hostTop - tabsHeight - 8),
+            behavior: "smooth"
+          });
+        } else {
+          panel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        }
       });
     });
     apply();
