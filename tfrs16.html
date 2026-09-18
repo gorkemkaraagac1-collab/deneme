@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>LeaseQant — TFRS 16 Kiralama Yönetimi</title>
   <meta name="description" content="TFRS 16 kiralama muhasebesi — sözleşme, hesaplama, kapanış ve raporlama" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -130,6 +130,11 @@
            Existing contractsView and all engine hooks remain intact. -->
       <section class="lq-dashboard" id="lqDashboard" hidden>
         <div class="lq-dash-head">
+          <div class="lq-welcome">
+            <div class="lq-welcome-kicker">PORTFÖY KONTROL MERKEZİ</div>
+            <h1>Merhaba, <span id="lqGreetingName">Görkem</span> <span class="lq-wave">👋</span></h1>
+            <p>Portföyünüzün güncel görünümü aşağıda.</p>
+          </div>
           <div>
             <div class="lq-overline">PORTFÖY KONTROL MERKEZİ</div>
             <h1>Finansal görünüm</h1>
@@ -961,6 +966,23 @@
       toggle?.setAttribute("aria-expanded","false");
     }
   });
+})();
+</script>
+
+
+<script>
+/* LeaseQant V10.1 visual parity helper — presentation only. */
+(() => {
+  const syncGreeting=()=>{
+    const source=(document.getElementById("userName")?.textContent||"").trim();
+    const target=document.getElementById("lqGreetingName");
+    if(!target) return;
+    const first=source && source!=="Kullanıcı" ? source.split(/\s+/)[0] : "Görkem";
+    target.textContent=first;
+  };
+  syncGreeting();
+  const u=document.getElementById("userName");
+  if(u) new MutationObserver(syncGreeting).observe(u,{childList:true,subtree:true,characterData:true});
 })();
 </script>
 
