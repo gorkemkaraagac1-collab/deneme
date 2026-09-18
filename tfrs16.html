@@ -15,105 +15,112 @@
 </head>
 <body data-lq-ui-version="10.0">
   <div class="app" id="app">
-    <!-- ========== SIDEBAR ========== -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <div style="display:flex;align-items:center">
-          <img src="logo-nav.png" alt="LeaseQant" style="height:32px;width:auto;display:block;object-fit:contain;">
-        </div>
-      </div>
+    <!-- ========== V10 FINAL TOP NAVIGATION ========== -->
+    <aside class="sidebar lq-legacy-sidebar" id="sidebar" aria-hidden="true"></aside>
 
-      <nav class="sidebar-nav" id="sidebarNav">
-        <div class="nav-section">
-          <div class="nav-section-label">Ana menü</div>
-          <button type="button" class="nav-item lq-dashboard-nav" data-lq-dashboard="true">
-            <span class="icon">◫</span> Dashboard
+    <header class="topbar lq-topnav-shell" id="lqTopnav">
+      <a class="lq-topnav-brand" href="#" aria-label="LeaseQant Dashboard">
+        <img src="logo-nav.png" alt="LeaseQant">
+      </a>
+
+      <button type="button" class="menu-toggle lq-mobile-nav-toggle" id="menuToggle"
+              aria-label="Menüyü aç" aria-expanded="false">☰</button>
+
+      <nav class="lq-topnav" id="sidebarNav" aria-label="Ana navigasyon">
+        <button type="button" class="nav-item lq-dashboard-nav" data-lq-dashboard="true">
+          Dashboard
+        </button>
+        <button type="button" class="nav-item" data-view="contracts" data-open="">
+          Sözleşmeler
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="accountingCenter">
+          Muhasebe
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="close">
+          Kapanış
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="footnotes">
+          Raporlar
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="riskControls">
+          Kontroller
+        </button>
+
+        <div class="lq-nav-dropdown">
+          <button type="button" class="lq-nav-trigger" aria-expanded="false">
+            İşlemler <span>⌄</span>
           </button>
-          <button type="button" class="nav-item active" data-view="contracts" data-open="">
-            <span class="icon">📋</span> Sözleşmeler
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="close">
-            <span class="icon">✅</span> Kapanış Paneli
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="accountingCenter">
-            <span class="icon">🧾</span> Toplu Fiş Merkezi
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="footnotes">
-            <span class="icon">📝</span> Dipnotlar
-          </button>
+          <div class="lq-nav-menu lq-nav-menu-compact">
+            <div class="lq-nav-menu-title">İŞLEMLER</div>
+            <button type="button" class="nav-item" data-view="page" data-open="modification">
+              <span class="icon">🔁</span><span>Modifikasyon &amp; Reassessment</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="slb">
+              <span class="icon">🏢</span><span>Satış ve Geri Kiralama</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="sublease">
+              <span class="icon">🔄</span><span>Alt Kiralama</span>
+            </button>
+          </div>
         </div>
 
-        <div class="nav-section">
-          <div class="nav-section-label">İşlemler</div>
-          <button type="button" class="nav-item" data-view="page" data-open="modification">
-            <span class="icon">🔁</span> Modifikasyon &amp; Reassessment
+        <div class="lq-nav-dropdown lq-nav-dropdown-settings">
+          <button type="button" class="lq-nav-trigger" aria-expanded="false">
+            Ayarlar <span>⌄</span>
           </button>
-          <button type="button" class="nav-item" data-view="page" data-open="slb">
-            <span class="icon">🏢</span> Satış ve Geri Kiralama
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="sublease">
-            <span class="icon">🔄</span> Alt Kiralama
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="riskControls">
-            <span class="icon">⚠️</span> Risk &amp; Kontroller
-          </button>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-section-label">Ayarlar</div>
-          <button type="button" class="nav-item" data-view="page" data-open="accountMapping">
-            <span class="icon">📒</span> Hesap Planı
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="fxRates">
-            <span class="icon">💱</span> Döviz Kurları
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="inflation">
-            <span class="icon">📈</span> Enflasyon Endeksleri
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="companies">
-            <span class="icon">🏢</span> Şirket Yönetimi
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="groups">
-            <span class="icon">👥</span> Gruplar
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="eliminations">
-            <span class="icon">↔️</span> Eliminasyonlar
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="consolidation">
-            <span class="icon">📊</span> Konsolidasyon
-          </button>
-          <button type="button" class="nav-item" data-view="page" data-open="audit">
-            <span class="icon">🕵️</span> Denetim İzi
-          </button>
+          <div class="lq-nav-menu">
+            <div class="lq-nav-menu-title">AYARLAR</div>
+            <button type="button" class="nav-item" data-view="page" data-open="accountMapping">
+              <span class="icon">📒</span><span>Hesap Planı</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="fxRates">
+              <span class="icon">💱</span><span>Döviz Kurları</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="inflation">
+              <span class="icon">📈</span><span>Enflasyon Endeksleri</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="companies">
+              <span class="icon">🏢</span><span>Şirket Yönetimi</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="groups">
+              <span class="icon">👥</span><span>Gruplar</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="eliminations">
+              <span class="icon">↔️</span><span>Eliminasyonlar</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="consolidation">
+              <span class="icon">📊</span><span>Konsolidasyon</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="audit">
+              <span class="icon">🕵️</span><span>Denetim İzi</span>
+            </button>
+          </div>
         </div>
       </nav>
 
-      <div class="sidebar-footer">
-        <div class="user-chip">
+      <div class="lq-topnav-tools">
+        <div class="lq-hidden-page-meta" aria-hidden="true">
+          <span id="pageTitle">Dashboard</span>
+          <span id="pageSubtitle">Portföy kontrol merkezi</span>
+        </div>
+
+        <select class="company-select" id="v26ActiveCompanySelect" title="Aktif şirket">
+          <option value="ALL">Tüm Şirketler</option>
+        </select>
+
+        <button type="button" class="btn btn-ghost btn-sm" id="cleanupButton"
+                title="Eski logları temizle">🧹</button>
+
+        <div class="lq-user-menu">
           <div class="user-avatar" id="userAvatar">U</div>
           <div class="user-meta">
             <strong id="userName">Kullanıcı</strong>
             <span id="userRole">Oturum</span>
           </div>
+          <button type="button" class="shell-logout" id="logoutButton" onclick="logout()">
+            Çıkış
+          </button>
         </div>
-        <button type="button" class="shell-logout" id="logoutButton" onclick="logout()">Çıkış yap</button>
-      </div>
-    </aside>
-
-    <!-- ========== TOPBAR ========== -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menü">☰</button>
-        <div>
-          <span class="page-title" id="pageTitle">Sözleşmeler</span>
-          <span class="page-subtitle" id="pageSubtitle">Kiralama portföyü</span>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <select class="company-select" id="v26ActiveCompanySelect" title="Aktif şirket">
-          <option value="ALL">Tüm Şirketler</option>
-        </select>
-        <button type="button" class="btn btn-ghost btn-sm" id="cleanupButton" title="Eski logları temizle">🧹</button>
       </div>
     </header>
 
@@ -891,6 +898,69 @@
       host.setAttribute("data-lq-workspace",current);
     }
   }).observe(host,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V10 FINAL Top Navigation — presentation controller only. */
+(() => {
+  const nav=document.getElementById("sidebarNav");
+  const toggle=document.getElementById("menuToggle");
+  if(!nav) return;
+
+  const closeDropdowns=(except=null)=>{
+    document.querySelectorAll(".lq-nav-dropdown.open").forEach(d=>{
+      if(d!==except){
+        d.classList.remove("open");
+        d.querySelector(".lq-nav-trigger")?.setAttribute("aria-expanded","false");
+      }
+    });
+  };
+
+  document.querySelectorAll(".lq-nav-dropdown").forEach(drop=>{
+    const trigger=drop.querySelector(".lq-nav-trigger");
+    trigger?.addEventListener("click",e=>{
+      e.stopPropagation();
+      const willOpen=!drop.classList.contains("open");
+      closeDropdowns(drop);
+      drop.classList.toggle("open",willOpen);
+      trigger.setAttribute("aria-expanded",String(willOpen));
+    });
+  });
+
+  toggle?.addEventListener("click",e=>{
+    e.stopPropagation();
+    const open=nav.classList.toggle("mobile-open");
+    toggle.setAttribute("aria-expanded",String(open));
+  });
+
+  nav.querySelectorAll(".nav-item").forEach(item=>{
+    item.addEventListener("click",()=>{
+      closeDropdowns();
+      if(window.matchMedia("(max-width: 900px)").matches){
+        nav.classList.remove("mobile-open");
+        toggle?.setAttribute("aria-expanded","false");
+      }
+    });
+  });
+
+  document.addEventListener("click",e=>{
+    if(!e.target.closest(".lq-nav-dropdown")) closeDropdowns();
+    if(window.matchMedia("(max-width: 900px)").matches &&
+       !e.target.closest("#sidebarNav") && !e.target.closest("#menuToggle")){
+      nav.classList.remove("mobile-open");
+      toggle?.setAttribute("aria-expanded","false");
+    }
+  });
+
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){
+      closeDropdowns();
+      nav.classList.remove("mobile-open");
+      toggle?.setAttribute("aria-expanded","false");
+    }
+  });
 })();
 </script>
 
