@@ -500,6 +500,18 @@
                 <input type="number" id="restorationObligation" name="restorationObligation" min="0" step="0.01" value="0" />
               </div>
               <div class="form-field">
+                <label>
+                  <input type="checkbox" id="renewalOptionExpectedToExercise" name="renewalOptionExpectedToExercise" disabled />
+                  Yenileme opsiyonu kullanılacak
+                </label>
+                <small>Yenilemenin makul ölçüde kesin olduğu durumda işaretleyin.</small>
+              </div>
+              <div class="form-field">
+                <label for="renewalEndDate">Yenileme sonrası bitiş tarihi</label>
+                <input type="date" id="renewalEndDate" name="renewalEndDate" disabled />
+                <small>Opsiyon dönemi dahil yeni lease bitiş tarihi.</small>
+              </div>
+              <div class="form-field">
                 <label for="terminationDate">Fesih tarihi</label>
                 <input type="date" id="terminationDate" name="terminationDate" disabled />
                 <small>Fesih opsiyonunun kullanılacağı tarih.</small>
@@ -1037,6 +1049,9 @@
 (() => {
   const option = document.getElementById("purchaseOption");
   const price = document.getElementById("purchaseOptionPrice");
+  const renewal = document.getElementById("renewalOption");
+  const renewalExpected = document.getElementById("renewalOptionExpectedToExercise");
+  const renewalEndDate = document.getElementById("renewalEndDate");
   const variableType = document.getElementById("variablePaymentType");
   const inSubstanceFixed = document.getElementById("inSubstanceFixedPayment");
   const termination = document.getElementById("terminationOption");
@@ -1050,6 +1065,16 @@
     price.disabled = !option.checked;
     price.required = option.checked;
     if (!option.checked) price.value = "0";
+
+    if (renewal && renewalExpected && renewalEndDate) {
+      renewalExpected.disabled = !renewal.checked;
+      if (!renewal.checked) renewalExpected.checked = false;
+
+      const renewalActive = renewal.checked && renewalExpected.checked;
+      renewalEndDate.disabled = !renewalActive;
+      renewalEndDate.required = renewalActive;
+      if (!renewalActive) renewalEndDate.value = "";
+    }
 
     if (variableType && inSubstanceFixed) {
       const ozundeSabit = variableType.value === "OZUNDE_SABIT";
@@ -1076,6 +1101,8 @@
   };
 
   option.addEventListener("change", sync);
+  renewal?.addEventListener("change", sync);
+  renewalExpected?.addEventListener("change", sync);
   variableType?.addEventListener("change", sync);
   termination?.addEventListener("change", sync);
   rvg?.addEventListener("change", sync);
