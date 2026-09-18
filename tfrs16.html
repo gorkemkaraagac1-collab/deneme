@@ -160,8 +160,8 @@
         <div class="lq-dashboard-grid">
           <article class="lq-dash-card lq-chart-card">
             <div class="lq-card-head">
-              <div><span class="lq-card-kicker">PORTFÖY TRENDİ</span><h3>Kiralama yükümlülüğü görünümü</h3></div>
-              <span class="lq-chip">12 Ay</span>
+              <div><span class="lq-card-kicker">PORTFÖY TRENDİ</span><h3>Sözleşme vade yoğunluğu</h3></div>
+              <span class="lq-chip">Gerçek vade</span>
             </div>
             <div class="lq-bar-chart" id="lqLiabilityBars" aria-label="Portföy görünüm grafiği">
               <i style="--h:38%"></i><i style="--h:51%"></i><i style="--h:45%"></i><i style="--h:63%"></i>
@@ -575,95 +575,188 @@
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
 
 <script>
-/* LeaseQant Dashboard Bridge — presentation/read-only.
-   Reads values already rendered by the existing application. */
+/* LeaseQant Dashboard Bridge V3
+   Uses only the application's existing read-only public bridge.
+   No accounting calculation or persistence is performed here. */
 (() => {
-  const $ = (id) => document.getElementById(id);
+  "use strict";
+  const $ = id => document.getElementById(id);
   const dash = $("lqDashboard");
-  const contracts = $("contractsView");
-  if (!dash || !contracts) return;
+  const contractsView = $("contractsView");
+  if (!dash || !contractsView) return;
 
-  const text = (id) => ($(id)?.textContent || "").trim();
-  const copyText = (from, to) => {
-    const v = text(from);
+  const api = () => window.GK_TFRS16 || {};
+  const safeContracts = () => {
+    const bridge = api();
+    try {
+      if (typeof bridge.getPortfolioContracts === "function") return bridge.getPortfolioContracts() || [];
+      if (typeof bridge.getContractsSnapshot === "function") return bridge.getContractsSnapshot() || [];
+    } catch (_) {}
+    return [];
+  };
+  const activeCompanyMatch = contract => {
+    try {
+      return typeof api().v26ContractMatchesActiveCompany === "function"
+        ? api().v26ContractMatchesActiveCompany(contract)
+        : true;
+    } catch (_) { return true; }
+  };
+  const scopedContracts = () => safeContracts().filter(activeCompanyMatch);
+  const activeContracts = list => list.filter(c => String(c?.status || "active").toLowerCase() === "active");
+
+  const copyKpi = (from,to) => {
+    const v = ($(from)?.textContent || "").trim();
     if (v && v !== "—") $(to).textContent = v;
   };
-  const numberFromText = (v) => {
-    const cleaned = String(v || "").replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".");
+  const numeric = value => {
+    const s = String(value || "").trim();
+    if (!s || s === "—") return null;
+    const cleaned = s.replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".");
     const n = Number(cleaned);
-    return Number.isFinite(n) ? n : 0;
+    return Number.isFinite(n) ? n : null;
   };
+  const fmtCount = n => new Intl.NumberFormat("tr-TR").format(n || 0);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  function renderAssetClasses(list){
+    const host = $("lqAssetLegend");
+    const ring = document.querySelector(".lq-asset-ring");
+    if (!host || !ring) return;
+    const counts = new Map();
+    list.forEach(c => {
+      const key = String(c?.assetClass || "Diğer").trim() || "Diğer";
+      counts.set(key,(counts.get(key)||0)+1);
+    });
+    const rows = [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);
+    const total = rows.reduce((s,r)=>s+r[1],0);
+    if (!total) {
+      host.innerHTML = '<div><i></i><span>Henüz sınıflandırılmış aktif sözleşme yok</span></div>';
+      ring.style.background = "#172b4a";
+      return;
+    }
+    const palette = ["#3478f6","#60a5fa","#1d4ed8","#243652"];
+    let cursor=0, stops=[];
+    rows.forEach((r,i)=>{
+      const next=cursor+(r[1]/total*100);
+      stops.push(`${palette[i]} ${cursor.toFixed(1)}% ${next.toFixed(1)}%`);
+      cursor=next;
+    });
+    ring.style.background=`conic-gradient(${stops.join(",")})`;
+    host.innerHTML=rows.map((r,i)=>{
+      const pct=Math.round(r[1]/total*100);
+      return `<div><i style="background:${palette[i]}"></i><span><strong>${pct}%</strong> ${esc(r[0])}</span></div>`;
+    }).join("");
+  }
+
+  function renderAlerts(list){
+    const bridge=api();
+    let renewals=0;
+    if (typeof bridge.isRenewalWithin90Days === "function") {
+      list.forEach(c=>{ try { if(bridge.isRenewalWithin90Days(c)) renewals++; } catch(_){} });
+    }
+    const modifications=list.filter(c=>c?.modification===true || (Array.isArray(c?.modifications)&&c.modifications.length>0)).length;
+    if ($("lqRenewalCount")) $("lqRenewalCount").textContent=fmtCount(renewals);
+    if ($("lqModificationCount")) $("lqModificationCount").textContent=fmtCount(modifications);
+  }
+
+  function renderMaturity(){
+    const liability=numeric($("kpiLiability")?.textContent);
+    const current=numeric($("kpiCurrent")?.textContent);
+    if (liability === null || current === null || liability <= 0) {
+      $("lqCurrentPct").textContent="—";
+      $("lqCurrentLegend").textContent=$("kpiCurrent")?.textContent?.trim() || "—";
+      $("lqNonCurrentLegend").textContent="—";
+      return;
+    }
+    const pct=Math.max(0,Math.min(100,current/liability*100));
+    $("lqCurrentPct").textContent=`${pct.toFixed(0)}%`;
+    $("lqCurrentLegend").textContent=$("kpiCurrent")?.textContent?.trim() || "—";
+    $("lqNonCurrentLegend").textContent=`${(100-pct).toFixed(0)}%`;
+    document.querySelector(".lq-split-ring")?.style.setProperty("--current-pct",`${pct}%`);
+  }
+
+  function renderBars(list){
+    /* Contract end-date concentration: real portfolio data, no accounting estimate.
+       This intentionally does NOT pretend to be a liability forecast. */
+    const host=$("lqLiabilityBars");
+    const axis=document.querySelector(".lq-axis");
+    const title=document.querySelector(".lq-chart-card .lq-card-head h3");
+    if (!host || !axis) return;
+    if (title) title.textContent="Sözleşme vade yoğunluğu";
+    const now=new Date();
+    const buckets=Array.from({length:12},(_,i)=>{
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      return {y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleDateString("tr-TR",{month:"short"}),count:0};
+    });
+    list.forEach(c=>{
+      const d=new Date(c?.endDate);
+      if(Number.isNaN(d.getTime())) return;
+      const idx=(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth());
+      if(idx>=0&&idx<12) buckets[idx].count++;
+    });
+    const max=Math.max(1,...buckets.map(x=>x.count));
+    host.innerHTML=buckets.map(x=>`<i title="${x.count} sözleşme" style="--h:${Math.max(4,x.count/max*100).toFixed(1)}%"></i>`).join("");
+    axis.innerHTML=buckets.map(x=>`<span>${esc(x.label)}</span>`).join("");
+    const chip=document.querySelector(".lq-chart-card .lq-chip");
+    if(chip) chip.textContent="Gerçek vade";
+  }
 
   function syncDashboard(){
-    copyText("kpiLiability","lqTotalLiability");
-    copyText("kpiRou","lqTotalRou");
-    copyText("kpiContractCount","lqActiveContracts");
-    copyText("kpiCurrent","lqCurrentLiability");
+    copyKpi("kpiLiability","lqTotalLiability");
+    copyKpi("kpiRou","lqTotalRou");
+    copyKpi("kpiContractCount","lqActiveContracts");
+    copyKpi("kpiCurrent","lqCurrentLiability");
 
-    const company = $("v26ActiveCompanySelect");
-    if (company) {
-      const label = company.options?.[company.selectedIndex]?.text || "Tüm Şirketler";
-      $("lqCompanyScope").textContent = label;
+    const select=$("v26ActiveCompanySelect");
+    if(select && $("lqCompanyScope")){
+      $("lqCompanyScope").textContent=select.options?.[select.selectedIndex]?.text || "Tüm Şirketler";
     }
 
-    const liability = numberFromText(text("kpiLiability"));
-    const current = numberFromText(text("kpiCurrent"));
-    if (liability > 0 && current >= 0) {
-      const pct = Math.max(0, Math.min(100, (current/liability)*100));
-      $("lqCurrentPct").textContent = `${pct.toFixed(0)}%`;
-      $("lqCurrentLegend").textContent = text("kpiCurrent") || "—";
-      const ring = document.querySelector(".lq-split-ring");
-      if (ring) ring.style.setProperty("--current-pct", `${pct}%`);
-      $("lqNonCurrentLegend").textContent = `${(100-pct).toFixed(0)}%`;
+    const list=activeContracts(scopedContracts());
+    // KPI count remains engine-rendered; fallback only if it has not rendered yet.
+    if (($("lqActiveContracts")?.textContent || "").trim()==="—" && list.length) {
+      $("lqActiveContracts").textContent=fmtCount(list.length);
     }
+    renderAssetClasses(list);
+    renderAlerts(list);
+    renderMaturity();
+    renderBars(list);
+
+    const asOf=($("kpiDataAsOf")?.textContent || "").trim();
+    if(asOf && $("lqDashboardSubtitle")) $("lqDashboardSubtitle").textContent=`TFRS 16 portföyü · ${asOf}`;
   }
 
   function setDashboard(active){
-    dash.hidden = !active;
-    contracts.style.display = active ? "none" : "";
-    document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
-    if (active) {
+    dash.hidden=!active;
+    contractsView.style.display=active?"none":"";
+    document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));
+    if(active){
       document.querySelector("[data-lq-dashboard]")?.classList.add("active");
-      if ($("pageTitle")) $("pageTitle").textContent = "Dashboard";
-      if ($("pageSubtitle")) $("pageSubtitle").textContent = "Portföy kontrol merkezi";
+      if($("pageTitle")) $("pageTitle").textContent="Dashboard";
+      if($("pageSubtitle")) $("pageSubtitle").textContent="Portföy kontrol merkezi";
       syncDashboard();
-    } else {
+    }else{
       document.querySelector('.nav-item[data-view="contracts"]')?.classList.add("active");
     }
   }
 
-  document.querySelector("[data-lq-dashboard]")?.addEventListener("click", () => setDashboard(true));
-  $("lqGoContracts")?.addEventListener("click", () => {
+  document.querySelector("[data-lq-dashboard]")?.addEventListener("click",()=>setDashboard(true));
+  $("lqGoContracts")?.addEventListener("click",()=>{setDashboard(false);document.querySelector('.nav-item[data-view="contracts"]')?.click();});
+  $("lqOpenRisk")?.addEventListener("click",()=>{setDashboard(false);document.querySelector('.nav-item[data-open="riskControls"]')?.click();});
+  document.querySelectorAll("[data-open-target]").forEach(btn=>btn.addEventListener("click",()=>{
     setDashboard(false);
-    document.querySelector('.nav-item[data-view="contracts"]')?.click();
-  });
-  $("lqOpenRisk")?.addEventListener("click", () => {
-    setDashboard(false);
-    document.querySelector('.nav-item[data-open="riskControls"]')?.click();
-  });
-  document.querySelectorAll("[data-open-target]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      setDashboard(false);
-      document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
-    });
-  });
-  document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn => {
-    btn.addEventListener("click", () => {
-      dash.hidden = true;
-      contracts.style.display = "";
-    });
-  });
-  $("v26ActiveCompanySelect")?.addEventListener("change", () => setTimeout(syncDashboard, 250));
+    document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
+  }));
+  document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>{dash.hidden=true;contractsView.style.display="";}));
+  $("v26ActiveCompanySelect")?.addEventListener("change",()=>setTimeout(syncDashboard,300));
 
-  const observer = new MutationObserver(() => {
-    if (!dash.hidden) syncDashboard();
-  });
-  ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent"].forEach(id => {
-    const el = $(id); if (el) observer.observe(el,{childList:true,subtree:true,characterData:true});
+  const observer=new MutationObserver(()=>{if(!dash.hidden) syncDashboard();});
+  ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent","kpiDataAsOf"].forEach(id=>{
+    const el=$(id); if(el) observer.observe(el,{childList:true,subtree:true,characterData:true});
   });
 
-  // Dashboard is the default visual landing view; engine remains loaded underneath.
-  window.addEventListener("load", () => setTimeout(() => setDashboard(true), 350));
+  window.LeaseQantDashboard={refresh:syncDashboard,show:()=>setDashboard(true)};
+  window.addEventListener("load",()=>setTimeout(()=>setDashboard(true),500));
 })();
 </script>
 
