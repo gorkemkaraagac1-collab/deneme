@@ -13,7 +13,7 @@
   <!-- SheetJS for Excel import/export (engine uses XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
-<body>
+<body data-lq-ui-version="10.0">
   <div class="app" id="app">
     <!-- ========== SIDEBAR ========== -->
     <aside class="sidebar" id="sidebar">
@@ -157,6 +157,41 @@
           </article>
         </div>
 
+        <section class="lq-cfo-strip" aria-label="CFO kapanış görünümü">
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">12 AYLIK NAKİT GÖRÜNÜMÜ</span><h3>Ödeme yükü</h3></div>
+              <strong id="lqNext12Payments">—</strong>
+            </div>
+            <div class="lq-progress"><i id="lqPaymentProgress"></i></div>
+            <p>Mevcut motorun “önümüzdeki 12 ay” portföy KPI’sı varsa doğrudan yansıtılır.</p>
+          </article>
+
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">DÖNEM GİDERİ</span><h3>Faiz + amortisman</h3></div>
+              <span class="lq-cfo-state" id="lqExpenseState">Motor verisi</span>
+            </div>
+            <div class="lq-dual-metric">
+              <div><small>Aylık faiz</small><strong id="lqMonthlyInterest">—</strong></div>
+              <div><small>Amortisman</small><strong id="lqMonthlyDep">—</strong></div>
+            </div>
+          </article>
+
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">CLOSE READINESS</span><h3>Kapanış hazırlığı</h3></div>
+              <strong class="lq-readiness-score" id="lqReadinessScore">—</strong>
+            </div>
+            <div class="lq-readiness-list">
+              <span><i id="lqReadyContracts"></i>Sözleşme portföyü</span>
+              <span><i id="lqReadyCompany"></i>Şirket kapsamı</span>
+              <span><i id="lqReadyPeriod"></i>Raporlama dönemi</span>
+            </div>
+            <button type="button" class="lq-inline-action" data-open-target="close">Kapanış panelini aç →</button>
+          </article>
+        </section>
+
         <div class="lq-dashboard-grid">
           <article class="lq-dash-card lq-chart-card">
             <div class="lq-card-head">
@@ -232,7 +267,7 @@
         </div>
       </section>
 
-      <div class="main-inner" id="contractsView">
+      <div class="main-inner" id="contractsView" data-lq-workspace="contracts">
         <!-- KPI -->
         <div class="kpi-grid" id="kpiGrid">
           <div class="kpi-card accent-blue">
@@ -722,6 +757,35 @@
     renderMaturity();
     renderBars(list);
 
+    // CFO strip: read-only mirrors from any existing KPI IDs exposed by current UI.
+    const firstText = ids => {
+      for (const id of ids) {
+        const v = ($(id)?.textContent || "").trim();
+        if (v && v !== "—") return v;
+      }
+      return "—";
+    };
+    if ($("lqNext12Payments")) $("lqNext12Payments").textContent =
+      firstText(["kpiNext12","kpiNext12Months","next12Months","next12Payments"]);
+    if ($("lqMonthlyInterest")) $("lqMonthlyInterest").textContent =
+      firstText(["kpiMonthlyInterest","monthlyInterest","portfolioMonthlyInterest"]);
+    if ($("lqMonthlyDep")) $("lqMonthlyDep").textContent =
+      firstText(["kpiDepreciation","monthlyDepreciation","portfolioDepreciation"]);
+
+    // Readiness is operational UI readiness only, not an accounting opinion.
+    const portfolioReady = list.length > 0;
+    const companyReady = !!$("v26ActiveCompanySelect")?.value || !!$("v26ActiveCompanySelect");
+    const periodCandidates = ["reportingMonth","journalMonth","closePeriod","v26ReportingPeriod"];
+    const periodReady = periodCandidates.some(id => {
+      const el=$(id); return !!(el && (el.value || el.textContent?.trim()));
+    });
+    const checks=[portfolioReady,companyReady,periodReady];
+    const score=Math.round(checks.filter(Boolean).length/checks.length*100);
+    if ($("lqReadinessScore")) $("lqReadinessScore").textContent=`${score}%`;
+    [["lqReadyContracts",portfolioReady],["lqReadyCompany",companyReady],["lqReadyPeriod",periodReady]].forEach(([id,ok])=>{
+      const el=$(id); if(el) el.className=ok?"ready":"pending";
+    });
+
     const asOf=($("kpiDataAsOf")?.textContent || "").trim();
     if(asOf && $("lqDashboardSubtitle")) $("lqDashboardSubtitle").textContent=`TFRS 16 portföyü · ${asOf}`;
   }
@@ -749,6 +813,10 @@
   }));
   document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>{dash.hidden=true;contractsView.style.display="";}));
   $("v26ActiveCompanySelect")?.addEventListener("change",()=>setTimeout(syncDashboard,300));
+  document.querySelectorAll(".lq-cfo-strip [data-open-target]").forEach(btn=>btn.addEventListener("click",()=>{
+    setDashboard(false);
+    document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
+  }));
 
   const observer=new MutationObserver(()=>{if(!dash.hidden) syncDashboard();});
   ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent","kpiDataAsOf"].forEach(id=>{
@@ -757,6 +825,72 @@
 
   window.LeaseQantDashboard={refresh:syncDashboard,show:()=>setDashboard(true)};
   window.addEventListener("load",()=>setTimeout(()=>setDashboard(true),500));
+})();
+</script>
+
+
+<script>
+/* LeaseQant V7 detail presentation helper — no data mutation. */
+(() => {
+  const modal=document.getElementById("v191FunctionalModal");
+  if(!modal) return;
+  const mark=()=> {
+    const content=modal.querySelector(".modal-content");
+    if(content) content.setAttribute("data-lq-detail-workspace","true");
+  };
+  mark();
+  new MutationObserver(mark).observe(modal,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V8 close-workspace presentation helper — no accounting/data mutation. */
+(() => {
+  const host=document.getElementById("v26PageHost");
+  if(!host) return;
+
+  const tag=(name)=>{
+    host.setAttribute("data-lq-workspace",name||"module");
+    host.classList.add("lq-premium-module");
+  };
+
+  document.querySelectorAll('.nav-item[data-open]').forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const name=btn.getAttribute("data-open")||"module";
+      if(["close","accountingCenter","footnotes","riskControls","audit"].includes(name)){
+        setTimeout(()=>tag(name),0);
+      }
+    });
+  });
+
+  new MutationObserver(()=>{
+    if(host.childElementCount) host.classList.add("lq-premium-module");
+  }).observe(host,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V9 governance presentation helper — presentation state only. */
+(() => {
+  const host=document.getElementById("v26PageHost");
+  if(!host) return;
+  let current="";
+  document.querySelectorAll('.nav-item[data-open]').forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const name=btn.getAttribute("data-open")||"";
+      if(["footnotes","riskControls","audit"].includes(name)){
+        current=name;
+        host.setAttribute("data-lq-workspace",name);
+      }
+    });
+  });
+  new MutationObserver(()=>{
+    if(current && ["footnotes","riskControls","audit"].includes(current)){
+      host.setAttribute("data-lq-workspace",current);
+    }
+  }).observe(host,{childList:true,subtree:true});
 })();
 </script>
 
