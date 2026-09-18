@@ -499,6 +499,12 @@
                 <small>Her satır: Tarih | Tutar | Açıklama. Gelecekte alınacak teşvikler ilgili tarihte lease cash flow'dan düşülür.</small>
               </div>
               <div class="form-field">
+                <label for="rentFreePeriods">Kira ücretsiz dönemler</label>
+                <textarea id="rentFreePeriods" name="rentFreePeriods" rows="4"
+                  placeholder="2027-01-01 | 2027-03-31 | İlk 3 ay kira ücretsiz"></textarea>
+                <small>Her satır: Başlangıç tarihi | Bitiş tarihi | Açıklama. Bu dönemdeki düzenli kira ödemeleri 0 kabul edilir.</small>
+              </div>
+              <div class="form-field">
                 <label for="prepayments">Peşin ödemeler</label>
                 <input type="number" id="prepayments" name="prepayments" min="0" step="0.01" value="0" />
               </div>
@@ -552,6 +558,18 @@
               </div>
               <div class="form-field">
                 <label><input type="checkbox" id="lowValueAsset" name="lowValueAsset" /> Düşük değerli varlık</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueWhenNewConfirmed" name="lowValueWhenNewConfirmed" disabled /> Yeni durumdaki değerinin düşük olduğu teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueStandaloneUseConfirmed" name="lowValueStandaloneUseConfirmed" disabled /> Tek başına veya hazır kaynaklarla kullanılabildiği teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueNotHighlyDependentConfirmed" name="lowValueNotHighlyDependentConfirmed" disabled /> Diğer varlıklara yüksek derecede bağımlı / ilişkili olmadığı teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueNoSubleaseConfirmed" name="lowValueNoSubleaseConfirmed" disabled /> Sublease edilmediği / edilmesinin beklenmediği teyit edildi</label>
               </div>
               <div class="form-field">
                 <label><input type="checkbox" id="renewalOption" name="renewalOption" /> Yenileme opsiyonu</label>
@@ -1120,3 +1138,40 @@
 
 </body>
 </html>
+
+<script>
+/* Control 6 — low-value eligibility confirmation field state (UI only). */
+(() => {
+  const lowValue = document.getElementById("lowValueAsset");
+  const confirmationIds = [
+    "lowValueWhenNewConfirmed",
+    "lowValueStandaloneUseConfirmed",
+    "lowValueNotHighlyDependentConfirmed",
+    "lowValueNoSubleaseConfirmed"
+  ];
+
+  const syncLowValueEligibilityState = () => {
+    const enabled = lowValue?.checked === true;
+    confirmationIds.forEach(id => {
+      const field = document.getElementById(id);
+      if (field) field.disabled = !enabled;
+    });
+  };
+
+  lowValue?.addEventListener("change", syncLowValueEligibilityState);
+  document.getElementById("newContractButton")?.addEventListener("click", () =>
+    setTimeout(syncLowValueEligibilityState, 0)
+  );
+  document.getElementById("contractForm")?.addEventListener("reset", () =>
+    setTimeout(syncLowValueEligibilityState, 0)
+  );
+
+  new MutationObserver(syncLowValueEligibilityState).observe(
+    document.getElementById("contractModal") || document.body,
+    { attributes: true, subtree: true, attributeFilter: ["class"] }
+  );
+
+  syncLowValueEligibilityState();
+})();
+</script>
+
