@@ -465,6 +465,25 @@
                 <input type="number" id="leaseIncreaseRate" name="leaseIncreaseRate" step="0.01" placeholder="0" />
               </div>
               <div class="form-field">
+                <label for="variablePayment">Tahmini değişken ödeme</label>
+                <input type="number" id="variablePayment" name="variablePayment" min="0" step="0.01" value="0" />
+                <small>Bilgi/tahmin alanıdır; ciro-kullanım ödemelerinde liability hesabına girmez.</small>
+              </div>
+              <div class="form-field">
+                <label for="variablePaymentType">Değişken ödeme türü</label>
+                <select id="variablePaymentType" name="variablePaymentType">
+                  <option value="CIRO_KULLANIM">Ciro / kullanım / performansa bağlı</option>
+                  <option value="ENDEKS_ORAN">Endeks / orana bağlı</option>
+                  <option value="OZUNDE_SABIT">Özünde sabit ödeme</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="inSubstanceFixedPayment">Özünde sabit ödeme tutarı</label>
+                <input type="number" id="inSubstanceFixedPayment" name="inSubstanceFixedPayment"
+                       min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Her ödeme döneminde kira cash flow'una eklenecek kaçınılamayan tutar.</small>
+              </div>
+              <div class="form-field">
                 <label for="initialDirectCosts">İlk doğrudan maliyetler</label>
                 <input type="number" id="initialDirectCosts" name="initialDirectCosts" min="0" step="0.01" value="0" />
               </div>
@@ -481,10 +500,27 @@
                 <input type="number" id="restorationObligation" name="restorationObligation" min="0" step="0.01" value="0" />
               </div>
               <div class="form-field">
+                <label for="terminationDate">Fesih tarihi</label>
+                <input type="date" id="terminationDate" name="terminationDate" disabled />
+                <small>Fesih opsiyonunun kullanılacağı tarih.</small>
+              </div>
+              <div class="form-field">
+                <label for="terminationPenalty">Fesih cezası</label>
+                <input type="number" id="terminationPenalty" name="terminationPenalty" min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Fesih halinde ödenecek sözleşmesel ceza; yoksa 0.</small>
+              </div>
+              <div class="form-field">
                 <label for="purchaseOptionPrice">Satın alma opsiyonu bedeli</label>
                 <input type="number" id="purchaseOptionPrice" name="purchaseOptionPrice"
                        min="0" step="0.01" value="0" placeholder="0" disabled />
                 <small>Satın alma opsiyonu makul ölçüde kesin ise kullanım bedelini girin.</small>
+              </div>
+              <div class="form-field">
+                <label for="expectedResidualValueGuaranteePayment">Beklenen kalıntı değer garantisi ödemesi</label>
+                <input type="number" id="expectedResidualValueGuaranteePayment"
+                       name="expectedResidualValueGuaranteePayment"
+                       min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Garanti kapsamında kiracının ödemeyi beklediği tutar; garanti yoksa 0.</small>
               </div>
             </div>
           </div>
@@ -506,6 +542,9 @@
               </div>
               <div class="form-field">
                 <label><input type="checkbox" id="purchaseOption" name="purchaseOption" /> Satın alma opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="residualValueGuarantee" name="residualValueGuarantee" /> Kalıntı değer garantisi</label>
               </div>
               <div class="form-field">
                 <label><input type="checkbox" id="ownershipTransfer" name="ownershipTransfer" /> Mülkiyet devri</label>
@@ -998,15 +1037,48 @@
 (() => {
   const option = document.getElementById("purchaseOption");
   const price = document.getElementById("purchaseOptionPrice");
+  const variableType = document.getElementById("variablePaymentType");
+  const inSubstanceFixed = document.getElementById("inSubstanceFixedPayment");
+  const termination = document.getElementById("terminationOption");
+  const terminationDate = document.getElementById("terminationDate");
+  const terminationPenalty = document.getElementById("terminationPenalty");
+  const rvg = document.getElementById("residualValueGuarantee");
+  const rvgPayment = document.getElementById("expectedResidualValueGuaranteePayment");
   if (!option || !price) return;
 
   const sync = () => {
     price.disabled = !option.checked;
     price.required = option.checked;
     if (!option.checked) price.value = "0";
+
+    if (variableType && inSubstanceFixed) {
+      const ozundeSabit = variableType.value === "OZUNDE_SABIT";
+      inSubstanceFixed.disabled = !ozundeSabit;
+      inSubstanceFixed.required = ozundeSabit;
+      if (!ozundeSabit) inSubstanceFixed.value = "0";
+    }
+
+    if (termination && terminationDate && terminationPenalty) {
+      terminationDate.disabled = !termination.checked;
+      terminationPenalty.disabled = !termination.checked;
+      terminationDate.required = termination.checked;
+      if (!termination.checked) {
+        terminationDate.value = "";
+        terminationPenalty.value = "0";
+      }
+    }
+
+    if (rvg && rvgPayment) {
+      rvgPayment.disabled = !rvg.checked;
+      rvgPayment.required = rvg.checked;
+      if (!rvg.checked) rvgPayment.value = "0";
+    }
   };
 
   option.addEventListener("change", sync);
+  variableType?.addEventListener("change", sync);
+  termination?.addEventListener("change", sync);
+  rvg?.addEventListener("change", sync);
   document.getElementById("contractModal")?.addEventListener("click", () => setTimeout(sync, 0), { capture: true });
   sync();
 })();
