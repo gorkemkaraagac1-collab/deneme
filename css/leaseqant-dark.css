@@ -2016,3 +2016,1039 @@ body{
   .lq-hero-metrics{grid-template-columns:1fr!important}
   .lq-dashboard .lq-metric{min-height:112px!important}
 }
+
+/* =========================================================
+   LEASEQANT — LIGHT THEME OVERRIDE
+   Sadece renk katmanı.
+   Dashboard / KPI / Top Navigation / responsive yapı korunur.
+   ========================================================= */
+
+:root{
+  --lq-light-bg:#f4f6f9;
+  --lq-light-surface:#ffffff;
+  --lq-light-surface-2:#f8fafc;
+  --lq-light-border:#e2e8f0;
+  --lq-light-border-strong:#cbd5e1;
+
+  --lq-light-text:#0f172a;
+  --lq-light-text-2:#475569;
+  --lq-light-text-3:#64748b;
+
+  --lq-blue:#2563eb;
+  --lq-cyan:#0891b2;
+  --lq-green:#059669;
+  --lq-purple:#7c3aed;
+  --lq-amber:#d97706;
+}
+
+
+/* =========================================================
+   SAYFA ZEMİNİ
+   ========================================================= */
+
+html,
+body{
+  color:var(--lq-light-text)!important;
+  background:var(--lq-light-bg)!important;
+}
+
+body{
+  background:
+    radial-gradient(
+      900px 520px at 72% -8%,
+      rgba(37,99,235,.045),
+      transparent 62%
+    ),
+    radial-gradient(
+      780px 460px at 18% 8%,
+      rgba(8,145,178,.035),
+      transparent 60%
+    ),
+    var(--lq-light-bg)!important;
+}
+
+.main{
+  color:var(--lq-light-text)!important;
+  background:
+    linear-gradient(
+      rgba(148,163,184,.07) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(148,163,184,.07) 1px,
+      transparent 1px
+    ),
+    radial-gradient(
+      900px 480px at 50% 0%,
+      rgba(37,99,235,.035),
+      transparent 70%
+    ),
+    var(--lq-light-bg)!important;
+
+  background-size:
+    72px 72px,
+    72px 72px,
+    auto,
+    auto!important;
+}
+
+
+/* =========================================================
+   TOP NAVIGATION
+   ========================================================= */
+
+.lq-topnav-shell{
+  background:rgba(255,255,255,.96)!important;
+  border-bottom:1px solid var(--lq-light-border)!important;
+  box-shadow:0 4px 18px rgba(15,23,42,.06)!important;
+  backdrop-filter:blur(18px);
+}
+
+
+/* Menü */
+
+.lq-topnav > .nav-item,
+.lq-nav-trigger{
+  color:#475569!important;
+  background:transparent!important;
+}
+
+
+.lq-topnav > .nav-item:hover,
+.lq-nav-trigger:hover{
+  color:#0f172a!important;
+  background:#f1f5f9!important;
+}
+
+
+.lq-topnav > .nav-item.active,
+.lq-dashboard-nav.active{
+  color:#1d4ed8!important;
+
+  background:
+    linear-gradient(
+      180deg,
+      #eff6ff,
+      #eaf2ff
+    )!important;
+
+  border-color:#bfdbfe!important;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(37,99,235,.02)!important;
+}
+
+
+/* Dropdown açık */
+
+.lq-nav-dropdown.open > .lq-nav-trigger{
+  color:#0f172a!important;
+  background:#f1f5f9!important;
+  border-color:#dbe3ed!important;
+  box-shadow:none!important;
+}
+
+
+/* =========================================================
+   DROPDOWN MENÜLER
+   ========================================================= */
+
+.lq-nav-menu{
+  background:#ffffff!important;
+
+  border:1px solid
+    var(--lq-light-border)!important;
+
+  box-shadow:
+    0 18px 45px
+    rgba(15,23,42,.12)!important;
+}
+
+
+.lq-nav-menu-title{
+  color:#94a3b8!important;
+}
+
+
+.lq-nav-menu .nav-item{
+  color:#475569!important;
+  background:transparent!important;
+}
+
+
+.lq-nav-menu .nav-item:hover,
+.lq-nav-menu .nav-item.active{
+  color:#1d4ed8!important;
+  background:#eff6ff!important;
+}
+
+
+/* =========================================================
+   TOPBAR ŞİRKET SEÇİMİ
+   ========================================================= */
+
+.lq-topnav-tools .company-select,
+.company-select{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#dbe2ea!important;
+}
+
+
+.lq-topnav-tools .company-select:hover,
+.company-select:hover{
+  border-color:#94a3b8!important;
+}
+
+
+.company-select:focus{
+  border-color:#2563eb!important;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37,99,235,.10)!important;
+}
+
+
+/* =========================================================
+   TOPBAR KULLANICI
+   ========================================================= */
+
+.lq-user-menu{
+  border-left-color:#e2e8f0!important;
+}
+
+
+.lq-user-menu .user-avatar,
+.user-avatar{
+  color:#1d4ed8!important;
+  background:#dbeafe!important;
+}
+
+
+.lq-user-menu .user-meta strong{
+  color:#0f172a!important;
+}
+
+
+.lq-user-menu .user-meta span{
+  color:#64748b!important;
+}
+
+
+.lq-user-menu .shell-logout,
+.shell-logout{
+  color:#475569!important;
+  background:#ffffff!important;
+  border-color:#dbe2ea!important;
+}
+
+
+.lq-user-menu .shell-logout:hover,
+.shell-logout:hover{
+  color:#0f172a!important;
+  background:#f8fafc!important;
+  border-color:#cbd5e1!important;
+}
+
+
+/* =========================================================
+   DASHBOARD BAŞLIK
+   ========================================================= */
+
+.lq-welcome-kicker,
+.lq-overline,
+.lq-card-kicker{
+  color:#64748b!important;
+}
+
+
+.lq-welcome h1,
+.lq-dash-head h1{
+  color:#0f172a!important;
+}
+
+
+.lq-welcome p,
+.lq-dash-head p,
+#lqDashboardSubtitle{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   DASHBOARD ANA KARTLAR
+   ========================================================= */
+
+.lq-dashboard .lq-metric,
+.lq-dashboard .lq-dash-card,
+.lq-dashboard .lq-cfo-card{
+  color:#0f172a!important;
+
+  background:#ffffff!important;
+
+  border-color:
+    var(--lq-light-border)!important;
+
+  box-shadow:
+    0 1px 2px rgba(15,23,42,.03),
+    0 8px 24px rgba(15,23,42,.045)!important;
+}
+
+
+.lq-dashboard .lq-metric:hover,
+.lq-dashboard .lq-dash-card:hover{
+  border-color:#cbd5e1!important;
+
+  box-shadow:
+    0 2px 4px rgba(15,23,42,.04),
+    0 12px 30px rgba(15,23,42,.07)!important;
+}
+
+
+/* =========================================================
+   4 ANA KPI
+   Açık temada renk ayrımı korunuyor.
+   ========================================================= */
+
+.lq-dashboard
+.lq-hero-metrics > *:nth-child(1){
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f5f9ff
+    )!important;
+
+  border-color:#bfdbfe!important;
+}
+
+
+.lq-dashboard
+.lq-hero-metrics > *:nth-child(2){
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #faf7ff
+    )!important;
+
+  border-color:#ddd6fe!important;
+}
+
+
+.lq-dashboard
+.lq-hero-metrics > *:nth-child(3){
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f2fbf7
+    )!important;
+
+  border-color:#bbf7d0!important;
+}
+
+
+.lq-dashboard
+.lq-hero-metrics > *:nth-child(4){
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f3f9fc
+    )!important;
+
+  border-color:#bae6fd!important;
+}
+
+
+/* KPI yazıları */
+
+.lq-metric-label{
+  color:#64748b!important;
+}
+
+
+.lq-metric-value{
+  color:#0f172a!important;
+}
+
+
+.lq-metric-foot{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   DASHBOARD KART BAŞLIKLARI
+   ========================================================= */
+
+.lq-dashboard h2,
+.lq-dashboard h3,
+.lq-dashboard h4,
+.lq-card-head h3,
+.lq-cfo-top h3{
+  color:#0f172a!important;
+}
+
+
+.lq-dashboard p,
+.lq-dashboard small{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   CFO STRIP
+   ========================================================= */
+
+.lq-cfo-top strong,
+.lq-dual-metric strong{
+  color:#0f172a!important;
+}
+
+
+.lq-dual-metric > div{
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-dual-metric small{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
+
+.lq-progress{
+  background:#e2e8f0!important;
+}
+
+
+.lq-progress i{
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #0ea5e9
+    )!important;
+
+  box-shadow:none!important;
+}
+
+
+/* =========================================================
+   READINESS
+   ========================================================= */
+
+.lq-readiness-score{
+  color:#059669!important;
+  text-shadow:none!important;
+}
+
+
+.lq-readiness-list{
+  color:#475569!important;
+}
+
+
+/* =========================================================
+   CHIPS
+   ========================================================= */
+
+.lq-chip{
+  color:#475569!important;
+  background:#f8fafc!important;
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-chip-green{
+  color:#047857!important;
+  background:#ecfdf5!important;
+  border-color:#a7f3d0!important;
+}
+
+
+/* =========================================================
+   ACTION / CONTROL LISTS
+   ========================================================= */
+
+.lq-control-list button{
+  color:#334155!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-control-list button:hover{
+  color:#1d4ed8!important;
+  background:#f8fafc!important;
+  border-color:#bfdbfe!important;
+}
+
+
+.lq-action-list > div{
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-action-list strong{
+  color:#0f172a!important;
+}
+
+
+.lq-action-list small{
+  color:#64748b!important;
+}
+
+
+.lq-action-badge{
+  color:#475569!important;
+  background:#f1f5f9!important;
+  border-color:#e2e8f0!important;
+}
+
+
+/* =========================================================
+   STANDARD KARTI
+   ========================================================= */
+
+.lq-standard-row{
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-standard-row span{
+  color:#64748b!important;
+}
+
+
+.lq-standard-row strong{
+  color:#0f172a!important;
+}
+
+
+.lq-standard-row i{
+  color:#047857!important;
+  background:#ecfdf5!important;
+}
+
+
+/* =========================================================
+   GRAFİKLER
+   ========================================================= */
+
+.lq-bar-chart{
+  border-color:#e2e8f0!important;
+}
+
+
+.lq-bar-chart i,
+.lq-bar{
+  background:
+    linear-gradient(
+      180deg,
+      #60a5fa,
+      #2563eb
+    )!important;
+
+  box-shadow:none!important;
+}
+
+
+.lq-axis{
+  color:#94a3b8!important;
+}
+
+
+.lq-split-ring{
+  filter:none!important;
+}
+
+
+.lq-split-ring > div{
+  background:#ffffff!important;
+}
+
+
+.lq-split-ring strong{
+  color:#0f172a!important;
+}
+
+
+.lq-split-ring small{
+  color:#64748b!important;
+}
+
+
+.lq-split-legend{
+  color:#475569!important;
+}
+
+
+/* =========================================================
+   CONTRACT WORKSPACE / NORMAL KPI
+   ========================================================= */
+
+.kpi-card,
+.card{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+
+  box-shadow:
+    0 1px 2px rgba(15,23,42,.03),
+    0 5px 16px rgba(15,23,42,.04)!important;
+}
+
+
+.kpi-label,
+.kpi-hint{
+  color:#64748b!important;
+}
+
+
+.kpi-value{
+  color:#0f172a!important;
+}
+
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.toolbar{
+  color:#0f172a!important;
+}
+
+
+.search-box input{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#dbe2ea!important;
+}
+
+
+.search-box input::placeholder{
+  color:#94a3b8!important;
+}
+
+
+.search-box input:focus{
+  border-color:#2563eb!important;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37,99,235,.10)!important;
+}
+
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.btn-primary{
+  color:#ffffff!important;
+  background:#2563eb!important;
+  border-color:#2563eb!important;
+}
+
+
+.btn-primary:hover:not(:disabled){
+  background:#1d4ed8!important;
+  border-color:#1d4ed8!important;
+}
+
+
+.btn-secondary{
+  color:#334155!important;
+  background:#ffffff!important;
+  border-color:#cbd5e1!important;
+}
+
+
+.btn-secondary:hover:not(:disabled){
+  color:#0f172a!important;
+  background:#f8fafc!important;
+  border-color:#94a3b8!important;
+}
+
+
+.btn-ghost{
+  color:#475569!important;
+  background:transparent!important;
+}
+
+
+.btn-ghost:hover:not(:disabled){
+  color:#0f172a!important;
+  background:#f1f5f9!important;
+}
+
+
+/* =========================================================
+   TABLOLAR
+   ========================================================= */
+
+table.data-table{
+  color:#0f172a!important;
+  background:#ffffff!important;
+}
+
+
+table.data-table th{
+  color:#64748b!important;
+  background:#f8fafc!important;
+  border-color:#e2e8f0!important;
+}
+
+
+table.data-table td{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+table.data-table tbody tr:hover td{
+  background:#f8fbff!important;
+}
+
+
+/* =========================================================
+   SAYFALAR / ENGINE HOST
+   ========================================================= */
+
+#v26PageHost{
+  color:#0f172a!important;
+}
+
+
+#v26PageHost [class*="card"],
+#v26PageHost [class*="panel"],
+#v26PageHost [class*="section"]{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+/* =========================================================
+   ENGINE TABLOLARI
+   ========================================================= */
+
+#v26PageHost table{
+  color:#0f172a!important;
+  background:#ffffff!important;
+}
+
+
+#v26PageHost th{
+  color:#64748b!important;
+  background:#f8fafc!important;
+  border-color:#e2e8f0!important;
+}
+
+
+#v26PageHost td{
+  color:#0f172a!important;
+  border-color:#e2e8f0!important;
+}
+
+
+#v26PageHost tbody tr:hover td{
+  background:#f8fbff!important;
+}
+
+
+/* =========================================================
+   ENGINE FORM ALANLARI
+   ========================================================= */
+
+#v26PageHost input,
+#v26PageHost select,
+#v26PageHost textarea,
+.form-field input,
+.form-field select,
+.form-field textarea{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#cbd5e1!important;
+}
+
+
+#v26PageHost input::placeholder,
+#v26PageHost textarea::placeholder{
+  color:#94a3b8!important;
+}
+
+
+#v26PageHost input:focus,
+#v26PageHost select:focus,
+#v26PageHost textarea:focus{
+  border-color:#2563eb!important;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37,99,235,.10)!important;
+}
+
+
+/* =========================================================
+   FOOTNOTES / RISK / AUDIT
+   Dark mode'un özel override'larını geri açığa çevir.
+   ========================================================= */
+
+#v26PageHost[data-lq-workspace="footnotes"]
+[class*="card"],
+
+#v26PageHost[data-lq-workspace="footnotes"]
+[class*="panel"],
+
+#v26PageHost[data-lq-workspace="riskControls"]
+[class*="card"],
+
+#v26PageHost[data-lq-workspace="riskControls"]
+[class*="panel"],
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="card"],
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="panel"],
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="audit"],
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="history"],
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="timeline"]{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+/* Governance tabloları */
+
+#v26PageHost[data-lq-workspace="audit"] th{
+  color:#64748b!important;
+  background:#f8fafc!important;
+}
+
+
+#v26PageHost[data-lq-workspace="audit"] td{
+  color:#334155!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+#v26PageHost[data-lq-workspace="audit"]
+tbody tr:hover td{
+  background:#f8fbff!important;
+}
+
+
+/* Governance input */
+
+#v26PageHost[data-lq-workspace="footnotes"] input,
+#v26PageHost[data-lq-workspace="footnotes"] select,
+#v26PageHost[data-lq-workspace="footnotes"] textarea,
+
+#v26PageHost[data-lq-workspace="riskControls"] input,
+#v26PageHost[data-lq-workspace="riskControls"] select,
+#v26PageHost[data-lq-workspace="riskControls"] textarea,
+
+#v26PageHost[data-lq-workspace="audit"] input,
+#v26PageHost[data-lq-workspace="audit"] select,
+#v26PageHost[data-lq-workspace="audit"] textarea{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#cbd5e1!important;
+}
+
+
+/* Audit timeline */
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="timeline"] > *{
+  border-left-color:#cbd5e1!important;
+}
+
+
+#v26PageHost[data-lq-workspace="audit"]
+[class*="timeline"] > *::before{
+  background:#2563eb!important;
+
+  box-shadow:
+    0 0 0 4px
+    rgba(37,99,235,.10)!important;
+}
+
+
+/* =========================================================
+   MODALS
+   ========================================================= */
+
+.modal-overlay{
+  background:rgba(15,23,42,.35)!important;
+}
+
+
+.modal-card,
+#v191FunctionalModal .modal-content{
+  color:#0f172a!important;
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+
+  box-shadow:
+    0 22px 60px
+    rgba(15,23,42,.18)!important;
+}
+
+
+.modal-card .modal-header,
+.modal-overlay .modal-header,
+.modal-card .modal-footer,
+.modal-overlay .modal-footer,
+#v191FunctionalModal .modal-header,
+#v191FunctionalModal .detail-actions{
+  background:#ffffff!important;
+  border-color:#e2e8f0!important;
+}
+
+
+.modal-card .modal-header h2,
+.modal-overlay .modal-header h2{
+  color:#0f172a!important;
+}
+
+
+.modal-card .modal-header p,
+.modal-overlay .modal-header p{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   EMPTY / ERROR
+   ========================================================= */
+
+.empty-state,
+[class*="empty-state"]{
+  color:#64748b!important;
+  background:transparent!important;
+}
+
+
+.empty-state h4{
+  color:#334155!important;
+}
+
+
+.error-state,
+[class*="error-state"]{
+  color:#b91c1c!important;
+  background:#fef2f2!important;
+  border-color:#fecaca!important;
+}
+
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.loading-overlay{
+  background:rgba(255,255,255,.82)!important;
+}
+
+
+.loading-overlay::after{
+  color:#64748b!important;
+}
+
+
+/* =========================================================
+   MOBILE TOP NAV
+   ========================================================= */
+
+@media(max-width:900px){
+
+  .lq-mobile-nav-toggle{
+    color:#334155!important;
+    background:#ffffff!important;
+    border-color:#cbd5e1!important;
+  }
+
+
+  .lq-topnav{
+    background:#ffffff!important;
+    border-color:#e2e8f0!important;
+
+    box-shadow:
+      0 22px 55px
+      rgba(15,23,42,.16)!important;
+  }
+
+
+  .lq-nav-menu{
+    background:#f8fafc!important;
+    border-color:#e2e8f0!important;
+  }
+
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+*{
+  scrollbar-color:
+    #cbd5e1
+    transparent;
+}
+
+
+::-webkit-scrollbar{
+  width:10px;
+  height:10px;
+}
+
+
+::-webkit-scrollbar-track{
+  background:transparent;
+}
+
+
+::-webkit-scrollbar-thumb{
+  background:#cbd5e1;
+  border:3px solid transparent;
+  border-radius:999px;
+  background-clip:padding-box;
+}
+
+
+::-webkit-scrollbar-thumb:hover{
+  background:#94a3b8;
+  border:3px solid transparent;
+  background-clip:padding-box;
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+:focus-visible{
+  outline:2px solid #2563eb!important;
+  outline-offset:2px!important;
+}
