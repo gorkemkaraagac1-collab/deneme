@@ -3,152 +3,1145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Financial Intelligence Platform</title>
+    <title>Admin Genel Bakış - LeaseQant</title>
     <link rel="stylesheet" href="css/admin.css">
-</head>
-<body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html" class="active">
-                <span class="icon">📊</span> Dashboard
-            </a>
-            <a href="companies.html">
-                <span class="icon">🏢</span> Companies
-            </a>
-            <a href="users.html">
-                <span class="icon">👤</span> Users
-            </a>
-            <a href="licenses.html">
-                <span class="icon">🔑</span> Licenses
-            </a>
-            <a href="plans.html">
-                <span class="icon">📦</span> Plans
-            </a>
-            <a href="faq.html">
-                <span class="icon">❓</span> SSS
-            </a>
-            <a href="opening-balances.html">
-                <span class="icon">🧾</span> Açılış Bakiyeleri
-            </a>
-            <a href="../../tfrs16.html">
-                <span class="icon">🧮</span> TFRS16 Hesaplama Motoru
-            </a>
-            <a href="tfrs16.html">
-                <span class="icon">🧾</span> TFRS16 Customers
-            </a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">
-                <span class="icon">📈</span> Enflasyon Endeksleri
-            </a>
-            <a href="fx-rates.html">
-                <span class="icon">💱</span> TCMB Kurları
-            </a>
-            <a href="audit.html">
-                <span class="icon">📋</span> Audit Log
-            </a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Header -->
-        <header class="top-header">
-            <div class="page-title">Dashboard</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+    <style>
+        /* Yalnızca admin dashboard'a özel stiller.
+           Ortak admin.css yapısına dokunmuyoruz. */
 
-        <!-- Page Content -->
-        <div class="page-content">
-            <p id="adminWelcome" style="color:var(--text-light); font-size:14px; margin-bottom:16px;"></p>
-            <!-- Dashboard Cards -->
-            <div class="dashboard-cards" id="dashboardCards">
-                <div class="stat-card">
-                    <div class="stat-number" id="statCompanies">-</div>
-                    <div class="stat-label">Companies</div>
-                </div>
-                <div class="stat-card success">
-                    <div class="stat-number" id="statLicenses">-</div>
-                    <div class="stat-label">Active Licenses</div>
-                </div>
-                <div class="stat-card warning">
-                    <div class="stat-number" id="statUsers">-</div>
-                    <div class="stat-label">Active Users</div>
-                </div>
-                <a href="tfrs16.html" class="stat-card clickable">
-                    <div class="stat-number" id="statTfrs16">-</div>
-                    <div class="stat-label">TFRS16 Customers ›</div>
-                </a>
-                <a href="licenses.html?expiring=30" class="stat-card clickable warning">
-                    <div class="stat-number" id="statExpiringLicenses">-</div>
-                    <div class="stat-label">Expiring Licenses (30d) ›</div>
-                </a>
-            </div>
+        .admin-dashboard {
+            display: grid;
+            gap: 22px;
+        }
 
-            <!-- Recent Activity -->
-            <div class="recent-activity">
-                <h3>Recent Activity</h3>
-                <div id="recentActivity">
-                    <p style="color: var(--text-light);">Loading...</p>
-                </div>
-            </div>
-        </div>
-    </div>
+        .dashboard-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
 
-    <script src="../js/admin.js"></script>
-    <script>
-        // Dashboard verilerini yükle
-        async function loadDashboard() {
-            try {
-                const result = await AdminAPI.getDashboard();
-                if (!result.success) {
-                    console.error('Dashboard error:', result.error);
-                    return;
-                }
-                
-                const data = result.data;
-                document.getElementById('statCompanies').textContent = data.companies;
-                document.getElementById('statLicenses').textContent = data.active_licenses;
-                document.getElementById('statUsers').textContent = data.users;
-                document.getElementById('statTfrs16').textContent = data.tfrs16_customers;
-                document.getElementById('statExpiringLicenses').textContent = data.expiring_licenses_30d;
-                
-                // Recent Activity
-                const activityHtml = data.recent_activity.map(item => `
-                    <div class="activity-item">
-                        <span class="time">${formatDate(item.timestamp)}</span>
-                        <span class="action">${escapeHtml(item.action)}</span>
-                        <span class="details">
-                            ${escapeHtml(item.user_username || 'System')}
-                            ${item.company_name ? `→ ${escapeHtml(item.company_name)}` : ''}
-                            ${item.entity_type ? `(${item.entity_type})` : ''}
-                        </span>
-                        <span class="status ${item.success ? 'success' : 'failed'}">
-                            ${item.success ? 'SUCCESS' : 'FAILED'}
-                        </span>
-                    </div>
-                `).join('');
-                
-                document.getElementById('recentActivity').innerHTML = activityHtml || 
-                    '<p style="color: var(--text-light);">No recent activity</p>';
-                
-            } catch (error) {
-                console.error('Dashboard load error:', error);
+        .dashboard-intro h1 {
+            font: 600 25px var(--display);
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .dashboard-intro p {
+            color: var(--text-light);
+            font-size: 13px;
+        }
+
+        .dashboard-section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-section-title h2 {
+            font: 600 16px var(--display);
+            color: var(--text);
+        }
+
+        .dashboard-section-title span {
+            color: var(--text-light);
+            font: 10px var(--mono);
+        }
+
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .overview-card {
+            position: relative;
+            min-width: 0;
+            padding: 18px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            text-decoration: none;
+            overflow: hidden;
+            transition: .15s ease;
+        }
+
+        .overview-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent);
+        }
+
+        .overview-card.success::before {
+            background: var(--success);
+        }
+
+        .overview-card.warning::before {
+            background: var(--warning);
+        }
+
+        .overview-card.danger::before {
+            background: var(--danger);
+        }
+
+        a.overview-card:hover {
+            transform: translateY(-2px);
+            border-color: #C9AD7C;
+            box-shadow: var(--shadow);
+        }
+
+        .overview-icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 14px;
+            border-radius: 9px;
+            background: var(--paper);
+            font-size: 16px;
+        }
+
+        .overview-value {
+            min-height: 37px;
+            font: 600 27px var(--mono);
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .overview-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 11px;
+        }
+
+        .overview-link {
+            display: block;
+            margin-top: 12px;
+            color: var(--accent-hover);
+            font: 600 9px var(--mono);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .dashboard-panel {
+            min-width: 0;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .dashboard-panel-head {
+            min-height: 56px;
+            padding: 15px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .dashboard-panel-head h3 {
+            font: 600 15px var(--display);
+        }
+
+        .dashboard-panel-head a {
+            color: var(--accent-hover);
+            font: 600 10px var(--mono);
+            text-decoration: none;
+        }
+
+        .dashboard-panel-body {
+            padding: 0 18px;
+        }
+
+        .dashboard-activity {
+            display: grid;
+            grid-template-columns: 128px 145px minmax(150px, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            padding: 13px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+        }
+
+        .dashboard-activity:last-child {
+            border-bottom: 0;
+        }
+
+        .activity-time {
+            color: var(--text-light);
+            font: 10px var(--mono);
+        }
+
+        .activity-action {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+            font: 600 10px var(--mono);
+        }
+
+        .activity-detail {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text-light);
+        }
+
+        .activity-status {
+            padding: 4px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
+            font: 600 9px var(--mono);
+        }
+
+        .activity-status.success {
+            color: var(--success);
+            background: var(--ok-soft);
+        }
+
+        .activity-status.failed {
+            color: var(--danger);
+            background: var(--seal-soft);
+        }
+
+        .quick-actions {
+            display: grid;
+            gap: 8px;
+            padding: 14px;
+        }
+
+        .quick-action {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 12px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            text-decoration: none;
+            transition: .15s;
+        }
+
+        .quick-action:hover {
+            background: var(--paper);
+            border-color: var(--border);
+        }
+
+        .quick-action-icon {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 9px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 15px;
+        }
+
+        .quick-action strong {
+            display: block;
+            margin-bottom: 1px;
+            font-size: 11px;
+        }
+
+        .quick-action small {
+            display: block;
+            color: var(--text-light);
+            font-size: 9.5px;
+        }
+
+        .dashboard-state {
+            padding: 28px 10px;
+            color: var(--text-light);
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .dashboard-state.error {
+            color: var(--danger);
+        }
+
+        .dashboard-refresh {
+            background: #fff;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .dashboard-refresh:hover {
+            background: var(--paper);
+        }
+
+        .dashboard-refresh:disabled {
+            opacity: .55;
+            cursor: wait;
+        }
+
+        .skeleton {
+            display: inline-block;
+            width: 55px;
+            height: 25px;
+            border-radius: 6px;
+            background:
+                linear-gradient(
+                    90deg,
+                    var(--paper) 25%,
+                    #f8f5eb 50%,
+                    var(--paper) 75%
+                );
+            background-size: 200% 100%;
+            animation: dashboardLoading 1.2s infinite linear;
+        }
+
+        @keyframes dashboardLoading {
+            from { background-position: 200% 0; }
+            to { background-position: -200% 0; }
+        }
+
+        @media (max-width: 1250px) {
+            .overview-grid {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
+        @media (max-width: 900px) {
+            .overview-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .dashboard-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-activity {
+                grid-template-columns: 105px minmax(120px, 1fr) auto;
+            }
+
+            .activity-detail {
+                grid-column: 1 / -1;
+                padding-bottom: 2px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .overview-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-intro {
+                align-items: flex-start;
+            }
+
+            .dashboard-activity {
+                grid-template-columns: 1fr auto;
+                gap: 6px 10px;
+            }
+
+            .activity-time {
+                grid-column: 1;
+            }
+
+            .activity-action {
+                grid-column: 1;
+            }
+
+            .activity-detail {
+                grid-column: 1 / -1;
+                white-space: normal;
+            }
+
+            .activity-status {
+                grid-column: 2;
+                grid-row: 1 / span 2;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"
+         style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">Admin</small>
+    </div>
+
+    <div class="sidebar-nav">
+
+        <div class="nav-label">Yönetim</div>
+
+        <a href="index.html" class="active">
+            <span class="icon">📊</span>
+            Dashboard
+        </a>
+
+        <a href="companies.html">
+            <span class="icon">🏢</span>
+            Companies
+        </a>
+
+        <a href="users.html">
+            <span class="icon">👤</span>
+            Users
+        </a>
+
+        <a href="licenses.html">
+            <span class="icon">🔑</span>
+            Licenses
+        </a>
+
+        <a href="plans.html">
+            <span class="icon">📦</span>
+            Plans
+        </a>
+
+        <a href="faq.html">
+            <span class="icon">❓</span>
+            SSS
+        </a>
+
+        <a href="opening-balances.html">
+            <span class="icon">🧾</span>
+            Açılış Bakiyeleri
+        </a>
+
+        <a href="../../tfrs16.html">
+            <span class="icon">🧮</span>
+            TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            <span class="icon">🧾</span>
+            TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            <span class="icon">🔒</span>
+            Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            <span class="icon">📈</span>
+            Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            <span class="icon">💱</span>
+            TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            <span class="icon">📋</span>
+            Audit Log
+        </a>
+
+    </div>
+</nav>
+
+
+<div class="main-content">
+
+    <header class="top-header">
+
+        <div class="page-title">
+            Admin Genel Bakış
+        </div>
+
+        <div class="user-info">
+
+            <span
+                class="username"
+                id="adminUsername"
+            >
+                Loading...
+            </span>
+
+            <span class="role-badge">
+                ADMIN
+            </span>
+
+            <button
+                class="btn-logout"
+                type="button"
+                onclick="logout()"
+            >
+                Çıkış
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <main class="page-content">
+
+        <div class="admin-dashboard">
+
+            <!-- ==================================================
+                 INTRO
+            =================================================== -->
+
+            <section class="dashboard-intro">
+
+                <div>
+                    <h1>Yönetim Merkezi</h1>
+
+                    <p id="adminWelcome">
+                        Yönetim verileri hazırlanıyor...
+                    </p>
+                </div>
+
+                <button
+                    class="dashboard-refresh"
+                    id="refreshDashboardButton"
+                    type="button"
+                    onclick="loadDashboard()"
+                >
+                    ↻ Verileri Yenile
+                </button>
+
+            </section>
+
+
+            <!-- ==================================================
+                 KPI
+            =================================================== -->
+
+            <section>
+
+                <div class="dashboard-section-title">
+                    <h2>Genel Durum</h2>
+                    <span>Canlı yönetim verileri</span>
+                </div>
+
+                <div class="overview-grid">
+
+                    <a
+                        href="companies.html"
+                        class="overview-card"
+                    >
+                        <div class="overview-icon">🏢</div>
+
+                        <div
+                            class="overview-value"
+                            id="statCompanies"
+                        >
+                            <span class="skeleton"></span>
+                        </div>
+
+                        <div class="overview-label">
+                            Toplam Şirket
+                        </div>
+
+                        <span class="overview-link">
+                            Şirketleri Yönet →
+                        </span>
+                    </a>
+
+
+                    <a
+                        href="users.html"
+                        class="overview-card success"
+                    >
+                        <div class="overview-icon">👤</div>
+
+                        <div
+                            class="overview-value"
+                            id="statUsers"
+                        >
+                            <span class="skeleton"></span>
+                        </div>
+
+                        <div class="overview-label">
+                            Aktif Kullanıcı
+                        </div>
+
+                        <span class="overview-link">
+                            Kullanıcıları Gör →
+                        </span>
+                    </a>
+
+
+                    <a
+                        href="licenses.html"
+                        class="overview-card success"
+                    >
+                        <div class="overview-icon">🔑</div>
+
+                        <div
+                            class="overview-value"
+                            id="statLicenses"
+                        >
+                            <span class="skeleton"></span>
+                        </div>
+
+                        <div class="overview-label">
+                            Aktif Lisans
+                        </div>
+
+                        <span class="overview-link">
+                            Lisansları Yönet →
+                        </span>
+                    </a>
+
+
+                    <a
+                        href="tfrs16.html"
+                        class="overview-card"
+                    >
+                        <div class="overview-icon">🧮</div>
+
+                        <div
+                            class="overview-value"
+                            id="statTfrs16"
+                        >
+                            <span class="skeleton"></span>
+                        </div>
+
+                        <div class="overview-label">
+                            TFRS16 Müşterisi
+                        </div>
+
+                        <span class="overview-link">
+                            Müşterileri Gör →
+                        </span>
+                    </a>
+
+
+                    <a
+                        href="licenses.html?expiring=30"
+                        class="overview-card warning"
+                    >
+                        <div class="overview-icon">⚠️</div>
+
+                        <div
+                            class="overview-value"
+                            id="statExpiringLicenses"
+                        >
+                            <span class="skeleton"></span>
+                        </div>
+
+                        <div class="overview-label">
+                            30 Gün İçinde Bitecek Lisans
+                        </div>
+
+                        <span class="overview-link">
+                            İncele →
+                        </span>
+                    </a>
+
+                </div>
+
+            </section>
+
+
+            <!-- ==================================================
+                 CONTENT
+            =================================================== -->
+
+            <section class="dashboard-layout">
+
+                <!-- RECENT ACTIVITY -->
+
+                <div class="dashboard-panel">
+
+                    <div class="dashboard-panel-head">
+
+                        <h3>Son Yönetim İşlemleri</h3>
+
+                        <a href="audit.html">
+                            Tüm Denetim Kayıtları →
+                        </a>
+
+                    </div>
+
+                    <div
+                        class="dashboard-panel-body"
+                        id="recentActivity"
+                        aria-live="polite"
+                    >
+                        <div class="dashboard-state">
+                            Yönetim işlemleri yükleniyor...
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <!-- QUICK ACTIONS -->
+
+                <aside class="dashboard-panel">
+
+                    <div class="dashboard-panel-head">
+                        <h3>Hızlı İşlemler</h3>
+                    </div>
+
+                    <div class="quick-actions">
+
+                        <a
+                            href="companies.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                🏢
+                            </span>
+
+                            <span>
+                                <strong>Şirket Yönetimi</strong>
+                                <small>
+                                    Şirketleri görüntüle ve yönet
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="users.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                👤
+                            </span>
+
+                            <span>
+                                <strong>Kullanıcı Yönetimi</strong>
+                                <small>
+                                    Kullanıcı ve roller
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="licenses.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                🔑
+                            </span>
+
+                            <span>
+                                <strong>Lisans Yönetimi</strong>
+                                <small>
+                                    Plan ve kullanım limitleri
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="periods.html"
+                            class="quick-action"
+                            data-admin-only
+                        >
+                            <span class="quick-action-icon">
+                                🔒
+                            </span>
+
+                            <span>
+                                <strong>Dönem Yönetimi</strong>
+                                <small>
+                                    Dönem kapatma ve yeniden açma
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="fx-rates.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                💱
+                            </span>
+
+                            <span>
+                                <strong>TCMB Kurları</strong>
+                                <small>
+                                    Döviz kuru yönetimi
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="inflation-indices.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                📈
+                            </span>
+
+                            <span>
+                                <strong>Enflasyon Endeksleri</strong>
+                                <small>
+                                    TMS 29 endeks yönetimi
+                                </small>
+                            </span>
+                        </a>
+
+
+                        <a
+                            href="audit.html"
+                            class="quick-action"
+                        >
+                            <span class="quick-action-icon">
+                                📋
+                            </span>
+
+                            <span>
+                                <strong>Denetim İzi</strong>
+                                <small>
+                                    Sistem hareketlerini incele
+                                </small>
+                            </span>
+                        </a>
+
+                    </div>
+
+                </aside>
+
+            </section>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+    let dashboardLoading = false;
+
+    function setDashboardLoading() {
+
+        const ids = [
+            "statCompanies",
+            "statUsers",
+            "statLicenses",
+            "statTfrs16",
+            "statExpiringLicenses"
+        ];
+
+        ids.forEach(id => {
+
+            const element =
+                document.getElementById(id);
+
+            if (element) {
+                element.innerHTML =
+                    '<span class="skeleton"></span>';
+            }
+
+        });
+
+        document.getElementById(
+            "recentActivity"
+        ).innerHTML = `
+            <div class="dashboard-state">
+                Yönetim işlemleri yükleniyor...
+            </div>
+        `;
+    }
+
+
+    function setDashboardError(message) {
+
+        const ids = [
+            "statCompanies",
+            "statUsers",
+            "statLicenses",
+            "statTfrs16",
+            "statExpiringLicenses"
+        ];
+
+        ids.forEach(id => {
+
+            const element =
+                document.getElementById(id);
+
+            if (element) {
+                element.textContent = "—";
+            }
+
+        });
+
+        document.getElementById(
+            "recentActivity"
+        ).innerHTML = `
+            <div class="dashboard-state error">
+                ${escapeHtml(
+                    message ||
+                    "Dashboard verileri yüklenemedi."
+                )}
+            </div>
+        `;
+    }
+
+
+    function renderRecentActivity(items) {
+
+        const container =
+            document.getElementById(
+                "recentActivity"
+            );
+
+        if (
+            !Array.isArray(items) ||
+            items.length === 0
+        ) {
+
+            container.innerHTML = `
+                <div class="dashboard-state">
+                    Henüz yönetim işlemi bulunmuyor.
+                </div>
+            `;
+
+            return;
+        }
+
+
+        container.innerHTML =
+            items.map(item => {
+
+                const user =
+                    escapeHtml(
+                        item.user_username ||
+                        "System"
+                    );
+
+                const company =
+                    item.company_name
+                        ? ` → ${escapeHtml(
+                            item.company_name
+                        )}`
+                        : "";
+
+                const entity =
+                    item.entity_type
+                        ? ` (${escapeHtml(
+                            item.entity_type
+                        )})`
+                        : "";
+
+                return `
+                    <div class="dashboard-activity">
+
+                        <span class="activity-time">
+                            ${formatDate(
+                                item.timestamp
+                            )}
+                        </span>
+
+                        <span
+                            class="activity-action"
+                            title="${escapeHtml(
+                                item.action || ""
+                            )}"
+                        >
+                            ${escapeHtml(
+                                item.action || "-"
+                            )}
+                        </span>
+
+                        <span class="activity-detail">
+                            ${user}${company}${entity}
+                        </span>
+
+                        <span
+                            class="
+                                activity-status
+                                ${
+                                    item.success
+                                        ? "success"
+                                        : "failed"
+                                }
+                            "
+                        >
+                            ${
+                                item.success
+                                    ? "BAŞARILI"
+                                    : "HATA"
+                            }
+                        </span>
+
+                    </div>
+                `;
+
+            }).join("");
+    }
+
+
+    async function loadDashboard() {
+
+        if (dashboardLoading) {
+            return;
+        }
+
+        dashboardLoading = true;
+
+        const refreshButton =
+            document.getElementById(
+                "refreshDashboardButton"
+            );
+
+        if (refreshButton) {
+
+            refreshButton.disabled = true;
+
+            refreshButton.textContent =
+                "↻ Yükleniyor...";
+
+        }
+
+        setDashboardLoading();
+
+
+        try {
+
+            const result =
+                await AdminAPI.getDashboard();
+
+
+            if (!result || !result.success) {
+
+                const message =
+                    typeof describeApiError ===
+                    "function"
+                        ? describeApiError(
+                            result,
+                            "Dashboard verileri yüklenemedi."
+                        )
+                        : (
+                            result?.error ||
+                            "Dashboard verileri yüklenemedi."
+                        );
+
+                setDashboardError(message);
+
+                return;
+            }
+
+
+            const data =
+                result.data || {};
+
+
+            document.getElementById(
+                "statCompanies"
+            ).textContent =
+                data.companies ?? 0;
+
+
+            document.getElementById(
+                "statUsers"
+            ).textContent =
+                data.users ?? 0;
+
+
+            document.getElementById(
+                "statLicenses"
+            ).textContent =
+                data.active_licenses ?? 0;
+
+
+            document.getElementById(
+                "statTfrs16"
+            ).textContent =
+                data.tfrs16_customers ?? 0;
+
+
+            document.getElementById(
+                "statExpiringLicenses"
+            ).textContent =
+                data.expiring_licenses_30d ?? 0;
+
+
+            renderRecentActivity(
+                data.recent_activity
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Dashboard load error:",
+                error
+            );
+
+            setDashboardError(
+                "Sunucuya ulaşılamadı. Verileri yenileyerek tekrar deneyin."
+            );
+
+        } finally {
+
+            dashboardLoading = false;
+
+            if (refreshButton) {
+
+                refreshButton.disabled =
+                    false;
+
+                refreshButton.textContent =
+                    "↻ Verileri Yenile";
+
+            }
+
+        }
+
+    }
+
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        async () => {
+
+            const authenticated =
+                await checkAdminAuth();
+
+
             if (authenticated) {
                 loadDashboard();
             }
-        });
-    </script>
+
+        }
+    );
+
+</script>
+
 </body>
 </html>
