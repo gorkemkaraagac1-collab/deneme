@@ -4751,7 +4751,7 @@ window.fetch = (input, init = {}) => {
    * closing değerleri AYNEN döner (yuvarlama/çift hesap farkı olmasın
    * diye ayrıca tahakkuk ettirilmez).
    */
-  function buildReportingDateAccrual(core, measurement, schedule, reportingDate) {
+  function buildReportingDateAccrual(core, measurement, schedule, reportingDate, options = {}) {
     const asOf = parseDate(reportingDate);
     const commencementDate = core.commencementDate;
     if (!asOf || !commencementDate) return null;
@@ -4770,6 +4770,35 @@ window.fetch = (input, init = {}) => {
         isExactPaymentDate: false,
         monthsElapsedTotal: 0
       };
+    }
+
+    // Aylık ödeme grid'inde month-end raporlaması ilgili ayın ödeme satırı
+    // kapanışını temsil eder. Ay sonunu bir sonraki yıldönümüne snap etmek,
+    // bir sonraki ayın faizini cari döneme taşıyordu (LEASE-007/011/018).
+    // Ara dönem tahakkuku gereken üç aylık/yıllık gridler bu sınırdan etkilenmez.
+    const monthEnd = asOf.getDate() === new Date(asOf.getFullYear(), asOf.getMonth() + 1, 0).getDate();
+    const preferMonthlyScheduleClosing = options.preferMonthlyScheduleClosing === true &&
+      String(core?.paymentFrequency || "").toLowerCase() === "monthly" &&
+      monthEnd && Array.isArray(schedule) && schedule.length;
+    if (preferMonthlyScheduleClosing) {
+      const reached = schedule.filter(row => {
+        const d = parseDate(row?.date);
+        return d && d.getTime() <= asOf.getTime();
+      });
+      const latest = reached[reached.length - 1];
+      if (latest) {
+        return {
+          reportingDate: asOf,
+          liability: Math.max(0, Number(latest.closingLiability) || 0),
+          rouAsset: Math.max(0, Number(latest.rouClosing) || 0),
+          interestSinceLastEvent: 0,
+          depreciationSinceCommencement: Math.max(0, initialROU - (Number(latest.rouClosing) || 0)),
+          lastEventDate: parseDate(latest.date),
+          isExactPaymentDate: parseDate(latest.date)?.getTime() === asOf.getTime(),
+          monthsElapsedTotal: Number(latest.period) || 0,
+          scheduleBoundary: true
+        };
+      }
     }
 
     // ROU: ödeme takviminden bağımsız, saf takvim bazlı doğrusal itfa.
@@ -4912,10 +4941,12 @@ window.fetch = (input, init = {}) => {
     if (!accrualContext) return null;
 
     const accrualStart = buildReportingDateAccrual(
-      accrualContext.core, accrualContext.measurement, schedule, periodStartExclusive
+      accrualContext.core, accrualContext.measurement, schedule, periodStartExclusive,
+      { preferMonthlyScheduleClosing: true }
     );
     const accrualEnd = buildReportingDateAccrual(
-      accrualContext.core, accrualContext.measurement, schedule, periodEndInclusive
+      accrualContext.core, accrualContext.measurement, schedule, periodEndInclusive,
+      { preferMonthlyScheduleClosing: true }
     );
     if (!accrualStart || !accrualEnd) return null;
 
@@ -5070,7 +5101,8 @@ window.fetch = (input, init = {}) => {
       const core = {
         annualRate: Number(contract.discountRate) || 0,
         commencementDate,
-        advance: isAdvancePaymentTiming(contract.paymentTiming)
+        advance: isAdvancePaymentTiming(contract.paymentTiming),
+        paymentFrequency: contract.paymentFrequency || "monthly"
       };
       const measurement = {
         initialLiability: Number(firstRow.openingLiability) || 0,
@@ -6285,7 +6317,11 @@ window.fetch = (input, init = {}) => {
 
     setInput(
       "usefulLifeMonths",
-      contract?.usefulLifeMonths ?? ""
+      contract?.usefulLifeMonths == null || contract?.usefulLifeMonths === ""
+        ? ""
+        : (Number(contract.usefulLifeMonths) > 50
+            ? Number(contract.usefulLifeMonths) / 12
+            : Number(contract.usefulLifeMonths))
     );
 
     setInput(
@@ -15230,10 +15266,12 @@ ${renderAccountingCenterBulkPromo()}
     if (m < 1) return REPORTING_BUCKETS[0];
     if (m < 3) return REPORTING_BUCKETS[1];
     if (m < 6) return REPORTING_BUCKETS[2];
-    if (m < 12) return REPORTING_BUCKETS[3];
-    if (m < 24) return REPORTING_BUCKETS[4];
-    if (m < 36) return REPORTING_BUCKETS[5];
-    if (m < 60) return REPORTING_BUCKETS[6];
+    // Upper bounds are inclusive: the ordinary "3–12 months" bucket
+    // includes an amount due exactly twelve months after reporting date.
+    if (m <= 12) return REPORTING_BUCKETS[3];
+    if (m <= 24) return REPORTING_BUCKETS[4];
+    if (m <= 36) return REPORTING_BUCKETS[5];
+    if (m <= 60) return REPORTING_BUCKETS[6];
     return REPORTING_BUCKETS[7];
   }
 
@@ -15298,8 +15336,8 @@ ${renderAccountingCenterBulkPromo()}
         const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
         if (accrualContext) {
           const openingDate = rptAddDays(start, -1);
-          const openingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, openingDate);
-          const closingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, end);
+          const openingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, openingDate, { preferMonthlyScheduleClosing: true });
+          const closingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, end, { preferMonthlyScheduleClosing: true });
           const eventRows = rptRowsBetween(schedule, start, end);
           const payments = eventRows.reduce((sum, row, index) => {
             const isCommencementAdvance = accrualContext.core.advance && row === schedule[0];
@@ -15442,8 +15480,8 @@ ${renderAccountingCenterBulkPromo()}
         const schedule=built.schedule;
         const accrualContext=built.source==="LEASE_SCHEDULE"?resolveLeaseAccrualContext(contract):null;
         if(accrualContext){
-          const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1));
-          const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end);
+          const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1), { preferMonthlyScheduleClosing: true });
+          const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end, { preferMonthlyScheduleClosing: true });
           const firstScheduleRow = schedule[0] || {};
           const openingRuoSnapshot = rptNumber(openingSnapshot?.rouAsset);
           const firstScheduleRuo = firstScheduleRow.rouOpening !== undefined
@@ -16095,7 +16133,26 @@ ${renderAccountingCenterBulkPromo()}
     } else {
       const maturity = getLeasePaymentMaturityAnalysis(d);
       const buckets = rptRemapToDisclosureBuckets(maturity.rows);
-      const carryingValue = rptRound(rptNumber(currentNonCurrent.totals.totalLiability));
+      // The per-contract classification rows are authoritative. Keep a
+      // narrow aggregate fallback for older/private envelopes that expose
+      // `leaseLiability` or the CFO headline but omit the legacy
+      // `totalLiability` alias; displaying zero against live cash outflows
+      // is materially misleading (LEASE-007/009/011/013).
+      let carryingValue = rptRound(rptNumber(currentNonCurrent.totals.totalLiability));
+      if (carryingValue <= REPORTING_TOLERANCE) {
+        const rowSum = (currentNonCurrent.rows || [])
+          .filter(row => row.status !== "ERROR")
+          .reduce((sum, row) => sum + rptNumber(row.totalLiability), 0);
+        carryingValue = rptRound(rowSum);
+      }
+      if (carryingValue <= REPORTING_TOLERANCE) {
+        try {
+          const cfo = typeof getTfrs16CfoSnapshot === "function" ? getTfrs16CfoSnapshot(d) : null;
+          carryingValue = rptRound(rptNumber(cfo?.headline?.totalLeaseLiability ?? cfo?.liabilities?.total));
+        } catch (_) {
+          carryingValue = 0;
+        }
+      }
       const contractualCashOutflowsTotal = rptRound(buckets.reduce((s, b) => s + b.cashOutflow, 0));
       report.rows = [{ label: "Kiralama yükümlülükleri", carryingValue, contractualCashOutflowsTotal, buckets }];
       report.totals = { carryingValue, contractualCashOutflowsTotal };
