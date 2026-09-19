@@ -690,15 +690,10 @@
   <script src="js/tfrs16-operations-ui.js?v=20260916-ui-slice17"></script>
   <script>
     // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
-    // FAZ 2 (2026-09-15): ?api=0 acil geri dönüş kaldırıldı — Burhan'ın
-    // açık kararıyla (private backend'e tam bağımlılık kabul edildi).
-    // window.LEASEQANT_CALCULATION_API_PRIMARY artık sabit true; URL
-    // parametresiyle geçersiz kılınamaz. Yerel hesaplama motorunun
-    // gövdeleri (calculateLeaseEngineImpl ve türevleri) bu commit'te
-    // js/tfrs16-ui.js'ten tamamen kaldırıldı — bu bayrağı konsoldan
-    // false yapmak artık hiçbir yerel hesaplamayı YENİDEN AÇMAZ, sadece
-    // isPrivateCalculationApiReady() kontrollerini false döndürür ve
-    // ilgili özellikler "henüz hazır değil" hatası verir.
+    // API-primary is permanently enabled. URL parameters cannot disable the
+    // private calculation boundary; a missing private result fails closed and
+    // the public bundle contains no calculation fallback; unavailable
+    // private results are reported as "henüz hazır değil".
     (() => {
       const params = new URLSearchParams(window.location.search);
       if (params.get("shadow") === "1") {
@@ -1181,4 +1176,3 @@
   syncLowValueEligibilityState();
 })();
 </script>
-

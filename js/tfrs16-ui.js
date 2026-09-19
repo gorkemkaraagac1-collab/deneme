@@ -6,7 +6,7 @@ const __gkTfrs16Boot = () => {
   /*
   ============================================================
   GK FINANCE INTELLIGENCE
-  TFRS 16 ACCOUNTING ENGINE V17
+  TFRS 16 UI RUNTIME V17
   ------------------------------------------------------------
   V18 Parça 2 (additive — TMS 29 Enflasyon Düzeltmesi, kiralama
   portföyü katmanı — TAM KAPSAMLI TMS 29 uygulaması DEĞİLDİR)
@@ -41,15 +41,15 @@ const __gkTfrs16Boot = () => {
   - runSelfTestsV18Part1(): regresyon + compound/initial + CPI testleri.
   ------------------------------------------------------------
   V15
-  - Existing V14 functionality preserved
+  - Existing V14 UI functionality preserved
   - Contract portfolio
   - New contract
   - Excel bulk import
   - Contract detail
-  - TFRS 16 calculation engine
+  - TFRS 16 private-result consumers
   - Initial recognition
   - Monthly / quarterly / annual journal
-  - Current / non-current reclassification
+  - Current / non-current result presentation
   - Bulk journal generation
   - Voucher numbering
   - Excel journal export
@@ -74,22 +74,16 @@ const __gkTfrs16Boot = () => {
   - Existing V16.4 reporting-date classification remains the base engine.
 
   V16.4 (additive — nothing above removed or altered)
-  - Reporting-date based current / non-current liability classification
-    using the professional payment schedule as the single source of truth.
+  - Reporting-date based current / non-current liability presentation
+    using the private reporting-date envelope as the single source of truth.
   - Current liability = principal payable in the 12 months following
     the reporting date; interest excluded from current liability.
-  - Backward-compatible legacy current/non-current functions preserved.
+  - Backward-compatible field names preserved for existing UI consumers.
 
   ------------------------------------------------------------
-  V16.1 (additive — nothing above removed or altered)
-  - New calculateLeaseEngine(): professional TFRS 16 engine
-    supporting extended parameters (payment frequency/timing,
-    initial direct costs, incentives, prepayments, restoration
-    obligation, short-term/low-value exemption, renewal/
-    termination flags). Produces identical numbers to
-    calculateLease() when only legacy fields are present.
-    Escalation and non-monthly frequency math are intentionally
-    deferred to later approved phases (V16.2+).
+  V16.1 (historical UI compatibility)
+  - Payment Schedule panel consumes the authenticated private schedule
+    and keeps the established filters and export presentation.
   - New "Kira Ödeme Planı" (Payment Schedule) panel in contract
     detail view, with Yıl / Ay / Çeyrek filters and Excel export.
   ============================================================
@@ -855,7 +849,7 @@ window.fetch = (input, init = {}) => {
   const CALCULATION_CACHE_MAX_SIZE = 200;
 
   // Async API cutover cache. API-primary consumers read this cache exclusively;
-  // the local cache is reserved for the explicit ?api=0 rollback path.
+  // the legacy calculation cache remains only for non-accounting UI metadata.
   // Results are keyed with the same contract signature as the local cache so
   // a mutation can never reuse a stale remote result.
   const PRIVATE_CALCULATION_CACHE = new Map();
@@ -1418,16 +1412,9 @@ window.fetch = (input, init = {}) => {
       || null;
   }
 
-  // All production UI consumers call this boundary instead of reaching the
-  // calculation implementation directly. FAZ 2 (2026-09-15): the ?api=0
-  // rollback branch — and the local calculateLeaseEngineImpl() fallback it
-  // depended on — has been removed on purpose (Burhan's explicit decision:
-  // full dependency on the private backend, no local emergency path). This
-  // function now ALWAYS fails closed when the private cache doesn't have a
-  // result yet, regardless of why isPrivateCalculationApiReady() is false
-  // (flag off, no session, private client not loaded). There is no more
-  // "local" branch to reach — calculateLeaseEngineImpl and friends are now
-  // provably unreachable from this boundary.
+  // All production UI consumers call this boundary instead of reaching a
+  // calculation implementation directly. It fails closed whenever the
+  // private cache does not contain a result yet.
   function getPrivateCalculationForConsumer(contract) {
     const privateResult = getPrivateCachedCalculationResult(contract);
     if (privateResult) return privateResult;
@@ -1438,7 +1425,7 @@ window.fetch = (input, init = {}) => {
 
   // Mutations invalidate the calculation cache. Warm the new private result
   // before redrawing the host view so modification/reassessment screens do
-  // not briefly show a stale local calculation after a successful write.
+  // not briefly show stale values after a successful write.
   async function refreshPrivateCalculationAfterMutation(contract) {
     if (!contract || !isPrivateCalculationApiReady()) return null;
     const key = getCalculationCacheKey(contract);
@@ -2949,7 +2936,6 @@ window.fetch = (input, init = {}) => {
     }
     let result;
     try {
-      // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı.
       result = await loadPrivateChangePreview("reassessment", contract, input);
     } catch (error) {
       return {
@@ -3894,7 +3880,6 @@ window.fetch = (input, init = {}) => {
     };
     let result;
     try {
-      // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı.
       result = await loadPrivateChangePreview("modification", contract, previewInput);
     } catch (error) {
       return {
@@ -8809,8 +8794,8 @@ ${renderAccountingCenterBulkPromo()}
   /* ==========================================================
      PAYMENT SCHEDULE — "Kira Ödeme Planı" (V16.1 / Faz 3)
      ----------------------------------------------------------
-     Read-only view of the full amortization schedule for a
-     single contract, built on top of calculateLeaseEngine().
+     Read-only view of the full private amortization schedule for a
+     single contract, rendered through the private-result bridge.
      Does not touch renderAccountingCenter() or any journal
      generation logic above.
   ========================================================== */
@@ -9449,9 +9434,8 @@ ${renderAccountingCenterBulkPromo()}
       )?.value;
 
     // The payment-plan tab is a read-only consumer: ask the private facade
-    // on demand so a fast tab click cannot accidentally pin the local engine
-    // as the source. API-primary must fail closed when the result is absent;
-    // the public engine is available only through the explicit ?api=0 path.
+    // on demand so a fast tab click cannot display a stale result.
+    // API-primary fails closed when the private result is absent.
     const privateResult = await loadPrivateReadOnlyResult(contract);
     if (isPrivateCalculationApiReady() && !privateResult) {
       window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleState?.({
@@ -10020,8 +10004,7 @@ ${renderAccountingCenterBulkPromo()}
             : loadPrivateReadOnlyResult(contract))
           : loadPrivateReadOnlyResult(contract));
         let result;
-        // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — local
-        // calculateSublease() fallback dalı silindi.
+        // The sublease result is read verbatim from the private envelope.
         result = privateResult?.specialFlowsVersion === 1
           ? privateResult.specialFlows?.sublease || null
           : null;
@@ -16010,7 +15993,7 @@ ${renderAccountingCenterBulkPromo()}
           // Historical APPLIED events can exist before their private base
           // result has been hydrated. Keep the report and management page
           // usable from the persisted event values; never fall back to the
-          // removed local calculation path.
+          // The private result path is intentionally fail-closed.
           if (error?.code === "PRIVATE_CALCULATION_NOT_READY") {
             report.warnings.push(`Private hesaplama sonucu bekleniyor: ${contract.id}`);
           } else {
@@ -26457,8 +26440,7 @@ ${renderAccountingCenterBulkPromo()}
   /**
    * Erken ödeme uygulanmış bir sözleşme için etkin (effective) ödeme
    * planını döndürür: erken ödeme tarihine kadarki orijinal dönemler +
-   * o tarihten sonraki revize edilmiş dönemler. Erken ödeme yoksa
-   * normal calculateLeaseEngine() planını döndürür.
+   * o tarihten sonraki private API tarafından revize edilmiş dönemler.
    *
    * @param {Object} contract - Kiralama sözleşmesi
    * @returns {Array<Object>} Etkin ödeme planı

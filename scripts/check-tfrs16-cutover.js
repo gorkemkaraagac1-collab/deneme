@@ -35,6 +35,12 @@ const portfolioUi = read("js/tfrs16-portfolio-ui.js");
 const reportingUi = read("js/tfrs16-reporting-ui.js");
 const operationsUi = read("js/tfrs16-operations-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
+const publicRuntimeSource = [
+  html,
+  ...fs.readdirSync(path.join(root, "js"))
+    .filter(file => file.endsWith(".js"))
+    .map(file => read(path.join("js", file)))
+].join("\n");
 
 const checks = [
   ["legacy public engine asset is removed", !exists("js/tfrs16-engine.js")],
@@ -160,6 +166,9 @@ const checks = [
   ["legacy public discount-rate math helpers are removed", !/function (?:resolveDiscountRateConvention|resolveContractMonthlyRate)\s*\(/.test(engine)],
   ["legacy public payment-date builder is removed", !/function buildLeasePaymentDates\s*\(/.test(engine) && !/function monthsFromCommencement\s*\(/.test(engine)],
   ["legacy inception liability split helpers are removed", !/function (?:calculateCurrentLiability|calculateNonCurrentLiability)\s*\(/.test(engine)],
+  ["removed lease-math helpers have no runtime call-sites", !/\b(?:resolveDiscountRateConvention|resolveContractMonthlyRate|buildLeasePaymentDates|monthsFromCommencement|calculateCurrentLiability|calculateNonCurrentLiability)\s*\(/.test(publicRuntimeSource)],
+  ["removed lease-math helpers are absent from HTML handlers", !/\b(?:resolveDiscountRateConvention|resolveContractMonthlyRate|buildLeasePaymentDates|monthsFromCommencement|calculateCurrentLiability|calculateNonCurrentLiability)\s*\(/.test(html)],
+  ["public runtime contains no retired api=0 fallback wording", !/\?api=0|public engine is available|local engine as the source/.test(engine)],
   ["footnotes page entry lives in the reporting UI module", /renderFootnotes/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderFootnotes/.test(engine) && !/function renderFootnotesPage\(container\)[\s\S]{0,1000}loadTms29Many/.test(engine)],
   ["footnotes UI reads private TMS29 results through explicit bridges", /loadTms29Many/.test(reportingUi) && /computePrivatePortfolioTms29/.test(reportingUi) && /getContractsSnapshot/.test(engine) && /privateCalculationCacheHas/.test(engine)],
   ["footnotes UI renders the private TMS29 envelope", /prepareFinancialReportingData/.test(reportingUi) && /renderAssetNoteHtml/.test(reportingUi) && /renderLiabilityNoteHtml/.test(reportingUi) && /renderLiquidityNoteHtml/.test(reportingUi)],
