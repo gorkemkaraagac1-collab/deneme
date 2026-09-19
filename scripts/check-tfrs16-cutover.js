@@ -170,6 +170,8 @@ const checks = [
   ["private facade exposes TMS21 loading", /loadTms21/.test(facade)],
   ["private facade exposes early-payment loading", /loadEarlyPayment/.test(facade)],
   ["private facade exposes sale-and-leaseback loading", /loadSaleAndLeaseback/.test(facade)],
+  ["sale-and-leaseback runtime reads the dedicated private result", /async function runAndRenderSlb\([\s\S]{0,7000}facade\.loadSaleAndLeaseback\(input\)/.test(engine)],
+  ["public sale-and-leaseback annuity helper is removed", !/function slbAnnuityPayment\(/.test(engine)],
   ["private facade projects the read-only result envelope", /function project\(result\)/.test(facade) && /schedule: value\.schedule/.test(facade)],
   ["adapter splits portfolios into backend-sized chunks", /offset \+= 20/.test(adapter)],
   ["adapter normalizes every private batch result before caching", /response\.map\(normalizeCalculationResult\)/.test(adapter)],
@@ -213,7 +215,7 @@ const checks = [
   // de varlığını ayrı ayrı doğruluyoruz.
   ["TMS29 apply uses the private result and journal", /infl-apply-btn/.test(reportingUi) && /loadPrivateTms29Result\(adjustment\.period/.test(engine) && /privateResult\.journal/.test(engine)],
   ["TMS29 writes persist through the contracts API", /inflCreateBtn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-apply-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-cancel-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine)],
-  ["sale-and-leaseback preview requires the private special-flow envelope", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.saleAndLeaseback/.test(engine)],
+  ["sale-and-leaseback preview reads the dedicated private result", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /facade\.loadSaleAndLeaseback\(input\)/.test(engine)],
   ["sublease preview requires the private special-flow envelope", /Private alt kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.sublease/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
   ["Pages artifact carries the UI runtime", /test -f _site\/js\/tfrs16-ui\.js/.test(pagesWorkflow)],

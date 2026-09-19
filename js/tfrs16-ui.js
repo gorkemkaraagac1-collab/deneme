@@ -10063,17 +10063,14 @@ ${renderAccountingCenterBulkPromo()}
 
       if (!resultBox) return;
       try {
-        const privateResult = await (persist
-          ? (typeof refreshPrivateCalculationAfterMutation === "function"
-            ? refreshPrivateCalculationAfterMutation(contract)
-            : loadPrivateReadOnlyResult(contract))
-          : loadPrivateReadOnlyResult(contract));
-        let result;
-        // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — local
-        // calculateSaleAndLeaseback() fallback dalı silindi.
-        result = privateResult?.specialFlowsVersion === 1
-          ? privateResult.specialFlows?.saleAndLeaseback || null
-          : null;
+        const facade = window.LeaseQantPrivateTfrs16Facade;
+        if (typeof facade?.loadSaleAndLeaseback !== "function") {
+          throw new Error("Private satış ve geri kiralama API'si hazır değil.");
+        }
+        // The sale-and-leaseback endpoint returns the authoritative special
+        // flow envelope directly. The browser only renders it and never
+        // rebuilds annuity, PV, liability, ROU, or gain/loss values.
+        const result = await facade.loadSaleAndLeaseback(input);
         if (!result) {
           const unavailable = new Error("Private satış ve geri kiralama sonucu henüz hazır değil");
           unavailable.code = "PRIVATE_SPECIAL_FLOW_NOT_READY";
@@ -25151,12 +25148,6 @@ ${renderAccountingCenterBulkPromo()}
       assessedAt: new Date().toISOString(),
       assessedBy: v23CurrentUser()?.name || v23CurrentUser()?.id || null
     };
-  }
-
-  function slbAnnuityPayment(pv, monthlyRate, periods) {
-    if (!(periods > 0)) return 0;
-    if (Math.abs(monthlyRate) < 1e-9) return v23Round(pv / periods, 2);
-    return v23Round(pv * monthlyRate / (1 - Math.pow(1 + monthlyRate, -periods)), 2);
   }
 
   // input: {
