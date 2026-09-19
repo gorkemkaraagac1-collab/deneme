@@ -907,6 +907,10 @@ window.fetch = (input, init = {}) => {
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
+      const reportingHydration = await ensurePrivateReportingDateCache(contracts, new Date());
+      if (reportingHydration.failed > 0) {
+        console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
+      }
       // Contract hydration can render reporting/close consumers once before
       // the private batch is ready. That first render seeds the CFO aggregate
       // cache with zero/empty balances; invalidate only derived local
@@ -1124,6 +1128,9 @@ window.fetch = (input, init = {}) => {
     // temizle). Boyutu küçük (nadiren birkaç reportingDate anahtarı),
     // bu yüzden granüler/kısmi temizlik gerekmiyor.
     CFO_AGGREGATE_CACHE.clear();
+    if (!preservePrivate) {
+      try { window.LeaseQantTfrs16ReportingDateCache?.clear(contractId); } catch (_) { /* cache cleanup is best effort */ }
+    }
   }
 
   function getCachedCalculation(contract) {
@@ -1199,6 +1206,33 @@ window.fetch = (input, init = {}) => {
     return typeof api?.ensure === "function"
       ? api.ensure(list, privateCacheRuntimeAdapter())
       : Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
+  }
+
+  function getPrivateReportingDateResult(contract, reportingDate) {
+    if (!isPrivateCalculationApiReady()) return null;
+    return window.LeaseQantTfrs16ReportingDateCache?.get(contract, reportingDate) || null;
+  }
+
+  async function loadPrivateReportingDateResult(contract, reportingDate, options = {}) {
+    if (!isPrivateCalculationApiReady()) {
+      const error = new Error("Private reporting-date sonucu henüz hazır değil");
+      error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+      throw error;
+    }
+    const cache = window.LeaseQantTfrs16ReportingDateCache;
+    if (typeof cache?.load !== "function") {
+      const error = new Error("Private reporting-date önbelleği hazır değil");
+      error.code = "PRIVATE_REPORTING_DATE_UNAVAILABLE";
+      throw error;
+    }
+    return cache.load(contract, reportingDate, options);
+  }
+
+  async function ensurePrivateReportingDateCache(list, reportingDate, options = {}) {
+    if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0, results: [] };
+    const cache = window.LeaseQantTfrs16ReportingDateCache;
+    if (typeof cache?.preload !== "function") return { attempted: 0, succeeded: 0, failed: 0, results: [] };
+    return cache.preload(list, reportingDate, options);
   }
 
   function privateCacheHydrationInFlight() {
@@ -5591,6 +5625,41 @@ window.fetch = (input, init = {}) => {
 
     const normalizedReportingDate = parseDate(reportingDate);
 
+    // Phase 1: API-primary consumers receive the reporting-date envelope
+    // calculated by the private engine. A missing envelope is an explicit
+    // not-ready state; the browser must never reconstruct classification or
+    // accrued liability from its legacy schedule in this mode.
+    if (isPrivateCalculationApiReady()) {
+      const privateResult = getPrivateReportingDateResult(contract, reportingDate);
+      if (!privateResult) {
+        const error = new Error("Private reporting-date sonucu henüz hazır değil");
+        error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+        throw error;
+      }
+      const current = Number(privateResult.currentLiability) || 0;
+      const nonCurrent = Number(privateResult.nonCurrentLiability) || 0;
+      const total = Number(privateResult.totalLiability ?? privateResult.outstandingLiability) || 0;
+      return {
+        reportingDate: normalizedReportingDate || privateResult.reportingDate,
+        totalLeaseLiability: total,
+        outstandingROU: Number(privateResult.outstandingROU) || 0,
+        currentLiability: current,
+        nonCurrentLiability: nonCurrent,
+        next12MonthPrincipal: Number(privateResult.next12MonthPrincipal) || 0,
+        next12MonthInterest: Number(privateResult.next12MonthInterest) || 0,
+        next12MonthPayments: Number(privateResult.next12MonthPayments) || 0,
+        outstandingLiability: Number(privateResult.outstandingLiability ?? total) || 0,
+        current,
+        nonCurrent,
+        total,
+        next12Payments: Number(privateResult.next12MonthPayments) || 0,
+        next12Interest: Number(privateResult.next12MonthInterest) || 0,
+        next12Principal: Number(privateResult.next12MonthPrincipal) || 0,
+        valid: true,
+        source: "PRIVATE_ENGINE"
+      };
+    }
+
     // The engine's ordinary schedule is not a custom override. Raw,
     // single-layer leases must keep using the calendar accrual snapshot.
     const rawAccrualContext = resolveLeaseAccrualContext(contract);
@@ -7454,6 +7523,9 @@ window.fetch = (input, init = {}) => {
       closing reclassification entry using the existing TMS21 journal engine.
     */
     const effectiveReportingDate = reportingDate || new Date();
+    if (isPrivateCalculationApiReady()) {
+      await loadPrivateReportingDateResult(contract, effectiveReportingDate);
+    }
     const split = calculateLiabilitySplitAsOf(
       contract,
       effectiveReportingDate
@@ -21005,6 +21077,12 @@ ${renderAccountingCenterBulkPromo()}
   async function v191RenderFinancialReportingPrivate(date) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
+    const reportingHydration = await ensurePrivateReportingDateCache(contracts, effectivePeriodEnd);
+    if (reportingHydration.failed > 0) {
+      const error = new Error("Private reporting-date sonuçları eksik; finansal rapor üretilemedi");
+      error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+      throw error;
+    }
     const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
     return v191RenderFinancialReporting(date, { tms29 });
   }
@@ -25002,234 +25080,12 @@ ${renderAccountingCenterBulkPromo()}
       throw new Error("Private TMS21 hesaplama API'si hazır değil.");
     }
     if (!privateDate) throw new Error("TMS21 reporting date is required.");
-    return privateFacade.loadTms21(contract, String(privateDate).slice(0, 10), options);
+    const privateDateKey = typeof privateDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(privateDate)
+      ? privateDate.slice(0, 10)
+      : v23DateKey(privateDate);
+    if (!privateDateKey) throw new Error("TMS21 reporting date is invalid.");
+    return privateFacade.loadTms21(contract, privateDateKey, options);
 
-    // Kept below only as an unreachable migration reference until the final
-    // public-runtime extraction removes this legacy block. No production path
-    // can execute it because the private return above is unconditional.
-    const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
-    const functionalCurrency = resolveContractFunctionalCurrency(contract);
-    if (transactionCurrency === functionalCurrency) {
-      return { applicable: false, transactionCurrency, functionalCurrency };
-    }
-    const schedule = Array.isArray(scheduleSource) ? scheduleSource : scheduleSource?.schedule;
-    const exempt = !Array.isArray(scheduleSource) && scheduleSource?.exempt;
-    if (exempt || !schedule || !schedule.length) {
-      return { applicable: false, transactionCurrency, functionalCurrency, reason: exempt ? "EXEMPT" : "EMPTY_SCHEDULE" };
-    }
-
-    const rateType = options.rateType || V23_RATE_TYPES.CLOSING;
-    const rateCache = new Map();
-    const availableRateDates = loadV23Rates().filter(row => row.fromCurrency === transactionCurrency && row.toCurrency === functionalCurrency && row.rateType === rateType && Number(row.rate) > 0).map(row => row.rateDate).sort();
-    const latestRateDate = availableRateDates[availableRateDates.length - 1] || v23DateKey(new Date());
-
-    // Schedule dates represent calendar dates.  Using toISOString() for
-    // a local Date can move a midnight date one day backwards in a
-    // positive-offset timezone (e.g. 01.07 becomes 30.06 UTC), causing a
-    // future payment to be included in a 30.06 reporting close.
-    const calendarDateKey = value => {
-      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-      const date = v23Date(value);
-      return date
-        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-        : null;
-    };
-
-    /*
-      GC-2026-09 (Madde 4 — reportingDate wiring): önceden bu kesim
-      HER ZAMAN `latestRateDate`'e göre yapılıyordu — yani seçili
-      rapor tarihi ne olursa olsun, veri tabanındaki en son kur
-      tarihinden SONRAKİ hiçbir dönem işlenmiyordu (rapor tarihi
-      sessizce veri setindeki son kur tarihiyle DEĞİŞTİRİLİYORDU).
-      Artık `options.reportingDate` açıkça verildiyse kesim SEÇİLİ
-      RAPOR TARİHİNE göre yapılır; eksik kur `rateOn()` içinde zaten
-      açık hata/fallback ile ele alınıyor (allowLastAvailable +
-      görünür rateSource/usedFallback alanları) — burada "veri
-      setindeki son tarih" bir politika kararı olarak KULLANILMAZ.
-      reportingDate verilmemişse (eski çağıranlar) davranış birebir
-      korunur.
-    */
-    const scheduleCutoffDate =
-      options.reportingDate
-        ? calendarDateKey(options.reportingDate)
-        : latestRateDate;
-    const translationSchedule = schedule.filter(row => calendarDateKey(row.date) <= scheduleCutoffDate);
-
-    /*
-      GC-2026-09 (Madde 3+4): seçili rapor tarihi, ödeme takvimindeki
-      hiçbir satırla ÇAKIŞMIYORSA (ör. yıllık ödemeli bir kontratta
-      ara bir ay-sonu kapanışı), buildReportingDateAccrual ile
-      SENTETİK bir "kapanış olayı" satırı üretilip normal çevrim
-      döngüsüne eklenir — böylece TMS 21 motoru artık yalnızca ödeme
-      tarihlerini değil, seçili rapor tarihini de çevirir. Bu yalnızca
-      çağıran taraf `options.accrualContext` (core+measurement, bkz.
-      resolveLeaseAccrualContext) sağladığında devreye girer; sağlanmazsa
-      (reassessed/modified/migration/exempt kontratlar) ESKİ davranış
-      (yalnızca ödeme satırları) AYNEN korunur.
-    */
-    if (options.reportingDate && options.accrualContext) {
-      const reportingDateParsed = parseDate(options.reportingDate);
-      const lastRow = translationSchedule[translationSchedule.length - 1] || null;
-      const alreadyExact = lastRow && calendarDateKey(lastRow.date) === calendarDateKey(options.reportingDate);
-      if (reportingDateParsed && !alreadyExact) {
-        const accrual = buildReportingDateAccrual(
-          options.accrualContext.core,
-          options.accrualContext.measurement,
-          schedule,
-          reportingDateParsed
-        );
-        // Kontrat başlangıcından SONRA ve mevcut bir satırla
-        // çakışmayan (isExactPaymentDate=false) tahakkuklar için
-        // sentetik satır ekle. accrual null ise (asOf <= commencement
-        // vb.) hiçbir şey eklenmez.
-        if (accrual && !accrual.isExactPaymentDate) {
-          const rouOpeningForRow = lastRow ? lastRow.rouClosing : schedule[0].rouOpening;
-          const openingLiabilityForRow = lastRow ? lastRow.closingLiability : schedule[0].openingLiability;
-          translationSchedule.push({
-            period: lastRow ? Number(lastRow.period) + 0.5 : 0.5,
-            date: reportingDateParsed,
-            openingLiability: openingLiabilityForRow,
-            interest: accrual.interestSinceLastEvent,
-            payment: 0,
-            principal: 0,
-            closingLiability: accrual.liability,
-            rouOpening: rouOpeningForRow,
-            depreciation: Math.max(0, rouOpeningForRow - accrual.rouAsset),
-            rouClosing: accrual.rouAsset,
-            monthsCovered: 0,
-            variableExpense: 0,
-            isAccrualRow: true
-          });
-        }
-      }
-    }
-
-    async function rateOn(dateKey) {
-      const key = v23DateKey(dateKey);
-      if (rateCache.has(key)) return rateCache.get(key);
-      const fx = getFxRate(transactionCurrency, functionalCurrency, key, rateType, { allowMissing: true, allowLastAvailable: true });
-      if (fx?.error) {
-        const err = Object.assign(new Error(`${transactionCurrency}/${functionalCurrency} kuru bulunamadı (${key}). ${fx.message || ""}`), { code: fx.error, rateDate: key });
-        throw err;
-      }
-      rateCache.set(key, fx);
-      return fx;
-    }
-
-    // Başlangıç (işlem) kuru: kira başlangıç tarihindeki kur.
-    // Liability'nin çevrim başlangıcı ve ROU'nun İLK katmanı bu
-    // kurla sabitlenir. schedule[0].openingLiability/rouOpening
-    // KASITLI OLARAK kullanılıyor (engineResult.liability DEĞİL) —
-    // modifikasyonlu kontratlarda ilk dönem hâlâ orijinal şartlarla
-    // hesaplanmış olduğundan bu değer her zaman doğru başlangıç
-    // bazını verir.
-    const commencementRate = await rateOn(contract.startDate || schedule[0].date);
-
-    let openingLiabilityFx = v23Round(v23Num(schedule[0].openingLiability) * commencementRate.rate, 2);
-    const initialLiabilityFx = openingLiabilityFx;
-    const initialRouFx = v23Round(v23Num(schedule[0].rouOpening) * commencementRate.rate, 2);
-
-    // ROU katman defteri: her katman kendi sabit (tarihindeki) kuruyla taşınır.
-    let rouLayers = [{ rate: commencementRate.rate, rateDate: commencementRate.rateDate, remainingOriginal: v23Num(schedule[0].rouOpening) }];
-
-    let cumulativeFxGainLoss = 0;
-    let prevRouClosingOriginal = null;
-    const outSchedule = [];
-
-    for (const row of translationSchedule) {
-      const closing = await rateOn(row.date);
-      const closingRate = closing.rate;
-
-      // --- Kira yükümlülüğü (PARASAL) ---
-      const interestFx = v23Round(v23Num(row.interest) * closingRate, 2);
-      const paymentFx = v23Round(v23Num(row.payment) * closingRate, 2);
-      const movementBeforeRetranslationFx = v23Round(openingLiabilityFx + interestFx - paymentFx, 2);
-      const closingLiabilityFx = v23Round(v23Num(row.closingLiability) * closingRate, 2);
-      const fxGainLoss = v23Round(closingLiabilityFx - movementBeforeRetranslationFx, 2);
-      cumulativeFxGainLoss = v23Round(cumulativeFxGainLoss + fxGainLoss, 2);
-
-      // --- ROU (PARASAL OLMAYAN, katmanlı) ---
-      const rouOpeningOriginal = v23Num(row.rouOpening);
-      if (prevRouClosingOriginal !== null) {
-        const delta = v23Round(rouOpeningOriginal - prevRouClosingOriginal, 2);
-        if (delta > 0.01) {
-          // Yeniden ölçüm/modifikasyon artışı: yeni katman, BU
-          // dönemin (işlem tarihi) kuruyla sabitlenir.
-          rouLayers.push({ rate: closingRate, rateDate: closing.rateDate, remainingOriginal: delta });
-        } else if (delta < -0.01) {
-          // Azalış (kısmi sonlandırma/scope decrease): mevcut
-          // katmanları orijinal para birimi bakiyelerine orantılı küçült.
-          const totalRemaining = rouLayers.reduce((s, l) => s + l.remainingOriginal, 0) || 1;
-          const shrinkRatio = Math.max(0, (totalRemaining + delta) / totalRemaining);
-          rouLayers.forEach(l => { l.remainingOriginal = v23Round(l.remainingOriginal * shrinkRatio, 2); });
-        }
-      }
-
-      const rouOpeningFx = v23Round(rouLayers.reduce((s, l) => s + l.remainingOriginal * l.rate, 0), 2);
-
-      const totalRemainingBeforeDep = rouLayers.reduce((s, l) => s + l.remainingOriginal, 0) || 1;
-      let depreciationFx = 0;
-      rouLayers.forEach(l => {
-        const share = l.remainingOriginal / totalRemainingBeforeDep;
-        const depOriginalForLayer = v23Num(row.depreciation) * share;
-        depreciationFx = v23Round(depreciationFx + depOriginalForLayer * l.rate, 2);
-        l.remainingOriginal = v23Round(Math.max(0, l.remainingOriginal - depOriginalForLayer), 2);
-      });
-
-      const rouClosingFx = v23Round(rouLayers.reduce((s, l) => s + l.remainingOriginal * l.rate, 0), 2);
-      prevRouClosingOriginal = v23Num(row.rouClosing);
-
-      outSchedule.push({
-        period: row.period,
-        date: row.date,
-        rateDate: closing.rateDate,
-        closingRate,
-        rateSource: closing.source,
-        rateUsedFallback: !!closing.usedFallback,
-        openingLiabilityFx,
-        interestFx,
-        interestOriginal: v23Num(row.interest),
-        paymentFx,
-        paymentOriginal: v23Num(row.payment),
-        movementBeforeRetranslationFx,
-        closingLiabilityFx,
-        fxGainLoss,
-        cumulativeFxGainLoss,
-        rouOpeningFx,
-        depreciationFx,
-        depreciationOriginal: v23Num(row.depreciation),
-        rouClosingFx,
-        rouLayerCount: rouLayers.length,
-        // GC-2026-09: reportingDate ödeme tarihiyle çakışmadığında
-        // buildReportingDateAccrual ile üretilmiş sentetik "kapanış
-        // olayı" satırı mı, yoksa gerçek bir ödeme satırı mı —
-        // tüketiciler (UI, jurnal) bu satırı nakit ödeme olayıyla
-        // KARIŞTIRMAMALI (paymentFx her zaman 0'dır).
-        isAccrualRow: !!row.isAccrualRow,
-        isAdvanceCommencement:
-          isAdvancePaymentTiming(contract.paymentTiming || "arrears") &&
-          calendarDateKey(row.date) === calendarDateKey(contract.startDate)
-      });
-
-      openingLiabilityFx = closingLiabilityFx;
-    }
-
-    return {
-      applicable: true,
-      transactionCurrency,
-      functionalCurrency,
-      rateType,
-      commencementRate: commencementRate.rate,
-      commencementRateDate: commencementRate.rateDate,
-      initialLiabilityFx,
-      initialRouFx,
-      totals: {
-        closingLiabilityFx: outSchedule[outSchedule.length - 1]?.closingLiabilityFx ?? initialLiabilityFx,
-        closingRouFx: outSchedule[outSchedule.length - 1]?.rouClosingFx ?? initialRouFx,
-        cumulativeFxGainLoss
-      },
-      schedule: outSchedule
-    };
   }
 
   // Tek çağrıda: kontratı bul, orijinal motoru çalıştır, gerekiyorsa
@@ -29581,6 +29437,9 @@ ${renderAccountingCenterBulkPromo()}
     isPrivateCalculationApiReady,
     getPrivateCalculationForConsumer,
     ensurePrivateCalculationCache,
+    getPrivateReportingDateResult,
+    loadPrivateReportingDateResult,
+    ensurePrivateReportingDateCache,
     loadTms29Many: (...args) => window.LeaseQantPrivateTfrs16Facade?.loadTms29Many(...args),
     computePrivatePortfolioTms29: v191ComputePrivatePortfolioTms29,
     prepareFinancialReportingData: v191PrepareFinancialReportingData,
