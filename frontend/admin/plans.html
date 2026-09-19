@@ -3,38 +3,1239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plans - Admin Panel</title>
+    <title>Plan Yönetimi - LeaseQant</title>
     <link rel="stylesheet" href="css/admin.css">
-</head>
-<body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html" class="active">📦 Plans</a>
-            <a href="faq.html">❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a>
-            <a href="fx-rates.html">
-                <span class="icon">💱</span> TCMB Kurları
-            </a>
-            <a href="audit.html">📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">Plans</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
+    <style>
+        .plans-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin: 0 0 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .plan-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            min-width: 0;
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.users {
+            border-left: 3px solid var(--accent);
+        }
+
+        .summary-card.contracts {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.companies {
+            border-left: 3px solid var(--warning);
+        }
+
+        .summary-value {
+            overflow: hidden;
+            font: 600 23px var(--mono);
+            text-overflow: ellipsis;
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .plan-info {
+            padding: 14px 16px;
+            color: var(--text-light);
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 11px;
+            line-height: 1.7;
+        }
+
+        .plan-info strong {
+            color: var(--text);
+        }
+
+        .plan-name {
+            min-width: 140px;
+        }
+
+        .plan-name strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+
+        .plan-id {
+            color: var(--text-light);
+            font: 9px var(--mono);
+        }
+
+        .plan-description {
+            max-width: 340px;
+            line-height: 1.5;
+        }
+
+        .limit-value {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 68px;
+            padding: 5px 8px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            font: 600 10px var(--mono);
+        }
+
+        .limit-value.unlimited {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .plan-modal-info {
+            padding: 11px 12px;
+            margin-bottom: 15px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+            line-height: 1.6;
+        }
+
+        .plan-modal-info strong {
+            color: var(--text);
+        }
+
+        .plan-locked {
+            background: var(--paper) !important;
+            color: var(--text-light) !important;
+            cursor: not-allowed;
+        }
+
+        .limit-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .limit-help {
+            margin-top: 5px;
+            color: var(--text-light);
+            font-size: 9px;
+            line-height: 1.5;
+        }
+
+        .modal-error {
+            display: none;
+            padding: 9px 11px;
+            margin: 12px 0;
+            color: var(--danger);
+            background: rgba(143, 42, 32, .06);
+            border: 1px solid rgba(143, 42, 32, .15);
+            border-radius: 7px;
+            font-size: 10px;
+        }
+
+        @media (max-width: 1000px) {
+            .plan-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .limit-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .plan-summary {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .page-intro .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<nav class="sidebar" id="sidebar">
+
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+        <small style="opacity:.7">Admin</small>
+    </div>
+
+    <div class="sidebar-nav">
+
+        <div class="nav-label">Yönetim</div>
+
+        <a href="index.html">📊 Dashboard</a>
+        <a href="companies.html">🏢 Companies</a>
+        <a href="users.html">👤 Users</a>
+        <a href="licenses.html">🔑 Licenses</a>
+
+        <a href="plans.html" class="active">
+            📦 Plans
+        </a>
+
+        <a href="faq.html">❓ SSS</a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            💱 TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            📋 Audit Log
+        </a>
+
+    </div>
+
+</nav>
+
+
+<div class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        Plan Yönetimi
+    </div>
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="plans-page">
+
+    <!-- INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+            <h1>Lisans Planları</h1>
+
+            <p>
+                Platformdaki plan limitlerini ve açıklamalarını yönetin.
+                Plan kimlikleri mevcut lisans ilişkilerini korumak için
+                değiştirilemez.
+            </p>
+        </div>
+
+        <button
+            class="btn btn-outline"
+            onclick="loadPlans()"
+        >
+            ↻ Yenile
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="plan-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryPlans"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Toplam Plan
+            </div>
+
+        </div>
+
+
+        <div class="summary-card users">
+
+            <div
+                class="summary-value"
+                id="summaryUnlimitedUsers"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Sınırsız Kullanıcılı
+            </div>
+
+        </div>
+
+
+        <div class="summary-card contracts">
+
+            <div
+                class="summary-value"
+                id="summaryUnlimitedContracts"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Sınırsız Sözleşmeli
+            </div>
+
+        </div>
+
+
+        <div class="summary-card companies">
+
+            <div
+                class="summary-value"
+                id="summaryUnlimitedCompanies"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Sınırsız Şirketli
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- INFO -->
+
+    <section class="plan-info">
+
+        <strong>Plan yapılandırması:</strong>
+
+        Plan adı ve plan ID'si değiştirilemez.
+        Şirket lisansları ve sistem genelindeki plan ilişkileri
+        bu kimliklere bağlıdır.
+
+        Kullanıcı, sözleşme ve şirket limitlerini değiştirebilirsiniz.
+
+        Bir limit alanının boş bırakılması
+        <strong>sınırsız</strong> kullanım anlamına gelir.
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header">
+
+            <h3>Plan Listesi</h3>
+
+        </div>
+
+
+        <table>
+
+            <thead>
+
+            <tr>
+                <th>Plan</th>
+                <th>Açıklama</th>
+                <th>Kullanıcı Limiti</th>
+                <th>Sözleşme Limiti</th>
+                <th>Şirket Limiti</th>
+                <th>İşlemler</th>
+            </tr>
+
+            </thead>
+
+
+            <tbody id="plansTableBody">
+
+            <tr>
+                <td
+                    colspan="6"
+                    class="table-state"
+                >
+                    Planlar yükleniyor...
+                </td>
+            </tr>
+
+            </tbody>
+
+        </table>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Planı Düzenle
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
+    </div>
+
+    <div id="modalBody"></div>
+
+</div>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+let allPlans = [];
+
+
+/* =========================================================
+   LIMIT FORMAT
+========================================================= */
+
+function formatLimit(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+
+        return `
+            <span class="limit-value unlimited">
+                ∞ Sınırsız
+            </span>
+        `;
+
+    }
+
+    return `
+        <span class="limit-value">
+            ${Number(value)}
+        </span>
+    `;
+
+}
+
+
+/* =========================================================
+   LOAD
+========================================================= */
+
+async function loadPlans() {
+
+    const tbody =
+        document.getElementById(
+            "plansTableBody"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="6"
+                class="table-state"
+            >
+                Planlar yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    try {
+
+        const result =
+            await AdminAPI.getPlans();
+
+
+        if (!result.success) {
+
+            tbody.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="6"
+                        class="table-state error"
+                    >
+                        ${escapeHtml(
+                            describeApiError(
+                                result
+                            )
+                        )}
+                    </td>
+
+                </tr>
+
+            `;
+
+            return;
+
+        }
+
+
+        allPlans =
+            Array.isArray(result.data)
+                ? result.data
+                : [];
+
+
+        renderSummary();
+
+        renderPlans();
+
+
+    } catch (error) {
+
+        console.error(
+            "Load plans error:",
+            error
+        );
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="6"
+                    class="table-state error"
+                >
+                    Planlar yüklenirken hata oluştu.
+                </td>
+
+            </tr>
+
+        `;
+
+    }
+
+}
+
+
+/* =========================================================
+   SUMMARY
+========================================================= */
+
+function renderSummary() {
+
+    document.getElementById(
+        "summaryPlans"
+    ).textContent =
+        allPlans.length;
+
+
+    document.getElementById(
+        "summaryUnlimitedUsers"
+    ).textContent =
+        allPlans.filter(
+            plan =>
+                plan.max_users === null ||
+                plan.max_users === undefined
+        ).length;
+
+
+    document.getElementById(
+        "summaryUnlimitedContracts"
+    ).textContent =
+        allPlans.filter(
+            plan =>
+                plan.max_contracts === null ||
+                plan.max_contracts === undefined
+        ).length;
+
+
+    document.getElementById(
+        "summaryUnlimitedCompanies"
+    ).textContent =
+        allPlans.filter(
+            plan =>
+                plan.max_companies === null ||
+                plan.max_companies === undefined
+        ).length;
+
+}
+
+
+/* =========================================================
+   RENDER
+========================================================= */
+
+function renderPlans() {
+
+    const tbody =
+        document.getElementById(
+            "plansTableBody"
+        );
+
+
+    if (!allPlans.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="6"
+                    class="table-state"
+                >
+                    Tanımlı lisans planı bulunamadı.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        allPlans
+            .map(plan => `
+
+                <tr>
+
+                    <td>
+
+                        <div class="plan-name">
+
+                            <strong>
+                                ${escapeHtml(
+                                    plan.name || "-"
+                                )}
+                            </strong>
+
+                            <span class="plan-id">
+                                ${escapeHtml(
+                                    String(
+                                        plan.id || "-"
+                                    )
+                                )}
+                            </span>
+
+                        </div>
+
+                    </td>
+
+
+                    <td>
+
+                        <div class="plan-description">
+
+                            ${escapeHtml(
+                                plan.description ||
+                                "Açıklama bulunmuyor."
+                            )}
+
+                        </div>
+
+                    </td>
+
+
+                    <td>
+                        ${formatLimit(
+                            plan.max_users
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${formatLimit(
+                            plan.max_contracts
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${formatLimit(
+                            plan.max_companies
+                        )}
+                    </td>
+
+
+                    <td>
+
+                        <button
+                            class="btn btn-sm btn-success"
+                            onclick="openEditModal(
+                                '${escapeHtml(
+                                    String(plan.id)
+                                )}'
+                            )"
+                        >
+                            Düzenle
+                        </button>
+
+                    </td>
+
+                </tr>
+
+            `)
+            .join("");
+
+}
+
+
+/* =========================================================
+   EDIT MODAL
+========================================================= */
+
+function openEditModal(planId) {
+
+    const plan =
+        allPlans.find(
+            item =>
+                String(item.id) ===
+                String(planId)
+        );
+
+
+    if (!plan) {
+
+        alert(
+            "Plan bulunamadı. Listeyi yenileyin."
+        );
+
+        return;
+
+    }
+
+
+    const content = `
+
+        <form
+            id="editPlanForm"
+            onsubmit="submitEditPlan(
+                event,
+                '${escapeHtml(
+                    String(plan.id)
+                )}'
+            )"
+        >
+
+            <div class="plan-modal-info">
+
+                <strong>
+                    Plan kimliği ve adı kilitlidir.
+                </strong>
+
+                <br>
+
+                Mevcut şirket lisanslarının plan ilişkisini
+                korumak amacıyla yalnızca açıklama ve kullanım
+                limitleri değiştirilebilir.
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Plan
+                </label>
+
+                <input
+                    type="text"
+                    class="plan-locked"
+                    value="${escapeHtml(
+                        plan.name || ""
+                    )}"
+                    disabled
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Plan ID
+                </label>
+
+                <input
+                    type="text"
+                    class="plan-locked"
+                    value="${escapeHtml(
+                        String(
+                            plan.id || ""
+                        )
+                    )}"
+                    disabled
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Açıklama
+                </label>
+
+                <input
+                    type="text"
+                    id="editPlanDescription"
+                    maxlength="500"
+                    value="${escapeHtml(
+                        plan.description || ""
+                    )}"
+                    placeholder="Plan açıklaması"
+                >
+
+            </div>
+
+
+            <div class="limit-grid">
+
+                <div class="form-group">
+
+                    <label>
+                        Kullanıcı Limiti
+                    </label>
+
+                    <input
+                        type="number"
+                        id="editPlanMaxUsers"
+                        min="1"
+                        step="1"
+                        value="${
+                            plan.max_users === null ||
+                            plan.max_users === undefined
+                                ? ""
+                                : plan.max_users
+                        }"
+                        placeholder="Sınırsız"
+                    >
+
+                    <div class="limit-help">
+                        Boş bırakılırsa sınırsız.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Sözleşme Limiti
+                    </label>
+
+                    <input
+                        type="number"
+                        id="editPlanMaxContracts"
+                        min="1"
+                        step="1"
+                        value="${
+                            plan.max_contracts === null ||
+                            plan.max_contracts === undefined
+                                ? ""
+                                : plan.max_contracts
+                        }"
+                        placeholder="Sınırsız"
+                    >
+
+                    <div class="limit-help">
+                        Boş bırakılırsa sınırsız.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Şirket Limiti
+                    </label>
+
+                    <input
+                        type="number"
+                        id="editPlanMaxCompanies"
+                        min="1"
+                        step="1"
+                        value="${
+                            plan.max_companies === null ||
+                            plan.max_companies === undefined
+                                ? ""
+                                : plan.max_companies
+                        }"
+                        placeholder="Sınırsız"
+                    >
+
+                    <div class="limit-help">
+                        Ana şirket dahil holding ağacındaki
+                        toplam şirket sayısıdır.
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                class="modal-error"
+                id="editPlanError"
+            ></div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="editPlanSubmitBtn"
+                >
+                    Değişiklikleri Kaydet
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    showModal(
+        `${plan.name} Planını Düzenle`,
+        content
+    );
+
+}
+
+
+/* =========================================================
+   PARSE LIMIT
+========================================================= */
+
+function parseLimitInput(
+    elementId
+) {
+
+    const element =
+        document.getElementById(
+            elementId
+        );
+
+
+    const raw =
+        element.value.trim();
+
+
+    if (raw === "") {
+        return null;
+    }
+
+
+    const parsed =
+        Number(raw);
+
+
+    if (
+        !Number.isInteger(parsed) ||
+        parsed <= 0
+    ) {
+
+        throw new Error(
+            "Limit alanları boş bırakılmalı veya pozitif bir tam sayı olmalıdır."
+        );
+
+    }
+
+
+    return parsed;
+
+}
+
+
+/* =========================================================
+   SUBMIT
+========================================================= */
+
+async function submitEditPlan(
+    event,
+    planId
+) {
+
+    event.preventDefault();
+
+
+    const errorDiv =
+        document.getElementById(
+            "editPlanError"
+        );
+
+
+    const submitBtn =
+        document.getElementById(
+            "editPlanSubmitBtn"
+        );
+
+
+    errorDiv.style.display =
+        "none";
+
+
+    let maxUsers;
+    let maxContracts;
+    let maxCompanies;
+
+
+    try {
+
+        maxUsers =
+            parseLimitInput(
+                "editPlanMaxUsers"
+            );
+
+
+        maxContracts =
+            parseLimitInput(
+                "editPlanMaxContracts"
+            );
+
+
+        maxCompanies =
+            parseLimitInput(
+                "editPlanMaxCompanies"
+            );
+
+
+    } catch (validationError) {
+
+        errorDiv.textContent =
+            validationError.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+
+        return;
+
+    }
+
+
+    const description =
+        document
+            .getElementById(
+                "editPlanDescription"
+            )
+            .value
+            .trim();
+
+
+    submitBtn.disabled =
+        true;
+
+
+    submitBtn.textContent =
+        "Kaydediliyor...";
+
+
+    try {
+
+        const result =
+            await AdminAPI.updatePlan(
+                planId,
+                {
+                    maxUsers,
+                    maxContracts,
+                    maxCompanies,
+                    description
+                }
+            );
+
+
+        if (result.success) {
+
+            closeModal();
+
+            await loadPlans();
+
+        } else {
+
+            errorDiv.textContent =
+                describeApiError(
+                    result
+                );
+
+
+            errorDiv.style.display =
+                "block";
+
+        }
+
+
+    } catch (error) {
+
+        errorDiv.textContent =
+            "Plan güncellenirken hata oluştu: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+
+    } finally {
+
+        submitBtn.disabled =
+            false;
+
+
+        submitBtn.textContent =
+            "Değişiklikleri Kaydet";
+
+    }
+
+}
+
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        await loadPlans();
+
+    }
+);
+
+</script>
+
+</body>
+</html>                <span class="role-badge">ADMIN</span>
                 <button class="btn-logout" onclick="logout()">Logout</button>
             </div>
         </header>
