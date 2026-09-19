@@ -3,459 +3,2009 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Users - Admin Panel</title>
+    <title>Kullanıcı Yönetimi - LeaseQant</title>
     <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .users-page{display:grid;gap:20px}
+
+        .page-intro{
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-end;
+            gap:16px;
+            flex-wrap:wrap;
+        }
+
+        .page-intro h1{
+            font:600 24px var(--display);
+            margin-bottom:4px;
+        }
+
+        .page-intro p{
+            color:var(--text-light);
+            font-size:12px;
+        }
+
+        .user-summary{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:12px;
+        }
+
+        .summary-card{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            padding:15px 17px;
+        }
+
+        .summary-value{
+            font:600 23px var(--mono);
+        }
+
+        .summary-label{
+            margin-top:3px;
+            color:var(--text-light);
+            font-size:10px;
+        }
+
+        .summary-card.active{border-left:3px solid var(--success)}
+        .summary-card.inactive{border-left:3px solid var(--danger)}
+        .summary-card.warning{border-left:3px solid var(--warning)}
+
+        .users-toolbar{
+            display:flex;
+            align-items:center;
+            gap:9px;
+            flex-wrap:wrap;
+            margin-bottom:16px;
+        }
+
+        .users-toolbar input,
+        .users-toolbar select{
+            height:38px;
+            padding:0 11px;
+            border:1px solid var(--border);
+            border-radius:9px;
+            background:#fff;
+            color:var(--text);
+            font-size:11px;
+        }
+
+        .users-toolbar input{
+            flex:1;
+            min-width:220px;
+        }
+
+        .users-toolbar select{
+            min-width:150px;
+        }
+
+        .users-toolbar input:focus,
+        .users-toolbar select:focus{
+            outline:none;
+            border-color:var(--accent);
+            box-shadow:0 0 0 3px rgba(176,141,87,.1);
+        }
+
+        .user-name{
+            display:flex;
+            flex-direction:column;
+            gap:2px;
+        }
+
+        .user-name strong{font-size:12px}
+
+        .user-name small{
+            color:var(--text-light);
+            font-size:10px;
+        }
+
+        .password-warning{
+            color:var(--warning)!important;
+        }
+
+        .role-badge-table{
+            display:inline-flex;
+            padding:4px 7px;
+            border-radius:999px;
+            background:var(--paper);
+            color:var(--text);
+            font:600 8.5px var(--mono);
+            white-space:nowrap;
+        }
+
+        .company-list{
+            max-width:270px;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+
+        .company-more{
+            display:inline-block;
+            margin-left:4px;
+            padding:2px 6px;
+            background:var(--paper);
+            border-radius:999px;
+            font:600 9px var(--mono);
+        }
+
+        .table-state{
+            padding:28px!important;
+            text-align:center;
+            color:var(--text-light);
+        }
+
+        .table-state.error{
+            color:var(--danger);
+        }
+
+        .filter-count{
+            margin-left:auto;
+            color:var(--text-light);
+            font:10px var(--mono);
+            white-space:nowrap;
+        }
+
+        .company-selector-help{
+            padding:9px 10px;
+            margin-top:6px;
+            border-radius:8px;
+            background:var(--paper);
+            color:var(--text-light);
+            font-size:10px;
+        }
+
+        @media(max-width:900px){
+            .user-summary{
+                grid-template-columns:1fr 1fr;
+            }
+        }
+
+        @media(max-width:600px){
+            .user-summary{
+                grid-template-columns:1fr 1fr;
+            }
+
+            .users-toolbar{
+                align-items:stretch;
+            }
+
+            .users-toolbar input,
+            .users-toolbar select{
+                width:100%;
+                min-width:0;
+            }
+
+            .filter-count{
+                width:100%;
+                margin-left:0;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html" data-admin-only>📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html" class="active">👤 Users</a>
-            <a href="licenses.html" data-admin-only>🔑 Licenses</a>
-            <a href="plans.html" data-admin-only>📦 Plans</a>
-            <a href="faq.html" data-admin-only>❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html" data-admin-only>🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html" data-admin-only>📈 Enflasyon Endeksleri</a>
-            <a href="audit.html" data-admin-only>📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">Users</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+<nav class="sidebar" id="sidebar">
 
-        <div class="page-content">
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>All Users</h3>
-                    <button class="btn btn-primary" onclick="showCreateUserModal()">+ New User</button>
-                </div>
-                <div class="table-toolbar">
-                    <input type="text" id="userSearchInput" placeholder="Search by username..." oninput="onUserSearchInput()">
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Kullanıcı</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Companies</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
-                    </tbody>
-                </table>
-                <div id="usersPagination"></div>
-            </div>
-        </div>
+    <div class="sidebar-brand"
+         style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">Admin</small>
+
     </div>
 
-    <!-- Modal -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 id="modalTitle">Create User</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modalBody"></div>
-        </div>
+    <div class="sidebar-nav">
+
+        <div class="nav-label">Yönetim</div>
+
+        <a href="index.html" data-admin-only>📊 Dashboard</a>
+
+        <a href="companies.html">🏢 Companies</a>
+
+        <a href="users.html" class="active">👤 Users</a>
+
+        <a href="licenses.html" data-admin-only>🔑 Licenses</a>
+
+        <a href="plans.html" data-admin-only>📦 Plans</a>
+
+        <a href="faq.html" data-admin-only>❓ SSS</a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html" data-admin-only>
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html" data-admin-only>
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="audit.html" data-admin-only>
+            📋 Audit Log
+        </a>
+
     </div>
 
-    <script src="../js/admin.js"></script>
-    <script>
-        // --- Global Değişkenler ---
-        let allCompanies = [];
-        // Kullanıcı verilerini ID'ye göre saklamak için bir obje
-        let usersMap = {};
-        // Düzenleme sırasında butonu kilitlemek için
-        let isEditSubmitting = false;
-        let isCreateSubmitting = false;
+</nav>
 
-        // P1 madde 4 — rol yaratma matrisi (frontend UX katmanı;
-        // gerçek kontrol backend'de canAssignRole() ile yapılır).
-        // ADMIN: 5 rolün tümünü atayabilir.
-        // ACCOUNTANT_MANAGER: yalnızca ACCOUNTANT/CONTROLLER/VIEWER
-        // atayabilir (ADMIN veya ACCOUNTANT_MANAGER OLUŞTURAMAZ).
-        const ROLES_ASSIGNABLE_BY = {
-            ADMIN: ["ADMIN", "ACCOUNTANT_MANAGER", "ACCOUNTANT", "CONTROLLER", "VIEWER"],
-            ACCOUNTANT_MANAGER: ["ACCOUNTANT", "CONTROLLER", "VIEWER"]
+
+<div class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        Kullanıcı Yönetimi
+    </div>
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="users-page">
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>Kullanıcılar</h1>
+
+            <p>
+                Kullanıcı hesaplarını, rollerini ve şirket
+                erişimlerini yönetin.
+            </p>
+
+        </div>
+
+        <button
+            class="btn btn-primary"
+            onclick="showCreateUserModal()"
+        >
+            + Yeni Kullanıcı
+        </button>
+
+    </section>
+
+
+    <!-- ÖZET -->
+
+    <section class="user-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryTotal"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Bu Sayfadaki Kullanıcı
+            </div>
+
+        </div>
+
+
+        <div class="summary-card active">
+
+            <div
+                class="summary-value"
+                id="summaryActive"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Aktif
+            </div>
+
+        </div>
+
+
+        <div class="summary-card inactive">
+
+            <div
+                class="summary-value"
+                id="summaryInactive"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Pasif
+            </div>
+
+        </div>
+
+
+        <div class="summary-card warning">
+
+            <div
+                class="summary-value"
+                id="summaryPassword"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Şifre Değişikliği Bekleyen
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- TABLO -->
+
+    <section class="table-container">
+
+        <div class="table-header">
+
+            <h3>Kullanıcı Listesi</h3>
+
+            <button
+                class="btn btn-outline"
+                onclick="loadUsers()"
+            >
+                ↻ Yenile
+            </button>
+
+        </div>
+
+
+        <div class="users-toolbar">
+
+            <input
+                type="search"
+                id="userSearchInput"
+                placeholder="Ad, kullanıcı adı veya e-posta ara..."
+                autocomplete="off"
+                oninput="onUserSearchInput()"
+            >
+
+
+            <select
+                id="roleFilter"
+                onchange="renderCurrentUsers()"
+            >
+                <option value="">
+                    Tüm Roller
+                </option>
+
+                <option value="ADMIN">
+                    ADMIN
+                </option>
+
+                <option value="ACCOUNTANT_MANAGER">
+                    ACCOUNTANT_MANAGER
+                </option>
+
+                <option value="ACCOUNTANT">
+                    ACCOUNTANT
+                </option>
+
+                <option value="CONTROLLER">
+                    CONTROLLER
+                </option>
+
+                <option value="VIEWER">
+                    VIEWER
+                </option>
+
+            </select>
+
+
+            <select
+                id="statusFilter"
+                onchange="renderCurrentUsers()"
+            >
+
+                <option value="">
+                    Tüm Durumlar
+                </option>
+
+                <option value="ACTIVE">
+                    Aktif
+                </option>
+
+                <option value="INACTIVE">
+                    Pasif
+                </option>
+
+            </select>
+
+
+            <span
+                class="filter-count"
+                id="filterCount"
+            ></span>
+
+        </div>
+
+
+        <table>
+
+            <thead>
+
+            <tr>
+                <th>Kullanıcı</th>
+                <th>E-posta</th>
+                <th>Rol</th>
+                <th>Durum</th>
+                <th>Şirketler</th>
+                <th>Oluşturulma</th>
+                <th>İşlem</th>
+            </tr>
+
+            </thead>
+
+            <tbody id="usersTableBody">
+
+            <tr>
+                <td
+                    colspan="7"
+                    class="table-state"
+                >
+                    Kullanıcılar yükleniyor...
+                </td>
+            </tr>
+
+            </tbody>
+
+        </table>
+
+        <div id="usersPagination"></div>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Kullanıcı
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
+    </div>
+
+    <div id="modalBody"></div>
+
+</div>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+let allCompanies = [];
+
+let usersMap = {};
+
+let currentUsers = [];
+
+let isEditSubmitting = false;
+
+let isCreateSubmitting = false;
+
+
+const ROLES_ASSIGNABLE_BY = {
+
+    ADMIN: [
+        "ADMIN",
+        "ACCOUNTANT_MANAGER",
+        "ACCOUNTANT",
+        "CONTROLLER",
+        "VIEWER"
+    ],
+
+    ACCOUNTANT_MANAGER: [
+        "ACCOUNTANT",
+        "CONTROLLER",
+        "VIEWER"
+    ]
+
+};
+
+
+let usersState = {
+
+    search: "",
+    limit: 20,
+    offset: 0
+
+};
+
+
+/* ============================================================
+   CURRENT USER
+============================================================ */
+
+function getCurrentAdminUser() {
+
+    try {
+
+        return JSON.parse(
+            localStorage.getItem(
+                "current_user"
+            ) || "null"
+        );
+
+    } catch (_) {
+
+        return null;
+
+    }
+
+}
+
+
+function getAssignableRoles() {
+
+    const me =
+        getCurrentAdminUser();
+
+    return (
+        ROLES_ASSIGNABLE_BY[
+            me && me.role
+        ] || []
+    );
+
+}
+
+
+function roleOptionsHtml(
+    selectedRole
+) {
+
+    return getAssignableRoles()
+        .map(role => `
+
+            <option
+                value="${role}"
+                ${
+                    role === selectedRole
+                        ? "selected"
+                        : ""
+                }
+            >
+                ${role}
+            </option>
+
+        `)
+        .join("");
+
+}
+
+
+/* ============================================================
+   COMPANIES
+============================================================ */
+
+async function loadCompaniesForSelect() {
+
+    try {
+
+        const result =
+            await AdminAPI.getCompanies({
+                limit:500
+            });
+
+
+        if (result.success) {
+
+            allCompanies =
+                result.data || [];
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Load companies error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   LOAD USERS
+============================================================ */
+
+async function loadUsers() {
+
+    const tbody =
+        document.getElementById(
+            "usersTableBody"
+        );
+
+    tbody.innerHTML = `
+
+        <tr>
+            <td
+                colspan="7"
+                class="table-state"
+            >
+                Kullanıcılar yükleniyor...
+            </td>
+        </tr>
+
+    `;
+
+
+    try {
+
+        const params = {
+
+            limit:
+                usersState.limit,
+
+            offset:
+                usersState.offset
+
         };
 
-        function getCurrentAdminUser() {
-            try {
-                return JSON.parse(localStorage.getItem("current_user") || "null");
-            } catch (_) {
-                return null;
-            }
+
+        if (usersState.search) {
+
+            params.search =
+                usersState.search;
+
         }
 
-        function getAssignableRoles() {
-            const me = getCurrentAdminUser();
-            return ROLES_ASSIGNABLE_BY[me && me.role] || [];
-        }
 
-        function roleOptionsHtml(selectedRole) {
-            return getAssignableRoles().map(r =>
-                `<option value="${r}" ${r === selectedRole ? "selected" : ""}>${r}</option>`
-            ).join("");
-        }
+        const result =
+            await AdminAPI.getUsers(
+                params
+            );
 
-        // --- Mevcut Fonksiyonlar (Yeni eklenenlerle birlikte) ---
 
-        async function loadCompaniesForSelect() {
-            try {
-                // Dropdown için tam liste gerekir — sayfalama limitiyle
-                // (varsayılan 50) kesilmesin diye yüksek bir limit veriyoruz.
-                // Not: backend zaten ACCOUNTANT_MANAGER için kendi holding
-                // ağacıyla scope'luyor (requireStaffAccess) — burada ekstra
-                // bir filtreleme gerekmiyor.
-                const result = await AdminAPI.getCompanies({ limit: 500 });
-                if (result.success) {
-                    allCompanies = result.data;
-                }
-            } catch (error) {
-                console.error('Load companies error:', error);
-            }
-        }
+        if (!result.success) {
 
-        async function loadUsers() {
-            try {
-                const params = { limit: usersState.limit, offset: usersState.offset };
-                if (usersState.search) params.search = usersState.search;
+            tbody.innerHTML = `
 
-                const result = await AdminAPI.getUsers(params);
-                if (!result.success) {
-                    document.getElementById('usersTableBody').innerHTML = 
-                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${describeApiError(result)}</td></tr>`;
-                    return;
-                }
-                
-                // Kullanıcı verilerini haritaya kaydet
-                usersMap = {};
-                result.data.forEach(user => {
-                    usersMap[user.id] = user;
-                });
+                <tr>
 
-                const html = result.data.map(u => {
-                    const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
-                    return `
-                    <tr>
-                        <td>
-                            <strong>${escapeHtml(fullName || u.username)}</strong>
-                            ${fullName ? `<br><small style="color:var(--text-light);">${escapeHtml(u.username)}</small>` : ''}
-                            ${u.must_change_password ? '<br><small style="color:var(--warning, #d68910);">Şifre değişikliği bekleniyor</small>' : ''}
-                        </td>
-                        <td>${escapeHtml(u.email || '-')}</td>
-                        <td><span class="badge badge-active">${escapeHtml(u.role || 'VIEWER')}</span></td>
-                        <td>${getStatusBadge(u.status)}</td>
-                        <td>${(u.companies || []).map(c => escapeHtml(c.company_name)).join(', ')}</td>
-                        <td>${formatDateShort(u.created_at)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')">Edit</button>
-                        </td>
-                    </tr>
-                `;
-                }).join('');
-                
-                document.getElementById('usersTableBody').innerHTML = html || 
-                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No users found</td></tr>`;
+                    <td
+                        colspan="7"
+                        class="table-state error"
+                    >
+                        ${escapeHtml(
+                            describeApiError(
+                                result
+                            )
+                        )}
+                    </td>
 
-                document.getElementById('usersPagination').innerHTML =
-                    renderPagination(result.pagination, changeUsersPage);
-                    
-            } catch (error) {
-                console.error('Load users error:', error);
-            }
-        }
+                </tr>
 
-        let usersState = { search: '', limit: 20, offset: 0 };
-
-        function onUserSearchInput() {
-            debouncedUserSearch();
-        }
-
-        const debouncedUserSearch = debounce(() => {
-            usersState.search = document.getElementById('userSearchInput').value.trim();
-            usersState.offset = 0;
-            loadUsers();
-        }, 350);
-
-        function changeUsersPage(newOffset) {
-            usersState.offset = newOffset;
-            loadUsers();
-        }
-
-        // --- YENİ / GÜNCELLENEN FONKSİYONLAR ---
-
-        // 1. Düzenleme Modal'ını Göster
-        function editUser(userId) {
-            // Daha önce yüklenmiş kullanıcı verilerini bul
-            const user = usersMap[userId];
-            if (!user) {
-                alert('Kullanıcı verileri bulunamadı. Lütfen sayfayı yenileyin.');
-                return;
-            }
-
-            // Mevcut kullanıcının şirket ID'lerini al
-            const currentCompanyIds = (user.companies || []).map(c => c.company_id);
-
-            // Şirket seçeneklerini oluştur
-            const companyOptions = allCompanies.map(c => 
-                `<option value="${c.id}" ${currentCompanyIds.includes(c.id) ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
-            ).join('');
-
-            // Rol seçenekleri — mevcut kullanıcının rolü, düzenleyenin
-            // atayabileceği roller arasında yoksa (örn. bir
-            // ACCOUNTANT_MANAGER başka bir ACCOUNTANT_MANAGER'ı
-            // görüntülüyorsa) yine de seçili gösterilir ama listeye
-            // eklenmez — backend zaten böyle bir değişikliği reddeder,
-            // burada sadece mevcut değerin kaybolmamasını sağlıyoruz.
-            let roleOptions = roleOptionsHtml(user.role);
-            if (!getAssignableRoles().includes(user.role)) {
-                roleOptions = `<option value="${user.role}" selected>${user.role} (değiştirilemez)</option>` + roleOptions;
-            }
-
-            // Modal içeriğini oluştur
-            const modalContent = `
-                <form id="editUserForm" onsubmit="saveUserEdit(event, '${user.id}')">
-                    <div class="form-group">
-                        <label>Username (readonly)</label>
-                        <input type="text" value="${escapeHtml(user.username)}" readonly style="background:#f0f0f0;">
-                    </div>
-                    <div class="form-group">
-                        <label>Ad</label>
-                        <input type="text" name="first_name" value="${escapeHtml(user.first_name || '')}" maxlength="100">
-                    </div>
-                    <div class="form-group">
-                        <label>Soyad</label>
-                        <input type="text" name="last_name" value="${escapeHtml(user.last_name || '')}" maxlength="100">
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" name="email" value="${escapeHtml(user.email || '')}" maxlength="150">
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select name="role" required>${roleOptions}</select>
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select name="status" required>
-                            <option value="ACTIVE" ${user.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
-                            <option value="INACTIVE" ${user.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option>
-                        </select>
-                        <small style="color:var(--text-light);">INACTIVE: kullanıcı giriş yapamaz ve lisans kullanıcı limitine dahil edilmez.</small>
-                    </div>
-                    <div class="form-group">
-                        <label>Companies</label>
-                        <select name="company_ids" multiple style="height:120px;">
-                            ${companyOptions}
-                        </select>
-                        <small style="color:var(--text-light);">Hold Ctrl to select multiple. Select none to remove all assignments.</small>
-                    </div>
-                    <div id="editFormError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="editSubmitBtn">Save Changes</button>
-                    </div>
-                </form>
             `;
 
-            showModal(`Edit User: ${escapeHtml(user.username)}`, modalContent);
+            return;
+
         }
 
-        // 2. Düzenleme Formunu Kaydet
-        async function saveUserEdit(event, userId) {
-            event.preventDefault();
-            
-            // Eğer zaten bir işlem devam ediyorsa, çık
-            if (isEditSubmitting) return;
-            
-            const form = event.target;
-            const submitBtn = document.getElementById('editSubmitBtn');
-            const errorDiv = document.getElementById('editFormError');
-            
-            // Butonu devre dışı bırak ve metni değiştir
-            isEditSubmitting = true;
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Saving...';
-            errorDiv.style.display = 'none';
 
-            // Seçili şirket ID'lerini al
-            const companySelect = form.company_ids;
-            const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
+        currentUsers =
+            Array.isArray(result.data)
+                ? result.data
+                : [];
 
-            const data = {
-                role: form.role.value,
-                status: form.status.value,
-                company_ids: company_ids,
-                first_name: form.first_name.value.trim(),
-                last_name: form.last_name.value.trim(),
-                email: form.email.value.trim()
-            };
 
-            try {
-                const result = await AdminAPI.updateUser(userId, data);
-                
-                if (result.success) {
-                    // Başarılı
-                    closeModal();
-                    await loadUsers(); // Listeyi yenile
-                } else {
-                    // Hata
-                    errorDiv.textContent = describeApiError(result);
-                    errorDiv.style.display = 'block';
-                }
-            } catch (error) {
-                console.error('Update user error:', error);
-                errorDiv.textContent = 'Bir hata oluştu: ' + error.message;
-                errorDiv.style.display = 'block';
-            } finally {
-                // Butonu tekrar aktif et
-                isEditSubmitting = false;
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Save Changes';
+        usersMap = {};
+
+
+        currentUsers.forEach(
+            user => {
+
+                usersMap[user.id] =
+                    user;
+
             }
-        }
+        );
 
-        // --- Kullanıcı Oluşturma ---
-        // P0/P1 DÜZELTMESİ: önceden bu form yalnızca username/password/
-        // role(VIEWER|ADMIN)/status/companies içeriyordu — email, ad,
-        // soyad hiç yoktu; role seçimi yalnızca 2 sabit değere izin
-        // veriyordu (ACCOUNTANT_MANAGER/ACCOUNTANT/CONTROLLER hiç
-        // oluşturulamıyordu); password minlength=6 backend'in gerçek
-        // kuralıyla (>=10) çelişiyordu.
-        function showCreateUserModal() {
-            const companyOptions = allCompanies.map(c => 
-                `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`
-            ).join('');
 
-            const roleOptions = roleOptionsHtml();
-            
-            const content = `
-                <form id="createUserForm" onsubmit="createUser(event)">
-                    <div class="form-group">
-                        <label>Ad</label>
-                        <input type="text" name="first_name" maxlength="100" placeholder="e.g. Görkem">
-                    </div>
-                    <div class="form-group">
-                        <label>Soyad</label>
-                        <input type="text" name="last_name" maxlength="100" placeholder="e.g. Karaağaç">
-                    </div>
-                    <div class="form-group">
-                        <label>Email *</label>
-                        <input type="email" name="email" required maxlength="150" placeholder="e.g. gorkem@example.com">
-                        <small style="color:var(--text-light);">Giriş kimliği olarak kullanılacaktır.</small>
-                    </div>
-                    <div class="form-group">
-                        <label>İlk Şifre *</label>
-                        <input type="password" name="password" required minlength="10" placeholder="En az 10 karakter">
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select name="role">${roleOptions}</select>
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select name="status">
-                            <option value="ACTIVE">ACTIVE</option>
-                            <option value="INACTIVE">INACTIVE</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Companies</label>
-                        <select name="company_ids" multiple style="height:100px;">
-                            ${companyOptions}
-                        </select>
-                        <small style="color:var(--text-light);">Hold Ctrl to select multiple</small>
-                    </div>
-                    <div id="createUserError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="createUserSubmitBtn">Create User</button>
-                    </div>
-                </form>
-            `;
-            showModal('Create User', content);
-        }
+        renderCurrentUsers();
 
-        async function createUser(event) {
-            event.preventDefault();
-            if (isCreateSubmitting) return;
 
-            const form = event.target;
-            const errorDiv = document.getElementById('createUserError');
-            const submitBtn = document.getElementById('createUserSubmitBtn');
+        document.getElementById(
+            "usersPagination"
+        ).innerHTML =
+            renderPagination(
+                result.pagination,
+                changeUsersPage
+            );
 
-            isCreateSubmitting = true;
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Saving...';
-            errorDiv.style.display = 'none';
-            
-            const companySelect = form.company_ids;
-            const company_ids = Array.from(companySelect.selectedOptions).map(opt => opt.value);
-            
-            // NOT: username GÖNDERİLMİYOR — backend, username
-            // belirtilmezse email'i username olarak kullanır (bkz.
-            // routes/admin.js POST /users P0 yorumu).
-            const data = {
-                email: form.email.value.trim(),
-                first_name: form.first_name.value.trim(),
-                last_name: form.last_name.value.trim(),
-                password: form.password.value,
-                role: form.role.value,
-                status: form.status.value,
-                company_ids: company_ids.length > 0 ? company_ids : []
-            };
-            
-            try {
-                const result = await AdminAPI.createUser(data);
-                if (result.success) {
-                    closeModal();
-                    loadUsers();
-                } else {
-                    errorDiv.textContent = describeApiError(result);
-                    errorDiv.style.display = 'block';
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Kullanıcı oluşturulurken hata oluştu: ' + error.message;
-                errorDiv.style.display = 'block';
-            } finally {
-                isCreateSubmitting = false;
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Create User';
+
+    } catch (error) {
+
+        console.error(
+            "Load users error:",
+            error
+        );
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="7"
+                    class="table-state error"
+                >
+                    Kullanıcılar yüklenemedi.
+                </td>
+
+            </tr>
+
+        `;
+
+    }
+
+}
+
+
+/* ============================================================
+   CLIENT FILTER + RENDER
+============================================================ */
+
+function renderCurrentUsers() {
+
+    const role =
+        document.getElementById(
+            "roleFilter"
+        ).value;
+
+
+    const status =
+        document.getElementById(
+            "statusFilter"
+        ).value;
+
+
+    const filtered =
+        currentUsers.filter(user => {
+
+            if (
+                role &&
+                user.role !== role
+            ) {
+                return false;
             }
-        }
 
-        // --- Sayfa Yükleme ---
-        document.addEventListener('DOMContentLoaded', async () => {
-            // P2: ACCOUNTANT_MANAGER de bu sayfaya erişebilir (bkz.
-            // requireStaffAccess — backend/middleware/admin.js).
-            const authenticated = await checkAdminAuth(['ADMIN', 'ACCOUNTANT_MANAGER']);
-            if (authenticated) {
-                await loadCompaniesForSelect();
-                loadUsers();
+
+            if (
+                status &&
+                user.status !== status
+            ) {
+                return false;
             }
+
+
+            return true;
+
         });
 
-        // --- Güvenlik Uyarısı (Konsola) ---
-        console.warn('Security Note: This frontend is for UI purposes only. All critical authorization checks are performed on the backend.');
-    </script>
+
+    renderUserSummary(
+        currentUsers
+    );
+
+
+    document.getElementById(
+        "filterCount"
+    ).textContent =
+        filtered.length ===
+        currentUsers.length
+            ? `${filtered.length} kayıt`
+            : `${filtered.length} / ${currentUsers.length} kayıt`;
+
+
+    const tbody =
+        document.getElementById(
+            "usersTableBody"
+        );
+
+
+    if (!filtered.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="7"
+                    class="table-state"
+                >
+                    Filtrelere uygun kullanıcı bulunamadı.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        filtered.map(
+            renderUserRow
+        ).join("");
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderUserSummary(users) {
+
+    const total =
+        users.length;
+
+
+    const active =
+        users.filter(
+            user =>
+                user.status ===
+                "ACTIVE"
+        ).length;
+
+
+    const inactive =
+        users.filter(
+            user =>
+                user.status ===
+                "INACTIVE"
+        ).length;
+
+
+    const passwordPending =
+        users.filter(
+            user =>
+                Boolean(
+                    user.must_change_password
+                )
+        ).length;
+
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent = total;
+
+
+    document.getElementById(
+        "summaryActive"
+    ).textContent = active;
+
+
+    document.getElementById(
+        "summaryInactive"
+    ).textContent = inactive;
+
+
+    document.getElementById(
+        "summaryPassword"
+    ).textContent =
+        passwordPending;
+
+}
+
+
+/* ============================================================
+   USER ROW
+============================================================ */
+
+function renderUserRow(user) {
+
+    const fullName =
+        [
+            user.first_name,
+            user.last_name
+        ]
+        .filter(Boolean)
+        .join(" ");
+
+
+    const companies =
+        Array.isArray(
+            user.companies
+        )
+            ? user.companies
+            : [];
+
+
+    const visibleCompanies =
+        companies
+            .slice(0,2)
+            .map(
+                company =>
+                    escapeHtml(
+                        company.company_name
+                    )
+            )
+            .join(", ");
+
+
+    const moreCompanies =
+        companies.length > 2
+            ? `
+                <span class="company-more">
+                    +${companies.length - 2}
+                </span>
+              `
+            : "";
+
+
+    const companyHtml =
+        companies.length
+            ? `
+                <div
+                    class="company-list"
+                    title="${escapeHtml(
+                        companies
+                            .map(
+                                company =>
+                                    company.company_name
+                            )
+                            .join(", ")
+                    )}"
+                >
+                    ${visibleCompanies}
+                    ${moreCompanies}
+                </div>
+              `
+            : `
+                <span
+                    style="color:var(--text-light)"
+                >
+                    —
+                </span>
+              `;
+
+
+    return `
+
+        <tr>
+
+            <td>
+
+                <div class="user-name">
+
+                    <strong>
+                        ${escapeHtml(
+                            fullName ||
+                            user.username ||
+                            "-"
+                        )}
+                    </strong>
+
+                    ${
+                        fullName
+                            ? `
+                                <small>
+                                    ${escapeHtml(
+                                        user.username ||
+                                        ""
+                                    )}
+                                </small>
+                              `
+                            : ""
+                    }
+
+                    ${
+                        user.must_change_password
+                            ? `
+                                <small
+                                    class="password-warning"
+                                >
+                                    Şifre değişikliği bekleniyor
+                                </small>
+                              `
+                            : ""
+                    }
+
+                </div>
+
+            </td>
+
+
+            <td>
+                ${escapeHtml(
+                    user.email || "-"
+                )}
+            </td>
+
+
+            <td>
+
+                <span class="role-badge-table">
+                    ${escapeHtml(
+                        user.role ||
+                        "VIEWER"
+                    )}
+                </span>
+
+            </td>
+
+
+            <td>
+                ${getStatusBadge(
+                    user.status
+                )}
+            </td>
+
+
+            <td>
+                ${companyHtml}
+            </td>
+
+
+            <td>
+                ${formatDateShort(
+                    user.created_at
+                )}
+            </td>
+
+
+            <td>
+
+                <button
+                    class="btn btn-sm btn-outline"
+                    onclick="editUser('${user.id}')"
+                >
+                    Düzenle
+                </button>
+
+            </td>
+
+        </tr>
+
+    `;
+
+}
+
+
+/* ============================================================
+   SEARCH
+============================================================ */
+
+function onUserSearchInput() {
+
+    debouncedUserSearch();
+
+}
+
+
+const debouncedUserSearch =
+    debounce(
+        () => {
+
+            usersState.search =
+                document
+                    .getElementById(
+                        "userSearchInput"
+                    )
+                    .value
+                    .trim();
+
+
+            usersState.offset = 0;
+
+
+            loadUsers();
+
+        },
+        350
+    );
+
+
+function changeUsersPage(
+    newOffset
+) {
+
+    usersState.offset =
+        newOffset;
+
+    loadUsers();
+
+}
+
+
+/* ============================================================
+   EDIT USER
+============================================================ */
+
+function editUser(userId) {
+
+    const user =
+        usersMap[userId];
+
+
+    if (!user) {
+
+        alert(
+            "Kullanıcı verileri bulunamadı. Lütfen listeyi yenileyin."
+        );
+
+        return;
+
+    }
+
+
+    const currentCompanyIds =
+        (user.companies || [])
+            .map(
+                company =>
+                    company.company_id
+            );
+
+
+    const companyOptions =
+        allCompanies
+            .map(company => `
+
+                <option
+                    value="${company.id}"
+                    ${
+                        currentCompanyIds
+                            .includes(
+                                company.id
+                            )
+                            ? "selected"
+                            : ""
+                    }
+                >
+                    ${escapeHtml(
+                        company.name
+                    )}
+                    (${escapeHtml(
+                        company.code
+                    )})
+                </option>
+
+            `)
+            .join("");
+
+
+    let roleOptions =
+        roleOptionsHtml(
+            user.role
+        );
+
+
+    if (
+        !getAssignableRoles()
+            .includes(
+                user.role
+            )
+    ) {
+
+        roleOptions = `
+
+            <option
+                value="${escapeHtml(
+                    user.role
+                )}"
+                selected
+            >
+                ${escapeHtml(
+                    user.role
+                )}
+                (değiştirilemez)
+            </option>
+
+        ` + roleOptions;
+
+    }
+
+
+    const content = `
+
+        <form
+            id="editUserForm"
+            onsubmit="saveUserEdit(event,'${user.id}')"
+        >
+
+            <div class="form-group">
+
+                <label>
+                    Kullanıcı Adı
+                </label>
+
+                <input
+                    type="text"
+                    value="${escapeHtml(
+                        user.username
+                    )}"
+                    readonly
+                    style="background:var(--paper)"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Ad</label>
+
+                <input
+                    type="text"
+                    name="first_name"
+                    maxlength="100"
+                    value="${escapeHtml(
+                        user.first_name ||
+                        ""
+                    )}"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Soyad</label>
+
+                <input
+                    type="text"
+                    name="last_name"
+                    maxlength="100"
+                    value="${escapeHtml(
+                        user.last_name ||
+                        ""
+                    )}"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>E-posta</label>
+
+                <input
+                    type="email"
+                    name="email"
+                    maxlength="150"
+                    value="${escapeHtml(
+                        user.email ||
+                        ""
+                    )}"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Rol</label>
+
+                <select
+                    name="role"
+                    required
+                >
+                    ${roleOptions}
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Durum</label>
+
+                <select
+                    name="status"
+                    required
+                >
+
+                    <option
+                        value="ACTIVE"
+                        ${
+                            user.status ===
+                            "ACTIVE"
+                                ? "selected"
+                                : ""
+                        }
+                    >
+                        ACTIVE
+                    </option>
+
+                    <option
+                        value="INACTIVE"
+                        ${
+                            user.status ===
+                            "INACTIVE"
+                                ? "selected"
+                                : ""
+                        }
+                    >
+                        INACTIVE
+                    </option>
+
+                </select>
+
+                <small>
+                    Pasif kullanıcı giriş yapamaz ve
+                    lisans kullanıcı limitine dahil edilmez.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Erişebildiği Şirketler
+                </label>
+
+                <select
+                    name="company_ids"
+                    multiple
+                    size="6"
+                >
+                    ${companyOptions}
+                </select>
+
+                <div class="company-selector-help">
+                    Birden fazla şirket seçilebilir.
+                    Seçim bırakılmazsa tüm şirket
+                    atamaları kaldırılır.
+                </div>
+
+            </div>
+
+
+            <div
+                id="editFormError"
+                style="
+                    color:var(--danger);
+                    margin-bottom:12px;
+                    display:none;
+                "
+            ></div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="editSubmitBtn"
+                >
+                    Değişiklikleri Kaydet
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    showModal(
+        `Kullanıcı Düzenle: ${
+            escapeHtml(
+                user.username
+            )
+        }`,
+        content
+    );
+
+}
+
+
+/* ============================================================
+   SAVE EDIT
+============================================================ */
+
+async function saveUserEdit(
+    event,
+    userId
+) {
+
+    event.preventDefault();
+
+
+    if (isEditSubmitting) {
+        return;
+    }
+
+
+    const form =
+        event.target;
+
+
+    const submitBtn =
+        document.getElementById(
+            "editSubmitBtn"
+        );
+
+
+    const errorDiv =
+        document.getElementById(
+            "editFormError"
+        );
+
+
+    isEditSubmitting = true;
+
+    submitBtn.disabled = true;
+
+    submitBtn.textContent =
+        "Kaydediliyor...";
+
+    errorDiv.style.display =
+        "none";
+
+
+    const company_ids =
+        Array
+            .from(
+                form
+                    .company_ids
+                    .selectedOptions
+            )
+            .map(
+                option =>
+                    option.value
+            );
+
+
+    const data = {
+
+        role:
+            form.role.value,
+
+        status:
+            form.status.value,
+
+        company_ids,
+
+        first_name:
+            form
+                .first_name
+                .value
+                .trim(),
+
+        last_name:
+            form
+                .last_name
+                .value
+                .trim(),
+
+        email:
+            form
+                .email
+                .value
+                .trim()
+
+    };
+
+
+    try {
+
+        const result =
+            await AdminAPI.updateUser(
+                userId,
+                data
+            );
+
+
+        if (result.success) {
+
+            closeModal();
+
+            await loadUsers();
+
+        } else {
+
+            errorDiv.textContent =
+                describeApiError(
+                    result
+                );
+
+            errorDiv.style.display =
+                "block";
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Update user error:",
+            error
+        );
+
+
+        errorDiv.textContent =
+            "Kullanıcı güncellenirken hata oluştu: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+    } finally {
+
+        isEditSubmitting =
+            false;
+
+        submitBtn.disabled =
+            false;
+
+        submitBtn.textContent =
+            "Değişiklikleri Kaydet";
+
+    }
+
+}
+
+
+/* ============================================================
+   CREATE USER
+============================================================ */
+
+function showCreateUserModal() {
+
+    const companyOptions =
+        allCompanies
+            .map(company => `
+
+                <option
+                    value="${company.id}"
+                >
+                    ${escapeHtml(
+                        company.name
+                    )}
+                    (${escapeHtml(
+                        company.code
+                    )})
+                </option>
+
+            `)
+            .join("");
+
+
+    const roleOptions =
+        roleOptionsHtml();
+
+
+    const content = `
+
+        <form
+            id="createUserForm"
+            onsubmit="createUser(event)"
+        >
+
+            <div class="form-group">
+
+                <label>Ad</label>
+
+                <input
+                    type="text"
+                    name="first_name"
+                    maxlength="100"
+                    placeholder="Ad"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Soyad</label>
+
+                <input
+                    type="text"
+                    name="last_name"
+                    maxlength="100"
+                    placeholder="Soyad"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    E-posta *
+                </label>
+
+                <input
+                    type="email"
+                    name="email"
+                    required
+                    maxlength="150"
+                    placeholder="kullanici@sirket.com"
+                >
+
+                <small>
+                    Giriş kimliği olarak kullanılacaktır.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    İlk Şifre *
+                </label>
+
+                <input
+                    type="password"
+                    name="password"
+                    required
+                    minlength="10"
+                    autocomplete="new-password"
+                    placeholder="En az 10 karakter"
+                >
+
+                <small>
+                    Kullanıcı ilk girişten sonra
+                    parola değişikliğine yönlendirilebilir.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Rol</label>
+
+                <select
+                    name="role"
+                    required
+                >
+                    ${roleOptions}
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Durum</label>
+
+                <select
+                    name="status"
+                    required
+                >
+
+                    <option value="ACTIVE">
+                        ACTIVE
+                    </option>
+
+                    <option value="INACTIVE">
+                        INACTIVE
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Erişebildiği Şirketler
+                </label>
+
+                <select
+                    name="company_ids"
+                    multiple
+                    size="6"
+                >
+                    ${companyOptions}
+                </select>
+
+                <div class="company-selector-help">
+                    Kullanıcıya bir veya birden fazla
+                    şirket erişimi verebilirsiniz.
+                </div>
+
+            </div>
+
+
+            <div
+                id="createUserError"
+                style="
+                    color:var(--danger);
+                    margin-bottom:12px;
+                    display:none;
+                "
+            ></div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="createUserSubmitBtn"
+                >
+                    Kullanıcı Oluştur
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    showModal(
+        "Yeni Kullanıcı",
+        content
+    );
+
+}
+
+
+/* ============================================================
+   SUBMIT CREATE USER
+============================================================ */
+
+async function createUser(event) {
+
+    event.preventDefault();
+
+
+    if (isCreateSubmitting) {
+        return;
+    }
+
+
+    const form =
+        event.target;
+
+
+    const errorDiv =
+        document.getElementById(
+            "createUserError"
+        );
+
+
+    const submitBtn =
+        document.getElementById(
+            "createUserSubmitBtn"
+        );
+
+
+    isCreateSubmitting =
+        true;
+
+
+    submitBtn.disabled =
+        true;
+
+
+    submitBtn.textContent =
+        "Oluşturuluyor...";
+
+
+    errorDiv.style.display =
+        "none";
+
+
+    const company_ids =
+        Array
+            .from(
+                form
+                    .company_ids
+                    .selectedOptions
+            )
+            .map(
+                option =>
+                    option.value
+            );
+
+
+    const data = {
+
+        email:
+            form
+                .email
+                .value
+                .trim(),
+
+        first_name:
+            form
+                .first_name
+                .value
+                .trim(),
+
+        last_name:
+            form
+                .last_name
+                .value
+                .trim(),
+
+        password:
+            form.password.value,
+
+        role:
+            form.role.value,
+
+        status:
+            form.status.value,
+
+        company_ids
+
+    };
+
+
+    try {
+
+        const result =
+            await AdminAPI.createUser(
+                data
+            );
+
+
+        if (result.success) {
+
+            closeModal();
+
+            usersState.offset = 0;
+
+            await loadUsers();
+
+        } else {
+
+            errorDiv.textContent =
+                describeApiError(
+                    result
+                );
+
+
+            errorDiv.style.display =
+                "block";
+
+        }
+
+    } catch (error) {
+
+        errorDiv.textContent =
+            "Kullanıcı oluşturulurken hata oluştu: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+    } finally {
+
+        isCreateSubmitting =
+            false;
+
+
+        submitBtn.disabled =
+            false;
+
+
+        submitBtn.textContent =
+            "Kullanıcı Oluştur";
+
+    }
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth([
+                "ADMIN",
+                "ACCOUNTANT_MANAGER"
+            ]);
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        await loadCompaniesForSelect();
+
+        await loadUsers();
+
+    }
+);
+
+</script>
+
 </body>
 </html>
