@@ -3,404 +3,2389 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enflasyon Endeksleri - Admin Panel</title>
-    <link rel="stylesheet" href="css/admin.css">
-    <style>
-        .badge-rejected{background:var(--seal-soft);color:var(--danger)}
-        .inflation-forms{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-        @media(max-width:900px){.inflation-forms{grid-template-columns:1fr}}
-        .form-card{background:#fff;border:1px solid var(--border,#e5e0d8);border-radius:6px;padding:18px}
-        .form-card h3{margin:0 0 6px;font-size:15px}
-        .form-card p.hint{margin:0 0 14px;font-size:12px;color:var(--text-light)}
-        .form-row{display:flex;gap:10px;margin-bottom:10px}
-        .form-row input{flex:1;padding:9px 10px;border:1px solid #d4d0c8;border-radius:4px;font-size:14px}
-        .form-card textarea{width:100%;min-height:120px;padding:9px 10px;border:1px solid #d4d0c8;border-radius:4px;font:13px/1.5 monospace;box-sizing:border-box;resize:vertical}
-        .form-msg{margin-top:10px;font-size:13px}
-        .form-msg.ok{color:var(--success,#3d7057)}
-        .form-msg.err{color:var(--danger,#9d453b)}
-        .filter-bar{display:flex;gap:10px;align-items:center;margin:0 0 12px;flex-wrap:wrap}
-        .filter-bar select{padding:7px 10px;border:1px solid #d4d0c8;border-radius:4px}
-        .row-errors{list-style:none;margin:0;padding:0;font-size:12px;color:var(--danger,#9d453b)}
-        .row-errors li{padding:3px 0;border-bottom:1px dashed #eee}
+    <title>Enflasyon Endeksleri - LeaseQant</title>
 
-        /* ------------------------------------------------------
-         * MOBİL KART GÖRÜNÜMÜ — 8 kolonlu tablo dar ekranlarda
-         * (ör. iPhone) .table-container'ın overflow-x:auto scroll'u
-         * sayfayı SAĞA kaymış halde açılışa neden oluyordu (başlık ve
-         * ilk kolonlar viewport dışında kalıyordu). 680px altında
-         * tabloyu klasik yatay-scroll yerine dikey kart listesine
-         * çeviriyoruz — her satır bir kart, her hücre kendi etiketiyle
-         * (data-label) alt alta gösterilir. thead görsel olarak
-         * gizlenir (erişilebilirlik için DOM'da kalır).
-         * ------------------------------------------------------ */
+    <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .inflation-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin: 0 0 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            margin: 0;
+            max-width: 850px;
+            color: var(--text-light);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .inflation-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.pending {
+            border-left: 3px solid var(--warning);
+        }
+
+        .summary-card.verified {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.rejected {
+            border-left: 3px solid var(--danger);
+        }
+
+        .summary-value {
+            font: 600 23px var(--mono);
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .calculation-notice {
+            padding: 13px 15px;
+            color: var(--text);
+            background: rgba(176, 141, 87, .07);
+            border: 1px solid rgba(176, 141, 87, .20);
+            border-radius: var(--radius);
+            font-size: 10px;
+            line-height: 1.7;
+        }
+
+        .calculation-notice strong {
+            color: var(--accent);
+        }
+
+        .inflation-forms {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-card {
+            min-width: 0;
+            padding: 18px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .form-card.full {
+            grid-column: 1 / -1;
+        }
+
+        .form-card-header {
+            margin-bottom: 15px;
+        }
+
+        .form-card-header h3 {
+            margin: 0 0 5px;
+            font-size: 14px;
+        }
+
+        .form-card-header p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 10px;
+            line-height: 1.6;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .form-field label {
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .form-field input,
+        .form-field textarea {
+            width: 100%;
+            box-sizing: border-box;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .form-field input {
+            height: 40px;
+            padding: 0 11px;
+        }
+
+        .form-field textarea {
+            min-height: 130px;
+            padding: 10px 11px;
+            resize: vertical;
+            font: 11px/1.6 var(--mono);
+        }
+
+        .bulk-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+
+        .form-msg {
+            display: none;
+            padding: 9px 11px;
+            margin-top: 11px;
+            border-radius: 7px;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .form-msg.ok {
+            display: block;
+            color: var(--success);
+            background: rgba(39, 112, 78, .06);
+            border: 1px solid rgba(39, 112, 78, .15);
+        }
+
+        .form-msg.err {
+            display: block;
+            color: var(--danger);
+            background: rgba(143, 42, 32, .06);
+            border: 1px solid rgba(143, 42, 32, .15);
+        }
+
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-wrap: wrap;
+        }
+
+        .filter-bar select {
+            height: 36px;
+            padding: 0 10px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .record-count {
+            color: var(--text-light);
+            font: 10px var(--mono);
+        }
+
+        .badge-rejected {
+            color: var(--danger);
+            background: rgba(143, 42, 32, .08);
+        }
+
+        .badge-verified {
+            color: var(--success);
+            background: rgba(39, 112, 78, .08);
+        }
+
+        .badge-pending-custom {
+            color: var(--warning);
+            background: rgba(176, 141, 87, .10);
+        }
+
+        .index-value {
+            font: 600 10px var(--mono);
+            white-space: nowrap;
+        }
+
+        .month-value {
+            font: 600 10px var(--mono);
+            white-space: nowrap;
+        }
+
+        .source-label {
+            display: inline-block;
+            max-width: 180px;
+            overflow: hidden;
+            color: var(--text-light);
+            font-size: 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .reject-info {
+            padding: 10px 12px;
+            margin-bottom: 13px;
+            color: var(--text-light);
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+            line-height: 1.6;
+        }
+
+        .modal-error {
+            display: none;
+            padding: 9px 11px;
+            margin: 12px 0;
+            color: var(--danger);
+            background: rgba(143, 42, 32, .06);
+            border: 1px solid rgba(143, 42, 32, .15);
+            border-radius: 7px;
+            font-size: 10px;
+        }
+
+        @media (max-width: 1000px) {
+            .inflation-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .inflation-forms {
+                grid-template-columns: 1fr;
+            }
+
+            .form-card.full {
+                grid-column: auto;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .form-row .btn {
+                width: 100%;
+            }
+
+            .bulk-actions .btn {
+                width: 100%;
+            }
+        }
+
+        /* Mobil kart görünümü */
         @media (max-width: 680px) {
-            #inflationIndicesTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-            #inflationIndicesTable, #inflationIndicesTable tbody, #inflationIndicesTable tr, #inflationIndicesTable td {
-                display: block; width: 100%;
+            .inflation-summary {
+                grid-template-columns: 1fr 1fr;
             }
-            #inflationIndicesTable { min-width: 0; }
-            #inflationIndicesTable tr {
-                border: 1px solid #e5e0d8; border-radius: 6px; margin-bottom: 12px; padding: 10px 12px;
+
+            #inflationIndicesTable thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
             }
+
+            #inflationIndicesTable,
+            #inflationIndicesTable tbody,
+            #inflationIndicesTable tr,
             #inflationIndicesTable td {
-                border: 0; padding: 6px 0; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+                display: block;
+                width: 100%;
             }
+
+            #inflationIndicesTable {
+                min-width: 0;
+            }
+
+            #inflationIndicesTable tr {
+                box-sizing: border-box;
+                padding: 10px 12px;
+                margin-bottom: 12px;
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+
+            #inflationIndicesTable td {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+                gap: 12px;
+                padding: 6px 0;
+                border: 0;
+            }
+
             #inflationIndicesTable td::before {
-                content: attr(data-label); font: 500 10px 'JetBrains Mono', monospace; text-transform: uppercase;
-                color: var(--text-light, #68717f); letter-spacing: .05em; flex-shrink: 0;
+                content: attr(data-label);
+                flex-shrink: 0;
+                color: var(--text-light);
+                font: 500 9px var(--mono);
+                text-transform: uppercase;
+                letter-spacing: .04em;
             }
-            #inflationIndicesTable td[data-label="Actions"] { justify-content: flex-end; gap: 8px; }
-            .table-container { overflow-x: hidden; }
+
+            #inflationIndicesTable td[data-label="İşlemler"] {
+                justify-content: flex-end;
+            }
+
+            #inflationIndicesTable td[data-label="İşlemler"]::before {
+                margin-right: auto;
+            }
+
+            .table-container {
+                overflow-x: hidden;
+            }
+
+            .source-label {
+                max-width: 190px;
+            }
         }
     </style>
 </head>
+
 <body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
-            <a href="faq.html">❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html" class="active">📈 Enflasyon Endeksleri</a>
-            <a href="fx-rates.html">
-                <span class="icon">💱</span> TCMB Kurları
-            </a>
-            <a href="audit.html">📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">Enflasyon Endeksleri</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+<nav class="sidebar" id="sidebar">
 
-        <div class="page-content">
-            <p style="color:var(--text-light); font-size:13px; margin:-4px 0 16px;">
-                Resmî TÜİK SDMX kaynağından aylık toplam TÜFE endeksi çekilebilir veya gerektiğinde
-                manuel giriş yapılabilir. Her yeni kayıt <strong>PENDING</strong> olarak başlar; yalnızca
-                <strong>VERIFIED</strong> ve aktif (supersede edilmemiş) kayıtlar TFRS16/TMS29
-                restatement hesaplamasına girer. Aynı ay için yeni bir değer girmek, eski kaydı
-                overwrite etmez — eski kayıt supersede edilir ve yeni bir kayıt oluşturulur.
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+        <small style="opacity:.7">Admin</small>
+    </div>
+
+    <div class="sidebar-nav">
+
+        <div class="nav-label">Yönetim</div>
+
+        <a href="index.html">📊 Dashboard</a>
+        <a href="companies.html">🏢 Companies</a>
+        <a href="users.html">👤 Users</a>
+        <a href="licenses.html">🔑 Licenses</a>
+        <a href="plans.html">📦 Plans</a>
+        <a href="faq.html">❓ SSS</a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a
+            href="inflation-indices.html"
+            class="active"
+        >
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            💱 TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            📋 Audit Log
+        </a>
+
+    </div>
+
+</nav>
+
+
+<div class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        Enflasyon Endeksleri
+    </div>
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="inflation-page">
+
+    <!-- INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>
+                TMS 29 Enflasyon Endeksleri
+            </h1>
+
+            <p>
+                TÜİK kaynağından aylık TÜFE endekslerini alın,
+                manuel veri ekleyin ve hesaplamaya alınacak
+                kayıtları doğrulayın.
             </p>
 
-            <div class="inflation-forms">
-                <div class="form-card">
-                    <h3>TÜİK'ten Otomatik Getir</h3>
-                    <p class="hint">Resmî aylık toplam TÜFE endeksi (2025=100). Sonuçlar PENDING oluşturulur.</p>
-                    <div class="form-row">
-                        <input id="syncStartMonth" type="month" aria-label="Başlangıç ayı">
-                        <input id="syncEndMonth" type="month" aria-label="Bitiş ayı">
-                        <button class="btn btn-primary" id="syncSubmit" onclick="syncFromTuik()">TÜİK'ten Getir</button>
-                    </div>
-                    <div id="syncMsg" class="form-msg"></div>
-                </div>
-
-                <div class="form-card">
-                    <h3>Tek Endeks Girişi</h3>
-                    <p class="hint">Örn. Period: 2026-07, Index: 3500.25</p>
-                    <div class="form-row">
-                        <input id="singleMonth" placeholder="YYYY-MM" maxlength="7">
-                        <input id="singleValue" type="number" step="0.0001" placeholder="Endeks değeri">
-                        <button class="btn btn-primary" id="singleSubmit" onclick="submitSingleEntry()">Kaydet</button>
-                    </div>
-                    <div id="singleMsg" class="form-msg"></div>
-                </div>
-
-                <div class="form-card">
-                    <h3>Toplu Endeks Girişi</h3>
-                    <p class="hint">Her satır: "YYYY-MM &lt;boşluk/tab&gt; değer" — örn. 2025-01&#9;2648.12</p>
-                    <textarea id="bulkText" placeholder="2025-01&#9;2648.12&#10;2025-02&#9;2701.34&#10;2025-03&#9;2756.81"></textarea>
-                    <div class="form-row" style="margin-top:10px;margin-bottom:0;">
-                        <button class="btn btn-primary" id="bulkSubmit" onclick="submitBulkEntry()">Toplu Kaydet</button>
-                    </div>
-                    <div id="bulkMsg" class="form-msg"></div>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>Kayıtlar</h3>
-                    <div class="filter-bar">
-                        <select id="statusFilter" onchange="loadIndices()">
-                            <option value="">Tüm durumlar</option>
-                            <option value="PENDING">PENDING</option>
-                            <option value="VERIFIED">VERIFIED</option>
-                            <option value="REJECTED">REJECTED</option>
-                        </select>
-                        <button class="btn btn-sm btn-outline" onclick="loadIndices()">Yenile</button>
-                    </div>
-                </div>
-                <table id="inflationIndicesTable">
-                    <thead>
-                        <tr>
-                            <th>Ay</th>
-                            <th>Endeks Değeri</th>
-                            <th>Kaynak</th>
-                            <th>Durum</th>
-                            <th>Giren</th>
-                            <th>Doğrulayan</th>
-                            <th>Oluşturulma</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="indicesTableBody">
-                        <tr><td colspan="8" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
         </div>
+
+        <button
+            class="btn btn-outline"
+            onclick="loadIndices()"
+        >
+            ↻ Yenile
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="inflation-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryTotal"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Gösterilen Kayıt
+            </div>
+
+        </div>
+
+
+        <div class="summary-card pending">
+
+            <div
+                class="summary-value"
+                id="summaryPending"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Doğrulama Bekleyen
+            </div>
+
+        </div>
+
+
+        <div class="summary-card verified">
+
+            <div
+                class="summary-value"
+                id="summaryVerified"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Doğrulanmış
+            </div>
+
+        </div>
+
+
+        <div class="summary-card rejected">
+
+            <div
+                class="summary-value"
+                id="summaryRejected"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Reddedilmiş
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ACCOUNTING NOTICE -->
+
+    <section class="calculation-notice">
+
+        <strong>Hesaplama kontrolü:</strong>
+
+        Yeni endeks kayıtları <strong>PENDING</strong> olarak oluşturulur.
+
+        Yalnızca <strong>VERIFIED</strong> ve aktif
+        (supersede edilmemiş) kayıtlar TFRS16 / TMS29
+        yeniden ifade hesaplamasına dahil edilir.
+
+        Aynı ay için yeni değer girildiğinde mevcut kayıt
+        overwrite edilmez; eski kayıt supersede edilir.
+
+    </section>
+
+
+    <!-- FORMS -->
+
+    <section class="inflation-forms">
+
+        <!-- TÜİK -->
+
+        <div class="form-card">
+
+            <div class="form-card-header">
+
+                <h3>
+                    TÜİK'ten Otomatik Getir
+                </h3>
+
+                <p>
+                    Resmî aylık toplam TÜFE endeksi (2025=100).
+                    Oluşturulan kayıtlar doğrulama bekler.
+                    Tek seferde en fazla 36 ay çekilebilir.
+                </p>
+
+            </div>
+
+
+            <div class="form-row">
+
+                <div class="form-field">
+
+                    <label>
+                        Başlangıç Ayı
+                    </label>
+
+                    <input
+                        id="syncStartMonth"
+                        type="month"
+                    >
+
+                </div>
+
+
+                <div class="form-field">
+
+                    <label>
+                        Bitiş Ayı
+                    </label>
+
+                    <input
+                        id="syncEndMonth"
+                        type="month"
+                    >
+
+                </div>
+
+
+                <button
+                    class="btn btn-primary"
+                    id="syncSubmit"
+                    type="button"
+                    onclick="syncFromTuik()"
+                >
+                    TÜİK'ten Getir
+                </button>
+
+            </div>
+
+
+            <div
+                id="syncMsg"
+                class="form-msg"
+            ></div>
+
+        </div>
+
+
+        <!-- SINGLE -->
+
+        <div class="form-card">
+
+            <div class="form-card-header">
+
+                <h3>
+                    Tek Endeks Girişi
+                </h3>
+
+                <p>
+                    Bir aya ait endeks değerini manuel olarak ekleyin.
+                    Kayıt PENDING durumunda oluşturulur.
+                </p>
+
+            </div>
+
+
+            <div class="form-row">
+
+                <div class="form-field">
+
+                    <label>
+                        Ay
+                    </label>
+
+                    <input
+                        id="singleMonth"
+                        type="month"
+                    >
+
+                </div>
+
+
+                <div class="form-field">
+
+                    <label>
+                        Endeks Değeri
+                    </label>
+
+                    <input
+                        id="singleValue"
+                        type="number"
+                        step="0.0001"
+                        min="0.0001"
+                        placeholder="Örn. 3500.2500"
+                    >
+
+                </div>
+
+
+                <button
+                    class="btn btn-primary"
+                    id="singleSubmit"
+                    type="button"
+                    onclick="submitSingleEntry()"
+                >
+                    Kaydet
+                </button>
+
+            </div>
+
+
+            <div
+                id="singleMsg"
+                class="form-msg"
+            ></div>
+
+        </div>
+
+
+        <!-- BULK -->
+
+        <div class="form-card full">
+
+            <div class="form-card-header">
+
+                <h3>
+                    Toplu Endeks Girişi
+                </h3>
+
+                <p>
+                    Her satıra bir ay ve endeks değeri girin.
+                    Format:
+                    <strong>YYYY-MM [boşluk / tab] değer</strong>
+                </p>
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label>
+                    Endeks Verileri
+                </label>
+
+                <textarea
+                    id="bulkText"
+                    spellcheck="false"
+                    placeholder="2025-01	2648.1200
+2025-02	2701.3400
+2025-03	2756.8100"
+                ></textarea>
+
+            </div>
+
+
+            <div class="bulk-actions">
+
+                <button
+                    class="btn btn-primary"
+                    id="bulkSubmit"
+                    type="button"
+                    onclick="submitBulkEntry()"
+                >
+                    Toplu Kaydet
+                </button>
+
+            </div>
+
+
+            <div
+                id="bulkMsg"
+                class="form-msg"
+            ></div>
+
+        </div>
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header">
+
+            <h3>
+                Endeks Kayıtları
+            </h3>
+
+
+            <div class="filter-bar">
+
+                <select
+                    id="statusFilter"
+                    onchange="loadIndices()"
+                >
+                    <option value="">
+                        Tüm Durumlar
+                    </option>
+
+                    <option value="PENDING">
+                        Doğrulama Bekleyen
+                    </option>
+
+                    <option value="VERIFIED">
+                        Doğrulanmış
+                    </option>
+
+                    <option value="REJECTED">
+                        Reddedilmiş
+                    </option>
+                </select>
+
+
+                <span
+                    class="record-count"
+                    id="recordCount"
+                >
+                    —
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <table id="inflationIndicesTable">
+
+            <thead>
+
+            <tr>
+                <th>Ay</th>
+                <th>Endeks Değeri</th>
+                <th>Kaynak</th>
+                <th>Durum</th>
+                <th>Giren</th>
+                <th>Doğrulayan</th>
+                <th>Oluşturulma</th>
+                <th>İşlemler</th>
+            </tr>
+
+            </thead>
+
+
+            <tbody id="indicesTableBody">
+
+            <tr>
+
+                <td
+                    colspan="8"
+                    class="table-state"
+                >
+                    Endeks kayıtları yükleniyor...
+                </td>
+
+            </tr>
+
+            </tbody>
+
+        </table>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Endeks İşlemi
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
     </div>
 
-    <!-- Modal (reddetme sebebi için) -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 id="modalTitle">Kaydı Reddet</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modalBody"></div>
-        </div>
-    </div>
+    <div id="modalBody"></div>
 
-    <script src="../js/admin.js"></script>
-    <script>
-        const MONTH_FORMAT = /^\d{4}-(0[1-9]|1[0-2])$/;
+</div>
 
-        // getStatusBadge'in map'i VERIFIED'ı tanımıyor (o companies/licenses
-        // için yazıldı) — kendi haritamızı burada uyguluyoruz, mevcut
-        // fonksiyonu (diğer sayfalar için) değiştirmeden.
-        function inflationStatusBadge(status) {
-            const map = {
-                VERIFIED: 'badge-active',
-                PENDING: 'badge-pending',
-                REJECTED: 'badge-rejected'
-            };
-            return `<span class="badge ${map[status] || 'badge-inactive'}">${status || 'UNKNOWN'}</span>`;
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+const MONTH_FORMAT =
+    /^\d{4}-(0[1-9]|1[0-2])$/;
+
+
+let inflationIndicesCache = [];
+
+
+/* ============================================================
+   STATUS
+============================================================ */
+
+function inflationStatusBadge(status) {
+
+    const labels = {
+
+        VERIFIED: "Doğrulanmış",
+        PENDING: "Bekliyor",
+        REJECTED: "Reddedilmiş"
+
+    };
+
+
+    const classes = {
+
+        VERIFIED: "badge-verified",
+        PENDING: "badge-pending-custom",
+        REJECTED: "badge-rejected"
+
+    };
+
+
+    return `
+
+        <span
+            class="badge ${
+                classes[status] ||
+                "badge-inactive"
+            }"
+        >
+            ${escapeHtml(
+                labels[status] ||
+                status ||
+                "Bilinmiyor"
+            )}
+        </span>
+
+    `;
+
+}
+
+
+/* ============================================================
+   DATE
+============================================================ */
+
+function formatDateTime(value) {
+
+    if (!value) {
+        return "—";
+    }
+
+
+    const date =
+        new Date(value);
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+        return "—";
+    }
+
+
+    return date.toLocaleString(
+        "tr-TR"
+    );
+
+}
+
+
+/* ============================================================
+   FORM MESSAGE
+============================================================ */
+
+function setFormMsg(
+    elementId,
+    message,
+    isError
+) {
+
+    const element =
+        document.getElementById(
+            elementId
+        );
+
+
+    element.textContent =
+        message || "";
+
+
+    element.className =
+        message
+            ? "form-msg " +
+              (
+                  isError
+                      ? "err"
+                      : "ok"
+              )
+            : "form-msg";
+
+}
+
+
+/* ============================================================
+   LOAD
+============================================================ */
+
+async function loadIndices() {
+
+    const tbody =
+        document.getElementById(
+            "indicesTableBody"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="8"
+                class="table-state"
+            >
+                Endeks kayıtları yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    const status =
+        document.getElementById(
+            "statusFilter"
+        ).value;
+
+
+    const params =
+        status
+            ? { status }
+            : {};
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .getInflationIndices(
+                    params
+                );
+
+
+        if (!result.success) {
+
+            tbody.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        class="table-state error"
+                    >
+                        ${escapeHtml(
+                            describeApiError(
+                                result
+                            )
+                        )}
+                    </td>
+
+                </tr>
+
+            `;
+
+
+            resetSummary();
+
+            return;
+
         }
 
-        function formatDateTime(v) {
-            if (!v) return '-';
-            const d = new Date(v);
-            if (isNaN(d.getTime())) return '-';
-            return d.toLocaleString('tr-TR');
+
+        inflationIndicesCache =
+            Array.isArray(result.data)
+                ? result.data
+                : [];
+
+
+        renderSummary();
+
+        renderIndices();
+
+
+    } catch (error) {
+
+        console.error(
+            "Load inflation indices error:",
+            error
+        );
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="8"
+                    class="table-state error"
+                >
+                    Endeks kayıtları yüklenemedi.
+                </td>
+
+            </tr>
+
+        `;
+
+
+        resetSummary();
+
+    }
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderSummary() {
+
+    const total =
+        inflationIndicesCache.length;
+
+
+    const pending =
+        inflationIndicesCache.filter(
+            item =>
+                item.verificationStatus ===
+                "PENDING"
+        ).length;
+
+
+    const verified =
+        inflationIndicesCache.filter(
+            item =>
+                item.verificationStatus ===
+                "VERIFIED"
+        ).length;
+
+
+    const rejected =
+        inflationIndicesCache.filter(
+            item =>
+                item.verificationStatus ===
+                "REJECTED"
+        ).length;
+
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        total;
+
+
+    document.getElementById(
+        "summaryPending"
+    ).textContent =
+        pending;
+
+
+    document.getElementById(
+        "summaryVerified"
+    ).textContent =
+        verified;
+
+
+    document.getElementById(
+        "summaryRejected"
+    ).textContent =
+        rejected;
+
+
+    document.getElementById(
+        "recordCount"
+    ).textContent =
+        `${total} kayıt`;
+
+}
+
+
+function resetSummary() {
+
+    [
+        "summaryTotal",
+        "summaryPending",
+        "summaryVerified",
+        "summaryRejected",
+        "recordCount"
+    ].forEach(
+        id => {
+
+            document.getElementById(
+                id
+            ).textContent = "—";
+
         }
+    );
 
-        async function loadIndices() {
-            const tbody = document.getElementById('indicesTableBody');
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-light);">Loading...</td></tr>`;
+}
 
-            const status = document.getElementById('statusFilter').value;
-            const params = status ? { status } : {};
 
-            const result = await AdminAPI.getInflationIndices(params);
-            if (!result.success) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);">Error: ${escapeHtml(result.error)}</td></tr>`;
-                return;
-            }
+/* ============================================================
+   RENDER
+============================================================ */
 
-            const rows = result.data || [];
-            if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-light);">Kayıt bulunamadı</td></tr>`;
-                return;
-            }
+function renderIndices() {
 
-            tbody.innerHTML = rows.map(r => {
-                const actions = r.verificationStatus === 'PENDING'
-                    ? `<button class="btn btn-sm btn-primary" onclick="handleVerify('${r.id}')">Verify</button>
-                       <button class="btn btn-sm btn-outline" onclick="openRejectModal('${r.id}')">Reject</button>`
-                    : '-';
+    const tbody =
+        document.getElementById(
+            "indicesTableBody"
+        );
+
+
+    if (!inflationIndicesCache.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="8"
+                    class="table-state"
+                >
+                    Seçilen kriterlere uygun endeks kaydı bulunamadı.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        inflationIndicesCache
+            .map(record => {
+
+                const numericValue =
+                    Number(record.value);
+
+
+                const valueText =
+                    Number.isFinite(
+                        numericValue
+                    )
+                        ? numericValue
+                            .toLocaleString(
+                                "tr-TR",
+                                {
+                                    minimumFractionDigits: 4,
+                                    maximumFractionDigits: 4
+                                }
+                            )
+                        : "—";
+
+
+                const actions =
+                    record.verificationStatus ===
+                    "PENDING"
+                        ? `
+
+                            <div class="action-group">
+
+                                <button
+                                    class="btn btn-sm btn-primary"
+                                    onclick="handleVerify(
+                                        '${record.id}',
+                                        this
+                                    )"
+                                >
+                                    Doğrula
+                                </button>
+
+                                <button
+                                    class="btn btn-sm btn-outline"
+                                    onclick="openRejectModal(
+                                        '${record.id}'
+                                    )"
+                                >
+                                    Reddet
+                                </button>
+
+                            </div>
+
+                          `
+                        : "—";
+
 
                 return `
+
                     <tr>
-                        <td data-label="Ay"><strong>${escapeHtml(r.month)}</strong></td>
-                        <td data-label="Endeks Değeri">${Number(r.value).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</td>
-                        <td data-label="Kaynak">${escapeHtml(r.source)}</td>
-                        <td data-label="Durum">${inflationStatusBadge(r.verificationStatus)}</td>
-                        <td data-label="Giren">${escapeHtml(r.retrievedBy || '-')}</td>
-                        <td data-label="Doğrulayan">${escapeHtml(r.verifiedBy || '-')}</td>
-                        <td data-label="Oluşturulma">${formatDateTime(r.createdAt)}</td>
-                        <td data-label="Actions">${actions}</td>
+
+                        <td data-label="Ay">
+
+                            <span class="month-value">
+                                ${escapeHtml(
+                                    record.month ||
+                                    "—"
+                                )}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Endeks Değeri">
+
+                            <span class="index-value">
+                                ${valueText}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Kaynak">
+
+                            <span
+                                class="source-label"
+                                title="${escapeHtml(
+                                    record.source ||
+                                    "—"
+                                )}"
+                            >
+                                ${escapeHtml(
+                                    record.source ||
+                                    "—"
+                                )}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Durum">
+
+                            ${inflationStatusBadge(
+                                record.verificationStatus
+                            )}
+
+                        </td>
+
+
+                        <td data-label="Giren">
+
+                            ${escapeHtml(
+                                record.retrievedBy ||
+                                "—"
+                            )}
+
+                        </td>
+
+
+                        <td data-label="Doğrulayan">
+
+                            ${escapeHtml(
+                                record.verifiedBy ||
+                                "—"
+                            )}
+
+                        </td>
+
+
+                        <td data-label="Oluşturulma">
+
+                            ${escapeHtml(
+                                formatDateTime(
+                                    record.createdAt
+                                )
+                            )}
+
+                        </td>
+
+
+                        <td data-label="İşlemler">
+
+                            ${actions}
+
+                        </td>
+
                     </tr>
+
                 `;
-            }).join('');
+
+            })
+            .join("");
+
+}
+
+
+/* ============================================================
+   VERIFY
+============================================================ */
+
+async function handleVerify(
+    id,
+    button
+) {
+
+    const record =
+        inflationIndicesCache.find(
+            item =>
+                String(item.id) ===
+                String(id)
+        );
+
+
+    if (!record) {
+
+        alert(
+            "Endeks kaydı bulunamadı. Listeyi yenileyin."
+        );
+
+        return;
+
+    }
+
+
+    const confirmed =
+        confirm(
+            `${record.month} dönemine ait ${Number(record.value).toLocaleString("tr-TR")} endeks değeri doğrulansın mı?\n\nDoğrulanan aktif kayıt TMS29 hesaplamalarında kullanılabilir.`
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    if (button) {
+
+        button.disabled =
+            true;
+
+
+        button.textContent =
+            "Doğrulanıyor...";
+
+    }
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .verifyInflationIndex(
+                    id
+                );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        async function handleVerify(id) {
-            const btn = event.target;
-            btn.disabled = true;
-            const result = await AdminAPI.verifyInflationIndex(id);
-            if (!result.success) {
-                alert('Doğrulama başarısız: ' + result.error);
-                btn.disabled = false;
-                return;
-            }
-            loadIndices();
+
+        await loadIndices();
+
+
+    } catch (error) {
+
+        alert(
+            "Doğrulama başarısız: " +
+            error.message
+        );
+
+
+        if (button) {
+
+            button.disabled =
+                false;
+
+
+            button.textContent =
+                "Doğrula";
+
         }
 
-        function openRejectModal(id) {
-            showModal('Kaydı Reddet', `
-                <div class="field" style="margin-bottom:14px;">
-                    <label style="display:block;font-size:12px;color:var(--text-light);margin-bottom:6px;">Sebep (opsiyonel)</label>
-                    <textarea id="rejectReason" style="width:100%;min-height:80px;padding:9px;border:1px solid #d4d0c8;border-radius:4px;box-sizing:border-box;"></textarea>
-                </div>
-                <button class="btn btn-primary" onclick="confirmReject('${id}')">Reddet</button>
-                <button class="btn btn-outline" onclick="closeModal()">Vazgeç</button>
-            `);
+    }
+
+}
+
+
+/* ============================================================
+   REJECT MODAL
+============================================================ */
+
+function openRejectModal(id) {
+
+    const record =
+        inflationIndicesCache.find(
+            item =>
+                String(item.id) ===
+                String(id)
+        );
+
+
+    if (!record) {
+
+        alert(
+            "Endeks kaydı bulunamadı. Listeyi yenileyin."
+        );
+
+        return;
+
+    }
+
+
+    const content = `
+
+        <div class="reject-info">
+
+            <strong>
+                ${escapeHtml(
+                    record.month ||
+                    "—"
+                )}
+            </strong>
+
+            dönemine ait
+
+            <strong>
+                ${Number(
+                    record.value
+                ).toLocaleString(
+                    "tr-TR",
+                    {
+                        minimumFractionDigits: 4,
+                        maximumFractionDigits: 4
+                    }
+                )}
+            </strong>
+
+            endeks kaydı reddedilecek.
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label>
+                Reddetme Sebebi
+            </label>
+
+            <textarea
+                id="rejectReason"
+                rows="4"
+                maxlength="1000"
+                placeholder="Opsiyonel açıklama"
+                style="
+                    width:100%;
+                    box-sizing:border-box;
+                    resize:vertical;
+                "
+            ></textarea>
+
+        </div>
+
+
+        <div
+            class="modal-error"
+            id="rejectError"
+        ></div>
+
+
+        <div class="modal-footer">
+
+            <button
+                type="button"
+                class="btn btn-outline"
+                onclick="closeModal()"
+            >
+                Vazgeç
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-primary"
+                id="rejectSubmitBtn"
+                onclick="confirmReject(
+                    '${record.id}'
+                )"
+            >
+                Kaydı Reddet
+            </button>
+
+        </div>
+
+    `;
+
+
+    showModal(
+        "Endeks Kaydını Reddet",
+        content
+    );
+
+}
+
+
+/* ============================================================
+   REJECT
+============================================================ */
+
+async function confirmReject(id) {
+
+    const reason =
+        document
+            .getElementById(
+                "rejectReason"
+            )
+            .value
+            .trim();
+
+
+    const errorDiv =
+        document.getElementById(
+            "rejectError"
+        );
+
+
+    const button =
+        document.getElementById(
+            "rejectSubmitBtn"
+        );
+
+
+    errorDiv.style.display =
+        "none";
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Reddediliyor...";
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .rejectInflationIndex(
+                    id,
+                    reason || undefined
+                );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        async function confirmReject(id) {
-            const reason = document.getElementById('rejectReason').value.trim();
-            const result = await AdminAPI.rejectInflationIndex(id, reason || undefined);
-            closeModal();
-            if (!result.success) {
-                alert('Reddetme başarısız: ' + result.error);
-                return;
-            }
-            loadIndices();
+
+        closeModal();
+
+        await loadIndices();
+
+
+    } catch (error) {
+
+        errorDiv.textContent =
+            "Reddetme işlemi başarısız: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "Kaydı Reddet";
+
+    }
+
+}
+
+
+/* ============================================================
+   MONTH RANGE
+============================================================ */
+
+function monthsBetween(
+    start,
+    end
+) {
+
+    if (
+        !MONTH_FORMAT.test(start) ||
+        !MONTH_FORMAT.test(end) ||
+        start > end
+    ) {
+        return null;
+    }
+
+
+    const months = [];
+
+
+    let year =
+        Number(
+            start.slice(
+                0,
+                4
+            )
+        );
+
+
+    let month =
+        Number(
+            start.slice(
+                5,
+                7
+            )
+        );
+
+
+    const endYear =
+        Number(
+            end.slice(
+                0,
+                4
+            )
+        );
+
+
+    const endMonth =
+        Number(
+            end.slice(
+                5,
+                7
+            )
+        );
+
+
+    while (
+        year < endYear ||
+        (
+            year === endYear &&
+            month <= endMonth
+        )
+    ) {
+
+        months.push(
+            `${year}-${String(month).padStart(2, "0")}`
+        );
+
+
+        if (
+            months.length > 36
+        ) {
+            return null;
         }
 
-        function setFormMsg(elId, message, isError) {
-            const el = document.getElementById(elId);
-            el.textContent = message;
-            el.className = 'form-msg ' + (isError ? 'err' : 'ok');
+
+        month += 1;
+
+
+        if (month === 13) {
+
+            month = 1;
+
+            year += 1;
+
         }
 
-        function monthsBetween(start, end) {
-            if (!MONTH_FORMAT.test(start) || !MONTH_FORMAT.test(end) || start > end) return null;
-            const months = [];
-            let year = Number(start.slice(0, 4));
-            let month = Number(start.slice(5, 7));
-            const endYear = Number(end.slice(0, 4));
-            const endMonth = Number(end.slice(5, 7));
-            while (year < endYear || (year === endYear && month <= endMonth)) {
-                months.push(`${year}-${String(month).padStart(2, '0')}`);
-                if (months.length > 36) return null;
-                month += 1;
-                if (month === 13) { month = 1; year += 1; }
-            }
-            return months;
+    }
+
+
+    return months;
+
+}
+
+
+/* ============================================================
+   TÜİK SYNC
+============================================================ */
+
+async function syncFromTuik() {
+
+    const start =
+        document.getElementById(
+            "syncStartMonth"
+        ).value;
+
+
+    const end =
+        document.getElementById(
+            "syncEndMonth"
+        ).value;
+
+
+    const months =
+        monthsBetween(
+            start,
+            end
+        );
+
+
+    if (!months) {
+
+        setFormMsg(
+            "syncMsg",
+            "Geçerli bir başlangıç ve bitiş ayı seçin. Tek işlemde en fazla 36 ay alınabilir.",
+            true
+        );
+
+        return;
+
+    }
+
+
+    const confirmed =
+        confirm(
+            "TÜİK verileri PENDING olarak oluşturulacak.\n\nAynı aya ait aktif kayıt varsa eski kayıt supersede edilir ve yeni kayıt doğrulanana kadar hesaplamaya dahil edilmez.\n\nDevam edilsin mi?"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    const button =
+        document.getElementById(
+            "syncSubmit"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Getiriliyor...";
+
+
+    setFormMsg(
+        "syncMsg",
+        "",
+        false
+    );
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .syncInflationIndices(
+                    months
+                );
+
+
+        if (!result.success) {
+
+            setFormMsg(
+                "syncMsg",
+                describeApiError(
+                    result
+                ),
+                true
+            );
+
+            return;
+
         }
 
-        async function syncFromTuik() {
-            const start = document.getElementById('syncStartMonth').value;
-            const end = document.getElementById('syncEndMonth').value;
-            const months = monthsBetween(start, end);
-            if (!months) {
-                setFormMsg('syncMsg', 'Geçerli bir başlangıç/bitiş aralığı seçin (en fazla 36 ay).', true);
-                return;
-            }
-            if (!confirm('TÜİK verileri PENDING oluşturulacak. Aynı aya ait aktif kayıt varsa supersede edilir ve yeni kayıt doğrulanana kadar hesaplamaya girmez. Devam edilsin mi?')) {
-                return;
-            }
 
-            const btn = document.getElementById('syncSubmit');
-            btn.disabled = true;
-            const result = await AdminAPI.syncInflationIndices(months);
-            btn.disabled = false;
+        const synced =
+            Array.isArray(
+                result.synced
+            )
+                ? result.synced
+                : [];
 
-            if (!result.success) {
-                setFormMsg('syncMsg', result.error || 'TÜİK senkronizasyonu başarısız.', true);
-                return;
-            }
 
-            const synced = result.synced || [];
-            const unchanged = result.unchanged || [];
-            const skipped = result.skipped || [];
-            let message = `${synced.length} kayıt PENDING oluşturuldu; ${unchanged.length} kayıt değişmedi.`;
-            if (skipped.length) {
-                message += ` ${skipped.length} dönem atlandı: ` + skipped.map(item => `${item.month} (${item.reason})`).join('; ');
-            }
-            setFormMsg('syncMsg', message, skipped.length > 0 && synced.length === 0);
-            document.getElementById('statusFilter').value = 'PENDING';
-            loadIndices();
+        const unchanged =
+            Array.isArray(
+                result.unchanged
+            )
+                ? result.unchanged
+                : [];
+
+
+        const skipped =
+            Array.isArray(
+                result.skipped
+            )
+                ? result.skipped
+                : [];
+
+
+        let message =
+            `${synced.length} kayıt PENDING oluşturuldu; ` +
+            `${unchanged.length} kayıt değişmedi.`;
+
+
+        if (skipped.length) {
+
+            message +=
+                ` ${skipped.length} dönem atlandı: ` +
+                skipped
+                    .map(item =>
+                        `${item.month} (${item.reason})`
+                    )
+                    .join("; ");
+
         }
 
-        async function submitSingleEntry() {
-            const month = document.getElementById('singleMonth').value.trim();
-            const value = document.getElementById('singleValue').value.trim();
 
-            if (!MONTH_FORMAT.test(month)) {
-                setFormMsg('singleMsg', 'Period YYYY-MM formatında olmalı (ör. 2026-07).', true);
-                return;
-            }
-            const numValue = Number(value);
-            if (!Number.isFinite(numValue) || numValue <= 0) {
-                setFormMsg('singleMsg', 'Endeks değeri pozitif bir sayı olmalı.', true);
-                return;
-            }
+        setFormMsg(
+            "syncMsg",
+            message,
+            skipped.length > 0 &&
+            synced.length === 0
+        );
 
-            const btn = document.getElementById('singleSubmit');
-            btn.disabled = true;
-            const result = await AdminAPI.createInflationIndex(month, numValue);
-            btn.disabled = false;
 
-            if (!result.success) {
-                setFormMsg('singleMsg', result.error || 'Kayıt oluşturulamadı.', true);
-                return;
-            }
+        document.getElementById(
+            "statusFilter"
+        ).value =
+            "PENDING";
 
-            setFormMsg('singleMsg', `Kaydedildi (${month}) — durum: PENDING. Doğrulama bekleniyor.`, false);
-            document.getElementById('singleMonth').value = '';
-            document.getElementById('singleValue').value = '';
-            loadIndices();
+
+        await loadIndices();
+
+
+    } catch (error) {
+
+        setFormMsg(
+            "syncMsg",
+            "TÜİK senkronizasyonu başarısız: " +
+            error.message,
+            true
+        );
+
+
+    } finally {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "TÜİK'ten Getir";
+
+    }
+
+}
+
+
+/* ============================================================
+   SINGLE ENTRY
+============================================================ */
+
+async function submitSingleEntry() {
+
+    const month =
+        document.getElementById(
+            "singleMonth"
+        ).value;
+
+
+    const rawValue =
+        document.getElementById(
+            "singleValue"
+        ).value.trim();
+
+
+    if (
+        !MONTH_FORMAT.test(
+            month
+        )
+    ) {
+
+        setFormMsg(
+            "singleMsg",
+            "Geçerli bir ay seçin.",
+            true
+        );
+
+        return;
+
+    }
+
+
+    const numericValue =
+        Number(rawValue);
+
+
+    if (
+        !Number.isFinite(
+            numericValue
+        ) ||
+        numericValue <= 0
+    ) {
+
+        setFormMsg(
+            "singleMsg",
+            "Endeks değeri pozitif bir sayı olmalıdır.",
+            true
+        );
+
+        return;
+
+    }
+
+
+    const button =
+        document.getElementById(
+            "singleSubmit"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Kaydediliyor...";
+
+
+    setFormMsg(
+        "singleMsg",
+        "",
+        false
+    );
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .createInflationIndex(
+                    month,
+                    numericValue
+                );
+
+
+        if (!result.success) {
+
+            setFormMsg(
+                "singleMsg",
+                describeApiError(
+                    result
+                ),
+                true
+            );
+
+            return;
+
         }
 
-        async function submitBulkEntry() {
-            const text = document.getElementById('bulkText').value;
-            if (!text.trim()) {
-                setFormMsg('bulkMsg', 'Yapıştırılacak metin boş olamaz.', true);
-                return;
+
+        setFormMsg(
+            "singleMsg",
+            `${month} dönemi kaydedildi. Durum: PENDING — doğrulama bekleniyor.`,
+            false
+        );
+
+
+        document.getElementById(
+            "singleMonth"
+        ).value =
+            "";
+
+
+        document.getElementById(
+            "singleValue"
+        ).value =
+            "";
+
+
+        await loadIndices();
+
+
+    } catch (error) {
+
+        setFormMsg(
+            "singleMsg",
+            "Kayıt oluşturulamadı: " +
+            error.message,
+            true
+        );
+
+
+    } finally {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "Kaydet";
+
+    }
+
+}
+
+
+/* ============================================================
+   BULK ENTRY
+============================================================ */
+
+async function submitBulkEntry() {
+
+    const text =
+        document.getElementById(
+            "bulkText"
+        ).value;
+
+
+    if (!text.trim()) {
+
+        setFormMsg(
+            "bulkMsg",
+            "Toplu giriş alanı boş olamaz.",
+            true
+        );
+
+        return;
+
+    }
+
+
+    const button =
+        document.getElementById(
+            "bulkSubmit"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Kaydediliyor...";
+
+
+    setFormMsg(
+        "bulkMsg",
+        "",
+        false
+    );
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .createInflationIndicesBulk(
+                    text
+                );
+
+
+        if (!result.success) {
+
+            let message =
+                describeApiError(
+                    result
+                );
+
+
+            if (
+                Array.isArray(
+                    result.invalid
+                ) &&
+                result.invalid.length
+            ) {
+
+                message +=
+                    " Geçersiz satırlar: " +
+                    result.invalid
+                        .map(item =>
+                            `#${item.line} (${(item.errors || []).join(" ")})`
+                        )
+                        .join("; ");
+
             }
 
-            const btn = document.getElementById('bulkSubmit');
-            btn.disabled = true;
-            const result = await AdminAPI.createInflationIndicesBulk(text);
-            btn.disabled = false;
 
-            if (!result.success) {
-                let msg = result.error || 'Toplu giriş başarısız.';
-                if (Array.isArray(result.invalid) && result.invalid.length > 0) {
-                    msg += ' Geçersiz satırlar: ' + result.invalid.map(i => `#${i.line} (${i.errors.join(' ')})`).join('; ');
-                }
-                if (Array.isArray(result.duplicateMonthsInInput) && result.duplicateMonthsInInput.length > 0) {
-                    msg += ' Tekrarlanan ay(lar): ' + result.duplicateMonthsInInput.join(', ');
-                }
-                setFormMsg('bulkMsg', msg, true);
-                return;
+            if (
+                Array.isArray(
+                    result.duplicateMonthsInInput
+                ) &&
+                result.duplicateMonthsInInput.length
+            ) {
+
+                message +=
+                    " Tekrarlanan aylar: " +
+                    result.duplicateMonthsInInput
+                        .join(", ");
+
             }
 
-            const created = result.data.created || [];
-            const skipped = result.data.skipped || [];
-            let msg = `${created.length} kayıt oluşturuldu (PENDING).`;
-            if (skipped.length > 0) {
-                msg += ` ${skipped.length} satır atlandı: ` + skipped.map(s => `#${s.line} (${s.reason})`).join('; ');
-            }
-            setFormMsg('bulkMsg', msg, skipped.length > 0 && created.length === 0);
-            document.getElementById('bulkText').value = '';
-            loadIndices();
+
+            setFormMsg(
+                "bulkMsg",
+                message,
+                true
+            );
+
+            return;
+
         }
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
-            if (authenticated) {
-                loadIndices();
-            }
-            const tc = document.querySelector('.table-container');
-            if (tc) tc.scrollLeft = 0;
-        });
-    </script>
+
+        const data =
+            result.data || {};
+
+
+        const created =
+            Array.isArray(
+                data.created
+            )
+                ? data.created
+                : [];
+
+
+        const skipped =
+            Array.isArray(
+                data.skipped
+            )
+                ? data.skipped
+                : [];
+
+
+        let message =
+            `${created.length} kayıt oluşturuldu ve PENDING durumuna alındı.`;
+
+
+        if (skipped.length) {
+
+            message +=
+                ` ${skipped.length} satır atlandı: ` +
+                skipped
+                    .map(item =>
+                        `#${item.line} (${item.reason})`
+                    )
+                    .join("; ");
+
+        }
+
+
+        setFormMsg(
+            "bulkMsg",
+            message,
+            skipped.length > 0 &&
+            created.length === 0
+        );
+
+
+        if (created.length) {
+
+            document.getElementById(
+                "bulkText"
+            ).value =
+                "";
+
+        }
+
+
+        await loadIndices();
+
+
+    } catch (error) {
+
+        setFormMsg(
+            "bulkMsg",
+            "Toplu giriş başarısız: " +
+            error.message,
+            true
+        );
+
+
+    } finally {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "Toplu Kaydet";
+
+    }
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        await loadIndices();
+
+
+        const tableContainer =
+            document.querySelector(
+                ".table-container"
+            );
+
+
+        if (tableContainer) {
+
+            tableContainer.scrollLeft =
+                0;
+
+        }
+
+    }
+);
+
+</script>
+
 </body>
 </html>
