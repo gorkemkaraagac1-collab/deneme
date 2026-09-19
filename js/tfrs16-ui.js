@@ -16009,6 +16009,16 @@ ${renderAccountingCenterBulkPromo()}
     const totals=base(), rows=[];
     rptSafeContracts().forEach(contract=>{
       try{
+        // A lease that has not commenced is not yet a recognised lease
+        // liability. Keep it out of both the maturity buckets and the
+        // contractual-outflow total until the reporting date reaches the
+        // contractual start date. The reporting-date liability path already
+        // returns zero for this case; the maturity path must use the same
+        // scope so the liquidity note does not show future commitments as if
+        // they were current lease-liability exposure.
+        const commencementKey = rptCalendarDateKey(contract?.startDate || contract?.commencementDate);
+        const reportingKey = rptCalendarDateKey(d);
+        if (commencementKey && reportingKey && commencementKey > reportingKey) return;
         const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
         const buckets=base();
         (built.schedule||[]).forEach(item=>{
