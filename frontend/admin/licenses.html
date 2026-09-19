@@ -3,322 +3,2281 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Licenses - Admin Panel</title>
+    <title>Lisans Yönetimi - LeaseQant</title>
     <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .licenses-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin-bottom: 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            color: var(--text-light);
+            font-size: 12px;
+        }
+
+        .license-summary {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            min-width: 0;
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.active {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.warning {
+            border-left: 3px solid var(--warning);
+        }
+
+        .summary-card.inactive {
+            border-left: 3px solid var(--danger);
+        }
+
+        .summary-card.custom {
+            border-left: 3px solid var(--accent);
+        }
+
+        .summary-value {
+            font: 600 23px var(--mono);
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .license-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .license-toolbar select,
+        .license-toolbar input[type="number"] {
+            height: 38px;
+            padding: 0 11px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            font-size: 11px;
+        }
+
+        .license-toolbar select {
+            min-width: 150px;
+        }
+
+        .expiring-control {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 38px;
+            padding: 0 11px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            font-size: 10px;
+        }
+
+        .expiring-control input[type="number"] {
+            width: 66px;
+            min-width: 66px;
+            height: 28px;
+        }
+
+        .filter-count {
+            margin-left: auto;
+            color: var(--text-light);
+            font: 10px var(--mono);
+            white-space: nowrap;
+        }
+
+        .company-cell strong {
+            display: block;
+            font-size: 11px;
+        }
+
+        .company-cell small {
+            color: var(--text-light);
+            font: 9px var(--mono);
+        }
+
+        .plan-name {
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .custom-plan {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 6px;
+            color: var(--accent);
+            background: rgba(176, 141, 87, .10);
+            border-radius: 999px;
+            font: 600 8px var(--mono);
+        }
+
+        .usage-cell {
+            min-width: 115px;
+        }
+
+        .usage-numbers {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 5px;
+            font: 9px var(--mono);
+        }
+
+        .usage-track {
+            width: 100%;
+            height: 5px;
+            overflow: hidden;
+            background: var(--paper);
+            border-radius: 999px;
+        }
+
+        .usage-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: inherit;
+        }
+
+        .usage-fill.warning {
+            background: var(--warning);
+        }
+
+        .usage-fill.danger {
+            background: var(--danger);
+        }
+
+        .unlimited {
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .expiry-warning {
+            font-weight: 600;
+            color: var(--warning);
+        }
+
+        .expiry-danger {
+            font-weight: 600;
+            color: var(--danger);
+        }
+
+        .action-group {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            min-width: 175px;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .form-help {
+            padding: 8px 10px;
+            margin-top: 6px;
+            color: var(--text-light);
+            background: var(--paper);
+            border-radius: 7px;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .license-info-box {
+            padding: 11px 12px;
+            margin-bottom: 15px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 1200px) {
+            .license-summary {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 800px) {
+            .license-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .license-toolbar {
+                align-items: stretch;
+            }
+
+            .license-toolbar select,
+            .expiring-control {
+                width: 100%;
+            }
+
+            .filter-count {
+                width: 100%;
+                margin-left: 0;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .license-summary {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .page-intro .btn {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html">👤 Users</a>
-            <a href="licenses.html" class="active">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
-            <a href="faq.html">❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a>
-            <a href="fx-rates.html">
-                <span class="icon">💱</span> TCMB Kurları
-            </a>
-            <a href="audit.html">📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">Licenses</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+<nav class="sidebar" id="sidebar">
 
-        <div class="page-content">
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>All Licenses</h3>
-                    <button class="btn btn-primary" onclick="openAssignModal()">
-                        + Assign License
-                    </button>
-                </div>
-                <div class="table-toolbar">
-                    <label class="toolbar-label" style="display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" id="expiringOnlyCheckbox" onchange="onExpiringToggle()">
-                        Yalnızca süresi yaklaşanları göster (
-                        <input type="number" id="expiringDaysInput" value="30" min="1" max="3650" style="width:70px;min-width:70px;" onchange="onExpiringToggle()">
-                        gün içinde)
-                    </label>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Company</th>
-                            <th>Plan</th>
-                            <th>Status</th>
-                            <th>Users (Current/Max)</th>
-                            <th>Contracts Limit</th>
-                            <th>Companies Limit</th>
-                            <th>Starts</th>
-                            <th>Expires</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="licensesTableBody">
-                        <tr><td colspan="9" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">
+            Admin
+        </small>
     </div>
 
-    <!-- Modal -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 id="modalTitle">Assign License</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modalBody"></div>
+    <div class="sidebar-nav">
+
+        <div class="nav-label">
+            Yönetim
         </div>
+
+        <a href="index.html">
+            📊 Dashboard
+        </a>
+
+        <a href="companies.html">
+            🏢 Companies
+        </a>
+
+        <a href="users.html">
+            👤 Users
+        </a>
+
+        <a
+            href="licenses.html"
+            class="active"
+        >
+            🔑 Licenses
+        </a>
+
+        <a href="plans.html">
+            📦 Plans
+        </a>
+
+        <a href="faq.html">
+            ❓ SSS
+        </a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a
+            href="periods.html"
+            data-admin-only
+        >
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            💱 TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            📋 Audit Log
+        </a>
+
     </div>
 
-    <script src="../js/admin.js"></script>
-    <script>
-        let allCompanies = [];
-        let allPlans = [];
+</nav>
 
-        async function loadCompaniesForSelect() {
-            try {
-                // Dropdown için tam liste gerekir — sayfalama limitiyle
-                // (varsayılan 50) kesilmesin diye yüksek bir limit veriyoruz.
-                const result = await AdminAPI.getCompanies({ limit: 500 });
-                if (result.success) {
-                    allCompanies = result.data;
-                }
-            } catch (error) {
-                console.error('Load companies error:', error);
-            }
+
+<div class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        Lisans Yönetimi
+    </div>
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="licenses-page">
+
+    <!-- PAGE INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>Lisanslar</h1>
+
+            <p>
+                Şirket lisanslarını, kullanım limitlerini
+                ve lisans sürelerini yönetin.
+            </p>
+
+        </div>
+
+        <button
+            class="btn btn-primary"
+            onclick="openAssignModal()"
+        >
+            + Lisans Ata
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="license-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryTotal"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Gösterilen Lisans
+            </div>
+
+        </div>
+
+
+        <div class="summary-card active">
+
+            <div
+                class="summary-value"
+                id="summaryActive"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Aktif
+            </div>
+
+        </div>
+
+
+        <div class="summary-card warning">
+
+            <div
+                class="summary-value"
+                id="summaryExpiring"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                30 Gün İçinde Bitecek
+            </div>
+
+        </div>
+
+
+        <div class="summary-card inactive">
+
+            <div
+                class="summary-value"
+                id="summaryInactive"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Pasif / İptal
+            </div>
+
+        </div>
+
+
+        <div class="summary-card custom">
+
+            <div
+                class="summary-value"
+                id="summaryCustom"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Custom Plan
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header">
+
+            <h3>Lisans Listesi</h3>
+
+            <button
+                class="btn btn-outline"
+                onclick="loadLicenses()"
+            >
+                ↻ Yenile
+            </button>
+
+        </div>
+
+
+        <div class="license-toolbar">
+
+            <select
+                id="licenseStatusFilter"
+                onchange="renderLicenses()"
+            >
+                <option value="">
+                    Tüm Durumlar
+                </option>
+
+                <option value="ACTIVE">
+                    Aktif
+                </option>
+
+                <option value="INACTIVE">
+                    Pasif
+                </option>
+
+                <option value="CANCELLED">
+                    İptal
+                </option>
+
+                <option value="EXPIRED">
+                    Süresi Dolmuş
+                </option>
+            </select>
+
+
+            <select
+                id="licensePlanFilter"
+                onchange="renderLicenses()"
+            >
+                <option value="">
+                    Tüm Planlar
+                </option>
+            </select>
+
+
+            <label class="expiring-control">
+
+                <input
+                    type="checkbox"
+                    id="expiringOnlyCheckbox"
+                    onchange="onExpiringToggle()"
+                >
+
+                <span>
+                    Süresi yaklaşan
+                </span>
+
+                <input
+                    type="number"
+                    id="expiringDaysInput"
+                    value="30"
+                    min="1"
+                    max="3650"
+                    onchange="onExpiringToggle()"
+                >
+
+                <span>gün</span>
+
+            </label>
+
+
+            <span
+                class="filter-count"
+                id="licenseFilterCount"
+            ></span>
+
+        </div>
+
+
+        <table>
+
+            <thead>
+
+            <tr>
+                <th>Şirket</th>
+                <th>Plan</th>
+                <th>Durum</th>
+                <th>Kullanıcı</th>
+                <th>Sözleşme Limiti</th>
+                <th>Şirket Limiti</th>
+                <th>Başlangıç</th>
+                <th>Bitiş</th>
+                <th>İşlemler</th>
+            </tr>
+
+            </thead>
+
+
+            <tbody id="licensesTableBody">
+
+            <tr>
+                <td
+                    colspan="9"
+                    class="table-state"
+                >
+                    Lisanslar yükleniyor...
+                </td>
+            </tr>
+
+            </tbody>
+
+        </table>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Lisans
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
+    </div>
+
+    <div id="modalBody"></div>
+
+</div>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+let allCompanies = [];
+
+let allPlans = [];
+
+let licensesCache = [];
+
+
+/* ============================================================
+   COMPANIES
+============================================================ */
+
+async function loadCompaniesForSelect() {
+
+    try {
+
+        const result =
+            await AdminAPI.getCompanies({
+                limit: 500
+            });
+
+
+        if (result.success) {
+
+            allCompanies =
+                result.data || [];
+
         }
 
-        async function loadPlans() {
-            try {
-                const result = await AdminAPI.getPlans();
-                if (result.success) {
-                    allPlans = result.data;
-                }
-            } catch (error) {
-                console.error('Load plans error:', error);
-            }
+    } catch (error) {
+
+        console.error(
+            "Load companies error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   PLANS
+============================================================ */
+
+async function loadPlans() {
+
+    try {
+
+        const result =
+            await AdminAPI.getPlans();
+
+
+        if (result.success) {
+
+            allPlans =
+                result.data || [];
+
+            renderPlanFilter();
+
         }
 
-        function openAssignModal(preselectedCompanyId) {
-            showAssignLicenseModal(allCompanies, allPlans, preselectedCompanyId, loadLicenses);
-        }
+    } catch (error) {
 
-        function formatLimitValue(value) {
-            return (value === null || value === undefined) ? '∞' : value;
-        }
+        console.error(
+            "Load plans error:",
+            error
+        );
 
-        async function loadLicenses() {
-            try {
-                const expiringOnly = document.getElementById('expiringOnlyCheckbox').checked;
-                const days = document.getElementById('expiringDaysInput').value || 30;
+    }
 
-                const result = expiringOnly
-                    ? await AdminAPI.getExpiringLicenses(days)
-                    : await AdminAPI.getLicenses();
+}
 
-                if (!result.success) {
-                    document.getElementById('licensesTableBody').innerHTML = 
-                        `<tr><td colspan="9" style="text-align:center;color:var(--danger);">Error: ${describeApiError(result)}</td></tr>`;
-                    return;
-                }
-                
-                // DÜZELTME (P2 — kabul kriteri #12): önceden burada
-                // l.max_users (planın HAM değeri) gösteriliyordu — Custom
-                // bir lisansa max_users_override atansa bile bu sütun
-                // hep planın (genelde NULL/∞) değerini gösteriyordu.
-                // Artık backend'in COALESCE(override, plan) ile
-                // hesapladığı effective_max_* alanları kullanılıyor.
-                // effective_max_contracts/companies bu satırlarda YOK
-                // (expiring endpoint'i onları dönmüyor) — undefined
-                // durumunda '-' gösteriyoruz.
-                const html = result.data.map(l => `
-                    <tr>
-                        <td><strong>${escapeHtml(l.company_name)}</strong><br><small style="color:var(--text-light);">${escapeHtml(l.company_code)}</small></td>
-                        <td>${escapeHtml(l.plan_name)}</td>
-                        <td>${getStatusBadge(l.status)}</td>
-                        <td>${l.current_users || 0} / ${formatLimitValue(l.effective_max_users !== undefined ? l.effective_max_users : l.max_users)}</td>
-                        <td>${l.effective_max_contracts !== undefined ? formatLimitValue(l.effective_max_contracts) : '-'}</td>
-                        <td>${l.effective_max_companies !== undefined ? formatLimitValue(l.effective_max_companies) : '-'}</td>
-                        <td>${formatDateShort(l.starts_at)}</td>
-                        <td>${formatDateShort(l.expires_at)}</td>
-                        <td>
-                            ${l.plan_id === 'custom' ? `<button class="btn btn-sm btn-outline" onclick='openEditLimitsModal(${JSON.stringify(l).replace(/'/g, "&#39;")})'>Limits</button>` : ''}
-                            <button class="btn btn-sm btn-success" onclick="extendLicense('${l.id}')">Extend</button>
-                            ${l.status === 'ACTIVE' ? 
-                                `<button class="btn btn-sm btn-danger" onclick="cancelLicense('${l.id}')">Cancel</button>` : ''}
-                        </td>
-                    </tr>
-                `).join('');
-                
-                document.getElementById('licensesTableBody').innerHTML = html || 
-                    `<tr><td colspan="9" style="text-align:center;color:var(--text-light);">${expiringOnly ? 'No licenses expiring in this range' : 'No licenses found'}</td></tr>`;
-                    
-            } catch (error) {
-                console.error('Load licenses error:', error);
-            }
-        }
 
-        // P2 — CUSTOM PLAN limit düzenleme (kabul kriteri #13).
-        // PATCH /api/admin/licenses/:licenseId/limits: undefined =
-        // dokunma, null = override'ı temizle (plana dön), number =
-        // yeni override.
-        function openEditLimitsModal(license) {
-            const content = `
-                <form id="editLimitsForm" onsubmit="submitEditLimits(event, '${license.id}')">
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">
-                        ${escapeHtml(license.company_name)} — Custom plan limitleri. Boş bırakmak
-                        <strong>sınırsız</strong> anlamına gelir.
-                    </p>
-                    <div class="form-group">
-                        <label>Max Users</label>
-                        <input type="number" name="max_users_override" min="1" step="1"
-                            value="${license.max_users_override != null ? license.max_users_override : ''}"
-                            placeholder="sınırsız">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Contracts</label>
-                        <input type="number" name="max_contracts_override" min="1" step="1"
-                            value="${license.max_contracts_override != null ? license.max_contracts_override : ''}"
-                            placeholder="sınırsız">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Companies</label>
-                        <input type="number" name="max_companies_override" min="1" step="1"
-                            value="${license.max_companies_override != null ? license.max_companies_override : ''}"
-                            placeholder="sınırsız">
-                    </div>
-                    <div id="editLimitsError" style="color:var(--danger); margin-bottom:12px; display:none;"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="editLimitsSubmitBtn">Save</button>
-                    </div>
-                </form>
+function renderPlanFilter() {
+
+    const select =
+        document.getElementById(
+            "licensePlanFilter"
+        );
+
+
+    if (!select) {
+        return;
+    }
+
+
+    select.innerHTML = `
+
+        <option value="">
+            Tüm Planlar
+        </option>
+
+        ${allPlans.map(plan => `
+
+            <option value="${escapeHtml(
+                String(
+                    plan.id ||
+                    plan.plan_id ||
+                    ""
+                )
+            )}">
+                ${escapeHtml(
+                    plan.name ||
+                    plan.plan_name ||
+                    "-"
+                )}
+            </option>
+
+        `).join("")}
+
+        <option value="custom">
+            Custom
+        </option>
+
+    `;
+
+}
+
+
+/* ============================================================
+   ASSIGN LICENSE
+============================================================ */
+
+function openAssignModal(
+    preselectedCompanyId
+) {
+
+    showAssignLicenseModal(
+        allCompanies,
+        allPlans,
+        preselectedCompanyId,
+        loadLicenses
+    );
+
+}
+
+
+/* ============================================================
+   LIMIT HELPERS
+============================================================ */
+
+function formatLimitValue(value) {
+
+    return (
+        value === null ||
+        value === undefined
+    )
+        ? "∞"
+        : value;
+
+}
+
+
+function parseNumber(value) {
+
+    const number =
+        Number(value);
+
+    return Number.isFinite(number)
+        ? number
+        : 0;
+
+}
+
+
+/* ============================================================
+   LOAD LICENSES
+============================================================ */
+
+async function loadLicenses() {
+
+    const tbody =
+        document.getElementById(
+            "licensesTableBody"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="9"
+                class="table-state"
+            >
+                Lisanslar yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    try {
+
+        const expiringOnly =
+            document.getElementById(
+                "expiringOnlyCheckbox"
+            ).checked;
+
+
+        const days =
+            document.getElementById(
+                "expiringDaysInput"
+            ).value || 30;
+
+
+        const result =
+            expiringOnly
+                ? await AdminAPI
+                    .getExpiringLicenses(days)
+                : await AdminAPI
+                    .getLicenses();
+
+
+        if (!result.success) {
+
+            tbody.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="9"
+                        class="table-state error"
+                    >
+                        ${escapeHtml(
+                            describeApiError(
+                                result
+                            )
+                        )}
+                    </td>
+
+                </tr>
+
             `;
-            showModal(`Edit Limits: ${license.company_name}`, content);
+
+            return;
+
         }
 
-        async function submitEditLimits(event, licenseId) {
-            event.preventDefault();
-            const form = event.target;
-            const errorDiv = document.getElementById('editLimitsError');
-            const submitBtn = document.getElementById('editLimitsSubmitBtn');
 
-            errorDiv.style.display = 'none';
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Saving...';
+        licensesCache =
+            Array.isArray(result.data)
+                ? result.data
+                : [];
 
-            // Boş alan => null (override'ı temizle / plan değerine dön).
-            // Bu form her zaman ÜÇ alanı da gönderir (undefined
-            // göndermiyoruz) — yani "dokunma" davranışı burada
-            // kullanılmıyor, kullanıcı gördüğü üç alanı olduğu gibi
-            // kaydediyor. Backend zaten null/pozitif-tam-sayı dışında
-            // bir değeri 400 ile reddeder.
-            const data = {
-                maxUsersOverride: parseOptionalPositiveInt(form.max_users_override.value) ?? null,
-                maxContractsOverride: parseOptionalPositiveInt(form.max_contracts_override.value) ?? null,
-                maxCompaniesOverride: parseOptionalPositiveInt(form.max_companies_override.value) ?? null
-            };
 
-            try {
-                const result = await AdminAPI.updateLicenseLimits(licenseId, data);
-                if (result.success) {
-                    closeModal();
-                    loadLicenses();
-                } else {
-                    errorDiv.textContent = describeApiError(result);
-                    errorDiv.style.display = 'block';
+        renderLicenseSummary(
+            licensesCache
+        );
+
+
+        renderLicenses();
+
+
+    } catch (error) {
+
+        console.error(
+            "Load licenses error:",
+            error
+        );
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="9"
+                    class="table-state error"
+                >
+                    Lisanslar yüklenemedi.
+                </td>
+
+            </tr>
+
+        `;
+
+    }
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderLicenseSummary(
+    licenses
+) {
+
+    const total =
+        licenses.length;
+
+
+    const active =
+        licenses.filter(
+            license =>
+                license.status ===
+                "ACTIVE"
+        ).length;
+
+
+    const inactive =
+        licenses.filter(
+            license =>
+                license.status !==
+                "ACTIVE"
+        ).length;
+
+
+    const custom =
+        licenses.filter(
+            license =>
+                String(
+                    license.plan_id || ""
+                ).toLowerCase() ===
+                "custom"
+        ).length;
+
+
+    const now =
+        new Date();
+
+
+    const thirtyDays =
+        30 *
+        24 *
+        60 *
+        60 *
+        1000;
+
+
+    const expiring =
+        licenses.filter(
+            license => {
+
+                if (
+                    license.status !==
+                    "ACTIVE" ||
+                    !license.expires_at
+                ) {
+                    return false;
                 }
-            } catch (error) {
-                errorDiv.textContent = 'Hata: ' + error.message;
-                errorDiv.style.display = 'block';
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Save';
-            }
-        }
 
-        // DÜZELTME: platform genelinde "önümüzdeki N gün içinde bitecek
-        // lisanslar" görünümü yoktu — yenileme takibi elle yapılıyordu.
-        // Dashboard'daki "Expiring Licenses (30d)" kutusu buraya
-        // ?expiring=30 ile bağlanır ve checkbox'ı otomatik işaretler.
-        function onExpiringToggle() {
-            loadLicenses();
-        }
 
-        function initExpiringFromQuery() {
-            const params = new URLSearchParams(window.location.search);
-            const expiring = params.get('expiring');
-            if (expiring) {
-                document.getElementById('expiringOnlyCheckbox').checked = true;
-                document.getElementById('expiringDaysInput').value = expiring;
-            }
-        }
+                const expires =
+                    new Date(
+                        license.expires_at
+                    );
 
-        async function extendLicense(id) {
-            const months = prompt('Kaç ay uzatılsın? (1-120)', '12');
-            if (!months) return;
-            
-            const monthsNum = parseInt(months);
-            if (isNaN(monthsNum) || monthsNum < 1 || monthsNum > 120) {
-                alert('Lütfen 1-120 arası bir değer girin.');
-                return;
+
+                const diff =
+                    expires.getTime() -
+                    now.getTime();
+
+
+                return (
+                    diff >= 0 &&
+                    diff <= thirtyDays
+                );
+
             }
-            
-            try {
-                const result = await AdminAPI.extendLicense(id, { additionalMonths: monthsNum });
-                if (result.success) {
-                    alert('License extended successfully!');
-                    loadLicenses();
-                } else {
-                    alert(describeApiError(result));
+        ).length;
+
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        total;
+
+
+    document.getElementById(
+        "summaryActive"
+    ).textContent =
+        active;
+
+
+    document.getElementById(
+        "summaryInactive"
+    ).textContent =
+        inactive;
+
+
+    document.getElementById(
+        "summaryCustom"
+    ).textContent =
+        custom;
+
+
+    document.getElementById(
+        "summaryExpiring"
+    ).textContent =
+        expiring;
+
+}
+
+
+/* ============================================================
+   FILTER + RENDER
+============================================================ */
+
+function renderLicenses() {
+
+    const statusFilter =
+        document.getElementById(
+            "licenseStatusFilter"
+        ).value;
+
+
+    const planFilter =
+        document.getElementById(
+            "licensePlanFilter"
+        ).value;
+
+
+    const filtered =
+        licensesCache.filter(
+            license => {
+
+                if (
+                    statusFilter &&
+                    license.status !==
+                    statusFilter
+                ) {
+                    return false;
                 }
-            } catch (error) {
-                alert('Error extending license: ' + error.message);
-            }
-        }
 
-        async function cancelLicense(id) {
-            if (!confirm('License iptal edilsin mi?')) return;
-            
-            try {
-                const result = await AdminAPI.cancelLicense(id);
-                if (result.success) {
-                    alert('License cancelled successfully!');
-                    loadLicenses();
-                } else {
-                    alert(describeApiError(result));
+
+                if (planFilter) {
+
+                    const licensePlanId =
+                        String(
+                            license.plan_id ||
+                            ""
+                        );
+
+
+                    const licensePlanName =
+                        String(
+                            license.plan_name ||
+                            ""
+                        );
+
+
+                    if (
+                        licensePlanId !==
+                            planFilter &&
+                        licensePlanName !==
+                            planFilter
+                    ) {
+                        return false;
+                    }
+
                 }
-            } catch (error) {
-                alert('Error cancelling license: ' + error.message);
+
+
+                return true;
+
             }
+        );
+
+
+    document.getElementById(
+        "licenseFilterCount"
+    ).textContent =
+        filtered.length ===
+        licensesCache.length
+            ? `${filtered.length} kayıt`
+            : `${filtered.length} / ${licensesCache.length} kayıt`;
+
+
+    const tbody =
+        document.getElementById(
+            "licensesTableBody"
+        );
+
+
+    if (!filtered.length) {
+
+        const expiringOnly =
+            document.getElementById(
+                "expiringOnlyCheckbox"
+            ).checked;
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="9"
+                    class="table-state"
+                >
+                    ${
+                        expiringOnly
+                            ? "Bu tarih aralığında süresi yaklaşan lisans bulunamadı."
+                            : "Filtrelere uygun lisans bulunamadı."
+                    }
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        filtered
+            .map(renderLicenseRow)
+            .join("");
+
+}
+
+
+/* ============================================================
+   LICENSE ROW
+============================================================ */
+
+function renderLicenseRow(
+    license
+) {
+
+    const userLimit =
+        license.effective_max_users !==
+        undefined
+            ? license.effective_max_users
+            : license.max_users;
+
+
+    const contractsLimit =
+        license.effective_max_contracts !==
+        undefined
+            ? license.effective_max_contracts
+            : undefined;
+
+
+    const companiesLimit =
+        license.effective_max_companies !==
+        undefined
+            ? license.effective_max_companies
+            : undefined;
+
+
+    const usersHtml =
+        renderUsage(
+            license.current_users || 0,
+            userLimit
+        );
+
+
+    const contractsHtml =
+        contractsLimit !== undefined
+            ? formatLimitValue(
+                contractsLimit
+            )
+            : "—";
+
+
+    const companiesHtml =
+        companiesLimit !== undefined
+            ? formatLimitValue(
+                companiesLimit
+            )
+            : "—";
+
+
+    const expiry =
+        renderExpiry(
+            license.expires_at
+        );
+
+
+    const isCustom =
+        String(
+            license.plan_id || ""
+        ).toLowerCase() ===
+        "custom";
+
+
+    return `
+
+        <tr>
+
+            <td>
+
+                <div class="company-cell">
+
+                    <strong>
+                        ${escapeHtml(
+                            license.company_name ||
+                            "-"
+                        )}
+                    </strong>
+
+                    <small>
+                        ${escapeHtml(
+                            license.company_code ||
+                            "-"
+                        )}
+                    </small>
+
+                </div>
+
+            </td>
+
+
+            <td>
+
+                <span class="plan-name">
+                    ${escapeHtml(
+                        license.plan_name ||
+                        "-"
+                    )}
+                </span>
+
+                ${
+                    isCustom
+                        ? `
+                            <br>
+                            <span class="custom-plan">
+                                CUSTOM
+                            </span>
+                          `
+                        : ""
+                }
+
+            </td>
+
+
+            <td>
+                ${getStatusBadge(
+                    license.status
+                )}
+            </td>
+
+
+            <td>
+                ${usersHtml}
+            </td>
+
+
+            <td>
+                ${contractsHtml}
+            </td>
+
+
+            <td>
+                ${companiesHtml}
+            </td>
+
+
+            <td>
+                ${
+                    license.starts_at
+                        ? formatDateShort(
+                            license.starts_at
+                        )
+                        : "—"
+                }
+            </td>
+
+
+            <td>
+                ${expiry}
+            </td>
+
+
+            <td>
+
+                <div class="action-group">
+
+                    ${
+                        isCustom
+                            ? `
+                                <button
+                                    class="btn btn-sm btn-outline"
+                                    onclick="openEditLimitsById('${license.id}')"
+                                >
+                                    Limitler
+                                </button>
+                              `
+                            : ""
+                    }
+
+
+                    <button
+                        class="btn btn-sm btn-success"
+                        onclick="openExtendLicenseModal('${license.id}')"
+                    >
+                        Süre Uzat
+                    </button>
+
+
+                    ${
+                        license.status ===
+                        "ACTIVE"
+                            ? `
+                                <button
+                                    class="btn btn-sm btn-danger"
+                                    onclick="cancelLicense('${license.id}')"
+                                >
+                                    İptal Et
+                                </button>
+                              `
+                            : ""
+                    }
+
+                </div>
+
+            </td>
+
+        </tr>
+
+    `;
+
+}
+
+
+/* ============================================================
+   USAGE
+============================================================ */
+
+function renderUsage(
+    current,
+    limit
+) {
+
+    const currentValue =
+        parseNumber(current);
+
+
+    if (
+        limit === null ||
+        limit === undefined
+    ) {
+
+        return `
+
+            <div class="usage-cell">
+
+                <div class="usage-numbers">
+
+                    <span>
+                        ${currentValue}
+                    </span>
+
+                    <span class="unlimited">
+                        ∞
+                    </span>
+
+                </div>
+
+                <div class="usage-track">
+                    <div
+                        class="usage-fill"
+                        style="width:0%"
+                    ></div>
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
+
+    const maxValue =
+        parseNumber(limit);
+
+
+    const percentage =
+        maxValue > 0
+            ? Math.min(
+                100,
+                Math.round(
+                    currentValue /
+                    maxValue *
+                    100
+                )
+            )
+            : 0;
+
+
+    let className =
+        "usage-fill";
+
+
+    if (percentage >= 100) {
+
+        className +=
+            " danger";
+
+    } else if (
+        percentage >= 80
+    ) {
+
+        className +=
+            " warning";
+
+    }
+
+
+    return `
+
+        <div class="usage-cell">
+
+            <div class="usage-numbers">
+
+                <span>
+                    ${currentValue} / ${maxValue}
+                </span>
+
+                <span>
+                    ${percentage}%
+                </span>
+
+            </div>
+
+            <div class="usage-track">
+
+                <div
+                    class="${className}"
+                    style="width:${percentage}%"
+                ></div>
+
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+/* ============================================================
+   EXPIRY
+============================================================ */
+
+function renderExpiry(
+    expiresAt
+) {
+
+    if (!expiresAt) {
+        return "—";
+    }
+
+
+    const expires =
+        new Date(expiresAt);
+
+
+    const now =
+        new Date();
+
+
+    const diffDays =
+        Math.ceil(
+            (
+                expires.getTime() -
+                now.getTime()
+            ) /
+            (
+                1000 *
+                60 *
+                60 *
+                24
+            )
+        );
+
+
+    const formatted =
+        formatDateShort(
+            expiresAt
+        );
+
+
+    if (diffDays < 0) {
+
+        return `
+            <span class="expiry-danger">
+                ${formatted}
+            </span>
+        `;
+
+    }
+
+
+    if (diffDays <= 30) {
+
+        return `
+
+            <span class="expiry-warning">
+                ${formatted}
+            </span>
+
+            <br>
+
+            <small
+                style="color:var(--text-light)"
+            >
+                ${diffDays} gün kaldı
+            </small>
+
+        `;
+
+    }
+
+
+    return formatted;
+
+}
+
+
+/* ============================================================
+   EDIT CUSTOM LIMITS
+============================================================ */
+
+function openEditLimitsById(
+    licenseId
+) {
+
+    const license =
+        licensesCache.find(
+            item =>
+                String(item.id) ===
+                String(licenseId)
+        );
+
+
+    if (!license) {
+
+        alert(
+            "Lisans bilgisi bulunamadı. Listeyi yenileyin."
+        );
+
+        return;
+
+    }
+
+
+    openEditLimitsModal(
+        license
+    );
+
+}
+
+
+function openEditLimitsModal(
+    license
+) {
+
+    const content = `
+
+        <form
+            id="editLimitsForm"
+            onsubmit="submitEditLimits(
+                event,
+                '${license.id}'
+            )"
+        >
+
+            <div class="license-info-box">
+
+                <strong>
+                    ${escapeHtml(
+                        license.company_name ||
+                        "-"
+                    )}
+                </strong>
+
+                <br>
+
+                Custom plan için özel kullanım
+                limitlerini düzenliyorsunuz.
+
+                <br>
+
+                Boş bırakılan limit
+                <strong>sınırsız</strong>
+                olarak değerlendirilir.
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Maksimum Kullanıcı
+                </label>
+
+                <input
+                    type="number"
+                    name="max_users_override"
+                    min="1"
+                    step="1"
+                    value="${
+                        license.max_users_override != null
+                            ? license.max_users_override
+                            : ""
+                    }"
+                    placeholder="Sınırsız"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Maksimum Sözleşme
+                </label>
+
+                <input
+                    type="number"
+                    name="max_contracts_override"
+                    min="1"
+                    step="1"
+                    value="${
+                        license.max_contracts_override != null
+                            ? license.max_contracts_override
+                            : ""
+                    }"
+                    placeholder="Sınırsız"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Maksimum Şirket
+                </label>
+
+                <input
+                    type="number"
+                    name="max_companies_override"
+                    min="1"
+                    step="1"
+                    value="${
+                        license.max_companies_override != null
+                            ? license.max_companies_override
+                            : ""
+                    }"
+                    placeholder="Sınırsız"
+                >
+
+            </div>
+
+
+            <div class="form-help">
+                Bir alanı boş bırakırsanız ilgili
+                override temizlenir ve sistem planın
+                varsayılan değerine döner.
+            </div>
+
+
+            <div
+                id="editLimitsError"
+                style="
+                    color:var(--danger);
+                    margin:12px 0;
+                    display:none;
+                "
+            ></div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="editLimitsSubmitBtn"
+                >
+                    Limitleri Kaydet
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    showModal(
+        `Limitler: ${
+            escapeHtml(
+                license.company_name ||
+                "-"
+            )
+        }`,
+        content
+    );
+
+}
+
+
+/* ============================================================
+   SUBMIT LIMITS
+============================================================ */
+
+async function submitEditLimits(
+    event,
+    licenseId
+) {
+
+    event.preventDefault();
+
+
+    const form =
+        event.target;
+
+
+    const errorDiv =
+        document.getElementById(
+            "editLimitsError"
+        );
+
+
+    const submitBtn =
+        document.getElementById(
+            "editLimitsSubmitBtn"
+        );
+
+
+    errorDiv.style.display =
+        "none";
+
+
+    submitBtn.disabled =
+        true;
+
+
+    submitBtn.textContent =
+        "Kaydediliyor...";
+
+
+    const data = {
+
+        maxUsersOverride:
+            parseOptionalPositiveInt(
+                form
+                    .max_users_override
+                    .value
+            ) ?? null,
+
+        maxContractsOverride:
+            parseOptionalPositiveInt(
+                form
+                    .max_contracts_override
+                    .value
+            ) ?? null,
+
+        maxCompaniesOverride:
+            parseOptionalPositiveInt(
+                form
+                    .max_companies_override
+                    .value
+            ) ?? null
+
+    };
+
+
+    try {
+
+        const result =
+            await AdminAPI
+                .updateLicenseLimits(
+                    licenseId,
+                    data
+                );
+
+
+        if (result.success) {
+
+            closeModal();
+
+            await loadLicenses();
+
+        } else {
+
+            errorDiv.textContent =
+                describeApiError(
+                    result
+                );
+
+
+            errorDiv.style.display =
+                "block";
+
         }
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
-            if (authenticated) {
-                initExpiringFromQuery();
-                await Promise.all([loadCompaniesForSelect(), loadPlans()]);
-                loadLicenses();
-            }
-        });
-    </script>
+    } catch (error) {
+
+        errorDiv.textContent =
+            "Limitler güncellenirken hata oluştu: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+    } finally {
+
+        submitBtn.disabled =
+            false;
+
+
+        submitBtn.textContent =
+            "Limitleri Kaydet";
+
+    }
+
+}
+
+
+/* ============================================================
+   EXPIRING FILTER
+============================================================ */
+
+function onExpiringToggle() {
+
+    loadLicenses();
+
+}
+
+
+function initExpiringFromQuery() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+
+    const expiring =
+        params.get(
+            "expiring"
+        );
+
+
+    if (expiring) {
+
+        document.getElementById(
+            "expiringOnlyCheckbox"
+        ).checked =
+            true;
+
+
+        document.getElementById(
+            "expiringDaysInput"
+        ).value =
+            expiring;
+
+    }
+
+}
+
+
+/* ============================================================
+   EXTEND MODAL
+============================================================ */
+
+function openExtendLicenseModal(
+    licenseId
+) {
+
+    const license =
+        licensesCache.find(
+            item =>
+                String(item.id) ===
+                String(licenseId)
+        );
+
+
+    const companyName =
+        license
+            ? license.company_name
+            : "";
+
+
+    const content = `
+
+        <form
+            onsubmit="submitExtendLicense(
+                event,
+                '${licenseId}'
+            )"
+        >
+
+            <div class="license-info-box">
+
+                ${
+                    companyName
+                        ? `
+                            <strong>
+                                ${escapeHtml(
+                                    companyName
+                                )}
+                            </strong>
+                            <br>
+                        `
+                        : ""
+                }
+
+                Lisansın mevcut bitiş tarihine
+                eklenecek süreyi belirleyin.
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Uzatma Süresi (Ay) *
+                </label>
+
+                <input
+                    type="number"
+                    name="additional_months"
+                    value="12"
+                    min="1"
+                    max="120"
+                    step="1"
+                    required
+                >
+
+                <div class="form-help">
+                    1 ile 120 ay arasında
+                    bir değer girebilirsiniz.
+                </div>
+
+            </div>
+
+
+            <div
+                id="extendLicenseError"
+                style="
+                    color:var(--danger);
+                    margin-bottom:12px;
+                    display:none;
+                "
+            ></div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="extendLicenseSubmitBtn"
+                >
+                    Lisansı Uzat
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    showModal(
+        "Lisans Süresini Uzat",
+        content
+    );
+
+}
+
+
+/* ============================================================
+   EXTEND SUBMIT
+============================================================ */
+
+async function submitExtendLicense(
+    event,
+    licenseId
+) {
+
+    event.preventDefault();
+
+
+    const form =
+        event.target;
+
+
+    const errorDiv =
+        document.getElementById(
+            "extendLicenseError"
+        );
+
+
+    const submitBtn =
+        document.getElementById(
+            "extendLicenseSubmitBtn"
+        );
+
+
+    const months =
+        parseInt(
+            form.additional_months.value,
+            10
+        );
+
+
+    if (
+        !Number.isInteger(months) ||
+        months < 1 ||
+        months > 120
+    ) {
+
+        errorDiv.textContent =
+            "Lütfen 1 ile 120 arasında geçerli bir ay değeri girin.";
+
+
+        errorDiv.style.display =
+            "block";
+
+
+        return;
+
+    }
+
+
+    errorDiv.style.display =
+        "none";
+
+
+    submitBtn.disabled =
+        true;
+
+
+    submitBtn.textContent =
+        "Uzatılıyor...";
+
+
+    try {
+
+        const result =
+            await AdminAPI.extendLicense(
+                licenseId,
+                {
+                    additionalMonths:
+                        months
+                }
+            );
+
+
+        if (result.success) {
+
+            closeModal();
+
+            await loadLicenses();
+
+        } else {
+
+            errorDiv.textContent =
+                describeApiError(
+                    result
+                );
+
+
+            errorDiv.style.display =
+                "block";
+
+        }
+
+    } catch (error) {
+
+        errorDiv.textContent =
+            "Lisans uzatılırken hata oluştu: " +
+            error.message;
+
+
+        errorDiv.style.display =
+            "block";
+
+    } finally {
+
+        submitBtn.disabled =
+            false;
+
+
+        submitBtn.textContent =
+            "Lisansı Uzat";
+
+    }
+
+}
+
+
+/* ============================================================
+   CANCEL
+============================================================ */
+
+async function cancelLicense(
+    licenseId
+) {
+
+    const license =
+        licensesCache.find(
+            item =>
+                String(item.id) ===
+                String(licenseId)
+        );
+
+
+    const company =
+        license &&
+        license.company_name
+            ? ` (${license.company_name})`
+            : "";
+
+
+    if (
+        !confirm(
+            `Bu lisansı iptal etmek istediğinize emin misiniz?${company}`
+        )
+    ) {
+        return;
+    }
+
+
+    try {
+
+        const result =
+            await AdminAPI.cancelLicense(
+                licenseId
+            );
+
+
+        if (result.success) {
+
+            await loadLicenses();
+
+        } else {
+
+            alert(
+                describeApiError(
+                    result
+                )
+            );
+
+        }
+
+    } catch (error) {
+
+        alert(
+            "Lisans iptal edilirken hata oluştu: " +
+            error.message
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        initExpiringFromQuery();
+
+
+        await Promise.all([
+            loadCompaniesForSelect(),
+            loadPlans()
+        ]);
+
+
+        await loadLicenses();
+
+    }
+);
+
+</script>
+
 </body>
 </html>
