@@ -390,6 +390,10 @@ window.fetch = (input, init = {}) => {
       ownershipTransfer: details.ownershipTransfer === true,
       shortTermLease: details.shortTermLease === true,
       lowValueAsset: details.lowValueAsset === true,
+      lowValueWhenNewConfirmed: details.lowValueWhenNewConfirmed === true,
+      lowValueStandaloneUseConfirmed: details.lowValueStandaloneUseConfirmed === true,
+      lowValueNotHighlyDependentConfirmed: details.lowValueNotHighlyDependentConfirmed === true,
+      lowValueNoSubleaseConfirmed: details.lowValueNoSubleaseConfirmed === true,
       integrationMetadata: details.integrationMetadata && typeof details.integrationMetadata === "object"
         ? details.integrationMetadata
         : null,
@@ -697,6 +701,10 @@ window.fetch = (input, init = {}) => {
       ownershipTransfer: contract.ownershipTransfer === true,
       shortTermLease: contract.shortTermLease === true,
       lowValueAsset: contract.lowValueAsset === true,
+      lowValueWhenNewConfirmed: contract.lowValueWhenNewConfirmed === true,
+      lowValueStandaloneUseConfirmed: contract.lowValueStandaloneUseConfirmed === true,
+      lowValueNotHighlyDependentConfirmed: contract.lowValueNotHighlyDependentConfirmed === true,
+      lowValueNoSubleaseConfirmed: contract.lowValueNoSubleaseConfirmed === true,
       integrationMetadata: contract.integrationMetadata && typeof contract.integrationMetadata === "object"
         ? contract.integrationMetadata
         : null,
@@ -7081,6 +7089,17 @@ window.fetch = (input, init = {}) => {
 
           lowValueAsset:
             getCheckbox("lowValueAsset"),
+
+          // Persist the four IFRS 16 B3-B7 confirmations alongside the
+          // low-value election; disabled inputs are still read explicitly.
+          lowValueWhenNewConfirmed:
+            getCheckbox("lowValueWhenNewConfirmed"),
+          lowValueStandaloneUseConfirmed:
+            getCheckbox("lowValueStandaloneUseConfirmed"),
+          lowValueNotHighlyDependentConfirmed:
+            getCheckbox("lowValueNotHighlyDependentConfirmed"),
+          lowValueNoSubleaseConfirmed:
+            getCheckbox("lowValueNoSubleaseConfirmed"),
 
           assetClass:
             resolveAssetClassFromForm() ||
@@ -18520,6 +18539,10 @@ ${renderAccountingCenterBulkPromo()}
         ownershipTransfer: ["ownership transfer", "mülkiyet devri", "mulkiyet devri", "kira sonunda mülkiyet devri var", "kira sonunda mulkiyet devri var"],
         shortTermLease: ["short term lease", "short term exemption", "kısa vadeli kiralama istisnası", "kisa vadeli kiralama istisnasi"],
         lowValueAsset: ["low value asset", "low value exemption", "düşük değerli varlık istisnası", "dusuk degerli varlik istisnasi"],
+        lowValueWhenNewConfirmed: ["low value when new confirmed", "low value value when new", "yeni durumdaki değerinin düşük olduğu teyit edildi", "yeni durumdaki degerinin dusuk oldugu teyit edildi"],
+        lowValueStandaloneUseConfirmed: ["low value standalone use confirmed", "standalone use confirmed", "tek başına kullanılabildiği teyit edildi", "tek basina kullanilabildigi teyit edildi"],
+        lowValueNotHighlyDependentConfirmed: ["low value not highly dependent confirmed", "not highly dependent confirmed", "yüksek derecede bağımlı olmadığı teyit edildi", "yuksek derecede bagimli olmadigi teyit edildi"],
+        lowValueNoSubleaseConfirmed: ["low value no sublease confirmed", "no sublease confirmed", "sublease edilmediği teyit edildi", "sublease edilmedigi teyit edildi"],
         indexBaseRate: ["base index rate", "index base rate", "baz endeks oranı", "baz endeks orani"],
         indexCurrentRate: ["current index rate", "index current rate", "güncel endeks oranı", "guncel endeks orani"],
         indexReviewMonth: ["index review month", "index update month", "endeks güncelleme ayı", "endeks guncelleme ayi"],
@@ -18930,6 +18953,10 @@ ${renderAccountingCenterBulkPromo()}
       ownershipTransfer: integrationOptionalBoolean(row, fields.ownershipTransfer || []),
       shortTermLease: integrationOptionalBoolean(row, fields.shortTermLease || []),
       lowValueAsset: integrationOptionalBoolean(row, fields.lowValueAsset || []),
+      lowValueWhenNewConfirmed: integrationOptionalBoolean(row, fields.lowValueWhenNewConfirmed || []),
+      lowValueStandaloneUseConfirmed: integrationOptionalBoolean(row, fields.lowValueStandaloneUseConfirmed || []),
+      lowValueNotHighlyDependentConfirmed: integrationOptionalBoolean(row, fields.lowValueNotHighlyDependentConfirmed || []),
+      lowValueNoSubleaseConfirmed: integrationOptionalBoolean(row, fields.lowValueNoSubleaseConfirmed || []),
       indexBaseRate: integrationOptionalNumber(row, fields.indexBaseRate || []),
       indexCurrentRate: integrationOptionalNumber(row, fields.indexCurrentRate || []),
       indexReviewMonth: integrationOptionalReviewMonth(row, fields.indexReviewMonth || []),
@@ -19123,6 +19150,10 @@ ${renderAccountingCenterBulkPromo()}
       ownershipTransfer: data.ownershipTransfer === true,
       shortTermLease: data.shortTermLease === true,
       lowValueAsset: data.lowValueAsset === true,
+      lowValueWhenNewConfirmed: data.lowValueWhenNewConfirmed === true,
+      lowValueStandaloneUseConfirmed: data.lowValueStandaloneUseConfirmed === true,
+      lowValueNotHighlyDependentConfirmed: data.lowValueNotHighlyDependentConfirmed === true,
+      lowValueNoSubleaseConfirmed: data.lowValueNoSubleaseConfirmed === true,
       modification: false,
       reassessments: []
     };
@@ -19165,6 +19196,10 @@ ${renderAccountingCenterBulkPromo()}
     if (data.ownershipTransfer !== undefined) base.ownershipTransfer = data.ownershipTransfer === true;
     if (data.shortTermLease !== undefined) base.shortTermLease = data.shortTermLease === true;
     if (data.lowValueAsset !== undefined) base.lowValueAsset = data.lowValueAsset === true;
+    if (data.lowValueWhenNewConfirmed !== undefined) base.lowValueWhenNewConfirmed = data.lowValueWhenNewConfirmed === true;
+    if (data.lowValueStandaloneUseConfirmed !== undefined) base.lowValueStandaloneUseConfirmed = data.lowValueStandaloneUseConfirmed === true;
+    if (data.lowValueNotHighlyDependentConfirmed !== undefined) base.lowValueNotHighlyDependentConfirmed = data.lowValueNotHighlyDependentConfirmed === true;
+    if (data.lowValueNoSubleaseConfirmed !== undefined) base.lowValueNoSubleaseConfirmed = data.lowValueNoSubleaseConfirmed === true;
     if (!Array.isArray(base.reassessments)) base.reassessments = [];
     base.integrationMetadata = {
       ...(base.integrationMetadata || {}),
@@ -19184,7 +19219,7 @@ ${renderAccountingCenterBulkPromo()}
 
   function detectIntegrationChanges(oldContract, newData) {
     if (!oldContract) return [];
-    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "currency", "functionalCurrency", "paymentFrequency", "paymentTiming", "initialDirectCosts", "restorationObligation", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "indexBaseRate", "indexCurrentRate", "indexReviewMonth", "indexReviewDay", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset"];
+    const fields = ["company", "supplier", "monthlyPayment", "startDate", "endDate", "discountRate", "renewalDate", "currency", "functionalCurrency", "paymentFrequency", "paymentTiming", "initialDirectCosts", "restorationObligation", "status", "assetClass", "prepayments", "leaseIncentives", "leaseIncreaseType", "leaseIncreaseRate", "fixedIncrease", "variablePayment", "usefulLifeMonths", "indexBaseRate", "indexCurrentRate", "indexReviewMonth", "indexReviewDay", "renewalOption", "terminationOption", "purchaseOption", "ownershipTransfer", "shortTermLease", "lowValueAsset", "lowValueWhenNewConfirmed", "lowValueStandaloneUseConfirmed", "lowValueNotHighlyDependentConfirmed", "lowValueNoSubleaseConfirmed"];
     return fields.filter(field => newData[field] !== undefined && String(oldContract[field] ?? "") !== String(newData[field] ?? "")).map(field => ({ field, oldValue: oldContract[field] ?? null, newValue: newData[field] ?? null }));
   }
 
@@ -21250,6 +21285,10 @@ ${renderAccountingCenterBulkPromo()}
     normalized.restorationObligation = v20Amount(contract.restorationObligation);
     normalized.shortTermLease = contract.shortTermLease === true;
     normalized.lowValueAsset = contract.lowValueAsset === true;
+    normalized.lowValueWhenNewConfirmed = contract.lowValueWhenNewConfirmed === true;
+    normalized.lowValueStandaloneUseConfirmed = contract.lowValueStandaloneUseConfirmed === true;
+    normalized.lowValueNotHighlyDependentConfirmed = contract.lowValueNotHighlyDependentConfirmed === true;
+    normalized.lowValueNoSubleaseConfirmed = contract.lowValueNoSubleaseConfirmed === true;
 
     normalized.revisionNo = Number.isFinite(Number(contract.revisionNo))
       ? Number(contract.revisionNo)
