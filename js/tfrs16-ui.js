@@ -5849,9 +5849,20 @@ window.fetch = (input, init = {}) => {
         c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE"
       );
 
+    // The dashboard KPI uses reporting-date balances, which are a separate
+    // private endpoint/cache from the ordinary lease projection. Never turn
+    // a missing reporting-date result into a misleading zero while the cache
+    // is still warming; the hydration pass will repaint the cards once the
+    // authoritative split is available.
+    const kpiAsOfDate = new Date();
+    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
+        active.some(contract => !getPrivateReportingDateResult(contract, kpiAsOfDate))) {
+      setKpiPendingState();
+      return;
+    }
+
     const totals = new Map();
     let totalsError = "";
-    const kpiAsOfDate = new Date();
     const fallbackDates = new Set();
 
     active.forEach(
@@ -7593,7 +7604,7 @@ window.fetch = (input, init = {}) => {
         0
       );
 
-    const payment = summary ? summary.payment :
+    const payment = summary ? (summary.recurringCashSettlement ?? summary.cashSettlement ?? summary.payment) :
       selected.reduce(
         (total, item) =>
           total + item.payment,
@@ -7624,8 +7635,8 @@ window.fetch = (input, init = {}) => {
       },
 
       {
-        accountKey: "leaseLiabilityCurrent",
-        account: "301 Kiralama Yükümlülüğü - Current",
+        accountKey: "cashSettlement",
+        account: "102 Banka / 100 Kasa (Kira Ödemesi)",
         debit: 0,
         credit: payment
       },
@@ -8563,7 +8574,7 @@ ${renderAccountingCenterBulkPromo()}
 
     const payment =
       privateJournalRows
-        ? privateJournalRows.reduce((total, item) => total + (Number(item.payment) || 0), 0)
+        ? privateJournalRows.reduce((total, item) => total + (Number(item.cashSettlement ?? item.payment) || 0), 0)
         : accrualSummary
         // GC-2026-09: 301 kaydı, advance ilk taksit gibi ZATEN initial
         // entry'de banka'ya karşılık kaydedilmiş nakit hareketlerini
@@ -8607,8 +8618,8 @@ ${renderAccountingCenterBulkPromo()}
       },
 
       {
-        accountKey: "leaseLiabilityCurrent",
-        account: "301 Kiralama Yükümlülüğü - Current",
+        accountKey: "cashSettlement",
+        account: "102 Banka / 100 Kasa (Kira Ödemesi)",
         debit: 0,
         credit: payment
       },
@@ -11452,7 +11463,9 @@ ${renderAccountingCenterBulkPromo()}
     };
 
     const interestEntry = (entries || []).find(x => x.accountKey === "interestExpense" && !x.source);
-    const paymentEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityCurrent" && !x.source);
+    const paymentEntry = (entries || []).find(x =>
+      (x.accountKey === "cashSettlement" || x.accountKey === "leaseLiabilityCurrent") && !x.source
+    );
     const growthEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityAccrualGrowth" && !x.source);
     const interest = translatedAmount(Number(interestEntry?.debit) || Number(interestEntry?.credit), "interest");
     const payment = translatedAmount(Number(paymentEntry?.debit) || Number(paymentEntry?.credit), "payment");
@@ -11670,7 +11683,21 @@ ${renderAccountingCenterBulkPromo()}
             const d = parseDate(item.date);
             return d && d >= periodDates.periodStart && d <= periodDates.periodEnd;
           })
-        : getScheduleForYear(contract, year, month, period);
+          : getScheduleForYear(contract, year, month, period);
+      const privateResult = getPrivateCachedCalculationResult(contract);
+      const privatePeriodEffects = Array.isArray(privateResult?.periodEffects)
+        ? privateResult.periodEffects.filter(item => {
+            const d = parseDate(item?.date);
+            return d && d >= periodDates.periodStart && d <= periodDates.periodEnd;
+          })
+        : [];
+      // Bulk journals consume the same private period projection as the
+      // single-contract preview.  This keeps advance commencement payments
+      // at zero recurring cash settlement and removes the old browser-side
+      // 301 reconstruction path.
+      const journalRows = privatePeriodEffects.length === selected.length
+        ? privatePeriodEffects
+        : selected;
       const changeEntries = buildAppliedChangeJournalEntries(
         contract,
         periodDates.periodStart,
@@ -11698,15 +11725,21 @@ ${renderAccountingCenterBulkPromo()}
         continue;
       }
 
-      const interest = selected.reduce((total, item) => total + item.interest, 0);
-      const principal = selected.reduce((total, item) => total + item.principal, 0);
-      const payment = selected.reduce((total, item) => total + item.payment, 0);
-      const depreciation = selected.reduce((total, item) => total + item.depreciation, 0);
+      const interest = journalRows.reduce((total, item) => total + (Number(item.interest) || 0), 0);
+      const principal = journalRows.reduce((total, item) => total + (Number(item.principal) || 0), 0);
+      const firstScheduleDate = parseDate(effectiveSchedule[0]?.date)?.getTime();
+      const advance = ["advance", "in_advance", "prepaid"].includes(String(contract?.paymentTiming || "").toLowerCase());
+      const payment = journalRows.reduce((total, item) => {
+        if (item?.cashSettlement !== undefined) return total + (Number(item.cashSettlement) || 0);
+        const itemDate = parseDate(item?.date)?.getTime();
+        return total + (advance && itemDate === firstScheduleDate ? 0 : (Number(item?.payment) || 0));
+      }, 0);
+      const depreciation = journalRows.reduce((total, item) => total + (Number(item.depreciation) || 0), 0);
 
       const baseEntries = [
         { accountKey: "interestExpense", account: "780 Finansman Giderleri", debit: interest, credit: 0 },
         { accountKey: "leaseLiability", account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
-        { accountKey: "leaseLiabilityCurrent", account: "301 Kiralama Yükümlülüğü - Current", debit: 0, credit: payment },
+        { accountKey: "cashSettlement", account: "102 Banka / 100 Kasa (Kira Ödemesi)", debit: 0, credit: payment },
         { accountKey: "depreciationExpense", account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
         { accountKey: "rouAccumDep", account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
       ];
@@ -11723,7 +11756,7 @@ ${renderAccountingCenterBulkPromo()}
           mappedBase.concat(changeEntries),
           periodDates.periodStart,
           periodDates.periodEnd,
-          selected
+          journalRows
         );
       } catch (error) {
         hideLoading();
