@@ -4498,98 +4498,12 @@ window.fetch = (input, init = {}) => {
     return String(timing || "arrears").trim().toLowerCase() === "advance";
   }
 
-  /**
-   * resolveDiscountRateConvention — kira sözleşmesindeki discountRate
-   * alanının EFEKTİF yıllık oran mı yoksa NOMİNAL yıllık oran mı
-   * olduğunu belirler. GC-2026-09 düzeltmesi öncesi motor, oranı her
-   * zaman nominal kabul edip 12'ye bölüyordu (annualRate/100/12); bu
-   * ay/çeyrek dışı ödeme sıklıklarında yanlış efektif yıllık orana
-   * yol açıyordu (bkz. engine-decisions-and-learnings.md).
-   *
-   * VARSAYILAN artık "effective" — LEASE-020 gibi "yıllık efektif
-   * iskonto oranı" olarak girilen sözleşmelerle tutarlı. Geçmişte
-   * nominal varsayımıyla girilmiş sözleşmeler için contract/newTerms
-   * üzerinde açık `discountRateConvention: "nominal"` alanı set
-   * edilerek ESKİ davranış (annualRate/100/12) korunabilir — hiçbir
-   * kayıt otomatik/sessizce yeniden yorumlanmaz, karar sözleşme
-   * bazında açık alanla verilir.
-   */
-  function resolveDiscountRateConvention(source) {
-    const raw = String((source && source.discountRateConvention) || "effective")
-      .trim()
-      .toLowerCase();
-    return raw === "nominal" ? "nominal" : "effective";
-  }
-
-  /**
-   * resolveContractMonthlyRate — annualRatePercent (örn. 5.5) ve
-   * convention'a göre AYLIK iskonto oranını üretir. explicitMonthlyRate
-   * (effectiveMonthlyRate alanı) verilmişse bu HER ZAMAN önceliklidir
-   * ve doğrudan kullanılır (davranış değişmedi).
-   */
-  function resolveContractMonthlyRate(annualRatePercent, explicitMonthlyRate, convention) {
-    if (
-      explicitMonthlyRate !== undefined &&
-      explicitMonthlyRate !== null &&
-      explicitMonthlyRate !== ""
-    ) {
-      return Number(explicitMonthlyRate);
-    }
-    const annual = Number(annualRatePercent) || 0;
-    if (convention === "nominal") {
-      return annual / 100 / 12;
-    }
-    // effective (default): yıllık efektif orandan tam ay dönüşümü
-    return Math.pow(1 + annual / 100, 1 / 12) - 1;
-  }
-
-  function buildLeasePaymentDates(startDate, endDate, stepMonths, advance) {
-    const start = parseDate(startDate);
-    const end = parseDate(endDate);
-    if (!start || !end || end < start || stepMonths < 1) return [];
-
-    const termMonths = monthsBetween(startDate, endDate);
-    const dates = [];
-
-    if (advance) {
-      // Payment at commencement, then every stepMonths while the
-      // payment date still falls inside the lease term.
-      let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      while (cursor.getTime() <= end.getTime()) {
-        dates.push(new Date(cursor));
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + stepMonths, cursor.getDate());
-      }
-    } else {
-      // Arrears payments occur one day before each start-date anniversary.
-      // Generate one candidate beyond the term when needed, then filter it
-      // out so contracts ending one day before an anniversary retain the
-      // correct number of payment events.
-      const paymentCount = Math.max(1, Math.floor(termMonths / stepMonths));
-      for (let i = 1; i <= paymentCount; i++) {
-        const anniversary = new Date(start.getFullYear(), start.getMonth() + i * stepMonths, 1);
-        const daysInTargetMonth = new Date(anniversary.getFullYear(), anniversary.getMonth() + 1, 0).getDate();
-        anniversary.setDate(Math.min(start.getDate(), daysInTargetMonth));
-        anniversary.setDate(anniversary.getDate() - 1);
-        if (anniversary.getTime() <= end.getTime()) {
-          dates.push(anniversary);
-        }
-      }
-    }
-    return dates;
-  }
-
-  function monthsFromCommencement(startDate, paymentDate) {
-    const start = parseDate(startDate);
-    const pay = parseDate(paymentDate);
-    if (!start || !pay) return 0;
-    return (
-      (pay.getFullYear() - start.getFullYear()) * 12 +
-      (pay.getMonth() - start.getMonth())
-    );
-  }
-
   /* ==========================================================
-     TFRS 16 CALCULATION ENGINE
+     PRIVATE RESULT BOUNDARY
+     ----------------------------------------------------------
+     Lease measurement and schedule construction are owned by the
+     authenticated private engine. The public runtime keeps only the
+     bridge and presentation helpers needed by the existing UI.
   ========================================================== */
 
   function calculateLease(contract) {
@@ -4600,43 +4514,11 @@ window.fetch = (input, init = {}) => {
     return bridge.calculate(contract);
   }
 
-  /* ==========================================================
-     PROFESSIONAL CALCULATION ENGINE (V16.1)
-     ----------------------------------------------------------
-     calculateLease() above is untouched and remains the engine
-     used by every existing V15 screen (detail summary, initial
-     journal, accounting center, bulk journal, current/non-current
-     KPIs). Nothing in this file has been rewired to use the new
-     engine except the new Payment Schedule panel below.
-
-     calculateLeaseEngine() is additive. It wraps the same core
-     amortization math but accepts a wider set of TFRS 16
-     parameters: paymentFrequency, paymentTiming, leaseIncreaseType/
-     Rate, fixedIncrease, variablePayment, renewalOption,
-     terminationOption, initialDirectCosts, leaseIncentives,
-     prepayments, restorationObligation, shortTermLease,
-     lowValueAsset, effectiveMonthlyRate. When a contract only has
-     the legacy V15 fields (monthlyPayment, discountRate,
-     startDate, endDate) it produces numerically identical results
-     to calculateLease().
-
-     Implemented payment conventions:
-       - Payment frequency: monthly / quarterly / annual
-         (also accepts codes 1 / 3 / 12). Schedule and PV use the
-         real payment step; legacy monthly+arrears is unchanged.
-       - Payment timing: arrears (default) / advance
-         (advance discounts the first payment at t=0).
-       - Escalation: none / fixedRate / fixedAmount / index
-         (index uses leaseIncreaseRate as expected index growth;
-         actual index resets continue to go through reassessment).
-
-     V16.2 UPDATE: lease escalation (fixedRate / fixedAmount) is
-     implemented via computeEscalatedPayment() below. When
-     leaseIncreaseType is "none"/undefined (every legacy contract),
-     the ORIGINAL closed-form annuity path executes UNCHANGED —
-     same code, same numbers as V16.1. Escalation only activates
-     the alternate PV-summation path when explicitly requested.
-  ========================================================== */
+  /*
+   * TMS 16/29 input management remains in this runtime for the form and
+   * cache UI. Accounting entry points are bridge-only; reporting helpers
+   * consume schedules and envelopes already produced by the private engine.
+   */
 
   /* ==========================================================
      V18 Parça 1 — CPI ENDEKS TABLOSU
@@ -5304,56 +5186,11 @@ window.fetch = (input, init = {}) => {
   }
 
   /* ==========================================================
-     LIABILITY
-  ========================================================== */
-
-  function calculateCurrentLiability(
-    contract
-  ) {
-
-    const engine =
-      calculateLease(contract);
-
-    return engine.schedule
-      .slice(0, 12)
-      .reduce(
-        (total, item) =>
-          total + item.principal,
-        0
-      );
-  }
-
-  function calculateNonCurrentLiability(
-    contract
-  ) {
-
-    const engine =
-      calculateLease(contract);
-
-    const current =
-      calculateCurrentLiability(
-        contract
-      );
-
-    return Math.max(
-      0,
-      engine.liability - current
-    );
-  }
-
-  /* ==========================================================
      CURRENT / NON-CURRENT — REPORTING DATE BASED (V16.3 / Faz 6)
      ----------------------------------------------------------
-     calculateCurrentLiability()/calculateNonCurrentLiability()
-     above are UNTOUCHED and keep working exactly as in V15 (they
-     always look at the first 12 months from contract inception).
-
-     The functions below are additive: given an actual reporting
-     date, they find the outstanding liability AS OF that date
-     (from calculateLeaseEngine()'s schedule) and split it into
-     the next-12-months current portion and the remaining
-     non-current portion — the correct TFRS 16 classification
-     basis, independent of when the contract started.
+     The private reporting-date envelope is the only source for
+     outstanding, current, and non-current liability values. These
+     helpers adapt that envelope to legacy UI field names.
   ========================================================== */
 
   /**
