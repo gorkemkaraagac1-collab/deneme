@@ -1280,8 +1280,8 @@ window.fetch = (input, init = {}) => {
   // Apply mutations cross the same private boundary as calculation previews.
   // The server returns the authoritative APPLIED event, contract patch and
   // refreshed schedule; the browser only merges that envelope and persists
-  // the resulting contract record. The local implementation remains the
-  // explicit ?api=0 rollback path.
+  // the resulting contract record. There is no browser-side calculation
+  // fallback for either modification or reassessment.
   async function applyPrivateChange(kind, contract, eventId) {
     // DÜZELTME: aynı null-dönüş hatası burada da vardı — çağıranlar
     // (ör. applyModification sonrası "if (!result.valid)") null'da
@@ -3046,8 +3046,8 @@ window.fetch = (input, init = {}) => {
       };
     }
 
-    // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — bu fonksiyonun
-    // eskiden burada devam eden ~100 satırlık local apply dalı (contract
+    // The local apply implementation was removed — this function's former
+    // ~100-line local branch (contract
     // alanlarını doğrudan mutasyona uğratan, kendi journal/audit/rollback
     // mantığını taşıyan tam bir yerel uygulama akışı) tamamen silindi.
     // Private backend zaten yetkili APPLIED event + contract patch + revize
@@ -3149,7 +3149,8 @@ window.fetch = (input, init = {}) => {
     };
     let result;
     try {
-      // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı.
+      // The local reassessment calculator was removed; this preview always
+      // comes from the authenticated private engine.
       result = await loadPrivateChangePreview("reassessment", contract, previewInput);
     } catch (error) {
       return {
@@ -3649,8 +3650,8 @@ window.fetch = (input, init = {}) => {
 
     let result;
     try {
-      // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — local
-      // calculateModification() fallback dalı silindi.
+      // The local calculateModification() fallback was removed; this preview
+      // always comes from the authenticated private engine.
       result = await loadPrivateChangePreview("modification", contract, input);
     } catch (error) {
       return {
@@ -3771,8 +3772,8 @@ window.fetch = (input, init = {}) => {
       };
     }
 
-    // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı — bu fonksiyonun
-    // eskiden burada devam eden ~130 satırlık local apply dalı (kendi
+    // The local apply implementation was removed — this function's former
+    // ~130-line local branch (with its own
     // journal/audit/rollback mantığını taşıyan tam bir yerel uygulama
     // akışı) tamamen silindi. Private backend zaten yetkili APPLIED
     // event + contract patch + revize schedule döndürüyor.
