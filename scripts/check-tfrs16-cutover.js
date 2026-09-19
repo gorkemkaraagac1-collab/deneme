@@ -239,6 +239,12 @@ const checks = [
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],
   ["Pages artifact carries the UI runtime", /test -f _site\/js\/tfrs16-ui\.js/.test(pagesWorkflow)],
   ["TFRS16 page has no TMS19 script dependency", !/tms19/i.test(html)],
+  // FAZ 9: the shipped browser bundle must not retain test-only engine
+  // handles or raw calculation implementation markers.
+  ["public runtime has no test engine handle", !/__TFRS16_TEST__/.test(publicRuntimeSource)],
+  ["public runtime has no raw engine implementation markers", !/applyTMS29Restatement|calculateLeaseEngineImpl|runSelfTestsV19/.test(publicRuntimeSource)],
+  ["private adapter sends auth and cookies to the API", /Authorization/.test(adapter) && /credentials:\s*["']include["']/.test(adapter)],
+  ["private adapter has no browser calculation fallback", !/calculateLeaseEngineImpl|calculateLeaseEngine\s*\(/.test(adapter)],
 ];
 
 const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);

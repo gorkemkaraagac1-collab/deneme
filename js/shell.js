@@ -270,7 +270,7 @@ window.fetch = (input, init = {}) => {
   function syncCompanySelector() {
     const select = document.getElementById("v26ActiveCompanySelect");
     if (!select) return;
-    const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
+    const api = window.GK_TFRS16;
     const options = api && typeof api.getUnifiedCompanyOptions === "function"
       ? api.getUnifiedCompanyOptions()
       : [];
@@ -296,7 +296,7 @@ window.fetch = (input, init = {}) => {
     if (!select || select.dataset.bound === "true") return;
     select.dataset.bound = "true";
     select.addEventListener("change", () => {
-      const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
+      const api = window.GK_TFRS16;
       if (api && typeof api.setActiveCompanyId === "function") {
         api.setActiveCompanyId(select.value);
       }
@@ -337,9 +337,6 @@ window.fetch = (input, init = {}) => {
         if (window.GK_TFRS16 && typeof window.GK_TFRS16[fnName] === "function") {
           window.GK_TFRS16[fnName] = wrap;
         }
-        if (window.__TFRS16_TEST__ && typeof window.__TFRS16_TEST__[fnName] === "function") {
-          window.__TFRS16_TEST__[fnName] = wrap;
-        }
       } catch (_) {}
     });
     // Observe late-created V19 modal and keep it closed when page host is active
@@ -369,7 +366,7 @@ window.fetch = (input, init = {}) => {
     setTimeout(() => {
       try {
         rewireLegacyOpeners();
-        const api = window.GK_TFRS16 || window.__TFRS16_TEST__;
+        const api = window.GK_TFRS16;
         if (!api) return;
         // TFRS16 engine owns the KPI cards and applies the correct reporting
         // currency/available FX date. The legacy bridge exposes raw functional
