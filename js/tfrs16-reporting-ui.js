@@ -500,6 +500,10 @@
     const api = bridge();
     let privateHydrationStarted = false;
     let privateHydrationCompleted = false;
+    let privateReportingHydrationStarted = false;
+    let privateReportingHydrationCompleted = false;
+    let privateReportingHydrationError = null;
+    let privateReportingPeriodKey = null;
     let privateTms29HydrationStarted = false;
     let privateTms29HydrationCompleted = false;
     let privateTms29Result = null;
@@ -512,8 +516,15 @@
       const periodEnd = periodEndOverride ? api.parseDate(periodEndOverride) : new Date();
       const periodStart = new Date(periodEnd.getFullYear(), 0, 1);
       const reportingPeriod = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
+      const reportingDateKey = `${reportingPeriod}-${String(periodEnd.getDate()).padStart(2, "0")}`;
       const periodStartKey = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
       const periodKey = `${periodStartKey}|${reportingPeriod}`;
+      if (privateReportingPeriodKey !== reportingDateKey) {
+        privateReportingPeriodKey = reportingDateKey;
+        privateReportingHydrationStarted = false;
+        privateReportingHydrationCompleted = false;
+        privateReportingHydrationError = null;
+      }
       if (privateTms29PeriodKey !== periodKey) {
         privateTms29PeriodKey = periodKey;
         privateTms29HydrationStarted = false;
@@ -538,7 +549,25 @@
         }
         tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private hesaplama sonuçları yükleniyor...</div>`;
       } else if (api.isPrivateCalculationApiReady?.() && !privateTms29HydrationCompleted) {
-        if (!privateTms29HydrationStarted) {
+        if (!privateReportingHydrationCompleted) {
+          if (!privateReportingHydrationStarted) {
+            privateReportingHydrationStarted = true;
+            Promise.resolve(api.ensurePrivateReportingDateCache?.(contracts, periodEnd)).then(result => {
+              if (result?.failed > 0) {
+                throw new Error("Private reporting-date sonuçları eksik");
+              }
+              privateReportingHydrationCompleted = true;
+              render();
+            }).catch(reason => {
+              privateReportingHydrationError = reason;
+              privateReportingHydrationCompleted = true;
+              render();
+            });
+          }
+          tabContentHtml = `<div style="color:#475569;padding:12px 0;">Private raporlama tarihi sonuçları yükleniyor...</div>`;
+        } else if (privateReportingHydrationError) {
+          tabContentHtml = `<div style="color:#991b1b;padding:12px 0;">Dipnot hesaplanamadı: ${esc(privateReportingHydrationError?.message || String(privateReportingHydrationError))}</div>`;
+        } else if (!privateTms29HydrationStarted) {
           privateTms29HydrationStarted = true;
           const eligibleContracts = contracts.filter(contract => {
             if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return false;
