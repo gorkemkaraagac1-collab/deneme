@@ -136,7 +136,11 @@ const checks = [
   ["adapter targets the private TMS21 endpoint", /\/api\/calculations\/lease\/tms21/.test(adapter) && /async function calculateTms21\(/.test(adapter)],
   ["adapter targets the private early-payment endpoint", /\/api\/calculations\/lease\/early-payment/.test(adapter) && /async function calculateEarlyPayment\(/.test(adapter)],
   ["adapter targets the private sale-and-leaseback endpoint", /\/api\/calculations\/lease\/sale-and-leaseback/.test(adapter) && /async function calculateSaleAndLeaseback\(/.test(adapter)],
-  ["TMS21 runtime delegates unconditionally to the private facade", /async function buildTms21FxTranslation\(contract, scheduleSource, options = \{\}\)[\s\S]{0,700}privateFacade\.loadTms21/.test(engine)],
+  ["TMS21 runtime delegates unconditionally to the private facade", /async function buildTms21FxTranslation\(contract, scheduleSource, options = \{\}\)[\s\S]{0,1200}privateFacade\.loadTms21/.test(engine)],
+  ["public TMS21 translation math is removed after private cutover", (() => {
+    const match = engine.match(/async function buildTms21FxTranslation\([\s\S]*?\n  \}/);
+    return Boolean(match && !/loadV23Rates|buildReportingDateAccrual|translationSchedule|fxGainLoss/.test(match[0]));
+  })()],
   ["early-payment runtime delegates to the private facade", /async function applyEarlyPayment\(contractId, amount, date\)[\s\S]{0,1000}facade\.loadEarlyPayment/.test(engine)],
   ["adapter exposes the expected global", /global\.LeaseQantPrivateCalculation\s*=/.test(adapter)],
   ["private facade exposes async single-contract loading", /global\.LeaseQantPrivateTfrs16Facade\s*=/.test(facade) && /async function load\(/.test(facade)],
