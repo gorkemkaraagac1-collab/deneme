@@ -3,164 +3,1652 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Log - Admin Panel</title>
+
+    <title>Denetim İzi - LeaseQant</title>
+
     <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .audit-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin: 0 0 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            max-width: 820px;
+            margin: 0;
+            color: var(--text-light);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .audit-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            min-width: 0;
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.success {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.failed {
+            border-left: 3px solid var(--danger);
+        }
+
+        .summary-value {
+            font: 600 23px var(--mono);
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .audit-notice {
+            padding: 13px 15px;
+            color: var(--text);
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 10px;
+            line-height: 1.7;
+        }
+
+        .audit-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .audit-filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .audit-filters select {
+            height: 36px;
+            padding: 0 10px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .audit-table-wrap {
+            overflow-x: auto;
+        }
+
+        .audit-time {
+            color: var(--text-light);
+            font: 9px var(--mono);
+            white-space: nowrap;
+        }
+
+        .audit-action {
+            display: inline-flex;
+            padding: 4px 7px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font: 600 9px var(--mono);
+            white-space: nowrap;
+        }
+
+        .audit-entity {
+            font-size: 10px;
+        }
+
+        .audit-entity-id {
+            color: var(--text-light);
+            font: 9px var(--mono);
+        }
+
+        .audit-result {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .audit-result.success {
+            color: var(--success);
+            background: rgba(39, 112, 78, .08);
+        }
+
+        .audit-result.failed {
+            color: var(--danger);
+            background: rgba(143, 42, 32, .08);
+        }
+
+        .result-dot {
+            width: 6px;
+            height: 6px;
+            background: currentColor;
+            border-radius: 50%;
+        }
+
+        .detail-preview {
+            display: block;
+            max-width: 210px;
+            overflow: hidden;
+            color: var(--text-light);
+            font-size: 9px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .audit-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 18px;
+            border-top: 1px solid var(--border);
+        }
+
+        .pagination-info {
+            color: var(--text-light);
+            font: 10px var(--mono);
+        }
+
+        .pagination-actions {
+            display: flex;
+            gap: 7px;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .detail-section {
+            margin-bottom: 16px;
+        }
+
+        .detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-section h4 {
+            margin: 0 0 7px;
+            font-size: 11px;
+        }
+
+        .detail-meta {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 7px 12px;
+            padding: 12px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .detail-meta-label {
+            color: var(--text-light);
+        }
+
+        .json-box {
+            max-height: 300px;
+            overflow: auto;
+            box-sizing: border-box;
+            padding: 12px;
+            margin: 0;
+            color: var(--text);
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font: 10px/1.6 var(--mono);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .empty-detail {
+            padding: 12px;
+            color: var(--text-light);
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        @media (max-width: 800px) {
+            .audit-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .audit-filters {
+                width: 100%;
+            }
+
+            .audit-filters select {
+                flex: 1;
+                min-width: 150px;
+            }
+        }
+
+        @media (max-width: 680px) {
+            #auditTable thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+            }
+
+            #auditTable,
+            #auditTable tbody,
+            #auditTable tr,
+            #auditTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #auditTable {
+                min-width: 0;
+            }
+
+            #auditTable tr {
+                box-sizing: border-box;
+                padding: 10px 12px;
+                margin-bottom: 12px;
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+
+            #auditTable td {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+                gap: 12px;
+                padding: 7px 0;
+                border: 0;
+            }
+
+            #auditTable td::before {
+                content: attr(data-label);
+                flex-shrink: 0;
+                color: var(--text-light);
+                font: 500 9px var(--mono);
+                text-transform: uppercase;
+            }
+
+            .detail-preview {
+                max-width: 160px;
+            }
+
+            .audit-table-wrap {
+                overflow-x: hidden;
+            }
+
+            .audit-pagination {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .pagination-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .detail-meta {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
-            <a href="faq.html">❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a>
-            <a href="audit.html" class="active">📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">Audit Log</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+<nav class="sidebar" id="sidebar">
 
-        <div class="page-content">
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>All Audit Events</h3>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <select id="filterAction" onchange="loadAudit()">
-                            <option value="">All Actions</option>
-                            <option value="LOGIN">LOGIN</option>
-                            <option value="CREATE_USER">CREATE_USER</option>
-                            <option value="UPDATE_USER">UPDATE_USER</option>
-                            <option value="CREATE_COMPANY">CREATE_COMPANY</option>
-                            <option value="CREATE_LICENSE">CREATE_LICENSE</option>
-                            <option value="EXTEND_LICENSE">EXTEND_LICENSE</option>
-                            <option value="CANCEL_LICENSE">CANCEL_LICENSE</option>
-                            <option value="MODIFICATION_ROLLED_BACK">MODIFICATION_ROLLED_BACK</option>
-                            <option value="REASSESSMENT_ROLLED_BACK">REASSESSMENT_ROLLED_BACK</option>
-                        </select>
-                        <select id="filterEntity" onchange="loadAudit()">
-                            <option value="">All Types</option>
-                            <option value="user">User</option>
-                            <option value="company">Company</option>
-                            <option value="license">License</option>
-                            <option value="MODIFICATION">Modification</option>
-                            <option value="REASSESSMENT">Reassessment</option>
-                        </select>
-                    </div>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th>
-                            <th>User</th>
-                            <th>Company</th>
-                            <th>Action</th>
-                            <th>Entity</th>
-                            <th>Success</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody id="auditTableBody">
-                        <tr><td colspan="7" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
-                    </tbody>
-                </table>
-                <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--text-light);">
-                    <span id="auditPagination">Loading...</span>
-                    <div>
-                        <button class="btn btn-sm btn-outline" onclick="changePage(-1)">Previous</button>
-                        <button class="btn btn-sm btn-outline" onclick="changePage(1)">Next</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">
+            Admin
+        </small>
     </div>
 
-    <script src="../js/admin.js"></script>
-    <script>
-        let currentPage = 0;
-        const pageSize = 50;
-        let totalItems = 0;
+    <div class="sidebar-nav">
 
-        async function loadAudit() {
-            const action = document.getElementById('filterAction').value;
-            const entity = document.getElementById('filterEntity').value;
-            
-            const params = {
-                limit: pageSize,
-                offset: currentPage * pageSize
-            };
-            if (action) params.action = action;
-            if (entity) params.entity_type = entity;
-            
-            try {
-                const result = await AdminAPI.getAudit(params);
-                if (!result.success) {
-                    document.getElementById('auditTableBody').innerHTML = 
-                        `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error: ${result.error}</td></tr>`;
-                    return;
+        <div class="nav-label">
+            Yönetim
+        </div>
+
+        <a href="index.html">📊 Dashboard</a>
+        <a href="companies.html">🏢 Companies</a>
+        <a href="users.html">👤 Users</a>
+        <a href="licenses.html">🔑 Licenses</a>
+        <a href="plans.html">📦 Plans</a>
+        <a href="faq.html">❓ SSS</a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            💱 TCMB Kurları
+        </a>
+
+        <a
+            href="audit.html"
+            class="active"
+        >
+            📋 Audit Log
+        </a>
+
+    </div>
+
+</nav>
+
+
+<div class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        Denetim İzi
+    </div>
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="audit-page">
+
+    <!-- INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>
+                Audit Log
+            </h1>
+
+            <p>
+                Platform üzerinde gerçekleştirilen yönetim,
+                kullanıcı, şirket, lisans ve TFRS16 işlemlerinin
+                denetim kayıtlarını inceleyin.
+            </p>
+
+        </div>
+
+        <button
+            class="btn btn-outline"
+            onclick="refreshAudit()"
+        >
+            ↻ Yenile
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="audit-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryTotal"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Toplam Audit Kaydı
+            </div>
+
+        </div>
+
+
+        <div class="summary-card success">
+
+            <div
+                class="summary-value"
+                id="summarySuccess"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Bu Sayfadaki Başarılı
+            </div>
+
+        </div>
+
+
+        <div class="summary-card failed">
+
+            <div
+                class="summary-value"
+                id="summaryFailed"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Bu Sayfadaki Başarısız
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="audit-notice">
+
+        Audit kayıtları işlem geçmişinin izlenebilirliği için
+        gösterilir. Eski ve yeni değer içeren olaylarda
+        <strong>Detayı Gör</strong> seçeneği ile değişiklikleri
+        ayrı ayrı inceleyebilirsiniz.
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header audit-toolbar">
+
+            <h3>
+                Audit Olayları
+            </h3>
+
+
+            <div class="audit-filters">
+
+                <select
+                    id="filterAction"
+                    onchange="filtersChanged()"
+                >
+
+                    <option value="">
+                        Tüm İşlemler
+                    </option>
+
+                    <option value="LOGIN">
+                        LOGIN
+                    </option>
+
+                    <option value="CREATE_USER">
+                        CREATE_USER
+                    </option>
+
+                    <option value="UPDATE_USER">
+                        UPDATE_USER
+                    </option>
+
+                    <option value="CREATE_COMPANY">
+                        CREATE_COMPANY
+                    </option>
+
+                    <option value="CREATE_LICENSE">
+                        CREATE_LICENSE
+                    </option>
+
+                    <option value="EXTEND_LICENSE">
+                        EXTEND_LICENSE
+                    </option>
+
+                    <option value="CANCEL_LICENSE">
+                        CANCEL_LICENSE
+                    </option>
+
+                    <option value="MODIFICATION_ROLLED_BACK">
+                        MODIFICATION_ROLLED_BACK
+                    </option>
+
+                    <option value="REASSESSMENT_ROLLED_BACK">
+                        REASSESSMENT_ROLLED_BACK
+                    </option>
+
+                </select>
+
+
+                <select
+                    id="filterEntity"
+                    onchange="filtersChanged()"
+                >
+
+                    <option value="">
+                        Tüm Varlık Tipleri
+                    </option>
+
+                    <option value="user">
+                        Kullanıcı
+                    </option>
+
+                    <option value="company">
+                        Şirket
+                    </option>
+
+                    <option value="license">
+                        Lisans
+                    </option>
+
+                    <option value="MODIFICATION">
+                        Modifikasyon
+                    </option>
+
+                    <option value="REASSESSMENT">
+                        Yeniden Değerlendirme
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        <div class="audit-table-wrap">
+
+            <table id="auditTable">
+
+                <thead>
+
+                <tr>
+                    <th>Zaman</th>
+                    <th>Kullanıcı</th>
+                    <th>Şirket</th>
+                    <th>İşlem</th>
+                    <th>Varlık</th>
+                    <th>Sonuç</th>
+                    <th>Detay</th>
+                </tr>
+
+                </thead>
+
+
+                <tbody id="auditTableBody">
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        class="table-state"
+                    >
+                        Audit kayıtları yükleniyor...
+                    </td>
+
+                </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        <div class="audit-pagination">
+
+            <span
+                class="pagination-info"
+                id="auditPagination"
+            >
+                —
+            </span>
+
+
+            <div class="pagination-actions">
+
+                <button
+                    class="btn btn-sm btn-outline"
+                    id="previousPage"
+                    onclick="changePage(-1)"
+                >
+                    ← Önceki
+                </button>
+
+
+                <button
+                    class="btn btn-sm btn-outline"
+                    id="nextPage"
+                    onclick="changePage(1)"
+                >
+                    Sonraki →
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- DETAIL MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Audit Detayı
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
+    </div>
+
+    <div id="modalBody"></div>
+
+</div>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+/* ============================================================
+   STATE
+============================================================ */
+
+let currentPage = 0;
+
+const pageSize = 50;
+
+let totalItems = 0;
+
+let auditCache = [];
+
+let auditLoading = false;
+
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function safeJson(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+        return null;
+    }
+
+
+    try {
+
+        return JSON.stringify(
+            value,
+            null,
+            2
+        );
+
+    } catch (_) {
+
+        return String(value);
+
+    }
+
+}
+
+
+function detailPreview(event) {
+
+    const parts = [];
+
+
+    if (
+        event.old_value !== null &&
+        event.old_value !== undefined
+    ) {
+        parts.push("Eski değer");
+    }
+
+
+    if (
+        event.new_value !== null &&
+        event.new_value !== undefined
+    ) {
+        parts.push("Yeni değer");
+    }
+
+
+    if (!parts.length) {
+        return "Detay yok";
+    }
+
+
+    return parts.join(" / ");
+
+}
+
+
+/* ============================================================
+   LOAD
+============================================================ */
+
+async function loadAudit() {
+
+    if (auditLoading) {
+        return;
+    }
+
+
+    auditLoading = true;
+
+
+    const tbody =
+        document.getElementById(
+            "auditTableBody"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="7"
+                class="table-state"
+            >
+                Audit kayıtları yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    const action =
+        document.getElementById(
+            "filterAction"
+        ).value;
+
+
+    const entity =
+        document.getElementById(
+            "filterEntity"
+        ).value;
+
+
+    const params = {
+
+        limit:
+            pageSize,
+
+        offset:
+            currentPage *
+            pageSize
+
+    };
+
+
+    if (action) {
+        params.action = action;
+    }
+
+
+    if (entity) {
+        params.entity_type = entity;
+    }
+
+
+    try {
+
+        const result =
+            await AdminAPI.getAudit(
+                params
+            );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
+        }
+
+
+        auditCache =
+            Array.isArray(
+                result.data
+            )
+                ? result.data
+                : [];
+
+
+        totalItems =
+            Number(
+                result.pagination?.total ||
+                0
+            );
+
+
+        /*
+         * Filtre sonrası mevcut sayfa artık yoksa
+         * otomatik ilk geçerli sayfaya dön.
+         */
+        const maxPage =
+            totalItems > 0
+                ? Math.ceil(
+                    totalItems /
+                    pageSize
+                ) - 1
+                : 0;
+
+
+        if (
+            currentPage > maxPage
+        ) {
+
+            currentPage =
+                maxPage;
+
+
+            auditLoading =
+                false;
+
+
+            return loadAudit();
+
+        }
+
+
+        renderAudit();
+
+        renderSummary();
+
+        renderPagination();
+
+
+    } catch (error) {
+
+        console.error(
+            "Load audit error:",
+            error
+        );
+
+
+        auditCache = [];
+
+        totalItems = 0;
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="7"
+                    class="table-state error"
+                >
+                    ${escapeHtml(
+                        error.message ||
+                        "Audit kayıtları yüklenemedi."
+                    )}
+                </td>
+
+            </tr>
+
+        `;
+
+
+        resetSummary();
+
+        renderPagination();
+
+
+    } finally {
+
+        auditLoading =
+            false;
+
+    }
+
+}
+
+
+/* ============================================================
+   RENDER
+============================================================ */
+
+function renderAudit() {
+
+    const tbody =
+        document.getElementById(
+            "auditTableBody"
+        );
+
+
+    if (!auditCache.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="7"
+                    class="table-state"
+                >
+                    Seçilen kriterlere uygun audit kaydı bulunamadı.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        auditCache
+            .map(
+                (event, index) => {
+
+                    const company =
+                        event.company_name
+                            ? `${escapeHtml(
+                                event.company_name
+                              )}${
+                                event.company_code
+                                    ? ` (${escapeHtml(
+                                        event.company_code
+                                      )})`
+                                    : ""
+                              }`
+                            : "—";
+
+
+                    const entity =
+                        escapeHtml(
+                            event.entity_type ||
+                            "—"
+                        );
+
+
+                    const entityId =
+                        event.entity_id
+                            ? `
+                                <span class="audit-entity-id">
+                                    #${escapeHtml(
+                                        String(
+                                            event.entity_id
+                                        )
+                                    )}
+                                </span>
+                              `
+                            : "";
+
+
+                    const hasDetails =
+                        (
+                            event.old_value !== null &&
+                            event.old_value !== undefined
+                        ) ||
+                        (
+                            event.new_value !== null &&
+                            event.new_value !== undefined
+                        );
+
+
+                    return `
+
+                        <tr>
+
+                            <td data-label="Zaman">
+
+                                <span class="audit-time">
+                                    ${escapeHtml(
+                                        formatDate(
+                                            event.timestamp
+                                        )
+                                    )}
+                                </span>
+
+                            </td>
+
+
+                            <td data-label="Kullanıcı">
+
+                                ${escapeHtml(
+                                    event.user_username ||
+                                    "System"
+                                )}
+
+                            </td>
+
+
+                            <td data-label="Şirket">
+
+                                ${company}
+
+                            </td>
+
+
+                            <td data-label="İşlem">
+
+                                <span class="audit-action">
+                                    ${escapeHtml(
+                                        event.action ||
+                                        "—"
+                                    )}
+                                </span>
+
+                            </td>
+
+
+                            <td data-label="Varlık">
+
+                                <span class="audit-entity">
+                                    ${entity}
+                                    ${entityId}
+                                </span>
+
+                            </td>
+
+
+                            <td data-label="Sonuç">
+
+                                <span
+                                    class="audit-result ${
+                                        event.success
+                                            ? "success"
+                                            : "failed"
+                                    }"
+                                >
+
+                                    <span
+                                        class="result-dot"
+                                    ></span>
+
+                                    ${
+                                        event.success
+                                            ? "Başarılı"
+                                            : "Başarısız"
+                                    }
+
+                                </span>
+
+                            </td>
+
+
+                            <td data-label="Detay">
+
+                                ${
+                                    hasDetails
+                                        ? `
+                                            <button
+                                                class="btn btn-sm btn-outline"
+                                                onclick="openAuditDetail(${index})"
+                                            >
+                                                Detayı Gör
+                                            </button>
+                                          `
+                                        : `
+                                            <span class="detail-preview">
+                                                ${escapeHtml(
+                                                    detailPreview(
+                                                        event
+                                                    )
+                                                )}
+                                            </span>
+                                          `
+                                }
+
+                            </td>
+
+                        </tr>
+
+                    `;
+
                 }
-                
-                totalItems = result.pagination.total;
-                
-                const html = result.data.map(e => `
-                    <tr>
-                        <td style="font-size:12px;">${formatDate(e.timestamp)}</td>
-                        <td>${escapeHtml(e.user_username || 'System')}</td>
-                        <td>
-                            ${e.company_name ? `${escapeHtml(e.company_name)} (${escapeHtml(e.company_code || '')})` : 'N/A'}
-                        </td>
-                        <td><strong>${escapeHtml(e.action)}</strong></td>
-                        <td>${escapeHtml(e.entity_type)} ${e.entity_id ? '#'+e.entity_id : ''}</td>
-                        <td><span class="status ${e.success ? 'success' : 'failed'}">${e.success ? '✓' : '✗'}</span></td>
-                        <td style="font-size:12px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                            ${e.old_value ? 'OLD: ' + escapeHtml(JSON.stringify(e.old_value)) : ''}
-                            ${e.new_value ? ' NEW: ' + escapeHtml(JSON.stringify(e.new_value)) : ''}
-                        </td>
-                    </tr>
-                `).join('');
-                
-                document.getElementById('auditTableBody').innerHTML = html || 
-                    `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">No audit events found</td></tr>`;
-                
-                document.getElementById('auditPagination').textContent = 
-                    `Showing ${currentPage * pageSize + 1} - ${Math.min((currentPage + 1) * pageSize, totalItems)} of ${totalItems}`;
-                    
-            } catch (error) {
-                console.error('Load audit error:', error);
-                document.getElementById('auditTableBody').innerHTML = 
-                    `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Error loading audit data</td></tr>`;
+            )
+            .join("");
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderSummary() {
+
+    const success =
+        auditCache.filter(
+            event =>
+                Boolean(
+                    event.success
+                )
+        ).length;
+
+
+    const failed =
+        auditCache.length -
+        success;
+
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        totalItems;
+
+
+    document.getElementById(
+        "summarySuccess"
+    ).textContent =
+        success;
+
+
+    document.getElementById(
+        "summaryFailed"
+    ).textContent =
+        failed;
+
+}
+
+
+function resetSummary() {
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        "—";
+
+
+    document.getElementById(
+        "summarySuccess"
+    ).textContent =
+        "—";
+
+
+    document.getElementById(
+        "summaryFailed"
+    ).textContent =
+        "—";
+
+}
+
+
+/* ============================================================
+   PAGINATION
+============================================================ */
+
+function renderPagination() {
+
+    const info =
+        document.getElementById(
+            "auditPagination"
+        );
+
+
+    const previous =
+        document.getElementById(
+            "previousPage"
+        );
+
+
+    const next =
+        document.getElementById(
+            "nextPage"
+        );
+
+
+    if (
+        totalItems === 0
+    ) {
+
+        info.textContent =
+            "0 kayıt";
+
+
+        previous.disabled =
+            true;
+
+
+        next.disabled =
+            true;
+
+
+        return;
+
+    }
+
+
+    const start =
+        currentPage *
+        pageSize +
+        1;
+
+
+    const end =
+        Math.min(
+            (
+                currentPage + 1
+            ) *
+            pageSize,
+            totalItems
+        );
+
+
+    const totalPages =
+        Math.ceil(
+            totalItems /
+            pageSize
+        );
+
+
+    info.textContent =
+        `${start} - ${end} / ${totalItems} kayıt · Sayfa ${currentPage + 1}/${totalPages}`;
+
+
+    previous.disabled =
+        currentPage === 0;
+
+
+    next.disabled =
+        end >= totalItems;
+
+}
+
+
+/* ============================================================
+   PAGE CHANGE
+============================================================ */
+
+function changePage(delta) {
+
+    if (auditLoading) {
+        return;
+    }
+
+
+    const newPage =
+        currentPage +
+        delta;
+
+
+    const maxPage =
+        totalItems > 0
+            ? Math.ceil(
+                totalItems /
+                pageSize
+            ) - 1
+            : 0;
+
+
+    if (
+        newPage < 0 ||
+        newPage > maxPage
+    ) {
+        return;
+    }
+
+
+    currentPage =
+        newPage;
+
+
+    loadAudit();
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+
+}
+
+
+/* ============================================================
+   FILTER
+============================================================ */
+
+function filtersChanged() {
+
+    currentPage = 0;
+
+    loadAudit();
+
+}
+
+
+function refreshAudit() {
+
+    loadAudit();
+
+}
+
+
+/* ============================================================
+   DETAIL MODAL
+============================================================ */
+
+function openAuditDetail(index) {
+
+    const event =
+        auditCache[index];
+
+
+    if (!event) {
+        return;
+    }
+
+
+    const oldValue =
+        safeJson(
+            event.old_value
+        );
+
+
+    const newValue =
+        safeJson(
+            event.new_value
+        );
+
+
+    const company =
+        event.company_name
+            ? `${event.company_name}${
+                event.company_code
+                    ? ` (${event.company_code})`
+                    : ""
+              }`
+            : "—";
+
+
+    const content = `
+
+        <div class="detail-section">
+
+            <h4>
+                Olay Bilgileri
+            </h4>
+
+
+            <div class="detail-meta">
+
+                <div class="detail-meta-label">
+                    Zaman
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        formatDate(
+                            event.timestamp
+                        )
+                    )}
+                </div>
+
+
+                <div class="detail-meta-label">
+                    Kullanıcı
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        event.user_username ||
+                        "System"
+                    )}
+                </div>
+
+
+                <div class="detail-meta-label">
+                    Şirket
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        company
+                    )}
+                </div>
+
+
+                <div class="detail-meta-label">
+                    İşlem
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        event.action ||
+                        "—"
+                    )}
+                </div>
+
+
+                <div class="detail-meta-label">
+                    Varlık
+                </div>
+
+                <div>
+                    ${escapeHtml(
+                        event.entity_type ||
+                        "—"
+                    )}
+                    ${
+                        event.entity_id
+                            ? ` #${escapeHtml(
+                                String(
+                                    event.entity_id
+                                )
+                              )}`
+                            : ""
+                    }
+                </div>
+
+
+                <div class="detail-meta-label">
+                    Sonuç
+                </div>
+
+                <div>
+                    ${
+                        event.success
+                            ? "Başarılı"
+                            : "Başarısız"
+                    }
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="detail-section">
+
+            <h4>
+                Eski Değer
+            </h4>
+
+            ${
+                oldValue !== null
+                    ? `
+                        <pre class="json-box">${escapeHtml(
+                            oldValue
+                        )}</pre>
+                      `
+                    : `
+                        <div class="empty-detail">
+                            Eski değer bulunmuyor.
+                        </div>
+                      `
             }
+
+        </div>
+
+
+        <div class="detail-section">
+
+            <h4>
+                Yeni Değer
+            </h4>
+
+            ${
+                newValue !== null
+                    ? `
+                        <pre class="json-box">${escapeHtml(
+                            newValue
+                        )}</pre>
+                      `
+                    : `
+                        <div class="empty-detail">
+                            Yeni değer bulunmuyor.
+                        </div>
+                      `
+            }
+
+        </div>
+
+
+        <div class="modal-footer">
+
+            <button
+                type="button"
+                class="btn btn-primary"
+                onclick="closeModal()"
+            >
+                Kapat
+            </button>
+
+        </div>
+
+    `;
+
+
+    showModal(
+        "Audit Kaydı Detayı",
+        content
+    );
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
         }
 
-        function changePage(delta) {
-            const newPage = currentPage + delta;
-            const maxPage = Math.ceil(totalItems / pageSize) - 1;
-            if (newPage < 0 || newPage > maxPage) return;
-            currentPage = newPage;
-            loadAudit();
-        }
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
-            if (authenticated) {
-                loadAudit();
-            }
-        });
-    </script>
+        await loadAudit();
+
+    }
+);
+
+</script>
+
 </body>
 </html>
