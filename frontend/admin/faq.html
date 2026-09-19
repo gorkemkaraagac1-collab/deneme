@@ -3,316 +3,2118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSS - Admin Panel</title>
+
+    <title>SSS Yönetimi - LeaseQant</title>
+
     <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .faq-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin: 0 0 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            max-width: 780px;
+            margin: 0;
+            color: var(--text-light);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .faq-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            min-width: 0;
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.published {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.draft {
+            border-left: 3px solid var(--warning);
+        }
+
+        .summary-value {
+            font: 600 23px var(--mono);
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .faq-notice {
+            padding: 13px 15px;
+            background: rgba(176, 141, 87, .07);
+            border: 1px solid rgba(176, 141, 87, .20);
+            border-radius: var(--radius);
+            font-size: 10px;
+            line-height: 1.7;
+        }
+
+        .faq-notice strong {
+            color: var(--accent);
+        }
+
+        .faq-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .faq-filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .faq-search {
+            width: 230px;
+            height: 36px;
+            box-sizing: border-box;
+            padding: 0 10px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .faq-filter {
+            height: 36px;
+            padding: 0 10px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .faq-table-wrap {
+            overflow-x: auto;
+        }
+
+        .faq-question {
+            margin-bottom: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.5;
+        }
+
+        .faq-answer {
+            max-width: 620px;
+            color: var(--text-light);
+            font-size: 10px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .sort-controls {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .sort-controls button {
+            width: 30px;
+            height: 26px;
+            padding: 0;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            font-size: 9px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-pill.published {
+            color: var(--success);
+            background: rgba(39, 112, 78, .08);
+        }
+
+        .status-pill.draft {
+            color: var(--warning);
+            background: rgba(176, 141, 87, .10);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: currentColor;
+            border-radius: 50%;
+        }
+
+        .faq-actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .faq-record-count {
+            color: var(--text-light);
+            font: 9px var(--mono);
+        }
+
+        .form-help {
+            display: block;
+            margin-top: 5px;
+            color: var(--text-light);
+            font-size: 9px;
+            line-height: 1.5;
+        }
+
+        .faq-textarea {
+            width: 100%;
+            min-height: 130px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        .publish-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .publish-check input {
+            width: auto;
+            margin: 0;
+        }
+
+        .form-error {
+            display: none;
+            padding: 9px 11px;
+            margin-bottom: 12px;
+            color: var(--danger);
+            background: rgba(143, 42, 32, .06);
+            border: 1px solid rgba(143, 42, 32, .15);
+            border-radius: 7px;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .form-error.active {
+            display: block;
+        }
+
+        @media (max-width: 800px) {
+            .faq-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .faq-filters {
+                width: 100%;
+            }
+
+            .faq-search,
+            .faq-filter {
+                flex: 1;
+                width: auto;
+                min-width: 150px;
+            }
+        }
+
+        @media (max-width: 680px) {
+            #faqTable thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+            }
+
+            #faqTable,
+            #faqTable tbody,
+            #faqTable tr,
+            #faqTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #faqTable {
+                min-width: 0;
+            }
+
+            #faqTable tr {
+                box-sizing: border-box;
+                padding: 11px 12px;
+                margin-bottom: 12px;
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+
+            #faqTable td {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                box-sizing: border-box;
+                gap: 12px;
+                padding: 7px 0;
+                border: 0;
+            }
+
+            #faqTable td::before {
+                content: attr(data-label);
+                flex-shrink: 0;
+                color: var(--text-light);
+                font: 500 9px var(--mono);
+                text-transform: uppercase;
+            }
+
+            #faqTable td.faq-content-cell {
+                display: block;
+            }
+
+            #faqTable td.faq-content-cell::before {
+                display: block;
+                margin-bottom: 8px;
+            }
+
+            .faq-answer {
+                max-width: none;
+            }
+
+            .faq-table-wrap {
+                overflow-x: hidden;
+            }
+
+            .faq-actions {
+                justify-content: flex-end;
+            }
+        }
+    </style>
 </head>
+
 <body>
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Admin</small></div>
-        <div class="sidebar-nav">
-            <div class="nav-label">Yönetim</div>
-            <a href="index.html">📊 Dashboard</a>
-            <a href="companies.html">🏢 Companies</a>
-            <a href="users.html">👤 Users</a>
-            <a href="licenses.html">🔑 Licenses</a>
-            <a href="plans.html">📦 Plans</a>
-            <a href="faq.html" class="active">❓ SSS</a>
-            <a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a>
-            <a href="tfrs16.html">🧾 TFRS16 Customers</a>
-            <a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a>
-            <a href="fx-rates.html">
-                <span class="icon">💱</span> TCMB Kurları
-            </a>
-            <a href="audit.html">📋 Audit Log</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <header class="top-header">
-            <div class="page-title">SSS (Sık Sorulanlar)</div>
-            <div class="user-info">
-                <span class="username" id="adminUsername">Loading...</span>
-                <span class="role-badge">ADMIN</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
-        </header>
+<nav class="sidebar" id="sidebar">
 
-        <div class="page-content">
-            <div class="table-container">
-                <div class="table-header" style="display:flex;justify-content:space-between;align-items:center;">
-                    <h3>index.html — Sık Sorulanlar</h3>
-                    <button class="btn btn-primary" onclick="openCreateModal()">+ Yeni Soru</button>
-                </div>
-                <p style="padding:0 20px 12px;color:var(--text-light);font-size:13px;">
-                    Bu liste marketing sitesindeki (<code>index.html</code>) "Sık sorulanlar"
-                    bölümünü besler. Sıralama sütunundaki ↑ / ↓ ile görünüm sırası değiştirilir.
-                    "Yayında değil" işaretli sorular admin panelde görünmeye devam eder ama
-                    public sitede gösterilmez.
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Sıra</th>
-                            <th>Soru / Cevap</th>
-                            <th style="width:90px;">Durum</th>
-                            <th style="width:170px;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="faqTableBody">
-                        <tr><td colspan="4" style="text-align:center;color:var(--text-light);">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">
+            Admin
+        </small>
     </div>
 
-    <!-- Modal -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 id="modalTitle">Yeni Soru</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modalBody"></div>
+
+    <div class="sidebar-nav">
+
+        <div class="nav-label">
+            Yönetim
         </div>
+
+        <a href="index.html">📊 Dashboard</a>
+        <a href="companies.html">🏢 Companies</a>
+        <a href="users.html">👤 Users</a>
+        <a href="licenses.html">🔑 Licenses</a>
+        <a href="plans.html">📦 Plans</a>
+
+        <a
+            href="faq.html"
+            class="active"
+        >
+            ❓ SSS
+        </a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a href="fx-rates.html">
+            💱 TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            📋 Audit Log
+        </a>
+
     </div>
 
-    <script src="../js/admin.js"></script>
-    <script>
-        let allFaqs = [];
+</nav>
 
-        function escapeAttr(value) {
-            return escapeHtml(value).replace(/"/g, '&quot;');
-        }
 
-        async function loadFaqs() {
-            try {
-                const result = await AdminAPI.getFaqs();
+<div class="main-content">
 
-                if (!result.success) {
-                    document.getElementById('faqTableBody').innerHTML =
-                        `<tr><td colspan="4" style="text-align:center;color:var(--danger);">Error: ${escapeHtml(describeApiError(result))}</td></tr>`;
-                    return;
-                }
+<header class="top-header">
 
-                allFaqs = (result.data || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+    <div class="page-title">
+        SSS Yönetimi
+    </div>
 
-                renderFaqTable();
+    <div class="user-info">
 
-            } catch (error) {
-                console.error('Load FAQ error:', error);
-                document.getElementById('faqTableBody').innerHTML =
-                    `<tr><td colspan="4" style="text-align:center;color:var(--danger);">SSS listesi yüklenirken hata oluştu</td></tr>`;
-            }
-        }
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
 
-        function renderFaqTable() {
-            const html = allFaqs.map((f, index) => `
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="page-content">
+
+<div class="faq-page">
+
+    <!-- INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>
+                Sık Sorulan Sorular
+            </h1>
+
+            <p>
+                LeaseQant public sitesindeki Sık Sorulan Sorular
+                bölümünde yayınlanacak soru ve cevapları yönetin.
+            </p>
+
+        </div>
+
+
+        <button
+            class="btn btn-primary"
+            onclick="openCreateModal()"
+        >
+            + Yeni Soru
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="faq-summary">
+
+        <div class="summary-card">
+
+            <div
+                class="summary-value"
+                id="summaryTotal"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Toplam Soru
+            </div>
+
+        </div>
+
+
+        <div class="summary-card published">
+
+            <div
+                class="summary-value"
+                id="summaryPublished"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Yayında
+            </div>
+
+        </div>
+
+
+        <div class="summary-card draft">
+
+            <div
+                class="summary-value"
+                id="summaryDraft"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Yayında Değil
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- INFO -->
+
+    <section class="faq-notice">
+
+        Bu kayıtlar public <strong>index.html</strong> üzerindeki
+        Sık Sorulan Sorular bölümünü besler.
+
+        <strong>Yayında değil</strong> durumundaki sorular admin
+        panelinde saklanır ancak public sitede gösterilmez.
+
+        Yukarı ve aşağı oklarıyla görüntülenme sırasını
+        değiştirebilirsiniz.
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header faq-toolbar">
+
+            <div>
+
+                <h3>
+                    SSS Listesi
+                </h3>
+
+                <span
+                    class="faq-record-count"
+                    id="recordCount"
+                >
+                    —
+                </span>
+
+            </div>
+
+
+            <div class="faq-filters">
+
+                <input
+                    type="search"
+                    id="faqSearch"
+                    class="faq-search"
+                    placeholder="Soru veya cevap ara..."
+                    autocomplete="off"
+                    oninput="renderFaqTable()"
+                >
+
+
+                <select
+                    id="statusFilter"
+                    class="faq-filter"
+                    onchange="renderFaqTable()"
+                >
+
+                    <option value="">
+                        Tüm Durumlar
+                    </option>
+
+                    <option value="published">
+                        Yayında
+                    </option>
+
+                    <option value="draft">
+                        Yayında Değil
+                    </option>
+
+                </select>
+
+
+                <button
+                    class="btn btn-outline"
+                    onclick="loadFaqs()"
+                >
+                    ↻ Yenile
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div class="faq-table-wrap">
+
+            <table id="faqTable">
+
+                <thead>
+
                 <tr>
-                    <td>
-                        <div style="display:flex;flex-direction:column;gap:2px;">
-                            <button class="btn btn-sm btn-outline" title="Yukarı taşı" ${index === 0 ? 'disabled' : ''} onclick="moveFaq('${f.id}', -1)">↑</button>
-                            <button class="btn btn-sm btn-outline" title="Aşağı taşı" ${index === allFaqs.length - 1 ? 'disabled' : ''} onclick="moveFaq('${f.id}', 1)">↓</button>
-                        </div>
-                    </td>
-                    <td>
-                        <strong>${escapeHtml(f.question)}</strong>
-                        <div style="color:var(--text-light);font-size:12px;margin-top:4px;max-width:520px;">${escapeHtml(f.answer)}</div>
-                    </td>
-                    <td>
-                        ${f.is_published
-                            ? '<span class="role-badge" style="background:var(--success);color:#fff;">Yayında</span>'
-                            : '<span class="role-badge" style="background:var(--text-light);color:#fff;">Yayında değil</span>'}
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-success" onclick="openEditModal('${f.id}')">Düzenle</button>
-                        <button class="btn btn-sm btn-danger" onclick="confirmDeleteFaq('${f.id}')">Sil</button>
-                    </td>
+                    <th style="width:70px">
+                        Sıra
+                    </th>
+
+                    <th>
+                        Soru / Cevap
+                    </th>
+
+                    <th style="width:120px">
+                        Durum
+                    </th>
+
+                    <th style="width:180px">
+                        İşlemler
+                    </th>
                 </tr>
-            `).join('');
 
-            document.getElementById('faqTableBody').innerHTML = html ||
-                `<tr><td colspan="4" style="text-align:center;color:var(--text-light);">Henüz soru eklenmemiş</td></tr>`;
+                </thead>
+
+
+                <tbody id="faqTableBody">
+
+                <tr>
+
+                    <td
+                        colspan="4"
+                        class="table-state"
+                    >
+                        SSS kayıtları yükleniyor...
+                    </td>
+
+                </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+</div>
+
+</main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal-overlay"
+    id="modalOverlay"
+>
+
+<div class="modal">
+
+    <div class="modal-header">
+
+        <h3 id="modalTitle">
+            Yeni Soru
+        </h3>
+
+        <button
+            class="modal-close"
+            onclick="closeModal()"
+            aria-label="Kapat"
+        >
+            &times;
+        </button>
+
+    </div>
+
+    <div id="modalBody"></div>
+
+</div>
+
+</div>
+
+
+<script src="../js/admin.js"></script>
+
+<script>
+
+/* ============================================================
+   STATE
+============================================================ */
+
+let allFaqs = [];
+
+let faqLoading = false;
+
+let reorderInProgress = false;
+
+
+/* ============================================================
+   ESCAPE ATTRIBUTE
+============================================================ */
+
+function escapeAttr(value) {
+
+    return escapeHtml(
+        String(value ?? "")
+    )
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+}
+
+
+/* ============================================================
+   LOAD
+============================================================ */
+
+async function loadFaqs() {
+
+    if (faqLoading) {
+        return;
+    }
+
+
+    faqLoading = true;
+
+
+    const tbody =
+        document.getElementById(
+            "faqTableBody"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="4"
+                class="table-state"
+            >
+                SSS kayıtları yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    try {
+
+        const result =
+            await AdminAPI.getFaqs();
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        function faqFormFields(faq) {
-            const question = faq ? faq.question : '';
-            const answer = faq ? faq.answer : '';
-            const isPublished = faq ? faq.is_published : true;
 
-            return `
-                <div class="form-group">
-                    <label>Soru</label>
-                    <input type="text" id="faqQuestion" value="${escapeAttr(question)}" maxlength="300">
-                </div>
-                <div class="form-group">
-                    <label>Cevap</label>
-                    <textarea id="faqAnswer" rows="5" style="width:100%;resize:vertical;">${escapeHtml(answer)}</textarea>
-                    <small style="color:var(--text-light);">Basit HTML (ör. &lt;strong&gt;, &lt;code&gt;) desteklenir — index.html'de olduğu gibi render edilir.</small>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="faqIsPublished" ${isPublished ? 'checked' : ''}>
-                        Sitede yayınla
-                    </label>
-                </div>
-            `;
-        }
+        allFaqs =
+            (
+                Array.isArray(
+                    result.data
+                )
+                    ? result.data
+                    : []
+            )
+            .slice()
+            .sort(
+                (a, b) =>
+                    Number(
+                        a.sort_order || 0
+                    ) -
+                    Number(
+                        b.sort_order || 0
+                    )
+            );
 
-        function openCreateModal() {
-            document.getElementById('modalTitle').textContent = 'Yeni Soru';
-            document.getElementById('modalBody').innerHTML = `
-                <form id="faqForm" onsubmit="submitCreateFaq(event)">
-                    ${faqFormFields(null)}
-                    <div class="modal-footer">
-                        <button type="button" class="btn" onclick="closeModal()">İptal</button>
-                        <button type="submit" class="btn btn-primary">Ekle</button>
-                    </div>
-                </form>
-            `;
-            document.getElementById('modalOverlay').classList.add('active');
-        }
 
-        function openEditModal(id) {
-            const faq = allFaqs.find(f => f.id === id);
-            if (!faq) return;
+        renderSummary();
 
-            document.getElementById('modalTitle').textContent = 'Soruyu Düzenle';
-            document.getElementById('modalBody').innerHTML = `
-                <form id="faqForm" onsubmit="submitEditFaq(event, '${faq.id}')">
-                    ${faqFormFields(faq)}
-                    <div class="modal-footer">
-                        <button type="button" class="btn" onclick="closeModal()">İptal</button>
-                        <button type="submit" class="btn btn-primary">Kaydet</button>
-                    </div>
-                </form>
-            `;
-            document.getElementById('modalOverlay').classList.add('active');
-        }
+        renderFaqTable();
 
-        function closeModal() {
-            document.getElementById('modalOverlay').classList.remove('active');
-        }
 
-        function readFaqForm() {
-            const question = document.getElementById('faqQuestion').value.trim();
-            const answer = document.getElementById('faqAnswer').value.trim();
-            const isPublished = document.getElementById('faqIsPublished').checked;
+    } catch (error) {
 
-            if (!question || !answer) {
-                throw new Error('Soru ve cevap alanları boş bırakılamaz.');
+        console.error(
+            "Load FAQ error:",
+            error
+        );
+
+
+        allFaqs = [];
+
+
+        resetSummary();
+
+
+        document.getElementById(
+            "recordCount"
+        ).textContent =
+            "—";
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="4"
+                    class="table-state error"
+                >
+                    ${escapeHtml(
+                        error.message ||
+                        "SSS listesi yüklenemedi."
+                    )}
+                </td>
+
+            </tr>
+
+        `;
+
+
+    } finally {
+
+        faqLoading =
+            false;
+
+    }
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderSummary() {
+
+    const published =
+        allFaqs.filter(
+            faq =>
+                Boolean(
+                    faq.is_published
+                )
+        ).length;
+
+
+    const draft =
+        allFaqs.length -
+        published;
+
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        allFaqs.length;
+
+
+    document.getElementById(
+        "summaryPublished"
+    ).textContent =
+        published;
+
+
+    document.getElementById(
+        "summaryDraft"
+    ).textContent =
+        draft;
+
+}
+
+
+function resetSummary() {
+
+    document.getElementById(
+        "summaryTotal"
+    ).textContent =
+        "—";
+
+
+    document.getElementById(
+        "summaryPublished"
+    ).textContent =
+        "—";
+
+
+    document.getElementById(
+        "summaryDraft"
+    ).textContent =
+        "—";
+
+}
+
+
+/* ============================================================
+   FILTER
+============================================================ */
+
+function getFilteredFaqs() {
+
+    const search =
+        document.getElementById(
+            "faqSearch"
+        ).value
+        .trim()
+        .toLocaleLowerCase(
+            "tr-TR"
+        );
+
+
+    const status =
+        document.getElementById(
+            "statusFilter"
+        ).value;
+
+
+    return allFaqs.filter(
+        faq => {
+
+            if (
+                status === "published" &&
+                !faq.is_published
+            ) {
+                return false;
             }
 
-            return { question, answer, isPublished };
-        }
 
-        async function submitCreateFaq(event) {
-            event.preventDefault();
-
-            let data;
-            try {
-                data = readFaqForm();
-            } catch (validationError) {
-                alert(validationError.message);
-                return;
+            if (
+                status === "draft" &&
+                faq.is_published
+            ) {
+                return false;
             }
 
-            try {
-                const result = await AdminAPI.createFaq(data);
-                if (result.success) {
-                    closeModal();
-                    loadFaqs();
-                } else {
-                    alert('Hata: ' + describeApiError(result));
+
+            if (search) {
+
+                const searchable =
+                    (
+                        String(
+                            faq.question ||
+                            ""
+                        ) +
+                        " " +
+                        String(
+                            faq.answer ||
+                            ""
+                        )
+                    )
+                    .toLocaleLowerCase(
+                        "tr-TR"
+                    );
+
+
+                if (
+                    !searchable.includes(
+                        search
+                    )
+                ) {
+                    return false;
                 }
-            } catch (error) {
-                alert('Soru eklenirken hata oluştu: ' + error.message);
+
             }
+
+
+            return true;
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   RENDER
+============================================================ */
+
+function renderFaqTable() {
+
+    const tbody =
+        document.getElementById(
+            "faqTableBody"
+        );
+
+
+    const filtered =
+        getFilteredFaqs();
+
+
+    document.getElementById(
+        "recordCount"
+    ).textContent =
+        filtered.length ===
+        allFaqs.length
+            ? `${allFaqs.length} kayıt`
+            : `${filtered.length} / ${allFaqs.length} kayıt`;
+
+
+    if (!filtered.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="4"
+                    class="table-state"
+                >
+                    ${
+                        allFaqs.length
+                            ? "Arama veya filtre kriterlerine uygun soru bulunamadı."
+                            : "Henüz soru eklenmemiş."
+                    }
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        filtered
+            .map(faq => {
+
+                /*
+                 * Sıralama bütün listeye göre yapılır.
+                 * Filtreli listenin index'i kullanılmaz.
+                 */
+                const originalIndex =
+                    allFaqs.findIndex(
+                        item =>
+                            String(
+                                item.id
+                            ) ===
+                            String(
+                                faq.id
+                            )
+                    );
+
+
+                const first =
+                    originalIndex === 0;
+
+
+                const last =
+                    originalIndex ===
+                    allFaqs.length - 1;
+
+
+                return `
+
+                    <tr>
+
+                        <td data-label="Sıra">
+
+                            <div class="sort-controls">
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline"
+                                    title="Yukarı taşı"
+                                    data-move-index="${originalIndex}"
+                                    data-direction="-1"
+                                    ${
+                                        first ||
+                                        reorderInProgress
+                                            ? "disabled"
+                                            : ""
+                                    }
+                                >
+                                    ↑
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline"
+                                    title="Aşağı taşı"
+                                    data-move-index="${originalIndex}"
+                                    data-direction="1"
+                                    ${
+                                        last ||
+                                        reorderInProgress
+                                            ? "disabled"
+                                            : ""
+                                    }
+                                >
+                                    ↓
+                                </button>
+
+                            </div>
+
+                        </td>
+
+
+                        <td
+                            data-label="Soru / Cevap"
+                            class="faq-content-cell"
+                        >
+
+                            <div class="faq-question">
+                                ${escapeHtml(
+                                    faq.question ||
+                                    ""
+                                )}
+                            </div>
+
+
+                            <div class="faq-answer">
+                                ${escapeHtml(
+                                    faq.answer ||
+                                    ""
+                                )}
+                            </div>
+
+                        </td>
+
+
+                        <td data-label="Durum">
+
+                            ${
+                                faq.is_published
+                                    ? `
+                                        <span class="status-pill published">
+                                            <span class="status-dot"></span>
+                                            Yayında
+                                        </span>
+                                      `
+                                    : `
+                                        <span class="status-pill draft">
+                                            <span class="status-dot"></span>
+                                            Yayında Değil
+                                        </span>
+                                      `
+                            }
+
+                        </td>
+
+
+                        <td data-label="İşlemler">
+
+                            <div class="faq-actions">
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-success"
+                                    data-edit-index="${originalIndex}"
+                                >
+                                    Düzenle
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    data-delete-index="${originalIndex}"
+                                >
+                                    Sil
+                                </button>
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+            })
+            .join("");
+
+
+    /*
+     * ID'leri inline JavaScript içine basmıyoruz.
+     * Cache index üzerinden işlem yapıyoruz.
+     */
+    tbody
+        .querySelectorAll(
+            "[data-edit-index]"
+        )
+        .forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () =>
+                        openEditModal(
+                            Number(
+                                button.dataset.editIndex
+                            )
+                        )
+                );
+
+            }
+        );
+
+
+    tbody
+        .querySelectorAll(
+            "[data-delete-index]"
+        )
+        .forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () =>
+                        confirmDeleteFaq(
+                            Number(
+                                button.dataset.deleteIndex
+                            ),
+                            button
+                        )
+                );
+
+            }
+        );
+
+
+    tbody
+        .querySelectorAll(
+            "[data-move-index]"
+        )
+        .forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () =>
+                        moveFaq(
+                            Number(
+                                button.dataset.moveIndex
+                            ),
+                            Number(
+                                button.dataset.direction
+                            )
+                        )
+                );
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   FORM
+============================================================ */
+
+function faqFormFields(faq) {
+
+    const question =
+        faq
+            ? faq.question
+            : "";
+
+
+    const answer =
+        faq
+            ? faq.answer
+            : "";
+
+
+    const isPublished =
+        faq
+            ? faq.is_published
+            : true;
+
+
+    return `
+
+        <div
+            id="faqFormError"
+            class="form-error"
+        ></div>
+
+
+        <div class="form-group">
+
+            <label for="faqQuestion">
+                Soru
+            </label>
+
+            <input
+                type="text"
+                id="faqQuestion"
+                value="${escapeAttr(
+                    question
+                )}"
+                maxlength="300"
+                required
+            >
+
+            <small class="form-help">
+                En fazla 300 karakter.
+            </small>
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label for="faqAnswer">
+                Cevap
+            </label>
+
+            <textarea
+                id="faqAnswer"
+                class="faq-textarea"
+                rows="6"
+                required
+            >${escapeHtml(
+                answer
+            )}</textarea>
+
+            <small class="form-help">
+                Public site mevcut yapısına uygun olarak
+                basit HTML içeriğini destekleyebilir.
+                Admin önizlemesinde içerik güvenli metin
+                olarak gösterilir.
+            </small>
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label class="publish-check">
+
+                <input
+                    type="checkbox"
+                    id="faqIsPublished"
+                    ${
+                        isPublished
+                            ? "checked"
+                            : ""
+                    }
+                >
+
+                <span>
+                    Public sitede yayınla
+                </span>
+
+            </label>
+
+        </div>
+
+    `;
+
+}
+
+
+/* ============================================================
+   CREATE MODAL
+============================================================ */
+
+function openCreateModal() {
+
+    document.getElementById(
+        "modalTitle"
+    ).textContent =
+        "Yeni Soru";
+
+
+    document.getElementById(
+        "modalBody"
+    ).innerHTML = `
+
+        <form
+            id="faqForm"
+            onsubmit="submitCreateFaq(event)"
+        >
+
+            ${faqFormFields(null)}
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="faqSubmitButton"
+                >
+                    Soru Ekle
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    document.getElementById(
+        "modalOverlay"
+    ).classList.add(
+        "active"
+    );
+
+
+    setTimeout(
+        () =>
+            document
+                .getElementById(
+                    "faqQuestion"
+                )
+                ?.focus(),
+        0
+    );
+
+}
+
+
+/* ============================================================
+   EDIT MODAL
+============================================================ */
+
+function openEditModal(index) {
+
+    const faq =
+        allFaqs[index];
+
+
+    if (!faq) {
+        return;
+    }
+
+
+    document.getElementById(
+        "modalTitle"
+    ).textContent =
+        "Soruyu Düzenle";
+
+
+    document.getElementById(
+        "modalBody"
+    ).innerHTML = `
+
+        <form id="faqForm">
+
+            ${faqFormFields(faq)}
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn"
+                    onclick="closeModal()"
+                >
+                    İptal
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="faqSubmitButton"
+                >
+                    Kaydet
+                </button>
+
+            </div>
+
+        </form>
+
+    `;
+
+
+    document
+        .getElementById(
+            "faqForm"
+        )
+        .addEventListener(
+            "submit",
+            event =>
+                submitEditFaq(
+                    event,
+                    index
+                )
+        );
+
+
+    document.getElementById(
+        "modalOverlay"
+    ).classList.add(
+        "active"
+    );
+
+}
+
+
+/* ============================================================
+   MODAL CLOSE
+============================================================ */
+
+function closeModal() {
+
+    document.getElementById(
+        "modalOverlay"
+    ).classList.remove(
+        "active"
+    );
+
+}
+
+
+/* ============================================================
+   FORM ERROR
+============================================================ */
+
+function showFormError(message) {
+
+    const element =
+        document.getElementById(
+            "faqFormError"
+        );
+
+
+    if (!element) {
+        return;
+    }
+
+
+    element.textContent =
+        message;
+
+
+    element.classList.add(
+        "active"
+    );
+
+}
+
+
+/* ============================================================
+   READ FORM
+============================================================ */
+
+function readFaqForm() {
+
+    const question =
+        document.getElementById(
+            "faqQuestion"
+        ).value.trim();
+
+
+    const answer =
+        document.getElementById(
+            "faqAnswer"
+        ).value.trim();
+
+
+    const isPublished =
+        document.getElementById(
+            "faqIsPublished"
+        ).checked;
+
+
+    if (!question) {
+
+        throw new Error(
+            "Soru alanı boş bırakılamaz."
+        );
+
+    }
+
+
+    if (!answer) {
+
+        throw new Error(
+            "Cevap alanı boş bırakılamaz."
+        );
+
+    }
+
+
+    if (
+        question.length > 300
+    ) {
+
+        throw new Error(
+            "Soru en fazla 300 karakter olabilir."
+        );
+
+    }
+
+
+    return {
+
+        question,
+
+        answer,
+
+        isPublished
+
+    };
+
+}
+
+
+/* ============================================================
+   SUBMIT BUTTON
+============================================================ */
+
+function setSubmitState(
+    loading,
+    loadingText
+) {
+
+    const button =
+        document.getElementById(
+            "faqSubmitButton"
+        );
+
+
+    if (!button) {
+        return;
+    }
+
+
+    if (loading) {
+
+        button.dataset.originalText =
+            button.textContent;
+
+
+        button.disabled =
+            true;
+
+
+        button.textContent =
+            loadingText;
+
+    } else {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            button.dataset.originalText ||
+            "Kaydet";
+
+    }
+
+}
+
+
+/* ============================================================
+   CREATE
+============================================================ */
+
+async function submitCreateFaq(
+    event
+) {
+
+    event.preventDefault();
+
+
+    let data;
+
+
+    try {
+
+        data =
+            readFaqForm();
+
+    } catch (
+        validationError
+    ) {
+
+        showFormError(
+            validationError.message
+        );
+
+        return;
+
+    }
+
+
+    setSubmitState(
+        true,
+        "Ekleniyor..."
+    );
+
+
+    try {
+
+        const result =
+            await AdminAPI.createFaq(
+                data
+            );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        async function submitEditFaq(event, id) {
-            event.preventDefault();
 
-            let data;
-            try {
-                data = readFaqForm();
-            } catch (validationError) {
-                alert(validationError.message);
-                return;
-            }
+        closeModal();
 
-            try {
-                const result = await AdminAPI.updateFaq(id, data);
-                if (result.success) {
-                    closeModal();
-                    loadFaqs();
-                } else {
-                    alert('Hata: ' + describeApiError(result));
-                }
-            } catch (error) {
-                alert('Soru güncellenirken hata oluştu: ' + error.message);
-            }
+        await loadFaqs();
+
+
+    } catch (error) {
+
+        console.error(
+            "Create FAQ error:",
+            error
+        );
+
+
+        showFormError(
+            error.message ||
+            "Soru eklenirken hata oluştu."
+        );
+
+
+    } finally {
+
+        setSubmitState(
+            false
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   EDIT
+============================================================ */
+
+async function submitEditFaq(
+    event,
+    index
+) {
+
+    event.preventDefault();
+
+
+    const faq =
+        allFaqs[index];
+
+
+    if (!faq) {
+
+        showFormError(
+            "Düzenlenecek soru bulunamadı."
+        );
+
+        return;
+
+    }
+
+
+    let data;
+
+
+    try {
+
+        data =
+            readFaqForm();
+
+    } catch (
+        validationError
+    ) {
+
+        showFormError(
+            validationError.message
+        );
+
+        return;
+
+    }
+
+
+    setSubmitState(
+        true,
+        "Kaydediliyor..."
+    );
+
+
+    try {
+
+        const result =
+            await AdminAPI.updateFaq(
+                faq.id,
+                data
+            );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        async function confirmDeleteFaq(id) {
-            const faq = allFaqs.find(f => f.id === id);
-            if (!faq) return;
 
-            if (!confirm(`"${faq.question}" sorusunu silmek istediğinize emin misiniz?`)) {
-                return;
-            }
+        closeModal();
 
-            try {
-                const result = await AdminAPI.deleteFaq(id);
-                if (result.success) {
-                    loadFaqs();
-                } else {
-                    alert('Hata: ' + describeApiError(result));
-                }
-            } catch (error) {
-                alert('Soru silinirken hata oluştu: ' + error.message);
-            }
+        await loadFaqs();
+
+
+    } catch (error) {
+
+        console.error(
+            "Update FAQ error:",
+            error
+        );
+
+
+        showFormError(
+            error.message ||
+            "Soru güncellenirken hata oluştu."
+        );
+
+
+    } finally {
+
+        setSubmitState(
+            false
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   DELETE
+============================================================ */
+
+async function confirmDeleteFaq(
+    index,
+    button
+) {
+
+    const faq =
+        allFaqs[index];
+
+
+    if (!faq) {
+        return;
+    }
+
+
+    const confirmed =
+        confirm(
+            `"${faq.question}" sorusunu kalıcı olarak silmek istediğinize emin misiniz?`
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    const originalText =
+        button.textContent;
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Siliniyor...";
+
+
+    try {
+
+        const result =
+            await AdminAPI.deleteFaq(
+                faq.id
+            );
+
+
+        if (!result.success) {
+
+            throw new Error(
+                describeApiError(
+                    result
+                )
+            );
+
         }
 
-        // Sıralamayı, komşu kaydın sort_order değeriyle yer değiştirerek
-        // taşır — böylece her taşıma tek bir PATCH isteğiyle sonuçlanır.
-        async function moveFaq(id, direction) {
-            const index = allFaqs.findIndex(f => f.id === id);
-            const targetIndex = index + direction;
 
-            if (index === -1 || targetIndex < 0 || targetIndex >= allFaqs.length) {
-                return;
-            }
+        await loadFaqs();
 
-            const current = allFaqs[index];
-            const target = allFaqs[targetIndex];
 
-            try {
-                const [resultA, resultB] = await Promise.all([
-                    AdminAPI.updateFaq(current.id, { sortOrder: target.sort_order }),
-                    AdminAPI.updateFaq(target.id, { sortOrder: current.sort_order })
-                ]);
+    } catch (error) {
 
-                if (!resultA.success || !resultB.success) {
-                    alert('Hata: ' + describeApiError(!resultA.success ? resultA : resultB));
-                    return;
-                }
+        console.error(
+            "Delete FAQ error:",
+            error
+        );
 
-                loadFaqs();
 
-            } catch (error) {
-                alert('Sıralama güncellenirken hata oluştu: ' + error.message);
-            }
+        alert(
+            "Soru silinemedi: " +
+            (
+                error.message ||
+                "Bilinmeyen hata"
+            )
+        );
+
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            originalText;
+
+    }
+
+}
+
+
+/* ============================================================
+   MOVE / REORDER
+============================================================ */
+
+async function moveFaq(
+    index,
+    direction
+) {
+
+    if (reorderInProgress) {
+        return;
+    }
+
+
+    const targetIndex =
+        index +
+        direction;
+
+
+    if (
+        index < 0 ||
+        index >= allFaqs.length ||
+        targetIndex < 0 ||
+        targetIndex >= allFaqs.length
+    ) {
+        return;
+    }
+
+
+    const current =
+        allFaqs[index];
+
+
+    const target =
+        allFaqs[targetIndex];
+
+
+    reorderInProgress =
+        true;
+
+
+    renderFaqTable();
+
+
+    try {
+
+        /*
+         * Backend'de atomik reorder endpoint'i olmadığı
+         * için mevcut iki update sözleşmesi korunuyor.
+         *
+         * Her iki sonuç da kontrol edilir. Herhangi biri
+         * başarısız olursa aşağıdaki catch sonunda liste
+         * backend'den tekrar yüklenerek gerçek durum
+         * kullanıcıya yansıtılır.
+         */
+
+        const [
+            resultCurrent,
+            resultTarget
+        ] =
+            await Promise.all([
+
+                AdminAPI.updateFaq(
+                    current.id,
+                    {
+                        sortOrder:
+                            target.sort_order
+                    }
+                ),
+
+                AdminAPI.updateFaq(
+                    target.id,
+                    {
+                        sortOrder:
+                            current.sort_order
+                    }
+                )
+
+            ]);
+
+
+        if (
+            !resultCurrent.success ||
+            !resultTarget.success
+        ) {
+
+            const failedResult =
+                !resultCurrent.success
+                    ? resultCurrent
+                    : resultTarget;
+
+
+            throw new Error(
+                describeApiError(
+                    failedResult
+                )
+            );
+
         }
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const authenticated = await checkAdminAuth();
-            if (authenticated) {
-                loadFaqs();
-            }
-        });
-    </script>
+
+    } catch (error) {
+
+        console.error(
+            "FAQ reorder error:",
+            error
+        );
+
+
+        alert(
+            "Sıralama güncellenemedi: " +
+            (
+                error.message ||
+                "Bilinmeyen hata"
+            )
+        );
+
+
+    } finally {
+
+        reorderInProgress =
+            false;
+
+
+        /*
+         * Başarı veya hata fark etmeksizin gerçek
+         * backend sıralamasını yeniden getir.
+         */
+        await loadFaqs();
+
+    }
+
+}
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        await loadFaqs();
+
+    }
+);
+
+</script>
+
 </body>
 </html>
