@@ -142,6 +142,10 @@ const checks = [
     return Boolean(match && !/loadV23Rates|buildReportingDateAccrual|translationSchedule|fxGainLoss/.test(match[0]));
   })()],
   ["early-payment runtime delegates to the private facade", /async function applyEarlyPayment\(contractId, amount, date\)[\s\S]{0,1000}facade\.loadEarlyPayment/.test(engine)],
+  ["public early-payment runtime contains no schedule reconstruction", (() => {
+    const match = engine.match(/async function applyEarlyPayment\([\s\S]*?\n  \}/);
+    return Boolean(match && !/periodicRate|revisedSchedule|openingBalance/.test(match[0]));
+  })()],
   ["adapter exposes the expected global", /global\.LeaseQantPrivateCalculation\s*=/.test(adapter)],
   ["private facade exposes async single-contract loading", /global\.LeaseQantPrivateTfrs16Facade\s*=/.test(facade) && /async function load\(/.test(facade)],
   ["private facade exposes async batch loading", /async function loadMany\(/.test(facade) && /calculateMany\(contracts/.test(facade)],

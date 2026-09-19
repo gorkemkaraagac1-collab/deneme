@@ -26576,12 +26576,9 @@ ${renderAccountingCenterBulkPromo()}
   /* ---------- 3) KISMİ / ERKEN ÖDEME DESTEĞİ ---------- */
 
   /**
-   * Bir sözleşme için erken/kısmi ödeme uygular. Ödeme tarihindeki
-   * kalan kira yükümlülüğü bakiyesinden düşülür ve kalan dönemler için
-   * (mevcut periyodik faiz oranı korunarak, sözleşmedeki periyodik
-   * ödeme tutarı sabit kalarak) yeni bir amortisman tablosu kurulur.
-   * ROU varlığı ve amortismanı bu işlemden etkilenmez (TFRS 16 gönüllü
-   * erken ödemeler için ROU yeniden ölçümü öngörmez).
+   * Bir sözleşme için erken/kısmi ödeme uygular. Tutar ve tarih private
+   * engine'e gönderilir; liability ve revised schedule sonucu browser'da
+   * yeniden üretilmez. ROU sunum alanları private sonuç zarfından okunur.
    *
    * @param {string} contractId - Sözleşme ID
    * @param {number} amount - Erken ödeme tutarı
