@@ -24,6 +24,7 @@ const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
 const privateCacheUi = read("js/tfrs16-private-cache-ui.js");
+const reportingDateCache = read("js/tfrs16-reporting-date-cache.js");
 const coordinator = read("js/tfrs16-ui-coordinator.js");
 const privateResultBridge = read("js/tfrs16-private-result-bridge.js");
 const detailUi = read("js/tfrs16-detail-ui.js");
@@ -50,6 +51,8 @@ const checks = [
   ["TFRS16 UI coordinator exists", exists("js/tfrs16-ui-coordinator.js")],
   ["TFRS16 private cache UI module exists", exists("js/tfrs16-private-cache-ui.js") && /LeaseQantTfrs16PrivateCacheUi/.test(privateCacheUi)],
   ["TFRS16 private cache UI module loads before the runtime", html.indexOf("tfrs16-private-cache-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-private-cache-ui.js')],
+  ["reporting-date cache exists and loads before the runtime", exists("js/tfrs16-reporting-date-cache.js") && html.indexOf("tfrs16-reporting-date-cache.js") < html.indexOf("tfrs16-ui.js")],
+  ["reporting-date cache delegates to the private facade", /LeaseQantPrivateTfrs16Facade/.test(reportingDateCache) && /loadReportingDate/.test(reportingDateCache)],
   ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
   ["TFRS16 detail UI module exists", exists("js/tfrs16-detail-ui.js") && /LeaseQantTfrs16DetailUi/.test(detailUi)],
   ["TFRS16 detail UI module loads before the runtime", html.indexOf("tfrs16-detail-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-ui.js')],
@@ -165,6 +168,9 @@ const checks = [
   ["reporting accrual parses schedule dates defensively", /const eventDate = parseDate\(schedule\[i\]\?\.date\)/.test(engine) && /const rowDate = parseDate\(row\?\.date\)/.test(engine)],
   ["engine gates private results behind API-primary", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*===\s*true/.test(engine)],
   ["initial refresh waits for private cache hydration", /function refresh\(\)\s*\{[\s\S]{0,500}Array\.isArray\(contracts\)[\s\S]{0,180}PRIVATE_CALCULATION_CACHE\.size === 0/.test(engine)],
+  ["initial hydration warms private reporting-date results", /ensurePrivateReportingDateCache\(contracts, new Date\(\)\)/.test(engine)],
+  ["API-primary classification reads the private reporting-date envelope", /function calculateLiabilitySplitAsOf\([\s\S]{0,1800}getPrivateReportingDateResult\(contract, reportingDate\)/.test(engine) && /PRIVATE_REPORTING_DATE_NOT_READY/.test(engine)],
+  ["financial reporting warms its selected reporting date", /async function v191RenderFinancialReportingPrivate\([\s\S]{0,700}ensurePrivateReportingDateCache\(contracts, effectivePeriodEnd\)/.test(engine)],
   // FAZ 2 (2026-09-15): local fallback dalı kaldırıldığı için artık
   // koşullu bir "if (isPrivateCalculationApiReady())" sarmalayıcısı yok —
   // hem getPrivateCalculationForConsumer hem calculateLeaseEngine

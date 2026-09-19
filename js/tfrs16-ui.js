@@ -907,6 +907,10 @@ window.fetch = (input, init = {}) => {
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
+      const reportingHydration = await ensurePrivateReportingDateCache(contracts, new Date());
+      if (reportingHydration.failed > 0) {
+        console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
+      }
       // Contract hydration can render reporting/close consumers once before
       // the private batch is ready. That first render seeds the CFO aggregate
       // cache with zero/empty balances; invalidate only derived local
@@ -1124,6 +1128,9 @@ window.fetch = (input, init = {}) => {
     // temizle). Boyutu küçük (nadiren birkaç reportingDate anahtarı),
     // bu yüzden granüler/kısmi temizlik gerekmiyor.
     CFO_AGGREGATE_CACHE.clear();
+    if (!preservePrivate) {
+      try { window.LeaseQantTfrs16ReportingDateCache?.clear(contractId); } catch (_) { /* cache cleanup is best effort */ }
+    }
   }
 
   function getCachedCalculation(contract) {
@@ -1199,6 +1206,33 @@ window.fetch = (input, init = {}) => {
     return typeof api?.ensure === "function"
       ? api.ensure(list, privateCacheRuntimeAdapter())
       : Promise.resolve({ attempted: 0, succeeded: 0, failed: 0 });
+  }
+
+  function getPrivateReportingDateResult(contract, reportingDate) {
+    if (!isPrivateCalculationApiReady()) return null;
+    return window.LeaseQantTfrs16ReportingDateCache?.get(contract, reportingDate) || null;
+  }
+
+  async function loadPrivateReportingDateResult(contract, reportingDate, options = {}) {
+    if (!isPrivateCalculationApiReady()) {
+      const error = new Error("Private reporting-date sonucu henüz hazır değil");
+      error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+      throw error;
+    }
+    const cache = window.LeaseQantTfrs16ReportingDateCache;
+    if (typeof cache?.load !== "function") {
+      const error = new Error("Private reporting-date önbelleği hazır değil");
+      error.code = "PRIVATE_REPORTING_DATE_UNAVAILABLE";
+      throw error;
+    }
+    return cache.load(contract, reportingDate, options);
+  }
+
+  async function ensurePrivateReportingDateCache(list, reportingDate, options = {}) {
+    if (!isPrivateCalculationApiReady()) return { attempted: 0, succeeded: 0, failed: 0, results: [] };
+    const cache = window.LeaseQantTfrs16ReportingDateCache;
+    if (typeof cache?.preload !== "function") return { attempted: 0, succeeded: 0, failed: 0, results: [] };
+    return cache.preload(list, reportingDate, options);
   }
 
   function privateCacheHydrationInFlight() {
@@ -5591,6 +5625,41 @@ window.fetch = (input, init = {}) => {
 
     const normalizedReportingDate = parseDate(reportingDate);
 
+    // Phase 1: API-primary consumers receive the reporting-date envelope
+    // calculated by the private engine. A missing envelope is an explicit
+    // not-ready state; the browser must never reconstruct classification or
+    // accrued liability from its legacy schedule in this mode.
+    if (isPrivateCalculationApiReady()) {
+      const privateResult = getPrivateReportingDateResult(contract, reportingDate);
+      if (!privateResult) {
+        const error = new Error("Private reporting-date sonucu henüz hazır değil");
+        error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+        throw error;
+      }
+      const current = Number(privateResult.currentLiability) || 0;
+      const nonCurrent = Number(privateResult.nonCurrentLiability) || 0;
+      const total = Number(privateResult.totalLiability ?? privateResult.outstandingLiability) || 0;
+      return {
+        reportingDate: normalizedReportingDate || privateResult.reportingDate,
+        totalLeaseLiability: total,
+        outstandingROU: Number(privateResult.outstandingROU) || 0,
+        currentLiability: current,
+        nonCurrentLiability: nonCurrent,
+        next12MonthPrincipal: Number(privateResult.next12MonthPrincipal) || 0,
+        next12MonthInterest: Number(privateResult.next12MonthInterest) || 0,
+        next12MonthPayments: Number(privateResult.next12MonthPayments) || 0,
+        outstandingLiability: Number(privateResult.outstandingLiability ?? total) || 0,
+        current,
+        nonCurrent,
+        total,
+        next12Payments: Number(privateResult.next12MonthPayments) || 0,
+        next12Interest: Number(privateResult.next12MonthInterest) || 0,
+        next12Principal: Number(privateResult.next12MonthPrincipal) || 0,
+        valid: true,
+        source: "PRIVATE_ENGINE"
+      };
+    }
+
     // The engine's ordinary schedule is not a custom override. Raw,
     // single-layer leases must keep using the calendar accrual snapshot.
     const rawAccrualContext = resolveLeaseAccrualContext(contract);
@@ -7454,6 +7523,9 @@ window.fetch = (input, init = {}) => {
       closing reclassification entry using the existing TMS21 journal engine.
     */
     const effectiveReportingDate = reportingDate || new Date();
+    if (isPrivateCalculationApiReady()) {
+      await loadPrivateReportingDateResult(contract, effectiveReportingDate);
+    }
     const split = calculateLiabilitySplitAsOf(
       contract,
       effectiveReportingDate
@@ -21005,6 +21077,12 @@ ${renderAccountingCenterBulkPromo()}
   async function v191RenderFinancialReportingPrivate(date) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
+    const reportingHydration = await ensurePrivateReportingDateCache(contracts, effectivePeriodEnd);
+    if (reportingHydration.failed > 0) {
+      const error = new Error("Private reporting-date sonuçları eksik; finansal rapor üretilemedi");
+      error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
+      throw error;
+    }
     const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
     return v191RenderFinancialReporting(date, { tms29 });
   }
@@ -29581,6 +29659,9 @@ ${renderAccountingCenterBulkPromo()}
     isPrivateCalculationApiReady,
     getPrivateCalculationForConsumer,
     ensurePrivateCalculationCache,
+    getPrivateReportingDateResult,
+    loadPrivateReportingDateResult,
+    ensurePrivateReportingDateCache,
     loadTms29Many: (...args) => window.LeaseQantPrivateTfrs16Facade?.loadTms29Many(...args),
     computePrivatePortfolioTms29: v191ComputePrivatePortfolioTms29,
     prepareFinancialReportingData: v191PrepareFinancialReportingData,
