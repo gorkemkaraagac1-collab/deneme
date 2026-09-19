@@ -30,7 +30,7 @@
     return (Array.isArray(adjustments) ? adjustments : []).map(adjustment => {
       const gl = adjustment?.restatedFigures?.liabilityMonetaryGainLoss;
       const glCell = Number.isFinite(gl)
-        ? money(-gl)
+        ? money(gl)
         : `<span style="color:#94a3b8;">—</span>`;
       const lockCheck = lockFor(adjustment?.period || options.defaultPeriod || new Date());
       const disabled = lockCheck?.locked
@@ -59,7 +59,7 @@
       : value => String(value ?? "—");
     const totals = result?.totals || {};
     const gainLoss = Number.isFinite(totals.liabilityMonetaryGainLoss)
-      ? money(-totals.liabilityMonetaryGainLoss)
+      ? money(totals.liabilityMonetaryGainLoss)
       : `<span style="color:#94a3b8;">—</span>`;
     return `
           <tr>

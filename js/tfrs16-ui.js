@@ -370,14 +370,23 @@ window.fetch = (input, init = {}) => {
       leaseIncreaseRate: details.leaseIncreaseRate !== null && details.leaseIncreaseRate !== undefined ? Number(details.leaseIncreaseRate) : 0,
       fixedIncrease: details.fixedIncrease !== null && details.fixedIncrease !== undefined ? Number(details.fixedIncrease) : 0,
       variablePayment: details.variablePayment !== null && details.variablePayment !== undefined ? Number(details.variablePayment) : 0,
+      variablePaymentType: details.variablePaymentType || "CIRO_KULLANIM",
+      inSubstanceFixedPayment: details.inSubstanceFixedPayment !== null && details.inSubstanceFixedPayment !== undefined ? Number(details.inSubstanceFixedPayment) : 0,
       usefulLifeMonths: details.usefulLifeMonths !== null && details.usefulLifeMonths !== undefined ? Number(details.usefulLifeMonths) : null,
       indexBaseRate: details.indexBaseRate !== null && details.indexBaseRate !== undefined ? Number(details.indexBaseRate) : null,
       indexCurrentRate: details.indexCurrentRate !== null && details.indexCurrentRate !== undefined ? Number(details.indexCurrentRate) : null,
       indexReviewMonth: details.indexReviewMonth !== null && details.indexReviewMonth !== undefined ? Number(details.indexReviewMonth) : null,
       indexReviewDay: details.indexReviewDay !== null && details.indexReviewDay !== undefined ? Number(details.indexReviewDay) : null,
       renewalOption: details.renewalOption === true,
+      renewalOptionExpectedToExercise: details.renewalOptionExpectedToExercise === true,
+      renewalEndDate: details.renewalEndDate || null,
       terminationOption: details.terminationOption === true,
+      terminationDate: details.terminationDate || null,
+      terminationPenalty: details.terminationPenalty !== null && details.terminationPenalty !== undefined ? Number(details.terminationPenalty) : 0,
       purchaseOption: details.purchaseOption === true,
+      purchaseOptionPrice: details.purchaseOptionPrice !== null && details.purchaseOptionPrice !== undefined ? Number(details.purchaseOptionPrice) : 0,
+      residualValueGuarantee: details.residualValueGuarantee === true,
+      expectedResidualValueGuaranteePayment: details.expectedResidualValueGuaranteePayment !== null && details.expectedResidualValueGuaranteePayment !== undefined ? Number(details.expectedResidualValueGuaranteePayment) : 0,
       ownershipTransfer: details.ownershipTransfer === true,
       shortTermLease: details.shortTermLease === true,
       lowValueAsset: details.lowValueAsset === true,
@@ -658,6 +667,8 @@ window.fetch = (input, init = {}) => {
       leaseIncreaseRate: Number(contract.leaseIncreaseRate) || 0,
       fixedIncrease: Number(contract.fixedIncrease) || 0,
       variablePayment: Number(contract.variablePayment) || 0,
+      variablePaymentType: contract.variablePaymentType || "CIRO_KULLANIM",
+      inSubstanceFixedPayment: Number(contract.inSubstanceFixedPayment) || 0,
       usefulLifeMonths: contract.usefulLifeMonths != null && contract.usefulLifeMonths !== ""
         ? Number(contract.usefulLifeMonths)
         : null,
@@ -674,8 +685,15 @@ window.fetch = (input, init = {}) => {
         ? Number(contract.indexReviewDay)
         : null,
       renewalOption: contract.renewalOption === true,
+      renewalOptionExpectedToExercise: contract.renewalOptionExpectedToExercise === true,
+      renewalEndDate: contract.renewalEndDate || null,
       terminationOption: contract.terminationOption === true,
+      terminationDate: contract.terminationDate || null,
+      terminationPenalty: Number(contract.terminationPenalty) || 0,
       purchaseOption: contract.purchaseOption === true,
+      purchaseOptionPrice: Number(contract.purchaseOptionPrice) || 0,
+      residualValueGuarantee: contract.residualValueGuarantee === true,
+      expectedResidualValueGuaranteePayment: Number(contract.expectedResidualValueGuaranteePayment) || 0,
       ownershipTransfer: contract.ownershipTransfer === true,
       shortTermLease: contract.shortTermLease === true,
       lowValueAsset: contract.lowValueAsset === true,
@@ -4435,6 +4453,23 @@ window.fetch = (input, init = {}) => {
     annual: "12"
   };
 
+  function normalizePaymentFrequencyValue(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    return PAYMENT_FREQUENCY_CODE_TO_WORD[raw] ||
+      (["monthly", "quarterly", "annual"].includes(raw) ? raw : "monthly");
+  }
+
+  function normalizeLeaseIncreaseTypeValue(value) {
+    const raw = String(value || "none").trim().toLowerCase();
+    // The form uses the shorter "fixed" value; the private engine's
+    // canonical vocabulary is "fixedAmount".
+    if (raw === "fixed") return "fixedAmount";
+    if (["fixedrate", "fixedamount", "index", "none"].includes(raw)) {
+      return raw === "fixedrate" ? "fixedRate" : raw === "fixedamount" ? "fixedAmount" : raw;
+    }
+    return "none";
+  }
+
   /* ==========================================================
      DATE / PERIOD ENGINE
   ========================================================== */
@@ -5461,7 +5496,18 @@ window.fetch = (input, init = {}) => {
       }
       const current = Number(privateResult.currentLiability) || 0;
       const nonCurrent = Number(privateResult.nonCurrentLiability) || 0;
-      const total = Number(privateResult.totalLiability ?? privateResult.outstandingLiability) || 0;
+      // Accept both current and legacy envelope aliases. A stale API/cache
+      // payload may contain a zero `totalLiability` while still carrying the
+      // valid current/non-current split; in that case the split is the
+      // authoritative reconciled total rather than silently reporting zero.
+      const explicitTotal = [
+        privateResult.totalLiability,
+        privateResult.totalLeaseLiability,
+        privateResult.outstandingLiability
+      ].map(Number).find(value => Number.isFinite(value) && value > 0);
+      const total = Number.isFinite(explicitTotal)
+        ? explicitTotal
+        : Math.max(0, current + nonCurrent);
       return {
         reportingDate: normalizedReportingDate || privateResult.reportingDate,
         totalLeaseLiability: total,
@@ -6157,9 +6203,7 @@ window.fetch = (input, init = {}) => {
 
     setInput(
       "paymentFrequency",
-      PAYMENT_FREQUENCY_WORD_TO_CODE[
-        contract?.paymentFrequency
-      ] || "1"
+      normalizePaymentFrequencyValue(contract?.paymentFrequency || "monthly")
     );
 
     setInput(
@@ -6168,12 +6212,12 @@ window.fetch = (input, init = {}) => {
     );
 
     setInput(
-      "initialDirectCost",
+      "initialDirectCosts",
       contract?.initialDirectCosts || 0
     );
 
     setInput(
-      "restorationCost",
+      "restorationObligation",
       contract?.restorationObligation || 0
     );
 
@@ -6189,12 +6233,15 @@ window.fetch = (input, init = {}) => {
 
     setInput(
       "leaseIncreaseType",
-      contract?.leaseIncreaseType || "none"
+      normalizeLeaseIncreaseTypeValue(contract?.leaseIncreaseType || "none")
     );
 
     setInput(
       "leaseIncreaseRate",
-      contract?.leaseIncreaseRate || 0
+      contract?.leaseIncreaseRate ||
+        (normalizeLeaseIncreaseTypeValue(contract?.leaseIncreaseType || "none") === "fixedAmount"
+          ? contract?.fixedIncrease || 0
+          : 0)
     );
 
     setInput(
@@ -6205,6 +6252,16 @@ window.fetch = (input, init = {}) => {
     setInput(
       "variablePayment",
       contract?.variablePayment || 0
+    );
+
+    setInput(
+      "variablePaymentType",
+      contract?.variablePaymentType || "CIRO_KULLANIM"
+    );
+
+    setInput(
+      "inSubstanceFixedPayment",
+      contract?.inSubstanceFixedPayment || 0
     );
 
     setInput(
@@ -6254,13 +6311,48 @@ window.fetch = (input, init = {}) => {
     );
 
     setCheckbox(
+      "renewalOptionExpectedToExercise",
+      contract?.renewalOptionExpectedToExercise === true
+    );
+
+    setInput(
+      "renewalEndDate",
+      contract?.renewalEndDate || ""
+    );
+
+    setCheckbox(
       "terminationOption",
       contract?.terminationOption === true
+    );
+
+    setInput(
+      "terminationDate",
+      contract?.terminationDate || ""
+    );
+
+    setInput(
+      "terminationPenalty",
+      contract?.terminationPenalty || 0
     );
 
     setCheckbox(
       "purchaseOption",
       contract?.purchaseOption === true
+    );
+
+    setInput(
+      "purchaseOptionPrice",
+      contract?.purchaseOptionPrice || 0
+    );
+
+    setCheckbox(
+      "residualValueGuarantee",
+      contract?.residualValueGuarantee === true
+    );
+
+    setInput(
+      "expectedResidualValueGuaranteePayment",
+      contract?.expectedResidualValueGuaranteePayment || 0
     );
 
     setCheckbox(
@@ -6839,32 +6931,28 @@ window.fetch = (input, init = {}) => {
           // form but were never read by this handler, so every
           // manually created contract silently fell back to the
           // engine defaults ("monthly"/"arrears") regardless of
-          // what the user picked. The frequency select stores
-          // "1"/"3"/"12" (months per payment); the control engine
-          // (controlPayment(), ~line 9829) only accepts the word
-          // forms "monthly"/"quarterly"/"annual", so it is mapped
-          // here rather than stored raw.
+          // what the user picked. Older builds stored numeric month
+          // codes ("1"/"3"/"12"), while the current form stores the
+          // canonical word values; normalize both representations here.
           paymentFrequency:
-            PAYMENT_FREQUENCY_CODE_TO_WORD[
-              getInput("paymentFrequency")
-            ] || "monthly",
+            normalizePaymentFrequencyValue(getInput("paymentFrequency")),
 
           paymentTiming:
             getInput("paymentTiming") ||
             "arrears",
 
-          // initialDirectCost/restorationCost were also present in
-          // the form but never read; renamed on the contract object
-          // to the keys calculateLeaseEngine() actually expects
-          // (initialDirectCosts / restorationObligation).
+          // Keep the form ids and the contract model aligned. The old
+          // handler looked for singular/legacy ids (initialDirectCost and
+          // restorationCost), so every manually entered amount was silently
+          // persisted as zero.
           initialDirectCosts:
             Number(
-              getInput("initialDirectCost")
+              getInput("initialDirectCosts")
             ) || 0,
 
           restorationObligation:
             Number(
-              getInput("restorationCost")
+              getInput("restorationObligation")
             ) || 0,
 
           // V16.7 ADDITION — the extended TFRS 16 parameters the
@@ -6882,8 +6970,7 @@ window.fetch = (input, init = {}) => {
             ) || 0,
 
           leaseIncreaseType:
-            getInput("leaseIncreaseType") ||
-            "none",
+            normalizeLeaseIncreaseTypeValue(getInput("leaseIncreaseType")),
 
           leaseIncreaseRate:
             Number(
@@ -6893,12 +6980,22 @@ window.fetch = (input, init = {}) => {
           fixedIncrease:
             Number(
               getInput("fixedIncrease")
-            ) || 0,
+            ) || (
+              normalizeLeaseIncreaseTypeValue(getInput("leaseIncreaseType")) === "fixedAmount"
+                ? Number(getInput("leaseIncreaseRate")) || 0
+                : 0
+            ),
 
           variablePayment:
             Number(
               getInput("variablePayment")
             ) || 0,
+
+          variablePaymentType:
+            getInput("variablePaymentType") || "CIRO_KULLANIM",
+
+          inSubstanceFixedPayment:
+            Number(getInput("inSubstanceFixedPayment")) || 0,
 
           usefulLifeMonths:
             getInput("usefulLifeMonths") !== ""
@@ -6949,11 +7046,32 @@ window.fetch = (input, init = {}) => {
           renewalOption:
             getCheckbox("renewalOption"),
 
+          renewalOptionExpectedToExercise:
+            getCheckbox("renewalOptionExpectedToExercise"),
+
+          renewalEndDate:
+            normalizeDate(getInput("renewalEndDate")),
+
           terminationOption:
             getCheckbox("terminationOption"),
 
+          terminationDate:
+            normalizeDate(getInput("terminationDate")),
+
+          terminationPenalty:
+            Number(getInput("terminationPenalty")) || 0,
+
           purchaseOption:
             getCheckbox("purchaseOption"),
+
+          purchaseOptionPrice:
+            Number(getInput("purchaseOptionPrice")) || 0,
+
+          residualValueGuarantee:
+            getCheckbox("residualValueGuarantee"),
+
+          expectedResidualValueGuaranteePayment:
+            Number(getInput("expectedResidualValueGuaranteePayment")) || 0,
 
           ownershipTransfer:
             getCheckbox("ownershipTransfer"),
