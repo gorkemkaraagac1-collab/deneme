@@ -1,11 +1,1793 @@
-<!doctype html><html lang="tr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TCMB Kurları</title><link rel="stylesheet" href="css/admin.css"><style>
-body{background:#f5f2e9}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:250px}
-.main-content{margin-left:250px;padding:28px}
-.page-content{max-width:1200px}
-.page-content>p,.page-content>p+ p,.page-content>table{background:#fff;border:1px solid #e5e0d8;border-radius:8px;padding:18px}
-.page-content input{padding:10px;border:1px solid #d4d0c8;border-radius:5px}
-.page-content table{width:100%;border-collapse:collapse}
-.page-content th{background:#eee8d8;text-align:left;padding:12px}
-.page-content td{padding:12px;border-bottom:1px solid #eee}
-</style></head><body><nav class="sidebar"><div class="sidebar-brand" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"><img src="../../logo-nav.png" alt="LeaseQant" style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"><small style="opacity:.7">Platform Admin</small></div><div class="sidebar-nav"><div class="nav-label">Yönetim</div><a href="index.html">📊 Dashboard</a><a href="companies.html">🏢 Companies</a><a href="users.html">👤 Users</a><a href="licenses.html">🔑 Licenses</a><a href="plans.html">📦 Plans</a><a href="faq.html">❓ SSS</a><a href="../../tfrs16.html">🧮 TFRS16 Hesaplama Motoru</a><a href="tfrs16.html">🧾 TFRS16 Customers</a><a href="periods.html" data-admin-only>🔒 Dönem Yönetimi</a><a href="inflation-indices.html">📈 Enflasyon Endeksleri</a><a href="fx-rates.html" class="active">💱 TCMB Kurları</a><a href="audit.html">📋 Audit Log</a></div></nav><main class="main-content"><header class="top-header"><div class="page-title">TCMB Kurları</div><div class="user-info"><span id="adminUsername"></span><button class="btn-logout" onclick="logout()">Logout</button></div></header><div class="page-content"><p>TCMB USD/TRY ve EUR/TRY kayıtlarını yönetin. PENDING kayıtları kontrol edip doğrulayın.</p><p><input id="fromDate" type="date" value="2019-01-01"><input id="toDate" type="date" value="2019-12-31"><button class="btn-primary" id="syncBtn">Kurları getir</button><button class="btn-primary" id="bulkVerifyBtn">Bekleyenleri toplu doğrula</button></p><div id="msg"></div><table><thead><tr><th>Tarih</th><th>Parite</th><th>Kur</th><th>Durum</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="5">Yükleniyor...</td></tr></tbody></table></div></main><script src="../js/admin.js"></script><script>const H=()=>{const token=localStorage.getItem('access_token')||sessionStorage.getItem('gk_session_token')||localStorage.getItem('gk_backend_jwt');return {"Content-Type":"application/json",...(token?{Authorization:'Bearer '+token}:{})};};const e=s=>escapeHtml(String(s??''));async function load(){const r=await fetch(API_BASE_URL+'/api/fx-rates/pending',{headers:H()}).then(x=>x.json());rows.innerHTML=(r.rates||[]).map(x=>'<tr><td>'+e(x.rateDate)+'</td><td>'+e(x.fromCurrency)+'/'+e(x.toCurrency)+'</td><td>'+Number(x.rate).toLocaleString('tr-TR',{minimumFractionDigits:4})+'</td><td>'+e(x.verificationStatus)+'</td><td><button data-id="'+x.id+'">Doğrula</button></td></tr>').join('')||'<tr><td colspan="5">Bekleyen kur yok.</td></tr>';rows.querySelectorAll('[data-id]').forEach(b=>b.onclick=async()=>{await fetch(API_BASE_URL+'/api/fx-rates/'+b.dataset.id+'/verify',{method:'POST',headers:H()});load()})}bulkVerifyBtn.onclick=async()=>{if(!confirm('Seçili tarih aralığındaki TCMB bekleyen kayıtları doğrulansın mı?'))return;const from=fromDate.value,to=toDate.value;const r=await fetch(API_BASE_URL+'/api/fx-rates/bulk-verify',{method:'POST',headers:H(),body:JSON.stringify({from,to})}).then(x=>x.json());msg.textContent=r.error||((r.verified||0)+' kayıt doğrulandı.');load()};syncBtn.onclick=async()=>{msg.textContent='Senkronizasyon sürüyor...';const r=await fetch(API_BASE_URL+'/api/fx-rates/sync',{method:'POST',headers:H(),body:JSON.stringify({from:fromDate.value,to:toDate.value})}).then(x=>x.json());msg.textContent=r.error||'Senkronizasyon tamamlandı.';load()};document.addEventListener('DOMContentLoaded',async()=>{if(await checkAdminAuth())load()});</script></body></html>
+<!doctype html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>TCMB Kur Yönetimi - LeaseQant</title>
+
+    <link rel="stylesheet" href="css/admin.css">
+
+    <style>
+        .fx-page {
+            display: grid;
+            gap: 20px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .page-intro h1 {
+            margin: 0 0 4px;
+            font: 600 24px var(--display);
+        }
+
+        .page-intro p {
+            max-width: 800px;
+            margin: 0;
+            color: var(--text-light);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .fx-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .summary-card {
+            min-width: 0;
+            padding: 15px 17px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .summary-card.pending {
+            border-left: 3px solid var(--warning);
+        }
+
+        .summary-card.usd {
+            border-left: 3px solid var(--success);
+        }
+
+        .summary-card.eur {
+            border-left: 3px solid var(--accent);
+        }
+
+        .summary-value {
+            overflow: hidden;
+            font: 600 23px var(--mono);
+            text-overflow: ellipsis;
+        }
+
+        .summary-label {
+            margin-top: 3px;
+            color: var(--text-light);
+            font-size: 10px;
+        }
+
+        .fx-notice {
+            padding: 13px 15px;
+            color: var(--text);
+            background: rgba(176, 141, 87, .07);
+            border: 1px solid rgba(176, 141, 87, .20);
+            border-radius: var(--radius);
+            font-size: 10px;
+            line-height: 1.7;
+        }
+
+        .fx-notice strong {
+            color: var(--accent);
+        }
+
+        .sync-card {
+            padding: 18px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .sync-header {
+            margin-bottom: 16px;
+        }
+
+        .sync-header h3 {
+            margin: 0 0 5px;
+            font-size: 14px;
+        }
+
+        .sync-header p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 10px;
+            line-height: 1.6;
+        }
+
+        .sync-form {
+            display: grid;
+            grid-template-columns:
+                minmax(170px, 1fr)
+                minmax(170px, 1fr)
+                auto
+                auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-field label {
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .form-field input {
+            width: 100%;
+            height: 40px;
+            box-sizing: border-box;
+            padding: 0 11px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .fx-message {
+            display: none;
+            padding: 10px 12px;
+            margin-top: 12px;
+            border-radius: 8px;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .fx-message.info {
+            display: block;
+            color: var(--text);
+            background: var(--paper);
+            border: 1px solid var(--border);
+        }
+
+        .fx-message.success {
+            display: block;
+            color: var(--success);
+            background: rgba(39, 112, 78, .06);
+            border: 1px solid rgba(39, 112, 78, .15);
+        }
+
+        .fx-message.error {
+            display: block;
+            color: var(--danger);
+            background: rgba(143, 42, 32, .06);
+            border: 1px solid rgba(143, 42, 32, .15);
+        }
+
+        .fx-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .fx-toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-wrap: wrap;
+        }
+
+        .fx-toolbar select {
+            height: 36px;
+            padding: 0 10px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        .record-count {
+            color: var(--text-light);
+            font: 10px var(--mono);
+        }
+
+        .currency-pair {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 7px;
+            background: var(--paper);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            font: 600 9px var(--mono);
+            white-space: nowrap;
+        }
+
+        .rate-value {
+            font: 600 10px var(--mono);
+            white-space: nowrap;
+        }
+
+        .rate-date {
+            font: 10px var(--mono);
+            white-space: nowrap;
+        }
+
+        .pending-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 7px;
+            color: var(--warning);
+            background: rgba(176, 141, 87, .10);
+            border-radius: 999px;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .pending-dot {
+            width: 6px;
+            height: 6px;
+            background: currentColor;
+            border-radius: 50%;
+        }
+
+        .table-state {
+            padding: 30px !important;
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        .table-state.error {
+            color: var(--danger);
+        }
+
+        .fx-table-wrap {
+            overflow-x: auto;
+        }
+
+        .verify-action {
+            min-width: 90px;
+        }
+
+        @media (max-width: 1000px) {
+            .sync-form {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .sync-form .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .fx-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .sync-form {
+                grid-template-columns: 1fr;
+            }
+
+            .fx-toolbar-right {
+                width: 100%;
+            }
+
+            .fx-toolbar select {
+                width: 100%;
+            }
+        }
+
+        /* Mobil kart görünümü */
+        @media (max-width: 680px) {
+            #fxRatesTable thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+            }
+
+            #fxRatesTable,
+            #fxRatesTable tbody,
+            #fxRatesTable tr,
+            #fxRatesTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #fxRatesTable {
+                min-width: 0;
+            }
+
+            #fxRatesTable tr {
+                box-sizing: border-box;
+                padding: 10px 12px;
+                margin-bottom: 12px;
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+
+            #fxRatesTable td {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-sizing: border-box;
+                gap: 12px;
+                padding: 7px 0;
+                border: 0;
+            }
+
+            #fxRatesTable td::before {
+                content: attr(data-label);
+                flex-shrink: 0;
+                color: var(--text-light);
+                font: 500 9px var(--mono);
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
+
+            #fxRatesTable td[data-label="İşlemler"] {
+                justify-content: flex-end;
+            }
+
+            #fxRatesTable td[data-label="İşlemler"]::before {
+                margin-right: auto;
+            }
+
+            .fx-table-wrap {
+                overflow-x: hidden;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+<nav class="sidebar" id="sidebar">
+
+    <div
+        class="sidebar-brand"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:4px"
+    >
+        <img
+            src="../../logo-nav.png"
+            alt="LeaseQant"
+            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
+        >
+
+        <small style="opacity:.7">
+            Platform Admin
+        </small>
+    </div>
+
+
+    <div class="sidebar-nav">
+
+        <div class="nav-label">
+            Yönetim
+        </div>
+
+        <a href="index.html">
+            📊 Dashboard
+        </a>
+
+        <a href="companies.html">
+            🏢 Companies
+        </a>
+
+        <a href="users.html">
+            👤 Users
+        </a>
+
+        <a href="licenses.html">
+            🔑 Licenses
+        </a>
+
+        <a href="plans.html">
+            📦 Plans
+        </a>
+
+        <a href="faq.html">
+            ❓ SSS
+        </a>
+
+        <a href="../../tfrs16.html">
+            🧮 TFRS16 Hesaplama Motoru
+        </a>
+
+        <a href="tfrs16.html">
+            🧾 TFRS16 Customers
+        </a>
+
+        <a href="periods.html" data-admin-only>
+            🔒 Dönem Yönetimi
+        </a>
+
+        <a href="inflation-indices.html">
+            📈 Enflasyon Endeksleri
+        </a>
+
+        <a
+            href="fx-rates.html"
+            class="active"
+        >
+            💱 TCMB Kurları
+        </a>
+
+        <a href="audit.html">
+            📋 Audit Log
+        </a>
+
+    </div>
+
+</nav>
+
+
+<main class="main-content">
+
+<header class="top-header">
+
+    <div class="page-title">
+        TCMB Kur Yönetimi
+    </div>
+
+
+    <div class="user-info">
+
+        <span
+            class="username"
+            id="adminUsername"
+        >
+            Loading...
+        </span>
+
+        <span class="role-badge">
+            ADMIN
+        </span>
+
+        <button
+            class="btn-logout"
+            onclick="logout()"
+        >
+            Çıkış
+        </button>
+
+    </div>
+
+</header>
+
+
+<div class="page-content">
+
+<div class="fx-page">
+
+    <!-- INTRO -->
+
+    <section class="page-intro">
+
+        <div>
+
+            <h1>
+                Döviz Kurları
+            </h1>
+
+            <p>
+                TCMB kaynaklı USD/TRY ve EUR/TRY kurlarını
+                senkronize edin, bekleyen kayıtları kontrol edin
+                ve doğrulayın.
+            </p>
+
+        </div>
+
+
+        <button
+            class="btn btn-outline"
+            onclick="loadRates()"
+        >
+            ↻ Yenile
+        </button>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="fx-summary">
+
+        <div class="summary-card pending">
+
+            <div
+                class="summary-value"
+                id="summaryPending"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                Bekleyen Kur
+            </div>
+
+        </div>
+
+
+        <div class="summary-card usd">
+
+            <div
+                class="summary-value"
+                id="summaryUsd"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                USD / TRY Bekleyen
+            </div>
+
+        </div>
+
+
+        <div class="summary-card eur">
+
+            <div
+                class="summary-value"
+                id="summaryEur"
+            >
+                —
+            </div>
+
+            <div class="summary-label">
+                EUR / TRY Bekleyen
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- NOTICE -->
+
+    <section class="fx-notice">
+
+        <strong>Kur kontrolü:</strong>
+
+        TCMB'den getirilen kayıtlar önce
+        <strong>PENDING</strong> durumunda tutulur.
+
+        Kayıtları kontrol ettikten sonra tek tek veya
+        seçilen tarih aralığı için toplu olarak doğrulayabilirsiniz.
+
+        Bu ekran yalnızca backend tarafından döndürülen
+        bekleyen kur kayıtlarını gösterir.
+
+    </section>
+
+
+    <!-- SYNC -->
+
+    <section class="sync-card">
+
+        <div class="sync-header">
+
+            <h3>
+                TCMB Kur Senkronizasyonu
+            </h3>
+
+            <p>
+                TCMB kurlarının alınacağı tarih aralığını seçin.
+                Senkronizasyon tamamlandıktan sonra yeni bekleyen
+                kayıtlar aşağıdaki listeye yansır.
+            </p>
+
+        </div>
+
+
+        <div class="sync-form">
+
+            <div class="form-field">
+
+                <label for="fromDate">
+                    Başlangıç Tarihi
+                </label>
+
+                <input
+                    id="fromDate"
+                    type="date"
+                    value="2019-01-01"
+                >
+
+            </div>
+
+
+            <div class="form-field">
+
+                <label for="toDate">
+                    Bitiş Tarihi
+                </label>
+
+                <input
+                    id="toDate"
+                    type="date"
+                    value="2019-12-31"
+                >
+
+            </div>
+
+
+            <button
+                class="btn btn-primary"
+                id="syncBtn"
+                type="button"
+            >
+                TCMB'den Getir
+            </button>
+
+
+            <button
+                class="btn btn-outline"
+                id="bulkVerifyBtn"
+                type="button"
+            >
+                Bekleyenleri Toplu Doğrula
+            </button>
+
+        </div>
+
+
+        <div
+            id="msg"
+            class="fx-message"
+            role="status"
+        ></div>
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-container">
+
+        <div class="table-header fx-toolbar">
+
+            <h3>
+                Doğrulama Bekleyen Kurlar
+            </h3>
+
+
+            <div class="fx-toolbar-right">
+
+                <select
+                    id="pairFilter"
+                    onchange="renderRates()"
+                >
+
+                    <option value="">
+                        Tüm Pariteler
+                    </option>
+
+                    <option value="USD/TRY">
+                        USD / TRY
+                    </option>
+
+                    <option value="EUR/TRY">
+                        EUR / TRY
+                    </option>
+
+                </select>
+
+
+                <span
+                    class="record-count"
+                    id="recordCount"
+                >
+                    —
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="fx-table-wrap">
+
+            <table id="fxRatesTable">
+
+                <thead>
+
+                <tr>
+                    <th>Tarih</th>
+                    <th>Parite</th>
+                    <th>Kur</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+
+                </thead>
+
+
+                <tbody id="rows">
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        class="table-state"
+                    >
+                        Kurlar yükleniyor...
+                    </td>
+
+                </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+</div>
+
+</div>
+
+</main>
+
+
+<script src="../js/admin.js"></script>
+
+
+<script>
+
+/* ============================================================
+   STATE
+============================================================ */
+
+let pendingRatesCache = [];
+
+let ratesLoading = false;
+
+
+/* ============================================================
+   AUTH HEADER
+
+   Mevcut endpoint/token davranışı korunuyor.
+============================================================ */
+
+function getFxHeaders() {
+
+    const token =
+        localStorage.getItem(
+            "access_token"
+        ) ||
+        sessionStorage.getItem(
+            "gk_session_token"
+        ) ||
+        localStorage.getItem(
+            "gk_backend_jwt"
+        );
+
+
+    return {
+
+        "Content-Type":
+            "application/json",
+
+        ...(token
+            ? {
+                Authorization:
+                    "Bearer " +
+                    token
+            }
+            : {})
+
+    };
+
+}
+
+
+/* ============================================================
+   ESCAPE
+============================================================ */
+
+function safe(value) {
+
+    return escapeHtml(
+        String(
+            value ?? ""
+        )
+    );
+
+}
+
+
+/* ============================================================
+   MESSAGE
+============================================================ */
+
+function setFxMessage(
+    message,
+    type = "info"
+) {
+
+    const element =
+        document.getElementById(
+            "msg"
+        );
+
+
+    if (!message) {
+
+        element.textContent = "";
+
+        element.className =
+            "fx-message";
+
+        return;
+
+    }
+
+
+    element.textContent =
+        message;
+
+
+    element.className =
+        `fx-message ${type}`;
+
+}
+
+
+/* ============================================================
+   API RESPONSE
+============================================================ */
+
+async function parseResponse(
+    response
+) {
+
+    let data = {};
+
+
+    try {
+
+        data =
+            await response.json();
+
+    } catch (_) {
+
+        data = {};
+
+    }
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            data.error ||
+            data.message ||
+            `HTTP ${response.status}`
+        );
+
+    }
+
+
+    return data;
+
+}
+
+
+/* ============================================================
+   RATE FORMAT
+============================================================ */
+
+function formatRate(value) {
+
+    const number =
+        Number(value);
+
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+
+    return number.toLocaleString(
+        "tr-TR",
+        {
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 4
+        }
+    );
+
+}
+
+
+/* ============================================================
+   DATE FORMAT
+============================================================ */
+
+function formatRateDate(value) {
+
+    if (!value) {
+        return "—";
+    }
+
+
+    /*
+     * YYYY-MM-DD formatını Date nesnesine dönüştürmeden
+     * gösteriyoruz. Böylece UTC / timezone nedeniyle tarihin
+     * bir gün geri veya ileri kayması önleniyor.
+     */
+    const match =
+        String(value).match(
+            /^(\d{4})-(\d{2})-(\d{2})/
+        );
+
+
+    if (match) {
+
+        return (
+            match[3] +
+            "." +
+            match[2] +
+            "." +
+            match[1]
+        );
+
+    }
+
+
+    return String(value);
+
+}
+
+
+/* ============================================================
+   SUMMARY
+============================================================ */
+
+function renderSummary() {
+
+    const total =
+        pendingRatesCache.length;
+
+
+    const usd =
+        pendingRatesCache.filter(
+            rate =>
+                String(
+                    rate.fromCurrency
+                ).toUpperCase() ===
+                    "USD" &&
+                String(
+                    rate.toCurrency
+                ).toUpperCase() ===
+                    "TRY"
+        ).length;
+
+
+    const eur =
+        pendingRatesCache.filter(
+            rate =>
+                String(
+                    rate.fromCurrency
+                ).toUpperCase() ===
+                    "EUR" &&
+                String(
+                    rate.toCurrency
+                ).toUpperCase() ===
+                    "TRY"
+        ).length;
+
+
+    document.getElementById(
+        "summaryPending"
+    ).textContent =
+        total;
+
+
+    document.getElementById(
+        "summaryUsd"
+    ).textContent =
+        usd;
+
+
+    document.getElementById(
+        "summaryEur"
+    ).textContent =
+        eur;
+
+}
+
+
+/* ============================================================
+   LOAD
+============================================================ */
+
+async function loadRates() {
+
+    if (ratesLoading) {
+        return;
+    }
+
+
+    ratesLoading = true;
+
+
+    const tbody =
+        document.getElementById(
+            "rows"
+        );
+
+
+    tbody.innerHTML = `
+
+        <tr>
+
+            <td
+                colspan="5"
+                class="table-state"
+            >
+                Kurlar yükleniyor...
+            </td>
+
+        </tr>
+
+    `;
+
+
+    try {
+
+        const response =
+            await fetch(
+                API_BASE_URL +
+                "/api/fx-rates/pending",
+                {
+                    headers:
+                        getFxHeaders()
+                }
+            );
+
+
+        const result =
+            await parseResponse(
+                response
+            );
+
+
+        pendingRatesCache =
+            Array.isArray(
+                result.rates
+            )
+                ? result.rates
+                : [];
+
+
+        renderSummary();
+
+        renderRates();
+
+
+    } catch (error) {
+
+        console.error(
+            "Load FX rates error:",
+            error
+        );
+
+
+        pendingRatesCache = [];
+
+
+        renderSummary();
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="5"
+                    class="table-state error"
+                >
+                    ${safe(
+                        error.message ||
+                        "Kur kayıtları yüklenemedi."
+                    )}
+                </td>
+
+            </tr>
+
+        `;
+
+
+        document.getElementById(
+            "recordCount"
+        ).textContent =
+            "—";
+
+
+    } finally {
+
+        ratesLoading = false;
+
+    }
+
+}
+
+
+/* ============================================================
+   RENDER
+============================================================ */
+
+function renderRates() {
+
+    const tbody =
+        document.getElementById(
+            "rows"
+        );
+
+
+    const pairFilter =
+        document.getElementById(
+            "pairFilter"
+        ).value;
+
+
+    const filtered =
+        pendingRatesCache.filter(
+            rate => {
+
+                if (!pairFilter) {
+                    return true;
+                }
+
+
+                const pair =
+                    String(
+                        rate.fromCurrency ||
+                        ""
+                    ).toUpperCase() +
+                    "/" +
+                    String(
+                        rate.toCurrency ||
+                        ""
+                    ).toUpperCase();
+
+
+                return pair ===
+                    pairFilter;
+
+            }
+        );
+
+
+    document.getElementById(
+        "recordCount"
+    ).textContent =
+        filtered.length ===
+        pendingRatesCache.length
+            ? `${filtered.length} kayıt`
+            : `${filtered.length} / ${pendingRatesCache.length} kayıt`;
+
+
+    if (!filtered.length) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="5"
+                    class="table-state"
+                >
+                    ${
+                        pendingRatesCache.length
+                            ? "Seçilen parite için bekleyen kur bulunamadı."
+                            : "Doğrulama bekleyen kur bulunmuyor."
+                    }
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        filtered
+            .map(rate => {
+
+                const from =
+                    String(
+                        rate.fromCurrency ||
+                        ""
+                    ).toUpperCase();
+
+
+                const to =
+                    String(
+                        rate.toCurrency ||
+                        ""
+                    ).toUpperCase();
+
+
+                return `
+
+                    <tr>
+
+                        <td data-label="Tarih">
+
+                            <span class="rate-date">
+                                ${safe(
+                                    formatRateDate(
+                                        rate.rateDate
+                                    )
+                                )}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Parite">
+
+                            <span class="currency-pair">
+                                ${safe(from)}
+                                /
+                                ${safe(to)}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Kur">
+
+                            <span class="rate-value">
+                                ${safe(
+                                    formatRate(
+                                        rate.rate
+                                    )
+                                )}
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="Durum">
+
+                            <span class="pending-badge">
+
+                                <span
+                                    class="pending-dot"
+                                ></span>
+
+                                Bekliyor
+
+                            </span>
+
+                        </td>
+
+
+                        <td data-label="İşlemler">
+
+                            <button
+                                class="btn btn-sm btn-primary verify-action"
+                                data-verify-id="${safe(
+                                    rate.id
+                                )}"
+                            >
+                                Doğrula
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+            })
+            .join("");
+
+
+    tbody
+        .querySelectorAll(
+            "[data-verify-id]"
+        )
+        .forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () =>
+                        verifyRate(
+                            button.dataset.verifyId,
+                            button
+                        )
+                );
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   VERIFY ONE
+============================================================ */
+
+async function verifyRate(
+    id,
+    button
+) {
+
+    const rate =
+        pendingRatesCache.find(
+            item =>
+                String(item.id) ===
+                String(id)
+        );
+
+
+    if (!rate) {
+
+        setFxMessage(
+            "Kur kaydı bulunamadı. Listeyi yenileyin.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    const pair =
+        `${rate.fromCurrency}/${rate.toCurrency}`;
+
+
+    const confirmed =
+        confirm(
+            `${formatRateDate(rate.rateDate)} tarihli ${pair} kuru (${formatRate(rate.rate)}) doğrulansın mı?`
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Doğrulanıyor...";
+
+
+    setFxMessage(
+        "",
+        "info"
+    );
+
+
+    try {
+
+        const response =
+            await fetch(
+                API_BASE_URL +
+                "/api/fx-rates/" +
+                encodeURIComponent(id) +
+                "/verify",
+                {
+                    method:
+                        "POST",
+
+                    headers:
+                        getFxHeaders()
+                }
+            );
+
+
+        await parseResponse(
+            response
+        );
+
+
+        setFxMessage(
+            `${formatRateDate(rate.rateDate)} tarihli ${pair} kuru doğrulandı.`,
+            "success"
+        );
+
+
+        await loadRates();
+
+
+    } catch (error) {
+
+        console.error(
+            "Verify FX rate error:",
+            error
+        );
+
+
+        setFxMessage(
+            "Kur doğrulanamadı: " +
+            error.message,
+            "error"
+        );
+
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "Doğrula";
+
+    }
+
+}
+
+
+/* ============================================================
+   BULK VERIFY
+============================================================ */
+
+async function bulkVerifyRates() {
+
+    const from =
+        document.getElementById(
+            "fromDate"
+        ).value;
+
+
+    const to =
+        document.getElementById(
+            "toDate"
+        ).value;
+
+
+    if (
+        !from ||
+        !to
+    ) {
+
+        setFxMessage(
+            "Toplu doğrulama için başlangıç ve bitiş tarihi seçmelisiniz.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (from > to) {
+
+        setFxMessage(
+            "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    const confirmed =
+        confirm(
+            `${from} - ${to} tarih aralığındaki TCMB bekleyen kur kayıtları toplu olarak doğrulansın mı?`
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    const button =
+        document.getElementById(
+            "bulkVerifyBtn"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Doğrulanıyor...";
+
+
+    setFxMessage(
+        "Bekleyen kur kayıtları doğrulanıyor...",
+        "info"
+    );
+
+
+    try {
+
+        const response =
+            await fetch(
+                API_BASE_URL +
+                "/api/fx-rates/bulk-verify",
+                {
+                    method:
+                        "POST",
+
+                    headers:
+                        getFxHeaders(),
+
+                    body:
+                        JSON.stringify({
+                            from,
+                            to
+                        })
+                }
+            );
+
+
+        const result =
+            await parseResponse(
+                response
+            );
+
+
+        const verified =
+            Number(
+                result.verified || 0
+            );
+
+
+        setFxMessage(
+            `${verified} kur kaydı doğrulandı.`,
+            "success"
+        );
+
+
+        await loadRates();
+
+
+    } catch (error) {
+
+        console.error(
+            "Bulk verify FX rates error:",
+            error
+        );
+
+
+        setFxMessage(
+            "Toplu doğrulama başarısız: " +
+            error.message,
+            "error"
+        );
+
+
+    } finally {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "Bekleyenleri Toplu Doğrula";
+
+    }
+
+}
+
+
+/* ============================================================
+   SYNC
+============================================================ */
+
+async function syncRates() {
+
+    const from =
+        document.getElementById(
+            "fromDate"
+        ).value;
+
+
+    const to =
+        document.getElementById(
+            "toDate"
+        ).value;
+
+
+    if (
+        !from ||
+        !to
+    ) {
+
+        setFxMessage(
+            "Senkronizasyon için başlangıç ve bitiş tarihi seçmelisiniz.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (from > to) {
+
+        setFxMessage(
+            "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    const button =
+        document.getElementById(
+            "syncBtn"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.textContent =
+        "Getiriliyor...";
+
+
+    setFxMessage(
+        "TCMB senkronizasyonu sürüyor...",
+        "info"
+    );
+
+
+    try {
+
+        const response =
+            await fetch(
+                API_BASE_URL +
+                "/api/fx-rates/sync",
+                {
+                    method:
+                        "POST",
+
+                    headers:
+                        getFxHeaders(),
+
+                    body:
+                        JSON.stringify({
+                            from,
+                            to
+                        })
+                }
+            );
+
+
+        const result =
+            await parseResponse(
+                response
+            );
+
+
+        let message =
+            result.message ||
+            "TCMB senkronizasyonu tamamlandı.";
+
+
+        if (
+            result.created !== undefined
+        ) {
+
+            message +=
+                ` ${Number(result.created)} yeni kayıt oluşturuldu.`;
+
+        }
+
+
+        setFxMessage(
+            message,
+            "success"
+        );
+
+
+        await loadRates();
+
+
+    } catch (error) {
+
+        console.error(
+            "FX sync error:",
+            error
+        );
+
+
+        setFxMessage(
+            "TCMB senkronizasyonu başarısız: " +
+            error.message,
+            "error"
+        );
+
+
+    } finally {
+
+        button.disabled =
+            false;
+
+
+        button.textContent =
+            "TCMB'den Getir";
+
+    }
+
+}
+
+
+/* ============================================================
+   EVENTS
+============================================================ */
+
+document
+    .getElementById(
+        "syncBtn"
+    )
+    .addEventListener(
+        "click",
+        syncRates
+    );
+
+
+document
+    .getElementById(
+        "bulkVerifyBtn"
+    )
+    .addEventListener(
+        "click",
+        bulkVerifyRates
+    );
+
+
+/* ============================================================
+   INITIALIZE
+============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        const authenticated =
+            await checkAdminAuth();
+
+
+        if (!authenticated) {
+            return;
+        }
+
+
+        await loadRates();
+
+    }
+);
+
+</script>
+
+</body>
+
+</html>
