@@ -59,6 +59,30 @@
     return results.map(copyResult);
   }
 
+  async function loadReportingDate(contract, reportingDate, options) {
+    const value = adapter();
+    if (typeof value.calculateReportingDate !== "function") throw new Error("Private reporting-date calculation is unavailable");
+    return copyResult(await value.calculateReportingDate(contract, reportingDate, options));
+  }
+
+  async function loadTms21(contract, reportingDate, options) {
+    const value = adapter();
+    if (typeof value.calculateTms21 !== "function") throw new Error("Private TMS21 calculation is unavailable");
+    return copyResult(await value.calculateTms21(contract, reportingDate, options));
+  }
+
+  async function loadEarlyPayment(contract, amount, date, options) {
+    const value = adapter();
+    if (typeof value.calculateEarlyPayment !== "function") throw new Error("Private early-payment calculation is unavailable");
+    return copyResult(await value.calculateEarlyPayment(contract, amount, date, options));
+  }
+
+  async function loadSaleAndLeaseback(input, options) {
+    const value = adapter();
+    if (typeof value.calculateSaleAndLeaseback !== "function") throw new Error("Private sale-and-leaseback calculation is unavailable");
+    return copyResult(await value.calculateSaleAndLeaseback(input, options));
+  }
+
   async function loadModificationPreview(contract, input, options) {
     const value = adapter();
     if (typeof value.calculateModificationPreview !== "function") {
@@ -120,6 +144,10 @@
     loadMany,
     loadTms29,
     loadTms29Many,
+    loadReportingDate,
+    loadTms21,
+    loadEarlyPayment,
+    loadSaleAndLeaseback,
     loadModificationPreview,
     loadReassessmentPreview,
     applyModification,

@@ -10235,7 +10235,7 @@ ${renderAccountingCenterBulkPromo()}
     let fxError = null;
     if (contractNeedsFxTranslation(contract)) {
       try {
-        fx = await buildTms21FxTranslation(contract, engine);
+        fx = await buildTms21FxTranslation(contract, engine, { reportingDate: scheduleAsOfDate });
       } catch (error) {
         fxError = error;
       }
@@ -24994,6 +24994,19 @@ ${renderAccountingCenterBulkPromo()}
   // modifikasyon/reassessment geçirmiş kontratlarda tüm dönemler
   // yanlışlıkla en güncel şartlarla baştan hesaplanmış gibi çevrilir.
   async function buildTms21FxTranslation(contract, scheduleSource, options = {}) {
+    const privateFacade = window.LeaseQantPrivateTfrs16Facade;
+    const privateDate = options.reportingDate
+      || (Array.isArray(scheduleSource) ? scheduleSource.at(-1)?.date : scheduleSource?.schedule?.at(-1)?.date)
+      || contract?.endDate;
+    if (typeof privateFacade?.loadTms21 !== "function") {
+      throw new Error("Private TMS21 hesaplama API'si hazır değil.");
+    }
+    if (!privateDate) throw new Error("TMS21 reporting date is required.");
+    return privateFacade.loadTms21(contract, String(privateDate).slice(0, 10), options);
+
+    // Kept below only as an unreachable migration reference until the final
+    // public-runtime extraction removes this legacy block. No production path
+    // can execute it because the private return above is unconditional.
     const transactionCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
     const functionalCurrency = resolveContractFunctionalCurrency(contract);
     if (transactionCurrency === functionalCurrency) {
@@ -26719,110 +26732,40 @@ ${renderAccountingCenterBulkPromo()}
    * @param {string|Date} date - Ödeme tarihi
    * @returns {Object} result - { valid, liabilityBefore, liabilityAfter, schedule, payoffPeriod }
    */
-  function applyEarlyPayment(contractId, amount, date) {
+  async function applyEarlyPayment(contractId, amount, date) {
+    const contract = contracts.find(c => String(c.id) === String(contractId));
+    if (!contract) return { valid: false, errors: ["Sözleşme bulunamadı."] };
+    const paymentAmount = Number(amount);
+    const paymentDate = parseDate(date);
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || !paymentDate) {
+      return { valid: false, errors: ["Erken ödeme tutarı ve tarihi gereklidir."] };
+    }
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (typeof facade?.loadEarlyPayment !== "function") {
+      return { valid: false, errors: ["Private erken ödeme API'si hazır değil."] };
+    }
     try {
-      const contract = contracts.find(c => c.id === contractId);
-      if (!contract) return { valid: false, errors: ["Sözleşme bulunamadı."] };
-
-      const paymentAmount = Number(amount);
-      if (!isPositiveNumber(paymentAmount)) {
-        return { valid: false, errors: ["Erken ödeme tutarı geçersiz."] };
-      }
-
-      const paymentDate = parseDate(date) || new Date();
-      const asOf = getScheduleAsOfReportingDate(contract, paymentDate);
-
-      if (!asOf.valid) {
-        return { valid: false, errors: ["Ödeme tarihi için mevcut ödeme planı hesaplanamadı."] };
-      }
-
-      const futurePeriods = asOf.futurePeriods;
-      if (!futurePeriods.length) {
-        return { valid: false, errors: ["Bu tarihten sonra kalan dönem bulunmuyor."] };
-      }
-
-      const liabilityBefore = asOf.outstandingLiability;
-      const openingBalance = Math.max(0, liabilityBefore - paymentAmount);
-
-      const referencePeriod = futurePeriods[0];
-      const periodicRate = referencePeriod.openingLiability > 0
-        ? referencePeriod.interest / referencePeriod.openingLiability
-        : 0;
-
-      let opening = openingBalance;
-      const revisedSchedule = [];
-      let payoffPeriod = null;
-
-      for (const period of futurePeriods) {
-        if (opening <= 0.005) {
-          payoffPeriod = period.period - 1;
-          break;
-        }
-
-        const interest = Math.round(opening * periodicRate * 100) / 100;
-        const scheduledPayment = Number(period.payment) || 0;
-        let principal = scheduledPayment - interest;
-        let closing = opening - principal;
-
-        if (closing < 0) {
-          principal = opening;
-          closing = 0;
-        }
-
-        revisedSchedule.push({
-          ...period,
-          openingLiability: Math.round(opening * 100) / 100,
-          interest,
-          principal: Math.round(principal * 100) / 100,
-          closingLiability: Math.round(closing * 100) / 100,
-          earlyPaymentAdjusted: true
-        });
-
-        opening = closing;
-      }
-
-      contract.earlyPayments = safeArray(contract.earlyPayments);
+      const result = await facade.loadEarlyPayment(
+        contract,
+        paymentAmount,
+        paymentDate.toISOString().slice(0, 10)
+      );
+      if (!result?.valid) return result || { valid: false, errors: ["Erken ödeme hesaplanamadı."] };
       const eventId = `EP-${contract.id}-${Date.now()}`;
-      const isoPaymentDate = paymentDate.toISOString().slice(0, 10);
-
-      contract.earlyPayments.push({
+      contract.earlyPayments = safeArray(contract.earlyPayments).concat({
         id: eventId,
-        date: isoPaymentDate,
+        date: result.paymentDate,
         amount: paymentAmount,
-        liabilityBefore,
-        liabilityAfter: openingBalance,
+        liabilityBefore: result.liabilityBefore,
+        liabilityAfter: result.liabilityAfter,
         appliedAt: new Date().toISOString()
       });
-
-      contract.earlyPaymentSchedule = revisedSchedule;
-      contract.earlyPaymentScheduleAsOf = isoPaymentDate;
-
-      recordAuditEvent({
-        action: "EARLY_PAYMENT_APPLIED",
-        entityType: "CONTRACT",
-        entityId: contract.id,
-        contractId: contract.id,
-        reason: `Erken ödeme: ${formatCurrency(paymentAmount)}`,
-        metadata: { eventId, paymentDate: isoPaymentDate, liabilityBefore, liabilityAfter: openingBalance, payoffPeriod }
-      });
-
-      saveContracts(contracts);
+      contract.earlyPaymentSchedule = Array.isArray(result.schedule) ? result.schedule : [];
+      contract.earlyPaymentScheduleAsOf = result.paymentDate;
+      if (typeof persistContractToApi === "function") await persistContractToApi(contract, true);
       clearCalculationCache(contract.id);
-
-      if (typeof auditScheduleEvent === "function") {
-        auditScheduleEvent(contract, "SCHEDULE_UPDATED", "EARLY_PAYMENT", eventId, isoPaymentDate, revisedSchedule.length);
-      }
-
-      showToast(`${contract.id}: ${formatCurrency(paymentAmount)} erken ödeme uygulandı. Kalan bakiye: ${formatCurrency(openingBalance)}.`, "success");
-
-      return {
-        valid: true,
-        contractId: contract.id,
-        liabilityBefore,
-        liabilityAfter: openingBalance,
-        schedule: revisedSchedule,
-        payoffPeriod
-      };
+      showToast(`${contract.id}: ${formatCurrency(paymentAmount)} erken ödeme uygulandı.`, "success");
+      return { ...result, eventId };
     } catch (error) {
       showError(error, "applyEarlyPayment");
       return { valid: false, errors: [String(error?.message || error)] };

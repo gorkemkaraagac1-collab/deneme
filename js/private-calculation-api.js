@@ -178,6 +178,40 @@
     return results;
   }
 
+  async function calculateReportingDate(contract, reportingDate, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(reportingDate || ""))) {
+      throw new TypeError("reportingDate must be YYYY-MM-DD");
+    }
+    return requestCalculation("/api/calculations/lease/reporting-date", { contract, reportingDate }, options);
+  }
+
+  async function calculateTms21(contract, reportingDate, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(reportingDate || ""))) {
+      throw new TypeError("reportingDate must be YYYY-MM-DD");
+    }
+    return requestCalculation("/api/calculations/lease/tms21", { contract, reportingDate }, options);
+  }
+
+  async function calculateEarlyPayment(contract, amount, date, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) throw new TypeError("amount must be positive");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new TypeError("date must be YYYY-MM-DD");
+    return requestCalculation("/api/calculations/lease/early-payment", { contract, amount: Number(amount), date }, options);
+  }
+
+  async function calculateSaleAndLeaseback(input, options) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("input must be an object");
+    return requestCalculation("/api/calculations/lease/sale-and-leaseback", { input }, options);
+  }
+
   async function calculateModificationPreview(contract, input, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -229,6 +263,10 @@
     calculateMany,
     calculateTms29,
     calculateTms29Many,
+    calculateReportingDate,
+    calculateTms21,
+    calculateEarlyPayment,
+    calculateSaleAndLeaseback,
     calculateModificationPreview,
     calculateReassessmentPreview,
     applyModification,
