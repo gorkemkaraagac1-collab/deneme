@@ -17461,6 +17461,10 @@ ${renderAccountingCenterBulkPromo()}
   }
 
   async function ensurePrivateCloseJournalSummary(contractsForPeriod, reportingDate) {
+    // Close is a read-only dashboard surface. A stalled journal request must
+    // fail closed and leave an actionable error card; it must never keep the
+    // renderer (or the browser tab) waiting indefinitely.
+    const JOURNAL_REQUEST_TIMEOUT_MS = 10000;
     const end = coreIsoDate(coreDate(reportingDate));
     const start = closeJournalPeriodStart(end);
     if (!end || !start) throw new Error("Geçersiz kapanış raporlama tarihi.");
@@ -17473,7 +17477,7 @@ ${renderAccountingCenterBulkPromo()}
     }
     const promise = Promise.all((Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
       .filter(contract => cfoIsActive(contract, end))
-      .map(contract => facade.loadJournal(contract, start, end)))
+      .map(contract => facade.loadJournal(contract, start, end, { timeoutMs: JOURNAL_REQUEST_TIMEOUT_MS })))
       .then(results => {
         const summary = {
           interestExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.interest) || 0), 0),
