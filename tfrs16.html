@@ -927,11 +927,6 @@
   }));
   document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>{dash.hidden=true;contractsView.style.display="";}));
   $("v26ActiveCompanySelect")?.addEventListener("change",()=>setTimeout(syncDashboard,300));
-  document.querySelectorAll(".lq-cfo-strip [data-open-target]").forEach(btn=>btn.addEventListener("click",()=>{
-    setDashboard(false);
-    document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
-  }));
-
   const observer=new MutationObserver(()=>{if(!dash.hidden) syncDashboard();});
   ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent","kpiDataAsOf"].forEach(id=>{
     const el=$(id); if(el) observer.observe(el,{childList:true,subtree:true,characterData:true});
