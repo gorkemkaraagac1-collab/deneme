@@ -305,7 +305,7 @@ if (productionRows.length > 0) {
 }
 
 console.log(
-  `TFRS16 private cutover gate OK (${checks.length} checks; ${callSites} tracked references: ` +
+  `TFRS16 private cutover gate OK (${checks.length} source assertions; ${callSites} tracked references: ` +
   `${productionRows.length} production, ${commentRows.length} comments, ${knownGapRows.length} known FAZ 2 gap)`
 );
 if (knownGapRows.length > 0) {
