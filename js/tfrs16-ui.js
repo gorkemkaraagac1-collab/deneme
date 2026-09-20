@@ -6046,11 +6046,26 @@ window.fetch = (input, init = {}) => {
         // dashboard. This keeps the main KPI cards in sync after a
         // reassessment instead of retaining a stale local schedule snapshot.
         const privateReporting = getPrivateReportingDateResult(contract, reporting.date);
+        const privateCalculation = getPrivateCachedCalculationResult(contract);
+        const reportDate = reporting.date instanceof Date ? reporting.date : new Date(reporting.date);
+        const reportPeriodKey = !Number.isNaN(reportDate.getTime())
+          ? `${reportDate.getUTCFullYear()}-${String(reportDate.getUTCMonth() + 1).padStart(2, "0")}`
+          : null;
+        const privatePeriodRows = reportPeriodKey && Array.isArray(privateCalculation?.periodEffects)
+          ? privateCalculation.periodEffects.filter(row => String(row?.periodKey || "") === reportPeriodKey)
+          : [];
         const metrics = privateReporting
           ? {
               leaseLiability: Number(privateReporting.totalLeaseLiability ?? privateReporting.totalLiability ?? privateReporting.outstandingLiability) || 0,
               rouAsset: Number(privateReporting.outstandingROU) || 0,
-              next12MonthPayments: Number(privateReporting.next12MonthPrincipal ?? privateReporting.next12MonthPayments) || 0,
+              currentLiability: Number(privateReporting.currentLiability) || 0,
+              nonCurrentLiability: Number(privateReporting.nonCurrentLiability) || 0,
+              // Cash KPI is the next-twelve-month payment total. Principal
+              // remains a separate balance-sheet classification and must not
+              // replace the payment amount here.
+              next12MonthPayments: Number(privateReporting.next12MonthPayments) || 0,
+              monthlyInterest: privatePeriodRows.reduce((sum, row) => sum + (Number(row?.interest) || 0), 0),
+              monthlyDepreciation: privatePeriodRows.reduce((sum, row) => sum + (Number(row?.depreciation) || 0), 0),
               calculationValid: true
             }
           : (typeof cfoGetContractMetricsInternal === "function"
