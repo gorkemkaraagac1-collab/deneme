@@ -216,6 +216,16 @@
     }, options);
   }
 
+  async function calculateCloseControls(contracts, reportingDate, options) {
+    if (!Array.isArray(contracts) || contracts.length === 0) {
+      throw new TypeError("contracts must be a non-empty array");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(reportingDate || ""))) {
+      throw new TypeError("reportingDate must be YYYY-MM-DD");
+    }
+    return requestCalculation("/api/calculations/lease/close", { contracts, reportingDate }, options);
+  }
+
   async function calculateEarlyPayment(contract, amount, date, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -284,6 +294,7 @@
     calculateReportingDate,
     calculateTms21,
     calculateJournal,
+    calculateCloseControls,
     calculateEarlyPayment,
     calculateSaleAndLeaseback,
     calculateModificationPreview,
