@@ -8991,9 +8991,14 @@ ${renderAccountingCenterBulkPromo()}
       // has no subsequent-period FX gain/loss. Exclude that event from the
       // period FX delta; otherwise the opening conversion is re-posted as a
       // cumulative loss in every custom/annual journal.
+      const commencementDateKey = v23DateKey(contract.startDate);
+      const isOpeningAdvanceRow = row => row.isAdvanceCommencement || (
+        commencementDateKey && v23DateKey(row.date) === commencementDateKey &&
+        String(contract.paymentTiming || "").toLowerCase() === "advance"
+      );
       const netFx = v23Round(
         fxRows
-          .filter(row => !row.isAdvanceCommencement)
+          .filter(row => !isOpeningAdvanceRow(row))
           .reduce((sum, r) => sum + r.fxGainLoss, 0),
         2
       );
@@ -11694,9 +11699,14 @@ ${renderAccountingCenterBulkPromo()}
         const date = parseDate(row.date);
         return date && (!start || date >= start) && (!end || date <= end);
       });
+      const commencementDateKey = v23DateKey(contract.startDate);
+      const isOpeningAdvanceRow = row => row.isAdvanceCommencement || (
+        commencementDateKey && v23DateKey(row.date) === commencementDateKey &&
+        String(contract.paymentTiming || "").toLowerCase() === "advance"
+      );
       const totalFxGainLoss = v23Round(
         fxRows
-          .filter(row => !row.isAdvanceCommencement)
+          .filter(row => !isOpeningAdvanceRow(row))
           .reduce((sum, row) => sum + (Number(row.fxGainLoss) || 0), 0),
         2
       );
