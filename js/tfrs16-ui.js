@@ -8987,7 +8987,16 @@ ${renderAccountingCenterBulkPromo()}
         const selectedDates = new Set(selectedRows.map(r => v23DateKey(r.date)));
         fxRows = fx.schedule.filter(r => selectedDates.has(v23DateKey(r.date)));
       }
-      const netFx = v23Round(fxRows.reduce((sum, r) => sum + r.fxGainLoss, 0), 2);
+      // An advance commencement payment is measured at the opening rate and
+      // has no subsequent-period FX gain/loss. Exclude that event from the
+      // period FX delta; otherwise the opening conversion is re-posted as a
+      // cumulative loss in every custom/annual journal.
+      const netFx = v23Round(
+        fxRows
+          .filter(row => !row.isAdvanceCommencement)
+          .reduce((sum, r) => sum + r.fxGainLoss, 0),
+        2
+      );
       // fxGainLoss = (orijinal para birimindeki kapanış bakiyesi × kapanış kuru)
       // − (dönem hareketleriyle üstü örtülen tutar). Pozitifse kur yükselmiş
       // ve yükümlülüğün TL karşılığı beklenenden fazla büyümüş demektir →
@@ -11685,7 +11694,12 @@ ${renderAccountingCenterBulkPromo()}
         const date = parseDate(row.date);
         return date && (!start || date >= start) && (!end || date <= end);
       });
-      const totalFxGainLoss = v23Round(fxRows.reduce((sum, row) => sum + (Number(row.fxGainLoss) || 0), 0), 2);
+      const totalFxGainLoss = v23Round(
+        fxRows
+          .filter(row => !row.isAdvanceCommencement)
+          .reduce((sum, row) => sum + (Number(row.fxGainLoss) || 0), 0),
+        2
+      );
       const functionalEntries = buildFunctionalCurrencyJournalEntries(
         contract, baseEntries, selectedRows, periodStart, periodEnd, fxRows
       );
