@@ -71,6 +71,12 @@
     return copyResult(await value.calculateTms21(contract, reportingDate, options));
   }
 
+  async function loadJournal(contract, periodStart, periodEnd, options) {
+    const value = adapter();
+    if (typeof value.calculateJournal !== "function") throw new Error("Private journal calculation is unavailable");
+    return copyResult(await value.calculateJournal(contract, periodStart, periodEnd, options));
+  }
+
   async function loadEarlyPayment(contract, amount, date, options) {
     const value = adapter();
     if (typeof value.calculateEarlyPayment !== "function") throw new Error("Private early-payment calculation is unavailable");
@@ -146,6 +152,7 @@
     loadTms29Many,
     loadReportingDate,
     loadTms21,
+    loadJournal,
     loadEarlyPayment,
     loadSaleAndLeaseback,
     loadModificationPreview,

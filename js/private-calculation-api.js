@@ -198,6 +198,24 @@
     return requestCalculation("/api/calculations/lease/tms21", { contract, reportingDate }, options);
   }
 
+  async function calculateJournal(contract, periodStart, periodEnd, options) {
+    if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+      throw new TypeError("contract must be an object");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(periodStart || ""))) {
+      throw new TypeError("periodStart must be YYYY-MM-DD");
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(periodEnd || ""))) {
+      throw new TypeError("periodEnd must be YYYY-MM-DD");
+    }
+    return requestCalculation("/api/calculations/lease/journal", {
+      contract,
+      periodStart,
+      periodEnd,
+      options: options?.journalOptions || undefined
+    }, options);
+  }
+
   async function calculateEarlyPayment(contract, amount, date, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -265,6 +283,7 @@
     calculateTms29Many,
     calculateReportingDate,
     calculateTms21,
+    calculateJournal,
     calculateEarlyPayment,
     calculateSaleAndLeaseback,
     calculateModificationPreview,
