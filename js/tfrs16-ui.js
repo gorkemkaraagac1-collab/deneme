@@ -8574,9 +8574,12 @@ ${renderAccountingCenterBulkPromo()}
       migration'da bu fonksiyon null döner ve ESKİ davranış AYNEN
       korunur, bkz. resolveLeaseAccrualContext).
     */
-    const scheduleSourceForJournal = cfoBuildSchedule(contract);
+    const privateJournalPrimary = isPrivateCalculationApiReady();
+    const scheduleSourceForJournal = privateJournalPrimary
+      ? { schedule: [], source: "PRIVATE_ENGINE" }
+      : cfoBuildSchedule(contract);
     const journalAccrualContext =
-      scheduleSourceForJournal.source === "LEASE_SCHEDULE"
+      !privateJournalPrimary && scheduleSourceForJournal.source === "LEASE_SCHEDULE"
         ? resolveLeaseAccrualContext(contract)
         : null;
 
@@ -8591,17 +8594,19 @@ ${renderAccountingCenterBulkPromo()}
         // Custom periods must start from the effective event-aware schedule,
         // rather than an annual slice. This keeps reassessment/modification
         // rows and cash settlements inside the exact requested date range.
-        const customSchedule = cfoBuildSchedule(contract)?.schedule || [];
-        selected = customSchedule.filter(item => {
-          const itemDate = item.date instanceof Date ? item.date : new Date(item.date);
-          return itemDate > periodStartExclusive && itemDate <= periodEndInclusive;
-        });
+        if (!privateJournalPrimary) {
+          const customSchedule = cfoBuildSchedule(contract)?.schedule || [];
+          selected = customSchedule.filter(item => {
+            const itemDate = item.date instanceof Date ? item.date : new Date(item.date);
+            return itemDate > periodStartExclusive && itemDate <= periodEndInclusive;
+          });
+        }
       }
-    } else {
+    } else if (!privateJournalPrimary) {
       selected = getScheduleForYear(contract, year, month, period);
     }
 
-    if (isPrivateCalculationApiReady()) {
+    if (privateJournalPrimary) {
       try {
         await generatePrivateSelectedJournal(
           contract,
