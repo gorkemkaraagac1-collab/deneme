@@ -217,8 +217,12 @@
   }
 
   async function calculateCloseControls(contracts, reportingDate, options) {
-    if (!Array.isArray(contracts) || contracts.length === 0) {
-      throw new TypeError("contracts must be a non-empty array");
+    // An empty active scope is valid for a pre-commencement period or after
+    // the portfolio has been cleared. The private engine returns an explicit
+    // NOT_APPLICABLE/READY envelope for that state; rejecting it here makes
+    // the close dashboard show a false calculation failure.
+    if (!Array.isArray(contracts)) {
+      throw new TypeError("contracts must be an array");
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(reportingDate || ""))) {
       throw new TypeError("reportingDate must be YYYY-MM-DD");
