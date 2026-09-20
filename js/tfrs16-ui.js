@@ -7762,7 +7762,7 @@ window.fetch = (input, init = {}) => {
 
       {
         accountKey: "cashSettlement",
-        account: "102 Banka / 100 Kasa (Kira Ödemesi)",
+        account: "760 / 770 Kira Ödemesi",
         debit: 0,
         credit: payment
       },
@@ -8855,7 +8855,7 @@ ${renderAccountingCenterBulkPromo()}
 
       {
         accountKey: "cashSettlement",
-        account: "102 Banka / 100 Kasa (Kira Ödemesi)",
+        account: "760 / 770 Kira Ödemesi",
         debit: 0,
         credit: payment
       },
@@ -12018,7 +12018,7 @@ ${renderAccountingCenterBulkPromo()}
       const baseEntries = [
         { accountKey: "interestExpense", account: "780 Finansman Giderleri", debit: interest, credit: 0 },
         { accountKey: "leaseLiability", account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
-        { accountKey: "cashSettlement", account: "102 Banka / 100 Kasa (Kira Ödemesi)", debit: 0, credit: payment },
+        { accountKey: "cashSettlement", account: "760 / 770 Kira Ödemesi", debit: 0, credit: payment },
         { accountKey: "depreciationExpense", account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
         { accountKey: "rouAccumDep", account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
       ];
