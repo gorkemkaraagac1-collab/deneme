@@ -795,7 +795,12 @@ window.fetch = (input, init = {}) => {
       contracts = mapped;
       backendContractsHydrated = true;
       backendContractsHydrationError = null;
-      await hydrateAuditEventsFromApi();
+      // Audit evidence is ancillary to the accounting hydration path. A
+      // stale/slow audit endpoint must never hold the private calculation
+      // coordinator hostage and leave the whole UI on "Private hesaplamalar
+      // yükleniyor…" indefinitely. Keep the sync best-effort and let core
+      // contract/private-result hydration continue independently.
+      void hydrateAuditEventsFromApi().catch(() => {});
       // DÜZELTME (2026-09-17): hostname kapısı yanlıştı (bkz.
       // queueAuditBackendSync üzerindeki not) — bu yüzden önceki
       // oturumlarda kuyruğa alınmış ama HİÇ backend'e gönderilmemiş
@@ -803,7 +808,7 @@ window.fetch = (input, init = {}) => {
       // localStorage'da takılı kalmış olabilir. Sayfa her açıldığında
       // bu birikmiş kuyruğu da temizlemeye çalış — yeni bir olay
       // beklemeden.
-      try { await flushAuditBackendSync(); } catch (_) { /* best effort */ }
+      void flushAuditBackendSync().catch(() => {});
       try {
         saveContracts(contracts);
       } catch (_) { /* Cache persistence is best-effort. */ }
