@@ -889,6 +889,13 @@ window.fetch = (input, init = {}) => {
   const PRIVATE_CALCULATION_ERRORS = new Map();
   const PRIVATE_CALCULATION_INFLIGHT = new Map();
 
+  // Close Dashboard period P&L is sourced from the private journal endpoint.
+  // Keep this separate from the reporting-date balance cache because a
+  // period journal contains accrued interest and depreciation even when no
+  // payment row falls inside the selected month.
+  const PRIVATE_CLOSE_JOURNAL_CACHE = new Map();
+  const PRIVATE_CLOSE_JOURNAL_INFLIGHT = new Map();
+
   // FAZ 4.1 — getCfoAggregateMetrics()'in reportingDate başına
   // önbelleği. CALCULATION_CACHE ile AYNI TDZ nedeniyle burada
   // (loadContracts()'tan önce) tanımlanmak zorunda. clearCalculationCache()
@@ -1156,6 +1163,10 @@ window.fetch = (input, init = {}) => {
         PRIVATE_CALCULATION_ERRORS.clear();
       }
     }
+    // Journal summaries are derived data and must never survive a contract
+    // mutation or a private-cache hydration reset.
+    PRIVATE_CLOSE_JOURNAL_CACHE.clear();
+    PRIVATE_CLOSE_JOURNAL_INFLIGHT.clear();
     // FAZ 4.1 — aggregate önbellek reportingDate bazlı, TEK bir
     // kontratın değişmesi bile o tarihteki toplamları geçersiz kılar
     // (hangi kontrat olduğu önemli değil — güvenli taraf: tamamen
@@ -17436,6 +17447,43 @@ ${renderAccountingCenterBulkPromo()}
      Uses existing V17 getMonthEndCloseDashboardData engine.
      ========================================================== */
 
+  function closeJournalPeriodStart(reportingDate) {
+    const end = coreDate(reportingDate);
+    if (!end) return null;
+    const first = new Date(end.getFullYear(), end.getMonth(), 1);
+    first.setDate(first.getDate() - 1);
+    return coreIsoDate(first);
+  }
+
+  async function ensurePrivateCloseJournalSummary(contractsForPeriod, reportingDate) {
+    const end = coreIsoDate(coreDate(reportingDate));
+    const start = closeJournalPeriodStart(end);
+    if (!end || !start) throw new Error("Geçersiz kapanış raporlama tarihi.");
+    const key = end;
+    if (PRIVATE_CLOSE_JOURNAL_CACHE.has(key)) return PRIVATE_CLOSE_JOURNAL_CACHE.get(key);
+    if (PRIVATE_CLOSE_JOURNAL_INFLIGHT.has(key)) return PRIVATE_CLOSE_JOURNAL_INFLIGHT.get(key);
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (!isPrivateCalculationApiReady() || typeof facade?.loadJournal !== "function") {
+      throw new Error("Private period journal calculation is unavailable");
+    }
+    const promise = Promise.all((Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
+      .filter(contract => cfoIsActive(contract, end))
+      .map(contract => facade.loadJournal(contract, start, end)))
+      .then(results => {
+        const summary = {
+          interestExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.interest) || 0), 0),
+          depreciationExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.depreciation) || 0), 0),
+          payment: results.reduce((sum, result) => sum + (Number(result?.summary?.payment) || 0), 0),
+          source: "PRIVATE_ENGINE_JOURNAL"
+        };
+        PRIVATE_CLOSE_JOURNAL_CACHE.set(key, summary);
+        return summary;
+      })
+      .finally(() => PRIVATE_CLOSE_JOURNAL_INFLIGHT.delete(key));
+    PRIVATE_CLOSE_JOURNAL_INFLIGHT.set(key, promise);
+    return promise;
+  }
+
   function renderCloseDashboardPage(container, options = {}) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
@@ -17550,6 +17598,29 @@ ${renderAccountingCenterBulkPromo()}
           }
           return;
         }
+
+        const journalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
+        if (!journalSummary) {
+          const state = container.__closeJournalHydration || {};
+          if (state.reportingDate !== reportingDate || (!state.promise && !state.failed)) {
+            state.reportingDate = reportingDate;
+            state.failed = false;
+            state.promise = ensurePrivateCloseJournalSummary(contracts, reportingDate)
+              .then(() => { state.failed = false; })
+              .catch(() => { state.failed = true; })
+              .finally(() => {
+                state.promise = null;
+                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+              });
+            container.__closeJournalHydration = state;
+          }
+          if (state.failed) {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private dönem fişi alınamadı (${escapeHtml(reportingDate)}). Faiz ve amortisman özeti gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
+          } else {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${escapeHtml(reportingDate)} dönem faizi ve amortismanı private API'den yükleniyor…</div></div>`;
+          }
+          return;
+        }
       }
       let data = {};
       let readiness = {};
@@ -17557,6 +17628,11 @@ ${renderAccountingCenterBulkPromo()}
         data = typeof getMonthEndCloseDashboardData === "function"
           ? getMonthEndCloseDashboardData(reportingDate)
           : {};
+        const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
+        if (privateJournalSummary) {
+          data.interestExpense = privateJournalSummary.interestExpense;
+          data.depreciationExpense = privateJournalSummary.depreciationExpense;
+        }
         readiness = typeof getCloseReadiness === "function"
           ? getCloseReadiness(reportingDate)
           : {};
