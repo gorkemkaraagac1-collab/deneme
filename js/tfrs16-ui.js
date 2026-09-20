@@ -900,6 +900,10 @@ window.fetch = (input, init = {}) => {
   // payment row falls inside the selected month.
   const PRIVATE_CLOSE_JOURNAL_CACHE = new Map();
   const PRIVATE_CLOSE_JOURNAL_INFLIGHT = new Map();
+  // Authoritative close-control envelopes are hydrated from the private API;
+  // the browser never rebuilds the accounting controls locally.
+  const PRIVATE_CLOSE_CONTROLS_CACHE = new Map();
+  const PRIVATE_CLOSE_CONTROLS_INFLIGHT = new Map();
 
   // FAZ 4.1 — getCfoAggregateMetrics()'in reportingDate başına
   // önbelleği. CALCULATION_CACHE ile AYNI TDZ nedeniyle burada
@@ -1181,6 +1185,8 @@ window.fetch = (input, init = {}) => {
     // mutation or a private-cache hydration reset.
     PRIVATE_CLOSE_JOURNAL_CACHE.clear();
     PRIVATE_CLOSE_JOURNAL_INFLIGHT.clear();
+    PRIVATE_CLOSE_CONTROLS_CACHE.clear();
+    PRIVATE_CLOSE_CONTROLS_INFLIGHT.clear();
     // FAZ 4.1 — aggregate önbellek reportingDate bazlı, TEK bir
     // kontratın değişmesi bile o tarihteki toplamları geçersiz kılar
     // (hangi kontrat olduğu önemli değil — güvenli taraf: tamamen
@@ -17543,12 +17549,35 @@ ${renderAccountingCenterBulkPromo()}
     return promise;
   }
 
+  async function ensurePrivateCloseControls(contractsForPeriod, reportingDate, companyId) {
+    const end = closeDateOnly(reportingDate);
+    if (!end) throw new Error("Geçersiz kapanış raporlama tarihi.");
+    const list = (Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
+      .filter(contract => cfoIsActive(contract, end))
+      .filter(contract => !companyId || companyId === "ALL" || String(contract.companyId || contract.company || "") === String(companyId));
+    const key = `${end}|${String(companyId || "ALL")}`;
+    if (PRIVATE_CLOSE_CONTROLS_CACHE.has(key)) return PRIVATE_CLOSE_CONTROLS_CACHE.get(key);
+    if (PRIVATE_CLOSE_CONTROLS_INFLIGHT.has(key)) return PRIVATE_CLOSE_CONTROLS_INFLIGHT.get(key);
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (typeof facade?.loadCloseControls !== "function") {
+      throw new Error("Private close controls calculation is unavailable");
+    }
+    const promise = Promise.resolve(facade.loadCloseControls(list, end, { timeoutMs: 20000 }))
+      .then(result => {
+        PRIVATE_CLOSE_CONTROLS_CACHE.set(key, result);
+        return result;
+      })
+      .finally(() => PRIVATE_CLOSE_CONTROLS_INFLIGHT.delete(key));
+    PRIVATE_CLOSE_CONTROLS_INFLIGHT.set(key, promise);
+    return promise;
+  }
+
   // API-primary kapanış özeti yalnızca zaten alınmış private reporting-date
   // zarflarını toplar. Bu ekranın legacy close/reporting zincirine düşmesi
   // hem proprietary browser hesaplamasını yeniden çalıştırır hem de büyük
   // portföylerde sekmeyi kilitleyebilir. Burada yeni muhasebe hesabı yok;
   // backend'in verdiği sözleşme bazlı sonuçlar yalnızca toplulaştırılır.
-  function buildPrivateCloseDashboardSnapshot(contractsForPeriod, reportingDate, companyId) {
+  function buildPrivateCloseDashboardSnapshot(contractsForPeriod, reportingDate, companyId, privateControls) {
     const list = (Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
       .filter(contract => cfoIsActive(contract, reportingDate))
       .filter(contract => !companyId || companyId === "ALL" || String(contract.companyId || contract.company || "") === String(companyId));
@@ -17558,19 +17587,15 @@ ${renderAccountingCenterBulkPromo()}
     })).filter(item => item.result && typeof item.result === "object");
     const sum = key => rows.reduce((total, item) => total + (Number(item.result?.[key]) || 0), 0);
     const journal = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate)) || {};
-    const warnings = [{
-      controlId: "PRIVATE-CLOSE-CONTROLS",
-      category: "MIGRATION",
-      severity: "HIGH",
-      status: "WARNING",
-      description: "Kapanış kontrol listesi private endpoint'e taşınana kadar bu ekran salt-okunur private özet olarak çalışır."
-    }];
+    const controls = Array.isArray(privateControls?.controls) ? privateControls.controls : [];
+    const warnings = Array.isArray(privateControls?.warnings) ? privateControls.warnings : [];
+    const blockers = Array.isArray(privateControls?.blockers) ? privateControls.blockers : [];
     const state = closeGetState(closePeriod(reportingDate));
     const data = {
       engineVersion: "PRIVATE_ENGINE_CLOSE_READONLY",
       period: closePeriod(reportingDate),
-      status: "WARNING",
-      score: 0,
+      status: privateControls?.status || "WARNING",
+      score: Number(privateControls?.score) || 0,
       totalContracts: list.length,
       activeContracts: rows.length,
       totalLiability: sum("totalLiability") || sum("outstandingLiability") || sum("currentLiability") + sum("nonCurrentLiability"),
@@ -17584,20 +17609,20 @@ ${renderAccountingCenterBulkPromo()}
       reconciliationStatus: "PRIVATE_ENGINE",
       companyStatus: [],
       currencyStatus: [],
-      controls: [],
-      blockers: [],
+      controls,
+      blockers,
       warnings,
-      certification: state || { period: closePeriod(reportingDate), status: "WARNING", locked: false, certified: false }
+      certification: state || privateControls?.certification || { period: closePeriod(reportingDate), status: "NOT_CERTIFIED", locked: false, certified: false }
     };
     return {
       data,
       readiness: {
-        ready: false,
-        score: 0,
-        status: "WARNING",
-        blockingIssues: [],
+        ready: privateControls?.ready === true,
+        score: data.score,
+        status: data.status,
+        blockingIssues: blockers,
         warnings,
-        checklist: { checks: [] },
+        checklist: { checks: controls },
         state: data.certification
       }
     };
@@ -17703,6 +17728,7 @@ ${renderAccountingCenterBulkPromo()}
 
     const render = () => {
       const reportingDate = period + "-28"; // mid-late month for close checks
+      const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
 
       // API-primary reporting is date keyed. The initial page hydration warms
       // today's date, while Close Dashboard can be opened for any month. Do
@@ -17769,16 +17795,50 @@ ${renderAccountingCenterBulkPromo()}
         }
       }
 
+      // Close controls are also private-engine output. Keep the dashboard
+      // fail-closed until the scoped control envelope is available instead of
+      // reviving the legacy browser control engine.
+      if (privateCloseOnly && typeof privateJournalFacade?.loadCloseControls === "function" && Array.isArray(contracts) && contracts.length > 0) {
+        const controlKey = `${closeDateOnly(reportingDate)}|${String(companyId || "ALL")}`;
+        const privateControls = PRIVATE_CLOSE_CONTROLS_CACHE.get(controlKey);
+        if (!privateControls) {
+          const state = container.__closeControlsHydration || {};
+          if (state.key !== controlKey || (!state.promise && !state.failed)) {
+            state.key = controlKey;
+            state.failed = false;
+            state.promise = ensurePrivateCloseControls(contracts, reportingDate, companyId)
+              .then(() => { state.failed = false; })
+              .catch(() => { state.failed = true; })
+              .finally(() => {
+                state.promise = null;
+                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+              });
+            container.__closeControlsHydration = state;
+          }
+          if (state.failed) {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private kapanış kontrol sonucu alınamadı. Kapanış kontrolleri gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
+          } else {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">Kapanış kontrolleri private API'den yükleniyor…</div></div>`;
+          }
+          return;
+        }
+      }
+
       // API-primary is a hard boundary: do not invoke the legacy close,
       // reporting, liquidity or control engines after private hydration.
       // Those synchronous chains can duplicate proprietary work and can make
       // the browser renderer unresponsive. The private snapshot above keeps
       // the financial values visible while certification remains fail-closed.
-      const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
       let data = {};
       let readiness = {};
       if (privateCloseOnly) {
-        const snapshot = buildPrivateCloseDashboardSnapshot(contracts, reportingDate, companyId);
+        const controlKey = `${closeDateOnly(reportingDate)}|${String(companyId || "ALL")}`;
+        const snapshot = buildPrivateCloseDashboardSnapshot(
+          contracts,
+          reportingDate,
+          companyId,
+          PRIVATE_CLOSE_CONTROLS_CACHE.get(controlKey)
+        );
         data = snapshot.data;
         readiness = snapshot.readiness;
       } else {

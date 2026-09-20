@@ -77,6 +77,18 @@
     return copyResult(await value.calculateJournal(contract, periodStart, periodEnd, options));
   }
 
+  async function loadCloseControls(contracts, reportingDate, options) {
+    const value = adapter();
+    if (typeof value.calculateCloseControls !== "function") {
+      throw new Error("Private close controls calculation is unavailable");
+    }
+    const result = await value.calculateCloseControls(contracts, reportingDate, options);
+    if (!result || typeof result !== "object" || !Array.isArray(result.controls)) {
+      throw new Error("Private close controls returned an invalid result");
+    }
+    return result;
+  }
+
   async function loadEarlyPayment(contract, amount, date, options) {
     const value = adapter();
     if (typeof value.calculateEarlyPayment !== "function") throw new Error("Private early-payment calculation is unavailable");
@@ -153,6 +165,7 @@
     loadReportingDate,
     loadTms21,
     loadJournal,
+    loadCloseControls,
     loadEarlyPayment,
     loadSaleAndLeaseback,
     loadModificationPreview,
