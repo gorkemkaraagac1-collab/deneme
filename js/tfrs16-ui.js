@@ -951,6 +951,14 @@ window.fetch = (input, init = {}) => {
       if (reportingHydration.failed > 0) {
         console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
       }
+      // Warm the same private close-control envelope used by Month-End Close
+      // so the portfolio Dashboard cannot display a legacy/local readiness
+      // score alongside an authoritative private close score.
+      try {
+        await ensurePrivateCloseControls(contracts, requestedKpiDate, "ALL");
+      } catch (error) {
+        console.warn("Private close controls dashboard için ısıtılamadı:", error?.message || error);
+      }
       // If the requested month-end is beyond the verified data horizon, warm
       // only the latest available period for each affected currency. This
       // keeps the dashboard finite and authoritative without inventing data.
@@ -6123,8 +6131,10 @@ window.fetch = (input, init = {}) => {
     const dashboardDate = Array.from(kpiFallbackDates)[0] || v23DateKey(requestedKpiDate);
     let closeScore = null;
     try {
+      const closeKey = `${typeof closeDateOnly === "function" ? closeDateOnly(dashboardDate) : dashboardDate}|ALL`;
+      const privateClose = PRIVATE_CLOSE_CONTROLS_CACHE.get(closeKey);
       const close = typeof getCloseReadiness === "function" ? getCloseReadiness(dashboardDate) : null;
-      closeScore = Number(close?.score ?? close?.closeScore);
+      closeScore = Number(privateClose?.score ?? close?.score ?? close?.closeScore);
       if (!Number.isFinite(closeScore)) closeScore = null;
     } catch (_) {}
     window.__GK_TFRS16_DASHBOARD_METRICS__ = {
