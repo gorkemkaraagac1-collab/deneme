@@ -8376,6 +8376,89 @@ ${renderAccountingCenterBulkPromo()}
      SINGLE JOURNAL
   ========================================================== */
 
+  function journalTitleForPeriod(year, period, month, customStartValue, customEndValue) {
+    if (period === "monthly") return `${year} - ${getMonthName(month)} Aylık Muhasebe Fişi`;
+    if (period === "quarterly") return `${year} - ${Math.ceil(month / 3)}. Çeyrek Aylık Muhasebe Fişi`;
+    if (period === "custom" && customStartValue && customEndValue) {
+      const start = new Date(`${customStartValue}T00:00:00`);
+      const end = new Date(`${customEndValue}T00:00:00`);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        return `Muhasebe Fişi — ${formatDate(start)} - ${formatDate(end)}`;
+      }
+    }
+    return "Muhasebe Fişi";
+  }
+
+  async function generatePrivateSelectedJournal(
+    contract,
+    year,
+    period,
+    month,
+    customStartValue,
+    customEndValue,
+    periodStartExclusive,
+    periodEndInclusive,
+    preview
+  ) {
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (typeof facade?.loadJournal !== "function") {
+      throw new Error("Private journal calculation is unavailable");
+    }
+    const periodStart = v23DateKey(periodStartExclusive);
+    const periodEnd = v23DateKey(periodEndInclusive);
+    const result = await facade.loadJournal(contract, periodStart, periodEnd);
+    const nominalEntries = (Array.isArray(result?.journal) ? result.journal : [])
+      .filter(entry => Math.abs(Number(entry?.debit) || 0) > 0.0000001 || Math.abs(Number(entry?.credit) || 0) > 0.0000001)
+      .map(entry => ({ ...entry, source: entry.source || "PRIVATE_ENGINE" }));
+    const title = journalTitleForPeriod(year, period, month, customStartValue, customEndValue);
+    if (!nominalEntries.length) {
+      if (preview) preview.innerHTML = `<div style="margin-top:18px;padding:15px;background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;color:#9a3412;">Bu sözleşmede seçilen dönem için ödeme planı bulunmuyor.</div>`;
+      return;
+    }
+
+    // Currency translation is also sourced from the private TMS 21 result.
+    // The public engine is never used as a journal fallback.
+    let privateTms21Result = null;
+    if (contractNeedsFxTranslation(contract)) {
+      if (typeof facade.loadTms21 !== "function") throw new Error("Private TMS 21 calculation is unavailable");
+      privateTms21Result = await facade.loadTms21(contract, periodEnd);
+    }
+    const privateFxRows = privateTms21Result && Array.isArray(privateTms21Result.schedule)
+      ? privateTms21Result.schedule.filter(row => {
+        const key = v23DateKey(row?.date);
+        return key && key > periodStart && key <= periodEnd;
+      })
+      : [];
+    const renderEntries = typeof applyAccountMappingToJournal === "function"
+      ? applyAccountMappingToJournal(nominalEntries, contract?.companyId || "")
+      : nominalEntries;
+    if (preview) preview.innerHTML = renderJournalEntry(title, renderEntries, contract.currency || "TRY");
+    await appendFxJournalLines(
+      contract,
+      privateFxRows,
+      renderEntries,
+      title,
+      preview,
+      { reportingDate: periodEndInclusive, periodStartExclusive, privateTms21Result }
+    );
+
+    if (preview) {
+      const tms29StartDate = new Date(periodStartExclusive.getTime() + 24 * 60 * 60 * 1000);
+      let tms29Entries = [];
+      try {
+        tms29Entries = await buildTms29BulkJournalEntries(contract, tms29StartDate, periodEndInclusive);
+      } catch (error) {
+        preview.insertAdjacentHTML("beforeend", `<div style="margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">TMS 29 private hesaplama yapılamadı: ${escapeHtml(error?.message || String(error))}</div>`);
+      }
+      if (tms29Entries.length) {
+        const mapped = typeof applyAccountMappingToJournal === "function"
+          ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
+          : tms29Entries;
+        preview.insertAdjacentHTML("beforeend", `<div style="margin-top:16px;">${renderJournalEntry(`${title} — TMS 29 Enflasyon Düzeltme Fişi`, mapped, resolveContractFunctionalCurrency(contract) || contract.currency || "TRY")}</div>`);
+      }
+    }
+  }
+
   async function generateSelectedJournal(
     contract
   ) {
@@ -8516,6 +8599,26 @@ ${renderAccountingCenterBulkPromo()}
       }
     } else {
       selected = getScheduleForYear(contract, year, month, period);
+    }
+
+    if (isPrivateCalculationApiReady()) {
+      try {
+        await generatePrivateSelectedJournal(
+          contract,
+          year,
+          period,
+          month,
+          customStartValue,
+          customEndValue,
+          periodStartExclusive,
+          periodEndInclusive,
+          preview
+        );
+      } catch (error) {
+        if (preview) preview.innerHTML = `<div style="margin-top:18px;padding:15px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;color:#991b1b;">Private yevmiye hesaplaması yapılamadı: ${escapeHtml(error?.message || String(error))}</div>`;
+        auditCalculationFailure(contract, error, "JOURNAL");
+      }
+      return;
     }
 
     let privateJournalRows = null;
@@ -8849,7 +8952,7 @@ ${renderAccountingCenterBulkPromo()}
       await refreshFxRateCacheFromBackend();
     }
 
-    const engineResult = cfoBuildSchedule(contract);
+    const engineResult = options.privateTms21Result ? null : cfoBuildSchedule(contract);
       // GC-2026-09 (Madde 5): reportingDate/accrualContext verildiğinde
       // buildTms21FxTranslation, dönem sonu ödeme gününe denk gelmeyen
       // durumlarda sentetik bir kapanış satırı ekliyor (bkz.
@@ -8857,7 +8960,7 @@ ${renderAccountingCenterBulkPromo()}
       // göre eşleştirilerek (eskiden yalnızca `selectedRows`'un TAM
       // tarihleriyle eşleşen satırlar alınıyordu, ödeme günü olmayan
       // dönemlerde bu her zaman BOŞ küme oluyordu) fişe dahil edilir.
-      const fx = await buildTms21FxTranslation(contract, engineResult, {
+      const fx = options.privateTms21Result || await buildTms21FxTranslation(contract, engineResult, {
         reportingDate: options.reportingDate,
         accrualContext: options.accrualContext
       });
