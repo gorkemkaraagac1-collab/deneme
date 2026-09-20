@@ -951,14 +951,6 @@ window.fetch = (input, init = {}) => {
       if (reportingHydration.failed > 0) {
         console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
       }
-      // Warm the same private close-control envelope used by Month-End Close
-      // so the portfolio Dashboard cannot display a legacy/local readiness
-      // score alongside an authoritative private close score.
-      try {
-        await ensurePrivateCloseControls(contracts, requestedKpiDate, "ALL");
-      } catch (error) {
-        console.warn("Private close controls dashboard için ısıtılamadı:", error?.message || error);
-      }
       // If the requested month-end is beyond the verified data horizon, warm
       // only the latest available period for each affected currency. This
       // keeps the dashboard finite and authoritative without inventing data.
@@ -975,6 +967,18 @@ window.fetch = (input, init = {}) => {
       // aggregates after private results arrive while preserving the warmed
       // private result cache itself.
       clearCalculationCache(undefined, { preservePrivate: true });
+
+      // Warm the same private close-control envelope used by Month-End Close
+      // after derived-cache invalidation. clearCalculationCache() clears
+      // stale close controls after contract/reporting hydration, so this
+      // ordering keeps the Dashboard and Month-End Close on the same
+      // authoritative private score instead of falling back to the legacy
+      // three-flag readiness calculation.
+      try {
+        await ensurePrivateCloseControls(contracts, requestedKpiDate, "ALL");
+      } catch (error) {
+        console.warn("Private close controls dashboard için ısıtılamadı:", error?.message || error);
+      }
     }
 
     // The base lease-result batch and the reporting-date cache are separate
