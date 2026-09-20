@@ -17517,6 +17517,40 @@ ${renderAccountingCenterBulkPromo()}
 
     const render = () => {
       const reportingDate = period + "-28"; // mid-late month for close checks
+
+      // API-primary reporting is date keyed. The initial page hydration warms
+      // today's date, while Close Dashboard can be opened for any month. Do
+      // not let a missing date envelope fall through to the legacy close
+      // helpers (which would render zero liability/interest/depreciation).
+      if (isPrivateCalculationApiReady() && Array.isArray(contracts) && contracts.length > 0) {
+        const missing = contracts.filter(contract => !getPrivateReportingDateResult(contract, reportingDate));
+        if (missing.length > 0) {
+          const state = container.__closeReportingHydration || {};
+          if (state.reportingDate !== reportingDate || (!state.promise && !state.failed)) {
+            state.reportingDate = reportingDate;
+            state.failed = false;
+            state.promise = ensurePrivateReportingDateCache(contracts, reportingDate)
+              .then(result => {
+                state.failed = Number(result?.failed || 0) > 0;
+                clearCalculationCache(undefined, { preservePrivate: true });
+              })
+              .catch(() => {
+                state.failed = true;
+              })
+              .finally(() => {
+                state.promise = null;
+                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+              });
+            container.__closeReportingHydration = state;
+          }
+          if (state.failed) {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private reporting-date sonucu alınamadı (${escapeHtml(reportingDate)}). Kapanış tutarları gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
+          } else {
+            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${escapeHtml(reportingDate)} kapanış sonuçları private API'den yükleniyor…</div></div>`;
+          }
+          return;
+        }
+      }
       let data = {};
       let readiness = {};
       try {
