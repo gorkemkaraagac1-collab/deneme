@@ -12031,6 +12031,13 @@ ${renderAccountingCenterBulkPromo()}
     }
 
     const activeContracts = contracts.filter(c => c.status === "active");
+    // The single-contract preview already consumes the private period
+    // journal.  The bulk center must use the same source; rebuilding from a
+    // yearly payment-plan row turns an annual/advance lease's interim period
+    // into a full-year depreciation posting.  Keep the existing schedule
+    // path as a fallback for deployments where the private API is not ready.
+    const privateJournalPrimary = isPrivateCalculationApiReady() &&
+      typeof window.LeaseQantPrivateTfrs16Facade?.loadJournal === "function";
     bulkJournalData = [];
 
     let sequence = 1;
@@ -12040,6 +12047,28 @@ ${renderAccountingCenterBulkPromo()}
 
     for (let index = 0; index < activeContracts.length; index++) {
       const contract = activeContracts[index];
+      let privateNominalEntries = null;
+      if (privateJournalPrimary) {
+        try {
+          const privateResult = await window.LeaseQantPrivateTfrs16Facade.loadJournal(
+            contract,
+            // The private journal endpoint treats periodStart as an
+            // exclusive boundary, while the bulk form stores an inclusive
+            // first day.  Move the boundary back one calendar day so a
+            // payment on the first day of a monthly/custom period is not
+            // dropped.
+            v23DateKey(new Date(periodDates.periodStart.getTime() - 24 * 60 * 60 * 1000)),
+            v23DateKey(periodDates.periodEnd)
+          );
+          privateNominalEntries = (Array.isArray(privateResult?.journal) ? privateResult.journal : [])
+            .filter(entry => Math.abs(Number(entry?.debit) || 0) > 0.0000001 || Math.abs(Number(entry?.credit) || 0) > 0.0000001)
+            .map(entry => ({ ...entry, source: entry.source || "PRIVATE_ENGINE" }));
+        } catch (error) {
+          hideLoading();
+          showAlert(`${contract.id} sözleşmesinin private nominal fişi oluşturulamadı: ${error?.message || error}`);
+          return;
+        }
+      }
       const effectiveSchedule = typeof resolveContractScheduleSource === "function"
         ? resolveContractScheduleSource(contract).schedule
         : calculateLease(contract).schedule;
@@ -12082,7 +12111,10 @@ ${renderAccountingCenterBulkPromo()}
         return;
       }
 
-      if (!selected.length && !changeEntries.length && !tms29Entries.length) {
+      const hasNominalEntries = Array.isArray(privateNominalEntries)
+        ? privateNominalEntries.length > 0
+        : selected.length > 0 || changeEntries.length > 0;
+      if (!hasNominalEntries && !tms29Entries.length) {
         if ((index + 1) % 10 === 0 || index === activeContracts.length - 1) {
           const pct = totalContracts ? Math.round(((index + 1) / totalContracts) * 100) : 100;
           updateLoadingProgress(pct, `Toplu fişler hazırlanıyor... (${index + 1}/${totalContracts})`);
@@ -12090,35 +12122,41 @@ ${renderAccountingCenterBulkPromo()}
         continue;
       }
 
-      const interest = journalRows.reduce((total, item) => total + (Number(item.interest) || 0), 0);
-      const principal = journalRows.reduce((total, item) => total + (Number(item.principal) || 0), 0);
-      const firstScheduleDate = parseDate(effectiveSchedule[0]?.date)?.getTime();
-      const advance = ["advance", "in_advance", "prepaid"].includes(String(contract?.paymentTiming || "").toLowerCase());
-      const payment = journalRows.reduce((total, item) => {
-        if (item?.cashSettlement !== undefined) return total + (Number(item.cashSettlement) || 0);
-        const itemDate = parseDate(item?.date)?.getTime();
-        return total + (advance && itemDate === firstScheduleDate ? 0 : (Number(item?.payment) || 0));
-      }, 0);
-      const depreciation = journalRows.reduce((total, item) => total + (Number(item.depreciation) || 0), 0);
-
-      const baseEntries = [
-        { accountKey: "interestExpense", account: "780 Finansman Giderleri", debit: interest, credit: 0 },
-        { accountKey: "leaseLiability", account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
-        { accountKey: "cashSettlement", account: "760 / 770 Kira Ödemesi", debit: 0, credit: payment },
-        { accountKey: "depreciationExpense", account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
-        { accountKey: "rouAccumDep", account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
-      ];
-      // V19 mapping
-      const mappedBase = typeof applyAccountMappingToJournal === "function"
-        ? applyAccountMappingToJournal(baseEntries, contract?.companyId || "")
-        : baseEntries;
+      let mappedBase;
+      if (Array.isArray(privateNominalEntries)) {
+        mappedBase = typeof applyAccountMappingToJournal === "function"
+          ? applyAccountMappingToJournal(privateNominalEntries, contract?.companyId || "")
+          : privateNominalEntries;
+      } else {
+        const interest = journalRows.reduce((total, item) => total + (Number(item.interest) || 0), 0);
+        const principal = journalRows.reduce((total, item) => total + (Number(item.principal) || 0), 0);
+        const firstScheduleDate = parseDate(effectiveSchedule[0]?.date)?.getTime();
+        const advance = ["advance", "in_advance", "prepaid"].includes(String(contract?.paymentTiming || "").toLowerCase());
+        const payment = journalRows.reduce((total, item) => {
+          if (item?.cashSettlement !== undefined) return total + (Number(item.cashSettlement) || 0);
+          const itemDate = parseDate(item?.date)?.getTime();
+          return total + (advance && itemDate === firstScheduleDate ? 0 : (Number(item?.payment) || 0));
+        }, 0);
+        const depreciation = journalRows.reduce((total, item) => total + (Number(item.depreciation) || 0), 0);
+        const baseEntries = [
+          { accountKey: "interestExpense", account: "780 Finansman Giderleri", debit: interest, credit: 0 },
+          { accountKey: "leaseLiability", account: "401 Kiralama Yükümlülüğü", debit: principal, credit: 0 },
+          { accountKey: "cashSettlement", account: "760 / 770 Kira Ödemesi", debit: 0, credit: payment },
+          { accountKey: "depreciationExpense", account: "770 / 730 Amortisman Giderleri", debit: depreciation, credit: 0 },
+          { accountKey: "rouAccumDep", account: "268 Birikmiş Amortismanlar", debit: 0, credit: depreciation }
+        ];
+        // V19 mapping
+        mappedBase = typeof applyAccountMappingToJournal === "function"
+          ? applyAccountMappingToJournal(baseEntries, contract?.companyId || "")
+          : baseEntries;
+      }
       // TMS21: aktif ve farklı fonksiyonel para birimli sözleşmeler için
       // seçilen yıl/periyot aralığındaki kur farkı satırlarını sona ekle.
       let nominalEntries;
       try {
         nominalEntries = await appendFxToBulkJournal(
           contract,
-          mappedBase.concat(changeEntries),
+          mappedBase.concat(Array.isArray(privateNominalEntries) ? [] : changeEntries),
           periodDates.periodStart,
           periodDates.periodEnd,
           journalRows
@@ -12161,7 +12199,7 @@ ${renderAccountingCenterBulkPromo()}
       };
 
       // Nominal TFRS 16 ve TMS 21 kayıtları kendi fişi olarak kalır.
-      if (selected.length || changeEntries.length) {
+      if (hasNominalEntries) {
         pushVoucher(nominalEntries, description, "NOMINAL_TFRS16");
       }
       // TMS 29 enflasyon düzeltmesi nominal fişe eklenmez; ayrı bir
