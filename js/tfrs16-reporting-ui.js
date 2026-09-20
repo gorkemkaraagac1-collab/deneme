@@ -221,9 +221,13 @@
       if (api.isPrivateCalculationApiReady?.() && contracts.length && !state.loaded && !state.error) {
         if (!state.loading) {
           state.loading = true;
-          Promise.resolve(api.ensurePrivateReportingDateCache?.(contracts, reportingDate))
-            .then(result => {
-              if (result?.failed > 0) throw new Error("Private reporting-date sonuçları eksik");
+          const requestedDates = [...new Set([
+            reportingDate.toISOString().slice(0, 10),
+            ...contracts.map(contract => contract?.reportingDate).filter(Boolean)
+          ])];
+          Promise.all(requestedDates.map(date => api.ensurePrivateReportingDateCache?.(contracts, date)))
+            .then(results => {
+              if (results.some(result => result?.failed > 0)) throw new Error("Private reporting-date sonuçları eksik");
               state.loaded = true;
             })
             .catch(reason => { state.error = reason; })
