@@ -17727,7 +17727,8 @@ ${renderAccountingCenterBulkPromo()}
     }
 
     const render = () => {
-      const reportingDate = period + "-28"; // mid-late month for close checks
+      const [reportingYear, reportingMonth] = period.split("-").map(Number);
+      const reportingDate = coreIsoDate(new Date(Date.UTC(reportingYear, reportingMonth, 0)));
       const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
 
       // API-primary reporting is date keyed. The initial page hydration warms
@@ -20624,7 +20625,10 @@ ${renderAccountingCenterBulkPromo()}
     const beforeStart = event => event.date < start;
     const inPeriod = event => event.date >= start && event.date <= end;
     const restate = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
-    const restateDepreciation = event => event.parts.reduce((sum, part) => sum + part.fn * getInflationRatio(v191MonthKey(part.vintageDate), rpMonth), 0);
+    // Amortisman bir dönem gideridir ve TMS 29 kapsamında kayda alındığı ayın
+    // endeksinden raporlama ayına taşınır. ROU katmanının edinim tarihi burada
+    // kullanılırsa dönemin tüm gideri Ocak endeksiyle büyütülür.
+    const restateDepreciation = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
     const openingNominal = additions.filter(beforeStart).reduce((s, x) => s + x.fn, 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + x.fn, 0);
     const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restateDepreciation(x), 0);
     const periodAdditions = additions.filter(inPeriod);
@@ -21447,6 +21451,7 @@ ${renderAccountingCenterBulkPromo()}
 
   function v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
     const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
+    const weightedRate = getWeightedAverageDiscountRate(periodEnd);
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -21456,6 +21461,7 @@ ${renderAccountingCenterBulkPromo()}
         </div>
         <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
       </div>
+      <p style="margin:10px 0 0;color:#475569;font-size:11px;"><strong>Ağırlıklı ortalama iskonto oranı:</strong> ${Number(weightedRate.weightedAverageDiscountRate || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}% · kapanış kira yükümlülüğü ile ağırlıklandırılmıştır.</p>
       <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet <span style="font-weight:400;color:#94a3b8;">(bir satıra tıklayarak detaya inebilirsiniz)</span></h4>
       ${v191Table(liabByAssetClass, [
         { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("liab", row.assetClass) },
@@ -21576,8 +21582,16 @@ ${renderAccountingCenterBulkPromo()}
   function v191RenderRiskControls(date) {
     const summary = typeof getControlSummary === "function" ? getControlSummary(date) : null;
     const risks = typeof getRiskSummary === "function" ? getRiskSummary(date) : null;
-    const exceptions = typeof getOpenExceptions === "function" ? getOpenExceptions() : [];
     const snapshots = Array.isArray(summary?.snapshots) ? summary.snapshots : [];
+    // Bu ekran seçili raporlama tarihindeki mevcut portföyü gösterir. Global
+    // exception deposu silinmiş/eski sözleşmelerin snapshot'larını da içerir.
+    const exceptions = snapshots.flatMap(snapshot => {
+      const contractId = snapshot?.contractId || snapshot?.contract?.contractId || snapshot?.contract?.id || "";
+      const company = snapshot?.company || snapshot?.contract?.company || "";
+      return (Array.isArray(snapshot?.exceptions) ? snapshot.exceptions : [])
+        .filter(exception => !["RESOLVED", "WAIVED", "CLOSED"].includes(String(exception?.status || "").toUpperCase()))
+        .map(exception => ({ contractId, company, ...exception }));
+    });
     const measuredControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.length : 0), 0);
     const passedControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.filter(control => control.status === CONTROL_STATUS.GREEN).length : 0), 0);
     return v191Kpis([
