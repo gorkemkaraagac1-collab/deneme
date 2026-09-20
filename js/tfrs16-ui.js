@@ -17483,6 +17483,8 @@ ${renderAccountingCenterBulkPromo()}
           interestExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.interest) || 0), 0),
           depreciationExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.depreciation) || 0), 0),
           payment: results.reduce((sum, result) => sum + (Number(result?.summary?.payment) || 0), 0),
+          journalCount: results.length,
+          balancedJournalCount: results.filter(result => result?.summary?.balanced !== false).length,
           source: "PRIVATE_ENGINE_JOURNAL"
         };
         PRIVATE_CLOSE_JOURNAL_CACHE.set(key, summary);
@@ -17491,6 +17493,66 @@ ${renderAccountingCenterBulkPromo()}
       .finally(() => PRIVATE_CLOSE_JOURNAL_INFLIGHT.delete(key));
     PRIVATE_CLOSE_JOURNAL_INFLIGHT.set(key, promise);
     return promise;
+  }
+
+  // API-primary kapanış özeti yalnızca zaten alınmış private reporting-date
+  // zarflarını toplar. Bu ekranın legacy close/reporting zincirine düşmesi
+  // hem proprietary browser hesaplamasını yeniden çalıştırır hem de büyük
+  // portföylerde sekmeyi kilitleyebilir. Burada yeni muhasebe hesabı yok;
+  // backend'in verdiği sözleşme bazlı sonuçlar yalnızca toplulaştırılır.
+  function buildPrivateCloseDashboardSnapshot(contractsForPeriod, reportingDate, companyId) {
+    const list = (Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
+      .filter(contract => cfoIsActive(contract, reportingDate))
+      .filter(contract => !companyId || companyId === "ALL" || String(contract.companyId || contract.company || "") === String(companyId));
+    const rows = list.map(contract => ({
+      contract,
+      result: getPrivateReportingDateResult(contract, reportingDate)
+    })).filter(item => item.result && typeof item.result === "object");
+    const sum = key => rows.reduce((total, item) => total + (Number(item.result?.[key]) || 0), 0);
+    const journal = PRIVATE_CLOSE_JOURNAL_CACHE.get(coreIsoDate(coreDate(reportingDate))) || {};
+    const warnings = [{
+      controlId: "PRIVATE-CLOSE-CONTROLS",
+      category: "MIGRATION",
+      severity: "HIGH",
+      status: "WARNING",
+      description: "Kapanış kontrol listesi private endpoint'e taşınana kadar bu ekran salt-okunur private özet olarak çalışır."
+    }];
+    const state = closeGetState(closePeriod(reportingDate));
+    const data = {
+      engineVersion: "PRIVATE_ENGINE_CLOSE_READONLY",
+      period: closePeriod(reportingDate),
+      status: "WARNING",
+      score: 0,
+      totalContracts: list.length,
+      activeContracts: rows.length,
+      totalLiability: sum("totalLiability") || sum("outstandingLiability") || sum("currentLiability") + sum("nonCurrentLiability"),
+      currentLiability: sum("currentLiability"),
+      nonCurrentLiability: sum("nonCurrentLiability"),
+      rouAssets: sum("outstandingROU"),
+      interestExpense: Number(journal.interestExpense) || 0,
+      depreciationExpense: Number(journal.depreciationExpense) || 0,
+      journalCount: Number(journal.journalCount) || 0,
+      balancedJournalCount: Number(journal.balancedJournalCount) || 0,
+      reconciliationStatus: "PRIVATE_ENGINE",
+      companyStatus: [],
+      currencyStatus: [],
+      controls: [],
+      blockers: [],
+      warnings,
+      certification: state || { period: closePeriod(reportingDate), status: "WARNING", locked: false, certified: false }
+    };
+    return {
+      data,
+      readiness: {
+        ready: false,
+        score: 0,
+        status: "WARNING",
+        blockingIssues: [],
+        warnings,
+        checklist: { checks: [] },
+        state: data.certification
+      }
+    };
   }
 
   function renderCloseDashboardPage(container, options = {}) {
@@ -17658,22 +17720,35 @@ ${renderAccountingCenterBulkPromo()}
           return;
         }
       }
+
+      // API-primary is a hard boundary: do not invoke the legacy close,
+      // reporting, liquidity or control engines after private hydration.
+      // Those synchronous chains can duplicate proprietary work and can make
+      // the browser renderer unresponsive. The private snapshot above keeps
+      // the financial values visible while certification remains fail-closed.
+      const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
       let data = {};
       let readiness = {};
-      try {
-        data = typeof getMonthEndCloseDashboardData === "function"
-          ? getMonthEndCloseDashboardData(reportingDate)
-          : {};
-        const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
-        if (privateJournalSummary) {
-          data.interestExpense = privateJournalSummary.interestExpense;
-          data.depreciationExpense = privateJournalSummary.depreciationExpense;
+      if (privateCloseOnly) {
+        const snapshot = buildPrivateCloseDashboardSnapshot(contracts, reportingDate, companyId);
+        data = snapshot.data;
+        readiness = snapshot.readiness;
+      } else {
+        try {
+          data = typeof getMonthEndCloseDashboardData === "function"
+            ? getMonthEndCloseDashboardData(reportingDate)
+            : {};
+          const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
+          if (privateJournalSummary) {
+            data.interestExpense = privateJournalSummary.interestExpense;
+            data.depreciationExpense = privateJournalSummary.depreciationExpense;
+          }
+          readiness = typeof getCloseReadiness === "function"
+            ? getCloseReadiness(reportingDate)
+            : {};
+        } catch (error) {
+          console.error("Close dashboard data error:", error);
         }
-        readiness = typeof getCloseReadiness === "function"
-          ? getCloseReadiness(reportingDate)
-          : {};
-      } catch (error) {
-        console.error("Close dashboard data error:", error);
       }
 
       let score = Number(data.score ?? readiness.score ?? 0);
@@ -17690,7 +17765,7 @@ ${renderAccountingCenterBulkPromo()}
       // seçilmişse KPI/finansal özet/checklist o şirkete özgü
       // getCompanyMonthEndCloseStatus() sonucundan türetilir.
       let scopedCompanyMeta = null;
-      if (companyId && companyId !== "ALL") {
+      if (companyId && companyId !== "ALL" && !privateCloseOnly) {
         scopedCompanyMeta = companyOptions.find(c => c.id === companyId) || null;
         const companyName = scopedCompanyMeta ? scopedCompanyMeta.name : companyId;
         try {
@@ -17836,7 +17911,7 @@ ${renderAccountingCenterBulkPromo()}
             <button type="button" class="gk-v26-btn" id="closeCertifyBtn" ${(!readiness.ready || certified || scopedCompanyMeta) ? "disabled style='opacity:.5;'" : ""} ${scopedCompanyMeta ? `title="Onay tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : ""}>
               ${certified ? "✓ Onaylandı" : "Close'u Onayla"}
             </button>
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeReopenBtn" ${(!certified && !locked) || scopedCompanyMeta ? "disabled style='opacity:.5;'" : ""} ${scopedCompanyMeta ? `title="Dönem yeniden açma tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : ""}>
+            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeReopenBtn" ${privateCloseOnly || ((!certified && !locked) || scopedCompanyMeta) ? "disabled style='opacity:.5;'" : ""} ${privateCloseOnly ? `title="Private kapanış kontrol endpoint'i hazır olana kadar salt-okunur."` : (scopedCompanyMeta ? `title="Dönem yeniden açma tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : "")}>
               Dönemi Yeniden Aç
             </button>
             <span id="closeActionStatus" style="font-size:12px;color:#64748b;"></span>
