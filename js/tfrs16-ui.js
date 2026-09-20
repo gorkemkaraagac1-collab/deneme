@@ -17463,7 +17463,7 @@ ${renderAccountingCenterBulkPromo()}
     if (PRIVATE_CLOSE_JOURNAL_CACHE.has(key)) return PRIVATE_CLOSE_JOURNAL_CACHE.get(key);
     if (PRIVATE_CLOSE_JOURNAL_INFLIGHT.has(key)) return PRIVATE_CLOSE_JOURNAL_INFLIGHT.get(key);
     const facade = window.LeaseQantPrivateTfrs16Facade;
-    if (!isPrivateCalculationApiReady() || typeof facade?.loadJournal !== "function") {
+    if (typeof facade?.loadJournal !== "function") {
       throw new Error("Private period journal calculation is unavailable");
     }
     const promise = Promise.all((Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
@@ -17599,6 +17599,14 @@ ${renderAccountingCenterBulkPromo()}
           return;
         }
 
+      }
+
+      // Journal hydration must not depend on the calculation-cache readiness
+      // flag. That flag can be false during a clean page load even though the
+      // authenticated private facade is already available. Skipping this
+      // request would fall through to the legacy zero P&L values.
+      const privateJournalFacade = window.LeaseQantPrivateTfrs16Facade;
+      if (typeof privateJournalFacade?.loadJournal === "function" && Array.isArray(contracts) && contracts.length > 0) {
         const journalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
         if (!journalSummary) {
           const state = container.__closeJournalHydration || {};
