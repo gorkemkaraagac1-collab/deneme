@@ -943,15 +943,15 @@ window.fetch = (input, init = {}) => {
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
-      const requestedKpiDate = new Date();
+      const requestedKpiDate = getDashboardReportingDate(new Date());
       // Keep the release-gate contract explicit: the initial pass warms the
-      // current reporting date, then the fallback pass below handles a
+      // current month-end reporting date, then the fallback pass below handles a
       // verified data horizon that ends earlier.
-      const reportingHydration = await ensurePrivateReportingDateCache(contracts, new Date());
+      const reportingHydration = await ensurePrivateReportingDateCache(contracts, requestedKpiDate);
       if (reportingHydration.failed > 0) {
         console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
       }
-      // If today's reporting date is beyond the verified data horizon, warm
+      // If the requested month-end is beyond the verified data horizon, warm
       // only the latest available period for each affected currency. This
       // keeps the dashboard finite and authoritative without inventing data.
       for (const contract of contracts) {
@@ -5929,6 +5929,15 @@ window.fetch = (input, init = {}) => {
     return { date: latest, usedFallback: latest !== requested };
   }
 
+  // Portfolio KPIs are a month-end control view. Keep their cut-off aligned
+  // with Month-End Close instead of using the browser's intra-month date.
+  function getDashboardReportingDate(value) {
+    const base = value instanceof Date ? value : new Date(value || new Date());
+    if (Number.isNaN(base.getTime())) return new Date();
+    if (typeof closeMonthEnd === "function") return closeMonthEnd(base);
+    return new Date(base.getFullYear(), base.getMonth() + 1, 0);
+  }
+
   // Production data can intentionally stop at the latest verified month.
   // Asking the private endpoint for today's date would otherwise leave the
   // dashboard in a permanent loading state. Use the latest verified FX date
@@ -5988,7 +5997,7 @@ window.fetch = (input, init = {}) => {
     // a missing reporting-date result into a misleading zero while the cache
     // is still warming; the hydration pass will repaint the cards once the
     // authoritative split is available.
-    const requestedKpiDate = new Date();
+    const requestedKpiDate = getDashboardReportingDate(new Date());
     const kpiFallbackDates = new Set();
 
     const totals = new Map();
