@@ -17475,9 +17475,28 @@ ${renderAccountingCenterBulkPromo()}
     if (typeof facade?.loadJournal !== "function") {
       throw new Error("Private period journal calculation is unavailable");
     }
+    const loadJournalWithDeadline = contract => {
+      let timer = null;
+      const request = Promise.resolve().then(() => facade.loadJournal(
+        contract,
+        start,
+        end,
+        { timeoutMs: JOURNAL_REQUEST_TIMEOUT_MS }
+      ));
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error("Private dönem fişi zaman aşımına uğradı");
+          error.code = "PRIVATE_JOURNAL_TIMEOUT";
+          reject(error);
+        }, JOURNAL_REQUEST_TIMEOUT_MS + 250);
+      });
+      return Promise.race([request, deadline]).finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+    };
     const promise = Promise.all((Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
       .filter(contract => cfoIsActive(contract, end))
-      .map(contract => facade.loadJournal(contract, start, end, { timeoutMs: JOURNAL_REQUEST_TIMEOUT_MS })))
+      .map(loadJournalWithDeadline))
       .then(results => {
         const summary = {
           interestExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.interest) || 0), 0),
