@@ -927,9 +927,23 @@ window.fetch = (input, init = {}) => {
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
+      const requestedKpiDate = new Date();
+      // Keep the release-gate contract explicit: the initial pass warms the
+      // current reporting date, then the fallback pass below handles a
+      // verified data horizon that ends earlier.
       const reportingHydration = await ensurePrivateReportingDateCache(contracts, new Date());
       if (reportingHydration.failed > 0) {
         console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
+      }
+      // If today's reporting date is beyond the verified data horizon, warm
+      // only the latest available period for each affected currency. This
+      // keeps the dashboard finite and authoritative without inventing data.
+      for (const contract of contracts) {
+        if (getPrivateReportingDateResult(contract, requestedKpiDate)) continue;
+        const fallback = resolveKpiReportingDate(contract, requestedKpiDate);
+        if (fallback.usedFallback) {
+          await ensurePrivateReportingDateCache([contract], fallback.date);
+        }
       }
       // Contract hydration can render reporting/close consumers once before
       // the private batch is ready. That first render seeds the CFO aggregate
@@ -1874,8 +1888,10 @@ window.fetch = (input, init = {}) => {
             rejected.push({ event, rejectedAt: new Date().toISOString(), status: error.status, reason: error.message });
             localStorage.setItem(AUDIT_REJECTED_SYNC_KEY, JSON.stringify(rejected.slice(-500)));
           } catch (_) {}
-          // eslint-disable-next-line no-console
-          console.warn("Audit olayı kalıcı olarak reddedildi ve inceleme kuyruğuna taşındı.", error);
+          // 403/404 is a terminal outcome for this browser event (the
+          // contract may have been deleted or is outside the session scope).
+          // Keep the rejected record locally for review, but do not emit a
+          // repeated console warning on every calculation refresh.
         } else {
           remaining.push(event);
           // eslint-disable-next-line no-console
@@ -5863,6 +5879,32 @@ window.fetch = (input, init = {}) => {
     return { date: latest, usedFallback: latest !== requested };
   }
 
+  // Production data can intentionally stop at the latest verified month.
+  // Asking the private endpoint for today's date would otherwise leave the
+  // dashboard in a permanent loading state. Use the latest verified FX date
+  // at or before today as a display reporting date; journal dates are never
+  // changed by this fallback.
+  function resolveKpiReportingDate(contract, requestedDate) {
+    const requested = requestedDate || new Date();
+    if (getPrivateReportingDateResult(contract, requested)) {
+      return { date: requested, usedFallback: false };
+    }
+    const from = String(contract?.currency || "").trim().toUpperCase();
+    const to = String(
+      resolveContractFunctionalCurrency(contract) || contract?.presentationCurrency || getReportingCurrency() || "TRY"
+    ).trim().toUpperCase();
+    if (!from || from === to || typeof getFxRates !== "function") {
+      return { date: requested, usedFallback: false };
+    }
+    const requestedKey = v23DateKey(requested);
+    const available = getFxRates({ fromCurrency: from, toCurrency: to, rateType: V23_RATE_TYPES.CLOSING })
+      .filter(row => row.rateDate <= requestedKey)
+      .sort((a, b) => b.rateDate.localeCompare(a.rateDate));
+    if (!available.length) return { date: requested, usedFallback: false };
+    const latest = available[0].rateDate;
+    return { date: latest, usedFallback: latest !== requestedKey };
+  }
+
   function updateKPIs() {
 
     // updateKPIs() is also called directly by backend hydration and legacy
@@ -5886,12 +5928,8 @@ window.fetch = (input, init = {}) => {
     // a missing reporting-date result into a misleading zero while the cache
     // is still warming; the hydration pass will repaint the cards once the
     // authoritative split is available.
-    const kpiAsOfDate = new Date();
-    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
-        active.some(contract => !getPrivateReportingDateResult(contract, kpiAsOfDate))) {
-      setKpiPendingState();
-      return;
-    }
+    const requestedKpiDate = new Date();
+    const kpiFallbackDates = new Set();
 
     const totals = new Map();
     let totalsError = "";
@@ -5921,11 +5959,13 @@ window.fetch = (input, init = {}) => {
         // zincirini, ödeme planını ve rapor tarihindeki son satırı birlikte
         // çözer. Böylece modifikasyon/reassessment sonrası kalan ROU ve
         // yükümlülük kullanılır.
+        const reporting = resolveKpiReportingDate(contract, requestedKpiDate);
+        if (reporting.usedFallback) kpiFallbackDates.add(v23DateKey(reporting.date));
         const metrics = typeof cfoGetContractMetricsInternal === "function"
-          ? cfoGetContractMetricsInternal(contract, kpiAsOfDate)
+          ? cfoGetContractMetricsInternal(contract, reporting.date)
           : null;
         if (!metrics || metrics.calculationValid === false) throw new Error("KPI_CURRENT_BALANCE_UNAVAILABLE");
-        const fxDate = resolveKpiFxDate(currency, presentationCurrency, kpiAsOfDate);
+        const fxDate = resolveKpiFxDate(currency, presentationCurrency, reporting.date);
         if (fxDate.usedFallback) fallbackDates.add(fxDate.date);
         const next12MonthPayments = Number.isFinite(Number(metrics.next12MonthPayments))
           ? Number(metrics.next12MonthPayments)
@@ -5991,9 +6031,10 @@ window.fetch = (input, init = {}) => {
       modifications
     );
 
-    const asOfText = fallbackDates.size
-      ? `Gösterge kurları: ${Array.from(fallbackDates).sort().join(", ")} (son geçerli veri)`
-      : "";
+    const asOfParts = [];
+    if (kpiFallbackDates.size) asOfParts.push(`Gösterge tarihi: ${Array.from(kpiFallbackDates).sort().join(", ")} (son doğrulanmış dönem)`);
+    if (fallbackDates.size) asOfParts.push(`Gösterge kurları: ${Array.from(fallbackDates).sort().join(", ")} (son geçerli veri)`);
+    const asOfText = asOfParts.join(" · ");
     setText("kpiDataAsOf", asOfText);
   }
 
@@ -11620,11 +11661,15 @@ ${renderAccountingCenterBulkPromo()}
       return { amount: tx * endRate, rate: endRate, rateDate: v23DateKey(endDate) };
     };
 
-    const interestEntry = (entries || []).find(x => x.accountKey === "interestExpense" && !x.source);
+    // Private engine journal rows carry source=LEASE_SCHEDULE. They are
+    // nominal core lines and must use the weighted transaction-date rates in
+    // a multi-date range, just like legacy untagged rows.
+    const isNominalCoreLine = entry => !entry?.source || entry.source === "LEASE_SCHEDULE";
+    const interestEntry = (entries || []).find(x => x.accountKey === "interestExpense" && isNominalCoreLine(x));
     const paymentEntry = (entries || []).find(x =>
-      (x.accountKey === "cashSettlement" || x.accountKey === "leaseLiabilityCurrent") && !x.source
+      ["cashSettlement", "leaseLiabilityCurrent"].includes(x.accountKey) && isNominalCoreLine(x)
     );
-    const growthEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityAccrualGrowth" && !x.source);
+    const growthEntry = (entries || []).find(x => x.accountKey === "leaseLiabilityAccrualGrowth" && isNominalCoreLine(x));
     const interest = translatedAmount(Number(interestEntry?.debit) || Number(interestEntry?.credit), "interest");
     const payment = translatedAmount(Number(paymentEntry?.debit) || Number(paymentEntry?.credit), "payment");
     const growthTx = Number(growthEntry?.debit) || Number(growthEntry?.credit) || 0;
@@ -11633,7 +11678,7 @@ ${renderAccountingCenterBulkPromo()}
     // cash settlement and any unpaid-interest growth are measured in the
     // functional currency.
     const principalFn = payment.amount + growth.amount - interest.amount;
-    const principalEntry = (entries || []).find(x => x.accountKey === "leaseLiability" && !x.source);
+    const principalEntry = (entries || []).find(x => x.accountKey === "leaseLiability" && isNominalCoreLine(x));
     const principalTx = Number(principalEntry?.debit) || Number(principalEntry?.credit) || 0;
     const principalRate = Math.abs(principalTx) > 0.0000001 ? Math.abs(principalFn / principalTx) : endRate;
 
