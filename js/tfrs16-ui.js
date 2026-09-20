@@ -17726,7 +17726,7 @@ ${renderAccountingCenterBulkPromo()}
       // Those synchronous chains can duplicate proprietary work and can make
       // the browser renderer unresponsive. The private snapshot above keeps
       // the financial values visible while certification remains fail-closed.
-      const privateCloseOnly = isPrivateCalculationApiReady();
+      const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
       let data = {};
       let readiness = {};
       if (privateCloseOnly) {
