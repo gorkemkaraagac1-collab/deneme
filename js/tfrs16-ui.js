@@ -965,8 +965,17 @@ window.fetch = (input, init = {}) => {
       clearCalculationCache(undefined, { preservePrivate: true });
     }
 
+    // The base lease-result batch and the reporting-date cache are separate
+    // private surfaces. A failed base batch must not leave the dashboard's
+    // KPI guard in a permanent loading state when the reporting-date cache
+    // is already usable by the dashboard/close consumers. Mark the one-shot
+    // coordinator settled before the final repaint so updateKPIs can either
+    // use the private reporting-date result or show one finite error state.
+    window.__GK_TFRS16_PRIVATE_HYDRATION_SETTLED__ = true;
+
     updateKPIs();
     renderTable();
+    try { window.LeaseQantDashboard?.refresh?.(); } catch (_) { /* best effort */ }
     // Deep-linked reporting, close and risk screens can render before the
     // asynchronous private batch has finished. Repaint the active host now
     // that its synchronous consumers can see the warmed private results.
@@ -5929,6 +5938,7 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
+        window.__GK_TFRS16_PRIVATE_HYDRATION_SETTLED__ !== true &&
         (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
       setKpiPendingState();
       return;
@@ -6178,6 +6188,7 @@ window.fetch = (input, init = {}) => {
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
+        window.__GK_TFRS16_PRIVATE_HYDRATION_SETTLED__ !== true &&
         (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
       setKpiPendingState();
       return;
