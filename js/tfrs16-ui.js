@@ -17452,12 +17452,25 @@ ${renderAccountingCenterBulkPromo()}
      Uses existing V17 getMonthEndCloseDashboardData engine.
      ========================================================== */
 
+  function closeDateOnly(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+    const date = coreDate(value);
+    if (!date) return null;
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
   function closeJournalPeriodStart(reportingDate) {
-    const end = coreDate(reportingDate);
+    const end = coreDate(closeDateOnly(reportingDate));
     if (!end) return null;
     const first = new Date(end.getFullYear(), end.getMonth(), 1);
     first.setDate(first.getDate() - 1);
-    return coreIsoDate(first);
+    return closeDateOnly(first);
   }
 
   async function ensurePrivateCloseJournalSummary(contractsForPeriod, reportingDate) {
@@ -17465,7 +17478,12 @@ ${renderAccountingCenterBulkPromo()}
     // fail closed and leave an actionable error card; it must never keep the
     // renderer (or the browser tab) waiting indefinitely.
     const JOURNAL_REQUEST_TIMEOUT_MS = 10000;
-    const end = coreIsoDate(coreDate(reportingDate));
+    // A close period is a calendar date, not an instant. Converting a local
+    // midnight through toISOString() shifts Istanbul dates to the previous
+    // UTC day (for example 2026-09-28 -> 2026-09-27). The cache was therefore
+    // written under one day and read under another, restarting journal
+    // hydration/rendering forever until the browser tab crashed.
+    const end = closeDateOnly(reportingDate);
     const start = closeJournalPeriodStart(end);
     if (!end || !start) throw new Error("Geçersiz kapanış raporlama tarihi.");
     const key = end;
@@ -17528,7 +17546,7 @@ ${renderAccountingCenterBulkPromo()}
       result: getPrivateReportingDateResult(contract, reportingDate)
     })).filter(item => item.result && typeof item.result === "object");
     const sum = key => rows.reduce((total, item) => total + (Number(item.result?.[key]) || 0), 0);
-    const journal = PRIVATE_CLOSE_JOURNAL_CACHE.get(coreIsoDate(coreDate(reportingDate))) || {};
+    const journal = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate)) || {};
     const warnings = [{
       controlId: "PRIVATE-CLOSE-CONTROLS",
       category: "MIGRATION",
@@ -17716,7 +17734,7 @@ ${renderAccountingCenterBulkPromo()}
       // request would fall through to the legacy zero P&L values.
       const privateJournalFacade = window.LeaseQantPrivateTfrs16Facade;
       if (typeof privateJournalFacade?.loadJournal === "function" && Array.isArray(contracts) && contracts.length > 0) {
-        const journalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
+        const journalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate));
         if (!journalSummary) {
           const state = container.__closeJournalHydration || {};
           if (state.reportingDate !== reportingDate || (!state.promise && !state.failed)) {
@@ -17757,7 +17775,7 @@ ${renderAccountingCenterBulkPromo()}
           data = typeof getMonthEndCloseDashboardData === "function"
             ? getMonthEndCloseDashboardData(reportingDate)
             : {};
-          const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(reportingDate);
+          const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate));
           if (privateJournalSummary) {
             data.interestExpense = privateJournalSummary.interestExpense;
             data.depreciationExpense = privateJournalSummary.depreciationExpense;
