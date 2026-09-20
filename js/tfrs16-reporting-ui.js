@@ -511,8 +511,20 @@
     let privateTms29PeriodKey = null;
     let activeTab = "asset";
     let periodEndOverride = null;
+    let periodWasAutoAdjusted = false;
     const render = () => {
       bindRefresh(render);
+      if (!periodEndOverride && typeof api.getVerifiedInflationIndexInfo === "function") {
+        const latestIndex = api.getVerifiedInflationIndexInfo();
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        if (latestIndex?.month && currentMonth > latestIndex.month) {
+          const [year, month] = latestIndex.month.split("-").map(Number);
+          const lastDay = new Date(year, month, 0).getDate();
+          periodEndOverride = `${latestIndex.month}-${String(lastDay).padStart(2, "0")}`;
+          periodWasAutoAdjusted = true;
+        }
+      }
       const periodEnd = periodEndOverride ? api.parseDate(periodEndOverride) : new Date();
       const periodStart = new Date(periodEnd.getFullYear(), 0, 1);
       const reportingPeriod = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
@@ -605,9 +617,14 @@
       const periodInputValue = typeof api.dateInputValue === "function"
         ? api.dateInputValue(periodEnd)
         : `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}-${String(periodEnd.getDate()).padStart(2, "0")}`;
-      container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Dipnotlar</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16 finansal raporlama dipnotları — varlık, yükümlülük ve likidite riski. Tüm portföy için, dönem sonuna göre hesaplanır.</p></div><div class="gk-v26-card"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label><input type="date" id="v26FootnotesPeriodEndInput" value="${periodInputValue}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button><span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${periodStart.toLocaleDateString("tr-TR")}</span><div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">${tabBtn("asset", "Varlık")}${tabBtn("liability", "Yükümlülük")}${tabBtn("liquidity", "Likidite")}</div>${tabContentHtml}</div></div>`;
+      const indexInfo = typeof api.getVerifiedInflationIndexInfo === "function"
+        ? api.getVerifiedInflationIndexInfo(reportingPeriod) : null;
+      const indexInfoHtml = indexInfo
+        ? `<div style="margin-top:8px;font-size:11px;color:#64748b;">Enflasyon endeksi: <strong>${esc(indexInfo.month)}</strong> · ${esc(indexInfo.verificationStatus || "VERIFIED")}${indexInfo.source ? ` · ${esc(indexInfo.source)}` : ""}${periodWasAutoAdjusted ? " · son doğrulanmış ay otomatik seçildi" : ""}</div>`
+        : "";
+      container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Dipnotlar</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16 finansal raporlama dipnotları — varlık, yükümlülük ve likidite riski. Tüm portföy için, dönem sonuna göre hesaplanır.</p></div><div class="gk-v26-card"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Dönem Sonu (Raporlama Tarihi)</label><input type="date" id="v26FootnotesPeriodEndInput" value="${periodInputValue}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><button type="button" id="v26FootnotesApplyPeriod" class="gk-v26-btn" style="margin-left:8px;">Uygula</button><span style="margin-left:8px;font-size:11px;color:#94a3b8;">Dönem başı: ${periodStart.toLocaleDateString("tr-TR")}</span>${indexInfoHtml}<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">${tabBtn("asset", "Varlık")}${tabBtn("liability", "Yükümlülük")}${tabBtn("liquidity", "Likidite")}</div>${tabContentHtml}</div></div>`;
       container.querySelectorAll("[data-footnote-tab]").forEach(btn => btn.addEventListener("click", () => { activeTab = btn.dataset.footnoteTab; render(); }));
-      container.querySelector("#v26FootnotesApplyPeriod")?.addEventListener("click", () => { const value = container.querySelector("#v26FootnotesPeriodEndInput")?.value; if (value) periodEndOverride = value; render(); });
+      container.querySelector("#v26FootnotesApplyPeriod")?.addEventListener("click", () => { const value = container.querySelector("#v26FootnotesPeriodEndInput")?.value; if (value) { periodEndOverride = value; periodWasAutoAdjusted = false; } render(); });
     };
     render();
   }
