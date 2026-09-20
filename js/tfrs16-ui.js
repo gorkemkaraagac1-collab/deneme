@@ -17635,6 +17635,50 @@ ${renderAccountingCenterBulkPromo()}
       .filter(contract => !companyId || companyId === "ALL" || String(contract.companyId || contract.company || "") === String(companyId));
     const key = `${end}|${String(companyId || "ALL")}`;
     if (PRIVATE_CLOSE_CONTROLS_CACHE.has(key)) return PRIVATE_CLOSE_CONTROLS_CACHE.get(key);
+
+    // A portfolio can legitimately have no active contracts for a reporting
+    // period (for example before the first lease commences). Keep this state
+    // auditable without making a remote empty-scope request, which some API
+    // gateways reject before the private engine can return its zero-scope
+    // envelope.
+    if (list.length === 0) {
+      const controls = [
+        ["CLOSE-CONTRACT-COMPLETENESS", "DATA"],
+        ["CLOSE-SCHEDULE-COMPLETENESS", "SCHEDULE"],
+        ["CLOSE-CALCULATION-COMPLETENESS", "CALCULATION"],
+        ["CLOSE-CLASSIFICATION", "CLASSIFICATION"],
+        ["CLOSE-LIABILITY-RECON", "RECONCILIATION"],
+        ["CLOSE-ROU-RECON", "RECONCILIATION"],
+        ["CLOSE-JOURNAL-COMPLETENESS", "JOURNAL"],
+        ["CLOSE-JOURNAL-BALANCE", "JOURNAL"]
+      ].map(([controlId, category]) => ({
+        controlId,
+        category,
+        severity: "CRITICAL",
+        status: "NOT_APPLICABLE",
+        blocking: false,
+        resolved: true,
+        description: "Portföyde aktif sözleşme bulunmuyor; kontrol bu dönem için uygulanamaz.",
+        affectedContracts: []
+      }));
+      const result = {
+        source: "PRIVATE_ENGINE_CLOSE_CONTROLS",
+        period: end.slice(0, 7),
+        reportingDate: end,
+        ready: true,
+        score: 100,
+        status: "READY",
+        totalContracts: 0,
+        activeContracts: 0,
+        controls,
+        blockers: [],
+        warnings: [],
+        certification: { status: "NOT_CERTIFIED", locked: false, certified: false }
+      };
+      PRIVATE_CLOSE_CONTROLS_CACHE.set(key, result);
+      return result;
+    }
+
     if (PRIVATE_CLOSE_CONTROLS_INFLIGHT.has(key)) return PRIVATE_CLOSE_CONTROLS_INFLIGHT.get(key);
     const facade = window.LeaseQantPrivateTfrs16Facade;
     if (typeof facade?.loadCloseControls !== "function") {
