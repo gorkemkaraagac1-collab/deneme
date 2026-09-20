@@ -8545,6 +8545,8 @@ ${renderAccountingCenterBulkPromo()}
           ? applyAccountMappingToJournal(tms29Entries, contract?.companyId || "")
           : tms29Entries;
         preview.insertAdjacentHTML("beforeend", `<div style="margin-top:16px;">${renderJournalEntry(`${title} — TMS 29 Enflasyon Düzeltme Fişi`, mapped, resolveContractFunctionalCurrency(contract) || contract.currency || "TRY")}</div>`);
+      } else if (tms29Entries.journalStatus === "NO_ADJUSTMENT") {
+        preview.insertAdjacentHTML("beforeend", `<div style="margin-top:12px;padding:11px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;color:#475569;font-size:12px;"><strong>TMS 29 kontrolü:</strong> Seçilen dönem için muhasebeleştirilecek enflasyon düzeltme farkı bulunmuyor. Nominal fiş ayrı olarak yukarıda gösterildi.</div>`);
       }
     }
   }
@@ -8996,6 +8998,11 @@ ${renderAccountingCenterBulkPromo()}
             mappedTms29,
             resolveContractFunctionalCurrency(contract) || contract.currency || "TRY"
           )}</div>`
+        );
+      } else if (tms29Entries.journalStatus === "NO_ADJUSTMENT") {
+        preview.insertAdjacentHTML(
+          "beforeend",
+          `<div style="margin-top:12px;padding:11px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;color:#475569;font-size:12px;"><strong>TMS 29 kontrolü:</strong> Seçilen dönem için muhasebeleştirilecek enflasyon düzeltme farkı bulunmuyor. Nominal fiş ayrı olarak yukarıda gösterildi.</div>`
         );
       }
     }
@@ -11872,12 +11879,22 @@ ${renderAccountingCenterBulkPromo()}
       reportingPeriod,
       periodStartMonth
     );
+    if (result?.journalControl?.balanced === false) {
+      throw new Error(`TMS 29 fişi dengeli değil (fark: ${Number(result.journalControl.difference || 0).toFixed(2)})`);
+    }
     const entries = Array.isArray(result?.journal) ? result.journal : [];
-    return entries.map(entry => ({
+    if (result?.journalStatus === "READY" && !entries.length) {
+      throw new Error("TMS 29 servisi READY durumu döndürdü ancak fiş satırı üretmedi");
+    }
+    const mappedEntries = entries.map(entry => ({
       ...entry,
       journalType: entry.journalType || "TMS29_INFLATION",
       controlStatus: entry.controlStatus || "VALID"
     }));
+    mappedEntries.journalStatus = result?.journalStatus || (mappedEntries.length ? "READY" : "NO_ADJUSTMENT");
+    mappedEntries.journalControl = result?.journalControl || null;
+    mappedEntries.reportingPeriod = result?.reportingPeriod || reportingPeriod;
+    return mappedEntries;
   }
 
   function buildAppliedChangeJournalEntries(contract, periodStart, periodEnd) {
@@ -12213,6 +12230,8 @@ ${renderAccountingCenterBulkPromo()}
    */
   function renderBulkJournalSummaryCards(data, stats) {
     const { balanced, unbalanced, totalDebit, totalCredit } = stats;
+    const nominalVoucherCount = data.filter(item => item.journalType === "NOMINAL_TFRS16").length;
+    const tms29VoucherCount = data.filter(item => item.journalType === "TMS29_INFLATION").length;
     return `
 
       <div
@@ -12360,6 +12379,21 @@ ${renderAccountingCenterBulkPromo()}
 
         </div>
 
+        <div
+          style="
+            padding:14px;
+            border-radius:10px;
+            background:#eff6ff;
+            border:1px solid #bfdbfe;
+            color:#1e40af;
+          "
+        >
+
+          <div style="font-size:10px;">NOMİNAL / TMS 29 FİŞİ</div>
+          <strong style="font-size:20px;">${nominalVoucherCount} / ${tms29VoucherCount}</strong>
+
+        </div>
+
       </div>
 
     `;
@@ -12386,6 +12420,14 @@ ${renderAccountingCenterBulkPromo()}
    */
   const BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD = 50;
 
+  function bulkJournalTypeLabel(item) {
+    return item?.journalType === "TMS29_INFLATION"
+      ? "TMS 29 Düzeltme"
+      : item?.journalType === "TMS21_FX"
+        ? "TMS 21 Kur Farkı"
+        : "Nominal TFRS 16";
+  }
+
   /**
    * renderBulkJournalRowContent — `renderVirtualTable`'ın `renderRow`
    * callback'i. `renderVirtualTable` her satırı `display:flex` bir
@@ -12403,6 +12445,7 @@ ${renderAccountingCenterBulkPromo()}
       cell(escapeHtml(item.voucherNo)) +
       cell(formatDate(item.voucherDate)) +
       cell(escapeHtml(item.contractId), "font-weight:700;") +
+      cell(escapeHtml(bulkJournalTypeLabel(item)), "font-weight:700;") +
       cell(escapeHtml(item.company)) +
       cell(formatCurrency(item.totalDebit), "text-align:right;") +
       cell(formatCurrency(item.totalCredit), "text-align:right;") +
@@ -12430,6 +12473,7 @@ ${renderAccountingCenterBulkPromo()}
           ${headerCell("Fiş No")}
           ${headerCell("Tarih")}
           ${headerCell("Sözleşme")}
+          ${headerCell("Fiş Türü")}
           ${headerCell("Şirket")}
           ${headerCell("Borç", "text-align:right;")}
           ${headerCell("Alacak", "text-align:right;")}
@@ -12488,6 +12532,14 @@ ${renderAccountingCenterBulkPromo()}
                 "
               >
                 Sözleşme
+              </th>
+
+              <th
+                style="
+                  padding:10px;
+                "
+              >
+                Fiş Türü
               </th>
 
               <th
@@ -12568,6 +12620,16 @@ ${renderAccountingCenterBulkPromo()}
                       ${escapeHtml(
                         item.contractId
                       )}
+                    </td>
+
+                    <td
+                      style="
+                        padding:10px;
+                        border-top:1px solid #edf0f4;
+                        font-weight:700;
+                      "
+                    >
+                      ${escapeHtml(bulkJournalTypeLabel(item))}
                     </td>
 
                     <td
