@@ -901,7 +901,11 @@
     });
 
     const asOf=($("kpiDataAsOf")?.textContent || "").trim();
-    if(asOf && $("lqDashboardSubtitle")) $("lqDashboardSubtitle").textContent=`TFRS 16 portföyü · ${asOf}`;
+    if($("lqDashboardSubtitle")) {
+      $("lqDashboardSubtitle").textContent = asOf
+        ? `TFRS 16 portföyü · ${asOf}`
+        : "TFRS 16 portföyü · kapanış, yükümlülük ve risk görünümü";
+    }
   }
 
   function setDashboard(active){
