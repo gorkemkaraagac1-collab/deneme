@@ -212,15 +212,34 @@
     if (!container) return;
     styles();
     const api = bridge();
+    const state = { loading: false, loaded: false, error: null };
     const render = () => {
       bindRefresh(render);
       let body = "";
-      try {
-        body = typeof api.renderRiskControlsBody === "function"
-          ? api.renderRiskControlsBody(new Date())
-          : `<div class="empty-state">Private risk köprüsü hazır değil.</div>`;
-      } catch (reason) {
-        body = `<div style="color:#991b1b;padding:12px 0;">Risk &amp; Kontroller yüklenemedi: ${esc(reason?.message || String(reason))}</div>`;
+      const contracts = typeof api.getContractsSnapshot === "function" ? api.getContractsSnapshot() : [];
+      const reportingDate = new Date();
+      if (api.isPrivateCalculationApiReady?.() && contracts.length && !state.loaded && !state.error) {
+        if (!state.loading) {
+          state.loading = true;
+          Promise.resolve(api.ensurePrivateReportingDateCache?.(contracts, reportingDate))
+            .then(result => {
+              if (result?.failed > 0) throw new Error("Private reporting-date sonuçları eksik");
+              state.loaded = true;
+            })
+            .catch(reason => { state.error = reason; })
+            .finally(() => { state.loading = false; render(); });
+        }
+        body = `<div class="empty-state">Private raporlama tarihi sonuçları yükleniyor; sınıflandırma kontrolü veri hazır olduktan sonra çalıştırılacak...</div>`;
+      } else if (state.error) {
+        body = `<div style="color:#991b1b;padding:12px 0;">Risk &amp; Kontroller yüklenemedi: ${esc(state.error?.message || String(state.error))}</div>`;
+      } else {
+        try {
+          body = typeof api.renderRiskControlsBody === "function"
+            ? api.renderRiskControlsBody(reportingDate)
+            : `<div class="empty-state">Private risk köprüsü hazır değil.</div>`;
+        } catch (reason) {
+          body = `<div style="color:#991b1b;padding:12px 0;">Risk &amp; Kontroller yüklenemedi: ${esc(reason?.message || String(reason))}</div>`;
+        }
       }
       container.innerHTML = `
         <div class="gk-v26-page">

@@ -4463,7 +4463,10 @@ window.fetch = (input, init = {}) => {
       contractCount: "kpiContractCount",
       leaseLiability: "kpiLiability",
       rouAssets: "kpiRou",
-      next12Months: "kpiCurrent"
+      currentLiability: "kpiCurrent",
+      next12Months: "kpiNext12Payments",
+      monthlyInterest: "kpiMonthlyInterest",
+      monthlyDepreciation: "kpiDepreciation"
     }[id];
     const compatibilityElement = compatibilityId
       ? document.getElementById(compatibilityId)
@@ -5936,6 +5939,15 @@ window.fetch = (input, init = {}) => {
     if (getPrivateReportingDateResult(contract, requested)) {
       return { date: requested, usedFallback: false };
     }
+    // The private API is date-keyed and the dashboard can be opened after
+    // the latest verified close period.  Reuse the latest authoritative
+    // envelope already hydrated for this contract instead of allowing the
+    // missing date to fall through as a zero balance.
+    const cachedLatest = window.LeaseQantTfrs16ReportingDateCache?.latest?.(contract, requested);
+    const latestDate = cachedLatest?.reportingDate || cachedLatest?.asOfDate || cachedLatest?.reporting_date;
+    if (latestDate) {
+      return { date: latestDate, usedFallback: true };
+    }
     const from = String(contract?.currency || "").trim().toUpperCase();
     const to = String(
       resolveContractFunctionalCurrency(contract) || contract?.presentationCurrency || getReportingCurrency() || "TRY"
@@ -6018,13 +6030,21 @@ window.fetch = (input, init = {}) => {
         const next12MonthPayments = Number.isFinite(Number(metrics.next12MonthPayments))
           ? Number(metrics.next12MonthPayments)
           : calculateNext12Months(contract);
-        const values = [metrics.leaseLiability, metrics.rouAsset, next12MonthPayments].map(value => {
+        const values = [
+          metrics.leaseLiability,
+          metrics.rouAsset,
+          next12MonthPayments,
+          metrics.currentLiability,
+          metrics.nonCurrentLiability,
+          metrics.monthlyInterest,
+          metrics.monthlyDepreciation
+        ].map(value => {
           const converted = convertAmountToReportingCurrency(value, currency, fxDate.date, presentationCurrency);
           if (converted.error) throw new Error("FX_RATE_NOT_FOUND");
           return converted.value;
         });
         if (!values.every(Number.isFinite)) throw new Error("Invalid portfolio amount");
-        const group = totals.get(presentationCurrency) || [0, 0, 0];
+        const group = totals.get(presentationCurrency) || [0, 0, 0, 0, 0, 0, 0];
         values.forEach((value, index) => { group[index] += value; });
         totals.set(presentationCurrency, group);
         } catch (error) {
@@ -6065,9 +6085,52 @@ window.fetch = (input, init = {}) => {
     );
 
     setText(
+      "currentLiability",
+      totalText(3)
+    );
+
+    // Keep the 12-month cash KPI separate from the current-liability KPI.
+    // The legacy compatibility bridge previously wrote this value into
+    // kpiCurrent, which made the dashboard present cash payments as current
+    // principal for quarterly leases.
+    setText(
       "next12Months",
       totalText(2)
     );
+
+    setText("monthlyInterest", totalText(5));
+    setText("monthlyDepreciation", totalText(6));
+
+    const dashboardCurrencyGroups = Array.from(totals).map(([currency, values]) => ({
+      currency,
+      liability: values[0],
+      rou: values[1],
+      next12Payments: values[2],
+      current: values[3],
+      nonCurrent: values[4],
+      monthlyInterest: values[5],
+      monthlyDepreciation: values[6]
+    }));
+    const dashboardDate = Array.from(kpiFallbackDates)[0] || v23DateKey(requestedKpiDate);
+    let closeScore = null;
+    try {
+      const close = typeof getCloseReadiness === "function" ? getCloseReadiness(dashboardDate) : null;
+      closeScore = Number(close?.score ?? close?.closeScore);
+      if (!Number.isFinite(closeScore)) closeScore = null;
+    } catch (_) {}
+    window.__GK_TFRS16_DASHBOARD_METRICS__ = {
+      reportingDate: dashboardDate,
+      groups: dashboardCurrencyGroups,
+      liabilityText: totalText(0),
+      rouText: totalText(1),
+      currentText: totalText(3),
+      nonCurrentText: totalText(4),
+      next12PaymentsText: totalText(2),
+      monthlyInterestText: totalText(5),
+      monthlyDepreciationText: totalText(6),
+      closeScore,
+      source: "PRIVATE_REPORTING_DATE_ENGINE"
+    };
 
     setText(
       "renewals90Days",
@@ -6096,7 +6159,7 @@ window.fetch = (input, init = {}) => {
       ? contracts.filter(c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE").length
       : 0;
     setText("contractCount", activeCount);
-    ["leaseLiability", "rouAssets", "next12Months"].forEach(id => setText(id, "Yükleniyor…"));
+    ["leaseLiability", "rouAssets", "currentLiability", "next12Months", "monthlyInterest", "monthlyDepreciation"].forEach(id => setText(id, "Yükleniyor…"));
     setText("kpiDataAsOf", "Private hesaplamalar yükleniyor…");
   }
 
