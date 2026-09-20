@@ -304,6 +304,9 @@
           </div>
         </div>
         <div id="kpiDataAsOf" class="kpi-data-as-of" aria-live="polite"></div>
+        <span id="kpiNext12Payments" hidden>—</span>
+        <span id="kpiMonthlyInterest" hidden>—</span>
+        <span id="kpiDepreciation" hidden>—</span>
 
         <!-- Toolbar -->
         <div class="toolbar">
@@ -692,19 +695,19 @@
   <!-- TFRS 16 private-result UI runtime -->
   <script src="js/private-calculation-api.js?v=20260920-close-controls-1"></script>
   <script src="js/private-tfrs16-facade.js?v=20260920-close-controls-1"></script>
-  <script src="js/tfrs16-reporting-date-cache.js?v=20260919-phase1"></script>
+  <script src="js/tfrs16-reporting-date-cache.js?v=20260920-dashboard-fix-1"></script>
   <script src="js/tfrs16-private-result-bridge.js?v=20260917-result-bridge-slice1"></script>
   <script src="js/tfrs16-detail-ui.js?v=20260917-detail-ui-slice1"></script>
   <script src="js/tfrs16-detail-events-ui.js?v=20260917-detail-events-slice1"></script>
   <script src="js/tfrs16-form-bridge-ui.js?v=20260917-form-bridge-1"></script>
   <script src="js/tfrs16-private-cache-ui.js?v=20260917-private-cache-1"></script>
-  <script src="js/tfrs16-ui.js?v=20260920-close-controls-1"></script>
+  <script src="js/tfrs16-ui.js?v=20260920-dashboard-fix-1"></script>
   <script src="js/tfrs16-private-hydration-ui.js?v=20260920-dashboard-hydration-1"></script>
   <script src="js/tfrs16-ui-coordinator.js?v=20260917-coordinator-3"></script>
   <script src="js/tfrs16-inflation-ui.js?v=20260915-ui-slice1"></script>
   <script src="js/tfrs16-fx-ui.js?v=20260916-ui-slice3"></script>
   <script src="js/tfrs16-portfolio-ui.js?v=20260915-ui-slice3"></script>
-  <script src="js/tfrs16-reporting-ui.js?v=20260916-ui-slice15"></script>
+  <script src="js/tfrs16-reporting-ui.js?v=20260920-dashboard-fix-2"></script>
   <script src="js/tfrs16-operations-ui.js?v=20260916-ui-slice17"></script>
   <script>
     // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
@@ -764,6 +767,13 @@
     const n = Number(cleaned);
     return Number.isFinite(n) ? n : null;
   };
+  const formatAmount = value => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency", currency: "TRY", minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n);
+  };
   const fmtCount = n => new Intl.NumberFormat("tr-TR").format(n || 0);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -809,8 +819,11 @@
   }
 
   function renderMaturity(){
-    const liability=numeric($("kpiLiability")?.textContent);
-    const current=numeric($("kpiCurrent")?.textContent);
+    const dashboard=window.__GK_TFRS16_DASHBOARD_METRICS__;
+    const group=dashboard?.groups?.length===1 ? dashboard.groups[0] : null;
+    const liability=group ? Number(group.liability) : numeric($("kpiLiability")?.textContent);
+    const current=group ? Number(group.current) : numeric($("kpiCurrent")?.textContent);
+    const nonCurrent=group ? Number(group.nonCurrent) : (liability !== null && current !== null ? liability-current : null);
     if (liability === null || current === null || liability <= 0) {
       $("lqCurrentPct").textContent="—";
       $("lqCurrentLegend").textContent=$("kpiCurrent")?.textContent?.trim() || "—";
@@ -819,8 +832,8 @@
     }
     const pct=Math.max(0,Math.min(100,current/liability*100));
     $("lqCurrentPct").textContent=`${pct.toFixed(0)}%`;
-    $("lqCurrentLegend").textContent=$("kpiCurrent")?.textContent?.trim() || "—";
-    $("lqNonCurrentLegend").textContent=`${(100-pct).toFixed(0)}%`;
+    $("lqCurrentLegend").textContent=group ? formatAmount(current) : $("kpiCurrent")?.textContent?.trim() || "—";
+    $("lqNonCurrentLegend").textContent=Number.isFinite(nonCurrent) ? formatAmount(nonCurrent) : "—";
     document.querySelector(".lq-split-ring")?.style.setProperty("--current-pct",`${pct}%`);
   }
 
@@ -851,10 +864,23 @@
   }
 
   function syncDashboard(){
-    copyKpi("kpiLiability","lqTotalLiability");
-    copyKpi("kpiRou","lqTotalRou");
-    copyKpi("kpiContractCount","lqActiveContracts");
-    copyKpi("kpiCurrent","lqCurrentLiability");
+    const dashboard=window.__GK_TFRS16_DASHBOARD_METRICS__;
+    if (dashboard) {
+      if ($("lqTotalLiability")) $("lqTotalLiability").textContent=dashboard.liabilityText || "—";
+      if ($("lqTotalRou")) $("lqTotalRou").textContent=dashboard.rouText || "—";
+      if ($("lqCurrentLiability")) $("lqCurrentLiability").textContent=dashboard.currentText || "—";
+      if ($("lqNext12Payments")) $("lqNext12Payments").textContent=dashboard.next12PaymentsText || "—";
+      if ($("lqMonthlyInterest")) $("lqMonthlyInterest").textContent=dashboard.monthlyInterestText || "—";
+      if ($("lqMonthlyDep")) $("lqMonthlyDep").textContent=dashboard.monthlyDepreciationText || "—";
+      if ($("lqDashboardSubtitle")) $("lqDashboardSubtitle").textContent=`TFRS 16 portföyü · ${dashboard.reportingDate || "son doğrulanmış dönem"}`;
+      if (Number.isFinite(Number(dashboard.closeScore)) && $("lqReadinessScore")) $("lqReadinessScore").textContent=`${Math.round(Number(dashboard.closeScore))}%`;
+    }
+    if (!dashboard) {
+      copyKpi("kpiLiability","lqTotalLiability");
+      copyKpi("kpiRou","lqTotalRou");
+      copyKpi("kpiContractCount","lqActiveContracts");
+      copyKpi("kpiCurrent","lqCurrentLiability");
+    }
 
     const select=$("v26ActiveCompanySelect");
     if(select && $("lqCompanyScope")){
@@ -879,11 +905,11 @@
       }
       return "—";
     };
-    if ($("lqNext12Payments")) $("lqNext12Payments").textContent =
-      firstText(["kpiNext12","kpiNext12Months","next12Months","next12Payments"]);
-    if ($("lqMonthlyInterest")) $("lqMonthlyInterest").textContent =
+    if (!(dashboard?.next12PaymentsText) && $("lqNext12Payments")) $("lqNext12Payments").textContent =
+      firstText(["kpiNext12Payments","kpiNext12","kpiNext12Months","next12Months","next12Payments"]);
+    if (!(dashboard?.monthlyInterestText) && $("lqMonthlyInterest")) $("lqMonthlyInterest").textContent =
       firstText(["kpiMonthlyInterest","monthlyInterest","portfolioMonthlyInterest"]);
-    if ($("lqMonthlyDep")) $("lqMonthlyDep").textContent =
+    if (!(dashboard?.monthlyDepreciationText) && $("lqMonthlyDep")) $("lqMonthlyDep").textContent =
       firstText(["kpiDepreciation","monthlyDepreciation","portfolioDepreciation"]);
 
     // Readiness is operational UI readiness only, not an accounting opinion.
@@ -894,7 +920,7 @@
       const el=$(id); return !!(el && (el.value || el.textContent?.trim()));
     });
     const checks=[portfolioReady,companyReady,periodReady];
-    const score=Math.round(checks.filter(Boolean).length/checks.length*100);
+    const score=Number.isFinite(Number(dashboard?.closeScore)) ? Math.round(Number(dashboard.closeScore)) : Math.round(checks.filter(Boolean).length/checks.length*100);
     if ($("lqReadinessScore")) $("lqReadinessScore").textContent=`${score}%`;
     [["lqReadyContracts",portfolioReady],["lqReadyCompany",companyReady],["lqReadyPeriod",periodReady]].forEach(([id,ok])=>{
       const el=$(id); if(el) el.className=ok?"ready":"pending";

@@ -70,6 +70,25 @@
     return cacheKey ? results.get(cacheKey) || null : null;
   }
 
+  // Return the latest already-hydrated reporting-date envelope at or before
+  // the requested date.  Dashboard consumers may be opened after the
+  // backend's verified horizon (for example, today's date can be later than
+  // the latest closed month); using the latest authoritative envelope keeps
+  // the UI from silently converting a missing result into zero.
+  function latest(contract, reportingDate) {
+    const identity = contractKey(contract);
+    const requested = dateKey(reportingDate) || "9999-12-31";
+    if (!identity) return null;
+    let selected = null;
+    for (const [cacheKey, result] of results.entries()) {
+      if (!cacheKey.startsWith(`${identity}|`)) continue;
+      const cachedDate = dateKey(result?.reportingDate) || cacheKey.slice(cacheKey.lastIndexOf("|") + 1);
+      if (!cachedDate || cachedDate > requested) continue;
+      if (!selected || cachedDate > selected.date) selected = { date: cachedDate, result };
+    }
+    return selected?.result || null;
+  }
+
   async function load(contract, reportingDate, options = {}) {
     const cacheKey = key(contract, reportingDate);
     if (!cacheKey) throw new TypeError("contract and reportingDate are required");
@@ -129,5 +148,5 @@
     for (const cacheKey of inFlight.keys()) if (cacheKey.includes(prefix)) inFlight.delete(cacheKey);
   }
 
-  global.LeaseQantTfrs16ReportingDateCache = Object.freeze({ dateKey, key, get, load, preload, clear });
+  global.LeaseQantTfrs16ReportingDateCache = Object.freeze({ dateKey, key, get, latest, load, preload, clear });
 })(window);
