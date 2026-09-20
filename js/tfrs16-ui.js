@@ -6042,9 +6042,20 @@ window.fetch = (input, init = {}) => {
         // yükümlülük kullanılır.
         const reporting = resolveKpiReportingDate(contract, requestedKpiDate);
         if (reporting.usedFallback) kpiFallbackDates.add(v23DateKey(reporting.date));
-        const metrics = typeof cfoGetContractMetricsInternal === "function"
-          ? cfoGetContractMetricsInternal(contract, reporting.date)
-          : null;
+        // Use the same private reporting-date envelope consumed by the close
+        // dashboard. This keeps the main KPI cards in sync after a
+        // reassessment instead of retaining a stale local schedule snapshot.
+        const privateReporting = getPrivateReportingDateResult(contract, reporting.date);
+        const metrics = privateReporting
+          ? {
+              leaseLiability: Number(privateReporting.totalLeaseLiability ?? privateReporting.totalLiability ?? privateReporting.outstandingLiability) || 0,
+              rouAsset: Number(privateReporting.outstandingROU) || 0,
+              next12MonthPayments: Number(privateReporting.next12MonthPrincipal ?? privateReporting.next12MonthPayments) || 0,
+              calculationValid: true
+            }
+          : (typeof cfoGetContractMetricsInternal === "function"
+            ? cfoGetContractMetricsInternal(contract, reporting.date)
+            : null);
         if (!metrics || metrics.calculationValid === false) throw new Error("KPI_CURRENT_BALANCE_UNAVAILABLE");
         const fxDate = resolveKpiFxDate(currency, presentationCurrency, reporting.date);
         if (fxDate.usedFallback) fallbackDates.add(fxDate.date);
@@ -14232,7 +14243,21 @@ ${renderAccountingCenterBulkPromo()}
   function controlEscalation(contract, config) {
     const type = String(contract?.leaseIncreaseType || "none");
     if (type === "none" || type === "index") {
-      if (type === "index") return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Index-linked escalation is enabled but no index calculation source is present in the current engine.", "Supported index calculation evidence", { leaseIncreaseType: type }, "Review index-linked payment assumptions and reassessment evidence.");
+      if (type === "index") {
+        const reassessments = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
+        const appliedIndexEvidence = reassessments.some(item => {
+          const kind = String(item?.type || "").toUpperCase();
+          const terms = item?.newTerms || item?.appliedToTerms || {};
+          return String(item?.status || "").toUpperCase() === "APPLIED" &&
+            kind.includes("INDEX") &&
+            Number.isFinite(Number(item?.liabilityAdjustment)) &&
+            Object.keys(terms).length > 0;
+        });
+        if (appliedIndexEvidence || contract?.indexSource || contract?.indexTableVerified === true) {
+          return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Index-linked escalation is supported by verified index evidence and an applied reassessment.", "Verified index evidence and applied reassessment", { leaseIncreaseType: type, appliedIndexEvidence, indexSource: contract?.indexSource || null }, "No action required.");
+        }
+        return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Index-linked escalation is enabled but no index calculation source is present in the current engine.", "Supported index calculation evidence", { leaseIncreaseType: type }, "Review index-linked payment assumptions and reassessment evidence.");
+      }
       return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "No fixed escalation control is required.", "none or supported escalation", { leaseIncreaseType: type }, "No action required.");
     }
     if (type === "fixedRate") {
