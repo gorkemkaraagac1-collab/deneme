@@ -29599,17 +29599,20 @@ ${renderAccountingCenterBulkPromo()}
       // instead of issuing a second batch.  If hydration fails, render the
       // page anyway so its explicit backend error state remains visible.
       const openInMainWhenReady = renderer => {
+        // Navigation must never wait for the one-shot private hydration
+        // promise. A slow or unavailable calculation API would otherwise
+        // leave every navigation button inert until the promise settles.
+        // The target renderer already has its own fail-closed loading/error
+        // states and will be refreshed by hydration when it completes.
+        const result = openInMain(renderer);
         const coordinator = window.__GK_TFRS16_PRIVATE_HYDRATION__;
         if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
             typeof coordinator?.run === "function") {
-          return Promise.resolve(coordinator.run())
-            .then(() => openInMain(renderer))
-            .catch(error => {
-              console.error("Private hydration navigation beklenirken hata:", error);
-              return openInMain(renderer);
-            });
+          Promise.resolve(coordinator.run()).catch(error => {
+            console.error("TFRS16 private hydration navigation arka planda başarısız:", error);
+          });
         }
-        return openInMain(renderer);
+        return result;
       };
       document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
       document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMainWhenReady(renderCloseDashboardPage));
