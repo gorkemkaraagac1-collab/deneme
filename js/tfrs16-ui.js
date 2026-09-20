@@ -17560,15 +17560,34 @@ ${renderAccountingCenterBulkPromo()}
     // bekleme deseni burada da uygulanıyor; ensurePrivateCalculationCache
     // tamamlanınca v26RefreshActivePage bu sayfayı otomatik yeniden çizer
     // (host.__v26LastRenderer zaten bu fonksiyona işaret ediyor).
+    const closeCalculationHydration = container.__closeCalculationHydration || {};
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) && contracts.length > 0 &&
-        (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
-      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">Private hesaplama sonuçları yükleniyor… Kapanış kontrolleri (CTRL-CALC-001, CTRL-CLS-001 vb.), portföydeki TÜM sözleşmelerin özel API sonucu hazır olunca gösterilecek — aksi halde her sözleşme geçici olarak "hata" gibi görünür.</div></div>`;
-      ensurePrivateCalculationCache(contracts).then(() => {
-        if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-      }).catch(() => {
-        if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-      });
+        (closeCalculationHydration.failed || PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
+      // A failed warm-up must settle into one visible error state. Starting
+      // the same request again from every refresh creates an endless
+      // refresh/request loop and can take down the browser tab.
+      const state = closeCalculationHydration;
+      if (!state.promise && !state.completed && !state.failed) {
+        state.promise = ensurePrivateCalculationCache(contracts)
+          .then(result => {
+            state.failed = Number(result?.failed || 0) > 0;
+            state.completed = !state.failed;
+          })
+          .catch(() => {
+            state.failed = true;
+          })
+          .finally(() => {
+            state.promise = null;
+            if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
+          });
+        container.__closeCalculationHydration = state;
+      }
+      const message = state.failed
+        ? "Private hesaplama sonuçları alınamadı. Kapanış sonuçları gösterilmiyor; Yenile ile tekrar deneyin."
+        : "Private hesaplama sonuçları yükleniyor… Kapanış kontrolleri (CTRL-CALC-001, CTRL-CLS-001 vb.), portföydeki TÜM sözleşmelerin özel API sonucu hazır olunca gösterilecek.";
+      const color = state.failed ? "#b91c1c" : "#475569";
+      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:${color};">${message}</div></div>`;
       return;
     }
 
