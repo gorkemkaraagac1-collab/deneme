@@ -2658,7 +2658,14 @@ window.fetch = (input, init = {}) => {
 
       backendInflationIndexCache = indices
         .filter(e => e && typeof e.month === "string" && Number.isFinite(Number(e.index)))
-        .map(e => ({ month: e.month, index: Number(e.index) }));
+        .map(e => ({
+          month: e.month,
+          index: Number(e.index),
+          source: e.source || null,
+          sourceUrl: e.sourceUrl || null,
+          retrievedAt: e.retrievedAt || null,
+          verificationStatus: e.verificationStatus || "VERIFIED"
+        }));
 
       return true;
     } catch (error) {
@@ -2713,6 +2720,15 @@ window.fetch = (input, init = {}) => {
     // zaten kendi kuralına göre açık bir hata fırlatır; asla sessizce
     // doğrulanmamış bir değere düşülmez.
     return Array.isArray(backendInflationIndexCache) ? backendInflationIndexCache : [];
+  }
+
+  function getVerifiedInflationIndexInfo(month) {
+    const target = String(month || "");
+    const rows = loadInflationIndexTable()
+      .filter(row => /^\d{4}-\d{2}$/.test(String(row?.month || "")))
+      .sort((a, b) => String(a.month).localeCompare(String(b.month)));
+    if (target) return rows.find(row => row.month === target) || null;
+    return rows.length ? rows[rows.length - 1] : null;
   }
 
   function saveInflationIndexTable(entries) {
@@ -30085,6 +30101,7 @@ ${renderAccountingCenterBulkPromo()}
     getPrivateReportingDateResult,
     loadPrivateReportingDateResult,
     ensurePrivateReportingDateCache,
+    getVerifiedInflationIndexInfo,
     loadTms29Many: (...args) => window.LeaseQantPrivateTfrs16Facade?.loadTms29Many(...args),
     computePrivatePortfolioTms29: v191ComputePrivatePortfolioTms29,
     prepareFinancialReportingData: v191PrepareFinancialReportingData,
