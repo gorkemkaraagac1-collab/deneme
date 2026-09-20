@@ -15769,6 +15769,8 @@ ${renderAccountingCenterBulkPromo()}
 
   async function exportRouAssetMovementNote(startDate, endDate) {
     const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
+    try { await v191LoadPrivatePortfolioTms21(end); }
+    catch (error) { showAlert(`ROU hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
     let tms29;
     try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
     catch (error) { showAlert(`ROU hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
@@ -15946,6 +15948,8 @@ ${renderAccountingCenterBulkPromo()}
 
   async function exportLeaseLiabilityMovementNote(startDate, endDate) {
     const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
+    try { await v191LoadPrivatePortfolioTms21(end); }
+    catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
     let tms29;
     try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
     catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
@@ -20519,6 +20523,37 @@ ${renderAccountingCenterBulkPromo()}
   // the promise/result here prevents the reporting modal and spreadsheet
   // exports from independently rebuilding the old public calculation.
   const v191PrivateTms29PortfolioCache = new Map();
+  // Financial-reporting FX movement rows use the same period-level TMS21
+  // result as the journal preview.  Keeping this cache separate from the
+  // ordinary lease projection prevents the reporting note from silently
+  // rebuilding weighted transaction-date rates in the browser.
+  const v191PrivateTms21PeriodCache = new Map();
+
+  function v191PrivateTms21CacheKey(contract, periodEnd) {
+    const id = String(contract?.id || "").trim();
+    const end = v23DateKey(periodEnd);
+    return id && end ? `${id}|${end}` : null;
+  }
+
+  async function v191LoadPrivatePortfolioTms21(periodEnd) {
+    const end = rptResolveDate(periodEnd);
+    if (!end) throw new Error("Geçersiz TMS 21 raporlama tarihi.");
+    if (!isPrivateCalculationApiReady()) throw new Error("Private TMS 21 API hazır değil; yerel hesaplama kapalı.");
+    const facade = window.LeaseQantPrivateTfrs16Facade;
+    if (typeof facade?.loadTms21 !== "function") throw new Error("Private TMS 21 API kullanılamıyor.");
+    const fxContracts = (Array.isArray(contracts) ? contracts : [])
+      .filter(contract => contractNeedsFxTranslation(contract));
+    const results = await Promise.all(fxContracts.map(async contract => ({
+      contract,
+      result: await facade.loadTms21(contract, v23DateKey(end))
+    })));
+    results.forEach(({ contract, result }) => {
+      const key = v191PrivateTms21CacheKey(contract, end);
+      if (key) v191PrivateTms21PeriodCache.set(key, result);
+    });
+    return results;
+  }
+
   async function v191LoadPrivatePortfolioTms29(periodStart, periodEnd) {
     const start = rptResolveDate(periodStart);
     const end = rptResolveDate(periodEnd);
@@ -20769,6 +20804,9 @@ ${renderAccountingCenterBulkPromo()}
       const translated = { ...row, currency: presentationCurrency };
       const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
       const schedule = contract ? (rptScheduleRows(contract).schedule || []) : [];
+      const privateTms21 = contract
+        ? v191PrivateTms21PeriodCache.get(v191PrivateTms21CacheKey(contract, periodEnd))
+        : null;
       const convertAtFinancialDate = (amount, date) => {
         try {
           const quote = getFxRate(
@@ -20796,6 +20834,21 @@ ${renderAccountingCenterBulkPromo()}
         });
         return found ? total : null;
       };
+      const privateEventConverted = field => {
+        const privateCurrency = String(privateTms21?.functionalCurrency || "").toUpperCase();
+        if (!privateTms21 || privateCurrency !== presentationCurrency || !Array.isArray(privateTms21.schedule)) return null;
+        const rowsInPeriod = privateTms21.schedule.filter(item => {
+          const d = rptDate(item?.date);
+          return d && d >= periodStart && d <= periodEnd;
+        });
+        const paymentRows = field === "paymentFx"
+          ? rowsInPeriod.filter(item => !item?.isAdvanceCommencement)
+          : rowsInPeriod;
+        if (!paymentRows.length) return null;
+        const values = paymentRows.map(item => Number(item?.[field]));
+        if (!values.some(Number.isFinite)) return null;
+        return rptRound(values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0));
+      };
       const changeConverted = kind => {
         if (!contract) return null;
         const changes = v191AppliedChanges(contract, periodStart, periodEnd)
@@ -20815,6 +20868,9 @@ ${renderAccountingCenterBulkPromo()}
           if (convertedChange !== null) { translated[key] = rptRound(convertedChange); return; }
         }
         const eventField = key === "payments" ? "payment" : key === "interest" ? "interest" : key === "depreciation" ? "depreciation" : null;
+        const privateEventField = key === "payments" ? "paymentFx" : key === "interest" ? "interestFx" : key === "depreciation" ? "depreciationFx" : null;
+        const privateEventValue = privateEventField ? privateEventConverted(privateEventField) : null;
+        if (privateEventValue !== null) { translated[key] = rptRound(privateEventValue); return; }
         const eventValue = eventField ? eventConverted(eventField) : null;
         if (eventValue !== null) { translated[key] = rptRound(eventValue); return; }
         const rateDate = key === "openingRuo" || key === "openingLiability" ? rptAddDays(periodStart, -1)
@@ -21331,6 +21387,7 @@ ${renderAccountingCenterBulkPromo()}
       error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
       throw error;
     }
+    await v191LoadPrivatePortfolioTms21(effectivePeriodEnd);
     const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
     return v191RenderFinancialReporting(date, { tms29 });
   }
