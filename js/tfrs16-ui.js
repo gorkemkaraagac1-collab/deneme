@@ -8723,8 +8723,11 @@ ${renderAccountingCenterBulkPromo()}
   }
   function renderAuditTrailPage(container) { return reportAuthorityUi().page(container,"Sunucuda Saklanan Olaylar","audit"); }
   function openReportingAuthority(title,section="metrics") {
-    const target=document.getElementById("mainContent") || document.querySelector("main") || document.getElementById("content");
+    const host=document.getElementById("v26PageHost");
+    const target=host || document.getElementById("mainContent") || document.querySelector("main") || document.getElementById("content");
     if (!target) reportingAuthorityUnavailable();
+    if (host && window.LeaseQantMainView) window.LeaseQantMainView.activate(
+      section === "controls" ? "riskControls" : section === "audit" ? "audit" : "financialReporting");
     return reportAuthorityUi().page(target,title,section);
   }
   async function contractReportingPackage(contractId) {
@@ -22414,6 +22417,9 @@ ${renderAccountingCenterBulkPromo()}
 
   function v191WireNavigation() {
     document.querySelectorAll(".nav-item").forEach(link => {
+      // Native route bindings own these destinations; do not attach a second
+      // text-matched legacy opener to the same navigation button.
+      if (link.dataset.open) return;
       const text = (link.textContent || "").replace(/\s+/g, " ").trim();
       if (link.dataset.v191Wired === "1") return;
       if (text.includes("Finansal Raporlama")) {
@@ -30415,7 +30421,7 @@ ${renderAccountingCenterBulkPromo()}
       sidebar.appendChild(navBlock);
       }
 
-      const openInMain = renderer => { if (typeof v191ActiveScreenRefreshCallback !== "undefined") v191ActiveScreenRefreshCallback = null; let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
+      const openInMain = (renderer, key = "page") => { if (typeof v191ActiveScreenRefreshCallback !== "undefined") v191ActiveScreenRefreshCallback = null; let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} if(window.LeaseQantMainView)window.LeaseQantMainView.activate(key);else host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
 
       // Calculation-backed pages must not render while the private result
       // cache is still warming.  A synchronous first paint used to run the
@@ -30425,13 +30431,13 @@ ${renderAccountingCenterBulkPromo()}
       // page bootstrap, so calling run() here joins the existing request
       // instead of issuing a second batch.  If hydration fails, render the
       // page anyway so its explicit backend error state remains visible.
-      const openInMainWhenReady = renderer => {
+      const openInMainWhenReady = (renderer, key) => {
         // Navigation must never wait for the one-shot private hydration
         // promise. A slow or unavailable calculation API would otherwise
         // leave every navigation button inert until the promise settles.
         // The target renderer already has its own fail-closed loading/error
         // states and will be refreshed by hydration when it completes.
-        const result = openInMain(renderer);
+        const result = openInMain(renderer, key);
         const coordinator = window.__GK_TFRS16_PRIVATE_HYDRATION__;
         if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
             typeof coordinator?.run === "function") {
@@ -30484,7 +30490,7 @@ ${renderAccountingCenterBulkPromo()}
         // gibi bir çağrıyla, renderer fonksiyonuna doğrudan erişimi
         // olmadan (o closure-scope'ta) aynı sayfayı açabiliyorlar.
         window.__gkOpenInMainByKey = key => {
-          if (deepLinkMap[key]) return openInMainWhenReady(deepLinkMap[key]);
+          if (deepLinkMap[key]) return openInMainWhenReady(deepLinkMap[key], key);
           return undefined;
         };
         if (deepLinkTarget && deepLinkMap[deepLinkTarget] && !window.__gkDeepLinkOpened) {
@@ -30493,7 +30499,7 @@ ${renderAccountingCenterBulkPromo()}
           // Defer one task so the coordinator can join the same boot request;
           // otherwise the deep link would be the one caller that paints
           // before private results are available.
-          setTimeout(() => { void openInMainWhenReady(deepLinkMap[deepLinkTarget]); }, 0);
+          setTimeout(() => { if (!window.LeaseQantMainView?.current()) void openInMainWhenReady(deepLinkMap[deepLinkTarget], deepLinkTarget); }, 0);
         }
       } catch (error) { console.error("V26 deep-link open error:", error); }
       return true;
