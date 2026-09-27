@@ -141,7 +141,7 @@
             <p id="lqDashboardSubtitle">TFRS 16 portföyü · kapanış, yükümlülük ve risk görünümü</p>
           </div>
           <div class="lq-dash-head-actions">
-            <span class="lq-live-dot"><i></i> Canlı portföy</span>
+            <span class="lq-live-dot"><i></i> Yetkili şirket kapsamı</span>
             <button type="button" class="btn btn-secondary btn-sm" id="lqGoContracts">Sözleşmelere git →</button>
           </div>
         </div>
@@ -150,7 +150,7 @@
           <article class="lq-metric lq-metric-primary">
             <div class="lq-metric-label">Toplam kiralama yükümlülüğü</div>
             <div class="lq-metric-value" id="lqTotalLiability">—</div>
-            <div class="lq-metric-foot"><span class="lq-status-dot"></span><span id="lqLiabilityNote">Portföy toplamı</span></div>
+            <div class="lq-metric-foot"><span class="lq-status-dot"></span><span id="lqLiabilityNote">Şirket bazında backend kapsamı</span></div>
           </article>
           <article class="lq-metric">
             <div class="lq-metric-label">Kullanım hakkı varlığı</div>
@@ -176,7 +176,7 @@
               <strong id="lqNext12Payments">—</strong>
             </div>
             <div class="lq-progress"><i id="lqPaymentProgress"></i></div>
-            <p>Mevcut motorun “önümüzdeki 12 ay” portföy KPI’sı varsa doğrudan yansıtılır.</p>
+            <p>Backend sözleşmesel ödeme görünümü; gerçek ödeme kanıtı değildir.</p>
           </article>
 
           <article class="lq-cfo-card">
@@ -266,7 +266,7 @@
             <div class="lq-action-list">
               <div><span class="lq-action-icon amber">↻</span><p><strong>Yenileme kontrolleri</strong><small>90 gün içindeki sözleşmeleri gözden geçirin</small></p><span class="lq-action-badge" id="lqRenewalCount">—</span></div>
               <div><span class="lq-action-icon blue">◆</span><p><strong>Modifikasyonlar</strong><small>İşaretlenmiş sözleşme değişikliklerini takip edin</small></p><span class="lq-action-badge" id="lqModificationCount">—</span></div>
-              <div><span class="lq-action-icon green">✓</span><p><strong>Raporlama dönemi</strong><small>Yevmiye ve dipnot üretimine hazır çalışma alanı</small></p><span class="lq-action-badge">Hazır</span></div>
+              <div><span class="lq-action-icon green">✓</span><p><strong>Raporlama dönemi</strong><small>Yevmiye ve dipnot üretimine hazır çalışma alanı</small></p><span class="lq-action-badge">NOT_READY</span></div>
             </div>
           </article>
 
@@ -691,23 +691,26 @@
   <div class="toast-host" id="toastHost"></div>
 
   <!-- Shell helpers (before engine) -->
-  <script src="js/shell.js?v=20260916-bootfix"></script>
+  <script src="js/shell.js?v=20260927-report-authority-1"></script>
   <!-- TFRS 16 private-result UI runtime -->
-  <script src="js/private-calculation-api.js?v=20260920-close-controls-1"></script>
-  <script src="js/private-tfrs16-facade.js?v=20260920-close-controls-1"></script>
+  <script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>
+  <script src="js/private-tfrs16-facade.js?v=20260927-journal-authority-1"></script>
   <script src="js/tfrs16-reporting-date-cache.js?v=20260920-dashboard-fix-1"></script>
   <script src="js/tfrs16-private-result-bridge.js?v=20260917-result-bridge-slice1"></script>
-  <script src="js/tfrs16-detail-ui.js?v=20260917-detail-ui-slice1"></script>
+  <script src="js/tfrs16-detail-ui.js?v=20260927-journal-authority-1"></script>
   <script src="js/tfrs16-detail-events-ui.js?v=20260917-detail-events-slice1"></script>
   <script src="js/tfrs16-form-bridge-ui.js?v=20260917-form-bridge-1"></script>
   <script src="js/tfrs16-private-cache-ui.js?v=20260917-private-cache-1"></script>
-  <script src="js/tfrs16-ui.js?v=20260920-dashboard-fix-4"></script>
+  <script src="js/tfrs16-journal-ui.js?v=20260927-journal-authority-1"></script>
+  <script src="js/tfrs16-report-authority-ui.js?v=20260927-report-authority-1"></script>
+  <script src="js/tfrs16-ui.js?v=20260927-report-authority-1"></script>
   <script src="js/tfrs16-private-hydration-ui.js?v=20260920-dashboard-hydration-1"></script>
   <script src="js/tfrs16-ui-coordinator.js?v=20260917-coordinator-3"></script>
   <script src="js/tfrs16-inflation-ui.js?v=20260915-ui-slice1"></script>
   <script src="js/tfrs16-fx-ui.js?v=20260916-ui-slice3"></script>
   <script src="js/tfrs16-portfolio-ui.js?v=20260915-ui-slice3"></script>
-  <script src="js/tfrs16-reporting-ui.js?v=20260920-dashboard-fix-2"></script>
+  <script src="js/tfrs16-disclosure-ui.js?v=20260927-disclosure-authority-1"></script>
+  <script src="js/tfrs16-reporting-ui.js?v=20260927-report-authority-1"></script>
   <script src="js/tfrs16-operations-ui.js?v=20260916-ui-slice17"></script>
   <script>
     // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
@@ -726,7 +729,7 @@
   </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
 
-<script>
+<script type="text/plain" data-report-auth-retired>
 /* LeaseQant Dashboard Bridge V3
    Uses only the application's existing read-only public bridge.
    No accounting calculation or persistence is performed here. */
@@ -966,6 +969,27 @@
   window.addEventListener("load",()=>setTimeout(()=>setDashboard(true),500));
 })();
 </script>
+<script>
+/* REPORT-AUTH-R1 dashboard navigation. Numbers are rendered from verified backend packages. */
+(() => {
+  const dash=document.getElementById('lqDashboard'),contracts=document.getElementById('contractsView');
+  if(!dash||!contracts)return;
+  const refresh=()=>window.LeaseQantReportingAuthorityUi?.refreshDashboardPresentation();
+  const show=active=>{dash.hidden=!active;dash.style.display=active?'':'none';contracts.style.display=active?'none':'';
+    const host=document.getElementById('v26PageHost');if(host&&active)host.style.display='none';
+    document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+    if(active)document.querySelector('[data-lq-dashboard]')?.classList.add('active');refresh();};
+  document.querySelector('[data-lq-dashboard]')?.addEventListener('click',()=>show(true));
+  document.getElementById('lqGoContracts')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-view="contracts"]')?.click();});
+  document.getElementById('lqOpenRisk')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-open="riskControls"]')?.click();});
+  document.querySelectorAll('[data-open-target]').forEach(el=>el.addEventListener('click',()=>{show(false);document.querySelector(`.nav-item[data-open="${el.dataset.openTarget}"]`)?.click();}));
+  document.querySelectorAll('.nav-item:not([data-lq-dashboard])').forEach(el=>el.addEventListener('click',()=>{dash.hidden=true;dash.style.display='none';}));
+  document.getElementById('v26ActiveCompanySelect')?.addEventListener('change',refresh);
+  const observer=new MutationObserver(refresh);const asOf=document.getElementById('kpiDataAsOf');if(asOf)observer.observe(asOf,{childList:true,subtree:true,characterData:true});
+  window.LeaseQantDashboard={refresh,show:()=>show(true)};window.addEventListener('load',()=>setTimeout(()=>show(true),500));
+})();
+</script>
+
 
 
 <script>

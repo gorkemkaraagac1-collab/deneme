@@ -412,13 +412,7 @@
           <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           <input type="text" id="searchInput" placeholder="Sözleşme, tedarikçi ara…" aria-label="Sözleşme ara">
         </div>
-        <select class="company-select" id="companySelect" aria-label="Aktif şirket">
-          <option value="ALL">Tüm Şirketler</option>
-          <option value="ACME Holding A.Ş.">ACME Holding A.Ş.</option>
-          <option value="ACME Lojistik A.Ş.">ACME Lojistik A.Ş.</option>
-          <option value="ACME Üretim A.Ş.">ACME Üretim A.Ş.</option>
-          <option value="ACME Enerji A.Ş.">ACME Enerji A.Ş.</option>
-        </select>
+        <select class="company-select" id="companySelect" aria-label="Aktif şirket"><option>Rapor şirketini aşağıdan seçin</option></select>
         <button class="icon-btn" aria-label="Bildirimler">
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" stroke="currentColor" stroke-width="1.6"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6"/></svg>
           <span class="dot"></span>
@@ -427,7 +421,7 @@
       </div>
     </header>
 
-    <div class="content">
+<template data-report-auth-retired>    <div class="content">
 
       <div class="welcome">
         <div class="eyebrow">Hoş geldin, Ayşe</div>
@@ -621,11 +615,12 @@
         </div>
       </div>
 
-    </div>
+    </div></template>
+<div class="content" id="backendReportingPage">Güvenilir rapor yükleniyor...</div>
   </div>
 </div>
 
-<script>
+<script type="text/plain" data-report-auth-retired>
   // --------------------------------------------------------------
   // Örnek veri (gerçek motorda contracts dizisinden gelir)
   // --------------------------------------------------------------
@@ -730,5 +725,16 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSidebar(); });
 </script>
 
+<script>
+window.tfrs16GetToken=()=>localStorage.getItem('access_token')||localStorage.getItem('gk_backend_jwt')||sessionStorage.getItem('gk_session_token');
+</script>
+<script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>
+<script src="js/tfrs16-report-authority-ui.js?v=20260927-report-authority-1"></script>
+<script>
+window.LeaseQantReportingAuthorityUi.page(document.getElementById('backendReportingPage'),"Y\u00f6netim Merkezi \u2014 Kiralama Raporu");
+const menu=document.getElementById('hamburger');if(menu)menu.onclick=()=>document.getElementById('sidebar')?.classList.toggle('open');
+const overlay=document.getElementById('overlay');if(overlay)overlay.onclick=()=>document.getElementById('sidebar')?.classList.remove('open');
+const logout=document.getElementById('logout');if(logout)logout.onclick=e=>{e.preventDefault();window.GKAuth?.logout();['access_token','gk_backend_jwt','gk_session_token'].forEach(key=>{localStorage.removeItem(key);sessionStorage.removeItem(key);});location.href='login.html';};
+</script>
 </body>
 </html>

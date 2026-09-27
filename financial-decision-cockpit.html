@@ -10,7 +10,7 @@
 <body>
 <header><nav class="nav"><a href="index.html" class="wordmark" style="display:inline-flex;align-items:center;line-height:0"><img src="logo-nav.png" alt="LeaseQant" style="height:32px;width:auto;display:block;object-fit:contain;"></a><div class="nav-links" style="position:static;transform:none;flex-direction:row;padding:0;background:transparent"><a href="dashboard.html">Finans Yönetim Merkezi</a><a href="#" id="logout">Çıkış</a></div></nav></header>
 <section class="page-hero"><div class="wrap"><div class="eyebrow">CFO Kokpiti</div><h1>Şirketin finansal görünümü</h1><p>Finansal performans, nakit, işletme sermayesi, borçluluk, riskler ve yönetim önceliklerini tek ekranda izleyin.</p></div></section>
-<main class="section"><div class="wrap">
+<template data-report-auth-retired><main class="section"><div class="wrap">
 <div class="actionbar"><button class="btn" id="printBtn">Yazdır / PDF</button><a class="btn" href="dashboard.html">← Finans Yönetim Merkezi</a></div>
 <div style="margin-top:28px"><div class="eyebrow">Yönetim Özeti</div><h2 class="section-title" id="companyName">Finansal Genel Bakış</h2><p class="muted" id="userMeta"></p></div>
 <div class="cfo-grid">
@@ -39,11 +39,22 @@
 <section class="cfo-panel"><div class="eyebrow">Modüller</div><h2 class="section-title">Finans motorları</h2><div class="module-grid" style="grid-template-columns:1fr"><a class="module-link" href="tms29.html"><strong>TMS 29</strong><small>Enflasyon muhasebesi</small></a><a class="module-link" href="tms19.html"><strong>TMS 19</strong><small>Çalışanlara sağlanan faydalar</small></a><a class="module-link" href="hedge.html"><strong>Riskten Korunma Muhasebesi</strong><small>Etkinlik değerlendirmesi</small></a></div></section>
 </aside></div>
 <p class="muted" style="margin-top:18px">Not: Bu ilk kokpit sürümündeki göstergeler demo değerleridir. Sonraki fazda modül çıktıları ortak finansal veri katmanından otomatik beslenecektir.</p>
-</div></main>
+</div></main></template><main class="section"><div class="wrap" id="backendReportingPage">Güvenilir rapor yükleniyor...</div></main>
 <footer><div class="wrap">© 2026 GK Advisory — CFO Kokpiti</div></footer>
-<script src="auth.js"></script><script>
+<script src="auth.js"></script><script type="text/plain" data-report-auth-retired>
 const u=GKAuth.require();
 if(u){document.getElementById('companyName').textContent='Finansal Genel Bakış';document.getElementById('userMeta').textContent=u.email+' · '+u.plan+' Plan';}
 document.getElementById('logout').onclick=e=>{e.preventDefault();GKAuth.logout();location.href='login.html';};
 document.getElementById('printBtn').onclick=()=>window.print();
-</script></body></html>
+</script><script>
+window.tfrs16GetToken=()=>localStorage.getItem('access_token')||localStorage.getItem('gk_backend_jwt')||sessionStorage.getItem('gk_session_token');
+</script>
+<script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>
+<script src="js/tfrs16-report-authority-ui.js?v=20260927-report-authority-1"></script>
+<script>
+window.LeaseQantReportingAuthorityUi.page(document.getElementById('backendReportingPage'),"CFO \u2014 Backend Kiralama Raporu");
+const menu=document.getElementById('hamburger');if(menu)menu.onclick=()=>document.getElementById('sidebar')?.classList.toggle('open');
+const overlay=document.getElementById('overlay');if(overlay)overlay.onclick=()=>document.getElementById('sidebar')?.classList.remove('open');
+const logout=document.getElementById('logout');if(logout)logout.onclick=e=>{e.preventDefault();window.GKAuth?.logout();['access_token','gk_backend_jwt','gk_session_token'].forEach(key=>{localStorage.removeItem(key);sessionStorage.removeItem(key);});location.href='login.html';};
+</script>
+</body></html>

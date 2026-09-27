@@ -16,8 +16,86 @@
     const message = body && (body.error || body.message);
     const error = new Error(message || "Hesaplama API hatası (HTTP " + status + ")");
     error.status = status;
+    if (body && typeof body.code === "string") error.code = body.code;
     if (body && typeof body === "object") error.details = body;
     return error;
+  }
+
+  async function requestDisclosure(path, method, payload, options) {
+    const config = options || {};
+    const timeoutMs = Number.isFinite(config.timeoutMs) ? Math.max(1000, config.timeoutMs) : DEFAULT_TIMEOUT_MS;
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = controller ? global.setTimeout(() => controller.abort(), timeoutMs) : null;
+    const headers = { Accept: "application/json" };
+    if (method === "POST") headers["Content-Type"] = "application/json";
+    const token = config.reportingBearer || getBearerToken();
+    if (token) headers.Authorization = "Bearer " + token;
+    try {
+      const response = await global.fetch(getApiBase() + path, {
+        method, credentials: "include", headers,
+        ...(method === "POST" ? { body: JSON.stringify(payload) } : {}),
+        signal: controller ? controller.signal : undefined
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.success === false) throw createRequestError(response.status, body);
+      if (!body || body.success !== true || !body.data || typeof body.data !== "object") {
+        throw createRequestError(response.status, { code: "DISCLOSURE_RESPONSE_INVALID" });
+      }
+      // Disclosure statuses, source IDs and provenance must remain byte-for-
+      // byte equivalent to the server JSON; calculation date normalization is
+      // deliberately not applied to this response.
+      return body.data;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        const timeoutError = new Error("Dipnot servisi zaman aşımına uğradı");
+        timeoutError.code = "DISCLOSURE_TIMEOUT";
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      if (timer) global.clearTimeout(timer);
+    }
+  }
+
+  async function getLeaseDisclosureAvailability(period, options) {
+    const fields = ["companyId", "reportingPeriodStart", "reportingPeriodEnd", "reportingDate"];
+    if (!period || fields.some(key => typeof period[key] !== "string" || !period[key])) {
+      throw new TypeError("Disclosure company and exact reporting period are required");
+    }
+    const query = new URLSearchParams(fields.map(key => [key, period[key]]));
+    return requestDisclosure("/api/reports/lease-disclosure/availability?" + query, "GET", null, options);
+  }
+
+  async function getJournalAuthorityPackage(intent, bulk, options) {
+    return requestDisclosure(bulk ? "/api/journals/bulk" : "/api/journals/preview", "POST", intent, options);
+  }
+
+  function reportingRequestOptions(options) {
+    const reportingBearer = getBearerToken() || global.localStorage?.getItem('access_token')
+      || global.localStorage?.getItem('gk_backend_jwt') || global.sessionStorage?.getItem('gk_session_token');
+    return { ...options, reportingBearer };
+  }
+  function getReportingAuthorityPackage(intent, options) {
+    return requestDisclosure('/api/reports/authority', 'POST', intent, reportingRequestOptions(options));
+  }
+  function getReportingCompanies(options) {
+    return requestDisclosure('/api/reports/authority/companies', 'GET', null, reportingRequestOptions(options));
+  }
+
+  async function getLeaseDisclosure(availability, options) {
+    const fields = ["companyId", "reportingPeriodStart", "reportingPeriodEnd", "reportingDate", "populationId"];
+    if (!availability || availability.sourceTrustStatus !== "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED"
+      || fields.some(key => typeof availability[key] !== "string" || !availability[key])
+      || !Array.isArray(availability.contractIds) || !availability.contractIds.length
+      || !Array.isArray(availability.calculationIds)
+      || availability.contractIds.length !== availability.calculationIds.length) {
+      throw new TypeError("Trusted disclosure identifiers are required");
+    }
+    const payload = Object.fromEntries(fields.map(key => [key, availability[key]]));
+    payload.contractIds = availability.contractIds;
+    payload.calculationIds = availability.calculationIds;
+    if (availability.maturityPolicyId) payload.maturityPolicyId = availability.maturityPolicyId;
+    return requestDisclosure("/api/reports/lease-disclosure", "POST", payload, options);
   }
 
   // The backend serializes schedule dates as JSON strings, while the public
@@ -305,6 +383,11 @@
     calculateReassessmentPreview,
     applyModification,
     applyReassessment,
+    getLeaseDisclosureAvailability,
+    getJournalAuthorityPackage,
+    getReportingAuthorityPackage,
+    getReportingCompanies,
+    getLeaseDisclosure,
     apiBase: getApiBase,
     timeoutMs: DEFAULT_TIMEOUT_MS
   });

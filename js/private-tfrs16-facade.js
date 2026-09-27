@@ -77,6 +77,33 @@
     return copyResult(await value.calculateJournal(contract, periodStart, periodEnd, options));
   }
 
+  async function loadLeaseDisclosureAvailability(period, options) {
+    const value = adapter();
+    if (typeof value.getLeaseDisclosureAvailability !== "function") {
+      throw new Error("Private disclosure availability adapter is unavailable");
+    }
+    return value.getLeaseDisclosureAvailability(period, options);
+  }
+
+  async function loadJournalAuthorityPackage(intent, bulk, options) {
+    const value = adapter();
+    if (typeof value.getJournalAuthorityPackage !== "function") {
+      const error = new Error("Yevmiye servisi hazır değil");
+      error.code = "JOURNAL_AUTHORITY_UNAVAILABLE";
+      throw error;
+    }
+    // Preserve exact journal values/provenance; no calculation-date hydration.
+    return value.getJournalAuthorityPackage(intent, bulk, options);
+  }
+
+  async function loadLeaseDisclosure(availability, options) {
+    const value = adapter();
+    if (typeof value.getLeaseDisclosure !== "function") {
+      throw new Error("Private disclosure adapter is unavailable");
+    }
+    return value.getLeaseDisclosure(availability, options);
+  }
+
   async function loadCloseControls(contracts, reportingDate, options) {
     const value = adapter();
     if (typeof value.calculateCloseControls !== "function") {
@@ -165,6 +192,9 @@
     loadReportingDate,
     loadTms21,
     loadJournal,
+    loadLeaseDisclosureAvailability,
+    loadJournalAuthorityPackage,
+    loadLeaseDisclosure,
     loadCloseControls,
     loadEarlyPayment,
     loadSaleAndLeaseback,

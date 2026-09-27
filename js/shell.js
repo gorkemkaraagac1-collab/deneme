@@ -151,6 +151,7 @@ window.fetch = (input, init = {}) => {
 
   function openEnginePage(key) {
     closeLegacyV191Modal();
+    const dash=document.getElementById('lqDashboard');if(dash){dash.hidden=true;dash.style.display='none';}
     const contracts = document.getElementById("contractsView");
     if (contracts) contracts.style.display = "none";
 
@@ -222,7 +223,7 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  window.__shellUpdateKpis = function (metrics) {
+  const legacyShellUpdateKpis = function (metrics) {
     if (!metrics) return;
     const set = (id, val) => {
       const el = document.getElementById(id);
@@ -232,6 +233,15 @@ window.fetch = (input, init = {}) => {
     if (metrics.liability != null) set("kpiLiability", formatTry(metrics.liability));
     if (metrics.rou != null) set("kpiRou", formatTry(metrics.rou));
     if (metrics.current != null) set("kpiCurrent", formatTry(metrics.current));
+  };
+
+  // REPORT-AUTH-R1: this bridge cannot accept caller-calculated balances.
+  window.__shellUpdateKpis = function () {
+    const ui = window.LeaseQantReportingAuthorityUi;
+    if (ui) return ui.dashboard();
+    ["kpiContractCount","kpiLiability","kpiRou","kpiCurrent"].forEach(id => {
+      const el=document.getElementById(id);if(el)el.textContent="REPORTING_AUTHORITY_UNAVAILABLE";
+    });
   };
 
   /* ---------- Session display (token / role if present) ---------- */
@@ -319,12 +329,11 @@ window.fetch = (input, init = {}) => {
    */
   function rewireLegacyOpeners() {
     const map = {
-      // Finansal Raporlama menüsü kaldırıldı; eski bağlantılar Dipnotlar'a
-      // yönlendirilerek mevcut raporlama işlevi korunur.
-      v191OpenFinancialReporting: "footnotes",
+      // Reporting openers share the authenticated report page.
+      v191OpenFinancialReporting: "financialReporting",
       v191OpenRiskControls: "riskControls",
       v191OpenMonthEndClose: "close",
-      v191OpenCfoDashboard: "close"
+      v191OpenCfoDashboard: "financialReporting"
     };
     Object.keys(map).forEach((fnName) => {
       const key = map[fnName];
@@ -366,27 +375,8 @@ window.fetch = (input, init = {}) => {
     setTimeout(() => {
       try {
         rewireLegacyOpeners();
-        const api = window.GK_TFRS16;
-        if (!api) return;
-        // TFRS16 engine owns the KPI cards and applies the correct reporting
-        // currency/available FX date. The legacy bridge exposes raw functional
-        // currency amounts and would overwrite them with a forced TRY symbol.
-        // Leave the UI runtime-owned cards untouched.
-        if (document.getElementById("kpiDataAsOf")) return;
         syncCompanySelector();
-        // Best-effort: some engines expose aggregate helpers
-        if (typeof api.getTotalLeaseLiability === "function") {
-          const liability = api.getTotalLeaseLiability();
-          const rou = typeof api.getTotalRuoAssets === "function" ? api.getTotalRuoAssets() : null;
-          const current = typeof api.getCurrentLeaseLiability === "function" ? api.getCurrentLeaseLiability() : null;
-          const list = typeof api.contracts !== "undefined" ? api.contracts : null;
-          window.__shellUpdateKpis({
-            count: Array.isArray(list) ? list.length : null,
-            liability,
-            rou,
-            current
-          });
-        }
+        window.__shellUpdateKpis();
       } catch (_) {}
     }, 2500);
   };
