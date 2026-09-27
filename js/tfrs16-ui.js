@@ -6315,16 +6315,20 @@ window.fetch = (input, init = {}) => {
 
   function refresh() {
 
-    // API-primary başlangıcında private sonuçlar henüz ısınmadan KPI'ları
-    // çizmek geçici "hesaplama bekliyor" uyarıları üretir. Sözleşme ve
-    // hesaplama önbelleği hydrate edildikten sonra hydrateTfrs16BackendData
-    // zaten aynı refresh akışını çağırır; ilk resmi bu arada ertele.
+    // The authenticated contract list is source data, not a calculated
+    // balance. Show it as soon as API hydration succeeds even when private
+    // calculation/reporting requests are still pending. Financial KPIs remain
+    // guarded below; never paint a localStorage-only list at this boundary.
     if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
         Array.isArray(contracts) &&
         contracts.length > 0 &&
         window.__GK_TFRS16_PRIVATE_HYDRATION_SETTLED__ !== true &&
         (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
       setKpiPendingState();
+      if (backendContractsHydrated) {
+        populateCompanyFilter();
+        renderTable();
+      }
       return;
     }
 

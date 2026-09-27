@@ -24,13 +24,16 @@ test('real accounting source → API → UI → XLSX/CSV/TXT/HTML/PDF has exact 
  const result=[];
  for(const proof of proofs){const p=await ui.acceptPackage(proof.package,proof.body),raw=ui.rawRows(p);ui.exportPackage(p,'xlsx');
   const csv=csvRows(ui.serialize(p,'csv'),';'),txt=csvRows(ui.serialize(p,'txt'),'\t'),header=csv.shift();txt.shift();
-  ui.exportPackage(p,'pdf');const doc=new JSDOM(printed).window.document,rows=Array.from(doc.querySelectorAll('tbody tr'));
+  ui.exportPackage(p,'pdf');const doc=new JSDOM(printed).window.document,rows=Array.from(doc.querySelectorAll('tbody tr')),
+   metricsVisible=p.population.count>0;
+  if(metricsVisible)assert.equal(rows.length,raw.length);else{assert.equal(rows.length,0);assert.match(doc.body.textContent,/finansal tutar gösterilmiyor/);}
   raw.forEach((r,i)=>{const value=proof.package.totals[r.metric].value;assert.equal(r.value,value);assert.equal(sheet[i].value,value);
    assert.equal(csv[i][header.indexOf('value')],value===null?'':String(value));assert.equal(txt[i][header.indexOf('value')],value===null?'':String(value));
-   assert.equal(rows[i].cells[header.indexOf('value')].textContent,value===null?'—':String(value));
+   const printRaw=metricsVisible?rows[i].cells[header.indexOf('value')].textContent:null;
+   if(metricsVisible)assert.equal(printRaw,value===null?'—':String(value));
    const source=proof.source?proof.source.reduce((s,c)=>s+c.values[r.metric],0):value;
    assert.equal(source,value);
-   result.push({fixture:proof.fixture,metric:r.metric,currency:r.currency,backendSourceValue:source,apiValue:value,frontendRaw:r.value,xlsxRaw:sheet[i].value,csvRaw:csv[i][header.indexOf('value')],txtRaw:txt[i][header.indexOf('value')],printRaw:rows[i].cells[header.indexOf('value')].textContent,delta:value===null?null:0,status:r.status,coverage:r.coverage});
+   result.push({fixture:proof.fixture,metric:r.metric,currency:r.currency,backendSourceValue:source,apiValue:value,frontendRaw:r.value,xlsxRaw:sheet[i].value,csvRaw:csv[i][header.indexOf('value')],txtRaw:txt[i][header.indexOf('value')],printRaw,delta:value===null?null:0,status:r.status,coverage:r.coverage});
   });
   for(const contract of p.contracts.filter(c=>c.status==='SUPPORTED')){
    const contractRows=ui.rawRows(p,'metrics',contract.contractId);ui.exportPackage(p,'xlsx','metrics',contract.contractId);
@@ -63,6 +66,14 @@ test('empty closing and unsupported controls stay readable while raw diagnostics
  assert.ok(controls.querySelector('table'));
  assert.ok(!controls.querySelector('table').textContent.includes('CLOSE-CONTRACT-COMPLETENESS'));
  assert.match(controls.querySelector('table').textContent,/Geçti/);
+});
+test('empty reporting population does not present unavailable metrics as a financial error',async()=>{
+ const {ui}=runtime(),proof=proofs.find(p=>p.fixture==='zero'),p=await ui.acceptPackage(proof.package,proof.body);
+ const doc=new JSDOM(ui.html(p,'metrics')).window.document;
+ assert.match(doc.querySelector('[role="status"]').textContent,/aktif sözleşme yok/);
+ assert.match(doc.querySelector('.lq-authority-empty').textContent,/finansal tutar gösterilmiyor/);
+ assert.equal(doc.querySelector('table'),null);
+ assert.equal(doc.querySelectorAll('[role="alert"]').length,0);
 });
 test('mutations cannot be repaired; structural source/route/coverage rules survive recomputed checksums',async()=>{
  const {ui}=runtime(),proof=proofs.find(p=>p.fixture==='single');
