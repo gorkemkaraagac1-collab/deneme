@@ -8672,7 +8672,7 @@ ${renderAccountingCenterBulkPromo()}
   function renderPaymentScheduleSection() { return '<div data-authoritative-report-schedule>Güvenilir raporlama kaynağı yükleniyor...</div>'; }
   function renderContractAuditTab() { return '<div data-authoritative-report-audit>Sunucudaki olaylar yükleniyor...</div>'; }
   function getFutureLeasesKPI() { return {value:null,status:"NOT_READY",reason:"SOURCE_BOUND_COMMITMENT_REPORT_REQUIRED"}; }
-  function updateFutureLeaseKPI() { setText("futureLeasesKPI","NOT_READY"); }
+  function updateFutureLeaseKPI() { setText("futureLeasesKPI","Kaynak verisi gerekli"); }
   function v26ConvertScheduleToPresentation() { return reportingAuthorityUnavailable(); }
   function v26ConvertToPresentation() { return reportingAuthorityUnavailable(); }
   function v26RenderConsolidationReportBody() { return reportingAuthorityUnavailable(); }
@@ -8681,7 +8681,7 @@ ${renderAccountingCenterBulkPromo()}
   function formatPortfolioAmount(value,currency,presentationCurrency) {
     const code=String(currency||"").trim().toUpperCase();
     if(!/^[A-Z]{3}$/.test(code)||value===null||value===""||!Number.isFinite(Number(value)))return "Tutar/para birimi eksik";
-    if(presentationCurrency&&String(presentationCurrency).toUpperCase()!==code)return "REPORTING_CURRENCY_SOURCE_REQUIRED";
+    if(presentationCurrency&&String(presentationCurrency).toUpperCase()!==code)return "Onaylı döviz kuru kaynağı gerekli";
     return new Intl.NumberFormat("tr-TR",{style:"currency",currency:code,maximumFractionDigits:2}).format(Number(value));
   }
   function buildReportHtml() { return reportingAuthorityUnavailable(); }
@@ -8719,7 +8719,7 @@ ${renderAccountingCenterBulkPromo()}
   }
   function renderCloseDashboardPage(container) { return reportAuthorityUi().page(container,"Ay Sonu — Backend Hesaplama Kontrolleri","controls"); }
   function renderConsolidationReportPage(container) {
-    if (container) container.innerHTML = '<p role="status">Konsolidasyon raporu hazır değil: SOURCE_BOUND_CONSOLIDATION_REQUIRED</p>';
+    if (container) container.innerHTML = '<p role="status">Konsolidasyon raporu için doğrulanmış şirketler arası kaynak verisi gerekli.</p><details><summary>Teknik ayrıntı</summary><code>SOURCE_BOUND_CONSOLIDATION_REQUIRED</code></details>';
   }
   function renderAuditTrailPage(container) { return reportAuthorityUi().page(container,"Sunucuda Saklanan Olaylar","audit"); }
   function openReportingAuthority(title,section="metrics") {
@@ -29270,6 +29270,8 @@ ${renderAccountingCenterBulkPromo()}
     try {
       const navSelect = document.getElementById("v26ActiveCompanySelect");
       if (navSelect && navSelect.value !== val) navSelect.value = val;
+      const sidebarSelect = document.getElementById("v26SidebarActiveCompanySelect");
+      if (sidebarSelect && sidebarSelect.value !== val) sidebarSelect.value = val;
     } catch (error) {}
     if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
     return val;
@@ -30030,7 +30032,7 @@ ${renderAccountingCenterBulkPromo()}
           <button class="gk-v26-btn" id="v26NewGroup">＋ Yeni Grup Ekle</button>
         </div>
         <div class="gk-v26-card"><table class="gk-v26-table"><thead><tr><th>Grup ID</th><th>Grup Kodu</th><th>Grup Adı</th><th>Grup Para Birimi</th><th>Durum</th></tr></thead><tbody>
-          ${groups.map(g=>`<tr data-group-id="${v26UiEsc(g.id)}" class="v26-group-row" style="cursor:pointer;${String(g.id)===String(selectedGroupId)?"background:#eff6ff;":""}"><td>${v26UiEsc(g.id)}</td><td><strong>${v26UiEsc(g.code)}</strong></td><td>${v26UiEsc(g.name)}</td><td>${v26UiEsc(g.groupCurrency)}</td><td><span class="gk-v26-badge ${String(g.status)==="ACTIVE"?"gk-v26-badge-success":"gk-v26-badge-warning"}">${v26UiEsc(g.status)}</span></td></tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Grup bulunamadı</td></tr>`}
+          ${groups.map(g=>`<tr data-group-id="${v26UiEsc(g.id)}" class="v26-group-row" style="cursor:pointer;${String(g.id)===String(selectedGroupId)?"background:#eff6ff;":""}"><td>${v26UiEsc(g.id)}</td><td><strong>${v26UiEsc(g.code)}</strong></td><td>${v26UiEsc(g.name)}</td><td>${v26UiEsc(g.groupCurrency)}</td><td><span class="gk-v26-badge ${String(g.status)==="ACTIVE"?"gk-v26-badge-success":"gk-v26-badge-warning"}">${g.status==='ACTIVE'?'Aktif':'Pasif'}</span></td></tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Grup bulunamadı</td></tr>`}
         </tbody></table></div>
         ${selected ? `<div class="gk-v26-card" id="v26GroupDetail"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin:0;font-size:15px;">${v26UiEsc(selected.name)}</h3><p style="margin:4px 0;color:#64748b;font-size:12px;">${v26UiEsc(selected.code)} · ${v26UiEsc(selected.groupCurrency)}</p></div><div style="display:flex;gap:8px;"><button class="gk-v26-btn gk-v26-btn-secondary" id="v26EditGroup">Düzenle</button><button class="gk-v26-btn" id="v26AddCompany">＋ Şirket Ekle</button></div></div>
           <table class="gk-v26-table" style="margin-top:12px;"><thead><tr><th>Şirket</th><th>Kod</th><th>Para Birimi</th><th>Yöntem</th><th>Oran</th><th>İşlem</th></tr></thead><tbody>
@@ -30059,6 +30061,11 @@ ${renderAccountingCenterBulkPromo()}
 
   function renderEliminationManagementPage(container) {
     if(!container)return; injectV26Styles();
+    try { getEliminations(null); }
+    catch (error) {
+      container.innerHTML = `<div class="gk-v26-page"><h2>Eliminasyon Yönetimi</h2><p role="status">Eliminasyon kayıtları için doğrulanmış sunucu kaynağı henüz hazır değil. Bu alanda kayıt oluşturulamaz veya rapor alınamaz.</p><details><summary>Teknik ayrıntı</summary><code>${v26UiEsc(error?.code || 'REPORTING_AUTHORITY_UNAVAILABLE')}</code></details></div>`;
+      return;
+    }
     const state=container.__v26ElimState||{groupId:'',date:'',status:'',rows:[],recon:[]}; container.__v26ElimState=state;
     const render=()=>{ let rows=v26UiRun(()=>getEliminations(state.groupId||null))||[]; if(state.date)rows=rows.filter(r=>String(r.reportingDate||'')===state.date); if(state.status)rows=rows.filter(r=>String(r.status||'')===state.status); state.rows=rows;
       const groups=getGroups(); const today=new Date().toISOString().slice(0,10); const fmt=n=>Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -30398,7 +30405,7 @@ ${renderAccountingCenterBulkPromo()}
         ${activeCompanyOptions.length ? `
         <label style="display:block;font-size:11px;color:#64748b;font-weight:600;margin-bottom:8px;">
           🏢 Aktif Şirket
-          <select id="v26ActiveCompanySelect" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;">
+          <select id="v26SidebarActiveCompanySelect" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;">
             <option value="ALL" ${activeCompanyId === "ALL" ? "selected" : ""}>Tüm Şirketler</option>
             ${activeCompanyOptions.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === activeCompanyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
           </select>
@@ -30419,6 +30426,7 @@ ${renderAccountingCenterBulkPromo()}
         <button type="button" id="v26NavConsol" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;margin-bottom:6px;text-align:left;padding:8px 12px;">📊 Konsolidasyon Raporu</button>
         <button type="button" id="v26NavAudit" class="gk-v26-btn gk-v26-btn-secondary" style="width:100%;text-align:left;padding:8px 12px;">🕵️ Denetim İzi</button>        </details>`;
       sidebar.appendChild(navBlock);
+      navBlock.querySelector("#v26SidebarActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
       }
 
       const openInMain = (renderer, key = "page") => { if (typeof v191ActiveScreenRefreshCallback !== "undefined") v191ActiveScreenRefreshCallback = null; let host=document.getElementById("v26PageHost"); if(!host){host=document.createElement("div");host.id="v26PageHost";const main=document.querySelector(".main, #mainContent, main, #app-content");(main||document.body).appendChild(host);} if(window.LeaseQantMainView)window.LeaseQantMainView.activate(key);else host.style.display="block";host.__v26LastRenderer=renderer;renderer(host);host.scrollIntoView({behavior:"smooth",block:"start"}); };
@@ -30447,7 +30455,6 @@ ${renderAccountingCenterBulkPromo()}
         }
         return result;
       };
-      document.getElementById("v26ActiveCompanySelect")?.addEventListener("change",(e)=>{ if(typeof setActiveCompanyId==="function") setActiveCompanyId(e.target.value); });
       document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMainWhenReady(renderCloseDashboardPage));
       document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMainWhenReady(renderAccountMappingPage));
       document.getElementById("v26NavCompanies")?.addEventListener("click",()=>openInMainWhenReady(renderCompanyManagementPage));
@@ -30730,6 +30737,9 @@ var V26_FX_UI_CURRENCIES = ["TRY","EUR","USD","GBP","CHF","JPY","AED","SAR"];
 const V26_FX_UI_RATE_TYPES = ["SPOT","CLOSING","AVERAGE","HISTORICAL","FORWARD"];
 
 const V26_FX_UI_SOURCES = ["MANUAL","IMPORT","SYSTEM","CENTRAL_BANK","ERP"];
+var V26_FX_UI_LABELS = { SPOT:'İşlem günü',CLOSING:'Kapanış',AVERAGE:'Ortalama',HISTORICAL:'Tarihî',FORWARD:'Vadeli',
+  MANUAL:'Manuel',IMPORT:'İçe aktarım',SYSTEM:'Sistem',CENTRAL_BANK:'Merkez Bankası',ERP:'ERP',
+  DRAFT:'Taslak',REVIEWED:'İncelendi',APPROVED:'Onaylı',REJECTED:'Reddedildi' };
 
 const V26_FX_UI_STATUSES = ["DRAFT","REVIEWED","APPROVED","REJECTED"];
 
@@ -30780,20 +30790,20 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
   function v26FxUiRateTypeOptions(selected="", includeAll=false) {
     const list = includeAll ? ["", ...V26_FX_UI_RATE_TYPES] : V26_FX_UI_RATE_TYPES;
-    return list.map(v => `<option value="${v26FxUiEscape(v)}" ${v === selected ? "selected" : ""}>${v || "Tümü"}</option>`).join("");
+    return list.map(v => `<option value="${v26FxUiEscape(v)}" ${v === selected ? "selected" : ""}>${V26_FX_UI_LABELS[v] || "Tümü"}</option>`).join("");
   }
 
   function v26FxUiSourceOptions(selected="") {
-    return V26_FX_UI_SOURCES.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${v}</option>`).join("");
+    return V26_FX_UI_SOURCES.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${V26_FX_UI_LABELS[v]}</option>`).join("");
   }
 
   function v26FxUiStatusOptions(selected="") {
-    return V26_FX_UI_STATUSES.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${v}</option>`).join("");
+    return V26_FX_UI_STATUSES.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${V26_FX_UI_LABELS[v]}</option>`).join("");
   }
 
   function v26FxUiStatusBadge(status) {
     const map = { DRAFT:"gk-std-gray", REVIEWED:"gk-std-blue", APPROVED:"gk-std-green", REJECTED:"gk-std-yellow" };
-    return `<span class="gk-std-badge ${map[status] || "gk-std-gray"}">${v26FxUiEscape(status || "DRAFT")}</span>`;
+    return `<span class="gk-std-badge ${map[status] || "gk-std-gray"}">${v26FxUiEscape(V26_FX_UI_LABELS[status] || 'Durum doğrulanmalı')}</span>`;
   }
 
   function v26FxUiFilterRows(filters) {
@@ -30907,8 +30917,8 @@ const V26_FX_UI_PAGE_SIZE = 50;
                     <td>${v26FxUiEscape(row.toCurrency)}</td>
                     <td style="text-align:right;font-variant-numeric:tabular-nums;">${Number(row.rate).toFixed(4)}</td>
                     <td>${v26FxUiEscape(row.rateDate)}</td>
-                    <td>${v26FxUiEscape(row.rateType)}</td>
-                    <td>${v26FxUiEscape(row.source)}</td>
+                    <td>${v26FxUiEscape(V26_FX_UI_LABELS[row.rateType] || 'Kur türü bilinmiyor')}</td>
+                    <td>${v26FxUiEscape(V26_FX_UI_LABELS[row.source] || 'Kaynak bilinmiyor')}</td>
                     <td>${v26FxUiStatusBadge(row.status)}</td>
                     <td style="text-align:right;white-space:nowrap;">
                       ${canManage ? `<button type="button" class="gk-v26-btn gk-v26-btn-secondary v26-fx-edit" data-id="${v26FxUiEscape(row.id)}" style="padding:4px 9px;font-size:12px;">Düzenle</button>` : ""}

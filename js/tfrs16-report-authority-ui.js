@@ -69,16 +69,42 @@
  function serialize(p,format='csv',section='metrics',contractId){const rows=rawRows(p,section,contractId),keys=Object.keys(rows[0]||{status:null});
   const cell=v=>'"'+String(v&&typeof v==='object'?JSON.stringify(v):v??'').replace(/"/g,'""')+'"';
   const sep=format==='txt'?'\t':';';return [keys.map(cell).join(sep),...rows.map(row=>keys.map(k=>cell(row[k])).join(sep))].join('\r\n');}
- function display(m){return m.value===null?`${m.status} —`:new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(m.value)+' '+esc(m.currency);}
- function html(p,section='metrics',contractId) {requirePackage(p);const rows=rawRows(p,section,contractId),keys=section==='metrics'?['metric','value','currency','status','coverage']:Object.keys(rows[0]||{});
-  const labels={metric:'Gösterge',value:'Ham tutar',currency:'Para birimi',status:'Durum',coverage:'Kapsam'};
+ const metricLabels={rouCarryingAmount:'Kullanım hakkı varlığı',leaseLiability:'Kira yükümlülüğü',currentLiability:'Kısa vadeli yükümlülük',
+  nonCurrentLiability:'Uzun vadeli yükümlülük',periodInterest:'Dönem faizi',periodDepreciation:'Dönem amortismanı',
+  contractualPayments:'Sözleşmesel ödemeler',next12MonthPayments:'Gelecek 12 ay ödemeleri',next12MonthPrincipal:'Gelecek 12 ay anapara',
+  next12MonthInterest:'Gelecek 12 ay faizi',openingROU:'Açılış kullanım hakkı varlığı',openingLiability:'Açılış kira yükümlülüğü'};
+ function statusLabel(status){return ({SUPPORTED:'Hazır',ZERO_CONFIRMED:'Doğrulanmış sıfır',NOT_READY:'Veri henüz hazır değil',
+  PASS:'Geçti',FAIL:'Kontrol başarısız',WARNING:'İnceleme gerekli',
+  NOT_SUPPORTED:'Bu kapsam henüz desteklenmiyor',NOT_APPLICABLE:'Uygulanmıyor',REQUIRES_LEDGER_DATA:'Defter verisi gerekli',
+  REQUIRES_CONFIGURATION:'Yapılandırma gerekli',REQUIRES_ENTITY_INPUT:'Şirket verisi gerekli',
+  COMPLETE_POPULATION:'Tam kapsam',UNAVAILABLE:'Kapsam hazır değil',SUPPORTED_CALCULATION_DIAGNOSTICS:'Hesaplama kontrolleri mevcut'}[status]
+  ||'Kaynak doğrulaması gerekli');}
+ function reasonLabel(reason){if(reason==='REPORTING_CURRENCY_PROFILE_REQUIRED'||reason==='DISCLOSURE_ENTITY_PROFILE_REQUIRED')return 'Onaylı para birimi profili gerekli';
+  if(reason==='ACTUAL_LEDGER_CASH_REQUIRED'||String(reason).includes('LEDGER'))return 'Doğrulanmış defter verisi gerekli';
+  if(String(reason).includes('MATURITY'))return 'Onaylı vade kaynağı gerekli';
+  if(String(reason).includes('WEIGHTING'))return 'Onaylı ağırlıklandırma kaynağı gerekli';
+  if(String(reason).includes('SOURCE')||String(reason).includes('EVIDENCE'))return 'Doğrulanmış kaynak verisi gerekli';
+  return 'Bu alan için ek kaynak veya yapılandırma gerekli';}
+ function display(m,empty=false){if(m.value===null)return empty?'Sözleşme yok':'Veri henüz hazır değil';
+  return new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(m.value)+(m.currency?' '+m.currency:'');}
+ function shownCell(value,key){if(key==='metric')return metricLabels[value]||'Rapor kalemi';
+  if(key==='status'||key==='coverage'||key==='controlScope'||key==='auditCoverage')return statusLabel(value);
+  if(key==='reason')return reasonLabel(value);
+  if(key==='currency'||key.endsWith('Id'))return value??'—';
+  if(value&&typeof value==='object')return 'Teknik ayrıntıda';
+  if(typeof value==='string'&&/^[A-Z][A-Z0-9_]+$/.test(value))return statusLabel(value);
+  return value??'—';}
+ function html(p,section='metrics',contractId) {requirePackage(p);const rows=rawRows(p,section,contractId),visibleRows=section==='controls'&&p.population.count===0?[]:rows;
+  const keys=section==='metrics'?['metric','value','currency','status','coverage']:section==='controls'?['description','status']:Object.keys(visibleRows[0]||{});
+  const labels={metric:'Gösterge',value:'Ham tutar',currency:'Para birimi',status:'Durum',coverage:'Kapsam',description:'Kontrol'};
   return `<h3>${esc(p.identity.companyName)} · ${esc(p.period.periodStart)} – ${esc(p.period.periodEnd)}</h3>
-   <p role="status">Kapsam: ${esc(p.population.coverage)} · ${p.population.count} sözleşme, ${p.population.includedCount} dahil, ${p.population.excludedCount} hazır değil.</p>
-   ${p.population.exclusions.map(r=>`<p>${esc(r.contractId)}: ${esc(r.reason)}</p>`).join('')}
-   <div style="max-width:100%;overflow:auto"><table style="border-collapse:collapse;width:100%"><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${esc(r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-   <details><summary>Kaynak ve ham veri</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(rows,null,2))}</pre></details>
-   <p>Kontroller: ${esc(p.controls.status)}. Hesaplama kontrolleri kapanış veya canlı kayıt onayı değildir.</p>
-   ${Object.entries(p.unsupported).map(([k,r])=>`<p>${esc(k)}: ${esc(r.status)} (${esc(r.reason)})</p>`).join('')}`;}
+   <p role="status">${p.population.count===0?'Bu dönemde bu şirket için aktif sözleşme yok.':
+    `${esc(statusLabel(p.population.coverage))} · ${p.population.count} sözleşme, ${p.population.includedCount} dahil, ${p.population.excludedCount} için kaynak hazır değil.`}</p>
+   ${p.population.exclusions.map(r=>`<p>${esc(r.contractId)}: ${esc(reasonLabel(r.reason))}</p>`).join('')}
+   ${visibleRows.length?`<div class="lq-authority-table"><table><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${visibleRows.map(r=>`<tr>${keys.map(k=>`<td>${esc(shownCell(r[k],k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:
+    '<p class="lq-authority-empty">Bu dönem için gösterilecek satır bulunmuyor.</p>'}
+   ${p.population.count>0?`<p>Hesaplama kontrolleri: ${esc(statusLabel(p.controls.status))}. Kapanış veya canlı kayıt onayı değildir.</p>`:''}
+   <details><summary>Teknik kaynak ayrıntıları</summary><pre>${esc(JSON.stringify({rows,unsupported:p.unsupported,controls:p.controls},null,2))}</pre></details>`;}
  function styles(container) {
   container.classList?.add('lq-report-authority');if(global.document.getElementById('lq-report-authority-style'))return;
   const style=global.document.createElement('style');style.id='lq-report-authority-style';style.textContent=`
@@ -86,8 +112,10 @@
    .lq-report-authority h2,.lq-report-authority h3 {color:#172033!important;}.lq-report-authority label{display:inline-block;margin:6px 12px 8px 0;color:#334155;}
    .lq-report-authority input,.lq-report-authority select{padding:7px;border:1px solid #cbd5e1;border-radius:6px;max-width:100%;background:#fff;color:#172033;}
    .lq-report-authority button{padding:7px 12px;margin:4px;border:1px solid #cbd5e1;border-radius:6px;background:#f1f5f9;color:#172033;cursor:pointer;}
+   .lq-report-authority .lq-authority-table{max-width:100%;overflow:auto;}.lq-report-authority table{border-collapse:collapse;width:100%;}
    .lq-report-authority td,.lq-report-authority th{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap;}
-   .lq-report-authority details{margin-top:12px;}.lq-report-authority [role=alert]{color:#9f1239;}
+   .lq-report-authority details{margin-top:12px;}.lq-report-authority details pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;}
+   .lq-report-authority [role=alert]{color:#9f1239;}.lq-report-authority .lq-authority-empty{padding:18px;border-radius:10px;background:#f1f5f9;}
   `;global.document.head.appendChild(style);
  }
 
@@ -101,7 +129,7 @@
    const link=global.document.createElement('a');link.href=url;link.download='TFRS16_Backend_Rapor.'+(format==='txt'?'txt':format==='html'?'html':'csv');link.click();global.URL.revokeObjectURL(url);}
   return true;
  }
- function errorHtml(e){return `<p role="alert">Rapor hazır değil: ${esc(e?.code||'REPORTING_AUTHORITY_UNAVAILABLE')}</p>`;}
+ function errorHtml(e){return `<p role="alert">Rapor şu anda gösterilemiyor. ${esc(reasonLabel(e?.code))}</p><details><summary>Teknik ayrıntı</summary><code>${esc(e?.code||'REPORTING_AUTHORITY_UNAVAILABLE')}</code></details>`;}
  async function page(container,title='Finansal Rapor',section='metrics'){
   if(!container)return;styles(container);current=null;container.innerHTML='<p>Güvenilir rapor yükleniyor...</p>';
   try{const scope=await companies(),period=defaultPeriod();
@@ -125,35 +153,49 @@
  async function dashboard(){const revision=++dashboardEpoch,ids={leaseLiability:'leaseLiability',rouAssets:'rouCarryingAmount',currentLiability:'currentLiability',next12Months:'next12MonthPayments',monthlyInterest:'periodInterest',monthlyDepreciation:'periodDepreciation'};
   const aliases={leaseLiability:'kpiLiability',rouAssets:'kpiRou',currentLiability:'kpiCurrent',contractCount:'kpiContractCount'};
   const set=(id,value)=>{[id,aliases[id]].filter(Boolean).forEach(key=>{const el=global.document.getElementById(key);if(el)el.textContent=value;});};
-  Object.keys(ids).forEach(id=>set(id,'Yükleniyor…'));set('contractCount','Yükleniyor…');['renewals90Days','modifications'].forEach(id=>set(id,'NOT_READY — güvenilir olay kaynağı gerekli'));set('kpiDataAsOf','Yükleniyor…');global.__GK_TFRS16_DASHBOARD_METRICS__=null;refreshDashboardPresentation('Yükleniyor…');
+  Object.keys(ids).forEach(id=>set(id,'Yükleniyor…'));set('contractCount','Yükleniyor…');['renewals90Days','modifications'].forEach(id=>set(id,'Kaynak verisi gerekli'));set('kpiDataAsOf','Yükleniyor…');global.__GK_TFRS16_DASHBOARD_METRICS__=null;refreshDashboardPresentation('Yükleniyor…');
   try{const scope=await companies(),period=defaultPeriod();const packages=[];
    for(const c of scope)packages.push(await load({companyId:c.id,...period}));if(revision!==dashboardEpoch)return;
-   for(const [id,key] of Object.entries(ids))set(id,packages.map(p=>`${p.identity.companyName}: ${display(p.totals[key])}`).join(' · ')||'Raporlanabilir şirket yok');
-   set('contractCount',packages.map(p=>`${p.identity.companyName}: ${p.population.count}`).join(' · '));
-   set('kpiDataAsOf',packages.map(p=>`${p.identity.companyName}: ${p.period.reportingDate} / ${p.population.coverage}`).join(' · '));
+   global.__GK_TFRS16_REPORTING_COMPANIES__=scope.map(c=>({id:String(c.id),name:String(c.name||c.id)}));
+   if(typeof global.Event==='function')global.dispatchEvent?.(new global.Event('gk-reporting-companies-ready'));
    global.__GK_TFRS16_DASHBOARD_METRICS__={reportingDate:period.reportingDate,source:'SERVER_PERSISTED_PRIVATE_REPORTING',packages,
     groups:packages.map(p=>({companyId:p.identity.companyId,currency:p.identity.presentationCurrency,coverage:p.population.coverage,
      liability:p.totals.leaseLiability.value,rou:p.totals.rouCarryingAmount.value,current:p.totals.currentLiability.value,nonCurrent:p.totals.nonCurrentLiability.value,
      next12Payments:p.totals.next12MonthPayments.value,monthlyInterest:p.totals.periodInterest.value,monthlyDepreciation:p.totals.periodDepreciation.value})),closeScore:null};refreshDashboardPresentation();
-  }catch(e){if(revision!==dashboardEpoch)return;[...Object.keys(ids),'contractCount'].forEach(id=>set(id,e.code||'REPORTING_AUTHORITY_UNAVAILABLE'));set('kpiDataAsOf','REPORTING_AUTHORITY_UNAVAILABLE');global.__GK_TFRS16_DASHBOARD_METRICS__=null;refreshDashboardPresentation();}
+  }catch(e){if(revision!==dashboardEpoch)return;global.__GK_TFRS16_DASHBOARD_METRICS__=null;refreshDashboardPresentation('Veri alınamadı');}
  }
- function refreshDashboardPresentation(state='REPORTING_AUTHORITY_UNAVAILABLE') {
+ function refreshDashboardPresentation(state='Veri alınamadı') {
   const snapshot=global.__GK_TFRS16_DASHBOARD_METRICS__,packages=snapshot?.packages;
-  const set=(id,value)=>{const el=global.document.getElementById(id);if(el){el.textContent=value;el.style.overflowWrap='anywhere';if(id.startsWith('lq')){el.style.fontSize='16px';el.style.color='#172033';}}};
-  const mapping={lqTotalLiability:'leaseLiability',lqTotalRou:'rouCarryingAmount',lqCurrentLiability:'currentLiability',
-    lqNext12Payments:'next12MonthPayments',lqMonthlyInterest:'periodInterest',lqMonthlyDep:'periodDepreciation',lqCurrentLegend:'currentLiability',lqNonCurrentLegend:'nonCurrentLiability'};
-  let selected=[];
-  try {if(!Array.isArray(packages))fail();packages.forEach(requirePackage);
-    const company=global.document.getElementById('v26ActiveCompanySelect')?.value;
-    selected=!company||company.toUpperCase()==='ALL'?packages:packages.filter(p=>p.identity.companyId===company);
-    for(const [id,key] of Object.entries(mapping))set(id,selected.map(p=>`${p.identity.companyName}: ${display(p.totals[key])}`).join(' · ')||'SOURCE_NOT_READY');
-    set('lqActiveContracts',selected.map(p=>`${p.identity.companyName}: ${p.population.count}`).join(' · ')||'SOURCE_NOT_READY');
-    set('lqDashboardSubtitle',selected.map(p=>`${p.identity.companyName}: ${p.period.reportingDate} / ${p.population.coverage}`).join(' · ')||'SOURCE_NOT_READY');
-  }catch(e){Object.keys(mapping).forEach(id=>set(id,state));set('lqActiveContracts',state);set('lqDashboardSubtitle',state);}
+  const set=(ids,value)=>{for(const id of ids){const el=global.document.getElementById(id);if(el){if(el.textContent!==value)el.textContent=value;el.style.overflowWrap='anywhere';}}};
+  const mapping={leaseLiability:['leaseLiability','kpiLiability','lqTotalLiability'],rouCarryingAmount:['rouAssets','kpiRou','lqTotalRou'],
+   currentLiability:['currentLiability','kpiCurrent','lqCurrentLiability','lqCurrentLegend'],
+   nonCurrentLiability:['lqNonCurrentLegend'],next12MonthPayments:['next12Months','lqNext12Payments'],
+   periodInterest:['monthlyInterest','lqMonthlyInterest'],periodDepreciation:['monthlyDepreciation','lqMonthlyDep']};
+  const countIds=['contractCount','kpiContractCount','lqActiveContracts'];
+  if(!Array.isArray(packages)){
+   Object.values(mapping).forEach(ids=>set(ids,state));set(countIds,state);set(['kpiDataAsOf','lqDashboardSubtitle'],state);
+  }else{
+   packages.forEach(requirePackage);
+   const company=global.document.getElementById('v26ActiveCompanySelect')?.value||'ALL';
+   const selected=company==='ALL'?packages:packages.filter(p=>p.identity.companyId===company);
+   const single=selected.length===1?selected[0]:null;
+   if(single){
+    for(const [key,ids] of Object.entries(mapping))set(ids,display(single.totals[key],single.population.count===0));
+    set(countIds,String(single.population.count));
+    const scopeText=single.population.count===0?'Bu dönemde aktif sözleşme yok':statusLabel(single.population.coverage);
+    set(['kpiDataAsOf','lqDashboardSubtitle'],`${single.identity.companyName} · ${single.period.reportingDate} · ${scopeText}`);
+   }else{
+    const unavailable=selected.filter(p=>p.population.coverage!=='COMPLETE_POPULATION').length;
+    const message=selected.length?`${selected.length} şirket · ${unavailable?`${unavailable} şirketin kaynağı hazır değil · `:''}Finansal tutar için şirket seçin`:'Raporlanabilir şirket yok';
+    Object.values(mapping).forEach(ids=>set(ids,'Şirket seçin'));set(countIds,selected.length?'Şirket seçin':'Sözleşme yok');
+    set(['kpiDataAsOf','lqDashboardSubtitle'],message);
+   }
+   set(['lqCompanyScope'],single?single.identity.companyName:'Tüm Şirketler');
+  }
   // These charts/readiness conclusions have no approved source in this reporting DTO.
-  ['lqCurrentPct','lqReadinessScore','lqRenewalCount','lqModificationCount'].forEach(id=>set(id,'NOT_READY'));
-  set('lqAssetLegend','REQUIRES_ENTITY_INPUT — güvenilir varlık sınıfı kaynağı gerekli');
-  set('lqLiabilityBars','REQUIRES_CONFIGURATION — yönetim vade kaynağı gerekli');
+  ['lqCurrentPct','lqReadinessScore','lqRenewalCount','lqModificationCount'].forEach(id=>set([id],'Veri hazır değil'));
+  set(['lqAssetLegend'],'Varlık sınıfı için doğrulanmış şirket verisi gerekli');
+  set(['lqLiabilityBars'],'Vade görünümü için onaylı kaynak gerekli');
   global.document.querySelector('.lq-axis')?.replaceChildren();
   ['.lq-split-ring','.lq-asset-ring'].forEach(selector=>{const el=global.document.querySelector(selector);if(el){el.style.background='#e2e8f0';el.style.setProperty('--current-pct','0%');}});
   const progress=global.document.getElementById('lqPaymentProgress');if(progress)progress.style.width='0%';
@@ -165,7 +207,7 @@
    if(!row||row.status!=='SUPPORTED')fail(row?.reason||'REPORTING_SOURCE_NOT_READY');
    targets.forEach(({kind,target})=>{if(!target?.isConnected)return;
     if(kind==='summary')target.innerHTML=`<p>${esc(p.period.reportingDate)} · ${esc(row.currency)} · ${esc(row.calculationId)}</p>`+
-      metrics.map(k=>`<p>${esc(k)}: ${display(row.metrics[k])}</p>`).join('');
+      metrics.map(k=>`<p>${esc(metricLabels[k])}: ${display(row.metrics[k])}</p>`).join('');
     else{const rows=rawRows(p,kind==='schedule'?'schedule':'audit',contract.id),keys=Object.keys(rows[0]||{});
      target.innerHTML=`<p>${kind==='audit'?esc(p.audit.evidenceType):'Backend sözleşmesel plan; gerçek ödeme kanıtı değildir.'}</p><table><thead><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${esc(r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
    });

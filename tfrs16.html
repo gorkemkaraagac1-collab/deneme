@@ -269,7 +269,7 @@
             <div class="lq-action-list">
               <div><span class="lq-action-icon amber">↻</span><p><strong>Yenileme kontrolleri</strong><small>90 gün içindeki sözleşmeleri gözden geçirin</small></p><span class="lq-action-badge" id="lqRenewalCount">—</span></div>
               <div><span class="lq-action-icon blue">◆</span><p><strong>Modifikasyonlar</strong><small>İşaretlenmiş sözleşme değişikliklerini takip edin</small></p><span class="lq-action-badge" id="lqModificationCount">—</span></div>
-              <div><span class="lq-action-icon green">✓</span><p><strong>Raporlama dönemi</strong><small>Yevmiye ve dipnot üretimine hazır çalışma alanı</small></p><span class="lq-action-badge">NOT_READY</span></div>
+              <div><span class="lq-action-icon green">✓</span><p><strong>Raporlama dönemi</strong><small>Yevmiye ve dipnot üretimine hazır çalışma alanı</small></p><span class="lq-action-badge">Kaynak gerekli</span></div>
             </div>
           </article>
 
@@ -895,6 +895,10 @@
   }
 
   function syncDashboard(){
+    if (window.LeaseQantReportingAuthorityUi?.refreshDashboardPresentation) {
+      window.LeaseQantReportingAuthorityUi.refreshDashboardPresentation();
+      return;
+    }
     const dashboard=window.__GK_TFRS16_DASHBOARD_METRICS__;
     if (dashboard) {
       if ($("lqTotalLiability")) $("lqTotalLiability").textContent=dashboard.liabilityText || "—";

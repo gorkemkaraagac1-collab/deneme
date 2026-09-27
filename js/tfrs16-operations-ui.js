@@ -622,8 +622,13 @@ ${footer}
 
     const buildPendingApprovals = () => {
       const now = new Date();
-      const modRows = bridge().getModificationReport?.(now)?.rows || [];
-      const reassRows = bridge().getReassessmentReport?.(now)?.rows || [];
+      let modRows, reassRows;
+      try {
+        modRows = bridge().getModificationReport?.(now)?.rows || [];
+        reassRows = bridge().getReassessmentReport?.(now)?.rows || [];
+      } catch (_) {
+        return null;
+      }
       const pendingMods = modRows.filter(row => row.status !== "APPLIED" && row.status !== "CANCELLED")
         .map(row => ({ kind: "MOD", contractId: row.contractId, company: row.company, id: row.modificationId, date: row.effectiveDate || row.modificationDate, reason: row.reason, oldPayment: row.oldPayment, newPayment: row.newPayment }));
       const pendingReass = reassRows.filter(row => row.status !== "APPLIED" && row.status !== "CANCELLED")
@@ -632,6 +637,7 @@ ${footer}
     };
 
     const pendingHtml = pending => {
+      if (pending === null) return '<p role="status" class="gk-v26-card">Onay bekleyen işlemlerin rapor kaynağı henüz hazır değil. Sözleşme bazındaki işlemleri aşağıdan inceleyebilirsiniz.</p>';
       if (!pending.length) return "";
       const value = bridge().formatOperationValue || (v => String(v ?? ""));
       return `<div class="gk-v26-card" style="background:#fffbeb;border-color:#fde68a;margin-bottom:16px;">

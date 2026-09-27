@@ -3052,3 +3052,31 @@ tbody tr:hover td{
   outline:2px solid #2563eb!important;
   outline-offset:2px!important;
 }
+
+/* Authority states are short labels; the card and its grid cell must still
+   accommodate localization and user-controlled company names. */
+#contractsView .kpi-grid,
+.lq-dashboard .lq-hero-metrics,
+.lq-dashboard .lq-dashboard-grid,
+.lq-dashboard .lq-cfo-strip{min-width:0}
+#contractsView .kpi-card,
+.lq-dashboard .lq-metric,
+.lq-dashboard .lq-dash-card,
+.lq-dashboard .lq-cfo-card{min-width:0;max-width:100%;box-sizing:border-box}
+#contractsView .kpi-value,
+#contractsView .kpi-hint,
+.lq-dashboard .lq-metric-value,
+.lq-dashboard .lq-cfo-card strong,
+.lq-dashboard .lq-split-legend strong,
+.lq-dashboard .lq-action-badge,
+.lq-dashboard #lqDashboardSubtitle{overflow-wrap:anywhere;word-break:normal;max-width:100%}
+.lq-dashboard .lq-cfo-card,
+.lq-dashboard .lq-split-legend,
+.lq-dashboard .lq-split-legend>div{min-width:0}
+
+@media(max-width:900px){
+  .lq-topnav-tools .company-select{display:block!important;min-width:0;max-width:min(38vw,150px)!important}
+}
+@media(max-width:520px){
+  .lq-topnav-tools .company-select{width:min(37vw,128px)!important;font-size:10px!important}
+}

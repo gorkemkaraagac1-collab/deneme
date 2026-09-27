@@ -254,7 +254,7 @@ window.fetch = (input, init = {}) => {
     const ui = window.LeaseQantReportingAuthorityUi;
     if (ui) return ui.dashboard();
     ["kpiContractCount","kpiLiability","kpiRou","kpiCurrent"].forEach(id => {
-      const el=document.getElementById(id);if(el)el.textContent="REPORTING_AUTHORITY_UNAVAILABLE";
+      const el=document.getElementById(id);if(el)el.textContent="Veri alınamadı";
     });
   };
 
@@ -295,9 +295,9 @@ window.fetch = (input, init = {}) => {
     const select = document.getElementById("v26ActiveCompanySelect");
     if (!select) return;
     const api = window.GK_TFRS16;
-    const options = api && typeof api.getUnifiedCompanyOptions === "function"
-      ? api.getUnifiedCompanyOptions()
-      : [];
+    const reportingScope = window.__GK_TFRS16_REPORTING_COMPANIES__;
+    const options = Array.isArray(reportingScope) ? reportingScope
+      : api && typeof api.getUnifiedCompanyOptions === "function" ? api.getUnifiedCompanyOptions() : [];
     const active = api && typeof api.getActiveCompanyId === "function"
       ? api.getActiveCompanyId()
       : "ALL";
@@ -384,6 +384,7 @@ window.fetch = (input, init = {}) => {
     refreshUserChip();
     initCompanySelector();
     window.addEventListener("gk-backend-hydrated", syncCompanySelector);
+    window.addEventListener("gk-reporting-companies-ready", syncCompanySelector);
 
     // Soft-hook: after engine hydrates, try to fill KPIs from global GK_TFRS16
     setTimeout(() => {

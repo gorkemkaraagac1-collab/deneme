@@ -51,6 +51,19 @@ test('schedule and raw stored audit numbers export unchanged; controls use serve
  const schedule=ui.rawRows(p,'schedule');p.contracts[0].scheduleRows.forEach((r,i)=>assert.deepEqual(plain(schedule[i]),{...plain(r),companyId:p.identity.companyId,populationId:p.identity.populationId,periodStart:p.period.periodStart,periodEnd:p.period.periodEnd,coverage:'COMPLETE_POPULATION'}));
  const mixed=await ui.acceptPackage(proofs.find(p=>p.fixture==='mixed').package,proofs.find(p=>p.fixture==='mixed').body);assert.equal(ui.rawRows(mixed,'schedule')[0].coverage,'SUPPORTED_SUBSET');
 });
+test('empty closing and unsupported controls stay readable while raw diagnostics remain in closed details',async()=>{
+ const {ui}=runtime();const proof=proofs.find(p=>p.fixture==='zero');const p=await ui.acceptPackage(proof.package,proof.body);
+ const doc=new JSDOM(ui.html(p,'controls')).window.document;
+ assert.match(doc.body.textContent,/aktif sözleşme yok/);
+ assert.equal(doc.querySelector('table'),null);
+ const details=doc.querySelector('details');assert.ok(details);assert.equal(details.open,false);
+ assert.match(details.textContent,/controlId/);
+ const single=proofs.find(p=>p.fixture==='single');const q=await ui.acceptPackage(single.package,single.body);
+ const controls=new JSDOM(ui.html(q,'controls')).window.document;
+ assert.ok(controls.querySelector('table'));
+ assert.ok(!controls.querySelector('table').textContent.includes('CLOSE-CONTRACT-COMPLETENESS'));
+ assert.match(controls.querySelector('table').textContent,/Geçti/);
+});
 test('mutations cannot be repaired; structural source/route/coverage rules survive recomputed checksums',async()=>{
  const {ui}=runtime(),proof=proofs.find(p=>p.fixture==='single');
  const attacks={missing:p=>delete p.totals.leaseLiability,amount:p=>p.totals.leaseLiability.value++,currency:p=>p.totals.leaseLiability.currency='USD',period:p=>p.period.reportingDate='2026-01-30',population:p=>p.population.contractIds.push('FOREIGN'),coverage:p=>p.population.coverage='SUPPORTED_SUBSET',source:p=>p.contracts[0].sourceResultHash='FORGED',route:p=>p.contracts[0].route='P8',profile:p=>p.identity.currencyEvidenceId=null};
@@ -82,13 +95,24 @@ test('CFO/report page filters, sorts and exports server data; source failure cle
 });
 test('company dashboard and old shell ID aliases show per-company authority; mixed/zero are explicit',async()=>{
  const ids=['leaseLiability','rouAssets','currentLiability','next12Months','monthlyInterest','monthlyDepreciation','contractCount','renewals90Days','modifications','kpiDataAsOf','kpiLiability','kpiRou','kpiCurrent','kpiContractCount'];
- const {ui,window}=runtime(ids.map(id=>`<span id="${id}"></span>`).join(''));adapter(window,proofs.filter(p=>['single','multiple','mixed','zero'].includes(p.fixture)));
+ const selected=proofs.filter(p=>['single','multiple','mixed','zero'].includes(p.fixture));
+ const selector=`<select id="v26ActiveCompanySelect"><option value="ALL">Tüm Şirketler</option>${selected.map(p=>`<option value="${p.body.companyId}">${p.package.identity.companyName}</option>`).join('')}</select>`;
+ const {ui,window}=runtime(selector+ids.map(id=>`<span id="${id}"></span>`).join(''));adapter(window,selected);
  let legacy=0;window.GK_TFRS16={getTotalLeaseLiability:()=>{legacy++;throw Error('fallback');}};
  await ui.dashboard();assert.equal(legacy,0);const packages=window.__GK_TFRS16_DASHBOARD_METRICS__.packages;
  assert.equal(packages.length,4);window.__GK_TFRS16_DASHBOARD_METRICS__.groups.forEach((g,i)=>assert.equal(g.liability,packages[i].totals.leaseLiability.value));
- assert.match(window.document.getElementById('leaseLiability').textContent,/mixed: NOT_READY/);assert.match(window.document.getElementById('kpiDataAsOf').textContent,/UNAVAILABLE/);assert.match(window.document.getElementById('renewals90Days').textContent,/NOT_READY/);
+ assert.equal(window.document.getElementById('leaseLiability').textContent,'Şirket seçin');
+ assert.match(window.document.getElementById('kpiDataAsOf').textContent,/Finansal tutar için şirket seçin/);
+ assert.equal(window.document.getElementById('renewals90Days').textContent,'Kaynak verisi gerekli');
  assert.equal(window.document.getElementById('kpiLiability').textContent,window.document.getElementById('leaseLiability').textContent);
- window.LeaseQantPrivateCalculation.getReportingCompanies=async()=>{throw Error('failure');};await ui.dashboard();assert.equal(window.__GK_TFRS16_DASHBOARD_METRICS__,null);assert.match(window.document.getElementById('contractCount').textContent,/UNAVAILABLE/);
+ const company=window.document.getElementById('v26ActiveCompanySelect');
+ company.value=proofs.find(p=>p.fixture==='single').body.companyId;ui.refreshDashboardPresentation();
+ assert.equal(window.document.getElementById('leaseLiability').textContent,new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(proofs.find(p=>p.fixture==='single').package.totals.leaseLiability.value)+' TRY');
+ company.value=proofs.find(p=>p.fixture==='zero').body.companyId;ui.refreshDashboardPresentation();
+ assert.equal(window.document.getElementById('leaseLiability').textContent,'0 TRY');
+ assert.match(window.document.getElementById('kpiDataAsOf').textContent,/aktif sözleşme yok/);
+ assert.equal(window.document.getElementById('contractCount').textContent,'0');
+ window.LeaseQantPrivateCalculation.getReportingCompanies=async()=>{throw Error('failure');};await ui.dashboard();assert.equal(window.__GK_TFRS16_DASHBOARD_METRICS__,null);assert.equal(window.document.getElementById('contractCount').textContent,'Veri alınamadı');
 });
 test('contract summary, payment plan and audit use persisted source, never client financial values',async()=>{
  const {ui,window}=runtime('<div id="detail"><div data-authoritative-report-summary></div><div data-authoritative-report-schedule></div><div data-authoritative-report-audit></div></div>');adapter(window,[proofs[0]]);const p=proofs[0].package,target=window.document.getElementById('detail');
@@ -108,7 +132,7 @@ test('actual active main reporting entrypoints/gates and database view never cal
  }
  const model=plain(vm.runInContext('v20GetDatabaseModel()',context));assert.deepEqual(model.reportingMetrics,plain(ui.rawRows(ui.read())));assert.deepEqual(model.schedules,plain(ui.rawRows(ui.read(),'schedule')));assert.equal(model.journalAuthorityStatus,'JOURNAL_AUTHORITY_UNAVAILABLE');
  assert.equal(vm.runInContext('getWeightedAverageDiscountRate().value',context),null);assert.equal(vm.runInContext('getFutureLeasesKPI().value',context),null);
- assert.match(vm.runInContext('formatPortfolioAmount(1234.56789,"TRY","USD")',context),/SOURCE_REQUIRED/);
+ assert.equal(vm.runInContext('formatPortfolioAmount(1234.56789,"TRY","USD")',context),'Onaylı döviz kuru kaynağı gerekli');
  const shell=fs.readFileSync(path.join(root,'js/shell.js'),'utf8');const active=shell.slice(shell.indexOf('window.__shellUpdateKpis = function'),shell.indexOf('/* ---------- Session display'));
  let calls=0;window.LeaseQantReportingAuthorityUi={dashboard:()=>{calls++;return Promise.resolve();}};vm.runInContext(active,context);await window.__shellUpdateKpis({liability:99999999});assert.equal(calls,1);
  const boot=shell.slice(shell.indexOf('/* ---------- Boot'));assert.ok(!boot.includes('getTotalLeaseLiability'));assert.ok(!boot.includes('legacyShellUpdateKpis'));

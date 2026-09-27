@@ -80,3 +80,12 @@ test('tablet and mobile use the actual menu binding and close it after Reporting
  for(const width of [800,390]){const s=setup('',width);await s.advance(4000);s.click('#menuToggle');assert.equal(s.w.document.getElementById('sidebarNav').classList.contains('mobile-open'),true);
  s.click('#sidebarNav [data-open="financialReporting"]');assert.equal(s.w.document.getElementById('sidebarNav').classList.contains('mobile-open'),false);assert.deepEqual(s.visible(),{dashboard:false,contracts:false,page:true});s.dom.window.close();}
 });
+test('topbar company selector receives authenticated reporting scope and remains the only active selector ID',async()=>{
+ const s=setup();await s.advance(4000);const w=s.w;
+ assert.equal(w.document.querySelectorAll('#v26ActiveCompanySelect').length,1);
+ w.__GK_TFRS16_REPORTING_COMPANIES__=[{id:'COMP-A',name:'Şirket A'},{id:'COMP-B',name:'Şirket B'}];
+ w.dispatchEvent(new w.Event('gk-reporting-companies-ready'));
+ const select=w.document.getElementById('v26ActiveCompanySelect');
+ assert.deepEqual(Array.from(select.options,o=>o.value),['ALL','COMP-A','COMP-B']);
+ assert.equal(select.options[2].textContent,'Şirket B');s.dom.window.close();
+});
