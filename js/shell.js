@@ -46,6 +46,7 @@ window.fetch = (input, init = {}) => {
     contracts: { title: "Sözleşmeler", subtitle: "Kiralama portföyü" },
     close: { title: "Kapanış Paneli", subtitle: "Ay sonu kapanış kontrolü" },
     accountingCenter: { title: "Toplu Fiş Merkezi", subtitle: "Muhasebe fişleri" },
+    financialReporting: { title: "Finansal Raporlama", subtitle: "Backend rapor paketi" },
     footnotes: { title: "Dipnotlar", subtitle: "Varlık · Yükümlülük · Likidite" },
     modification: { title: "Modifikasyon & Reassessment", subtitle: "Sözleşme değişiklikleri" },
     slb: { title: "Satış ve Geri Kiralama", subtitle: "TFRS 16.98–103" },
@@ -137,9 +138,14 @@ window.fetch = (input, init = {}) => {
     closeLegacyV191Modal();
     const contracts = document.getElementById("contractsView");
     const host = document.getElementById("v26PageHost");
-    if (contracts) contracts.style.display = "";
+    if (window.LeaseQantMainView) window.LeaseQantMainView.activate("contracts");
+    else {
+      const dash = document.getElementById("lqDashboard");
+      if (dash) { dash.hidden = true; dash.style.display = "none"; }
+      if (contracts) contracts.style.display = "";
+      if (host) host.style.display = "none";
+    }
     if (host) {
-      host.style.display = "none";
       host.innerHTML = "";
     }
     setActiveNav("contracts");
@@ -151,9 +157,13 @@ window.fetch = (input, init = {}) => {
 
   function openEnginePage(key) {
     closeLegacyV191Modal();
-    const dash=document.getElementById('lqDashboard');if(dash){dash.hidden=true;dash.style.display='none';}
-    const contracts = document.getElementById("contractsView");
-    if (contracts) contracts.style.display = "none";
+    if (window.LeaseQantMainView) window.LeaseQantMainView.activate(key);
+    else {
+      const dash = document.getElementById('lqDashboard');
+      if (dash) { dash.hidden = true; dash.style.display = 'none'; }
+      const contracts = document.getElementById("contractsView");
+      if (contracts) contracts.style.display = "none";
+    }
 
     setActiveNav(key);
     setTitle(key);
@@ -162,7 +172,7 @@ window.fetch = (input, init = {}) => {
     if (typeof window.__gkOpenInMainByKey === "function") {
       window.__gkOpenInMainByKey(key);
       const host = document.getElementById("v26PageHost");
-      if (host) host.style.display = "block";
+      if (host && !window.LeaseQantMainView) host.style.display = "block";
       // Period-picker etc. may reopen the old V19.1 popup — close it.
       setTimeout(closeLegacyV191Modal, 0);
       setTimeout(closeLegacyV191Modal, 250);
@@ -172,12 +182,16 @@ window.fetch = (input, init = {}) => {
     // Fallback: wait briefly for engine init
     let tries = 0;
     const timer = setInterval(() => {
+      if (window.LeaseQantMainView && window.LeaseQantMainView.current() !== key) {
+        clearInterval(timer);
+        return;
+      }
       tries += 1;
       if (typeof window.__gkOpenInMainByKey === "function") {
         clearInterval(timer);
         window.__gkOpenInMainByKey(key);
         const host = document.getElementById("v26PageHost");
-        if (host) host.style.display = "block";
+        if (host && !window.LeaseQantMainView) host.style.display = "block";
         closeLegacyV191Modal();
       } else if (tries > 20) {
         clearInterval(timer);

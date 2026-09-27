@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="stylesheet" href="css/leaseqant-dark.css?v=20260919-light-1" />
+  <link rel="stylesheet" href="css/leaseqant-dark.css?v=20260927-reporting-visibility-1" />
   <!-- SheetJS for Excel import/export (engine uses XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -38,6 +38,9 @@
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="close">
           Kapanış
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="financialReporting">
+          <span class="icon">📊</span><span>Finansal Raporlama</span>
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="footnotes">
           Raporlar
@@ -690,8 +693,33 @@
 
   <div class="toast-host" id="toastHost"></div>
 
+  <script>
+/* Main content view ownership: explicit navigation outranks default startup. */
+(() => {
+  let activeView = null;
+  function activate(view) {
+    activeView = view;
+    const dash = document.getElementById('lqDashboard');
+    const contracts = document.getElementById('contractsView');
+    const host = document.getElementById('v26PageHost');
+    if (dash) { dash.hidden = view !== 'dashboard'; dash.style.display = view === 'dashboard' ? '' : 'none'; }
+    if (contracts) contracts.style.display = view === 'contracts' ? '' : 'none';
+    if (host) host.style.display = view === 'dashboard' || view === 'contracts' ? 'none' : 'block';
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active',
+      view === 'dashboard' ? el.hasAttribute('data-lq-dashboard') :
+      view === 'contracts' ? el.dataset.view === 'contracts' : el.dataset.open === view));
+  }
+  window.LeaseQantMainView = Object.freeze({
+    activate,
+    current: () => activeView,
+    showDefaultDashboard: () => {
+      if (activeView === null && !window.__gkDeepLinkOpened) activate('dashboard');
+    }
+  });
+})();
+  </script>
   <!-- Shell helpers (before engine) -->
-  <script src="js/shell.js?v=20260927-report-authority-1"></script>
+  <script src="js/shell.js?v=20260927-reporting-visibility-1"></script>
   <!-- TFRS 16 private-result UI runtime -->
   <script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>
   <script src="js/private-tfrs16-facade.js?v=20260927-journal-authority-1"></script>
@@ -938,9 +966,7 @@
   }
 
   function setDashboard(active){
-    dash.hidden=!active;
-    contractsView.style.display=active?"none":"";
-    document.querySelectorAll(".nav-item").forEach(x=>x.classList.remove("active"));
+    window.LeaseQantMainView.activate(active ? 'dashboard' : 'contracts');
     if(active){
       document.querySelector("[data-lq-dashboard]")?.classList.add("active");
       if($("pageTitle")) $("pageTitle").textContent="Dashboard";
@@ -958,7 +984,7 @@
     setDashboard(false);
     document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
   }));
-  document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>{dash.hidden=true;contractsView.style.display="";}));
+  document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>window.LeaseQantMainView.activate(btn.dataset.open || 'contracts')));
   $("v26ActiveCompanySelect")?.addEventListener("change",()=>setTimeout(syncDashboard,300));
   const observer=new MutationObserver(()=>{if(!dash.hidden) syncDashboard();});
   ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent","kpiDataAsOf"].forEach(id=>{
@@ -966,7 +992,7 @@
   });
 
   window.LeaseQantDashboard={refresh:syncDashboard,show:()=>setDashboard(true)};
-  window.addEventListener("load",()=>setTimeout(()=>setDashboard(true),500));
+  window.addEventListener("load",()=>setTimeout(()=>{window.LeaseQantMainView.showDefaultDashboard();syncDashboard();},500));
 })();
 </script>
 <script>
@@ -975,18 +1001,15 @@
   const dash=document.getElementById('lqDashboard'),contracts=document.getElementById('contractsView');
   if(!dash||!contracts)return;
   const refresh=()=>window.LeaseQantReportingAuthorityUi?.refreshDashboardPresentation();
-  const show=active=>{dash.hidden=!active;dash.style.display=active?'':'none';contracts.style.display=active?'none':'';
-    const host=document.getElementById('v26PageHost');if(host&&active)host.style.display='none';
-    document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-    if(active)document.querySelector('[data-lq-dashboard]')?.classList.add('active');refresh();};
+  const show=active=>{window.LeaseQantMainView.activate(active?'dashboard':'contracts');refresh();};
   document.querySelector('[data-lq-dashboard]')?.addEventListener('click',()=>show(true));
   document.getElementById('lqGoContracts')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-view="contracts"]')?.click();});
   document.getElementById('lqOpenRisk')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-open="riskControls"]')?.click();});
   document.querySelectorAll('[data-open-target]').forEach(el=>el.addEventListener('click',()=>{show(false);document.querySelector(`.nav-item[data-open="${el.dataset.openTarget}"]`)?.click();}));
-  document.querySelectorAll('.nav-item:not([data-lq-dashboard])').forEach(el=>el.addEventListener('click',()=>{dash.hidden=true;dash.style.display='none';}));
+  document.querySelectorAll('.nav-item:not([data-lq-dashboard])').forEach(el=>el.addEventListener('click',()=>window.LeaseQantMainView.activate(el.dataset.open || 'contracts')));
   document.getElementById('v26ActiveCompanySelect')?.addEventListener('change',refresh);
   const observer=new MutationObserver(refresh);const asOf=document.getElementById('kpiDataAsOf');if(asOf)observer.observe(asOf,{childList:true,subtree:true,characterData:true});
-  window.LeaseQantDashboard={refresh,show:()=>show(true)};window.addEventListener('load',()=>setTimeout(()=>show(true),500));
+  window.LeaseQantDashboard={refresh,show:()=>show(true)};window.addEventListener('load',()=>setTimeout(()=>{window.LeaseQantMainView.showDefaultDashboard();refresh();},500));
 })();
 </script>
 

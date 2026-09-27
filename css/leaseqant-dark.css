@@ -1762,7 +1762,7 @@ img,svg,canvas{max-width:100%}
 .lq-mobile-nav-toggle{display:none!important}
 
 /* Medium desktop: preserve every primary destination, compact controls */
-@media(max-width:1220px){
+@media(max-width:1400px){
   .lq-topnav-shell{gap:12px;padding:0 14px!important}
   .lq-topnav > .nav-item,.lq-nav-trigger{padding:0 9px!important;font-size:10px!important}
   .lq-user-menu .user-meta{display:none}
