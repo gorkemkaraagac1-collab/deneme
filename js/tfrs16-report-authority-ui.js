@@ -94,14 +94,15 @@
   if(value&&typeof value==='object')return 'Teknik ayrıntıda';
   if(typeof value==='string'&&/^[A-Z][A-Z0-9_]+$/.test(value))return statusLabel(value);
   return value??'—';}
- function html(p,section='metrics',contractId) {requirePackage(p);const rows=rawRows(p,section,contractId),visibleRows=section==='controls'&&p.population.count===0?[]:rows;
+ function html(p,section='metrics',contractId) {requirePackage(p);const rows=rawRows(p,section,contractId),emptyMetricPopulation=section==='metrics'&&p.population.count===0,
+  visibleRows=(section==='controls'&&p.population.count===0)||emptyMetricPopulation?[]:rows;
   const keys=section==='metrics'?['metric','value','currency','status','coverage']:section==='controls'?['description','status']:Object.keys(visibleRows[0]||{});
   const labels={metric:'Gösterge',value:'Ham tutar',currency:'Para birimi',status:'Durum',coverage:'Kapsam',description:'Kontrol'};
   return `<h3>${esc(p.identity.companyName)} · ${esc(p.period.periodStart)} – ${esc(p.period.periodEnd)}</h3>
    <p role="status">${p.population.count===0?'Bu dönemde bu şirket için aktif sözleşme yok.':
     `${esc(statusLabel(p.population.coverage))} · ${p.population.count} sözleşme, ${p.population.includedCount} dahil, ${p.population.excludedCount} için kaynak hazır değil.`}</p>
    ${p.population.exclusions.map(r=>`<p>${esc(r.contractId)}: ${esc(reasonLabel(r.reason))}</p>`).join('')}
-   ${visibleRows.length?`<div class="lq-authority-table"><table><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${visibleRows.map(r=>`<tr>${keys.map(k=>`<td>${esc(shownCell(r[k],k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:
+   ${emptyMetricPopulation?'<p class="lq-authority-empty">Bu dönemde aktif sözleşme yok; finansal tutar gösterilmiyor.</p>':visibleRows.length?`<div class="lq-authority-table"><table><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${visibleRows.map(r=>`<tr>${keys.map(k=>`<td>${esc(shownCell(r[k],k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:
     '<p class="lq-authority-empty">Bu dönem için gösterilecek satır bulunmuyor.</p>'}
    ${p.population.count>0?`<p>Hesaplama kontrolleri: ${esc(statusLabel(p.controls.status))}. Kapanış veya canlı kayıt onayı değildir.</p>`:''}
    <details><summary>Teknik kaynak ayrıntıları</summary><pre>${esc(JSON.stringify({rows,unsupported:p.unsupported,controls:p.controls},null,2))}</pre></details>`;}

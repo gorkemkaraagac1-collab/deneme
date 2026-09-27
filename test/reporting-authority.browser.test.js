@@ -15,7 +15,7 @@ test.before(async()=>{
  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})});
 });
 test.after(async()=>{fs.writeFileSync('/tmp/report-auth-r1-browser-proof.json',JSON.stringify(evidence,null,2));await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));await pool.query('DELETE FROM user_companies WHERE user_id=$1',[uid]);await pool.query('DELETE FROM users WHERE id=$1',[uid]);await pool.end();});
-async function pageFor(name){const context=await browser.newContext({timezoneId:'Europe/Istanbul'}),page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,300));});page.on('requestfailed',r=>errors.push(new URL(r.url()).pathname+':'+r.failure()?.errorText));page.diagnosticErrors=errors;
+async function pageFor(name,{beforeNavigate}={}){const context=await browser.newContext({timezoneId:'Europe/Istanbul'}),page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,300));});page.on('requestfailed',r=>errors.push(new URL(r.url()).pathname+':'+r.failure()?.errorText));page.diagnosticErrors=errors;
  await page.addInitScript(({token,origin})=>{
   localStorage.setItem('access_token',token);sessionStorage.setItem('gk_session_token',token);window.LEASEQANT_API_BASE=origin;
   const NativeDate=Date;window.Date=class extends NativeDate{constructor(...a){super(...(a.length?a:['2026-01-17T10:00:00Z']));}static now(){return new NativeDate('2026-01-17T10:00:00Z').getTime();}};
@@ -25,8 +25,24 @@ async function pageFor(name){const context=await browser.newContext({timezoneId:
   const req=route.request(),url=new URL(req.url());const response=await context.request.fetch(origin+url.pathname+url.search,{method:req.method(),headers:req.headers(),data:req.postData()||undefined});const headers={...response.headers(),'access-control-allow-origin':origin,'access-control-allow-credentials':'true'};await route.fulfill({response,headers});
  });
  await page.route('https://cdn.jsdelivr.net/**',route=>route.abort());await page.route('https://cdnjs.cloudflare.com/**',route=>route.abort());
+ if(beforeNavigate)await beforeNavigate({page,context,origin,token});
  await page.goto(origin+'/'+name,{waitUntil:'domcontentloaded'});return {page,context};
 }
+test('API contract list renders while private calculations are still pending',async()=>{
+ let releasePrivate;const privateGate=new Promise(resolve=>{releasePrivate=resolve;});
+ let contractsResponse,calculationRequest;
+ const {page,context}=await pageFor('tfrs16.html',{beforeNavigate:async({page})=>{
+  contractsResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/contracts'&&response.ok());
+  calculationRequest=page.waitForRequest(request=>new URL(request.url()).pathname.startsWith('/api/calculations/'),{timeout:10000});
+  await page.route('**/api/calculations/**',async route=>{await privateGate;await route.continue();});
+ }});
+ try{
+  await Promise.all([contractsResponse,calculationRequest]);
+  await page.locator('#sidebarNav [data-view="contracts"]').click();
+  await page.locator('#contractsTableBody tr').first().waitFor({state:'visible',timeout:5000});
+  assert.ok((await page.locator('#contractsTableBody tr').count())>0,'Authenticated API contract list should render before private balances finish');
+ }finally{releasePrivate();await context.close();}
+});
 for(const name of ['dashboard.html','financial-decision-cockpit.html'])test('real browser '+name+' renders fresh authenticated local backend DTO and blocks mixed totals',async()=>{
  const {page,context}=await pageFor(name);await page.locator('[data-report-export="csv"]').waitFor();
  const single=proofs.find(p=>p.fixture==='single'),mixed=proofs.find(p=>p.fixture==='mixed');await page.locator('[data-report-company]').selectOption(single.body.companyId);
@@ -74,6 +90,7 @@ test('real authenticated navigation opens modification and each responsive KPI s
  await page.waitForFunction(text=>document.getElementById('lqTotalLiability')?.textContent===text,expected);
  await page.locator('#sidebarNav [data-view="contracts"]').click();
  assert.equal(await page.locator('#kpiLiability').innerText(),expected);
+ assert.ok((await page.locator('#contractsTableBody tr').count())>0,'Supported company contract should appear in the Contracts table');
  await page.locator('#v26ActiveCompanySelect').selectOption(zero.body.companyId);
  await page.waitForFunction(()=>document.getElementById('kpiLiability')?.textContent==='0 TRY');
  assert.equal(await page.locator('#kpiContractCount').innerText(),'0');
