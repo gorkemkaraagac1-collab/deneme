@@ -207,7 +207,7 @@ test('adapter errors preserve auth/scope/source status without a numeric fallbac
   const ui = window.LeaseQantTfrs16DisclosureUi;
   assert.equal(ui.errorLabel({ status: 401 }), 'Oturum açmanız gerekiyor.');
   assert.equal(ui.errorLabel({ status: 403 }), 'Bu şirketin dipnotlarına erişim yetkiniz yok.');
-  assert.equal(ui.errorLabel({ code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }), 'Güvenilir hesaplama kaynağı gerekli.');
+  assert.equal(ui.errorLabel({ code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }), 'Seçilen şirket ve dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Sözleşmenin varlığı tek başına dipnot kaynağı oluşturmaz.');
 });
 
 test('all three tabs render backend values; company and period controls reload the scoped package', async () => {

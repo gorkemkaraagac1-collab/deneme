@@ -107,7 +107,7 @@
     return `<div style="overflow-x:auto"><table class="gk-v26-table" style="width:100%"><thead><tr>`
       + `<th>Kalem</th><th style="text-align:right">Tutar</th><th>Durum</th></tr></thead><tbody>`
       + rows.map(row => `<tr><td>${escapeHtml(row.label)}${row.note ? `<small style="display:block;color:#64748b">${escapeHtml(row.note)}</small>` : ""}</td>`
-        + `<td style="text-align:right">${formatValue(row)}</td><td>${escapeHtml(STATUS_LABELS[row.status] || row.status)}</td></tr>`).join("")
+        + `<td style="text-align:right">${formatValue(row)}</td><td>${escapeHtml(STATUS_LABELS[row.status] || "Kaynak doğrulaması gerekli")}</td></tr>`).join("")
       + `</tbody></table></div>`;
   }
 
@@ -138,8 +138,9 @@
   function errorLabel(error) {
     if (error?.status === 401) return "Oturum açmanız gerekiyor.";
     if (error?.status === 403) return "Bu şirketin dipnotlarına erişim yetkiniz yok.";
-    if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" || error?.code === "DISCLOSURE_CALCULATION_SOURCE_MISMATCH"
-      || error?.code === "DISCLOSURE_SOURCE_HASH_INVALID") return "Güvenilir hesaplama kaynağı gerekli.";
+    if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return "Seçilen şirket ve dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Sözleşmenin varlığı tek başına dipnot kaynağı oluşturmaz.";
+    if (error?.code === "DISCLOSURE_CALCULATION_SOURCE_MISMATCH") return "Dipnot kaynağı ile doğrulanmış hesaplama kaydı uyuşmuyor.";
+    if (error?.code === "DISCLOSURE_SOURCE_HASH_INVALID") return "Dipnot kaynağının bütünlüğü doğrulanamadı.";
     if (error?.code === "DISCLOSURE_ENTITY_PROFILE_REQUIRED") return "Onaylı şirket para birimi profili gerekli.";
     if (error?.code === "DISCLOSURE_POPULATION_UNAVAILABLE" || error?.code === "DISCLOSURE_POPULATION_INVALID") {
       return "Bu dönem için uygun sözleşme kapsamı bulunamadı.";
@@ -224,7 +225,7 @@
       const rows = state.status === "ready" ? rowsForTab(state.pkg, state.tab) : [];
       const body = state.status === "loading" ? "<p>Güvenilir dipnot paketi yükleniyor…</p>"
         : state.status === "empty" ? "<p>Yetkili şirket bulunamadı.</p>"
-        : state.status === "error" ? `<p role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p>`
+        : state.status === "error" ? `<p role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p><details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
         : `${renderRows(rows)}<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureExport">↓ Dipnotu Dışa Aktar</button>`;
       const pkg = state.pkg;
       const source = pkg ? `<details style="margin-top:16px"><summary>Kaynak ve doğrulama bilgisi</summary>`

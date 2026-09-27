@@ -119,7 +119,7 @@
       JOURNAL_CURRENCY_SOURCE_EVIDENCE_NOT_READY:"Bu para birimi rotası için kaynak kanıtı hazır değil.",
       JOURNAL_ROUTE_SOURCE_EVIDENCE_NOT_READY:"Bu fiş rotası için kaynak kanıtı hazır değil.",
       JOURNAL_ROUTE_NOT_SUPPORTED:"Bu fiş rotası desteklenmiyor."};
-    return `<p role="alert">${escape(messages[code] || "Güvenilir yevmiye sonucu alınamadı.")} (${escape(code)})</p>`;
+    return `<p role="alert">${escape(messages[code] || "Güvenilir yevmiye sonucu alınamadı.")}</p><details><summary>Teknik ayrıntı</summary><code>${escape(code)}</code></details>`;
   }
   function serializedRows(packages) { return packages.flatMap(rowsForPackage); }
   function bulkRows() {
