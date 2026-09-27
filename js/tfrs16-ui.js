@@ -2019,7 +2019,7 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-  async function exportAuditTrail(contractId, presentationCurrency) {
+  async function legacyReportAuth_exportAuditTrail(contractId, presentationCurrency) {
     const events = getAuditTrail(contractId);
     if (!events.length) return false;
     const contract = contracts.find(c => String(c.id) === String(contractId));
@@ -2474,7 +2474,7 @@ window.fetch = (input, init = {}) => {
             <div>
               <h2 style="margin:0;font-size:20px;color:#0f172a;">Hesap Planı Eşleme</h2>
               <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-                Şirket bazlı hesap kodları. Yevmiye üretirken bu kodlar kullanılır.
+                Fişlerde sunucuda onaylanmış şirket hesap planı kullanılır. Bu ekrandaki yerel eşlemeler fişlere uygulanmaz.
               </p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -5827,7 +5827,7 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-  function calculateCurrentLiabilityAsOf(
+  function legacyReportAuth_calculateCurrentLiabilityAsOf(
     contract,
     reportingDate
   ) {
@@ -5838,7 +5838,7 @@ window.fetch = (input, init = {}) => {
     ).current;
   }
 
-  function calculateNonCurrentLiabilityAsOf(
+  function legacyReportAuth_calculateNonCurrentLiabilityAsOf(
     contract,
     reportingDate
   ) {
@@ -5849,7 +5849,7 @@ window.fetch = (input, init = {}) => {
     ).nonCurrent;
   }
 
-  function calculateNext12Months(
+  function legacyReportAuth_calculateNext12Months(
     contract,
     reportingDate
   ) {
@@ -5985,7 +5985,7 @@ window.fetch = (input, init = {}) => {
     return { date: latest, usedFallback: latest !== requestedKey };
   }
 
-  function updateKPIs() {
+  function legacyReportAuth_updateKPIs() {
 
     // updateKPIs() is also called directly by backend hydration and legacy
     // UI bridges, so the refresh() guard alone is not sufficient. Keep every
@@ -6203,7 +6203,7 @@ window.fetch = (input, init = {}) => {
   // error is misleading: there is no calculation failure, only data that is
   // still being fetched. Keep the count visible and give the amount cards an
   // explicit loading state until the authoritative private results are ready.
-  function setKpiPendingState() {
+  function legacyReportAuth_setKpiPendingState() {
     const activeCount = Array.isArray(contracts)
       ? contracts.filter(c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE").length
       : 0;
@@ -6277,7 +6277,7 @@ window.fetch = (input, init = {}) => {
   let tableCurrentPage = 1;
   const TABLE_PAGE_SIZE = 50;
 
-  function formatPortfolioAmount(value, currency, presentationCurrency) {
+  function legacyReportAuth_formatPortfolioAmount(value, currency, presentationCurrency) {
     const code = String(currency || "").trim().toUpperCase();
     const target = String(presentationCurrency || getReportingCurrency() || "TRY").trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(code) || !/^[A-Z]{3}$/.test(target)) return "Para birimi eksik/geçersiz";
@@ -8663,7 +8663,387 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  async function generateSelectedJournal(
+  // Active journal boundaries use only verified, server-owned complete DTOs.
+  // Legacy definitions below are retained for source history, never selected
+  // by API readiness, currency, bulk, closing or a feature flag.
+
+  // REPORT-AUTH-R1 active boundaries. Retained legacy report functions cannot
+  // become a source when the server, profile or route is unavailable.
+  function renderPaymentScheduleSection() { return '<div data-authoritative-report-schedule>Güvenilir raporlama kaynağı yükleniyor...</div>'; }
+  function renderContractAuditTab() { return '<div data-authoritative-report-audit>Sunucudaki olaylar yükleniyor...</div>'; }
+  function getFutureLeasesKPI() { return {value:null,status:"NOT_READY",reason:"SOURCE_BOUND_COMMITMENT_REPORT_REQUIRED"}; }
+  function updateFutureLeaseKPI() { setText("futureLeasesKPI","NOT_READY"); }
+  function v26ConvertScheduleToPresentation() { return reportingAuthorityUnavailable(); }
+  function v26ConvertToPresentation() { return reportingAuthorityUnavailable(); }
+  function v26RenderConsolidationReportBody() { return reportingAuthorityUnavailable(); }
+  function v26RenderAuditTrailBody() { return reportingAuthorityUnavailable(); }
+  function convertAmountToReportingCurrency() { return reportingAuthorityUnavailable(); }
+  function formatPortfolioAmount(value,currency,presentationCurrency) {
+    const code=String(currency||"").trim().toUpperCase();
+    if(!/^[A-Z]{3}$/.test(code)||value===null||value===""||!Number.isFinite(Number(value)))return "Tutar/para birimi eksik";
+    if(presentationCurrency&&String(presentationCurrency).toUpperCase()!==code)return "REPORTING_CURRENCY_SOURCE_REQUIRED";
+    return new Intl.NumberFormat("tr-TR",{style:"currency",currency:code,maximumFractionDigits:2}).format(Number(value));
+  }
+  function buildReportHtml() { return reportingAuthorityUnavailable(); }
+  function v191ComputePrivatePortfolioTms29() { return reportingAuthorityUnavailable(); }
+  function v191PrepareFinancialReportingData() { return reportingAuthorityUnavailable(); }
+  function v191GroupRollForwardByCurrency() { return reportingAuthorityUnavailable(); }
+  function v191GroupRollForwardByAssetClass() { return reportingAuthorityUnavailable(); }
+  function v191GroupRollForwardByDimension() { return reportingAuthorityUnavailable(); }
+  function v191RenderAssetNoteHtml() { return reportingAuthorityUnavailable(); }
+  function v191RenderLiabilityNoteHtml() { return reportingAuthorityUnavailable(); }
+  function v191RenderLiquidityNoteHtml() { return reportingAuthorityUnavailable(); }
+  function v23ExportRows() { return reportingAuthorityUnavailable(); }
+  function calculateFxGainLoss() { return reportingAuthorityUnavailable(); }
+  function calculateVariance() { return reportingAuthorityUnavailable(); }
+  function calculateVariancePercent() { return reportingAuthorityUnavailable(); }
+  function calculateDriverModel() { return reportingAuthorityUnavailable(); }
+  function calculateScenario() { return reportingAuthorityUnavailable(); }
+  function calculateCurrentLiabilityAsOf() { return reportingAuthorityUnavailable(); }
+  function calculateNonCurrentLiabilityAsOf() { return reportingAuthorityUnavailable(); }
+  function calculateNext12Months() { return reportingAuthorityUnavailable(); }
+  function getErpReadyContractData(date) { const ui=reportAuthorityUi();return ui.rawRows(ui.read(date),"contracts"); }
+  function reportingAuthorityUnavailable() {
+    const error = new Error("REPORTING_AUTHORITY_UNAVAILABLE");
+    error.code = "REPORTING_AUTHORITY_UNAVAILABLE";
+    throw error;
+  }
+  function reportAuthorityUi() {
+    const ui = window.LeaseQantReportingAuthorityUi;
+    if (!ui) reportingAuthorityUnavailable();
+    return ui;
+  }
+  function updateKPIs() { return reportAuthorityUi().dashboard(); }
+  function setKpiPendingState() {
+    ["contractCount","leaseLiability","rouAssets","currentLiability","next12Months","monthlyInterest","monthlyDepreciation"].forEach(id=>setText(id,"Yükleniyor…"));
+  }
+  function renderCloseDashboardPage(container) { return reportAuthorityUi().page(container,"Ay Sonu — Backend Hesaplama Kontrolleri","controls"); }
+  function renderConsolidationReportPage(container) {
+    if (container) container.innerHTML = '<p role="status">Konsolidasyon raporu hazır değil: SOURCE_BOUND_CONSOLIDATION_REQUIRED</p>';
+  }
+  function renderAuditTrailPage(container) { return reportAuthorityUi().page(container,"Sunucuda Saklanan Olaylar","audit"); }
+  function openReportingAuthority(title,section="metrics") {
+    const target=document.getElementById("mainContent") || document.querySelector("main") || document.getElementById("content");
+    if (!target) reportingAuthorityUnavailable();
+    return reportAuthorityUi().page(target,title,section);
+  }
+  async function contractReportingPackage(contractId) {
+    const contract=contracts.find(row=>String(row.id)===String(contractId));
+    if (!contract?.companyId) reportingAuthorityUnavailable();
+    const ui=reportAuthorityUi();
+    const pkg=await ui.load({companyId:contract.companyId,...ui.defaultPeriod()});
+    if (!pkg.population.contractIds.includes(String(contractId))) reportingAuthorityUnavailable();
+    return pkg;
+  }
+  async function exportAuditTrail(contractId) {
+    const ui=reportAuthorityUi(),pkg=contractId?await contractReportingPackage(contractId):ui.read();
+    return ui.exportPackage(pkg,window.XLSX?"xlsx":"csv","audit",contractId);
+  }
+  async function exportControlResults(contractId) {
+    const ui=reportAuthorityUi(),pkg=contractId?await contractReportingPackage(contractId):ui.read();
+    return ui.exportPackage(pkg,window.XLSX?"xlsx":"csv","controls",contractId);
+  }
+  function exportControlResultsAsCfoData(date) { const ui=reportAuthorityUi();return ui.rawRows(ui.read(date),"controls"); }
+  async function exportPaymentSchedule(contract) {
+    const ui=reportAuthorityUi();return ui.exportPackage(await contractReportingPackage(contract.id),window.XLSX?"xlsx":"csv","schedule",contract.id);
+  }
+  async function exportReport(contractId,format) {
+    const ui=reportAuthorityUi();return ui.exportPackage(await contractReportingPackage(contractId),format||"html","metrics",contractId);
+  }
+  function v20GetDatabaseModel() {
+    const ui=reportAuthorityUi(),pkg=ui.read();
+    const journal=window.LeaseQantTfrs16JournalUi?.databasePreview() || {status:"JOURNAL_AUTHORITY_UNAVAILABLE",journals:[],journalLines:[]};
+    return {schemaVersion:"REPORTING_AUTHORITY_DATABASE_VIEW_V1",reportingIdentity:pkg.identity,period:pkg.period,population:pkg.population,
+      reportingMetrics:ui.rawRows(pkg),contracts:ui.rawRows(pkg,"contracts"),schedules:ui.rawRows(pkg,"schedule"),
+      controls:ui.rawRows(pkg,"controls"),auditEvents:ui.rawRows(pkg,"audit"),journals:journal.journals,journalLines:journal.journalLines,
+      journalAuthorityStatus:journal.status};
+  }
+  function exportDatabaseReadyData() { return v20GetDatabaseModel(); }
+  function v191OpenFinancialReporting() { return openReportingAuthority("Finansal Raporlama","metrics"); }
+  function v191OpenRiskControls() { return openReportingAuthority("Backend Kontrolleri","controls"); }
+  function v191OpenMonthEndClose() { return openReportingAuthority("Ay Sonu Hesaplama Kontrolleri","controls"); }
+  function v191OpenCfoDashboard() { return openReportingAuthority("CFO — Kiralama Raporu","metrics"); }
+  function v191OpenIntegration() { return openReportingAuthority("Backend Raporlama Verisi","metrics"); }
+  function v191OpenReconciliation() { return openReportingAuthority("Backend Kontrolleri","controls"); }
+  function v191OpenContractTools() { return openReportingAuthority("Backend Sözleşme Raporu","metrics"); }
+  function cfoAggregateRows() { return reportingAuthorityUnavailable(); }
+  function cfoGetContractMetricsInternal() { return reportingAuthorityUnavailable(); }
+  function cfoPeriodMetrics() { return reportingAuthorityUnavailable(); }
+  function exportBudget() { return reportingAuthorityUnavailable(); }
+  function exportConsolidation() { return reportingAuthorityUnavailable(); }
+  function exportEliminations() { return reportingAuthorityUnavailable(); }
+  function exportForecast() { return reportingAuthorityUnavailable(); }
+  function exportFxExposure() { return reportingAuthorityUnavailable(); }
+  function exportFxGainLoss() { return reportingAuthorityUnavailable(); }
+  function exportFxRates() { return reportingAuthorityUnavailable(); }
+  function exportFxReconciliation() { return reportingAuthorityUnavailable(); }
+  function exportFxTranslation() { return reportingAuthorityUnavailable(); }
+  function exportGroupDatabaseReady() { return reportingAuthorityUnavailable(); }
+  function exportGroupReport() { return reportingAuthorityUnavailable(); }
+  function exportIntercompanyReconciliation() { return reportingAuthorityUnavailable(); }
+  function exportLeaseLiabilityMovementNote() { return reportingAuthorityUnavailable(); }
+  function exportLeaseLiquidityRiskNote() { return reportingAuthorityUnavailable(); }
+  function exportModificationsForDatabase() { return reportingAuthorityUnavailable(); }
+  function exportPlanningData() { return reportingAuthorityUnavailable(); }
+  function exportReassessmentsForDatabase() { return reportingAuthorityUnavailable(); }
+  function exportRiskSummary() { return reportingAuthorityUnavailable(); }
+  function exportRouAssetMovementNote() { return reportingAuthorityUnavailable(); }
+  function exportScenario() { return reportingAuthorityUnavailable(); }
+  function exportSchedulesForDatabase() { return reportingAuthorityUnavailable(); }
+  function exportTms29InflationNote() { return reportingAuthorityUnavailable(); }
+  function getActiveContractCount() { return reportingAuthorityUnavailable(); }
+  function getActualPlanningData() { return reportingAuthorityUnavailable(); }
+  function getActualPlusRemainingBudgetForecast() { return reportingAuthorityUnavailable(); }
+  function getAnnualLeaseReport() { return reportingAuthorityUnavailable(); }
+  function getAuditTrailReport() { return reportingAuthorityUnavailable(); }
+  function getBudget() { return reportingAuthorityUnavailable(); }
+  function getBudgetVersion() { return reportingAuthorityUnavailable(); }
+  function getBudgetVersions() { return reportingAuthorityUnavailable(); }
+  function getCashBridge() { return reportingAuthorityUnavailable(); }
+  function getCfoAggregateMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoAlerts() { return reportingAuthorityUnavailable(); }
+  function getCfoApprovalReadiness() { return reportingAuthorityUnavailable(); }
+  function getCfoAuditMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoCompanyDashboard() { return reportingAuthorityUnavailable(); }
+  function getCfoCompanyMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoContractMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoContractView(date) { return reportAuthorityUi().read(date); }
+  function getCfoCurrencyExposure() { return reportingAuthorityUnavailable(); }
+  function getCfoCurrencyMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoDashboardData(date) { return reportAuthorityUi().read(date); }
+  function getCfoDecisionFacts() { return reportingAuthorityUnavailable(); }
+  function getCfoExecutiveSnapshot(date) { return reportAuthorityUi().read(date); }
+  function getCfoJournalMetrics() { return reportingAuthorityUnavailable(); }
+  function getCfoKpis() { return reportingAuthorityUnavailable(); }
+  function getCfoMetricsByCompany() { return reportingAuthorityUnavailable(); }
+  function getCfoPeriodSummary(date) { return reportAuthorityUi().read(date); }
+  function getCfoScorecard() { return reportingAuthorityUnavailable(); }
+  function getCfoTopRisks() { return reportingAuthorityUnavailable(); }
+  function getCloseApprovalReadiness() { return reportingAuthorityUnavailable(); }
+  function getCloseBlockers() { return reportingAuthorityUnavailable(); }
+  function getCloseReadiness() { return reportingAuthorityUnavailable(); }
+  function getCompanyExposureReport(date) { return reportAuthorityUi().read(date); }
+  function getCompanyMaturityAnalysis() { return reportingAuthorityUnavailable(); }
+  function getCompanyMonthEndCloseStatus() { return reportingAuthorityUnavailable(); }
+  function getCompanyPlanningContribution() { return reportingAuthorityUnavailable(); }
+  function getConsolidatedData() { return reportingAuthorityUnavailable(); }
+  function getConsolidationReports() { return reportingAuthorityUnavailable(); }
+  function getContractControlResults() { return reportingAuthorityUnavailable(); }
+  function getContractExpiryReport() { return reportingAuthorityUnavailable(); }
+  function getContractMaturityAnalysis() { return reportingAuthorityUnavailable(); }
+  function getContractsExpiringWithin() { return reportingAuthorityUnavailable(); }
+  function getContractsExpiringWithin12Months() { return reportingAuthorityUnavailable(); }
+  function getContractsRequiringAttention() { return reportingAuthorityUnavailable(); }
+  function getControlExceptionReport() { return reportingAuthorityUnavailable(); }
+  function getControlRiskRows() { return reportingAuthorityUnavailable(); }
+  function getControlSummary() { return reportingAuthorityUnavailable(); }
+  function getControlSummaryReport() { return reportingAuthorityUnavailable(); }
+  function getCriticalControls() { return reportingAuthorityUnavailable(); }
+  function getCriticalExceptionsCfo() { return reportingAuthorityUnavailable(); }
+  function getCurrencyExposureReport(date) { return reportAuthorityUi().read(date); }
+  function getCurrencyMonthEndCloseStatus() { return reportingAuthorityUnavailable(); }
+  function getCurrentLeaseLiability() { return reportingAuthorityUnavailable(); }
+  function getCurrentNonCurrentReport(date) { return reportAuthorityUi().read(date); }
+  function getDepreciationExpense() { return reportingAuthorityUnavailable(); }
+  function getDepreciationReport() { return reportingAuthorityUnavailable(); }
+  function getEbitdaBridge() { return reportingAuthorityUnavailable(); }
+  function getEffectiveSchedule() { return reportingAuthorityUnavailable(); }
+  function getEliminations() { return reportingAuthorityUnavailable(); }
+  function getErpReadyPaymentData() { return reportingAuthorityUnavailable(); }
+  function getExpiredContractCount() { return reportingAuthorityUnavailable(); }
+  function getForecast() { return reportingAuthorityUnavailable(); }
+  function getFxCfoDashboardData() { return reportingAuthorityUnavailable(); }
+  function getFxConsolidatedData() { return reportingAuthorityUnavailable(); }
+  function getFxConsolidationReports() { return reportingAuthorityUnavailable(); }
+  function getFxControlStatus() { return reportingAuthorityUnavailable(); }
+  function getFxDataQualityStatus() { return reportingAuthorityUnavailable(); }
+  function getFxExposure() { return reportingAuthorityUnavailable(); }
+  function getFxReports() { return reportingAuthorityUnavailable(); }
+  function getGroupCfoDashboardData() { return reportingAuthorityUnavailable(); }
+  function getGroupCloseStatus() { return reportingAuthorityUnavailable(); }
+  function getGroupControlStatus() { return reportingAuthorityUnavailable(); }
+  function getGroupPlanningData() { return reportingAuthorityUnavailable(); }
+  function getHighExposureContracts() { return reportingAuthorityUnavailable(); }
+  function getIntegrationExportData(type,date,options={}) {
+    const kind=String(type||"ALL").toUpperCase();
+    if(kind==="JOURNAL"||kind==="ERP_JOURNAL")return getErpReadyJournalData(date,options);
+    const ui=reportAuthorityUi(),pkg=ui.read(date);
+    if(kind==="AUDIT")return ui.rawRows(pkg,"audit");
+    if(kind==="PAYMENT"||kind==="ERP_PAYMENT")return ui.rawRows(pkg,"schedule");
+    return pkg;
+  }
+  function getInterestExpense() { return reportingAuthorityUnavailable(); }
+  function getInterestExpenseReport() { return reportingAuthorityUnavailable(); }
+  function getJournalSummaryReport() { return reportingAuthorityUnavailable(); }
+  function getLeaseBalanceSheetImpact(date) { return reportAuthorityUi().read(date); }
+  function getLeaseCashFlowMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseCashFlowReport() { return reportingAuthorityUnavailable(); }
+  function getLeaseContractExpiryReport() { return reportingAuthorityUnavailable(); }
+  function getLeaseContractRegister(date) { return reportAuthorityUi().read(date); }
+  function getLeaseControlMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseLiabilityMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseLiabilityRollForward() { return reportingAuthorityUnavailable(); }
+  function getLeaseLiabilityRollForwardReport() { return reportingAuthorityUnavailable(); }
+  function getLeaseLiquidityRiskDisclosure() { return reportingAuthorityUnavailable(); }
+  function getLeaseModificationMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeasePaymentMaturityAnalysis(date) { return reportAuthorityUi().read(date).unsupported.maturityBands; }
+  function getLeaseProfitLossImpact(date) { return reportAuthorityUi().read(date); }
+  function getLeaseReassessmentMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseRenewalMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseRiskMetrics() { return reportingAuthorityUnavailable(); }
+  function getLeaseRouRollForward() { return reportingAuthorityUnavailable(); }
+  function getLiquidityPressureContracts() { return reportingAuthorityUnavailable(); }
+  function getManagementSummary(date) { return reportAuthorityUi().read(date); }
+  function getMaterialVariances() { return reportingAuthorityUnavailable(); }
+  function getModificationReport() { return reportingAuthorityUnavailable(); }
+  function getMonthEndCloseChecklist() { return reportingAuthorityUnavailable(); }
+  function getMonthEndCloseDashboardData() { return reportingAuthorityUnavailable(); }
+  function getMonthEndCloseStatus() { return reportingAuthorityUnavailable(); }
+  function getMonthEndCloseSummary() { return reportingAuthorityUnavailable(); }
+  function getMonthlyLeaseExpense() { return reportingAuthorityUnavailable(); }
+  function getMonthlyLeaseMetrics() { return reportingAuthorityUnavailable(); }
+  function getMonthlyLeaseReport() { return reportingAuthorityUnavailable(); }
+  function getNonCurrentLeaseLiability() { return reportingAuthorityUnavailable(); }
+  function getOpenExceptionsCfo() { return reportingAuthorityUnavailable(); }
+  function getPeriodicLeaseReport() { return reportingAuthorityUnavailable(); }
+  function getPlanningCashForecast() { return reportingAuthorityUnavailable(); }
+  function getPlanningCfoDashboardData() { return reportingAuthorityUnavailable(); }
+  function getPlanningControlStatus() { return reportingAuthorityUnavailable(); }
+  function getPlanningDataQualityStatus() { return reportingAuthorityUnavailable(); }
+  function getPlanningDrivers() { return reportingAuthorityUnavailable(); }
+  function getPlanningLine() { return reportingAuthorityUnavailable(); }
+  function getPlanningLines() { return reportingAuthorityUnavailable(); }
+  function getPlanningVarianceReport() { return reportingAuthorityUnavailable(); }
+  function getPlanningVersion() { return reportingAuthorityUnavailable(); }
+  function getQuarterlyLeaseReport() { return reportingAuthorityUnavailable(); }
+  function getReassessmentReport() { return reportingAuthorityUnavailable(); }
+  function getRenewalRiskReport() { return reportingAuthorityUnavailable(); }
+  function getRevenueBridge() { return reportingAuthorityUnavailable(); }
+  function getRiskSummary() { return reportingAuthorityUnavailable(); }
+  function getRunRateForecast() { return reportingAuthorityUnavailable(); }
+  function getRuoAssetRollForward() { return reportingAuthorityUnavailable(); }
+  function getRuoAssetRollForwardReport() { return reportingAuthorityUnavailable(); }
+  function getScenarios() { return reportingAuthorityUnavailable(); }
+  function getTerminatedContractCount() { return reportingAuthorityUnavailable(); }
+  function getTfrs16CfoMetrics(date) { return reportAuthorityUi().read(date); }
+  function getTfrs16CfoSnapshot(date) { return reportAuthorityUi().read(date); }
+  function getTfrs16FinancialReportingSnapshot(date) { return reportAuthorityUi().read(date); }
+  function getTfrs16ReportingReconciliation() { return reportingAuthorityUnavailable(); }
+  function getTotalContractCount() { return reportingAuthorityUnavailable(); }
+  function getTotalLeaseLiability() { return reportingAuthorityUnavailable(); }
+  function getTotalRuoAssets() { return reportingAuthorityUnavailable(); }
+  function getTrendForecast() { return reportingAuthorityUnavailable(); }
+  function getUpcomingRenewals() { return reportingAuthorityUnavailable(); }
+  function getV22DataHealth() { return reportingAuthorityUnavailable(); }
+  function getV23DatabaseModel() { return reportingAuthorityUnavailable(); }
+  function getVarianceStatus() { return reportingAuthorityUnavailable(); }
+  function getWeightedAverageDiscountRate(date) { return reportAuthorityUi().read(date).unsupported.weightedAverageDiscountRate; }
+  function runContractControls() { return reportingAuthorityUnavailable(); }
+  function v191RenderCfo() { return reportingAuthorityUnavailable(); }
+  function v191RenderClose() { return reportingAuthorityUnavailable(); }
+  function v191RenderContractTools() { return reportingAuthorityUnavailable(); }
+  function v191RenderFinancialReporting() { return reportingAuthorityUnavailable(); }
+  function v191RenderFinancialReportingPrivate() { return reportingAuthorityUnavailable(); }
+  function v191RenderIntegration() { return reportingAuthorityUnavailable(); }
+  function v191RenderReconciliation() { return reportingAuthorityUnavailable(); }
+  function v191RenderRiskControls() { return reportingAuthorityUnavailable(); }
+  function v22RunConsolidation() { return reportingAuthorityUnavailable(); }
+  function v22RunIntercompanyReconciliation() { return reportingAuthorityUnavailable(); }
+  function v26BuildConsolidationRows() { return reportingAuthorityUnavailable(); }
+  function v26ConvertJsonMoneyToPresentation() { return reportingAuthorityUnavailable(); }
+  function v26ExportConsolidationExcel() { return reportingAuthorityUnavailable(); }
+
+  function journalAuthorityUnavailable() {
+    const error = new Error("Güvenilir yevmiye servisi hazır değil");
+    error.code = "JOURNAL_AUTHORITY_UNAVAILABLE";
+    throw error;
+  }
+
+  async function generateSelectedJournal(contract) {
+    const control = id => {
+      const elements = Array.from(document.querySelectorAll("#" + id));
+      return elements.find(el => el.offsetParent !== null) || elements[0];
+    };
+    const preview = document.getElementById("journalPreview");
+    const ui = window.LeaseQantTfrs16JournalUi;
+    try {
+      if (!ui) journalAuthorityUnavailable();
+      if (preview) preview.innerHTML = "<p>Güvenilir yevmiye yükleniyor...</p>";
+      const year = Number(control("accountingYear")?.value);
+      const period = control("accountingPeriod")?.value;
+      const month = Number(control("accountingMonth")?.value);
+      const range = period === "custom"
+        ? {periodStart:parseDate(control("accountingCustomStart")?.value),periodEnd:parseDate(control("accountingCustomEnd")?.value)}
+        : getBulkJournalPeriodDates(year,period,month);
+      if (!range?.periodStart || !range?.periodEnd) throw new Error("Geçerli raporlama dönemi gerekiyor");
+      const pkg = await ui.loadSingle(contract,{kind:period === "closing" ? "RECLASSIFICATION" : "PERIOD",
+        periodStart:v23DateKey(range.periodStart),periodEnd:v23DateKey(range.periodEnd)});
+      ui.renderInto(preview,[pkg]);
+      return pkg;
+    } catch(error) {
+      if (preview) preview.innerHTML = ui?.errorHtml(error) || '<p role="alert">JOURNAL_AUTHORITY_UNAVAILABLE</p>';
+      return null;
+    }
+  }
+
+  async function generateBulkJournals() {
+    const ui = window.LeaseQantTfrs16JournalUi;
+    const preview = document.getElementById("bulkJournalPreview");
+    const summary = document.getElementById("bulkJournalSummary");
+    const exportButton = document.getElementById("exportBulkJournals");
+    bulkJournalData = [];
+    if (exportButton) exportButton.disabled = true;
+    if (preview) preview.innerHTML = "<p>Güvenilir yevmiye yükleniyor...</p>";
+    if (summary) summary.innerHTML = "";
+    try {
+      if (!ui) journalAuthorityUnavailable();
+      ui.clearBulk();
+      const year = Number(document.getElementById("bulkAccountingYear")?.value);
+      const period = document.getElementById("bulkAccountingPeriod")?.value;
+      const month = Number(document.getElementById("bulkAccountingMonth")?.value);
+      const range = period === "custom" ? getBulkJournalDateRange() : getBulkJournalPeriodDates(year,period,month);
+      if (!range) throw new Error("Geçerli raporlama dönemi gerekiyor");
+      const packages = await ui.loadBulk(contracts.filter(contract=>contract.status === "active"),{
+        kind:period === "closing" ? "RECLASSIFICATION" : "PERIOD",
+        periodStart:v23DateKey(range.periodStart),periodEnd:v23DateKey(range.periodEnd),
+        displayReference:document.getElementById("bulkVoucherNumber")?.value?.trim() || "",
+        description:document.getElementById("bulkVoucherDescription")?.value?.trim() || "TFRS 16 sözleşmesel önizleme"});
+      // Compatibility reporting caches retain server vouchers; no browser
+      // accounting, account mapping, numbering or totals are created here.
+      bulkJournalData = packages.flatMap(pkg=>pkg.vouchers.map(voucher=>({...voucher,
+        entries:voucher.lines,voucherDate:voucher.postingDate,journalType:voucher.eventType})));
+      const voucherDate = document.getElementById("bulkVoucherDate");
+      if (voucherDate) voucherDate.value = packages[0]?.vouchers[0]?.postingDate || "";
+      if (summary) summary.innerHTML = packages.map(pkg=>`<p>${escapeHtml(pkg.companyId)} · ${pkg.voucherCount} fiş · ${pkg.balancedCount} dengeli</p>`).join("");
+      ui.renderInto(preview,packages);
+      if (exportButton) { exportButton.disabled = false;exportButton.style.opacity = "1"; }
+      return packages;
+    } catch(error) {
+      ui?.clearBulk();
+      if (summary) summary.innerHTML = "";
+      if (preview) preview.innerHTML = ui?.errorHtml(error) || '<p role="alert">JOURNAL_AUTHORITY_UNAVAILABLE</p>';
+      return null;
+    } finally { hideLoading(); }
+  }
+
+  function exportBulkJournals(format) {
+    const ui = window.LeaseQantTfrs16JournalUi;
+    if (!ui) journalAuthorityUnavailable();
+    return ui.exportBulk(typeof format === "string" ? format : "xlsx");
+  }
+
+  function exportJournalEntries(pkg,meta = {},format = "xlsx") {
+    const ui = window.LeaseQantTfrs16JournalUi;
+    if (!ui) journalAuthorityUnavailable();
+    // Unverified legacy arrays cannot be promoted to accounting authority.
+    return ui.exportPackages([pkg],format);
+  }
+
+  function renderBulkJournalResults() {
+    window.LeaseQantTfrs16JournalUi?.renderBulk(document.getElementById("bulkJournalPreview"));
+  }
+
+  async function legacyGenerateSelectedJournal(
     contract
   ) {
     const visibleAccountingControl = id => {
@@ -9911,12 +10291,12 @@ ${renderAccountingCenterBulkPromo()}
    * edilmiş, hiçbir karakter eklenmeden/çıkarılmadan) geri
    * koyuyor — bkz. PROJECT_CONTEXT.md bölüm 36.
    */
-  function renderPaymentScheduleSection(contract) {
+  function legacyReportAuth_renderPaymentScheduleSection(contract) {
     const renderer = window.LeaseQantTfrs16OperationsUi?.renderPaymentScheduleSection;
     return typeof renderer === "function" ? renderer(contract) : "";
   }
 
-  function renderContractAuditTab(contract, events) {
+  function legacyReportAuth_renderContractAuditTab(contract, events) {
     const renderer = window.LeaseQantTfrs16ReportingUi?.renderContractAuditTab;
     return typeof renderer === "function"
       ? renderer(contract, events)
@@ -10601,7 +10981,7 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  async function exportPaymentSchedule(contract, presentationCurrency) {
+  async function legacyReportAuth_exportPaymentSchedule(contract, presentationCurrency) {
 
     presentationCurrency = String(presentationCurrency || document.getElementById("schedulePresentationCurrency")?.value || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
 
@@ -10785,28 +11165,10 @@ ${renderAccountingCenterBulkPromo()}
         "detailContent"
       );
 
-    // Journal preview can require an FX rate even when the private
-    // calculation result is already cached. Keep the detail modal usable
-    // when that auxiliary preview cannot be generated yet.
-    let initialJournalEntries = null;
-    let initialJournalCurrency = resolveContractFunctionalCurrency(contract) || contract.currency || "TRY";
-    if (!calculationError && !engine.exempt) {
-      try {
-        initialJournalEntries = generateInitialEntryForFunctionalCurrency(contract);
-      } catch (error) {
-        // Private calculation is already available here. Functional-currency
-        // journal conversion is an auxiliary presentation layer and may lack
-        // a historical FX row, so do not surface a false private-result error
-        // for the entire detail modal. Keep the opening journal in its
-        // transaction currency until the FX history is completed.
-        try {
-          initialJournalEntries = generateInitialEntry(contract);
-          initialJournalCurrency = String(contract.currency || "TRY").toUpperCase();
-        } catch (_) {
-          initialJournalEntries = [];
-        }
-      }
-    }
+    // Initial journal is loaded separately from a persisted server source.
+    // No nominal or FX browser fallback is permitted.
+    const initialJournalEntries = [];
+    const initialJournalCurrency = contract.currency;
 
     if (title) {
       // FAZ C: başlıkta sadece sözleşme ID'si vardı — kullanıcı hangi
@@ -10852,7 +11214,6 @@ ${renderAccountingCenterBulkPromo()}
         renderContractStandardsPanel,
         v26StandardsBadgeHtml,
         renderPaymentScheduleSection,
-        renderJournalEntry,
         renderModificationManagementSection,
         renderReassessmentManagementSection,
         renderAccountingCenter,
@@ -10879,6 +11240,15 @@ ${renderAccountingCenterBulkPromo()}
     modal?.classList.remove(
       "hidden"
     );
+    window.LeaseQantReportingAuthorityUi?.renderContractDetails(content,contract);
+    const initialTarget = content?.querySelector("[data-authoritative-initial-journal]");
+    const journalUi = window.LeaseQantTfrs16JournalUi;
+    if (initialTarget && journalUi) {
+      journalUi.loadSingle(contract,{kind:"INITIAL",periodStart:contract.startDate,periodEnd:contract.startDate})
+        .then(pkg=>{ if (selectedContractId === contract.id && initialTarget.isConnected) journalUi.renderInto(initialTarget,[pkg]); })
+        .catch(error=>{ if (initialTarget.isConnected) initialTarget.innerHTML = journalUi.errorHtml(error); });
+    } else if (initialTarget) initialTarget.innerHTML = '<p role="alert">JOURNAL_AUTHORITY_UNAVAILABLE</p>';
+
 
     // Read-only summary/report consumers use the same stable result envelope
     // as the payment-plan tab. If the portfolio warm-up has not completed by
@@ -11239,6 +11609,8 @@ ${renderAccountingCenterBulkPromo()}
               <input
                 id="bulkVoucherDate"
                 type="date"
+                readonly
+                title="Fiş tarihi doğrulanmış dönem fişinden gelir."
                 style="
                   width:100%;
                   padding:9px;
@@ -11271,7 +11643,7 @@ ${renderAccountingCenterBulkPromo()}
                   margin-bottom:7px;
                 "
               >
-                Fiş No Başlangıç
+                Önizleme Referansı (defter numarası değildir)
               </label>
 
               <input
@@ -12021,7 +12393,7 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  async function generateBulkJournals() {
+  async function legacyGenerateBulkJournals() {
 
     const year = Number(document.getElementById("bulkAccountingYear")?.value);
     const period = document.getElementById("bulkAccountingPeriod")?.value;
@@ -12856,7 +13228,7 @@ ${renderAccountingCenterBulkPromo()}
    * tablosu) DOM'a yazar. PUBLIC API imzası HİÇ DEĞİŞMEDİ. İçi 3 alt
    * fonksiyona bölündü (Faz 3 — SRP) — bkz. PROJECT_CONTEXT.md bölüm 36.
    */
-  function renderBulkJournalResults() {
+  function legacyRenderBulkJournalResults() {
 
     const summary =
       document.getElementById(
@@ -12993,7 +13365,7 @@ ${renderAccountingCenterBulkPromo()}
      EXCEL EXPORT
   ========================================================== */
 
-  function exportBulkJournals(format) {
+  function legacyExportBulkJournals(format) {
     // format: "xlsx" | "csv" | "txt" | "logo" | "mikro"  (default xlsx)
     format = String(format || "xlsx").toLowerCase();
 
@@ -13223,7 +13595,7 @@ ${renderAccountingCenterBulkPromo()}
    * @param {Object} meta - { voucherNo, voucherDate, contractId, company, description, companyId }
    * @param {string} format - xlsx | csv | txt | logo | mikro
    */
-  function exportJournalEntries(entries, meta = {}, format = "xlsx") {
+  function legacyExportJournalEntries(entries, meta = {}, format = "xlsx") {
     if (!Array.isArray(entries) || !entries.length) {
       if (typeof showAlert === "function") showAlert("Dışa aktarılacak satır yok.");
       return false;
@@ -14482,7 +14854,7 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function runContractControls(contract, options = {}) {
+  function legacyReportAuth_runContractControls(contract, options = {}) {
     if (!contract || !contract.id) {
       return {
         controlRunId: controlId(),
@@ -14568,7 +14940,7 @@ ${renderAccountingCenterBulkPromo()}
     return snapshot?.overallStatus || CONTROL_STATUS.GREEN;
   }
 
-  function getContractControlResults(contractIdValue, options = {}) {
+  function legacyReportAuth_getContractControlResults(contractIdValue, options = {}) {
     const contract = contracts.find(item => item.id === contractIdValue);
     if (options.run === true && contract) return runContractControls(contract, options);
     return getStoredControlSnapshot(contractIdValue) || (contract ? runContractControls(contract, { ...options, persist: false }) : null);
@@ -14584,7 +14956,7 @@ ${renderAccountingCenterBulkPromo()}
     );
   }
 
-  function getControlSummary(options = {}) {
+  function legacyReportAuth_getControlSummary(options = {}) {
     const targetContracts = Array.isArray(options.contracts)
       ? options.contracts
       : contracts;
@@ -14603,7 +14975,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getRiskSummary(options = {}) {
+  function legacyReportAuth_getRiskSummary(options = {}) {
     const summary = getControlSummary(options);
     return {
       testedAt: summary.testedAt,
@@ -14677,7 +15049,7 @@ ${renderAccountingCenterBulkPromo()}
     return true;
   }
 
-  async function exportControlResults(contractIdValue, presentationCurrency) {
+  async function legacyReportAuth_exportControlResults(contractIdValue, presentationCurrency) {
     const target = contractIdValue
       ? [getContractControlResults(contractIdValue, { run: true, persist: true, audit: false })].filter(Boolean)
       : contracts.map(contract => runContractControls(contract, { persist: true, audit: false }));
@@ -14735,7 +15107,7 @@ ${renderAccountingCenterBulkPromo()}
     return true;
   }
 
-  function exportRiskSummary() {
+  function legacyReportAuth_exportRiskSummary() {
     const summary = getRiskSummary({ persist: true });
     const rows = [{
       TestedAt: summary.testedAt,
@@ -15104,7 +15476,7 @@ ${renderAccountingCenterBulkPromo()}
     return { valid: false, totalLeaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, next12MonthPrincipal: 0, next12MonthInterest: 0, next12MonthPayments: 0 };
   }
 
-  function cfoGetContractMetricsInternal(contract, reportingDate) {
+  function legacyReportAuth_cfoGetContractMetricsInternal(contract, reportingDate) {
     const report = cfoResolveReportingDate(reportingDate);
     const built = cfoBuildSchedule(contract);
     const schedule = built.schedule || [];
@@ -15218,7 +15590,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCfoContractMetrics(contractIdValue, reportingDate) {
+  function legacyReportAuth_getCfoContractMetrics(contractIdValue, reportingDate) {
     const contract = cfoGetContracts().find(item => item.id === contractIdValue);
     if (!contract) return null;
     try { return cfoGetContractMetricsInternal(contract, reportingDate); }
@@ -15227,7 +15599,7 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function cfoAggregateRows(rows) {
+  function legacyReportAuth_cfoAggregateRows(rows) {
     const totals = { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, monthlyInterest: 0, monthlyDepreciation: 0, monthlyLeaseExpense: 0, next12MonthPayments: 0, next12MonthPrincipal: 0, next12MonthInterest: 0 };
     rows.forEach(r => Object.keys(totals).forEach(k => { totals[k] += cfoNumber(r?.[k]); }));
     Object.keys(totals).forEach(k => totals[k] = cfoRound(totals[k]));
@@ -15256,7 +15628,7 @@ ${renderAccountingCenterBulkPromo()}
    * Önbellek geçersiz kılma: `clearCalculationCache()` bu önbelleği de
    * temizler (kontrat mutasyonu olan HER yerde tek bakım noktası).
    */
-  function getCfoAggregateMetrics(reportingDate) {
+  function legacyReportAuth_getCfoAggregateMetrics(reportingDate) {
     const resolvedDate = cfoResolveReportingDate(reportingDate);
     const cacheKey = cfoIsoDate(resolvedDate) || String(reportingDate);
 
@@ -15274,15 +15646,15 @@ ${renderAccountingCenterBulkPromo()}
   }
 
   /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function getTotalLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).leaseLiability; }
+  function legacyReportAuth_getTotalLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).leaseLiability; }
   /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function getCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).currentLiability; }
+  function legacyReportAuth_getCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).currentLiability; }
   /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function getNonCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).nonCurrentLiability; }
+  function legacyReportAuth_getNonCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).nonCurrentLiability; }
   /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function getTotalRuoAssets(reportingDate) { return getCfoAggregateMetrics(reportingDate).rouAsset; }
+  function legacyReportAuth_getTotalRuoAssets(reportingDate) { return getCfoAggregateMetrics(reportingDate).rouAsset; }
 
-  function cfoPeriodMetrics(startDate, endDate, options = {}) {
+  function legacyReportAuth_cfoPeriodMetrics(startDate, endDate, options = {}) {
     const start = cfoDate(startDate), end = cfoDate(endDate);
     if (!start || !end || end < start) return { interestExpense: 0, depreciationExpense: 0, leaseExpense: 0, cashPayments: 0, principal: 0, paymentInterest: 0 };
     const rows = [];
@@ -15302,13 +15674,13 @@ ${renderAccountingCenterBulkPromo()}
     return { interestExpense:cfoRound(interestExpense), depreciationExpense:cfoRound(depreciationExpense), leaseExpense:cfoRound(interestExpense+depreciationExpense), cashPayments:cfoRound(cashPayments), principal:cfoRound(principal), paymentInterest:cfoRound(interestExpense), rowCount:rows.length };
   }
 
-  function getInterestExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).interestExpense; }
-  function getDepreciationExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).depreciationExpense; }
-  function getMonthlyLeaseExpense(reportingDate) {
+  function legacyReportAuth_getInterestExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).interestExpense; }
+  function legacyReportAuth_getDepreciationExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).depreciationExpense; }
+  function legacyReportAuth_getMonthlyLeaseExpense(reportingDate) {
     const d = cfoResolveReportingDate(reportingDate);
     return cfoPeriodMetrics(new Date(d.getFullYear(), d.getMonth(), 1), new Date(d.getFullYear(), d.getMonth()+1, 0)).leaseExpense;
   }
-  function getLeaseLiabilityMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseLiabilityMetrics(reportingDate) {
     const d = cfoResolveReportingDate(reportingDate);
     return { reportingDate:cfoIsoDate(d), total:getTotalLeaseLiability(d), current:getCurrentLeaseLiability(d), nonCurrent:getNonCurrentLeaseLiability(d) };
   }
@@ -15320,7 +15692,7 @@ ${renderAccountingCenterBulkPromo()}
   // liability as of the reporting date (exempt/zero-liability
   // contracts naturally get zero weight, so they don't distort the
   // rate even though they were entered with a discount rate field).
-  function getWeightedAverageDiscountRate(reportingDate) {
+  function legacyReportAuth_getWeightedAverageDiscountRate(reportingDate) {
     const d = cfoResolveReportingDate(reportingDate);
     let weightedSum = 0;
     let totalWeight = 0;
@@ -15342,32 +15714,32 @@ ${renderAccountingCenterBulkPromo()}
       basis: "Contract discount rates weighted by outstanding lease liability as of the reporting date (TFRS 16.53(i))."
     };
   }
-  function getLeaseCashFlowMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseCashFlowMetrics(reportingDate) {
     const d = cfoResolveReportingDate(reportingDate);
     const end = cfoAddMonths(d,12);
     const p = cfoPeriodMetrics(new Date(d.getTime()+86400000), end, { activeOnly:true });
     return { reportingDate:cfoIsoDate(d), periodEnd:cfoIsoDate(end), next12MonthsPayments:p.cashPayments, next12MonthsPrincipal:p.principal, next12MonthsInterest:p.interestExpense, reconciliationDifference:cfoRound(p.cashPayments-(p.principal+p.interestExpense)) };
   }
 
-  function getTotalContractCount() { return cfoGetContracts().length; }
-  function getActiveContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>cfoIsActive(c,d)).length; }
-  function getExpiredContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>{ const e=cfoDate(c.endDate); return e && e<d && String(c.status||"ACTIVE").toUpperCase() !== "TERMINATED"; }).length; }
-  function getTerminatedContractCount() { return cfoGetContracts().filter(c=>String(c.status||"").toUpperCase()==="TERMINATED").length; }
+  function legacyReportAuth_getTotalContractCount() { return cfoGetContracts().length; }
+  function legacyReportAuth_getActiveContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>cfoIsActive(c,d)).length; }
+  function legacyReportAuth_getExpiredContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>{ const e=cfoDate(c.endDate); return e && e<d && String(c.status||"ACTIVE").toUpperCase() !== "TERMINATED"; }).length; }
+  function legacyReportAuth_getTerminatedContractCount() { return cfoGetContracts().filter(c=>String(c.status||"").toUpperCase()==="TERMINATED").length; }
 
-  function getContractsExpiringWithin(days, reportingDate) {
+  function legacyReportAuth_getContractsExpiringWithin(days, reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), horizon=cfoAddMonths(d,0); horizon.setDate(horizon.getDate()+Math.max(0,Number(days)||0));
     return cfoGetContracts().filter(c=>cfoIsActive(c,d)).filter(c=>{const e=cfoDate(c.endDate);return e&&e>=d&&e<=horizon;});
   }
-  function getContractsExpiringWithin12Months(reportingDate) { return getContractsExpiringWithin(365, reportingDate); }
+  function legacyReportAuth_getContractsExpiringWithin12Months(reportingDate) { return getContractsExpiringWithin(365, reportingDate); }
 
-  function getLeaseRenewalMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseRenewalMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate);
     const within=(days)=>cfoGetContracts().filter(c=>cfoIsActive(c,d)).filter(c=>{const r=cfoDate(c.renewalDate||c.renewalOptionDate||c.renewalAssessmentDate); const n=cfoDaysBetween(d,r); return n!==null&&n>=0&&n<=days;});
     const r90=within(90), r180=within(180);
     return { within90Days:r90.length, within180Days:r180.length, contractsWithin90Days:r90.map(c=>c.id), contractsWithin180Days:r180.map(c=>c.id) };
   }
 
-  function getLeaseModificationMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseModificationMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), cutoff=cfoAddMonths(d,-12), all=[];
     cfoGetContracts().forEach(c=>(Array.isArray(c.modifications)?c.modifications:[]).forEach(m=>all.push({...m,contractId:c.id})));
     const pending=all.filter(m=>!["APPLIED","CANCELLED"].includes(String(m.status||"").toUpperCase()));
@@ -15376,7 +15748,7 @@ ${renderAccountingCenterBulkPromo()}
     return { pending:pending.length, applied:applied.length, last12Months:last12.length, pendingIds:pending.map(x=>x.id).filter(Boolean), appliedLast12Ids:last12.map(x=>x.id).filter(Boolean), liabilityImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.liabilityAdjustment),0)), rouImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.rouAdjustment),0)) };
   }
 
-  function getLeaseReassessmentMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseReassessmentMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), cutoff=cfoAddMonths(d,-12), all=[];
     cfoGetContracts().forEach(c=>(Array.isArray(c.reassessments)?c.reassessments:[]).forEach(r=>all.push({...r,contractId:c.id})));
     const pending=all.filter(r=>!["APPLIED","CANCELLED"].includes(String(r.status||"").toUpperCase()));
@@ -15385,7 +15757,7 @@ ${renderAccountingCenterBulkPromo()}
     return { pending:pending.length, applied:applied.length, last12Months:last12.length, pendingIds:pending.map(x=>x.id).filter(Boolean), appliedLast12Ids:last12.map(x=>x.id).filter(Boolean), liabilityImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.liabilityAdjustment),0)), rouImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.rouAdjustment),0)) };
   }
 
-  function getLeaseRiskMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseRiskMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), rows=[];
     cfoGetContracts().forEach(c=>{ try { rows.push(cfoGetContractMetricsInternal(c,d)); } catch(error) {} });
     const open=rows.reduce((s,r)=>s+cfoNumber(r.openExceptions),0);
@@ -15393,50 +15765,50 @@ ${renderAccountingCenterBulkPromo()}
     return { green:rows.filter(r=>r.controlStatus==="GREEN").length, yellow:rows.filter(r=>r.controlStatus==="YELLOW").length, red:rows.filter(r=>r.controlStatus==="RED").length, openExceptions:open, criticalExceptions:critical, highExceptions:rows.reduce((s,r)=>s+cfoNumber(r.highExceptions),0), mediumExceptions:rows.reduce((s,r)=>s+cfoNumber(r.mediumExceptions),0), lowExceptions:rows.reduce((s,r)=>s+cfoNumber(r.lowExceptions),0), distribution:{GREEN:rows.filter(r=>r.controlStatus==="GREEN").length,YELLOW:rows.filter(r=>r.controlStatus==="YELLOW").length,RED:rows.filter(r=>r.controlStatus==="RED").length} };
   }
 
-  function getLeaseControlMetrics(reportingDate) {
+  function legacyReportAuth_getLeaseControlMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), rows=[];
     cfoGetContracts().forEach(c=>{ try { const m=cfoGetContractMetricsInternal(c,d); rows.push(m); } catch(error) {} });
     return { contractsWithMissingCriticalData:rows.filter(r=>r.controlStatus==="RED").filter(r=>String(r.calculationError||"").length===0).length, contractsWithCalculationErrors:rows.filter(r=>!r.calculationValid).length, contractsWithJournalIssues:rows.filter(r=>r.criticalExceptions>0).length, contractsWithClassificationIssues:rows.filter(r=>r.controlStatus==="RED").length, contractsWithAuditIssues:rows.filter(r=>r.openExceptions>0).length };
   }
 
-  function getControlRiskRows(reportingDate) {
+  function legacyReportAuth_getControlRiskRows(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate);
     return cfoGetContracts().map(c=>{try{return cfoGetContractMetricsInternal(c,d);}catch(error){return {contractId:c.id,calculationValid:false,calculationError:error?.message||String(error),controlStatus:"RED"};}});
   }
 
-  function getCfoCompanyMetrics(company, reportingDate) {
+  function legacyReportAuth_getCfoCompanyMetrics(company, reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), target=String(company||"");
     const rows=cfoGetContracts().filter(c=>String(c.company||"")===target).map(c=>cfoGetContractMetricsInternal(c,d));
     const totals=cfoAggregateRows(rows);
     return { company:target, reportingDate:cfoIsoDate(d), contractCount:rows.length, activeContracts:rows.filter(r=>r.active).length, ...totals, risk:{green:rows.filter(r=>r.controlStatus==="GREEN").length,yellow:rows.filter(r=>r.controlStatus==="YELLOW").length,red:rows.filter(r=>r.controlStatus==="RED").length,openExceptions:rows.reduce((s,r)=>s+r.openExceptions,0)}, contracts:rows };
   }
 
-  function getCfoMetricsByCompany(reportingDate) {
+  function legacyReportAuth_getCfoMetricsByCompany(reportingDate) {
     const companies=[...new Set(cfoGetContracts().map(c=>String(c.company||"")).filter(Boolean))];
     return companies.map(company=>getCfoCompanyMetrics(company,reportingDate));
   }
 
-  function getCfoCurrencyMetrics(reportingDate) {
+  function legacyReportAuth_getCfoCurrencyMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), groups={};
     cfoGetContracts().forEach(c=>{try{const r=cfoGetContractMetricsInternal(c,d);const cur=r.currency||"UNSPECIFIED";if(!groups[cur])groups[cur]={currency:cur,contractCount:0,activeContracts:0,leaseLiability:0,currentLiability:0,nonCurrentLiability:0,rouAsset:0,monthlyInterest:0,monthlyDepreciation:0,monthlyLeaseExpense:0,next12MonthPayments:0,next12MonthPrincipal:0,next12MonthInterest:0};const g=groups[cur];g.contractCount++;if(r.active)g.activeContracts++;["leaseLiability","currentLiability","nonCurrentLiability","rouAsset","monthlyInterest","monthlyDepreciation","monthlyLeaseExpense","next12MonthPayments","next12MonthPrincipal","next12MonthInterest"].forEach(k=>g[k]+=cfoNumber(r[k]));}catch(error){}});
     Object.values(groups).forEach(g=>Object.keys(g).forEach(k=>{if(typeof g[k]==="number")g[k]=cfoRound(g[k]);}));
     return groups;
   }
 
-  function getLeaseLiabilityRollForward(reportingDate) {
+  function legacyReportAuth_getLeaseLiabilityRollForward(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
     const report=getLeaseLiabilityRollForwardReport(start,d), t=report.totals||{};
     return {reportingDate:cfoIsoDate(d),openingLiability:cfoRound(t.openingLiability),interest:cfoRound(t.interest),payments:cfoRound(t.payments),closingLiability:cfoRound(t.closingLiability),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL",monthlyLeaseExpense:cfoRound(getMonthlyLeaseExpense(d))};
   }
 
-  function getLeaseRouRollForward(reportingDate) {
+  function legacyReportAuth_getLeaseRouRollForward(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
     const report=getRuoAssetRollForwardReport(start,d), t=report.totals||{};
     const adjustments=cfoRound(cfoNumber(t.modificationAdjustment)+cfoNumber(t.reassessmentAdjustment));
     return {reportingDate:cfoIsoDate(d),openingROU:cfoRound(t.openingRuo),depreciation:cfoRound(t.depreciation),modificationReassessmentAdjustments:adjustments,closingROU:cfoRound(t.closingRuo),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL"};
   }
 
-  function getCfoJournalMetrics() {
+  function legacyReportAuth_getCfoJournalMetrics() {
     const events=typeof getAuditEvents==="function"?getAuditEvents({}):[];
     const generated=events.filter(e=>String(e.action||"").includes("JOURNAL_GENERATED"));
     const rows=[];
@@ -15447,7 +15819,7 @@ ${renderAccountingCenterBulkPromo()}
     return { totalGeneratedJournals:generated.length, generatedJournalEvents:generated.length, balancedJournals:rows.length?Math.abs(debit-credit)<=CFO_TOLERANCE:0, unbalancedJournals:rows.length&&Math.abs(debit-credit)>CFO_TOLERANCE?1:0, journalEntries:rows.length, totalDebit:cfoRound(debit), totalCredit:cfoRound(credit), bySource:rows.reduce((a,r)=>{const k=r.source||"UNKNOWN";a[k]=(a[k]||0)+1;return a;},{}) };
   }
 
-  function getCfoAuditMetrics(reportingDate) {
+  function legacyReportAuth_getCfoAuditMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), events=typeof getAuditEvents==="function"?getAuditEvents({}):[], cutoff30=cfoAddMonths(d,0), cutoff90=cfoAddMonths(d,0); cutoff30.setDate(cutoff30.getDate()-30); cutoff90.setDate(cutoff90.getDate()-90);
     const last30=events.filter(e=>{const x=cfoDate(e.timestamp);return x&&x>=cutoff30&&x<=d;}).length;
     const last90=events.filter(e=>{const x=cfoDate(e.timestamp);return x&&x>=cutoff90&&x<=d;}).length;
@@ -15455,7 +15827,7 @@ ${renderAccountingCenterBulkPromo()}
     return { totalAuditEvents:events.length, eventsLast30Days:last30, eventsLast90Days:last90, contractsWithoutRecentAuditActivity:noRecent.length, contractIdsWithoutRecentAuditActivity:noRecent };
   }
 
-  function getTfrs16CfoMetrics(reportingDate) {
+  function legacyReportAuth_getTfrs16CfoMetrics(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), rows=getControlRiskRows(d), activeRows=rows.filter(r=>r.active);
     const totals=cfoAggregateRows(activeRows), risk=getLeaseRiskMetrics(d), renewals=getLeaseRenewalMetrics(d), modifications=getLeaseModificationMetrics(d), reassessments=getLeaseReassessmentMetrics(d), cash=getLeaseCashFlowMetrics(d);
     const contracts={total:cfoGetContracts().length,active:activeRows.length,expired:getExpiredContractCount(d),terminated:getTerminatedContractCount()};
@@ -15465,12 +15837,12 @@ ${renderAccountingCenterBulkPromo()}
     return { reportingDate:cfoIsoDate(d), contracts, liabilities:{total:totals.leaseLiability,current:totals.currentLiability,nonCurrent:totals.nonCurrentLiability}, rouAssets:{total:totals.rouAsset}, pnl:{interestExpense:totals.monthlyInterest,depreciationExpense:totals.monthlyDepreciation,leaseExpense:totals.monthlyLeaseExpense}, cashFlow:{next12MonthsPayments:cash.next12MonthsPayments,next12MonthsPrincipal:cash.next12MonthsPrincipal,next12MonthsInterest:cash.next12MonthsInterest,reconciliationDifference:cashReconciliation}, renewals, expiry:{within12Months:getContractsExpiringWithin12Months(d).length}, modifications, reassessments, risk, controls:getLeaseControlMetrics(d), companies:getCfoMetricsByCompany(d), currencies:getCfoCurrencyMetrics(d), journal:getCfoJournalMetrics(), audit:getCfoAuditMetrics(d), liabilityRollForward:getLeaseLiabilityRollForward(d), rouRollForward:getLeaseRouRollForward(d), disclosures:{weightedAverageDiscountRate:getWeightedAverageDiscountRate(d)}, reconciliation:{liability:{difference:liabilityReconciliation,passed:Math.abs(liabilityReconciliation)<=CFO_TOLERANCE},cashFlow:{difference:cashReconciliation,passed:Math.abs(cashReconciliation)<=CFO_TOLERANCE}}, dataQuality:{status:dataErrors?"ERROR":(risk.openExceptions?"WARNING":"COMPLETE"),errors:dataErrors,warnings:risk.openExceptions}, sourceMetadata:{liabilities:"REPORTING_DATE_ENGINE",rouAssets:"LEASE_SCHEDULE",pnl:"LEASE_SCHEDULE",cashFlow:"LEASE_SCHEDULE",risk:"CONTROL_ENGINE",audit:"AUDIT_TRAIL_ENGINE"} };
   }
 
-  function getTfrs16CfoSnapshot(reportingDate) {
+  function legacyReportAuth_getTfrs16CfoSnapshot(reportingDate) {
     const d=cfoResolveReportingDate(reportingDate), metrics=getTfrs16CfoMetrics(d);
     return { version:CFO_DATA_LAYER_VERSION, reportingDate:metrics.reportingDate, generatedAt:new Date().toISOString(), status:metrics.dataQuality.status==="ERROR"?"ERROR":(metrics.dataQuality.status==="WARNING"?"WARNING":"READY"), headline:{totalLeaseLiability:metrics.liabilities.total,currentLeaseLiability:metrics.liabilities.current,nonCurrentLeaseLiability:metrics.liabilities.nonCurrent,rouAssets:metrics.rouAssets.total,next12MonthCashPayments:metrics.cashFlow.next12MonthsPayments,redContracts:metrics.risk.red,criticalExceptions:metrics.risk.criticalExceptions}, ...metrics };
   }
 
-  function getMonthlyLeaseMetrics(year) {
+  function legacyReportAuth_getMonthlyLeaseMetrics(year) {
     const y=Number(year), rows=[];
     if(!Number.isInteger(y)) return rows;
     for(let month=0;month<12;month++){
@@ -15481,11 +15853,11 @@ ${renderAccountingCenterBulkPromo()}
     return rows;
   }
 
-  function getOpenExceptionsCfo() { return typeof getOpenExceptions === "function" ? getOpenExceptions() : []; }
+  function legacyReportAuth_getOpenExceptionsCfo() { return typeof getOpenExceptions === "function" ? getOpenExceptions() : []; }
 
-  function getCriticalExceptionsCfo() { return typeof getCriticalExceptions === "function" ? getCriticalExceptions() : []; }
+  function legacyReportAuth_getCriticalExceptionsCfo() { return typeof getCriticalExceptions === "function" ? getCriticalExceptions() : []; }
 
-  function exportControlResultsAsCfoData(reportingDate) {
+  function legacyReportAuth_exportControlResultsAsCfoData(reportingDate) {
     const snapshot=getTfrs16CfoSnapshot(reportingDate);
     return cfoClone(snapshot);
   }
@@ -15754,7 +16126,7 @@ ${renderAccountingCenterBulkPromo()}
     return null;
   }
 
-  function getLeaseLiabilityRollForwardReport(startDate, endDate) {
+  function legacyReportAuth_getLeaseLiabilityRollForwardReport(startDate, endDate) {
     const start = rptDate(startDate), end = rptDate(endDate);
     const report = rptEmptyReport("Lease Liability Roll-forward", end, "LEASE_SCHEDULE");
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
@@ -15912,7 +16284,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getRuoAssetRollForwardReport(startDate, endDate) {
+  function legacyReportAuth_getRuoAssetRollForwardReport(startDate, endDate) {
     const start = rptDate(startDate), end = rptDate(endDate);
     const report = rptEmptyReport("ROU Asset Roll-forward", end, "LEASE_SCHEDULE");
     if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
@@ -16023,7 +16395,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getRuoAssetRollForward(reportingDate, endDate) {
+  function legacyReportAuth_getRuoAssetRollForward(reportingDate, endDate) {
     if (endDate !== undefined) return getRuoAssetRollForwardReport(reportingDate,endDate);
     const end=rptResolveDate(reportingDate), start=new Date(end.getFullYear(),end.getMonth(),1);
     return getRuoAssetRollForwardReport(start,end);
@@ -16042,7 +16414,7 @@ ${renderAccountingCenterBulkPromo()}
      source of truth; no new calculation logic is introduced here.
   ========================================================== */
 
-  async function exportRouAssetMovementNote(startDate, endDate) {
+  async function legacyReportAuth_exportRouAssetMovementNote(startDate, endDate) {
     const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
     try { await v191LoadPrivatePortfolioTms21(end); }
     catch (error) { showAlert(`ROU hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
@@ -16093,7 +16465,7 @@ ${renderAccountingCenterBulkPromo()}
     ], "Kullanim_Hakki_Varligi_Hareket_Tablosu");
   }
 
-  async function exportTms29InflationNote(startDate, endDate) {
+  async function legacyReportAuth_exportTms29InflationNote(startDate, endDate) {
     const start = rptDate(startDate), end = rptDate(endDate);
     if (!start || !end || end < start) return false;
     const rouReport = getRuoAssetRollForwardReport(start, end) || {};
@@ -16221,7 +16593,7 @@ ${renderAccountingCenterBulkPromo()}
     ], "TMS29_Enflasyon_Duzeltmeli_Hareket_Tablosu");
   }
 
-  async function exportLeaseLiabilityMovementNote(startDate, endDate) {
+  async function legacyReportAuth_exportLeaseLiabilityMovementNote(startDate, endDate) {
     const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
     try { await v191LoadPrivatePortfolioTms21(end); }
     catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
@@ -16271,7 +16643,7 @@ ${renderAccountingCenterBulkPromo()}
     ], "Kira_Yukumlulugu_Hareket_Tablosu");
   }
 
-  function exportLeaseLiquidityRiskNote(reportingDate) {
+  function legacyReportAuth_exportLeaseLiquidityRiskNote(reportingDate) {
     const report = v191BuildPresentationLiquidityDisclosure(reportingDate, getReportingCurrency());
     const row = Array.isArray(report.rows) ? report.rows[0] : null;
     if (!row) return false;
@@ -16433,15 +16805,15 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function v191GroupRollForwardByCurrency(rows, sumKeys) {
+  function legacyReportAuth_v191GroupRollForwardByCurrency(rows, sumKeys) {
     return v191GroupRollForwardByDimension(rows, "currency", "currency", "UNSPECIFIED", sumKeys);
   }
 
-  function v191GroupRollForwardByAssetClass(rows, sumKeys) {
+  function legacyReportAuth_v191GroupRollForwardByAssetClass(rows, sumKeys) {
     return v191GroupRollForwardByDimension(rows, "assetClass", "assetClass", ASSET_CLASS_UNCLASSIFIED, sumKeys);
   }
 
-  function v191GroupRollForwardByDimension(rows, sourceKey, outKey, fallbackValue, sumKeys) {
+  function legacyReportAuth_v191GroupRollForwardByDimension(rows, sourceKey, outKey, fallbackValue, sumKeys) {
     const groups = {};
     (rows || []).forEach(row => {
       const dimValue = row[sourceKey] || fallbackValue;
@@ -16479,7 +16851,7 @@ ${renderAccountingCenterBulkPromo()}
     return rows;
   }
 
-  function getInterestExpenseReport(startDate,endDate,filters={}) {
+  function legacyReportAuth_getInterestExpenseReport(startDate,endDate,filters={}) {
     const report=rptEmptyReport("Interest Expense Report",endDate,"LEASE_SCHEDULE");
     const rows=rptPeriodRows(startDate,endDate,filters.dimension||"month").filter(r=>!filters.company||r.company===filters.company).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||r.currency===filters.currency);
     report.rows=rows;
@@ -16488,7 +16860,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getDepreciationReport(startDate,endDate,filters={}) {
+  function legacyReportAuth_getDepreciationReport(startDate,endDate,filters={}) {
     const report=rptEmptyReport("Depreciation Report",endDate,"LEASE_SCHEDULE");
     const rows=rptPeriodRows(startDate,endDate,filters.dimension||"month").filter(r=>!filters.company||r.company===filters.company).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||r.currency===filters.currency);
     report.rows=rows;
@@ -16497,7 +16869,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getLeasePaymentMaturityAnalysis(reportingDate, options={}) {
+  function legacyReportAuth_getLeasePaymentMaturityAnalysis(reportingDate, options={}) {
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Lease Payment Maturity Analysis",d,"LEASE_SCHEDULE");
     const base=()=>REPORTING_BUCKETS.map(b=>({bucket:b.id,bucketName:b.name,cashPayment:0,principal:0,interest:0}));
     const totals=base(), rows=[];
@@ -16534,13 +16906,13 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getContractMaturityAnalysis(contractId,reportingDate){
+  function legacyReportAuth_getContractMaturityAnalysis(contractId,reportingDate){
     const contract=rptSafeContracts().find(c=>c.id===contractId), d=rptResolveDate(reportingDate);
     if(!contract)return null;
     return getLeasePaymentMaturityAnalysis(d,{byContract:true}).rows.find(r=>r.contractId===contractId)||{contractId,company:contract.company||"",currency:contract.currency||"UNSPECIFIED",buckets:[]};
   }
 
-  function getCompanyMaturityAnalysis(company,reportingDate){
+  function legacyReportAuth_getCompanyMaturityAnalysis(company,reportingDate){
     const all=getLeasePaymentMaturityAnalysis(reportingDate,{byContract:true}), rows=all.rows.filter(r=>String(r.company||"")===String(company||"")), buckets=REPORTING_BUCKETS.map(b=>({bucket:b.id,bucketName:b.name,cashPayment:0,principal:0,interest:0}));
     rows.forEach(r=>r.buckets.forEach((b,i)=>{buckets[i].cashPayment+=rptNumber(b.cashPayment);buckets[i].principal+=rptNumber(b.principal);buckets[i].interest+=rptNumber(b.interest);}));
     buckets.forEach(b=>{b.cashPayment=rptRound(b.cashPayment);b.principal=rptRound(b.principal);b.interest=rptRound(b.interest);});
@@ -16562,7 +16934,7 @@ ${renderAccountingCenterBulkPromo()}
    * @returns {object} report - rptEmptyReport şablonunda, options.byCompany=false
    *   iken report.rows tek elemanlı ["Kiralama yükümlülükleri"] dizisidir.
    */
-  function getLeaseLiquidityRiskDisclosure(reportingDate, options = {}) {
+  function legacyReportAuth_getLeaseLiquidityRiskDisclosure(reportingDate, options = {}) {
     const d = rptResolveDate(reportingDate);
     const report = rptEmptyReport("Lease Liability Liquidity Risk Disclosure (TFRS 7.39)", d, "LEASE_SCHEDULE + REPORTING_DATE_ENGINE");
     const currentNonCurrent = getCurrentNonCurrentReport(d);
@@ -16627,7 +16999,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getCurrentNonCurrentReport(reportingDate,filters={}) {
+  function legacyReportAuth_getCurrentNonCurrentReport(reportingDate,filters={}) {
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Current / Non-current Analysis",d,"REPORTING_DATE_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>{
       if(filters.company&&String(contract.company||"")!==String(filters.company))return;
@@ -16648,7 +17020,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getLeaseContractExpiryReport(reportingDate,filters={}){
+  function legacyReportAuth_getLeaseContractExpiryReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Contract Expiry Report",d,"CONTRACT_MASTER + RISK_ENGINE");
     report.rows=rptSafeContracts().filter(c=>!filters.company||String(c.company||"")===String(filters.company)).filter(c=>!filters.currency||String(c.currency||"UNSPECIFIED")===String(filters.currency)).map(contract=>{
       const end=rptDate(contract.endDate), days=end?Math.round((end-d)/86400000):null, risk=typeof getContractRiskStatus==="function"?getContractRiskStatus(contract.id):rptRiskForDays(days);
@@ -16658,9 +17030,9 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getContractExpiryReport(reportingDate,filters={}){ return getLeaseContractExpiryReport(reportingDate,filters); }
+  function legacyReportAuth_getContractExpiryReport(reportingDate,filters={}){ return getLeaseContractExpiryReport(reportingDate,filters); }
 
-  function getRenewalRiskReport(reportingDate,filters={}){
+  function legacyReportAuth_getRenewalRiskReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Renewal Risk Report",d,"CONTRACT_MASTER + RISK_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>{
       if(!contract.renewalDate)return;
@@ -16675,7 +17047,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getModificationReport(reportingDate,filters={}){
+  function legacyReportAuth_getModificationReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Modification Report",d,"MODIFICATION_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>(Array.isArray(contract.modifications)?contract.modifications:[]).forEach(storedItem=>{
       let item = storedItem;
@@ -16706,7 +17078,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getReassessmentReport(reportingDate,filters={}){
+  function legacyReportAuth_getReassessmentReport(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Reassessment Report",d,"REASSESSMENT_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>(Array.isArray(contract.reassessments)?contract.reassessments:[]).forEach(item=>{
       if(filters.company&&String(contract.company||"")!==String(filters.company))return;
@@ -16721,7 +17093,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getLeaseContractRegister(reportingDate,filters={}){
+  function legacyReportAuth_getLeaseContractRegister(reportingDate,filters={}){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Lease Contract Register",d,"CONTRACT_MASTER + CFO_DATA_LAYER"), rows=[];
     rptSafeContracts().forEach(contract=>{
       if(filters.company&&String(contract.company||"")!==String(filters.company))return;
@@ -16753,7 +17125,7 @@ ${renderAccountingCenterBulkPromo()}
     return rows;
   }
 
-  function getJournalSummaryReport(filters={}){
+  function legacyReportAuth_getJournalSummaryReport(filters={}){
     const report=rptEmptyReport("Journal Summary Report",filters.endDate||new Date(),"JOURNAL_ENGINE + AUDIT_TRAIL_ENGINE"), all=rptJournalRows();
     report.rows=all.filter(r=>!filters.company||String(r.company||"")===String(filters.company)).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||String(r.currency||"")===String(filters.currency)).filter(r=>!filters.source||r.source===filters.source);
     const groups=new Map();
@@ -16765,7 +17137,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getControlExceptionReport(filters={}){
+  function legacyReportAuth_getControlExceptionReport(filters={}){
     const report=rptEmptyReport("Control Exception Report",new Date(),"CONTROL_ENGINE"), rows=[];
     rptSafeContracts().forEach(contract=>{
       try{
@@ -16781,7 +17153,7 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getControlSummaryReport(){
+  function legacyReportAuth_getControlSummaryReport(){
     const summary=typeof getControlSummary==="function"?getControlSummary({persist:false,audit:false}):{};
     const report=rptEmptyReport("Control Summary",new Date(),"CONTROL_ENGINE");
     const snapshots=Array.isArray(summary.snapshots)?summary.snapshots:[];
@@ -16804,21 +17176,21 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getAuditTrailReport(filters={}){
+  function legacyReportAuth_getAuditTrailReport(filters={}){
     const report=rptEmptyReport("Audit Trail Report",filters.dateTo||new Date(),"AUDIT_TRAIL_ENGINE"), events=typeof getAuditEvents==="function"?getAuditEvents(filters):[];
     report.rows=events.filter(e=>!filters.company||String(rptSafeContracts().find(c=>c.id===e.contractId)?.company||"")===String(filters.company)).map(e=>({timestamp:e.timestamp||null,actor:e.actor||"system",action:e.action||"",contractId:e.contractId||null,company:rptSafeContracts().find(c=>c.id===e.contractId)?.company||"",oldValue:rptClone(e.oldValue),newValue:rptClone(e.newValue),entityType:e.entityType||null,entityId:e.entityId||null,reason:e.reason||null,journalId:e.journalId||null,modificationId:e.modificationId||null,reassessmentId:e.reassessmentId||null}));
     report.totals={totalEvents:report.rows.length};
     return rptFinalize(report);
   }
 
-  function getCompanyExposureReport(reportingDate){
+  function legacyReportAuth_getCompanyExposureReport(reportingDate){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Company Exposure Report",d,"CFO_DATA_LAYER"), rows=typeof getCfoMetricsByCompany==="function"?getCfoMetricsByCompany(d):[];
     report.rows=rows.map(r=>({company:r.company,reportingDate:r.reportingDate,contractCount:r.contractCount,activeContracts:r.activeContracts,totalLiability:rptRound(r.leaseLiability),currentLiability:rptRound(r.currentLiability),nonCurrentLiability:rptRound(r.nonCurrentLiability),rou:rptRound(r.rouAsset),interest:rptRound(r.monthlyInterest),depreciation:rptRound(r.monthlyDepreciation),next12MonthCashPayments:rptRound(r.next12MonthPayments),riskCount:rptNumber(r.risk?.red)+rptNumber(r.risk?.yellow),red:rptNumber(r.risk?.red),yellow:rptNumber(r.risk?.yellow),green:rptNumber(r.risk?.green),openExceptions:rptNumber(r.risk?.openExceptions)}));
     report.totals={companies:report.rows.length};
     return rptFinalize(report);
   }
 
-  function getCurrencyExposureReport(reportingDate){
+  function legacyReportAuth_getCurrencyExposureReport(reportingDate){
     const d=rptResolveDate(reportingDate), report=rptEmptyReport("Currency Exposure Report",d,"CFO_DATA_LAYER");
     const groups=typeof getCfoCurrencyMetrics==="function"?getCfoCurrencyMetrics(d):{};
     report.rows=Object.values(groups).map(g=>({currency:g.currency,contractCount:g.contractCount,activeContracts:g.activeContracts,totalLiability:rptRound(g.leaseLiability),currentLiability:rptRound(g.currentLiability),nonCurrentLiability:rptRound(g.nonCurrentLiability),rou:rptRound(g.rouAsset),interest:rptRound(g.monthlyInterest),depreciation:rptRound(g.monthlyDepreciation),cashPayments:rptRound(g.next12MonthPayments),principal:rptRound(g.next12MonthPrincipal)}));
@@ -16827,17 +17199,17 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getLeaseBalanceSheetImpact(reportingDate){
+  function legacyReportAuth_getLeaseBalanceSheetImpact(reportingDate){
     const d=rptResolveDate(reportingDate);
     return {reportName:"Lease Balance Sheet Impact",reportingDate:rptIsoDate(d),rouAssets:rptRound(getTotalRuoAssets(d)),leaseLiability:rptRound(getTotalLeaseLiability(d)),currentLiability:rptRound(getCurrentLeaseLiability(d)),nonCurrentLiability:rptRound(getNonCurrentLeaseLiability(d)),source:"CFO_DATA_LAYER"};
   }
 
-  function getLeaseProfitLossImpact(startDate,endDate){
+  function legacyReportAuth_getLeaseProfitLossImpact(startDate,endDate){
     const interest=typeof getInterestExpense==="function"?getInterestExpense(startDate,endDate):0, depreciation=typeof getDepreciationExpense==="function"?getDepreciationExpense(startDate,endDate):0, modifications=getModificationReport(endDate||new Date()).rows.filter(r=>{const d=rptDate(r.effectiveDate),s=rptDate(startDate),e=rptDate(endDate);return d&&(!s||d>=s)&&(!e||d<=e);}).reduce((s,r)=>s+rptNumber(r.gainLoss),0);
     return {reportName:"Lease Profit & Loss Impact",startDate:rptIsoDate(startDate),endDate:rptIsoDate(endDate),interestExpense:rptRound(interest),depreciationExpense:rptRound(depreciation),modificationGainLoss:rptRound(modifications),totalLeasePnlImpact:rptRound(interest+depreciation+modifications),source:"LEASE_SCHEDULE + MODIFICATION_ENGINE"};
   }
 
-  function getLeaseCashFlowReport(startDate,endDate){
+  function legacyReportAuth_getLeaseCashFlowReport(startDate,endDate){
     const rows=rptPeriodRows(startDate,endDate,"month"), totalPayments=rows.reduce((s,r)=>s+rptNumber(r.cashPayment),0), principal=rows.reduce((s,r)=>s+rptNumber(r.principal),0), interest=rows.reduce((s,r)=>s+rptNumber(r.interestExpense),0);
     return {reportName:"Lease Cash Flow Report",startDate:rptIsoDate(startDate),endDate:rptIsoDate(endDate),totalPayments:rptRound(totalPayments),principal:rptRound(principal),interest:rptRound(interest),reconciliation:{difference:rptRound(totalPayments-principal-interest),passed:Math.abs(totalPayments-principal-interest)<=REPORTING_TOLERANCE},source:"LEASE_SCHEDULE"};
   }
@@ -16849,7 +17221,7 @@ ${renderAccountingCenterBulkPromo()}
     return Array.from({length:12},(_,m)=>({period:`${y}-${String(m+1).padStart(2,"0")}`,start:new Date(y,m,1),end:new Date(y,m+1,0)}));
   }
 
-  function getPeriodicLeaseReport(year,dimension="month"){
+  function legacyReportAuth_getPeriodicLeaseReport(year,dimension="month"){
     const ranges=rptPeriodRanges(year,dimension), report=rptEmptyReport(`${dimension[0].toUpperCase()+dimension.slice(1)} Lease Report`,new Date(Number(year),11,31),"LEASE_SCHEDULE"), rows=[];
     ranges.forEach(range=>{
       const liabilityStart=rptAddDays(range.start,-1), opening=getTotalLeaseLiability(liabilityStart), closing=getTotalLeaseLiability(range.end), period=rptPeriodRows(range.start,range.end,dimension), interest=period.reduce((s,r)=>s+rptNumber(r.interestExpense),0), payments=period.reduce((s,r)=>s+rptNumber(r.cashPayment),0), depreciation=period.reduce((s,r)=>s+rptNumber(r.depreciationExpense),0), rouOpening=getTotalRuoAssets(liabilityStart), rouClosing=getTotalRuoAssets(range.end), liabAdjustment=closing-(opening+interest-payments), rouAdjustment=rouClosing-(rouOpening-depreciation);
@@ -16862,17 +17234,17 @@ ${renderAccountingCenterBulkPromo()}
     return rptFinalize(report);
   }
 
-  function getMonthlyLeaseReport(year){return getPeriodicLeaseReport(year,"month");}
-  function getQuarterlyLeaseReport(year){return getPeriodicLeaseReport(year,"quarter");}
-  function getAnnualLeaseReport(year){return getPeriodicLeaseReport(year,"year");}
+  function legacyReportAuth_getMonthlyLeaseReport(year){return getPeriodicLeaseReport(year,"month");}
+  function legacyReportAuth_getQuarterlyLeaseReport(year){return getPeriodicLeaseReport(year,"quarter");}
+  function legacyReportAuth_getAnnualLeaseReport(year){return getPeriodicLeaseReport(year,"year");}
 
-  function getTfrs16ReportingReconciliation(reportingDate){
+  function legacyReportAuth_getTfrs16ReportingReconciliation(reportingDate){
     const d=rptResolveDate(reportingDate), liability=getCurrentNonCurrentReport(d), maturity=getLeasePaymentMaturityAnalysis(d), journal=getJournalSummaryReport(), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), liabRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d);
     const portfolioLiability=rptNumber(liability.totals.totalLiability), current=rptNumber(liability.totals.currentLiability), nonCurrent=rptNumber(liability.totals.nonCurrentLiability);
     return {reportingDate:rptIsoDate(d),liability:{total:portfolioLiability,current,nonCurrent,difference:rptRound(portfolioLiability-current-nonCurrent),passed:Math.abs(portfolioLiability-current-nonCurrent)<=REPORTING_TOLERANCE},cashFlow:{difference:rptNumber(maturity.reconciliation?.difference),passed:Boolean(maturity.reconciliation?.passed)},liabilityRollForward:{difference:rptNumber(liabRoll.reconciliation?.difference),passed:Boolean(liabRoll.reconciliation?.passed)},rouRollForward:{difference:rptNumber(rouRoll.reconciliation?.difference),passed:Boolean(rouRoll.reconciliation?.passed)},journal:{difference:rptNumber(journal.reconciliation?.difference),passed:Boolean(journal.reconciliation?.passed)},companyTotals:{companyCount:company.rows.length,portfolioLiability:portfolioLiability,companyLiability:rptRound(company.rows.reduce((s,r)=>s+rptNumber(r.totalLiability),0)),difference:rptRound(company.rows.reduce((s,r)=>s+rptNumber(r.totalLiability),0)-portfolioLiability)},currencyExposure:{currencyCount:currency.rows.length,note:"FX conversion not applied; currencies remain separated."}};
   }
 
-  function getTfrs16FinancialReportingSnapshot(reportingDate){
+  function legacyReportAuth_getTfrs16FinancialReportingSnapshot(reportingDate){
     const d=rptResolveDate(reportingDate), cfo=typeof getTfrs16CfoSnapshot==="function"?getTfrs16CfoSnapshot(d):{}, bs=getLeaseBalanceSheetImpact(d), periodStart=new Date(d.getFullYear(),d.getMonth(),1), pl=getLeaseProfitLossImpact(periodStart,d), cf=getLeaseCashFlowReport(periodStart,d), liabilityRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d), maturity=getLeasePaymentMaturityAnalysis(d), liquidityRiskDisclosure=getLeaseLiquidityRiskDisclosure(d), expiry=getLeaseContractExpiryReport(d), renewal=getRenewalRiskReport(d), modification=getModificationReport(d), reassessment=getReassessmentReport(d), journal=getJournalSummaryReport(), control=getControlExceptionReport(), controlSummary=getControlSummaryReport(), audit=getAuditTrailReport({dateTo:rptIsoDate(d)}), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), reconciliation=getTfrs16ReportingReconciliation(d);
     const errors=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.errors)?r.errors:[]);
     const warnings=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.warnings)?r.warnings:[]);
@@ -17252,7 +17624,7 @@ ${renderAccountingCenterBulkPromo()}
     return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, "No unresolved control exceptions remain for active contracts.", [], { openExceptions: [] });
   }
 
-  function getMonthEndCloseChecklist(reportingDate) {
+  function legacyReportAuth_getMonthEndCloseChecklist(reportingDate) {
     const d = closeResolveDate(reportingDate), period = closePeriod(d), start = closeMonthStart(d), end = closeMonthEnd(d);
     const activeContracts = closeSafeContracts().filter(c => closeIsActive(c, d));
     const cache = new Map();
@@ -17332,7 +17704,7 @@ ${renderAccountingCenterBulkPromo()}
     return CLOSE_STATUS.IN_PROGRESS;
   }
 
-  function getCloseReadiness(reportingDate) {
+  function legacyReportAuth_getCloseReadiness(reportingDate) {
     const d = closeResolveDate(reportingDate), period = closePeriod(d);
     const checklist = getMonthEndCloseChecklist(d);
     const score = closeCalculateScore(checklist.checks);
@@ -17357,11 +17729,11 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getMonthEndCloseStatus(reportingDate) {
+  function legacyReportAuth_getMonthEndCloseStatus(reportingDate) {
     return getCloseReadiness(reportingDate);
   }
 
-  function getMonthEndCloseSummary(reportingDate) {
+  function legacyReportAuth_getMonthEndCloseSummary(reportingDate) {
     const d = closeResolveDate(reportingDate), readiness = getCloseReadiness(d);
     const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
     const journal = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({}) : { rows: [], totals: {} };
@@ -17399,7 +17771,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCompanyMonthEndCloseStatus(company, reportingDate) {
+  function legacyReportAuth_getCompanyMonthEndCloseStatus(company, reportingDate) {
     const d = closeResolveDate(reportingDate), name = String(company || "");
     const companyContracts = closeSafeContracts().filter(c => String(c?.company || "") === name);
     const active = companyContracts.filter(c => closeIsActive(c, d));
@@ -17449,7 +17821,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCurrencyMonthEndCloseStatus(currency, reportingDate) {
+  function legacyReportAuth_getCurrencyMonthEndCloseStatus(currency, reportingDate) {
     const d = closeResolveDate(reportingDate), curr = String(currency || "UNSPECIFIED");
     const contractsForCurrency = closeSafeContracts().filter(c => String(c?.currency || "UNSPECIFIED") === curr);
     const companies = Array.from(new Set(contractsForCurrency.map(c => c.company).filter(Boolean)));
@@ -17475,7 +17847,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCloseApprovalReadiness(reportingDate) {
+  function legacyReportAuth_getCloseApprovalReadiness(reportingDate) {
     const readiness = getCloseReadiness(reportingDate);
     const state = readiness.state || {};
     return {
@@ -17500,7 +17872,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getMonthEndCloseDashboardData(reportingDate) {
+  function legacyReportAuth_getMonthEndCloseDashboardData(reportingDate) {
     const d = closeResolveDate(reportingDate), readiness = getCloseReadiness(d), summary = getMonthEndCloseSummary(d);
     const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
     const companies = Array.from(new Set(closeSafeContracts().map(c => c.company).filter(Boolean))).map(company => getCompanyMonthEndCloseStatus(company, d));
@@ -17914,7 +18286,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function renderCloseDashboardPage(container, options = {}) {
+  function legacyReportAuth_renderCloseDashboardPage(container, options = {}) {
     if (!container) return;
     if (typeof injectV26Styles === "function") injectV26Styles();
 
@@ -19094,7 +19466,7 @@ ${renderAccountingCenterBulkPromo()}
     return { type, severity, title, message, contractId: options.contractId || null, company: options.company || null, currency: options.currency || null, financialImpact: options.financialImpact ?? null, actionRequired: options.actionRequired || null, sourceFunction: options.sourceFunction || null };
   }
 
-  function getCfoAlerts(reportingDate) {
+  function legacyReportAuth_getCfoAlerts(reportingDate) {
     const d = v18ResolveDate(reportingDate), alerts = [], close = v18CloseStatus(d), controls = v18ControlStatus(d), rec = v18ReconciliationStatus(d), journals = v18JournalStatus(d), dataQuality = v18DataQuality(d, v18ContractRows(d), controls, close, rec), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), liquidity = v18LiquidityView(d);
     if (close.status === "BLOCKED") alerts.push(v18Alert(CFO_ALERT_TYPES.CLOSE, CFO_ALERT_SEVERITY.CRITICAL, "Month-end close is blocked", `${close.blockingIssues.length} blocking issue(s) prevent close readiness.`, { actionRequired: "Resolve all blocking close issues before certification.", sourceFunction: "getMonthEndCloseStatus" }));
     else if (close.status === "WARNING") alerts.push(v18Alert(CFO_ALERT_TYPES.CLOSE, CFO_ALERT_SEVERITY.MEDIUM, "Month-end close has warnings", `${close.warnings.length} close warning(s) remain open.`, { actionRequired: "Review close warnings and complete remaining controls.", sourceFunction: "getMonthEndCloseStatus" }));
@@ -19110,7 +19482,7 @@ ${renderAccountingCenterBulkPromo()}
     return alerts.sort((a, b) => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 }[a.severity] ?? 9) - ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 }[b.severity] ?? 9));
   }
 
-  function getCfoTopRisks(reportingDate) {
+  function legacyReportAuth_getCfoTopRisks(reportingDate) {
     const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), risks = [];
     rows.forEach(row => {
       const m = row.metric || {}, severity = m.controlStatus === "RED" ? "CRITICAL" : (m.controlStatus === "YELLOW" ? "HIGH" : null);
@@ -19128,7 +19500,7 @@ ${renderAccountingCenterBulkPromo()}
     return CFO_COCKPIT_STATUS.GREEN;
   }
 
-  function getCfoExecutiveSnapshot(reportingDate) {
+  function legacyReportAuth_getCfoExecutiveSnapshot(reportingDate) {
     const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), activeRows = rows.filter(r => r.metric?.active), financialPosition = v18FinancialPosition(d, rows), profitLoss = v18ProfitLoss(d, rows), cashFlow = v18LiquidityView(d), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), close = v18CloseStatus(d), controls = v18ControlStatus(d), reconciliation = v18ReconciliationStatus(d), dataQuality = v18DataQuality(d, rows, controls, close, reconciliation), alerts = getCfoAlerts(d), risks = getCfoTopRisks(d), companies = v18CompanyExposure(d), currencies = v18CurrencyExposure(d);
     return {
       version: CFO_COCKPIT_VERSION,
@@ -19157,7 +19529,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCfoKpis(reportingDate) {
+  function legacyReportAuth_getCfoKpis(reportingDate) {
     const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), active = rows.filter(r => r.metric?.active), totals = v18AggregateMetrics(active), previous = v18PreviousSnapshot(d), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), close = v18CloseStatus(d), controls = v18ControlStatus(d);
     const next12 = active.length === 0 ? 0 : (new Set(active.map(r => v18Currency(r.contract))).size === 1 ? totals.next12MonthPayments : null);
     const monthStart = new Date(d.getFullYear(), d.getMonth(), 1), monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
@@ -19186,13 +19558,13 @@ ${renderAccountingCenterBulkPromo()}
     return kpis;
   }
 
-  function getCfoCompanyDashboard(company, reportingDate) {
+  function legacyReportAuth_getCfoCompanyDashboard(company, reportingDate) {
     const d = v18ResolveDate(reportingDate), target = String(company || ""), exposure = v18CompanyExposure(d).find(x => x.company === target) || null, close = typeof getCompanyMonthEndCloseStatus === "function" ? getCompanyMonthEndCloseStatus(target, d) : null;
     const rows = v18ContractRows(d).filter(r => v18Company(r.contract) === target), risks = getCfoTopRisks(d).filter(r => r.company === target), renewals = v18Renewals(d), expiries = v18Expiries(d);
     return { version: CFO_COCKPIT_VERSION, company: target, reportingDate: v18IsoDate(d), financialPosition: exposure ? { leaseLiability: exposure.leaseLiability, currentLiability: exposure.currentLiability, nonCurrentLiability: exposure.nonCurrentLiability, rouAssets: exposure.rouAssets } : {}, profitLoss: exposure ? { interest: exposure.interest, depreciation: exposure.depreciation } : {}, cashFlow: exposure ? { next12MPayments: exposure.next12MPayments, expected: true } : {}, leaseExposure: exposure, risk: { topRisks: risks, renewalCount90D: renewals.within90Days.filter(r => r.company === target).length, expiryCount90D: expiries.within90Days.filter(r => r.company === target).length }, controls: rows.map(r => ({ contractId: r.contract.id, status: r.metric?.controlStatus, openExceptions: r.metric?.openExceptions || 0 })), close, contracts: rows.map(r => getCfoContractView(r.contract.id, d)).filter(Boolean) };
   }
 
-  function getCfoContractView(contractId, reportingDate) {
+  function legacyReportAuth_getCfoContractView(contractId, reportingDate) {
     const d = v18ResolveDate(reportingDate), contract = v18SafeContracts().find(c => c.id === contractId);
     if (!contract) return null;
     const metric = v18ContractMetric(contract, d) || {}, close = v18CompanyExposure(d).find(x => x.company === v18Company(contract)) || null;
@@ -19201,17 +19573,17 @@ ${renderAccountingCenterBulkPromo()}
     return { version: CFO_COCKPIT_VERSION, contractId, company: v18Company(contract), supplier: contract.supplier || "", currency: v18Currency(contract), reportingDate: v18IsoDate(d), financialPosition: { leaseLiability: v18Round(metric.leaseLiability), currentLiability: v18Round(metric.currentLiability), nonCurrentLiability: v18Round(metric.nonCurrentLiability), rouAssets: v18Round(metric.rouAsset) }, periodImpact: { interest: v18Round(metric.monthlyInterest), depreciation: v18Round(metric.monthlyDepreciation), leaseExpense: v18Round(metric.monthlyLeaseExpense), expectedNext12MPayments: v18Round(metric.next12MonthPayments) }, renewal: { date: metric.renewalDate || v18IsoDate(contract.renewalDate), daysRemaining: metric.renewalDays ?? null }, expiry: { date: metric.expiryDate || v18IsoDate(contract.endDate), daysRemaining: metric.expiryDays ?? null }, modification: { status: metric.modificationStatus, pending: metric.pendingModifications, applied: metric.appliedModifications }, reassessment: { status: metric.reassessmentStatus, pending: metric.pendingReassessments, applied: metric.appliedReassessments }, risk: { status: metric.controlStatus, openExceptions: metric.openExceptions, criticalExceptions: metric.criticalExceptions, highExceptions: metric.highExceptions }, calculation: { valid: metric.calculationValid !== false, error: metric.calculationError || null, scheduleSource: metric.scheduleSource || null }, journal: journal ? { journalCount: journal.totals?.journalCount || 0, balanced: !(journal.totals?.unbalancedJournals > 0), rows: journal.rows || [] } : null, audit: typeof getContractAuditSummary === "function" ? getContractAuditSummary(contractId) : null, companyCloseContext: close, source: "V16.10 + V17 + V18" };
   }
 
-  function getCfoCurrencyExposure(currency, reportingDate) {
+  function legacyReportAuth_getCfoCurrencyExposure(currency, reportingDate) {
     const curr = String(currency || "UNSPECIFIED").toUpperCase();
     return v18CurrencyExposure(reportingDate).find(row => row.currency === curr) || { currency: curr, contractCount: 0, activeContracts: 0, leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAssets: 0, interest: 0, depreciation: 0, next12MPayments: 0, fxConversionApplied: false, source: "V18_CFO_COCKPIT" };
   }
 
-  function getCfoPeriodSummary(reportingDate) {
+  function legacyReportAuth_getCfoPeriodSummary(reportingDate) {
     const d = v18ResolveDate(reportingDate), start = new Date(d.getFullYear(), d.getMonth(), 1), end = new Date(d.getFullYear(), d.getMonth() + 1, 0), quarter = Math.floor(d.getMonth() / 3) + 1, year = d.getFullYear(), close = v18CloseStatus(d), snapshot = getCfoExecutiveSnapshot(d);
     return { version: CFO_COCKPIT_VERSION, reportingDate: v18IsoDate(d), month: `${year}-${String(d.getMonth() + 1).padStart(2, "0")}`, quarter: `${year}-Q${quarter}`, year: String(year), periodStart: v18IsoDate(start), periodEnd: v18IsoDate(end), closeStatus: close, financialPosition: snapshot.financialPosition, profitLoss: snapshot.profitLoss, cashFlow: snapshot.cashFlow, risk: snapshot.contractRisk, controls: snapshot.controlStatus, source: "V18_CFO_COCKPIT" };
   }
 
-  function getCfoDecisionFacts(reportingDate) {
+  function legacyReportAuth_getCfoDecisionFacts(reportingDate) {
     const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), facts = [];
     facts.push({ metric: "TOTAL_LEASE_LIABILITY", currentValue: snapshot.financialPosition.totalLeaseLiability, previousValue: snapshot.financialPosition.trend.leaseLiability.previous, variance: snapshot.financialPosition.trend.leaseLiability.change, driver: "Reporting-date liability", severity: snapshot.executiveStatus });
     facts.push({ metric: "ROU_ASSETS", currentValue: snapshot.financialPosition.totalRuoAssets, previousValue: snapshot.financialPosition.trend.rouAssets.previous, variance: snapshot.financialPosition.trend.rouAssets.change, driver: "ROU closing balance", severity: snapshot.executiveStatus });
@@ -19220,7 +19592,7 @@ ${renderAccountingCenterBulkPromo()}
     return facts;
   }
 
-  function getContractsRequiringAttention(reportingDate) {
+  function legacyReportAuth_getContractsRequiringAttention(reportingDate) {
     const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d);
     return rows.filter(r => {
       const m = r.metric || {};
@@ -19228,25 +19600,25 @@ ${renderAccountingCenterBulkPromo()}
     }).map(r => getCfoContractView(r.contract.id, d)).filter(Boolean);
   }
 
-  function getHighExposureContracts(reportingDate) {
+  function legacyReportAuth_getHighExposureContracts(reportingDate) {
     const d = v18ResolveDate(reportingDate);
     return v18ContractRows(d).filter(r => r.metric?.active).sort((a, b) => v18Number(b.metric?.leaseLiability) - v18Number(a.metric?.leaseLiability)).slice(0, 20).map(r => getCfoContractView(r.contract.id, d)).filter(Boolean);
   }
 
-  function getUpcomingRenewals(reportingDate, days = 90) {
+  function legacyReportAuth_getUpcomingRenewals(reportingDate, days = 90) {
     const d = v18ResolveDate(reportingDate), horizon = Math.max(0, Number(days) || 0);
     return v18Renewals(d).within365Days.filter(row => row.daysRemaining <= horizon);
   }
 
-  function getCriticalControls(reportingDate) {
+  function legacyReportAuth_getCriticalControls(reportingDate) {
     return v18ControlStatus(reportingDate).openExceptions.filter(e => String(e?.priority || e?.severity || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL);
   }
 
-  function getCloseBlockers(reportingDate) {
+  function legacyReportAuth_getCloseBlockers(reportingDate) {
     return v18CloseStatus(reportingDate).blockingIssues || [];
   }
 
-  function getLiquidityPressureContracts(reportingDate) {
+  function legacyReportAuth_getLiquidityPressureContracts(reportingDate) {
     const d = v18ResolveDate(reportingDate), rows = [];
     v18SafeContracts().forEach(contract => {
       try {
@@ -19258,7 +19630,7 @@ ${renderAccountingCenterBulkPromo()}
     return rows.sort((a, b) => b.next90DaysPayments - a.next90DaysPayments).slice(0, 20);
   }
 
-  function getCfoScorecard(reportingDate) {
+  function legacyReportAuth_getCfoScorecard(reportingDate) {
     const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), close = snapshot.closeStatus, controls = snapshot.controlStatus, data = snapshot.dataQuality, rec = snapshot.reconciliation;
     const financialScore = rec.status === "READY" ? 100 : 50;
     const liquidityScore = snapshot.cashFlow.currencyCount === 1 || snapshot.cashFlow.currencyCount === 0 ? 100 : 100;
@@ -19270,12 +19642,12 @@ ${renderAccountingCenterBulkPromo()}
     return { financial: category(financialScore, rec.status === "RED" ? ["Reporting reconciliation failure"] : []), liquidity: category(liquidityScore), risk: category(riskScore, snapshot.topRisks.slice(0, 5)), controls: category(controlScore, controls.openExceptions.slice(0, 5)), close: category(closeScore, close.blockingIssues.concat(close.warnings).slice(0, 5)), dataQuality: category(dataQualityScore, data.errors ? ["Data quality errors detected"] : []) };
   }
 
-  function getManagementSummary(reportingDate) {
+  function legacyReportAuth_getManagementSummary(reportingDate) {
     const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d);
     return { version: CFO_COCKPIT_VERSION, reportingDate: v18IsoDate(d), executiveStatus: snapshot.executiveStatus, financialPosition: snapshot.financialPosition, pnlImpact: snapshot.profitLoss, cashFlow: snapshot.cashFlow, risk: snapshot.contractRisk, controls: snapshot.controlStatus, close: snapshot.closeStatus, keyAlerts: snapshot.keyAlerts, actions: snapshot.keyAlerts.filter(a => a.actionRequired).map(a => ({ severity: a.severity, type: a.type, actionRequired: a.actionRequired, contractId: a.contractId, company: a.company })) };
   }
 
-  function getCfoDashboardData(reportingDate) {
+  function legacyReportAuth_getCfoDashboardData(reportingDate) {
     const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), kpis = getCfoKpis(d), scorecard = getCfoScorecard(d), management = getManagementSummary(d), previous = v18PreviousSnapshot(d);
     const start = new Date(d.getFullYear(), d.getMonth(), 1), end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
     const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
@@ -19310,7 +19682,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getCfoApprovalReadiness(reportingDate) {
+  function legacyReportAuth_getCfoApprovalReadiness(reportingDate) {
     const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), approval = typeof getCloseApprovalReadiness === "function" ? getCloseApprovalReadiness(d) : null;
     return { reportingDate: v18IsoDate(d), ready: snapshot.executiveStatus === "GREEN" && Boolean(snapshot.closeStatus.ready), executiveStatus: snapshot.executiveStatus, score: snapshot.closeStatus.score, blockingIssues: snapshot.closeStatus.blockingIssues, warnings: snapshot.closeStatus.warnings, openControls: snapshot.controlStatus.openExceptions, reconciliationStatus: snapshot.reconciliation, journalStatus: v18JournalStatus(d), certification: approval?.certification || null };
   }
@@ -20238,7 +20610,7 @@ ${renderAccountingCenterBulkPromo()}
     return list.filter(contract => !options.company || contract.company === options.company).filter(contract => !options.currency || normalizeIntegrationCurrency(contract.currency || contract.integrationMetadata?.currency) === normalizeIntegrationCurrency(options.currency));
   }
 
-  function getErpReadyContractData(reportingDate, options = {}) {
+  function legacyReportAuth_getErpReadyContractData(reportingDate, options = {}) {
     const d = reportingDate ? new Date(reportingDate) : new Date();
     const list = getIntegrationContractData(options);
     return list.map(contract => {
@@ -20265,7 +20637,7 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  function getErpReadyPaymentData(reportingDate, options = {}) {
+  function legacyReportAuth_getErpReadyPaymentData(reportingDate, options = {}) {
     const d = reportingDate ? new Date(reportingDate) : new Date();
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const end = new Date(start); end.setFullYear(end.getFullYear() + 1);
@@ -20286,6 +20658,18 @@ ${renderAccountingCenterBulkPromo()}
   }
 
   function getErpReadyJournalData(reportingDate, options = {}) {
+    const ui = window.LeaseQantTfrs16JournalUi;
+    if (!ui) journalAuthorityUnavailable();
+    const rows = ui.bulkRows();
+    if (reportingDate && ui.databasePreview().journals.some(voucher=>voucher.periodEnd !== v23DateKey(reportingDate))) {
+      const error = new Error("Yevmiye paketi istenen dönemle eşleşmiyor");
+      error.code = "JOURNAL_PERIOD_SOURCE_REQUIRED";
+      throw error;
+    }
+    return rows;
+  }
+
+  function legacyGetErpReadyJournalData(reportingDate, options = {}) {
     const d = reportingDate ? new Date(reportingDate) : new Date();
     let report = null;
     try { report = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({ reportingDate: d }) : null; } catch (error) { report = null; }
@@ -20313,7 +20697,7 @@ ${renderAccountingCenterBulkPromo()}
     return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
   }
 
-  function getIntegrationExportData(exportType, reportingDate, options = {}) {
+  function legacyReportAuth_getIntegrationExportData(exportType, reportingDate, options = {}) {
     const type = String(exportType || "").toUpperCase();
     if (type === "CONTRACT" || type === "LEASE_REGISTER") return getErpReadyContractData(reportingDate, options);
     if (type === "PAYMENT" || type === "LEASE_PAYMENT") return getErpReadyPaymentData(reportingDate, options);
@@ -21051,7 +21435,7 @@ ${renderAccountingCenterBulkPromo()}
 
   // Private API counterpart for the portfolio TMS29 path. The browser only
   // assembles the already-computed private envelopes.
-  function v191ComputePrivatePortfolioTms29(contractList, apiResults, periodStartMonth, rpMonth) {
+  function legacyReportAuth_v191ComputePrivatePortfolioTms29(contractList, apiResults, periodStartMonth, rpMonth) {
     const sourceContracts = Array.isArray(contractList) ? contractList : [];
     const results = new Map();
     const flatRows = [];
@@ -21380,7 +21764,7 @@ ${renderAccountingCenterBulkPromo()}
    * hem o fonksiyon hem yeni "Dipnotlar" sayfası (renderFootnotesPage)
    * bunu kullanıyor.
    */
-  function v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options = {}) {
+  function legacyReportAuth_v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options = {}) {
     const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
     const bs = data.balanceSheet || {};
     const pnl = data.profitLoss || {};
@@ -21653,7 +22037,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function v191RenderFinancialReporting(date, options = {}) {
+  function legacyReportAuth_v191RenderFinancialReporting(date, options = {}) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
 
@@ -21694,7 +22078,7 @@ ${renderAccountingCenterBulkPromo()}
    * kısmında var (rouReport/liabReport/tms29/liquidityDisclosure
    * hesaplama çağrıları), HTML üretimi PAYLAŞILIYOR.
    */
-  function v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 }) {
+  function legacyReportAuth_v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 }) {
     const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
@@ -21735,7 +22119,7 @@ ${renderAccountingCenterBulkPromo()}
     </div>`;
   }
 
-  function v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
+  function legacyReportAuth_v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
     const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     const weightedRate = getWeightedAverageDiscountRate(periodEnd);
     return `
@@ -21782,7 +22166,7 @@ ${renderAccountingCenterBulkPromo()}
     </div>`;
   }
 
-  function v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd }) {
+  function legacyReportAuth_v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd }) {
     const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
     return `
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
@@ -21865,7 +22249,7 @@ ${renderAccountingCenterBulkPromo()}
     v191TriggerActiveScreenRefresh();
   }
 
-  function v191RenderRiskControls(date) {
+  function legacyReportAuth_v191RenderRiskControls(date) {
     const summary = typeof getControlSummary === "function" ? getControlSummary(date) : null;
     const risks = typeof getRiskSummary === "function" ? getRiskSummary(date) : null;
     const snapshots = Array.isArray(summary?.snapshots) ? summary.snapshots : [];
@@ -21894,7 +22278,7 @@ ${renderAccountingCenterBulkPromo()}
     ])}`;
   }
 
-  function v191RenderClose(date) {
+  function legacyReportAuth_v191RenderClose(date) {
     const data = getMonthEndCloseDashboardData(date) || {};
     const readiness = data.readiness || getCloseReadiness(date) || {};
     const summary = data.summary || getMonthEndCloseSummary(date) || {};
@@ -21916,7 +22300,7 @@ ${renderAccountingCenterBulkPromo()}
     ])}`;
   }
 
-  function v191RenderCfo(date) {
+  function legacyReportAuth_v191RenderCfo(date) {
     const data = getCfoDashboardData(date) || {};
     const k = data.kpis || {};
     const liab = data.financialPosition?.leaseLiability || {};
@@ -21936,7 +22320,7 @@ ${renderAccountingCenterBulkPromo()}
     ])}`;
   }
 
-  function v191RenderIntegration(date) {
+  function legacyReportAuth_v191RenderIntegration(date) {
     const data = getIntegrationDashboardData() || {};
     const freshness = getIntegrationDataFreshness() || {};
     const history = getImportHistory() || [];
@@ -21957,7 +22341,7 @@ ${renderAccountingCenterBulkPromo()}
     ])}`;
   }
 
-  function v191RenderReconciliation(date) {
+  function legacyReportAuth_v191RenderReconciliation(date) {
     const rows = typeof getIntegrationReconciliations === "function" ? getIntegrationReconciliations() : [];
     return v191Table(rows.slice(0, 50), [
       { key: "reconciliationId", label: "ID" },
@@ -21970,7 +22354,7 @@ ${renderAccountingCenterBulkPromo()}
     ]);
   }
 
-  function v191RenderContractTools() {
+  function legacyReportAuth_v191RenderContractTools() {
     if (!selectedContractId) return `<div class="empty-state"><h3>Sözleşme seçilmedi</h3><p>Payment Schedule, Journal ve Audit Trail için önce bir sözleşme detayını açın.</p></div>`;
     const contract = contracts.find(c => c.id === selectedContractId);
     if (!contract) return `<div class="empty-state"><h3>Sözleşme bulunamadı</h3><p>Seçili sözleşme artık portföyde mevcut değil.</p></div>`;
@@ -22007,7 +22391,7 @@ ${renderAccountingCenterBulkPromo()}
     v191ClearLiabFilter
   });
 
-  async function v191RenderFinancialReportingPrivate(date) {
+  async function legacyReportAuth_v191RenderFinancialReportingPrivate(date) {
     const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
     const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
     const reportingHydration = await ensurePrivateReportingDateCache(contracts, effectivePeriodEnd);
@@ -22020,13 +22404,13 @@ ${renderAccountingCenterBulkPromo()}
     const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
     return v191RenderFinancialReporting(date, { tms29 });
   }
-  function v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReportingPrivate); v191OpenView(); }
-  function v191OpenRiskControls() { v191OpenView = () => v191Show("Risk & Kontroller", "Existing V16.8 Risk & Control Engine", v191RenderRiskControls); v191OpenView(); }
-  function v191OpenMonthEndClose() { v191OpenView = () => v191Show("Ay Sonu Kapanış", "Existing V17 Month-End Close Engine", v191RenderClose); v191OpenView(); }
-  function v191OpenCfoDashboard() { v191OpenView = () => v191Show("CFO Dashboard", "Existing V18 CFO Data Layer", v191RenderCfo); v191OpenView(); }
-  function v191OpenIntegration() { v191OpenView = () => v191Show("Integration", "Existing V19 Integration Data Exchange Engine", v191RenderIntegration); v191OpenView(); }
-  function v191OpenReconciliation() { v191OpenView = () => v191Show("Reconciliation", "Existing V19 Integration Reconciliation Engine", v191RenderReconciliation); v191OpenView(); }
-  function v191OpenContractTools() { v191OpenView = () => v191Show("Contract Financial Tools", "Selected contract: Payment Schedule / Journal / Audit Trail", v191RenderContractTools); v191OpenView(); }
+  function legacyReportAuth_v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReportingPrivate); v191OpenView(); }
+  function legacyReportAuth_v191OpenRiskControls() { v191OpenView = () => v191Show("Risk & Kontroller", "Existing V16.8 Risk & Control Engine", v191RenderRiskControls); v191OpenView(); }
+  function legacyReportAuth_v191OpenMonthEndClose() { v191OpenView = () => v191Show("Ay Sonu Kapanış", "Existing V17 Month-End Close Engine", v191RenderClose); v191OpenView(); }
+  function legacyReportAuth_v191OpenCfoDashboard() { v191OpenView = () => v191Show("CFO Dashboard", "Existing V18 CFO Data Layer", v191RenderCfo); v191OpenView(); }
+  function legacyReportAuth_v191OpenIntegration() { v191OpenView = () => v191Show("Integration", "Existing V19 Integration Data Exchange Engine", v191RenderIntegration); v191OpenView(); }
+  function legacyReportAuth_v191OpenReconciliation() { v191OpenView = () => v191Show("Reconciliation", "Existing V19 Integration Reconciliation Engine", v191RenderReconciliation); v191OpenView(); }
+  function legacyReportAuth_v191OpenContractTools() { v191OpenView = () => v191Show("Contract Financial Tools", "Selected contract: Payment Schedule / Journal / Audit Trail", v191RenderContractTools); v191OpenView(); }
 
   function v191WireNavigation() {
     document.querySelectorAll(".nav-item").forEach(link => {
@@ -22705,7 +23089,7 @@ ${renderAccountingCenterBulkPromo()}
     return v20SafeArray(contracts).map(migrateContractData).filter(Boolean);
   }
 
-  function v20GetDatabaseModel() {
+  function legacyReportAuth_v20GetDatabaseModel() {
     const normalizedContracts = v20GetContracts();
     const companies = v20CollectCompanies(normalizedContracts);
     const schedules = [];
@@ -22743,75 +23127,15 @@ ${renderAccountingCenterBulkPromo()}
         if (normalized) reassessments.push(normalized);
       });
 
-      const contractJournalSources = [];
-      if (Array.isArray(contract.journal)) contractJournalSources.push(...contract.journal);
-      if (Array.isArray(contract.journals)) contractJournalSources.push(...contract.journals);
-      if (Array.isArray(contract.modificationJournals)) contractJournalSources.push(...contract.modificationJournals);
-
-      contractJournalSources.forEach(item => {
-        const normalized = normalizeJournalData(
-          item,
-          contract.id,
-          contract.companyId || null
-        );
-        if (normalized) {
-          journals.push(normalized.header);
-          journalLines.push(...normalized.lines);
-        }
-      });
+      // Journal sources are deliberately excluded from browser contract,
+      // event, audit and schedule collections. Only an accepted DTO may be
+      // serialized below; other database-model entities retain their scope.
     });
 
-    /* Reuse the existing V19.1 journal/reporting engine as the canonical
-       journal source when available; no new journal calculation is introduced. */
-    if (typeof rptJournalRows === "function") {
-      try {
-        const journalRows = rptJournalRows();
-        const grouped = new Map();
-
-        v20SafeArray(journalRows).forEach((row, index) => {
-          const journalId = String(
-            row?.voucherNo ||
-            `${row?.contractId || "LEASE"}-${row?.eventId || "JNL"}`
-          );
-
-          if (!grouped.has(journalId)) {
-            grouped.set(journalId, {
-              id: journalId,
-              voucherNo: row?.voucherNo || journalId,
-              voucherDate: v20NormalizeDate(row?.voucherDate),
-              companyId: row?.companyId || null,
-              company: row?.company || "",
-              contractId: row?.contractId || null,
-              reportingPeriod: row?.period || null,
-              description: row?.description || "",
-              currency: v20NormalizeCurrency(row?.currency, "TRY"),
-              source: row?.source || "JOURNAL_ENGINE",
-              controlStatus: row?.controlStatus || "VALID",
-              createdAt: row?.createdAt || null
-            });
-          }
-
-          const header = grouped.get(journalId);
-          journalLines.push(v20VersionedEntity({
-            id: String(row?.id || `${journalId}-LINE-${index + 1}`),
-            journalId,
-            account: row?.account || "",
-            costCenter: row?.costCenter || null,
-            profitCenter: row?.profitCenter || null,
-            debit: v20Amount(row?.debit),
-            credit: v20Amount(row?.credit),
-            currency: v20NormalizeCurrency(row?.currency, header.currency),
-            description: row?.description || ""
-          }, "JournalLine"));
-        });
-
-        journals.splice(0, journals.length, ...Array.from(grouped.values()).map(item =>
-          v20VersionedEntity(item, "Journal")
-        ));
-      } catch (error) {
-        console.error("V20 journal normalization error:", error);
-      }
-    }
+    const journalPreview = window.LeaseQantTfrs16JournalUi?.databasePreview()
+      || {status:"JOURNAL_AUTHORITY_UNAVAILABLE",journals:[],journalLines:[]};
+    journals.push(...journalPreview.journals);
+    journalLines.push(...journalPreview.journalLines);
 
     const auditEvents = typeof loadAuditEvents === "function"
       ? loadAuditEvents().map(normalizeAuditEventData).filter(Boolean)
@@ -22881,6 +23205,7 @@ ${renderAccountingCenterBulkPromo()}
       reassessments,
       journals,
       journalLines,
+      journalAuthorityStatus:journalPreview.status,
       auditEvents,
       controls,
       closePeriods,
@@ -22898,15 +23223,15 @@ ${renderAccountingCenterBulkPromo()}
     return v20GetDatabaseModel().contracts;
   }
 
-  function exportSchedulesForDatabase() {
+  function legacyReportAuth_exportSchedulesForDatabase() {
     return v20GetDatabaseModel().schedules;
   }
 
-  function exportModificationsForDatabase() {
+  function legacyReportAuth_exportModificationsForDatabase() {
     return v20GetDatabaseModel().modifications;
   }
 
-  function exportReassessmentsForDatabase() {
+  function legacyReportAuth_exportReassessmentsForDatabase() {
     return v20GetDatabaseModel().reassessments;
   }
 
@@ -22922,7 +23247,7 @@ ${renderAccountingCenterBulkPromo()}
     return v20GetDatabaseModel().auditEvents;
   }
 
-  function exportDatabaseReadyData(options = {}) {
+  function legacyReportAuth_exportDatabaseReadyData(options = {}) {
     const model = v20GetDatabaseModel();
     const requested = Array.isArray(options.entities) && options.entities.length
       ? options.entities
@@ -24887,7 +25212,7 @@ ${renderAccountingCenterBulkPromo()}
     }).filter(Boolean);
   }
 
-  function getConsolidatedData(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_getConsolidatedData(groupId, reportingDate, options = {}) {
     v22Require("consolidation.view", { ...options, groupId, action: "CONSOLIDATION_VIEW" });
     const group = v22Groups.find(item => String(item.id) === String(groupId));
     if (!group) return { success: false, error: { code: "GROUP_NOT_FOUND", message: "Group not found." }, data: null, metadata: {} };
@@ -25035,7 +25360,7 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(existing);
   }
 
-  function getEliminations(groupId = null, options = {}) {
+  function legacyReportAuth_getEliminations(groupId = null, options = {}) {
     v22Require("eliminations.view", { ...options, groupId });
     return v22Clone(groupId ? v22Eliminations.filter(item => String(item.groupId) === String(groupId)) : v22Eliminations) || [];
   }
@@ -25063,7 +25388,7 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(row);
   }
 
-  function v22RunIntercompanyReconciliation(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_v22RunIntercompanyReconciliation(groupId, reportingDate, options = {}) {
     v22Require("consolidation.view", { ...options, groupId, action: "INTERCOMPANY_RECONCILIATION" });
     const rows = v22GetGroupEliminations(groupId, reportingDate);
     const map = new Map();
@@ -25084,7 +25409,7 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  function getGroupControlStatus(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_getGroupControlStatus(groupId, reportingDate, options = {}) {
     v22Require("group.view", { ...options, groupId, action: "GROUP_CONTROL_VIEW" });
     const group = v22Groups.find(item => String(item.id) === String(groupId));
     const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
@@ -25129,7 +25454,7 @@ ${renderAccountingCenterBulkPromo()}
     return { status: "UNKNOWN" };
   }
 
-  function getGroupCloseStatus(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_getGroupCloseStatus(groupId, reportingDate, options = {}) {
     v22Require("group.view", { ...options, groupId, action: "GROUP_CLOSE_VIEW" });
     const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
     const companies = v22VisibleGroupCompanies(groupId, date, options.user || v22CurrentUser());
@@ -25139,7 +25464,7 @@ ${renderAccountingCenterBulkPromo()}
     return { groupId, reportingDate: date, status, companies: rows, openCompanies: open.map(row => row.companyId) };
   }
 
-  function getGroupCfoDashboardData(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_getGroupCfoDashboardData(groupId, reportingDate, options = {}) {
     v22Require("group.view", { ...options, groupId, action: "GROUP_CFO_VIEW" });
     const consolidated = getConsolidatedData(groupId, reportingDate, options);
     const control = getGroupControlStatus(groupId, reportingDate, options);
@@ -25174,7 +25499,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function exportGroupReport(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_exportGroupReport(groupId, reportingDate, options = {}) {
     v22Require("consolidation.export", { ...options, groupId, action: "CONSOLIDATION_EXPORT" });
     const report = getGroupCfoDashboardData(groupId, reportingDate, options);
     const rows = (report.companyContribution || []).map(row => ({
@@ -25206,11 +25531,11 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(report);
   }
 
-  function exportConsolidation(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_exportConsolidation(groupId, reportingDate, options = {}) {
     return exportGroupReport(groupId, reportingDate, options);
   }
 
-  function exportEliminations(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_exportEliminations(groupId, reportingDate, options = {}) {
     v22Require("consolidation.export", { ...options, groupId, action: "ELIMINATION_EXPORT" });
     const rows = v22GetGroupEliminations(groupId, reportingDate);
     if (typeof XLSX !== "undefined") {
@@ -25226,7 +25551,7 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(rows);
   }
 
-  function exportIntercompanyReconciliation(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_exportIntercompanyReconciliation(groupId, reportingDate, options = {}) {
     v22Require("consolidation.export", { ...options, groupId, action: "INTERCOMPANY_EXPORT" });
     const rows = v22RunIntercompanyReconciliation(groupId, reportingDate, options);
     if (typeof XLSX !== "undefined") {
@@ -25257,7 +25582,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function exportGroupDatabaseReady(groupId = null, options = {}) {
+  function legacyReportAuth_exportGroupDatabaseReady(groupId = null, options = {}) {
     v22Require("consolidation.export", { ...options, groupId, action: "DATABASE_READY_EXPORT" });
     const model = v22GetDatabaseModel();
     if (groupId) {
@@ -25324,7 +25649,7 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function getV22DataHealth(options = {}) {
+  function legacyReportAuth_getV22DataHealth(options = {}) {
     const groups = v22Groups;
     const companies = v22CompanyList();
     const companyIds = new Set(companies.map(item => String(item.id)));
@@ -25367,7 +25692,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function getConsolidationReports(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_getConsolidationReports(groupId, reportingDate, options = {}) {
     const consolidated = getConsolidatedData(groupId, reportingDate, options);
     return {
       groupLeaseLiability: consolidated.data.consolidated.leaseLiability,
@@ -25383,7 +25708,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function v22RunConsolidation(groupId, reportingDate, options = {}) {
+  function legacyReportAuth_v22RunConsolidation(groupId, reportingDate, options = {}) {
     v22Require("consolidation.execute", { ...options, groupId, action: "CONSOLIDATION_RUN" });
     const result = getConsolidatedData(groupId, reportingDate, options);
     v22RecordAudit("CONSOLIDATION_RUN", "GROUP", groupId, { reportingDate, status: result.data?.status, companyCount: result.data?.companies?.length || 0 });
@@ -25743,7 +26068,7 @@ ${renderAccountingCenterBulkPromo()}
    * @param {string} [toCurrency] - hedef PB (varsayılan getReportingCurrency())
    * @returns {{value:number, currency:string, applied:boolean, rate:number|null, error:string|null}}
    */
-  function convertAmountToReportingCurrency(amount, fromCurrency, date, toCurrency) {
+  function legacyReportAuth_convertAmountToReportingCurrency(amount, fromCurrency, date, toCurrency) {
     const from = String(fromCurrency || "TRY").toUpperCase();
     const to = String(toCurrency || getReportingCurrency() || "TRY").toUpperCase();
     const num = Number(amount) || 0;
@@ -26271,14 +26596,14 @@ ${renderAccountingCenterBulkPromo()}
     if(!row.reportingDate || !row.currency) throw new Error("CTA reportingDate and currency are required.");
     const rows=getCtaRecords(), idx=rows.findIndex(x=>x.id===row.id); if(idx>=0) rows[idx]=row; else rows.push(row); v23StorageSet(V23_CTA_STORAGE_KEY,rows); v23Audit("FX_ADJUSTMENT","CTA",row.id,{row}); return v23Clone(row);
   }
-  function calculateFxGainLoss(openingAmount,closingAmount,transactionAmount,options={}) {
+  function legacyReportAuth_calculateFxGainLoss(openingAmount,closingAmount,transactionAmount,options={}) {
     const difference=v23Num(closingAmount)-v23Num(openingAmount); const realized=options.realized===true;
     return {type: realized ? (difference>=0?"REALIZED_FX_GAIN":"REALIZED_FX_LOSS") : (difference>=0?"UNREALIZED_FX_GAIN":"UNREALIZED_FX_LOSS"),amount:Math.abs(difference),signedAmount:difference,currency:v23CurrencyCode(options.currency),sourceAmount:v23Num(transactionAmount),reportingDate:v23DateKey(options.reportingDate)};
   }
 
   function getV23Contracts() { try { return typeof v20GetContracts === "function" ? v20GetContracts() : v23Array(contracts); } catch(e) { return v23Array(contracts); } }
   function v23CompanyIdOf(row) { return String(row?.companyId || row?.companyIdValue || row?.company || row?.legalEntityId || "").trim(); }
-  function getFxExposure(options={}) {
+  function legacyReportAuth_getFxExposure(options={}) {
     v23Authorize("fx.view",{...options,action:"FX_EXPOSURE"});
     const rows=getV23Contracts(), out=[];
     rows.forEach(contract=>{
@@ -26291,7 +26616,7 @@ ${renderAccountingCenterBulkPromo()}
     });
     return out;
   }
-  function getFxCfoDashboardData(groupId,reportingDate,options={}) {
+  function legacyReportAuth_getFxCfoDashboardData(groupId,reportingDate,options={}) {
     v23Authorize("fx.view",{...options,action:"FX_CFO_VIEW",entityId:groupId});
     const exposure=getFxExposure(options), byCurrency={}; exposure.forEach(x=>{ byCurrency[x.currency]=(byCurrency[x.currency]||0)+x.amount; });
     const rates=getFxRates({}), date=v23DateKey(reportingDate), missing=[];
@@ -26299,7 +26624,7 @@ ${renderAccountingCenterBulkPromo()}
     Object.keys(byCurrency).forEach(currency=>{ if(currency!==groupCurrency){ try { getFxRate(currency,groupCurrency,date,V23_RATE_TYPES.CLOSING); } catch(e) { missing.push({fromCurrency:currency,toCurrency:groupCurrency,reportingDate:date,code:e.code||"FX_RATE_NOT_FOUND"}); } } });
     return {groupId,reportingDate:date,groupCurrency,foreignCurrencyExposure:byCurrency,totalFxExposure:Object.values(byCurrency).reduce((a,b)=>a+b,0),fxRateCount:rates.length,missingFxRates:missing,companiesWithFxExposure:Array.from(new Set(exposure.map(x=>x.companyId).filter(Boolean))),translationDifference:0,fxGainLoss:0};
   }
-  function getFxDataQualityStatus(options={}) {
+  function legacyReportAuth_getFxDataQualityStatus(options={}) {
     v23Authorize("fx.view",{...options,action:"FX_DATA_QUALITY"});
     const rates=loadV23Rates(), currencies=loadV23Currencies(), checks=[];
     checks.push({id:"CURRENCY_MASTER",status:currencies.length?"GREEN":"RED",message:currencies.length?"Currency master available":"Currency master missing"});
@@ -26311,7 +26636,7 @@ ${renderAccountingCenterBulkPromo()}
     const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
     return {version:V23_SCHEMA_VERSION,status,checks,currencyCount:currencies.length,rateCount:rates.length,duplicateRates:duplicates};
   }
-  function getFxControlStatus(options={}) {
+  function legacyReportAuth_getFxControlStatus(options={}) {
     const quality=getFxDataQualityStatus(options), exposure=getFxExposure(options), manual=loadV23Rates().filter(x=>x.source==="MANUAL").length;
     const checks=[...quality.checks,{id:"MANUAL_RATES",status:manual?"YELLOW":"GREEN",message:manual?`${manual} manual FX rate(s) in use`:"No manual FX rates"},{id:"FX_EXPOSURE",status:exposure.length?"GREEN":"GREEN",message:"FX exposure calculated"}];
     const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
@@ -26349,7 +26674,7 @@ ${renderAccountingCenterBulkPromo()}
     const functionalCurrency=v23CurrencyCode(row.functionalCurrency || options.functionalCurrency || transactionCurrency);
     return { ...v23Clone(row), paymentAmount:v23Num(row.paymentAmount ?? row.amount), paymentCurrency:transactionCurrency, functionalCurrency, functionalAmount:row.functionalAmount ?? null, fxRate:row.fxRate ?? null, schemaVersion:V23_SCHEMA_VERSION };
   }
-  function getFxConsolidatedData(groupId,reportingDate,options={}) {
+  function legacyReportAuth_getFxConsolidatedData(groupId,reportingDate,options={}) {
     v23Authorize("fx.execute",{...options,action:"FX_TRANSLATION",entityId:groupId});
     if(typeof getConsolidatedData!=="function") return {success:false,error:"V22_CONSOLIDATION_UNAVAILABLE"};
     const base=getConsolidatedData(groupId,reportingDate,{...options,user:options.user || v23CurrentUser()});
@@ -26375,26 +26700,26 @@ ${renderAccountingCenterBulkPromo()}
     v23Audit("FX_TRANSLATION","GROUP",groupId,{reportingDate:v23DateKey(reportingDate),groupCurrency,companyCount:translatedCompanies.length,errorCount:errors.length});
     return result;
   }
-  function getFxConsolidationReports(groupId,reportingDate,options={}) {
+  function legacyReportAuth_getFxConsolidationReports(groupId,reportingDate,options={}) {
     const data=getFxConsolidatedData(groupId,reportingDate,options);
     return { groupTranslation:data, fxRates:getFxRates(), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options), cta:getCtaRecords({groupId}) };
   }
-  function getFxReports(options={}) {
+  function legacyReportAuth_getFxReports(options={}) {
     return { fxRates:getFxRates(options), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options) };
   }
-  function v23ExportRows(name,rows,options={}) {
+  function legacyReportAuth_v23ExportRows(name,rows,options={}) {
     v23Authorize("fx.export",{...options,action:"FX_EXPORT",entityId:name});
     const data=v23Array(rows); if(!data.length) return false;
     if(typeof XLSX!=="undefined") { try { const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31)); XLSX.writeFile(wb,`GK_FX_${name}_${Date.now()}.xlsx`); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"xlsx"}); return true; } catch(e) {} }
     const headers=Object.keys(data[0]||{}), csv=[headers.join(";"),...data.map(r=>headers.map(h=>String(r[h] ?? "").replace(/;/g,",")).join(";"))].join("\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),link=document.createElement("a"); link.href=url; link.download=`GK_FX_${name}_${Date.now()}.csv`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"csv"}); return true;
   }
-  function exportFxRates(options={}) { return v23ExportRows("Rates",getFxRates(options),options); }
-  function exportFxExposure(options={}) { return v23ExportRows("Exposure",getFxExposure(options),options); }
-  function exportFxGainLoss(rows=[],options={}) { return v23ExportRows("GainLoss",rows,options); }
-  function exportFxTranslation(rows=[],options={}) { return v23ExportRows("Translation",rows,options); }
-  function exportFxReconciliation(rows=[],options={}) { return v23ExportRows("Reconciliation",rows,options); }
+  function legacyReportAuth_exportFxRates(options={}) { return v23ExportRows("Rates",getFxRates(options),options); }
+  function legacyReportAuth_exportFxExposure(options={}) { return v23ExportRows("Exposure",getFxExposure(options),options); }
+  function legacyReportAuth_exportFxGainLoss(rows=[],options={}) { return v23ExportRows("GainLoss",rows,options); }
+  function legacyReportAuth_exportFxTranslation(rows=[],options={}) { return v23ExportRows("Translation",rows,options); }
+  function legacyReportAuth_exportFxReconciliation(rows=[],options={}) { return v23ExportRows("Reconciliation",rows,options); }
 
-  function getV23DatabaseModel() {
+  function legacyReportAuth_getV23DatabaseModel() {
     return { schemaVersion:V23_SCHEMA_VERSION, currencies:getCurrencies(), fxRates:getFxRates(), cta:getCtaRecords(), config:getFxConfig(), securityPermissions:V23_SECURITY_PERMISSIONS.slice() };
   }
   function v23MigrationReport() {
@@ -26568,9 +26893,9 @@ ${renderAccountingCenterBulkPromo()}
     findHeadLeaseRouAtDate,
     renderSubleaseSection,
     renderSubleaseResultHtml,
-    appendFxToReclassification,
-    appendFxJournalLines,
-    getContractFxTranslationJournal,
+    appendFxToReclassification: journalAuthorityUnavailable,
+    appendFxJournalLines: journalAuthorityUnavailable,
+    getContractFxTranslationJournal: journalAuthorityUnavailable,
     translateAmount,
     translateCompanyToGroupCurrency,
     getTranslationRateType,
@@ -26579,7 +26904,7 @@ ${renderAccountingCenterBulkPromo()}
     upsertCta,
     calculateFxGainLoss,
     normalizeFxTransaction,
-    buildFxJournalLine,
+    buildFxJournalLine: journalAuthorityUnavailable,
     enrichPaymentCurrency,
     getFxConsolidatedData,
     getFxConsolidationReports,
@@ -27069,8 +27394,8 @@ ${renderAccountingCenterBulkPromo()}
     rows[index] = next; v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_UPDATED", "PLANNING_PLAN", id, { patch:v24Clone(patch) }); return v24Clone(next);
   }
   function v24VersionRows() { return v24Load(V24_STORAGE_KEYS.VERSIONS); }
-  function getBudgetVersions(planId, options = {}) { v24Require("planning.view", { ...options, action:"PLANNING_VERSION_VIEW", entityId:planId }); return v24VersionRows().filter(x => String(x.planId) === String(planId)); }
-  function getPlanningVersion(planId, version, options = {}) { return getBudgetVersions(planId, options).find(x => String(x.version) === String(version)) || null; }
+  function legacyReportAuth_getBudgetVersions(planId, options = {}) { v24Require("planning.view", { ...options, action:"PLANNING_VERSION_VIEW", entityId:planId }); return v24VersionRows().filter(x => String(x.planId) === String(planId)); }
+  function legacyReportAuth_getPlanningVersion(planId, version, options = {}) { return getBudgetVersions(planId, options).find(x => String(x.version) === String(version)) || null; }
   function createPlanningVersion(planId, input = {}, options = {}) {
     const plan = getPlanningPlan(planId, options); if (!plan) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
     v24Require("planning.create", { ...options, companyId:plan.companyId, action:"PLANNING_VERSION_CREATE", entityId:planId });
@@ -27087,11 +27412,11 @@ ${renderAccountingCenterBulkPromo()}
     const amount=v24Number(input.amount), currency=v24Currency(input,v24CompanyRecord(companyId)?.baseCurrency||"TRY");
     return { id:input.id||v24Id("PL"),planId:input.planId,version:input.version||1,companyId,groupId:input.groupId||v24GroupIdForCompany(companyId),period,periodType:input.periodType||"MONTH",account:v24Text(input.account||input.category||"UNCLASSIFIED").toUpperCase(),category:v24Text(input.category||"OTHER").toUpperCase(),subCategory:v24Text(input.subCategory||"").toUpperCase(),currency,amount,driver:input.driver||null,scenario:v24Text(input.scenario||"BASE").toUpperCase(),source:input.source||"MANUAL",createdAt:input.createdAt||v24Now(),updatedAt:v24Now(),createdBy:input.createdBy||v24CurrentUser()?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};
   }
-  function getPlanningLines(options = {}) {
+  function legacyReportAuth_getPlanningLines(options = {}) {
     v24Require("planning.view", { ...options, action:"PLANNING_LINE_VIEW" }); const user=v24CurrentUser(options);
     return v24Load(V24_STORAGE_KEYS.LINES).filter(x => (!options.planId || String(x.planId)===String(options.planId)) && (!options.version || String(x.version)===String(options.version)) && (!options.companyId || String(x.companyId)===String(options.companyId)) && (!options.groupId || String(x.groupId)===String(options.groupId)) && (!options.period || String(x.period)===String(options.period)) && (!options.category || String(x.category)===String(options.category)) && (!x.companyId || v24CanCompany(user,x.companyId)));
   }
-  function getPlanningLine(id, options = {}) { return v24Find(getPlanningLines(options),id); }
+  function legacyReportAuth_getPlanningLine(id, options = {}) { return v24Find(getPlanningLines(options),id); }
   function createPlanningLine(input = {}, options = {}) {
     const line=v24NormalizeLine({ ...input, createdBy:input.createdBy||v24CurrentUser(options)?.id }); v24Require("planning.create",{...options,companyId:line.companyId,action:"PLANNING_LINE_CREATE",entityId:line.id}); v24AssertVersionEditable(line.planId,line.version);
     const rows=v24Load(V24_STORAGE_KEYS.LINES); if(rows.some(x=>String(x.planId)===String(line.planId)&&String(x.version)===String(line.version)&&String(x.companyId)===String(line.companyId)&&x.period===line.period&&x.account===line.account&&x.category===line.category&&x.scenario===line.scenario&&x.id!==line.id)) throw Object.assign(new Error("Duplicate planning line."),{code:"DUPLICATE_PLANNING_LINE"});
@@ -27122,8 +27447,8 @@ ${renderAccountingCenterBulkPromo()}
   function lockBudget(planId,options={}) { return v24SetPlanStatus(planId,"LOCKED",options); }
   function createBudget(input={},options={}) { return createPlanningPlan({...input,planType:"BUDGET"},options); }
   function updateBudget(id,patch={},options={}) { return updatePlanningPlan(id,patch,options); }
-  function getBudget(options={}) { return getPlanningPlans({...options,planType:"BUDGET"}).filter(x=>x.planType==="BUDGET"); }
-  function getBudgetVersion(planId,version,options={}) { return getPlanningVersion(planId,version,options); }
+  function legacyReportAuth_getBudget(options={}) { return getPlanningPlans({...options,planType:"BUDGET"}).filter(x=>x.planType==="BUDGET"); }
+  function legacyReportAuth_getBudgetVersion(planId,version,options={}) { return getPlanningVersion(planId,version,options); }
 
   function v24MonthsOfYear(year) { return Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,"0")}`); }
   function v24PeriodMonths(period) { const p=String(period); if(/^\d{4}-\d{2}$/.test(p))return[p]; if(/^\d{4}-Q[1-4]$/.test(p)){const y=p.slice(0,4),q=Number(p.slice(-1));return [0,1,2].map(i=>`${y}-${String((q-1)*3+i+1).padStart(2,"0")}`);} if(/^\d{4}$/.test(p))return v24MonthsOfYear(Number(p)); return []; }
@@ -27144,13 +27469,13 @@ ${renderAccountingCenterBulkPromo()}
     });
     return rows;
   }
-  function getActualPlanningData(options={}) { return v24ActualRows(options); }
+  function legacyReportAuth_getActualPlanningData(options={}) { return v24ActualRows(options); }
   function v24ActualValue(category,companyId,period,options={}) { const row=v24ActualRows({year:Number(String(period).slice(0,4)),...options}).find(x=>String(x.companyId)===String(companyId)&&x.period===period);return v24Number(row?.categories?.[String(category).toUpperCase()]); }
   function v24BudgetForMonth(planId,version,companyId,period,category,options={}) { return getPlanningLines({...options,planId,version,companyId,period,category}).reduce((s,x)=>s+v24Number(x.amount),0); }
 
   function v24CreateForecastPlan(input={},options={}) { return createPlanningPlan({...input,planType:input.planType||"FORECAST"},options); }
   function createForecast(input={},options={}) { return v24CreateForecastPlan(input,options); }
-  function getForecast(options={}) { return getPlanningPlans(options).filter(x=>x.planType==="FORECAST"||x.planType==="LATEST_ESTIMATE"); }
+  function legacyReportAuth_getForecast(options={}) { return getPlanningPlans(options).filter(x=>x.planType==="FORECAST"||x.planType==="LATEST_ESTIMATE"); }
   function v24ForecastValue(method, actualValues, remainingPlanValues, historyValues=[]) {
     const actual=v24Number(actualValues), remaining=v24Number(remainingPlanValues), history=v24Array(historyValues).map(v24Number).filter(Number.isFinite), m=String(method||"MANUAL").toUpperCase();
     if(m==="ACTUAL_PLUS_REMAINING_BUDGET") return actual+remaining;
@@ -27170,28 +27495,28 @@ ${renderAccountingCenterBulkPromo()}
     });
     v24Audit("FORECAST_CREATED","FORECAST",options.planId||null,{year,method,companyId});return results;
   }
-  function getRunRateForecast(options={}) { return generateForecast({...options,method:"RUN_RATE"}); }
-  function getActualPlusRemainingBudgetForecast(options={}) { return generateForecast({...options,method:"ACTUAL_PLUS_REMAINING_BUDGET"}); }
-  function getTrendForecast(options={}) { return generateForecast({...options,method:"TREND"}); }
+  function legacyReportAuth_getRunRateForecast(options={}) { return generateForecast({...options,method:"RUN_RATE"}); }
+  function legacyReportAuth_getActualPlusRemainingBudgetForecast(options={}) { return generateForecast({...options,method:"ACTUAL_PLUS_REMAINING_BUDGET"}); }
+  function legacyReportAuth_getTrendForecast(options={}) { return generateForecast({...options,method:"TREND"}); }
 
-  function calculateVariance(actual,plan,options={}) {
+  function legacyReportAuth_calculateVariance(actual,plan,options={}) {
     const a=v24Number(actual), p=v24Number(plan), variance=a-p, pct=p===0?(a===0?0:null):(variance/Math.abs(p))*100, category=String(options.category||"").toUpperCase(), cfg=V24_CATEGORY_CONFIG[category]||{direction:"EXPENSE",favorableWhen:"NEGATIVE"}, favorable=cfg.favorableWhen==="POSITIVE"?variance>0:variance<0, absThreshold=v24Number(options.absoluteThreshold??V24_DEFAULT_MATERIALITY.absoluteThreshold), pctThreshold=v24Number(options.percentageThreshold??V24_DEFAULT_MATERIALITY.percentageThreshold), material=Math.abs(variance)>=absThreshold || (pct!=null&&Math.abs(pct)>=pctThreshold), redPct=v24Number(options.redPercentage??V24_DEFAULT_MATERIALITY.redPercentage), status=!material?"GREEN":(pct!=null&&Math.abs(pct)>=redPct?"RED":"YELLOW");
     const result={actual:a,plan:p,variance,variancePercent:pct,status,favorable:variance===0?null:favorable,unfavorable:variance===0?null:!favorable,material,varianceType:"ABSOLUTE",category,varianceReason:options.varianceReason||null,managementComment:options.managementComment||null};
     if(options.audit!==false)v24Audit("VARIANCE_CALCULATED","VARIANCE",options.entityId||null,{category,actual:a,plan:p,variance,status});return result;
   }
-  function calculateVariancePercent(actual,plan,options={}) { return calculateVariance(actual,plan,options).variancePercent; }
-  function getVarianceStatus(actual,plan,options={}) { return calculateVariance(actual,plan,options).status; }
-  function getPlanningVarianceReport(options={}) {
+  function legacyReportAuth_calculateVariancePercent(actual,plan,options={}) { return calculateVariance(actual,plan,options).variancePercent; }
+  function legacyReportAuth_getVarianceStatus(actual,plan,options={}) { return calculateVariance(actual,plan,options).status; }
+  function legacyReportAuth_getPlanningVarianceReport(options={}) {
     v24Require("planning.view",{...options,action:"VARIANCE_VIEW"}); const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,categories=options.categories||Object.keys(V24_CATEGORY_CONFIG),rows=[];
     categories.forEach(category=>{const months=v24MonthsOfYear(year),actual=months.reduce((s,p)=>s+v24ActualValue(category,companyId,p,options),0),plan=planId?months.reduce((s,p)=>s+v24BudgetForMonth(planId,version,companyId,p,category,options),0):0;rows.push({category,...calculateVariance(actual,plan,{...options,category,audit:false})});});return rows;
   }
-  function getMaterialVariances(options={}) { return getPlanningVarianceReport(options).filter(x=>x.material); }
+  function legacyReportAuth_getMaterialVariances(options={}) { return getPlanningVarianceReport(options).filter(x=>x.material); }
 
   function createPlanningDriver(input={},options={}) {
     v24Require("planning.create",{...options,companyId:input.companyId,action:"DRIVER_CREATE"}); const row={id:input.id||v24Id("DRV"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),driverType:v24Text(input.driverType||"GENERIC").toUpperCase(),driverName:v24Text(input.driverName||"Driver"),period:v24Text(input.period),value:v24Number(input.value),unit:v24Text(input.unit||"NUMBER"),source:v24Text(input.source||"MANUAL").toUpperCase(),createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.DRIVERS);rows.push(row);v24Save(V24_STORAGE_KEYS.DRIVERS,rows);v24Audit("BUDGET_UPDATED","PLANNING_DRIVER",row.id,row);return v24Clone(row);
   }
-  function getPlanningDrivers(options={}) { v24Require("planning.view",{...options,action:"DRIVER_VIEW"});const user=v24CurrentUser(options);return v24Load(V24_STORAGE_KEYS.DRIVERS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))&&(!x.companyId||v24CanCompany(user,x.companyId))); }
-  function calculateDriverModel(input={},options={}) {
+  function legacyReportAuth_getPlanningDrivers(options={}) { v24Require("planning.view",{...options,action:"DRIVER_VIEW"});const user=v24CurrentUser(options);return v24Load(V24_STORAGE_KEYS.DRIVERS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))&&(!x.companyId||v24CanCompany(user,x.companyId))); }
+  function legacyReportAuth_calculateDriverModel(input={},options={}) {
     const type=String(input.driverType||"").toUpperCase(), volume=v24Number(input.volume), price=v24Number(input.price), revenue=v24Number(input.revenue), ratio=v24Number(input.ratio), headcount=v24Number(input.headcount), avgCost=v24Number(input.averageCost), debt=v24Number(input.debt), rate=v24Number(input.rate), assetBase=v24Number(input.assetBase), result={driverType:type};
     if(type==="REVENUE")result.amount=volume*price;
     else if(type==="COGS")result.amount=revenue*ratio;
@@ -27203,33 +27528,33 @@ ${renderAccountingCenterBulkPromo()}
   }
   function createScenario(input={},options={}) { v24Require("scenario.manage",{...options,companyId:input.companyId,action:"SCENARIO_CREATE"});const name=String(input.scenario||"BASE").toUpperCase();if(!V24_SCENARIOS.includes(name))throw Object.assign(new Error("Invalid scenario."),{code:"INVALID_SCENARIO"});const row={id:input.id||v24Id("SCN"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),scenario:name,parameters:v24Clone(input.parameters||{}),status:input.status||"DRAFT",createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS);rows.push(row);v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_CREATED","SCENARIO",row.id,row);return v24Clone(row); }
   function updateScenario(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Scenario not found."),{code:"SCENARIO_NOT_FOUND"});const cur=rows[i];v24Require("scenario.manage",{...options,companyId:cur.companyId,action:"SCENARIO_UPDATE",entityId:id});rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_UPDATED","SCENARIO",id,{patch});return v24Clone(rows[i]); }
-  function getScenarios(options={}) { v24Require("scenario.view",{...options,action:"SCENARIO_VIEW"});return v24Load(V24_STORAGE_KEYS.SCENARIOS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))); }
-  function calculateScenario(base={},scenario={},options={}) { const params=scenario.parameters||{};const revenue=v24Number(base.revenue)*(1+v24Number(params.revenueGrowth)/100);const cogs=v24Number(base.cogs)*(1+v24Number(params.cogsPercent)/100);const opex=v24Number(base.opex)*(1+v24Number(params.opexPercent)/100);const ebitda=revenue-cogs-opex;const interest=v24Number(base.interest)*(1+v24Number(params.interestRate)/10000);const netIncome=ebitda-v24Number(base.depreciation)-interest-v24Number(base.tax);return {...base,scenario:scenario.scenario||"BASE",revenue,cogs,opex,ebitda,interest,netIncome,cashFlow:v24Number(base.cashFlow)+v24Number(params.cashFlowAdjustment)}; }
+  function legacyReportAuth_getScenarios(options={}) { v24Require("scenario.view",{...options,action:"SCENARIO_VIEW"});return v24Load(V24_STORAGE_KEYS.SCENARIOS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))); }
+  function legacyReportAuth_calculateScenario(base={},scenario={},options={}) { const params=scenario.parameters||{};const revenue=v24Number(base.revenue)*(1+v24Number(params.revenueGrowth)/100);const cogs=v24Number(base.cogs)*(1+v24Number(params.cogsPercent)/100);const opex=v24Number(base.opex)*(1+v24Number(params.opexPercent)/100);const ebitda=revenue-cogs-opex;const interest=v24Number(base.interest)*(1+v24Number(params.interestRate)/10000);const netIncome=ebitda-v24Number(base.depreciation)-interest-v24Number(base.tax);return {...base,scenario:scenario.scenario||"BASE",revenue,cogs,opex,ebitda,interest,netIncome,cashFlow:v24Number(base.cashFlow)+v24Number(params.cashFlowAdjustment)}; }
 
-  function getPlanningCashForecast(options={}) {
+  function legacyReportAuth_getPlanningCashForecast(options={}) {
     v24Require("planning.view",{...options,action:"CASH_FORECAST_VIEW"});const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,months=v24MonthsOfYear(year),out=[];let opening=v24Number(options.openingCash);
     months.forEach(period=>{const operating=v24Number(options.monthlyOperatingCash?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"OPERATING_CASH_FLOW",options):0));const capex=v24Number(options.monthlyCapex?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"CAPEX",options):0));const financing=v24Number(options.monthlyFinancing?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"FINANCING_CASH_FLOW",options):0));const lease=v24Number(options.monthlyLeasePayments?.[period] ?? (v24ActualValue("LEASE_PAYMENT",companyId,period,options)));const interest=v24Number(options.monthlyInterest?.[period] ?? v24ActualValue("INTEREST",companyId,period,options));const tax=v24Number(options.monthlyTax?.[period]||0);const closing=opening+operating-capex+financing-lease-interest-tax;out.push({period,companyId,openingCash:opening,operatingCashFlow:operating,capex,financing,leasePayments:lease,interest,tax,netCashFlow:closing-opening,closingCash:closing,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY")});opening=closing;});return out;
   }
-  function getGroupPlanningData(options={}) {
+  function legacyReportAuth_getGroupPlanningData(options={}) {
     v24Require("planning.view",{...options,action:"GROUP_PLANNING_VIEW"});const groupId=options.groupId,plans=getPlanningPlans({...options,groupId}),planId=options.planId||plans[0]?.id,version=options.version||getBudgetVersions(planId,options)[0]?.version||1,lines=getPlanningLines({...options,planId,version,groupId}),by={};lines.forEach(l=>{const c=l.companyId||"UNASSIGNED";if(!by[c])by[c]={companyId:c,revenue:0,ebitda:0,cashFlow:0};if(l.category==="REVENUE")by[c].revenue+=v24Number(l.amount);if(l.category==="EBITDA")by[c].ebitda+=v24Number(l.amount);if(l.category==="OPERATING_CASH_FLOW"||l.category==="NET_CASH_FLOW")by[c].cashFlow+=v24Number(l.amount);});return {groupId,planId,version,companies:Object.values(by),totals:Object.values(by).reduce((a,r)=>({revenue:a.revenue+r.revenue,ebitda:a.ebitda+r.ebitda,cashFlow:a.cashFlow+r.cashFlow}),{revenue:0,ebitda:0,cashFlow:0})};
   }
-  function getCompanyPlanningContribution(companyId,options={}) { const data=getGroupPlanningData({...options,companyId});return data.companies.find(x=>String(x.companyId)===String(companyId))||{companyId,revenue:0,ebitda:0,cashFlow:0}; }
-  function getEbitdaBridge(options={}) { const rows=getPlanningVarianceReport({...options,categories:["REVENUE","COGS","OPEX"]});const budgetEbitda=v24Number(options.budgetEbitda);const revenue=rows.find(x=>x.category==="REVENUE")?.variance||0,cogs=rows.find(x=>x.category==="COGS")?.variance||0,opex=rows.find(x=>x.category==="OPEX")?.variance||0;return {budgetEbitda,revenueVariance:revenue,cogsVariance:-cogs,opexVariance:-opex,forecastEbitda:budgetEbitda+revenue-cogs-opex}; }
-  function getRevenueBridge(options={}) { const params=options.drivers||{};return {budgetRevenue:v24Number(options.budgetRevenue),volumeImpact:v24Number(params.volumeImpact),priceImpact:v24Number(params.priceImpact),mixImpact:v24Number(params.mixImpact),forecastRevenue:v24Number(options.budgetRevenue)+v24Number(params.volumeImpact)+v24Number(params.priceImpact)+v24Number(params.mixImpact)}; }
-  function getCashBridge(options={}) { return {budgetClosingCash:v24Number(options.budgetClosingCash),operatingVariance:v24Number(options.operatingVariance),capexVariance:v24Number(options.capexVariance),financingVariance:v24Number(options.financingVariance),fxVariance:v24Number(options.fxVariance),forecastClosingCash:v24Number(options.budgetClosingCash)+v24Number(options.operatingVariance)+v24Number(options.capexVariance)+v24Number(options.financingVariance)+v24Number(options.fxVariance)}; }
+  function legacyReportAuth_getCompanyPlanningContribution(companyId,options={}) { const data=getGroupPlanningData({...options,companyId});return data.companies.find(x=>String(x.companyId)===String(companyId))||{companyId,revenue:0,ebitda:0,cashFlow:0}; }
+  function legacyReportAuth_getEbitdaBridge(options={}) { const rows=getPlanningVarianceReport({...options,categories:["REVENUE","COGS","OPEX"]});const budgetEbitda=v24Number(options.budgetEbitda);const revenue=rows.find(x=>x.category==="REVENUE")?.variance||0,cogs=rows.find(x=>x.category==="COGS")?.variance||0,opex=rows.find(x=>x.category==="OPEX")?.variance||0;return {budgetEbitda,revenueVariance:revenue,cogsVariance:-cogs,opexVariance:-opex,forecastEbitda:budgetEbitda+revenue-cogs-opex}; }
+  function legacyReportAuth_getRevenueBridge(options={}) { const params=options.drivers||{};return {budgetRevenue:v24Number(options.budgetRevenue),volumeImpact:v24Number(params.volumeImpact),priceImpact:v24Number(params.priceImpact),mixImpact:v24Number(params.mixImpact),forecastRevenue:v24Number(options.budgetRevenue)+v24Number(params.volumeImpact)+v24Number(params.priceImpact)+v24Number(params.mixImpact)}; }
+  function legacyReportAuth_getCashBridge(options={}) { return {budgetClosingCash:v24Number(options.budgetClosingCash),operatingVariance:v24Number(options.operatingVariance),capexVariance:v24Number(options.capexVariance),financingVariance:v24Number(options.financingVariance),fxVariance:v24Number(options.fxVariance),forecastClosingCash:v24Number(options.budgetClosingCash)+v24Number(options.operatingVariance)+v24Number(options.capexVariance)+v24Number(options.financingVariance)+v24Number(options.fxVariance)}; }
 
-  function getPlanningDataQualityStatus(options={}) {
+  function legacyReportAuth_getPlanningDataQualityStatus(options={}) {
     v24Require("planning.view",{...options,action:"PLANNING_DATA_QUALITY"});const plans=getPlanningPlans(options),lines=v24Load(V24_STORAGE_KEYS.LINES),drivers=v24Load(V24_STORAGE_KEYS.DRIVERS),checks=[];const add=(code,ok,severity="WARNING",details=null)=>checks.push({code,passed:!!ok,severity,details});
     add("PLANS_EXIST",plans.length>0,"WARNING");add("NO_DUPLICATE_LINES",new Set(lines.map(x=>x.id)).size===lines.length,"BLOCKING");add("VALID_CURRENCY",lines.every(x=>!!x.currency),"BLOCKING");add("VALID_PERIOD",lines.every(x=>/^\d{4}(-\d{2}|-Q[1-4])?$/.test(String(x.period))),"BLOCKING");add("COMPANY_ACCESS",lines.filter(x=>x.companyId).every(x=>v24CanCompany(v24CurrentUser(options),x.companyId)),"BLOCKING");add("DRIVER_REFERENCES",drivers.every(x=>x.period&&x.driverName),"WARNING");const blocking=checks.some(x=>!x.passed&&x.severity==="BLOCKING"),warnings=checks.some(x=>!x.passed);return {version:V24_SCHEMA_VERSION,status:blocking?"RED":(warnings?"YELLOW":"GREEN"),checks,planCount:plans.length,lineCount:lines.length,driverCount:drivers.length};
   }
-  function getPlanningControlStatus(options={}) { return getPlanningDataQualityStatus(options); }
-  function getPlanningCfoDashboardData(options={}) {
+  function legacyReportAuth_getPlanningControlStatus(options={}) { return getPlanningDataQualityStatus(options); }
+  function legacyReportAuth_getPlanningCfoDashboardData(options={}) {
     v24Require("planning.view",{...options,action:"PLANNING_CFO_VIEW"});const year=Number(options.year||new Date().getFullYear()),variance=getPlanningVarianceReport({...options,year}),material=variance.filter(x=>x.material),forecast=generateForecast({...options,year,method:options.forecastMethod||"ACTUAL_PLUS_REMAINING_BUDGET",audit:false}),by=(cat)=>forecast.find(x=>x.category===cat)||{ytdActual:0,fullYearForecast:0,remainingBudget:0};const revenueBudget=v24Number(options.revenueBudget),ebitdaBudget=v24Number(options.ebitdaBudget);return {version:V24_PLANNING_ENGINE_VERSION,year,revenue:{budget:revenueBudget,actual:by("REVENUE").ytdActual,forecast:by("REVENUE").fullYearForecast},ebitda:{budget:ebitdaBudget,actual:by("EBITDA").ytdActual,forecast:by("EBITDA").fullYearForecast,margin:by("REVENUE").fullYearForecast?by("EBITDA").fullYearForecast/by("REVENUE").fullYearForecast*100:0},netIncomeForecast:by("NET_INCOME").fullYearForecast,cashFlowForecast:getPlanningCashForecast(options),budgetVariance:variance,forecastVariance:variance,materialVariances:material,scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};
   }
-  function exportPlanningData(options={}) { v24Require("planning.export",{...options,action:"PLANNING_EXPORT"});const payload={schemaVersion:V24_SCHEMA_VERSION,exportedAt:v24Now(),plans:getPlanningPlans(options),versions:v24VersionRows(),lines:getPlanningLines(options),drivers:getPlanningDrivers(options),scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};v24Audit("PLANNING_EXPORTED","PLANNING",null,{planCount:payload.plans.length,lineCount:payload.lines.length});return payload; }
-  function exportBudget(options={}) { return exportPlanningData({...options,planType:"BUDGET"}); }
-  function exportForecast(options={}) { return exportPlanningData({...options,planType:"FORECAST"}); }
-  function exportScenario(options={}) { return exportPlanningData(options); }
+  function legacyReportAuth_exportPlanningData(options={}) { v24Require("planning.export",{...options,action:"PLANNING_EXPORT"});const payload={schemaVersion:V24_SCHEMA_VERSION,exportedAt:v24Now(),plans:getPlanningPlans(options),versions:v24VersionRows(),lines:getPlanningLines(options),drivers:getPlanningDrivers(options),scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};v24Audit("PLANNING_EXPORTED","PLANNING",null,{planCount:payload.plans.length,lineCount:payload.lines.length});return payload; }
+  function legacyReportAuth_exportBudget(options={}) { return exportPlanningData({...options,planType:"BUDGET"}); }
+  function legacyReportAuth_exportForecast(options={}) { return exportPlanningData({...options,planType:"FORECAST"}); }
+  function legacyReportAuth_exportScenario(options={}) { return exportPlanningData(options); }
   function v24MigrationReport() { const plans=v24Load(V24_STORAGE_KEYS.PLANS),lines=v24Load(V24_STORAGE_KEYS.LINES),versions=v24VersionRows();return {from:"23.0",to:V24_SCHEMA_VERSION,plans:plans.length,versions:versions.length,lines:lines.length,status:"READY",actualEnginePreserved:true,fxEnginePreserved:true,consolidationPreserved:true}; }
   function v24MigrateData() {
     [V24_STORAGE_KEYS.PLANS,V24_STORAGE_KEYS.VERSIONS,V24_STORAGE_KEYS.LINES,V24_STORAGE_KEYS.DRIVERS,V24_STORAGE_KEYS.SCENARIOS,V24_STORAGE_KEYS.VARIANCES,V24_STORAGE_KEYS.CASH,V24_STORAGE_KEYS.ADJUSTMENTS,V24_STORAGE_KEYS.AUDIT].forEach(key=>{const rows=v24Load(key);if(Array.isArray(rows))v24Save(key,rows.map(x=>({...x,schemaVersion:x.schemaVersion||V24_SCHEMA_VERSION})));});v24PermissionInstall();return v24MigrationReport();
@@ -27565,7 +27890,7 @@ ${renderAccountingCenterBulkPromo()}
    * @param {Object} contract - Kiralama sözleşmesi
    * @returns {Array<Object>} Etkin ödeme planı
    */
-  function getEffectiveSchedule(contract) {
+  function legacyReportAuth_getEffectiveSchedule(contract) {
     if (contract?.earlyPaymentSchedule?.length) {
       const engine = getPrivateCalculationForConsumer(contract);
       const cutoff = parseDate(contract.earlyPaymentScheduleAsOf);
@@ -27672,7 +27997,7 @@ ${renderAccountingCenterBulkPromo()}
    * "Gelecek Kiralamalar" KPI verisini hesaplar.
    * @returns {Object} { count, contracts, totalMonthlyCommitment }
    */
-  function getFutureLeasesKPI() {
+  function legacyReportAuth_getFutureLeasesKPI() {
     const pending = safeArray(contracts).filter(c => c.status === "pending");
     const totalMonthlyCommitment = pending.reduce((sum, c) => sum + (Number(c.monthlyPayment) || 0), 0);
     return {
@@ -27688,7 +28013,7 @@ ${renderAccountingCenterBulkPromo()}
    * yoksa sessizce atlar.
    * @returns {void}
    */
-  function updateFutureLeaseKPI() {
+  function legacyReportAuth_updateFutureLeaseKPI() {
     try {
       const kpi = getFutureLeasesKPI();
       setText("futureLeasesCount", kpi.count);
@@ -27725,7 +28050,7 @@ ${renderAccountingCenterBulkPromo()}
    * @param {Object} engine - calculateLeaseEngine(contract) sonucu
    * @returns {string} HTML string
    */
-  function buildReportHtml(contract, engine) {
+  function legacyReportAuth_buildReportHtml(contract, engine) {
     const rows = (engine.schedule || []).map(period => `
       <tr>
         <td style="padding:6px;border:1px solid #e2e8f0;">${period.period}</td>
@@ -27769,7 +28094,7 @@ ${renderAccountingCenterBulkPromo()}
    * @param {Object} [options] - Şu an kullanılmıyor, ileriye dönük
    * @returns {Promise<Object>} result - { valid }
    */
-  async function exportReport(contractId, format, options = {}) {
+  async function legacyReportAuth_exportReport(contractId, format, options = {}) {
     try {
       showLoading(`${String(format).toUpperCase()} raporu hazırlanıyor...`, null);
       const contract = contracts.find(c => c.id === contractId);
@@ -29139,7 +29464,7 @@ ${renderAccountingCenterBulkPromo()}
     return V26_COUNTRIES.map(c => `<option value="${c.code}" ${c.code === selected ? "selected" : ""}>${c.name} (${c.code})</option>`).join("");
   }
 
-  function v26ConvertToPresentation(amount, fromCurrency, toCurrency, asOfDate) {
+  function legacyReportAuth_v26ConvertToPresentation(amount, fromCurrency, toCurrency, asOfDate) {
     const from = String(fromCurrency || "TRY").toUpperCase();
     const to = String(toCurrency || from).toUpperCase();
     if (from === to) return { amount: Number(amount) || 0, rate: 1, from, to, ok: true };
@@ -29165,7 +29490,7 @@ ${renderAccountingCenterBulkPromo()}
      the original value; the result carries an explicit error.
   ========================================================== */
 
-  async function v26ConvertScheduleToPresentation(schedule, fromCurrency, toCurrency, asOfDate) {
+  async function legacyReportAuth_v26ConvertScheduleToPresentation(schedule, fromCurrency, toCurrency, asOfDate) {
     const rows = Array.isArray(schedule) ? schedule : [];
     const from = String(fromCurrency || "TRY").toUpperCase();
     const to = String(toCurrency || from).toUpperCase();
@@ -29208,7 +29533,7 @@ ${renderAccountingCenterBulkPromo()}
     return /amount|value|balance|liability|payment|interest|principal|depreciation|rou|debit|credit|cost|adjustment|gain|loss|total|carrying|expense|income|asset|actual|expected/i.test(String(key || ""));
   }
 
-  async function v26ConvertJsonMoneyToPresentation(value, fromCurrency, toCurrency, asOfDate) {
+  async function legacyReportAuth_v26ConvertJsonMoneyToPresentation(value, fromCurrency, toCurrency, asOfDate) {
     const from = String(fromCurrency || "TRY").toUpperCase();
     const to = String(toCurrency || from).toUpperCase();
     let rate = 1;
@@ -29390,7 +29715,7 @@ ${renderAccountingCenterBulkPromo()}
       </div>`;
   }
 
-  function v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate) {
+  function legacyReportAuth_v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate) {
     const companies = v26LoadCompanies().filter(c => !groupId || c.groupId === groupId);
     const asOf = reportingDate || new Date().toISOString().slice(0, 10);
     const allContracts = typeof contracts !== "undefined" ? contracts : [];
@@ -29552,7 +29877,7 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function v26ExportConsolidationExcel(groupId, presentationCurrency, reportingDate) {
+  function legacyReportAuth_v26ExportConsolidationExcel(groupId, presentationCurrency, reportingDate) {
     const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
     let v22EliminationRows = [];
     let v22EliminationTotalPresentation = 0;
@@ -29750,7 +30075,7 @@ ${renderAccountingCenterBulkPromo()}
     document.body.appendChild(modal);modal.querySelector('#cancel').onclick=()=>modal.remove();modal.querySelector('#save').onclick=()=>v26UiRun(()=>{const input={groupId:modal.querySelector('#group').value,fromCompanyId:modal.querySelector('#from').value,toCompanyId:modal.querySelector('#to').value,account:modal.querySelector('#account').value,amount:Number(modal.querySelector('#amount').value),currency:modal.querySelector('#currency').value,eliminationType:modal.querySelector('#type').value,reportingDate:modal.querySelector('#date').value,reason:modal.querySelector('#reason').value,status:modal.querySelector('#status').value}; if(row)updateElimination(row.id,input);else createElimination(input);modal.remove();onDone();});
   }
 
-  function v26RenderConsolidationReportBody(container, options = {}) {
+  function legacyReportAuth_v26RenderConsolidationReportBody(container, options = {}) {
     if (!container) return;
     injectV26Styles();
     const presentationCurrency = options.presentationCurrency || "USD";
@@ -30030,7 +30355,7 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  function renderConsolidationReportPage(container, options = {}) {
+  function legacyReportAuth_renderConsolidationReportPage(container, options = {}) {
     const renderer = window.LeaseQantTfrs16ReportingUi?.renderConsolidation;
     if (typeof renderer === "function") return renderer(container, options);
     if (!container) return;
@@ -30150,8 +30475,8 @@ ${renderAccountingCenterBulkPromo()}
           accountingCenter: renderAccountingCenterPage,
           footnotes: renderFootnotesPage,
           riskControls: renderRiskControlsPage,
-          // Eski deep-link'ler kırılmasın; ayrıntılı ekran Dipnotlar'dır.
-          financialReporting: renderFootnotesPage,
+          // REPORT-AUTH-R1 financial reports use the separate server reporting package.
+          financialReporting: renderFinancialReportingPage,
           consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
         };
         // dashboard.html'in NATİVE linkleri (JS click handler'ları)
@@ -30190,10 +30515,10 @@ ${renderAccountingCenterBulkPromo()}
     loadAccountMapping,
     saveAccountMapping,
     getAccountCode,
-    applyAccountMappingToJournal,
+    applyAccountMappingToJournal: journalAuthorityUnavailable,
     exportBulkJournals,
-    buildTms29BulkJournalEntries,
-    buildAppliedChangeJournalEntries,
+    buildTms29BulkJournalEntries: journalAuthorityUnavailable,
+    buildAppliedChangeJournalEntries: journalAuthorityUnavailable,
     exportJournalEntries,
     renderAccountMappingPage,
     renderCloseDashboardPage,
@@ -30266,7 +30591,7 @@ ${renderAccountingCenterBulkPromo()}
     loadAccountMapping,
     saveAccountMapping,
     getAccountCode,
-    applyAccountMappingToJournal,
+    applyAccountMappingToJournal: journalAuthorityUnavailable,
     exportBulkJournals,
     exportJournalEntries,
     renderAccountMappingPage,
@@ -30495,14 +30820,14 @@ const V26_FX_UI_PAGE_SIZE = 50;
 
   const AUDIT_TRAIL_PAGE_SIZE = 25;
 
-  function v26RenderAuditTrailBody(container) {
+  function legacyReportAuth_v26RenderAuditTrailBody(container) {
     const renderer = window.LeaseQantTfrs16ReportingUi?.renderAuditTrailBody;
     if (typeof renderer === "function") return renderer(container);
     if (!container) return;
     container.innerHTML = `<div class="gk-v26-card">Denetim izi arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
   }
 
-  function renderAuditTrailPage(container) {
+  function legacyReportAuth_renderAuditTrailPage(container) {
     const renderer = window.LeaseQantTfrs16ReportingUi?.renderAuditTrail;
     if (typeof renderer === "function") return renderer(container);
     if (!container) return;

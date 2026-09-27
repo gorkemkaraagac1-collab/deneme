@@ -13,6 +13,9 @@ jobs:
         run: |
           set -euo pipefail
           for f in index.html tfrs16.html js/shell.js js/admin.js js/tfrs16-ui.js frontend/admin/index.html; do test -f "$f"; done
-          for p in backend test package.json package-lock.json cloudbuild.yaml; do test ! -e "$p"; done
+          for p in backend package.json package-lock.json cloudbuild.yaml; do test ! -e "$p"; done
+          # Presentation/transport tests are public source, excluded from Pages.
+          # Private engines, source DTO evidence and mapping config stay forbidden.
+          node scripts/check-authority-public-boundary.js
       - name: Verify TFRS16 private cutover gate
         run: node scripts/check-tfrs16-cutover.js

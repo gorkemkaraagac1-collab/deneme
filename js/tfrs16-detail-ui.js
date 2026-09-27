@@ -50,11 +50,7 @@
                 bir "ilk muhasebeleştirme fişi" üretilmez.
               </p>
             </div>
-          ` : call("renderJournalEntry",
-            "İlk Muhasebeleştirme Fişi",
-            initialJournalEntries,
-            initialJournalCurrency
-          )}`;
+          ` : '<div data-authoritative-initial-journal><p>Güvenilir ilk muhasebeleştirme fişi yükleniyor...</p></div>'}`;
 
     const detailPanelsHtml = reporting.renderContractDetailPanels?.({
       summaryHtml: reporting.renderContractSummaryTab?.(contract, engine, { calculationError }) || "",

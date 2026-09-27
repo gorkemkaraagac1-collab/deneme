@@ -34,6 +34,9 @@ const fxUi = read("js/tfrs16-fx-ui.js");
 const portfolioUi = read("js/tfrs16-portfolio-ui.js");
 const reportingUi = read("js/tfrs16-reporting-ui.js");
 const operationsUi = read("js/tfrs16-operations-ui.js");
+const disclosureUi = read("js/tfrs16-disclosure-ui.js");
+const journalUi = read("js/tfrs16-journal-ui.js");
+const authorityUi = read("js/tfrs16-report-authority-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 const publicRuntimeSource = [
   html,
@@ -43,6 +46,8 @@ const publicRuntimeSource = [
 ].join("\n");
 
 const checks = [
+  ["Authority modules load before main UI", ["tfrs16-journal-ui.js","tfrs16-report-authority-ui.js"].every(name => html.includes('src="js/'+name) && html.indexOf(name) < html.indexOf("tfrs16-ui.js")) && html.indexOf("tfrs16-disclosure-ui.js") < html.indexOf("tfrs16-reporting-ui.js") && /DOMContentLoaded/.test(coordinator)],
+  ["Journal preview DTO has no active browser journal builder", /loadJournalAuthorityPackage/.test(journalUi) && /requireAccepted/.test(journalUi) && !/calculateLease|calculateJournal/.test(journalUi)],
   ["legacy public engine asset is removed", !exists("js/tfrs16-engine.js")],
   ["TFRS16 page loads the UI runtime asset", html.includes('src="js/tfrs16-ui.js') && !html.includes("tfrs16-engine.js")],
   ["private adapter is loaded", html.includes('src="js/private-calculation-api.js')],
@@ -173,13 +178,13 @@ const checks = [
   ["removed lease-math helpers are absent from HTML handlers", !/\b(?:resolveDiscountRateConvention|resolveContractMonthlyRate|buildLeasePaymentDates|monthsFromCommencement|calculateCurrentLiability|calculateNonCurrentLiability)\s*\(/.test(html)],
   ["public runtime contains no retired api=0 fallback wording", !/\?api=0|public engine is available|local engine as the source/.test(engine)],
   ["footnotes page entry lives in the reporting UI module", /renderFootnotes/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderFootnotes/.test(engine) && !/function renderFootnotesPage\(container\)[\s\S]{0,1000}loadTms29Many/.test(engine)],
-  ["footnotes UI reads private TMS29 results through explicit bridges", /loadTms29Many/.test(reportingUi) && /computePrivatePortfolioTms29/.test(reportingUi) && /getContractsSnapshot/.test(engine) && /privateCalculationCacheHas/.test(engine)],
-  ["footnotes UI renders the private TMS29 envelope", /prepareFinancialReportingData/.test(reportingUi) && /renderAssetNoteHtml/.test(reportingUi) && /renderLiabilityNoteHtml/.test(reportingUi) && /renderLiquidityNoteHtml/.test(reportingUi)],
-  ["TMS29 export uses the private batch facade", /async function exportTms29InflationNote\([\s\S]{0,2600}loadTms29Many/.test(engine) && !/async function exportTms29InflationNote\([\s\S]{0,2600}v191ComputePortfolioTms29\(rouRows/.test(engine)],
+  ["Dipnot loads authenticated availability then DISC", /loadLeaseDisclosureAvailability/.test(disclosureUi) && /facade.loadLeaseDisclosure\(availability\)/.test(disclosureUi) && /getLeaseDisclosureAvailability/.test(adapter)],
+  ["Dipnot delegates to the DISC DTO renderer", /disclosure.renderFootnotes\(container\)/.test(reportingUi) && /rowsForTab\(state.pkg/.test(disclosureUi) && !/loadTms29Many/.test(disclosureUi)],
+  ["Uncertified TMS29 reporting export is unavailable", /function exportTms29InflationNote\(\) \{ return reportingAuthorityUnavailable\(\); \}/.test(engine)],
   ["TMS29 journal consumers use the private journal envelope", /async function buildTms29BulkJournalEntries[\s\S]{0,900}loadTms29\(/.test(engine) && !/async function buildTms29BulkJournalEntries[\s\S]{0,900}applyTMS29Restatement\(/.test(engine)],
-  ["TMS29 single and batch consumers use private facade loaders", /loadTms29\(/.test(engine) && /loadTms29Many\(/.test(engine) && /loadTms29Many\(/.test(reportingUi)],
-  ["financial reporting consumers load the private TMS29 portfolio envelope", /async function v191RenderFinancialReportingPrivate[\s\S]{0,700}v191LoadPrivatePortfolioTms29/.test(engine) && /renderFinancialReportingBody/.test(reportingUi)],
-  ["financial reporting exports load the private TMS29 portfolio envelope", /async function exportRouAssetMovementNote[\s\S]{0,500}v191LoadPrivatePortfolioTms29/.test(engine) && /async function exportLeaseLiabilityMovementNote[\s\S]{0,500}v191LoadPrivatePortfolioTms29/.test(engine)],
+  ["Other TMS29 operations retain private loaders; reporting has no TMS29 fallback", /loadTms29\(/.test(engine) && /loadTms29Many\(/.test(engine) && !/loadTms29Many\(/.test(authorityUi)],
+  ["Financial reporting delegates to the authoritative report module", /LeaseQantReportingAuthorityUi/.test(engine) && /exportPackage,page,dashboard/.test(authorityUi) && /getReportingAuthorityPackage/.test(adapter)],
+  ["Uncertified movement exports remain unavailable", /function exportRouAssetMovementNote\(\) \{ return reportingAuthorityUnavailable\(\); \}/.test(engine) && /function exportLeaseLiabilityMovementNote\(\) \{ return reportingAuthorityUnavailable\(\); \}/.test(engine)],
   ["no production calls remain to the legacy TMS29 portfolio calculator", !engine.split(/\n/).some(line => /v191ComputePortfolioTms29\s*\(/.test(line) && !/function\s+v191ComputePortfolioTms29\s*\(/.test(line) && !/^\s*(?:\/\/|\*)/.test(line))],
   ["private facade exposes modification preview loading", /loadModificationPreview/.test(facade)],
   ["private facade exposes reassessment preview loading", /loadReassessmentPreview/.test(facade)],
@@ -202,7 +207,7 @@ const checks = [
   ["initial refresh waits for private cache hydration", /function refresh\(\)\s*\{[\s\S]{0,500}Array\.isArray\(contracts\)[\s\S]{0,180}PRIVATE_CALCULATION_CACHE\.size === 0/.test(engine)],
   ["initial hydration warms private month-end reporting-date results", /const requestedKpiDate = getDashboardReportingDate\(new Date\(\)\)[\s\S]{0,260}ensurePrivateReportingDateCache\(contracts, requestedKpiDate\)/.test(engine)],
   ["API-primary classification reads the private reporting-date envelope", /function calculateLiabilitySplitAsOf\([\s\S]{0,1800}getPrivateReportingDateResult\(contract, reportingDate\)/.test(engine) && /PRIVATE_REPORTING_DATE_NOT_READY/.test(engine)],
-  ["financial reporting warms its selected reporting date", /async function v191RenderFinancialReportingPrivate\([\s\S]{0,700}ensurePrivateReportingDateCache\(contracts, effectivePeriodEnd\)/.test(engine)],
+  ["Authority report module requires verified backend packages", /requirePackage/.test(authorityUi) && /REPORTING_PACKAGE_NOT_VERIFIED/.test(authorityUi) && /SERVER_PERSISTED_PRIVATE_REPORTING/.test(authorityUi)],
   // FAZ 2 (2026-09-15): local fallback dalı kaldırıldığı için artık
   // koşullu bir "if (isPrivateCalculationApiReady())" sarmalayıcısı yok —
   // hem getPrivateCalculationForConsumer hem calculateLeaseEngine
@@ -214,7 +219,7 @@ const checks = [
   ["payment-plan consumer requests the private read-only result", /function loadPrivateReadOnlyResult\(/.test(engine) && /loadReadOnly/.test(privateCacheUi) && /const privateResult = await loadPrivateReadOnlyResult\(contract\)/.test(engine)],
   ["synchronous consumers have a private-cache lookup", /function getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["control schedule resolves through the private-only source", /function controlSchedule\(contract\)\s*\{[\s\S]{0,500}resolveContractScheduleSource\(contract\)/.test(engine)],
-  ["contract tools prefer the warmed private schedule", /function v191RenderContractTools\(\)[\s\S]{0,900}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
+  ["Retired browser contract reporting constructors remain unavailable", /function v191RenderContractTools\(\) \{ return reportingAuthorityUnavailable\(\); \}/.test(engine)],
   ["report schedule source prefers private result for unchanged contracts", /function resolveContractScheduleSource\(contract\)[\s\S]{0,2200}expectedPrivateSource[\s\S]{0,900}getPrivateCachedCalculationResult\(contract\)/.test(engine)],
   ["report schedule source accepts versioned private event-aware results", /eventAwareScheduleVersion === 1/.test(engine) && /privateResult\.scheduleSource === expectedPrivateSource/.test(engine) && /function resolveContractScheduleSource\(contract\)[\s\S]{0,2600}source: appliedEvent \? \"ERROR\"/.test(engine)],
   ["report schedule source has no browser fallback", !/function resolveContractScheduleSource\(contract\)[\s\S]{0,2600}buildReassessedSchedule\(contract/.test(engine) && !/function resolveContractScheduleSource\(contract\)[\s\S]{0,2600}buildModifiedSchedule\(contract/.test(engine)],
