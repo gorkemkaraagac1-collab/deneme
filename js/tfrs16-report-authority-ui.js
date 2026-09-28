@@ -55,7 +55,9 @@
  function isoDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
   const date=new Date(`${value}T00:00:00Z`);return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===value;}
  function validPeriodRange(periodStart,periodEnd){return isoDate(periodStart)&&isoDate(periodEnd)&&periodStart<=periodEnd;}
- function defaultPeriod(){const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),0),start=new Date(end.getFullYear(),end.getMonth(),1);
+ function defaultPeriod(){const shared=global.LeaseQantReportingPeriod?.get?.();
+  if(shared&&validPeriodRange(shared.periodStart,shared.periodEnd))return {periodStart:shared.periodStart,periodEnd:shared.periodEnd,reportingDate:shared.periodEnd};
+  const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),0),start=new Date(end.getFullYear(),end.getMonth(),1);
   const dateOnly=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const periodStart=dateOnly(start),periodEnd=dateOnly(end);return {periodStart,periodEnd,reportingDate:periodEnd};}
  function read(reportingDate){requirePackage(current);if(reportingDate){const d=reportingDate instanceof Date?reportingDate:new Date(reportingDate);
