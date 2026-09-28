@@ -104,6 +104,44 @@
     return value.getLeaseDisclosure(availability, options);
   }
 
+  async function createTrustedDisclosureSnapshots(contractIds, period, options) {
+    const value = adapter();
+    if (!Array.isArray(contractIds) || !contractIds.length || contractIds.length > 500
+      || contractIds.some(id => (typeof id !== "string" && typeof id !== "number") || !String(id).trim())
+      || new Set(contractIds.map(String)).size !== contractIds.length) {
+      throw new TypeError("Unique persisted contract IDs are required");
+    }
+    if (typeof value.executeTrustedDisclosureCalculation !== "function"
+      || typeof value.createTrustedDisclosureSnapshot !== "function") {
+      throw new Error("Trusted disclosure source production is unavailable");
+    }
+    const results = [];
+    for (const rawId of contractIds) {
+      const contractId = String(rawId);
+      try {
+        const execution = await value.executeTrustedDisclosureCalculation(contractId, period, options);
+        if (execution.eligibleForDisclosureSnapshot !== true
+          || typeof execution.calculationId !== "string" || !execution.calculationId) {
+          throw Object.assign(new Error("The trusted calculation is not eligible for disclosure"), {
+            code: "DISCLOSURE_TRUSTED_EXECUTION_NOT_ELIGIBLE"
+          });
+        }
+        const snapshot = await value.createTrustedDisclosureSnapshot(execution.calculationId, options);
+        if (typeof snapshot.snapshotId !== "string" || !snapshot.snapshotId
+          || String(snapshot.trustedExecutionId) !== execution.calculationId) {
+          throw Object.assign(new Error("Trusted disclosure snapshot response is invalid"), {
+            code: "DISCLOSURE_SNAPSHOT_RESPONSE_INVALID"
+          });
+        }
+        results.push({ contractId, success: true, calculationId: execution.calculationId,
+          snapshotId: snapshot.snapshotId, replayed: execution.replayed === true || snapshot.replayed === true });
+      } catch (error) {
+        results.push({ contractId, success: false, code: error?.code || "TRUSTED_DISCLOSURE_SOURCE_FAILED" });
+      }
+    }
+    return results;
+  }
+
   async function loadCloseControls(contracts, reportingDate, options) {
     const value = adapter();
     if (typeof value.calculateCloseControls !== "function") {
@@ -195,6 +233,7 @@
     loadLeaseDisclosureAvailability,
     loadJournalAuthorityPackage,
     loadLeaseDisclosure,
+    createTrustedDisclosureSnapshots,
     loadCloseControls,
     loadEarlyPayment,
     loadSaleAndLeaseback,
