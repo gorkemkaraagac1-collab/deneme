@@ -140,7 +140,8 @@
  async function page(container,title='Finansal Rapor',section='metrics'){
   if(!container)return;styles(container);current=null;container.innerHTML='<p>Güvenilir rapor yükleniyor...</p>';
   try{const scope=await companies(),period=defaultPeriod();
-   container.innerHTML=`<h2>${esc(title)}</h2><label>Şirket <select data-report-company>${scope.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
+   const activeCompanyId=global.document.getElementById('v26ActiveCompanySelect')?.value;
+   container.innerHTML=`<h2>${esc(title)}</h2><label>Şirket <select data-report-company>${scope.map(c=>`<option value="${esc(c.id)}"${activeCompanyId&&activeCompanyId!=='ALL'&&String(c.id)===String(activeCompanyId)?' selected':''}>${esc(c.name)}</option>`).join('')}</select></label>
     <label>Başlangıç <input type="date" data-report-start value="${period.periodStart}" aria-describedby="report-period-error"></label><label>Bitiş <input type="date" data-report-end value="${period.periodEnd}" aria-describedby="report-period-error"></label>
     <p id="report-period-error" data-report-period-error role="alert" hidden></p><button data-report-load>Raporu getir</button><div data-report-output></div>`;
    const output=container.querySelector('[data-report-output]'),startField=container.querySelector('[data-report-start]'),endField=container.querySelector('[data-report-end]'),loadButton=container.querySelector('[data-report-load]'),periodError=container.querySelector('[data-report-period-error]');let epoch=0;

@@ -126,6 +126,24 @@ test('CFO/report page filters, sorts and exports server data; source failure cle
  window.LeaseQantPrivateCalculation.getReportingAuthorityPackage=async()=>{throw Object.assign(Error('Unavailable'),{code:'SOURCE_NOT_READY'});};await target.querySelector('[data-report-load]').onclick();
  assert.match(target.textContent,/SOURCE_NOT_READY/);assert.equal(target.querySelectorAll('[data-report-export]').length,0);assert.throws(()=>ui.read(),/NOT_VERIFIED/);
 });
+test('report page follows the active authorized company and safely falls back for tenant-wide selection',async()=>{
+ const active=proofs.find(p=>p.fixture==='multiple'),other=proofs.find(p=>p.fixture==='single'),allowed=[other,active];
+ const markup=`<select id="v26ActiveCompanySelect"><option value="ALL">Tüm Şirketler</option><option value="${active.body.companyId}" selected>${active.package.identity.companyName}</option></select><main id="mainContent"></main>`;
+ const {ui,window}=runtime(markup),target=window.document.getElementById('mainContent');adapter(window,allowed);
+ const requested=[],getPackage=window.LeaseQantPrivateCalculation.getReportingAuthorityPackage;
+ window.LeaseQantPrivateCalculation.getReportingAuthorityPackage=async intent=>{requested.push(plain(intent));return getPackage(intent);};
+ await ui.page(target,'Finansal Rapor');
+ const localCompany=target.querySelector('[data-report-company]'),headerCompany=window.document.getElementById('v26ActiveCompanySelect');
+ assert.equal(localCompany.value,active.body.companyId);assert.equal(requested[0].companyId,active.body.companyId);
+ headerCompany.value='ALL';localCompany.value=other.body.companyId;localCompany.dispatchEvent(new window.Event('change',{bubbles:true}));await tick();
+ assert.equal(requested.at(-1).companyId,other.body.companyId);assert.equal(headerCompany.value,'ALL');
+
+ const fallbackRuntime=runtime('<select id="v26ActiveCompanySelect"><option value="ALL" selected>Tüm Şirketler</option></select><main id="mainContent"></main>');
+ adapter(fallbackRuntime.window,allowed);const fallbackTarget=fallbackRuntime.window.document.getElementById('mainContent');
+ await fallbackRuntime.ui.page(fallbackTarget,'Finansal Rapor');
+ assert.equal(fallbackTarget.querySelector('[data-report-company]').value,other.body.companyId);
+ assert.equal(fallbackRuntime.ui.read().identity.companyId,other.body.companyId);
+});
 test('company dashboard and old shell ID aliases show per-company authority; mixed/zero are explicit',async()=>{
  const ids=['leaseLiability','rouAssets','currentLiability','next12Months','monthlyInterest','monthlyDepreciation','contractCount','renewals90Days','modifications','kpiDataAsOf','kpiLiability','kpiRou','kpiCurrent','kpiContractCount'];
  const selected=proofs.filter(p=>['single','multiple','mixed','zero'].includes(p.fixture));
