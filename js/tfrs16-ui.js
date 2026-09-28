@@ -8673,7 +8673,13 @@ ${renderAccountingCenterBulkPromo()}
 
   // REPORT-AUTH-R1 active boundaries. Retained legacy report functions cannot
   // become a source when the server, profile or route is unavailable.
-  function renderPaymentScheduleSection() { return '<div data-authoritative-report-schedule>Güvenilir raporlama kaynağı yükleniyor...</div>'; }
+  function renderPaymentScheduleSection(contract) {
+    const ui = window.LeaseQantTfrs16ReportingUi;
+    const sourceTerms = typeof ui?.renderContractPaymentTerms === "function"
+      ? ui.renderContractPaymentTerms(contract)
+      : "";
+    return `${sourceTerms}<div data-authoritative-report-schedule role="status">Güvenilir raporlama kaynağı yükleniyor...</div>`;
+  }
   function renderContractAuditTab() { return '<div data-authoritative-report-audit>Sunucudaki olaylar yükleniyor...</div>'; }
   function getFutureLeasesKPI() { return {value:null,status:"NOT_READY",reason:"SOURCE_BOUND_COMMITMENT_REPORT_REQUIRED"}; }
   function updateFutureLeaseKPI() { setText("futureLeasesKPI","Kaynak verisi gerekli"); }

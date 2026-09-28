@@ -132,6 +132,44 @@ test('contract summary, payment plan and audit use persisted source, never clien
  assert.throws(()=>ui.rawRows(accepted,'metrics','FOREIGN'),/NOT_READY/);
  await ui.renderContractDetails(target,{id:'FOREIGN',companyId:p.identity.companyId});assert.match(target.textContent,/SOURCE_NOT_READY/);assert.equal(target.querySelectorAll('table').length,0);
 });
+
+test('contract terms through the recorded 2030 expiry remain visible when trusted reporting is unavailable',async()=>{
+ const {ui,window,load}=runtime('<div id="detail"></div>');
+ window.GK_TFRS16={
+  escapeHtml:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+  formatDate:value=>String(value).split('-').reverse().join('.'),
+  formatPresentationCurrency:value=>`₺${Number(value).toLocaleString('tr-TR')}`,
+  resolvePaymentFrequencyLabel:()=> 'Aylık'
+ };
+ load('js/tfrs16-reporting-ui.js');
+ const contract={id:'111',company:'Financial Intelligence Platform',supplier:'<img src=x onerror=alert(1)>',startDate:'2025-02-28',endDate:'2030-02-28',monthlyPayment:10000,currency:'TRY',paymentFrequency:'MONTHLY'};
+ const presentation=window.LeaseQantTfrs16ReportingUi;
+ const target=window.document.getElementById('detail');
+ target.innerHTML=presentation.renderContractSummaryTab(contract)+presentation.renderContractPaymentTerms(contract)
+  +'<div data-authoritative-report-schedule>Güvenilir raporlama kaynağı yükleniyor...</div><div data-authoritative-report-audit></div>';
+ window.LeaseQantPrivateCalculation={getReportingAuthorityPackage:async()=>{const error=new Error('Approved currency profile required');error.code='REPORTING_CURRENCY_PROFILE_REQUIRED';throw error;}};
+ await ui.renderContractDetails(target,contract);
+ assert.match(target.querySelector('[data-contract-source-facts]').textContent,/28\.02\.2030/);
+ assert.match(target.querySelector('[data-contract-source-facts]').textContent,/28\.02\.2025/);
+ assert.match(target.querySelector('[data-contract-source-facts]').textContent,/10\.000/);
+ assert.match(target.querySelector('[data-contract-source-terms]').textContent,/28\.02\.2030/);
+ assert.match(target.querySelector('[data-authoritative-report-summary]').textContent,/Onaylı para birimi profili gerekli/);
+ assert.match(target.querySelector('[data-authoritative-report-schedule]').textContent,/REPORTING_CURRENCY_PROFILE_REQUIRED/);
+ assert.equal(target.querySelector('[data-contract-source-facts] img'),null);
+ assert.match(target.querySelector('[data-contract-source-facts]').textContent,/<img src=x onerror=alert\(1\)>/);
+});
+
+test('Contracts row action opens the selected contract from a pointer click',()=>{
+ const {window,load}=runtime('<table><tbody id="contractsTableBody"></tbody></table><div id="emptyState"></div><span id="resultCount"></span><input id="searchInput">');
+ const opened=[];
+ window.GK_TFRS16={getPortfolioContracts:()=>[{id:'111',company:'Financial Intelligence Platform',supplier:'abc',startDate:'2025-02-28',endDate:'2030-02-28',monthlyPayment:10000,currency:'TRY',status:'active'}],
+  escapeHtml:value=>String(value??''),formatDate:value=>String(value??''),formatPortfolioAmount:value=>String(value??''),
+  isRenewalWithin90Days:()=>false,v26StandardsBadgeHtml:()=>'',v26ContractMatchesActiveCompany:()=>true,
+  openDetail:id=>opened.push(String(id))};
+ load('js/tfrs16-portfolio-ui.js');
+ window.document.querySelector('.row-action').click();
+ assert.deepEqual(opened,['111']);
+});
 test('actual active main reporting entrypoints/gates and database view never call retained accounting',async()=>{
  const {ui,window,context}=runtime();adapter(window,[proofs[0]]);const source=fs.readFileSync(path.join(root,'js/tfrs16-ui.js'),'utf8');
  const start=source.indexOf('  // REPORT-AUTH-R1 active boundaries.'),end=source.indexOf('  function journalAuthorityUnavailable()',start);assert.ok(end>start);

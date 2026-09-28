@@ -302,8 +302,68 @@
   function renderConsolidation(container) { if(container)container.innerHTML='<p role="status">Konsolidasyon için doğrulanmış şirketler arası kaynak verisi gerekli.</p><details><summary>Teknik ayrıntı</summary><code>SOURCE_BOUND_CONSOLIDATION_REQUIRED</code></details>'; }
   function renderAuditTrail(container) { return global.LeaseQantReportingAuthorityUi?.page(container,"Sunucudaki Olaylar","audit") || (container.innerHTML='<p role="alert">REPORTING_AUTHORITY_UNAVAILABLE</p>'); }
   function renderContractAuditTab() { return '<div data-authoritative-report-audit>Sunucudaki olaylar yükleniyor...</div>'; }
+  function contractDate(value) {
+    if (value === undefined || value === null || value === "") return "—";
+    const formatter = bridge().formatDate;
+    try { return contractText(typeof formatter === "function" ? formatter(value) : value); }
+    catch (_) { return contractText(value); }
+  }
+
+  function contractText(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[character]));
+  }
+
+  function contractPaymentFacts(contract) {
+    const source = contract || {};
+    const api = bridge();
+    const currency = String(source.currency || "Para birimi belirtilmemiş").toUpperCase();
+    const rawAmount = source.monthlyPayment;
+    const numericAmount = rawAmount === null || rawAmount === undefined || rawAmount === ""
+      ? null
+      : Number(rawAmount);
+    const formattedAmount = Number.isFinite(numericAmount)
+      ? (typeof api.formatPresentationCurrency === "function"
+        ? api.formatPresentationCurrency(numericAmount, currency)
+        : numericAmount.toLocaleString("tr-TR"))
+      : "—";
+    const frequency = source.paymentFrequency
+      ? (typeof api.resolvePaymentFrequencyLabel === "function"
+        ? api.resolvePaymentFrequencyLabel(source.paymentFrequency)
+        : source.paymentFrequency)
+      : "Belirtilmemiş";
+    return {
+      currency,
+      amount: contractText(formattedAmount),
+      frequency: contractText(frequency),
+      startDate: contractDate(source.startDate),
+      endDate: contractDate(source.endDate),
+      id: contractText(source.id || "—"),
+      supplier: contractText(source.supplier || "—")
+    };
+  }
+
+  function renderContractPaymentTerms(contract) {
+    const facts = contractPaymentFacts(contract);
+    return `<section data-contract-source-terms style="margin:0 0 12px;padding:12px 14px;border:1px solid #dbeafe;border-radius:9px;background:#f8fbff;">
+      <strong style="display:block;margin-bottom:5px;">Kaydedilmiş sözleşme koşulları</strong>
+      <div>${facts.startDate} – ${facts.endDate} · ${facts.frequency} ödeme · ${facts.amount} ${contractText(facts.currency)}</div>
+      <small style="display:block;margin-top:4px;color:#64748b;">Bu alan sözleşme kaydındaki koşulları gösterir; hesaplanmış nakit akışı veya muhasebe sonucu değildir.</small>
+    </section>`;
+  }
+
   function renderContractSummaryTab(contract) {
-    return '<div data-authoritative-report-summary>Güvenilir sözleşme raporu yükleniyor...</div>';
+    const facts = contractPaymentFacts(contract);
+    const item = (label, value) => `<div class="detail-item"><span>${label}</span><strong>${value}</strong></div>`;
+    return `<section data-contract-source-facts aria-label="Kaydedilmiş sözleşme bilgileri" style="margin:0 0 12px;">
+      <h3 style="margin:0 0 8px;font-size:14px;">Kaydedilmiş sözleşme bilgileri</h3>
+      <div class="detail-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+        ${item("Sözleşme", facts.id)}${item("Tedarikçi", facts.supplier)}
+        ${item("Başlangıç", facts.startDate)}${item("Bitiş", facts.endDate)}
+        ${item("Sözleşme ödeme tutarı", `${facts.amount} ${contractText(facts.currency)}`)}${item("Ödeme sıklığı", facts.frequency)}
+      </div>
+    </section><div data-authoritative-report-summary role="status">Güvenilir sözleşme finansal raporu yükleniyor...</div>`;
   }
   function legacyReportAuth_renderContractSummaryTab(contract, metrics = {}, options = {}) {
     const api = bridge();
@@ -588,6 +648,7 @@
     renderAuditTrailBody,
     renderContractAuditTab,
     renderContractSummaryTab,
+    renderContractPaymentTerms,
     renderContractDetailStatus,
     renderContractDetailTabs,
     renderContractDetailPanels,

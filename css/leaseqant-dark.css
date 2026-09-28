@@ -615,6 +615,26 @@ table.data-table tbody tr:last-child td{border-bottom:none}
 #contractsView table.data-table tbody tr:hover{
   background:rgba(52,120,246,.065);
 }
+#contractsView .row-action{
+  min-width:78px;
+  min-height:38px;
+  padding:8px 12px;
+  border:1px solid #2b3d59;
+  border-radius:8px;
+  background:#142239;
+  color:#e5edf8;
+  font-size:11px;
+  font-weight:650;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+#contractsView .row-action:hover,
+#contractsView .row-action:focus-visible{
+  border-color:#4f8cff;
+  background:#1a2c48;
+  outline:2px solid rgba(79,140,255,.28);
+  outline-offset:2px;
+}
 #contractsView table.data-table td:first-child{
   color:#e3ebf7;
   font-weight:610;
@@ -809,6 +829,11 @@ table.data-table tbody tr:last-child td{border-bottom:none}
   }
   #contractsView table.data-table td{
     height:48px;
+  }
+  #contractsView .row-action{
+    min-width:88px;
+    min-height:44px;
+    font-size:12px;
   }
   .modal-card,.modal-content{
     width:calc(100vw - 20px)!important;
