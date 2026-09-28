@@ -5,11 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>LeaseQant — TFRS 16 Kiralama Yönetimi</title>
   <meta name="description" content="TFRS 16 kiralama muhasebesi — sözleşme, hesaplama, kapanış ve raporlama" />
+  <script>
+    /* UI v2 bayrağı: varsayılan açık; ?ui=legacy eski görünümü açar, tercih bu tarayıcıda saklanır. */
+    (function () {
+      var ui = "2";
+      try {
+        var q = new URLSearchParams(location.search).get("ui");
+        if (q === "legacy" || q === "2") localStorage.setItem("lq-ui", q);
+        if (localStorage.getItem("lq-ui") === "legacy") ui = "1";
+      } catch (e) {}
+      document.documentElement.setAttribute("data-lq-ui", ui);
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/app.css" />
   <link rel="stylesheet" href="css/leaseqant-dark.css?v=20260928-contract-detail-r1" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/lq-v2.css?v=20260928-ui-v2-faz1" />
   <!-- SheetJS for Excel import/export (engine uses XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -28,13 +42,13 @@
 
       <nav class="lq-topnav" id="sidebarNav" aria-label="Ana navigasyon">
         <button type="button" class="nav-item lq-dashboard-nav" data-lq-dashboard="true">
-          Dashboard
+          Genel Bakış
         </button>
         <button type="button" class="nav-item" data-view="contracts" data-open="">
           Sözleşmeler
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="accountingCenter">
-          Muhasebe
+          Yevmiye
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="close">
           Kapanış
@@ -43,7 +57,7 @@
           <span class="icon">📊</span><span>Finansal Raporlama</span>
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="footnotes">
-          Raporlar
+          Dipnotlar
         </button>
         <button type="button" class="nav-item" data-view="page" data-open="riskControls">
           Kontroller
@@ -140,7 +154,7 @@
           </div>
           <div>
             <div class="lq-overline">PORTFÖY KONTROL MERKEZİ</div>
-            <h1>Finansal görünüm</h1>
+            <h1>Genel Bakış</h1>
             <p id="lqDashboardSubtitle">TFRS 16 portföyü · kapanış, yükümlülük ve risk görünümü</p>
           </div>
           <div class="lq-dash-head-actions">
@@ -151,7 +165,7 @@
 
         <div class="lq-hero-metrics">
           <article class="lq-metric lq-metric-primary">
-            <div class="lq-metric-label">Toplam kiralama yükümlülüğü</div>
+            <div class="lq-metric-label">Kira yükümlülüğü</div>
             <div class="lq-metric-value" id="lqTotalLiability">—</div>
             <div class="lq-metric-foot"><span class="lq-status-dot"></span><span id="lqLiabilityNote">Şirket bazında backend kapsamı</span></div>
           </article>
@@ -195,7 +209,7 @@
 
           <article class="lq-cfo-card">
             <div class="lq-cfo-top">
-              <div><span class="lq-card-kicker">CLOSE READINESS</span><h3>Kapanış hazırlığı</h3></div>
+              <div><span class="lq-card-kicker">KAPANIŞ HAZIRLIĞI</span><h3>Kapanış hazırlığı</h3></div>
               <strong class="lq-readiness-score" id="lqReadinessScore">—</strong>
             </div>
             <div class="lq-readiness-list">
@@ -213,12 +227,8 @@
               <div><span class="lq-card-kicker">PORTFÖY TRENDİ</span><h3>Sözleşme vade yoğunluğu</h3></div>
               <span class="lq-chip">Gerçek vade</span>
             </div>
-            <div class="lq-bar-chart" id="lqLiabilityBars" aria-label="Portföy görünüm grafiği">
-              <i style="--h:38%"></i><i style="--h:51%"></i><i style="--h:45%"></i><i style="--h:63%"></i>
-              <i style="--h:68%"></i><i style="--h:82%"></i><i style="--h:74%"></i><i style="--h:90%"></i>
-              <i style="--h:72%"></i><i style="--h:80%"></i><i style="--h:67%"></i><i style="--h:76%"></i>
-            </div>
-            <div class="lq-axis"><span>Eki</span><span>Kas</span><span>Ara</span><span>Oca</span><span>Şub</span><span>Mar</span><span>Nis</span><span>May</span><span>Haz</span><span>Tem</span><span>Ağu</span><span>Eyl</span></div>
+            <div class="lq-bar-chart" id="lqLiabilityBars" aria-label="Portföy görünüm grafiği"></div>
+            <div class="lq-axis"></div>
           </article>
 
           <article class="lq-dash-card">
@@ -248,7 +258,7 @@
 
           <article class="lq-dash-card lq-control-card">
             <div class="lq-card-head">
-              <div><span class="lq-card-kicker">CLOSE &amp; CONTROL</span><h3>Kapanış kontrolü</h3></div>
+              <div><span class="lq-card-kicker">KAPANIŞ VE KONTROL</span><h3>Kapanış kontrolü</h3></div>
               <span class="lq-chip lq-chip-green">Kontrol</span>
             </div>
             <div class="lq-control-list">
@@ -291,9 +301,9 @@
             <div class="kpi-hint">Portföydeki kiralama sayısı</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-label">Kiralama yükümlülüğü</div>
+            <div class="kpi-label">Kira yükümlülüğü</div>
             <div class="kpi-value" id="kpiLiability">—</div>
-            <div class="kpi-hint">Toplam lease liability</div>
+            <div class="kpi-hint">Toplam kira yükümlülüğü</div>
           </div>
           <div class="kpi-card accent-green">
             <div class="kpi-label">Kullanım hakkı varlığı</div>
@@ -756,6 +766,7 @@
     })();
   </script>
   <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
+  <script src="js/lq-ui-v2.js?v=20260928-ui-v2-faz1"></script>
 
 <script type="text/plain" data-report-auth-retired>
 /* LeaseQant Dashboard Bridge V3
