@@ -52,8 +52,12 @@
   if(!pending.has(key))pending.set(key,Promise.resolve(f(intent)).then(p=>acceptPackage(p,intent)).finally(()=>pending.delete(key)));
   return pending.get(key);
  }
- function defaultPeriod(){const now=new Date(),y=now.getFullYear(),m=now.getMonth()+1,month=String(m).padStart(2,'0');
-  const periodStart=`${y}-${month}-01`,periodEnd=`${y}-${month}-${new Date(y,m,0).getDate()}`;return {periodStart,periodEnd,reportingDate:periodEnd};}
+ function isoDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const date=new Date(`${value}T00:00:00Z`);return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===value;}
+ function validPeriodRange(periodStart,periodEnd){return isoDate(periodStart)&&isoDate(periodEnd)&&periodStart<=periodEnd;}
+ function defaultPeriod(){const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),0),start=new Date(end.getFullYear(),end.getMonth(),1);
+  const dateOnly=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const periodStart=dateOnly(start),periodEnd=dateOnly(end);return {periodStart,periodEnd,reportingDate:periodEnd};}
  function read(reportingDate){requirePackage(current);if(reportingDate){const d=reportingDate instanceof Date?reportingDate:new Date(reportingDate);
    const key=typeof reportingDate==='string'?reportingDate:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
    if(current.period.reportingDate!==key)fail('REPORTING_PERIOD_SOURCE_REQUIRED');}return current;}
@@ -80,6 +84,8 @@
   COMPLETE_POPULATION:'Tam kapsam',UNAVAILABLE:'Kapsam hazır değil',SUPPORTED_CALCULATION_DIAGNOSTICS:'Hesaplama kontrolleri mevcut'}[status]
   ||'Kaynak doğrulaması gerekli');}
  function reasonLabel(reason){if(reason==='REPORTING_CURRENCY_PROFILE_REQUIRED'||reason==='DISCLOSURE_ENTITY_PROFILE_REQUIRED')return 'Onaylı para birimi profili gerekli';
+  if(reason==='REPORTING_INTENT_INVALID'||reason==='REPORTING_PERIOD_NOT_SUPPORTED')return 'Dönem tarihlerini kontrol edin';
+  if(reason==='REPORTING_ROUTE_NOT_SUPPORTED')return 'Bu sözleşme türü için rapor rotası desteklenmiyor';
   if(reason==='ACTUAL_LEDGER_CASH_REQUIRED'||String(reason).includes('LEDGER'))return 'Doğrulanmış defter verisi gerekli';
   if(String(reason).includes('MATURITY'))return 'Onaylı vade kaynağı gerekli';
   if(String(reason).includes('WEIGHTING'))return 'Onaylı ağırlıklandırma kaynağı gerekli';
@@ -135,9 +141,15 @@
   if(!container)return;styles(container);current=null;container.innerHTML='<p>Güvenilir rapor yükleniyor...</p>';
   try{const scope=await companies(),period=defaultPeriod();
    container.innerHTML=`<h2>${esc(title)}</h2><label>Şirket <select data-report-company>${scope.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
-    <label>Başlangıç <input type="date" data-report-start value="${period.periodStart}"></label><label>Bitiş <input type="date" data-report-end value="${period.periodEnd}"></label><button data-report-load>Raporu getir</button><div data-report-output></div>`;
-   const output=container.querySelector('[data-report-output]');let epoch=0;
-   const run=async()=>{const revision=++epoch;current=null;output.innerHTML='<p>Güvenilir rapor yükleniyor...</p>';
+    <label>Başlangıç <input type="date" data-report-start value="${period.periodStart}" aria-describedby="report-period-error"></label><label>Bitiş <input type="date" data-report-end value="${period.periodEnd}" aria-describedby="report-period-error"></label>
+    <p id="report-period-error" data-report-period-error role="alert" hidden></p><button data-report-load>Raporu getir</button><div data-report-output></div>`;
+   const output=container.querySelector('[data-report-output]'),startField=container.querySelector('[data-report-start]'),endField=container.querySelector('[data-report-end]'),loadButton=container.querySelector('[data-report-load]'),periodError=container.querySelector('[data-report-period-error]');let epoch=0;
+   const syncPeriod=()=>{const valid=validPeriodRange(startField.value,endField.value);endField.min=startField.value||'';startField.max=endField.value||'';
+    startField.setAttribute('aria-invalid',String(!valid));endField.setAttribute('aria-invalid',String(!valid));loadButton.disabled=!valid;
+    periodError.hidden=valid;periodError.textContent=valid?'':'Dönem başlangıcı, dönem sonundan sonra olamaz. İki tarihi kontrol edin.';
+    current=null;++epoch;output.replaceChildren();return valid;};
+   const run=async()=>{if(!syncPeriod()){++epoch;current=null;output.replaceChildren();return;}
+    const revision=++epoch;current=null;output.innerHTML='<p>Güvenilir rapor yükleniyor...</p>';
     try{const companyId=container.querySelector('[data-report-company]').value,periodStart=container.querySelector('[data-report-start]').value,periodEnd=container.querySelector('[data-report-end]').value;
      const p=await load({companyId,periodStart,periodEnd,reportingDate:periodEnd});if(revision!==epoch||!output.isConnected)return;current=p;
      output.innerHTML=`<label>Satırlarda ara <input data-report-filter></label><label>Sırala <select data-report-sort><option value="">Backend sırası</option><option value="0">İlk sütun</option></select></label>
@@ -148,7 +160,9 @@
      output.querySelector('[data-report-sort]').onchange=()=>{const tbody=output.querySelector('tbody');if(tbody)Array.from(tbody.rows).sort((a,b)=>a.cells[0].textContent.localeCompare(b.cells[0].textContent)).forEach(row=>tbody.appendChild(row));};
     }catch(e){if(revision===epoch){current=null;output.innerHTML=errorHtml(e);}}
    };
-   container.querySelector('[data-report-load]').onclick=run;container.querySelector('[data-report-company]').onchange=run;await run();
+   startField.addEventListener('input',syncPeriod);startField.addEventListener('change',syncPeriod);
+   endField.addEventListener('input',syncPeriod);endField.addEventListener('change',syncPeriod);
+   loadButton.onclick=run;container.querySelector('[data-report-company]').onchange=run;syncPeriod();await run();
   }catch(e){current=null;container.innerHTML=errorHtml(e);}
  }
  async function dashboard(){const revision=++dashboardEpoch,ids={leaseLiability:'leaseLiability',rouAssets:'rouCarryingAmount',currentLiability:'currentLiability',next12Months:'next12MonthPayments',monthlyInterest:'periodInterest',monthlyDepreciation:'periodDepreciation'};
@@ -181,7 +195,12 @@
    const selected=company==='ALL'?packages:packages.filter(p=>p.identity.companyId===company);
    const single=selected.length===1?selected[0]:null;
    if(single){
-    for(const [key,ids] of Object.entries(mapping))set(ids,display(single.totals[key],single.population.count===0));
+    for(const [key,ids] of Object.entries(mapping)){
+     const unavailableReasons=[...new Set(single.population.exclusions.map(row=>row.reason))];
+     const value=single.totals[key].value===null&&unavailableReasons.length===1
+      ?reasonLabel(unavailableReasons[0]):display(single.totals[key],single.population.count===0);
+     set(ids,value);
+    }
     set(countIds,String(single.population.count));
     const scopeText=single.population.count===0?'Bu dönemde aktif sözleşme yok':statusLabel(single.population.coverage);
     set(['kpiDataAsOf','lqDashboardSubtitle'],`${single.identity.companyName} · ${single.period.reportingDate} · ${scopeText}`);
@@ -214,5 +233,5 @@
    });
   }catch(e){targets.forEach(({target})=>{if(target?.isConnected)target.innerHTML=errorHtml(e);});}
  }
- global.LeaseQantReportingAuthorityUi={acceptPackage,companies,load,read,rawRows,serialize,html,exportPackage,page,dashboard,errorHtml,defaultPeriod,renderContractDetails,refreshDashboardPresentation};
+ global.LeaseQantReportingAuthorityUi={acceptPackage,companies,load,read,rawRows,serialize,html,exportPackage,page,dashboard,errorHtml,defaultPeriod,validPeriodRange,renderContractDetails,refreshDashboardPresentation};
 })(window);
