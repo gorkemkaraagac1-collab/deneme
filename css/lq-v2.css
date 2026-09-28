@@ -674,3 +674,42 @@ html[data-lq-ui="2"] #v26PageHost input:not([type="checkbox"]):not([type="radio"
   border: 1px solid var(--lq-line-strong) !important; border-radius: 8px !important;
   background: var(--lq-surface) !important; color: var(--lq-ink) !important;
 }
+
+/* ---------- Faz 2: dönem şeridi ---------- */
+html[data-lq-ui="2"] .lq-ribbon {
+  display: flex; align-items: center; gap: 14px; min-width: 0; flex: 0 1 auto;
+}
+html[data-lq-ui="2"] .lq-ribbon-months {
+  display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none;
+  padding: 2px;
+}
+html[data-lq-ui="2"] .lq-ribbon-months::-webkit-scrollbar { display: none; }
+html[data-lq-ui="2"] .lq-ribbon-month {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 44px; height: 44px; padding: 0;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--lq-ink-2);
+  font-size: 12.5px; font-weight: 500; line-height: 14px; cursor: pointer;
+}
+html[data-lq-ui="2"] .lq-ribbon-month small { font-size: 10px; line-height: 12px; color: var(--lq-ink-3); font-weight: 400; }
+html[data-lq-ui="2"] .lq-ribbon-month:hover { background: var(--lq-surface-2); border-color: var(--lq-line); color: var(--lq-ink); }
+html[data-lq-ui="2"] .lq-ribbon-month[aria-checked="true"] {
+  background: var(--lq-primary); border-color: var(--lq-primary); color: #FFFFFF; font-weight: 600;
+}
+html[data-lq-ui="2"] .lq-ribbon-month[aria-checked="true"] small { color: #DCE8FC; }
+html[data-lq-ui="2"] .lq-ribbon-meta {
+  display: flex; flex-direction: column; align-items: flex-end;
+  padding-right: 14px; border-right: 1px solid var(--lq-line); white-space: nowrap;
+}
+html[data-lq-ui="2"] .lq-ribbon-meta small { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--lq-ink-3); }
+html[data-lq-ui="2"] .lq-ribbon-meta b { font-family: var(--lq-mono); font-size: 14px; font-weight: 500; color: var(--lq-ink); }
+html[data-lq-ui="2"] .lq-ctx .company-select { flex: 0 0 auto; }
+@media (max-width: 1360px) {
+  html[data-lq-ui="2"] .lq-ribbon-months { max-width: 280px; }
+}
+@media (max-width: 900px) {
+  html[data-lq-ui="2"] .lq-ribbon { order: 3; width: 100%; flex-direction: row-reverse; justify-content: space-between; }
+  html[data-lq-ui="2"] .lq-ribbon-months { max-width: none; flex: 1 1 auto; }
+  html[data-lq-ui="2"] .lq-ribbon-meta { align-items: flex-start; border-right: 0; padding-right: 0; }
+}
