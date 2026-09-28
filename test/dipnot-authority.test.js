@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { JSDOM } = require('jsdom');
 
 const root = path.resolve(__dirname, '..');
 function load(file, window) {
@@ -207,7 +208,37 @@ test('adapter errors preserve auth/scope/source status without a numeric fallbac
   const ui = window.LeaseQantTfrs16DisclosureUi;
   assert.equal(ui.errorLabel({ status: 401 }), 'Oturum açmanız gerekiyor.');
   assert.equal(ui.errorLabel({ status: 403 }), 'Bu şirketin dipnotlarına erişim yetkiniz yok.');
-  assert.equal(ui.errorLabel({ code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }), 'Seçilen şirket ve dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Sözleşmenin varlığı tek başına dipnot kaynağı oluşturmaz.');
+  assert.equal(ui.errorLabel({ code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }), 'Seçilen dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Dipnotlar yalnızca onaylı, kaynak bağlı hesaplama kaydı bulunduğunda gösterilir.');
+});
+
+test('disclosure uses a complete month by default and blocks reversed date ranges before source lookup', async () => {
+  const calls = [], dom = new JSDOM('<main id="footnotes"></main>', { url: 'https://example.test/tfrs16.html' });
+  const window = dom.window;
+  window.GK_TFRS16 = {
+    getUnifiedCompanyOptions: () => [{ id: 'COMPANY-1', name: 'Synthetic Test' }],
+    getActiveCompanyId: () => 'COMPANY-1', setActiveScreenRefreshCallback: () => {}
+  };
+  window.LeaseQantPrivateTfrs16Facade = {
+    loadLeaseDisclosureAvailability: async period => { calls.push({ ...period });
+      throw Object.assign(new Error('Missing test source'), { code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }); },
+    loadLeaseDisclosure: async () => { throw new Error('Not reached'); }
+  };
+  load('js/tfrs16-disclosure-ui.js', window);
+  const ui = window.LeaseQantTfrs16DisclosureUi, target = window.document.getElementById('footnotes');
+  assert.equal(ui.validPeriodRange('2026-08-01', '2026-08-31'), true);
+  assert.equal(ui.validPeriodRange('2026-09-01', '2026-06-30'), false);
+  ui.renderFootnotes(target);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(calls[0], { companyId: 'COMPANY-1', reportingPeriodStart: '2026-08-01',
+    reportingPeriodEnd: '2026-08-31', reportingDate: '2026-08-31' });
+  assert.match(target.querySelector('[role="status"]').textContent, /onaylı, kaynak bağlı hesaplama kaydı/);
+  assert.equal(target.querySelector('[role="alert"]'), null);
+  const start = target.querySelector('#disclosureStart'), end = target.querySelector('#disclosureDate');
+  start.value = '2026-09-01'; start.dispatchEvent(new window.Event('change', { bubbles: true }));
+  end.value = '2026-06-30'; end.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1);
+  assert.match(target.querySelector('[role="alert"]').textContent, /başlangıcı, dönem sonundan sonra olamaz/);
 });
 
 test('all three tabs render backend values; company and period controls reload the scoped package', async () => {
@@ -251,6 +282,8 @@ test('all three tabs render backend values; company and period controls reload t
   events['#disclosureCompany']({ target: { value: 'COMPANY-2' } });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(requests.at(-1).companyId, 'COMPANY-2');
+  events['#disclosureStart']({ target: { value: '2026-01-01' } });
+  await new Promise(resolve => setTimeout(resolve, 0));
   events['#disclosureDate']({ target: { value: '2026-06-30' } });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(requests.at(-1).reportingDate, '2026-06-30');

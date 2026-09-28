@@ -7,7 +7,7 @@ assert.equal(proofs.length,5,'Fresh authenticated real backend evidence required
 const plain=v=>JSON.parse(JSON.stringify(v));
 const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
 const rehash=p=>{delete p.contentHash;p.contentHash=createHash('sha256').update(stable(p)).digest('hex');return p;};
-class FixedDate extends Date{constructor(...a){super(...(a.length?a:['2026-01-17T10:00:00Z']));}static now(){return new Date('2026-01-17T10:00:00Z').getTime();}}
+class FixedDate extends Date{constructor(...a){super(...(a.length?a:['2026-02-17T10:00:00Z']));}static now(){return new Date('2026-02-17T10:00:00Z').getTime();}}
 function runtime(markup='<main id="mainContent"></main>'){
  const dom=new JSDOM(markup,{url:'https://example.test/tfrs16.html'}),window=dom.window;
  Object.defineProperty(window,'crypto',{value:webcrypto});
@@ -91,6 +91,28 @@ test('authenticated adapter sends only intent and company request, with no calcu
  assert.match(calls[0].url,/\/api\/reports\/authority\/companies$/);assert.equal(calls[0].options.method,'GET');
  assert.match(calls[1].url,/\/api\/reports\/authority$/);assert.equal(calls[1].options.headers.Authorization,'Bearer SYNTHETIC-TOKEN-ONLY');assert.equal(calls[1].options.credentials,'include');assert.deepEqual(JSON.parse(calls[1].options.body),proof.body);
 });
+test('default reporting period is the last fully elapsed calendar month',()=>{
+ const {ui}=runtime();
+ assert.deepEqual(plain(ui.defaultPeriod()),{periodStart:'2026-01-01',periodEnd:'2026-01-31',reportingDate:'2026-01-31'});
+ assert.equal(ui.validPeriodRange('2026-08-01','2026-08-31'),true);
+ assert.equal(ui.validPeriodRange('2026-09-01','2026-06-30'),false);
+ assert.equal(ui.validPeriodRange('2026-02-30','2026-03-01'),false);
+});
+test('report page blocks reversed date ranges before calling the authenticated report source',async()=>{
+ const {ui,window}=runtime(),source=plain(proofs.find(p=>p.fixture==='single').package),intent={companyId:source.identity.companyId,...ui.defaultPeriod()};source.period=intent;rehash(source);
+ const target=window.document.getElementById('mainContent'),calls=[];
+ window.LeaseQantPrivateCalculation={getReportingCompanies:async()=>({companies:[{id:intent.companyId,name:'Synthetic'}]}),
+  getReportingAuthorityPackage:async requested=>{calls.push(plain(requested));return plain(source);}};
+ await ui.page(target,'Test raporu');assert.equal(calls.length,1);
+ const start=target.querySelector('[data-report-start]'),end=target.querySelector('[data-report-end]'),button=target.querySelector('[data-report-load]');
+ start.value='2026-09-01';start.dispatchEvent(new window.Event('input',{bubbles:true}));
+ end.value='2026-06-30';end.dispatchEvent(new window.Event('input',{bubbles:true}));
+ assert.equal(button.disabled,true);assert.equal(target.querySelector('[data-report-period-error]').hidden,false);
+ assert.match(target.querySelector('[data-report-period-error]').textContent,/başlangıcı, dönem sonundan sonra olamaz/);
+ button.click();await tick();assert.equal(calls.length,1);assert.throws(()=>ui.read(),/NOT_VERIFIED/);
+ end.value='2026-09-30';end.dispatchEvent(new window.Event('input',{bubbles:true}));
+ assert.equal(button.disabled,false);assert.equal(target.querySelector('[data-report-period-error]').hidden,true);
+});
 test('report transport authenticates storage-only sessions without changing closed journal/disclosure intent',async()=>{
  const {window,load,ui}=runtime(),proof=proofs[0],calls=[];window.localStorage.setItem('access_token','STORAGE-TEST-ONLY');window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
  window.fetch=async(url,options)=>{calls.push({url,options});return {ok:true,status:200,json:async()=>({success:true,data:proof.package})};};load('js/private-calculation-api.js');await ui.load(proof.body);
@@ -123,6 +145,8 @@ test('company dashboard and old shell ID aliases show per-company authority; mix
  assert.equal(window.document.getElementById('leaseLiability').textContent,'0 TRY');
  assert.match(window.document.getElementById('kpiDataAsOf').textContent,/aktif sözleşme yok/);
  assert.equal(window.document.getElementById('contractCount').textContent,'0');
+ company.value=proofs.find(p=>p.fixture==='mixed').body.companyId;ui.refreshDashboardPresentation();
+ assert.equal(window.document.getElementById('leaseLiability').textContent,'Bu sözleşme türü için rapor rotası desteklenmiyor');
  window.LeaseQantPrivateCalculation.getReportingCompanies=async()=>{throw Error('failure');};await ui.dashboard();assert.equal(window.__GK_TFRS16_DASHBOARD_METRICS__,null);assert.equal(window.document.getElementById('contractCount').textContent,'Veri alınamadı');
 });
 test('contract summary, payment plan and audit use persisted source, never client financial values',async()=>{

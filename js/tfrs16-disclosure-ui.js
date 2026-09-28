@@ -22,6 +22,16 @@
     })[char]);
   }
 
+  function isoDate(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }
+
+  function validPeriodRange(start, end) {
+    return isoDate(start) && isoDate(end) && start <= end;
+  }
+
   function fieldRow(label, field, note) {
     const source = field && typeof field === "object" ? field : MISSING;
     return {
@@ -138,7 +148,8 @@
   function errorLabel(error) {
     if (error?.status === 401) return "Oturum açmanız gerekiyor.";
     if (error?.status === 403) return "Bu şirketin dipnotlarına erişim yetkiniz yok.";
-    if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return "Seçilen şirket ve dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Sözleşmenin varlığı tek başına dipnot kaynağı oluşturmaz.";
+    if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return "Seçilen dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Dipnotlar yalnızca onaylı, kaynak bağlı hesaplama kaydı bulunduğunda gösterilir.";
+    if (error?.code === "DISCLOSURE_PERIOD_INVALID") return "Dönem başlangıcı, dönem sonundan sonra olamaz. İki tarihi kontrol edin.";
     if (error?.code === "DISCLOSURE_CALCULATION_SOURCE_MISMATCH") return "Dipnot kaynağı ile doğrulanmış hesaplama kaydı uyuşmuyor.";
     if (error?.code === "DISCLOSURE_SOURCE_HASH_INVALID") return "Dipnot kaynağının bütünlüğü doğrulanamadı.";
     if (error?.code === "DISCLOSURE_ENTITY_PROFILE_REQUIRED") return "Onaylı şirket para birimi profili gerekli.";
@@ -159,11 +170,13 @@
     const companies = (bridge.getUnifiedCompanyOptions?.() || [])
       .filter(item => item && typeof item.id === "string" && item.id && item.id !== "ALL");
     const activeCompany = bridge.getActiveCompanyId?.();
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const now = new Date(), periodEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
+    const periodStartDate = new Date(periodEndDate.getFullYear(), periodEndDate.getMonth(), 1);
+    const dateOnly = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const defaultStart = dateOnly(periodStartDate), defaultEnd = dateOnly(periodEndDate);
     const state = {
       companyId: companies.some(item => item.id === activeCompany) ? activeCompany : (companies[0]?.id || ""),
-      periodStart: `${today.slice(0, 4)}-01-01`, reportingDate: today,
+      periodStart: defaultStart, reportingDate: defaultEnd,
       tab: "asset", key: null, status: "idle", pkg: null, availability: null, error: null, sequence: 0
     };
     const period = () => ({ companyId: state.companyId,
@@ -177,9 +190,12 @@
       state.availability = null;
       state.error = null;
       if (!state.companyId) { state.status = "empty"; return; }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(state.reportingDate)
-        || !/^\d{4}-\d{2}-\d{2}$/.test(state.periodStart)
-        || state.periodStart > state.reportingDate || !facade?.loadLeaseDisclosureAvailability
+      if (!validPeriodRange(state.periodStart, state.reportingDate)) {
+        state.status = "invalid-period";
+        state.error = Object.assign(new Error("Invalid disclosure period"), { code: "DISCLOSURE_PERIOD_INVALID" });
+        return;
+      }
+      if (!facade?.loadLeaseDisclosureAvailability
         || !facade?.loadLeaseDisclosure) {
         state.status = "error";
         state.error = new Error("Disclosure adapter or period unavailable");
@@ -225,7 +241,8 @@
       const rows = state.status === "ready" ? rowsForTab(state.pkg, state.tab) : [];
       const body = state.status === "loading" ? "<p>Güvenilir dipnot paketi yükleniyor…</p>"
         : state.status === "empty" ? "<p>Yetkili şirket bulunamadı.</p>"
-        : state.status === "error" ? `<p role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p><details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
+        : state.status === "invalid-period" ? ""
+        : state.status === "error" ? `<p role="${state.error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" ? "status" : "alert"}" style="color:${state.error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" ? "#334155" : "#991b1b"}">${escapeHtml(errorLabel(state.error))}</p><details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
         : `${renderRows(rows)}<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureExport">↓ Dipnotu Dışa Aktar</button>`;
       const pkg = state.pkg;
       const source = pkg ? `<details style="margin-top:16px"><summary>Kaynak ve doğrulama bilgisi</summary>`
@@ -244,8 +261,9 @@
       container.innerHTML = `<div class="gk-v26-page"><h2>Dipnotlar</h2><p>Güvenilir arka uç açıklama paketi</p>`
         + `<div class="gk-v26-card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">`
         + `<label>Şirket<br><select id="disclosureCompany">${companies.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === state.companyId ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`
-        + `<label>Dönem başlangıcı<br><input id="disclosureStart" type="date" value="${escapeHtml(state.periodStart)}"></label>`
-        + `<label>Dönem sonu<br><input id="disclosureDate" type="date" value="${escapeHtml(state.reportingDate)}"></label>`
+        + `<label>Dönem başlangıcı<br><input id="disclosureStart" type="date" value="${escapeHtml(state.periodStart)}" max="${escapeHtml(state.reportingDate)}" aria-describedby="disclosure-period-error"></label>`
+        + `<label>Dönem sonu<br><input id="disclosureDate" type="date" value="${escapeHtml(state.reportingDate)}" min="${escapeHtml(state.periodStart)}" aria-describedby="disclosure-period-error"></label>`
+        + (state.error?.code === "DISCLOSURE_PERIOD_INVALID" ? `<p id="disclosure-period-error" role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p>` : `<span id="disclosure-period-error" class="sr-only"></span>`)
         + `</div><div style="margin:15px 0">${tabs.map(([key, title]) => `<button type="button" data-disclosure-tab="${key}" class="gk-v26-btn ${key === state.tab ? "" : "gk-v26-btn-secondary"}">${title}</button>`).join(" ")}</div>`
         + body + source + `</div></div>`;
       container.querySelector("#disclosureCompany")?.addEventListener("change", event => {
@@ -268,5 +286,5 @@
     draw();
   }
 
-  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, rowsForTab, exportRows, errorLabel });
+  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, rowsForTab, exportRows, errorLabel, validPeriodRange });
 })(window);
