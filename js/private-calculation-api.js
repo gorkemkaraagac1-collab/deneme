@@ -66,6 +66,28 @@
     return requestDisclosure("/api/reports/lease-disclosure/availability?" + query, "GET", null, options);
   }
 
+  async function executeTrustedDisclosureCalculation(contractId, period, options) {
+    const fields = ["reportingPeriodStart", "reportingPeriodEnd", "reportingDate"];
+    if (typeof contractId !== "string" && typeof contractId !== "number") {
+      throw new TypeError("A persisted contract ID is required");
+    }
+    const id = String(contractId).trim();
+    if (!id || id.length > 50 || !period || fields.some(key => typeof period[key] !== "string" || !period[key])
+      || period.reportingPeriodStart > period.reportingPeriodEnd
+      || period.reportingPeriodEnd !== period.reportingDate) {
+      throw new TypeError("A persisted contract and exact disclosure period are required");
+    }
+    const payload = Object.fromEntries(fields.map(key => [key, period[key]]));
+    return requestDisclosure(`/api/calculations/lease/${encodeURIComponent(id)}/execute`, "POST", payload, options);
+  }
+
+  async function createTrustedDisclosureSnapshot(trustedExecutionId, options) {
+    if (typeof trustedExecutionId !== "string" || !/^[A-Za-z0-9_-]{1,50}$/.test(trustedExecutionId)) {
+      throw new TypeError("A trusted calculation execution ID is required");
+    }
+    return requestDisclosure("/api/reports/lease-disclosure/snapshots", "POST", { trustedExecutionId }, options);
+  }
+
   async function getJournalAuthorityPackage(intent, bulk, options) {
     return requestDisclosure(bulk ? "/api/journals/bulk" : "/api/journals/preview", "POST", intent, options);
   }
@@ -384,6 +406,8 @@
     applyModification,
     applyReassessment,
     getLeaseDisclosureAvailability,
+    executeTrustedDisclosureCalculation,
+    createTrustedDisclosureSnapshot,
     getJournalAuthorityPackage,
     getReportingAuthorityPackage,
     getReportingCompanies,

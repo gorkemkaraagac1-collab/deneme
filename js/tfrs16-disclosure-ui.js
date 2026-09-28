@@ -177,11 +177,69 @@
     const state = {
       companyId: companies.some(item => item.id === activeCompany) ? activeCompany : (companies[0]?.id || ""),
       periodStart: defaultStart, reportingDate: defaultEnd,
-      tab: "asset", key: null, status: "idle", pkg: null, availability: null, error: null, sequence: 0
+      tab: "asset", key: null, status: "idle", pkg: null, availability: null, error: null,
+      sequence: 0, producing: false, productionSummary: null
     };
     const period = () => ({ companyId: state.companyId,
       reportingPeriodStart: state.periodStart,
       reportingPeriodEnd: state.reportingDate, reportingDate: state.reportingDate });
+    const contractsForPeriod = () => {
+      const source = bridge.getPortfolioContracts?.();
+      if (!Array.isArray(source)) return [];
+      const ids = new Set();
+      return source.filter(contract => {
+        const id = String(contract?.id ?? "").trim();
+        const companyId = String(contract?.companyId ?? contract?.company_id ?? "");
+        const start = contract?.startDate ?? contract?.start_date;
+        const end = contract?.endDate ?? contract?.end_date;
+        if (!id || companyId !== state.companyId || !isoDate(start) || !isoDate(end)
+          || end < state.periodStart || start > state.reportingDate || ids.has(id)) return false;
+        ids.add(id);
+        return true;
+      }).map(contract => String(contract.id));
+    };
+    const createTrustedSources = async () => {
+      if (state.producing || state.status !== "error"
+        || state.error?.code !== "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return;
+      const contractIds = contractsForPeriod();
+      if (!contractIds.length) {
+        state.productionSummary = "Seçilen şirket ve dönemle örtüşen sözleşme bulunamadı; kaynak üretilmedi.";
+        draw();
+        return;
+      }
+      if (typeof facade?.createTrustedDisclosureSnapshots !== "function") {
+        state.productionSummary = "Güvenilir kaynak üretme işlemi bu sürümde kullanılamıyor.";
+        draw();
+        return;
+      }
+      state.producing = true;
+      state.productionSummary = null;
+      const requestKey = `${state.companyId}|${state.periodStart}|${state.reportingDate}`;
+      draw();
+      try {
+        const results = await facade.createTrustedDisclosureSnapshots(contractIds, period());
+        if (requestKey !== `${state.companyId}|${state.periodStart}|${state.reportingDate}`) return;
+        const succeeded = results.filter(result => result?.success === true);
+        const failed = results.filter(result => result?.success !== true);
+        if (failed.length) {
+          const codes = [...new Set(failed.map(result => result?.code || "TRUSTED_DISCLOSURE_SOURCE_FAILED"))];
+          state.productionSummary = `${succeeded.length}/${contractIds.length} sözleşme için kaynak oluşturuldu. Kalan işlem sunucu tarafından reddedildi: ${codes.join(", ")}.`;
+          state.producing = false;
+          draw();
+          return;
+        }
+        state.productionSummary = `${succeeded.length} sözleşme için güvenilir hesaplama ve kaynak snapshot'ı oluşturuldu; dipnotlar yenileniyor.`;
+        state.producing = false;
+        state.key = null;
+        state.status = "idle";
+        draw();
+      } catch (error) {
+        if (requestKey !== `${state.companyId}|${state.periodStart}|${state.reportingDate}`) return;
+        state.producing = false;
+        state.productionSummary = `Kaynak oluşturulamadı: ${error?.code || "TRUSTED_DISCLOSURE_SOURCE_FAILED"}.`;
+        draw();
+      }
+    };
     const load = () => {
       const key = `${state.companyId}|${state.periodStart}|${state.reportingDate}`;
       if (state.key === key) return;
@@ -239,10 +297,17 @@
       load();
       const tabs = [["asset", "Varlık"], ["liability", "Yükümlülük"], ["liquidity", "Likidite"]];
       const rows = state.status === "ready" ? rowsForTab(state.pkg, state.tab) : [];
-      const body = state.status === "loading" ? "<p>Güvenilir dipnot paketi yükleniyor…</p>"
+      const sourceRequired = state.status === "error" && state.error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED";
+      const sourceContractIds = sourceRequired ? contractsForPeriod() : [];
+      const body = state.producing ? "<p role=\"status\">Sunucu kayıtlı sözleşme şartlarını doğrulayıp güvenilir kaynak oluşturuyor…</p>"
+        : state.status === "loading" ? "<p>Güvenilir dipnot paketi yükleniyor…</p>"
         : state.status === "empty" ? "<p>Yetkili şirket bulunamadı.</p>"
         : state.status === "invalid-period" ? ""
-        : state.status === "error" ? `<p role="${state.error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" ? "status" : "alert"}" style="color:${state.error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" ? "#334155" : "#991b1b"}">${escapeHtml(errorLabel(state.error))}</p><details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
+        : state.status === "error" ? `<p role="${sourceRequired ? "status" : "alert"}" style="color:${sourceRequired ? "#334155" : "#991b1b"}">${escapeHtml(errorLabel(state.error))}</p>`
+          + (sourceRequired ? `<p>${sourceContractIds.length ? `${sourceContractIds.length} kapsam sözleşmesi` : "Bu dönem için sözleşme kapsamı yok"}. Açıkça başlatıldığında sunucu kayıtlı sözleşme şartları ve desteklediği muhasebe yolu üzerinden hesaplama/snapshot üretir; yevmiye veya defter kaydı oluşturmaz.</p>`
+            + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureCreateTrustedSource" ${!sourceContractIds.length ? "disabled" : ""}>Güvenilir kaynağı oluştur</button>` : "")
+          + (state.productionSummary ? `<p role="status">${escapeHtml(state.productionSummary)}</p>` : "")
+          + `<details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
         : `${renderRows(rows)}<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureExport">↓ Dipnotu Dışa Aktar</button>`;
       const pkg = state.pkg;
       const source = pkg ? `<details style="margin-top:16px"><summary>Kaynak ve doğrulama bilgisi</summary>`
@@ -260,20 +325,20 @@
         + ` · Güvenilir snapshot: ${escapeHtml((pkg.periodMovement?.sourceSnapshotIds || []).join(", ") || "Yok")}</p></details>` : "";
       container.innerHTML = `<div class="gk-v26-page"><h2>Dipnotlar</h2><p>Güvenilir arka uç açıklama paketi</p>`
         + `<div class="gk-v26-card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">`
-        + `<label>Şirket<br><select id="disclosureCompany">${companies.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === state.companyId ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`
-        + `<label>Dönem başlangıcı<br><input id="disclosureStart" type="date" value="${escapeHtml(state.periodStart)}" max="${escapeHtml(state.reportingDate)}" aria-describedby="disclosure-period-error"></label>`
-        + `<label>Dönem sonu<br><input id="disclosureDate" type="date" value="${escapeHtml(state.reportingDate)}" min="${escapeHtml(state.periodStart)}" aria-describedby="disclosure-period-error"></label>`
+        + `<label>Şirket<br><select id="disclosureCompany" ${state.producing ? "disabled" : ""}>${companies.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === state.companyId ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`
+        + `<label>Dönem başlangıcı<br><input id="disclosureStart" type="date" value="${escapeHtml(state.periodStart)}" max="${escapeHtml(state.reportingDate)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>`
+        + `<label>Dönem sonu<br><input id="disclosureDate" type="date" value="${escapeHtml(state.reportingDate)}" min="${escapeHtml(state.periodStart)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>`
         + (state.error?.code === "DISCLOSURE_PERIOD_INVALID" ? `<p id="disclosure-period-error" role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p>` : `<span id="disclosure-period-error" class="sr-only"></span>`)
         + `</div><div style="margin:15px 0">${tabs.map(([key, title]) => `<button type="button" data-disclosure-tab="${key}" class="gk-v26-btn ${key === state.tab ? "" : "gk-v26-btn-secondary"}">${title}</button>`).join(" ")}</div>`
         + body + source + `</div></div>`;
       container.querySelector("#disclosureCompany")?.addEventListener("change", event => {
-        state.companyId = event.target.value; state.sequence++; draw();
+        state.companyId = event.target.value; state.productionSummary = null; state.sequence++; draw();
       });
       container.querySelector("#disclosureStart")?.addEventListener("change", event => {
-        state.periodStart = event.target.value; state.sequence++; draw();
+        state.periodStart = event.target.value; state.productionSummary = null; state.sequence++; draw();
       });
       container.querySelector("#disclosureDate")?.addEventListener("change", event => {
-        state.reportingDate = event.target.value; state.sequence++; draw();
+        state.reportingDate = event.target.value; state.productionSummary = null; state.sequence++; draw();
       });
       container.querySelectorAll("[data-disclosure-tab]").forEach(button => button.addEventListener("click", () => {
         state.tab = button.dataset.disclosureTab; draw();
@@ -281,6 +346,7 @@
       container.querySelector("#disclosureExport")?.addEventListener("click", () => {
         if (state.status === "ready") exportRows(rowsForTab(state.pkg, state.tab), state.tab, state.pkg);
       });
+      container.querySelector("#disclosureCreateTrustedSource")?.addEventListener("click", createTrustedSources);
     };
     bridge.setActiveScreenRefreshCallback?.(() => { state.key = null; state.sequence++; draw(); });
     draw();

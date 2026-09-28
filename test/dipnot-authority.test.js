@@ -96,6 +96,51 @@ test('authenticated adapter discovers server-owned IDs and posts exact DISC payl
   });
 });
 
+test('trusted source producer uses only the existing authenticated execute and snapshot routes', async () => {
+  const calls = [];
+  const window = {
+    tfrs16GetToken: () => 'TEST-TOKEN-ONLY', setTimeout, clearTimeout,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      const data = calls.length === 1
+        ? { calculationId: 'EXEC-111', eligibleForDisclosureSnapshot: true, replayed: false }
+        : { snapshotId: 'D1S-EXEC-111', trustedExecutionId: 'EXEC-111', replayed: false };
+      return { ok: true, status: calls.length === 1 ? 200 : 201,
+        json: async () => ({ success: true, data }) };
+    }
+  };
+  load('js/private-calculation-api.js', window);
+  load('js/private-tfrs16-facade.js', window);
+  const period = { reportingPeriodStart: '2026-01-01', reportingPeriodEnd: '2026-06-30', reportingDate: '2026-06-30' };
+  const result = await window.LeaseQantPrivateTfrs16Facade.createTrustedDisclosureSnapshots(['111'], period);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), [{ contractId: '111', success: true,
+    calculationId: 'EXEC-111', snapshotId: 'D1S-EXEC-111', replayed: false }]);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://api.leaseqant.com/api/calculations/lease/111/execute');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.credentials, 'include');
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer TEST-TOKEN-ONLY');
+  assert.deepEqual(JSON.parse(calls[0].options.body), period);
+  assert.equal(calls[1].url, 'https://api.leaseqant.com/api/reports/lease-disclosure/snapshots');
+  assert.deepEqual(JSON.parse(calls[1].options.body), { trustedExecutionId: 'EXEC-111' });
+});
+
+test('trusted source producer never snapshots an execution the server marks ineligible', async () => {
+  let requests = 0;
+  const window = {
+    tfrs16GetToken: () => 'TEST-TOKEN-ONLY', setTimeout, clearTimeout,
+    fetch: async () => { requests += 1; return { ok: true, status: 200,
+      json: async () => ({ success: true, data: { calculationId: 'EXEC-UNSUPPORTED', eligibleForDisclosureSnapshot: false } }) }; }
+  };
+  load('js/private-calculation-api.js', window);
+  load('js/private-tfrs16-facade.js', window);
+  const results = await window.LeaseQantPrivateTfrs16Facade.createTrustedDisclosureSnapshots(['111'], {
+    reportingPeriodStart: '2026-01-01', reportingPeriodEnd: '2026-06-30', reportingDate: '2026-06-30'
+  });
+  assert.equal(requests, 1, 'the snapshot route must not be called after an ineligible execution');
+  assert.deepEqual(JSON.parse(JSON.stringify(results)), [{ contractId: '111', success: false, code: 'DISCLOSURE_TRUSTED_EXECUTION_NOT_ELIGIBLE' }]);
+});
+
 test('source statuses and exact values survive UI projection and export', () => {
   let exported;
   const window = { XLSX: { utils: {
@@ -239,6 +284,105 @@ test('disclosure uses a complete month by default and blocks reversed date range
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(calls.length, 1);
   assert.match(target.querySelector('[role="alert"]').textContent, /başlangıcı, dönem sonundan sonra olamaz/);
+});
+
+test('trusted source generation is an explicit click and reloads only after the server accepts it', async () => {
+  const calls = [], dom = new JSDOM('<main id="footnotes"></main>', { url: 'https://example.test/tfrs16.html' });
+  const window = dom.window;
+  let sourcesCreated = false;
+  const periodContract = { id: '111', companyId: 'COMPANY-1', startDate: '2025-02-28', endDate: '2030-02-28' };
+  window.GK_TFRS16 = {
+    getUnifiedCompanyOptions: () => [{ id: 'COMPANY-1', name: 'Financial Intelligence Platform' }],
+    getActiveCompanyId: () => 'COMPANY-1', getPortfolioContracts: () => [periodContract],
+    setActiveScreenRefreshCallback: () => {}
+  };
+  window.LeaseQantPrivateTfrs16Facade = {
+    loadLeaseDisclosureAvailability: async period => {
+      calls.push({ type: 'availability', ...period });
+      if (!sourcesCreated) throw Object.assign(new Error('No trusted source'), { code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' });
+      return { ...period, populationId: 'POP-TEST', contractIds: ['111'], calculationIds: ['EXEC-111'],
+        sourceTrustStatus: 'TRUSTED_SOURCE_IDENTIFIERS_VERIFIED',
+        currencyProfile: { presentationCurrency: 'TRY', evidenceId: 'CURRENCY-TEST' } };
+    },
+    loadLeaseDisclosure: async availability => ({
+      ...fixture(availability), identity: { ...fixture(availability).identity, companyId: availability.companyId },
+      population: { ...fixture(availability).population, populationId: availability.populationId,
+        includedContractIds: availability.contractIds, includedCalculationIds: availability.calculationIds }
+    }),
+    createTrustedDisclosureSnapshots: async (ids, period) => {
+      calls.push({ type: 'produce', ids: [...ids], ...period });
+      sourcesCreated = true;
+      return [{ contractId: '111', success: true, calculationId: 'EXEC-111', snapshotId: 'D1S-EXEC-111' }];
+    }
+  };
+  load('js/tfrs16-disclosure-ui.js', window);
+  const container = window.document.getElementById('footnotes');
+  window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(calls.some(call => call.type === 'produce'), false, 'page load must not create accounting sources');
+  assert.ok(container.querySelector('#disclosureCreateTrustedSource'));
+  const start = container.querySelector('#disclosureStart'), end = container.querySelector('#disclosureDate');
+  start.value = '2026-01-01'; start.dispatchEvent(new window.Event('change', { bubbles: true }));
+  end.value = '2026-06-30'; end.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  container.querySelector('#disclosureCreateTrustedSource').click();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  const production = calls.find(call => call.type === 'produce');
+  assert.deepEqual(production.ids, ['111']);
+  assert.deepEqual({ reportingPeriodStart: production.reportingPeriodStart,
+    reportingPeriodEnd: production.reportingPeriodEnd, reportingDate: production.reportingDate },
+  { reportingPeriodStart: '2026-01-01', reportingPeriodEnd: '2026-06-30', reportingDate: '2026-06-30' });
+  assert.match(container.textContent, /91,23/);
+  assert.match(container.textContent, /Güvenilir snapshot/);
+});
+
+test('trusted source generation excludes contracts outside the selected company and period', async () => {
+  const dom = new JSDOM('<main id="footnotes"></main>', { url: 'https://example.test/tfrs16.html' });
+  const window = dom.window;
+  window.GK_TFRS16 = {
+    getUnifiedCompanyOptions: () => [{ id: 'COMPANY-1' }], getActiveCompanyId: () => 'COMPANY-1',
+    getPortfolioContracts: () => [
+      { id: 'FOREIGN', companyId: 'COMPANY-2', startDate: '2025-01-01', endDate: '2030-01-01' },
+      { id: 'OUTSIDE', companyId: 'COMPANY-1', startDate: '2027-01-01', endDate: '2030-01-01' }
+    ], setActiveScreenRefreshCallback: () => {}
+  };
+  window.LeaseQantPrivateTfrs16Facade = {
+    loadLeaseDisclosureAvailability: async () => { throw Object.assign(new Error('No source'), { code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }); },
+    loadLeaseDisclosure: async () => { throw new Error('Not reached without a trusted source'); },
+    createTrustedDisclosureSnapshots: async () => { throw new Error('No in-scope source may be sent'); }
+  };
+  load('js/tfrs16-disclosure-ui.js', window);
+  const container = window.document.getElementById('footnotes');
+  window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.ok(container.querySelector('#disclosureCreateTrustedSource'), container.innerHTML);
+  assert.equal(container.querySelector('#disclosureCreateTrustedSource').disabled, true);
+  assert.match(container.textContent, /Bu dönem için sözleşme kapsamı yok/);
+});
+
+test('unsupported trusted route is displayed and does not render invented disclosure amounts', async () => {
+  const dom = new JSDOM('<main id="footnotes"></main>', { url: 'https://example.test/tfrs16.html' });
+  const window = dom.window;
+  window.GK_TFRS16 = {
+    getUnifiedCompanyOptions: () => [{ id: 'COMPANY-1' }], getActiveCompanyId: () => 'COMPANY-1',
+    getPortfolioContracts: () => [{ id: '111', companyId: 'COMPANY-1', startDate: '2025-01-01', endDate: '2030-01-01' }],
+    setActiveScreenRefreshCallback: () => {}
+  };
+  window.LeaseQantPrivateTfrs16Facade = {
+    loadLeaseDisclosureAvailability: async () => { throw Object.assign(new Error('No source'), { code: 'DISCLOSURE_TRUSTED_SOURCE_REQUIRED' }); },
+    loadLeaseDisclosure: async () => { throw new Error('Not reached without a trusted source'); },
+    createTrustedDisclosureSnapshots: async () => [{ contractId: '111', success: false, code: 'TRUSTED_ROUTE_UNSUPPORTED' }]
+  };
+  load('js/tfrs16-disclosure-ui.js', window);
+  const container = window.document.getElementById('footnotes');
+  window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.ok(container.querySelector('#disclosureCreateTrustedSource'), container.innerHTML);
+  container.querySelector('#disclosureCreateTrustedSource').click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(container.textContent, /TRUSTED_ROUTE_UNSUPPORTED/);
+  assert.doesNotMatch(container.textContent, /91,23/);
+  assert.ok(container.querySelector('[role="status"]'));
 });
 
 test('all three tabs render backend values; company and period controls reload the scoped package', async () => {
