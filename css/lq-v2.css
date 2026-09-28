@@ -518,10 +518,10 @@ html[data-lq-ui="2"] .form-group label {
   letter-spacing: 0 !important; text-transform: none !important; opacity: 1 !important;
 }
 html[data-lq-ui="2"] .form-field small { color: var(--lq-ink-3) !important; font-size: 12px !important; line-height: 17px !important; }
-html[data-lq-ui="2"] .form-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html[data-lq-ui="2"] .form-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.lq-date-text):not(.lq-date-native),
 html[data-lq-ui="2"] .form-field select,
 html[data-lq-ui="2"] .form-field textarea,
-html[data-lq-ui="2"] .gk-v26-card input:not([type="checkbox"]):not([type="radio"]),
+html[data-lq-ui="2"] .gk-v26-card input:not([type="checkbox"]):not([type="radio"]):not(.lq-date-text):not(.lq-date-native),
 html[data-lq-ui="2"] .gk-v26-card select {
   min-height: 40px !important;
   padding: 0 12px !important;
@@ -534,14 +534,14 @@ html[data-lq-ui="2"] .gk-v26-card select {
 }
 html[data-lq-ui="2"] .form-field textarea { padding: 10px 12px !important; font-family: var(--lq-mono) !important; font-size: 13px !important; }
 html[data-lq-ui="2"] .form-field input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; }
-html[data-lq-ui="2"] .form-field input:focus,
+html[data-lq-ui="2"] .form-field input:not(.lq-date-text):focus,
 html[data-lq-ui="2"] .form-field select:focus,
 html[data-lq-ui="2"] .form-field textarea:focus {
   border-color: var(--lq-primary) !important;
   box-shadow: 0 0 0 3px rgba(22, 96, 214, .15) !important;
   outline: none !important;
 }
-html[data-lq-ui="2"] .form-field input:disabled,
+html[data-lq-ui="2"] .form-field input:not(.lq-date-text):disabled,
 html[data-lq-ui="2"] .form-field select:disabled,
 html[data-lq-ui="2"] .form-field textarea:disabled { background: var(--lq-surface-2) !important; color: var(--lq-ink-3) !important; }
 html[data-lq-ui="2"] .form-field input:user-invalid,
@@ -669,7 +669,7 @@ html[data-lq-ui="2"] [data-disclosure-tab].gk-v26-btn:not(.gk-v26-btn-secondary)
   background: var(--lq-ink) !important; border-color: var(--lq-ink) !important;
 }
 html[data-lq-ui="2"] #v26PageHost select,
-html[data-lq-ui="2"] #v26PageHost input:not([type="checkbox"]):not([type="radio"]) {
+html[data-lq-ui="2"] #v26PageHost input:not([type="checkbox"]):not([type="radio"]):not(.lq-date-text):not(.lq-date-native) {
   min-height: 38px; min-width: 160px; padding: 0 10px;
   border: 1px solid var(--lq-line-strong) !important; border-radius: 8px !important;
   background: var(--lq-surface) !important; color: var(--lq-ink) !important;
