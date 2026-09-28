@@ -1,0 +1,84 @@
+/* LeaseQant UI v2 — GG.AA.YYYY tarih alanları (js/lq-date-fields.js) */
+html[data-lq-ui="2"] .lq-date {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 150px;
+}
+html[data-lq-ui="2"] .lq-date > input.lq-date-text {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 40px 0 12px !important;
+  border: 1px solid var(--lq-line-strong, #CBD3DF) !important;
+  border-radius: 8px !important;
+  background: var(--lq-surface, #FFFFFF) !important;
+  color: var(--lq-ink, #0B1628) !important;
+  font-family: var(--lq-mono, ui-monospace, monospace) !important;
+  font-size: 14px !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  box-sizing: border-box;
+}
+html[data-lq-ui="2"] .lq-date > input.lq-date-text::placeholder { color: #7A8699; letter-spacing: .04em; }
+html[data-lq-ui="2"] .lq-date > input.lq-date-text:focus {
+  border-color: var(--lq-primary, #1660D6) !important;
+  box-shadow: 0 0 0 3px rgba(22, 96, 214, .15) !important;
+  outline: none !important;
+}
+html[data-lq-ui="2"] .lq-date > input.lq-date-text[aria-invalid="true"] {
+  border-color: var(--lq-danger, #B42318) !important;
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, .12) !important;
+}
+html[data-lq-ui="2"] .lq-date > input.lq-date-text:disabled {
+  background: var(--lq-surface-2, #F8FAFC) !important;
+  color: var(--lq-ink-3, #5E6A7D) !important;
+}
+html[data-lq-ui="2"] .lq-date > .lq-date-pick {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lq-ink-2, #46546A);
+  cursor: pointer;
+}
+html[data-lq-ui="2"] .lq-date > .lq-date-pick:hover { background: var(--lq-surface-2, #F8FAFC); color: var(--lq-ink, #0B1628); }
+html[data-lq-ui="2"] .lq-date > .lq-date-pick:disabled { opacity: .4; cursor: not-allowed; background: transparent; }
+/* Özgün kutu yerinde ve çizilir durumda kalır (takvim onun konumunda açılır),
+   ama görünmez ve tıklanamaz. */
+html[data-lq-ui="2"] .lq-date > input.lq-date-native {
+  position: absolute !important;
+  right: 4px;
+  bottom: 0;
+  width: 32px !important;
+  min-width: 0 !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html[data-lq-ui="2"] .lq-date.lq-date > input.lq-date-text.lq-date-text[aria-invalid="true"] {
+  border-color: var(--lq-danger, #B42318) !important;
+  border-width: 1.5px !important;
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, .12) !important;
+}
+html[data-lq-ui="2"] .form-field small.lq-date-error,
+html[data-lq-ui="2"] small.lq-date-error.lq-date-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px !important;
+  line-height: 17px;
+  color: var(--lq-danger, #B42318) !important;
+}
+html[data-lq-ui="2"] .lq-date-error[hidden] { display: none !important; }
