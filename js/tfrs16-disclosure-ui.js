@@ -173,7 +173,9 @@
     const now = new Date(), periodEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
     const periodStartDate = new Date(periodEndDate.getFullYear(), periodEndDate.getMonth(), 1);
     const dateOnly = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    const defaultStart = dateOnly(periodStartDate), defaultEnd = dateOnly(periodEndDate);
+    const sharedPeriod = global.LeaseQantReportingPeriod?.get?.();
+    const defaultStart = sharedPeriod?.periodStart || dateOnly(periodStartDate);
+    const defaultEnd = sharedPeriod?.periodEnd || dateOnly(periodEndDate);
     const state = {
       companyId: companies.some(item => item.id === activeCompany) ? activeCompany : (companies[0]?.id || ""),
       periodStart: defaultStart, reportingDate: defaultEnd,
