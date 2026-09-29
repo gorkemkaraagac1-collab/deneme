@@ -174,7 +174,7 @@
       <strong>${escape(KIND_LABELS[voucher.eventType]||voucher.eventType)}</strong><span class="lq-jr-mono lq-jr-link">${escape(voucher.contractId)}</span>
       <span class="lq-jr-ok">✓ Dengede</span></header>
       <div class="lq-jr-line is-head"><span>HESAP</span><span>HESAP ADI</span><span>AÇIKLAMA</span><span class="is-r">BORÇ</span><span class="is-r">ALACAK</span></div>
-      ${lines.map(line=>`<div class="lq-jr-line"><span class="lq-jr-mono">${escape(line.accountCode)}</span><span class="${line.credit>0&&!line.debit?"is-credit":""}">${escape(line.accountName)}</span><span class="lq-jr-muted">${escape(line.description||"")}</span><span class="lq-jr-mono is-r">${line.debit?amount(line.debit):""}</span><span class="lq-jr-mono is-r">${line.credit?amount(line.credit):""}</span></div>`).join("")}
+      ${lines.map(line=>`<div class="lq-jr-line"><span class="lq-jr-mono">${escape(line.accountCode)}</span><span class="${line.credit>0&&!line.debit?"lq-jr-cr":""}">${escape(line.accountName)}</span><span class="lq-jr-muted">${escape(line.description||"")}</span><span class="lq-jr-mono is-r">${line.debit?amount(line.debit):""}</span><span class="lq-jr-mono is-r">${line.credit?amount(line.credit):""}</span></div>`).join("")}
       ${!voucher.lines.length?'<p class="lq-jr-muted lq-jr-pad">Sunucu bu dönem için fiş hareketi olmadığını doğruladı.</p>':""}
       <footer><span class="lq-jr-muted">${escape(voucher.supplier||"")} · ${escape(voucher.currency)}</span><span class="lq-jr-mono">Borç ${amount(voucher.totalDebit)} · Alacak ${amount(voucher.totalCredit)}</span></footer></article>`;
   }
