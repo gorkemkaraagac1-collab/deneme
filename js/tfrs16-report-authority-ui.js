@@ -226,7 +226,9 @@
  }
  async function renderContractDetails(container,contract){
   const targets=['summary','schedule','audit'].map(kind=>({kind,target:container?.querySelector('[data-authoritative-report-'+kind+']')}));
-  try{const p=await load({companyId:contract.companyId,...defaultPeriod()}),row=p.contracts.find(r=>r.contractId===contract.id);
+  const notify=detail=>{try{global.dispatchEvent(new CustomEvent('lq:contract-report',{detail:{contractId:contract.id,...detail}}));}catch(_){}};
+  let pkg=null,found=null;
+  try{const p=await load({companyId:contract.companyId,...defaultPeriod()}),row=p.contracts.find(r=>r.contractId===contract.id);pkg=p;found=row||null;
    if(!row||row.status!=='SUPPORTED')fail(row?.reason||'REPORTING_SOURCE_NOT_READY');
    targets.forEach(({kind,target})=>{if(!target?.isConnected)return;
     if(kind==='summary')target.innerHTML=`<p>${esc(p.period.reportingDate)} · ${esc(row.currency)} · ${esc(row.calculationId)}</p>`+
@@ -234,7 +236,9 @@
     else{const rows=rawRows(p,kind==='schedule'?'schedule':'audit',contract.id),keys=Object.keys(rows[0]||{});
      target.innerHTML=`<p>${kind==='audit'?esc(p.audit.evidenceType):'Backend sözleşmesel plan; gerçek ödeme kanıtı değildir.'}</p><table><thead><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${esc(r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
    });
-  }catch(e){targets.forEach(({target})=>{if(target?.isConnected)target.innerHTML=errorHtml(e);});}
+   notify({package:p,row});
+  }catch(e){targets.forEach(({target})=>{if(target?.isConnected)target.innerHTML=errorHtml(e);});
+   notify(pkg&&found?{package:pkg,row:found}:{error:{code:e?.code||'REPORTING_AUTHORITY_UNAVAILABLE'},period:defaultPeriod()});}
  }
  global.LeaseQantReportingAuthorityUi={acceptPackage,companies,load,read,rawRows,serialize,html,exportPackage,page,dashboard,errorHtml,defaultPeriod,validPeriodRange,renderContractDetails,refreshDashboardPresentation};
 })(window);
