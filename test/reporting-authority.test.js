@@ -113,6 +113,55 @@ test('report page blocks reversed date ranges before calling the authenticated r
  end.value='2026-09-30';end.dispatchEvent(new window.Event('input',{bubbles:true}));
  assert.equal(button.disabled,false);assert.equal(target.querySelector('[data-report-period-error]').hidden,true);
 });
+test('v2 close and controls tabs use verified server rows and keep period lock neutral',async()=>{
+ const proof=proofs.find(p=>p.fixture==='single');
+ const markup=`<!doctype html><html data-lq-ui="2"><body><select id="v26ActiveCompanySelect"><option value="${proof.body.companyId}" selected>Synthetic Company</option></select><main id="mainContent"></main></body></html>`;
+ const {ui,window}=runtime(markup),target=window.document.getElementById('mainContent');adapter(window,[proof]);
+ window.GK_TFRS16={getCurrentUserRoles:()=>['ADMIN']};
+ await ui.page(target,'Ay Sonu — Backend Hesaplama Kontrolleri','controls');
+ assert.ok(target.classList.contains('lq-v2-report'));
+ assert.equal(target.querySelector('#lqRcCloseTab').getAttribute('aria-selected'),'true');
+ assert.match(target.querySelector('[data-report-output]').textContent,/Kapanış durumu/);
+ assert.equal(target.querySelector('#lqRcCloseTab').tabIndex,0);
+ assert.equal(target.querySelector('#lqRcControlsTab').tabIndex,-1);
+ assert.match(target.querySelector('.lq-rc-role-note').textContent,/ADMIN yetkisindedir/);
+ assert.match(target.querySelector('.lq-rc-role-note').textContent,/sunucu tarafından doğrulanmış rol/);
+ assert.doesNotMatch(target.querySelector('.lq-rc-role-note').textContent,/ADMIN rolü doğrulandı/);
+ assert.equal(target.querySelectorAll('[data-close-action]').length,0);
+ assert.ok(target.querySelector('.lq-rc-facts').textContent.includes(proof.package.identity.companyName));
+ assert.match(target.querySelector('.lq-rc-facts').textContent,/Hesaplama kontrolleri/);
+ target.querySelector('#lqRcControlsTab').click();
+ assert.equal(target.querySelector('#lqRcControlsTab').getAttribute('aria-selected'),'true');
+ assert.equal(target.querySelector('#lqRcControlsTab').tabIndex,0);
+ assert.equal(target.querySelectorAll('[data-check-row]').length,proof.package.controls.checks.length);
+ assert.equal(target.querySelectorAll('[data-report-export]').length,5);
+ const serverDescriptions=proof.package.controls.checks.map(row=>row.description).filter(Boolean);
+ serverDescriptions.forEach(description=>assert.ok(target.querySelector('[data-report-output]').textContent.includes(description)));
+ assert.doesNotMatch(target.querySelector('[data-report-output]').textContent,/Kira yükümlülüğü\s+\d/);
+ target.querySelector('#lqRcControlsTab').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
+ assert.equal(target.querySelector('#lqRcCloseTab').getAttribute('aria-selected'),'true');
+ assert.equal(window.document.activeElement.id,'lqRcCloseTab');
+ target.querySelector('[data-rc-go-controls]').click();
+ assert.equal(target.querySelector('#lqRcControlsTab').getAttribute('aria-selected'),'true');
+ window.close();
+});
+test('v2 controls route opens on the server control table; legacy route does not receive v2 shell',async()=>{
+ const proof=proofs.find(p=>p.fixture==='single');
+ const markup=`<!doctype html><html data-lq-ui="2"><body><main id="mainContent"></main></body></html>`;
+ const {ui,window}=runtime(markup),target=window.document.getElementById('mainContent');adapter(window,[proof]);
+ window.GK_TFRS16={getCurrentUserRoles:()=>['ADMIN']};
+ await ui.page(target,'Backend Hesaplama Kontrolleri','controls');
+ assert.equal(target.querySelector('#lqRcControlsTab').getAttribute('aria-selected'),'true');
+ assert.match(target.querySelector('.lq-rc-role-note').textContent,/yetki doğrulanmış gösterilmez/);
+ assert.match(target.querySelector('.lq-rc-disclaimer').textContent,/dönem kapatma veya yevmiye kaydı değildir/);
+ window.close();
+
+ const legacy=runtime(),legacyTarget=legacy.window.document.getElementById('mainContent');adapter(legacy.window,[proof]);
+ await legacy.ui.page(legacyTarget,'Backend Hesaplama Kontrolleri','controls');
+ assert.equal(legacyTarget.classList.contains('lq-v2-report'),false);
+ assert.equal(legacyTarget.querySelector('.lq-rc-page'),null);
+ legacy.window.close();
+});
 test('report transport authenticates storage-only sessions without changing closed journal/disclosure intent',async()=>{
  const {window,load,ui}=runtime(),proof=proofs[0],calls=[];window.localStorage.setItem('access_token','STORAGE-TEST-ONLY');window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
  window.fetch=async(url,options)=>{calls.push({url,options});return {ok:true,status:200,json:async()=>({success:true,data:proof.package})};};load('js/private-calculation-api.js');await ui.load(proof.body);
