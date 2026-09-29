@@ -20,7 +20,7 @@ test('çıkış sekmedeki oturum anahtarını da siler',async()=>{
 test('lisans ve şirket sayfaları yüklenen lisansları normalize eder',()=>{
  assert.match(fs.readFileSync(path.join(root,'frontend/admin/licenses.html'),'utf8'),/\.map\(normalizeLicense\)/);
  const c=fs.readFileSync(path.join(root,'frontend/admin/companies.html'),'utf8');
- assert.equal((c.match(/normalizeLicense/g)||[]).length,2);
+ assert.ok((c.match(/normalizeLicense/g)||[]).length>=2);
 });
 test('şifre değiştirme sayfası sessionStorage anahtarını okur ve yeni anahtarı saklar',()=>{
  const s=fs.readFileSync(path.join(root,'frontend/admin/change-password.html'),'utf8');

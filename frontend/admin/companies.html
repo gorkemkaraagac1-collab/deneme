@@ -516,9 +516,9 @@
                     <tr>
                         <th>Kod</th>
                         <th>Şirket</th>
-                        <th>Üst Şirket</th>
                         <th>Durum</th>
-                        <th>Kullanıcı</th>
+                        <th style="text-align:right">Kullanıcı</th>
+                        <th style="text-align:right">Sözleşme</th>
                         <th>Lisans</th>
                         <th>Bitiş</th>
                         <th>İşlemler</th>
@@ -934,184 +934,46 @@ function renderCompanies() {
    COMPANY ROW
 ========================================================= */
 
-function renderCompanyRow(company) {
-
-    const canManage =
-        isPlatformAdmin();
-
-    const status =
-        company.status || "ACTIVE";
-
-    const license =
-        company.active_license;
-
-    const hasActiveLicense =
-        !!license &&
-        license.status === "ACTIVE";
-
-    const parentName =
-        company.parent_company_id
-            ? (
-                companyNameById[
-                    company.parent_company_id
-                ] ||
-                company.parent_company_id
-            )
-            : null;
-
-    const parentHtml =
-        parentName
-            ? `
-                <div
-                    class="parent-company"
-                    title="${escapeHtml(parentName)}"
-                >
-                    ${escapeHtml(parentName)}
-                </div>
-              `
-            : `
-                <span class="root-company">
-                    Ana şirket / Holding
-                </span>
-              `;
-
-    const licenseHtml =
-        license
-            ? `
-                <div class="license-cell">
-                    <span class="license-plan">
-                        ${escapeHtml(
-                            license.plan_name || "-"
-                        )}
-                    </span>
-
-                    ${getStatusBadge(
-                        license.status
-                    )}
-                </div>
-              `
-            : `
-                <span class="no-license">
-                    Aktif lisans yok
-                </span>
-              `;
-
-    let actions = `
-        <button
-            class="btn btn-sm btn-outline"
-            onclick="viewCompany('${company.id}')"
-        >
-            Detay
-        </button>
-    `;
-
-    if (canManage) {
-
-        actions += `
-            <button
-                class="btn btn-sm ${
-                    hasActiveLicense
-                        ? "btn-outline"
-                        : "btn-primary"
-                }"
-                onclick="openAssignModal('${company.id}')"
-            >
-                ${
-                    hasActiveLicense
-                        ? "Lisans"
-                        : "Lisans Ata"
-                }
-            </button>
-        `;
-
-        if (status === "ACTIVE") {
-
-            actions += `
-                <button
-                    class="btn btn-sm btn-danger"
-                    onclick="toggleCompanyStatus(
-                        '${company.id}',
-                        'INACTIVE'
-                    )"
-                >
-                    Pasifleştir
-                </button>
-            `;
-
-        } else {
-
-            actions += `
-                <button
-                    class="btn btn-sm btn-success"
-                    onclick="toggleCompanyStatus(
-                        '${company.id}',
-                        'ACTIVE'
-                    )"
-                >
-                    Aktifleştir
-                </button>
-            `;
-        }
-    }
-
-    return `
-        <tr>
-
-            <td>
-                <span class="company-code">
-                    ${escapeHtml(
-                        company.code || "-"
-                    )}
-                </span>
-            </td>
-
-            <td class="company-name">
-                <strong>
-                    ${escapeHtml(
-                        company.name || "-"
-                    )}
-                </strong>
-            </td>
-
-            <td>
-                ${parentHtml}
-            </td>
-
-            <td>
-                ${getStatusBadge(status)}
-            </td>
-
-            <td>
-                ${Number(
-                    company.user_count || 0
-                )}
-            </td>
-
-            <td>
-                ${licenseHtml}
-            </td>
-
-            <td>
-                ${
-                    license &&
-                    license.expires_at
-                        ? formatDateShort(
-                            license.expires_at
-                        )
-                        : "—"
-                }
-            </td>
-
-            <td>
-                <div class="action-group">
-                    ${actions}
-                </div>
-            </td>
-
-        </tr>
-    `;
+function licenseRemaining(license) {
+    if (!license || !license.expires_at) return null;
+    const t = Date.parse(license.expires_at);
+    return Number.isFinite(t) ? Math.ceil((t - Date.now()) / 86400000) : null;
 }
 
+function licenseChip(license) {
+    if (!license) return '<span class="lq-chip err">Lisans yok</span>';
+    if (license.status !== "ACTIVE") return `<span class="lq-chip n">${license.status === "CANCELLED" ? "İptal" : "Süresi doldu"}</span>`;
+    const d = licenseRemaining(license);
+    if (d == null) return '<span class="lq-chip ok">Süresiz</span>';
+    if (d < 0) return '<span class="lq-chip err">Süresi doldu</span>';
+    if (d <= 30) return `<span class="lq-chip warn">${d} gün kaldı</span>`;
+    return `<span class="lq-chip ok">Aktif</span>`;
+}
+
+function renderCompanyRow(company) {
+    const status = company.status || "ACTIVE";
+    const license = company.active_license;
+    const parentName = company.parent_company_id
+        ? (companyNameById[company.parent_company_id] || company.parent_company_id)
+        : null;
+    const nameHtml = parentName
+        ? `<div style="padding-left:14px"><span class="lq-tree">└</span>${escapeHtml(company.name || "-")}<small style="display:block;color:var(--text-light);font-size:11.5px;padding-left:18px">${escapeHtml(parentName)}</small></div>`
+        : `<strong>${escapeHtml(company.name || "-")}</strong>`;
+    const licenseHtml = license
+        ? `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start"><span>${escapeHtml(license.plan_name || "-")}</span>${licenseChip(license)}</div>`
+        : licenseChip(null);
+    return `
+        <tr>
+            <td><span class="company-code">${escapeHtml(company.code || "-")}</span></td>
+            <td class="company-name">${nameHtml}</td>
+            <td>${status === "ACTIVE" ? '<span class="lq-chip ok">Aktif</span>' : '<span class="lq-chip n">Pasif</span>'}</td>
+            <td style="text-align:right;font-family:var(--mono)">${Number(company.user_count || 0)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${Number(company.tfrs16_active_contracts || 0)}</td>
+            <td>${licenseHtml}</td>
+            <td style="white-space:nowrap">${license && license.expires_at ? formatDateShort(license.expires_at) : "—"}</td>
+            <td><button class="btn btn-sm btn-outline" type="button" onclick="viewCompany('${escapeHtml(String(company.id))}')">Detay</button></td>
+        </tr>`;
+}
 
 /* =========================================================
    STATUS
@@ -1252,19 +1114,6 @@ function showCreateCompanyModal() {
             </div>
 
 
-            <div class="form-group">
-                <label>E-posta *</label>
-
-                <input
-                    type="email"
-                    name="email"
-                    required
-                    maxlength="150"
-                    placeholder="info@sirket.com"
-                >
-            </div>
-
-
             <div
                 id="createCompanyError"
                 style="
@@ -1402,361 +1251,88 @@ async function createCompany(event) {
    COMPANY DETAIL
 ========================================================= */
 
-async function viewCompany(id) {
-
-    try {
-
-        const result =
-            await AdminAPI.getCompany(id);
-
-        if (!result.success) {
-
-            alert(
-                describeApiError(result)
-            );
-
-            return;
-        }
-
-        const company =
-            result.data;
-
-        const users =
-            Array.isArray(company.users)
-                ? company.users
-                : [];
-
-        const licenses =
-            (Array.isArray(company.licenses)
-                ? company.licenses
-                : []).map(normalizeLicense);
-
-        const summary =
-            company.contracts_summary || {
-                active_count: 0,
-                total_count: 0,
-                suppliers: [],
-                total_monthly_payment_by_currency: []
-            };
-
-        const totals =
-            (
-                summary.total_monthly_payment_by_currency ||
-                []
-            )
-            .map(item => {
-
-                const amount =
-                    Number(item.total || 0)
-                        .toLocaleString(
-                            "tr-TR",
-                            {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2
-                            }
-                        );
-
-                return `${amount} ${escapeHtml(
-                    item.currency || ""
-                )}`;
-
-            })
-            .join(", ") || "—";
-
-        const suppliers =
-            (summary.suppliers || [])
-                .map(escapeHtml)
-                .join(", ") || "—";
-
-        const parentName =
-            company.parent_company_id
-                ? (
-                    companyNameById[
-                        company.parent_company_id
-                    ] ||
-                    company.parent_company_id
-                )
-                : "Ana şirket / Holding";
-
-
-        const usersHtml =
-            users.length
-                ? users.map(user => `
-
-                    <div class="detail-list-item">
-
-                        <strong>
-                            ${escapeHtml(
-                                user.username || "-"
-                            )}
-                        </strong>
-
-                        <span>
-                            ${escapeHtml(
-                                user.role || "-"
-                            )}
-                            ·
-                            ${escapeHtml(
-                                user.status || "-"
-                            )}
-                        </span>
-
-                    </div>
-
-                `).join("")
-                : `
-                    <div class="detail-list-item">
-                        <span>
-                            Bu şirkete atanmış kullanıcı yok.
-                        </span>
-                    </div>
-                  `;
-
-
-        const licensesHtml =
-            licenses.length
-                ? licenses.map(license => `
-
-                    <div class="detail-list-item">
-
-                        <strong>
-                            ${escapeHtml(
-                                license.plan_name || "-"
-                            )}
-                        </strong>
-
-                        <span>
-                            ${escapeHtml(
-                                license.status || "-"
-                            )}
-                            ·
-                            ${
-                                license.expires_at
-                                    ? formatDateShort(
-                                        license.expires_at
-                                    )
-                                    : "Süresiz / belirtilmemiş"
-                            }
-                        </span>
-
-                    </div>
-
-                `).join("")
-                : `
-                    <div class="detail-list-item">
-                        <span>
-                            Lisans kaydı bulunmuyor.
-                        </span>
-                    </div>
-                  `;
-
-
-        const content = `
-
-            <div class="detail-grid">
-
-                <div class="detail-item">
-                    <label>Şirket Kodu</label>
-                    <div>
-                        ${escapeHtml(
-                            company.code || "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item">
-                    <label>Durum</label>
-                    <div>
-                        ${getStatusBadge(
-                            company.status ||
-                            "ACTIVE"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item full">
-                    <label>Şirket Adı</label>
-                    <div>
-                        ${escapeHtml(
-                            company.name || "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item">
-                    <label>Üst Şirket</label>
-                    <div>
-                        ${escapeHtml(parentName)}
-                    </div>
-                </div>
-
-                <div class="detail-item">
-                    <label>Vergi Numarası</label>
-                    <div>
-                        ${escapeHtml(
-                            company.tax_number ||
-                            "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item">
-                    <label>E-posta</label>
-                    <div>
-                        ${escapeHtml(
-                            company.email ||
-                            "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item">
-                    <label>Telefon</label>
-                    <div>
-                        ${escapeHtml(
-                            company.phone ||
-                            "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item full">
-                    <label>Adres</label>
-                    <div>
-                        ${escapeHtml(
-                            company.address ||
-                            "-"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-item full">
-                    <label>Oluşturulma</label>
-                    <div>
-                        ${
-                            company.created_at
-                                ? formatDate(
-                                    company.created_at
-                                )
-                                : "-"
-                        }
-                    </div>
-                </div>
-
-            </div>
-
-
-            <section class="detail-section">
-
-                <div class="detail-section-title">
-                    <h4>Kullanıcılar</h4>
-                    <span>${users.length} kullanıcı</span>
-                </div>
-
-                <div class="detail-list">
-                    ${usersHtml}
-                </div>
-
-            </section>
-
-
-            <section class="detail-section">
-
-                <div class="detail-section-title">
-                    <h4>Lisanslar</h4>
-                    <span>${licenses.length} kayıt</span>
-                </div>
-
-                <div class="detail-list">
-                    ${licensesHtml}
-                </div>
-
-            </section>
-
-
-            <section class="detail-section">
-
-                <div class="detail-section-title">
-                    <h4>TFRS16 Portföyü</h4>
-                    <span>Sözleşme özeti</span>
-                </div>
-
-
-                <div class="contract-summary">
-
-                    <div class="contract-stat">
-
-                        <strong>
-                            ${Number(
-                                summary.active_count ||
-                                0
-                            )}
-                        </strong>
-
-                        <span>
-                            Aktif Sözleşme
-                        </span>
-
-                    </div>
-
-
-                    <div class="contract-stat">
-
-                        <strong>
-                            ${Number(
-                                summary.total_count ||
-                                0
-                            )}
-                        </strong>
-
-                        <span>
-                            Toplam Sözleşme
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <div class="detail-text">
-
-                    <strong>Tedarikçiler:</strong>
-                    ${suppliers}
-
-                    <br>
-
-                    <strong>
-                        Toplam aylık ödeme:
-                    </strong>
-                    ${totals}
-
-                </div>
-
-            </section>
-        `;
-
-
-        showModal(
-            `Şirket: ${escapeHtml(
-                company.name
-            )}`,
-            content
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Company detail error:",
-            error
-        );
-
-        alert(
-            "Şirket bilgileri yüklenirken hata oluştu: " +
-            error.message
-        );
-    }
+const ROLE_TR = { ADMIN: "Yönetici", ACCOUNTANT_MANAGER: "Muhasebe müdürü", ACCOUNTANT: "Muhasebeci", CONTROLLER: "Kontrolör", VIEWER: "İzleyici" };
+
+function meter(used, max) {
+    if (!max) return '<div class="lq-meter"><i style="width:8%"></i></div>';
+    const r = used / max;
+    return `<div class="lq-meter"><i class="${r >= 1 ? "full" : r >= .8 ? "warn" : ""}" style="width:${Math.min(100, Math.round(r * 100))}%"></i></div>`;
 }
 
+async function viewCompany(id) {
+    let result;
+    try {
+        result = await AdminAPI.getCompany(id);
+    } catch (error) {
+        alert("Şirket bilgileri yüklenemedi: " + error.message);
+        return;
+    }
+    if (!result || !result.success) {
+        alert(describeApiError(result));
+        return;
+    }
+    const company = result.data || {};
+    const users = Array.isArray(company.users) ? company.users : [];
+    const licenses = (Array.isArray(company.licenses) ? company.licenses : []).map(normalizeLicense);
+    const active = licenses.find(l => l.status === "ACTIVE") || null;
+    const summary = company.contracts_summary || {};
+    const children = allCompaniesForAssign.filter(c => String(c.parent_company_id || "") === String(company.id));
+    const status = company.status || "ACTIVE";
+    const parentName = company.parent_company_id ? (companyNameById[company.parent_company_id] || company.parent_company_id) : null;
+    const canManage = isPlatformAdmin();
+    const money = item => `${Number(item.total || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${escapeHtml(item.currency || "")}`;
+
+    let licenseHtml;
+    if (active) {
+        const d = licenseRemaining(active);
+        const maxUsers = active.max_users == null ? null : Number(active.max_users);
+        licenseHtml = `<div class="lq-box">
+            <div style="display:flex;align-items:center"><div class="lq-kick" style="flex:1;margin:0">Lisans</div>${licenseChip(active)}</div>
+            <div style="font-size:16px;font-weight:600;margin-top:6px">${escapeHtml(active.plan_name || active.plan_id || "-")}</div>
+            <div style="font-size:12px;color:var(--text-light)">${active.starts_at ? formatDateShort(active.starts_at) : "—"} – ${active.expires_at ? formatDateShort(active.expires_at) : "süresiz"}${d != null && d >= 0 ? ` · ${d} gün kaldı` : ""}</div>
+            <div style="margin-top:12px;font-size:12.5px;color:var(--text-light)">Kullanıcı <span style="float:right;font-family:var(--mono);color:var(--text)">${users.filter(u => (u.status || "ACTIVE") === "ACTIVE").length} / ${maxUsers || "∞"}</span></div>
+            ${meter(users.filter(u => (u.status || "ACTIVE") === "ACTIVE").length, maxUsers)}
+        </div>`;
+    } else {
+        licenseHtml = `<div class="lq-box" style="display:flex;align-items:center;gap:10px"><span class="lq-chip err">Aktif lisans yok</span><span style="font-size:12.5px;color:var(--text-light)">${licenses.length ? `${licenses.length} eski kayıt` : "Hiç lisans atanmamış"}</span></div>`;
+    }
+
+    const childrenHtml = children.length
+        ? `<div><div class="lq-kick">Bağlı şirketler · ${children.length}</div><div class="lq-list">${children.map(c => `<div class="lq-list-row"><span class="grow">${escapeHtml(c.name)}</span>${licenseChip(c.active_license ? normalizeLicense(c.active_license) : null)}</div>`).join("")}</div></div>`
+        : "";
+
+    const usersHtml = `<div><div class="lq-kick">Kullanıcılar · ${users.length}</div><div class="lq-list">${users.length
+        ? users.map(u => `<div class="lq-list-row"><span class="grow">${escapeHtml(u.username || "-")}</span><span class="lq-chip b">${escapeHtml(ROLE_TR[u.role] || u.role || "-")}</span>${(u.status || "ACTIVE") === "ACTIVE" ? "" : '<span class="lq-chip n">Pasif</span>'}</div>`).join("")
+        : '<div class="lq-empty">Bu şirkete atanmış kullanıcı yok.</div>'}</div></div>`;
+
+    const totals = (summary.total_monthly_payment_by_currency || []).map(money);
+    const suppliers = summary.suppliers || [];
+    const portfolioHtml = `<div><div class="lq-kick">TFRS 16 portföyü</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+            <div class="lq-box"><div style="font-size:12px;color:var(--text-light)">Aktif / toplam sözleşme</div><div style="font:600 18px var(--mono);margin-top:4px">${Number(summary.active_count || 0)} / ${Number(summary.total_count || 0)}</div></div>
+            <div class="lq-box"><div style="font-size:12px;color:var(--text-light)">Aylık ödeme · sözleşmesel</div><div style="font:500 13.5px var(--mono);margin-top:4px">${totals.length ? totals.join("<br>") : "—"}</div></div>
+        </div>
+        <div style="font-size:12.5px;color:var(--text-light);margin-top:8px">Tedarikçiler: ${suppliers.length ? escapeHtml(suppliers.slice(0, 4).join(", ")) + (suppliers.length > 4 ? ` +${suppliers.length - 4}` : "") : "—"}</div>
+    </div>`;
+
+    const meta = `<dl class="lq-kv"><dt>Üst şirket</dt><dd>${parentName ? escapeHtml(parentName) : "Ana şirket / holding"}</dd><dt>Oluşturulma</dt><dd>${company.created_at ? formatDate(company.created_at) : "—"}</dd></dl>`;
+
+    let footer = "";
+    if (canManage) {
+        const cid = escapeHtml(String(company.id));
+        footer = `<button class="btn btn-primary" type="button" onclick="closeDrawer();openAssignModal('${cid}')">${active ? "Lisansı değiştir" : "Lisans ata"}</button><span class="sp"></span>`
+            + (status === "ACTIVE"
+                ? `<button class="btn btn-outline" style="color:var(--danger);border-color:#F3C7C2" type="button" onclick="closeDrawer();toggleCompanyStatus('${cid}','INACTIVE')">Pasifleştir</button>`
+                : `<button class="btn btn-outline" type="button" onclick="closeDrawer();toggleCompanyStatus('${cid}','ACTIVE')">Aktifleştir</button>`);
+    }
+
+    showDrawer({
+        eyebrow: `<span>${escapeHtml(company.code || "")}</span>${status === "ACTIVE" ? '<span class="lq-chip ok">Aktif</span>' : '<span class="lq-chip n">Pasif</span>'}<span class="lq-chip n">${parentName ? "Bağlı şirket" : "Ana şirket"}</span>`,
+        title: company.name || "Şirket",
+        body: licenseHtml + meta + childrenHtml + usersHtml + portfolioHtml,
+        footer
+    });
+}
 
 /* =========================================================
    INITIALIZE

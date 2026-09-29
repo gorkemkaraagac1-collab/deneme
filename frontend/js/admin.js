@@ -944,9 +944,14 @@ const overlay =
     document.getElementById(
         "modalOverlay"
     );
+// Çağıranların çoğu başlığı escapeHtml ile verir; textContent ile
+// yazılınca "&amp;" gibi görünüyordu. Varlıklar çözülüp yine
+// textContent ile yazılır (HTML olarak yorumlanmaz).
+const titleDecoder = document.createElement("textarea");
+titleDecoder.innerHTML = String(title == null ? "" : title);
 document.getElementById(
     "modalTitle"
-).textContent = title;
+).textContent = titleDecoder.value;
 document.getElementById(
     "modalBody"
 ).innerHTML = content;
@@ -1338,4 +1343,57 @@ if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", buildAdminRail);
 } else {
     buildAdminRail();
+}
+
+
+// ============================================================
+// SAĞ PANEL (drawer) — detay ve düzenleme için
+// ------------------------------------------------------------
+// showDrawer({ title, eyebrow, body, footer }) — body/footer HTML
+// çağıran tarafından escape edilmiş olmalıdır; title/eyebrow düz metin.
+// ============================================================
+let lqDrawerReturnFocus = null;
+function ensureDrawer() {
+    let root = document.getElementById("lqDrawer");
+    if (root) return root;
+    root = document.createElement("div");
+    root.id = "lqDrawer";
+    root.className = "lq-drawer-root";
+    root.hidden = true;
+    root.innerHTML = `
+        <div class="lq-drawer-scrim" data-drawer-close></div>
+        <aside class="lq-drawer" role="dialog" aria-modal="true" aria-labelledby="lqDrawerTitle" tabindex="-1">
+            <header class="lq-drawer-head">
+                <div class="lq-drawer-titles"><div class="lq-drawer-eyebrow" id="lqDrawerEyebrow"></div><h2 id="lqDrawerTitle"></h2></div>
+                <button type="button" class="lq-drawer-x" data-drawer-close aria-label="Paneli kapat">×</button>
+            </header>
+            <div class="lq-drawer-body" id="lqDrawerBody"></div>
+            <footer class="lq-drawer-foot" id="lqDrawerFoot" hidden></footer>
+        </aside>`;
+    document.body.appendChild(root);
+    root.addEventListener("click", e => { if (e.target.closest("[data-drawer-close]")) closeDrawer(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !root.hidden && !document.querySelector(".modal-overlay.active")) closeDrawer(); });
+    return root;
+}
+function showDrawer({ title = "", eyebrow = "", body = "", footer = "" } = {}) {
+    const root = ensureDrawer();
+    if (root.hidden) lqDrawerReturnFocus = document.activeElement;
+    document.getElementById("lqDrawerTitle").textContent = title;
+    document.getElementById("lqDrawerEyebrow").innerHTML = eyebrow;
+    document.getElementById("lqDrawerBody").innerHTML = body;
+    const foot = document.getElementById("lqDrawerFoot");
+    foot.innerHTML = footer;
+    foot.hidden = !footer;
+    root.hidden = false;
+    document.documentElement.classList.add("lq-drawer-open");
+    root.querySelector(".lq-drawer").focus({ preventScroll: true });
+    return root;
+}
+function closeDrawer() {
+    const root = document.getElementById("lqDrawer");
+    if (!root || root.hidden) return;
+    root.hidden = true;
+    document.documentElement.classList.remove("lq-drawer-open");
+    if (lqDrawerReturnFocus && lqDrawerReturnFocus.isConnected) lqDrawerReturnFocus.focus({ preventScroll: true });
+    lqDrawerReturnFocus = null;
 }
