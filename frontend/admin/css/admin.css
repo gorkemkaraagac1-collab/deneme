@@ -369,3 +369,49 @@ body{font-size:14px}
 .modal-header h3{font:600 18px var(--display)}
 :focus-visible{outline-color:#1660D6}
 .btn,a.btn{text-decoration:none}
+
+/* Sağ panel (drawer) */
+.lq-drawer-root[hidden]{display:none}
+.lq-drawer-scrim{position:fixed;inset:0;background:rgba(11,22,40,.28);z-index:1500}
+.lq-drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:#fff;z-index:1501;display:flex;flex-direction:column;box-shadow:-16px 0 40px rgba(11,22,40,.14);outline:none;animation:lqDrawerIn .18s ease-out}
+@keyframes lqDrawerIn{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.lq-drawer-head{display:flex;align-items:flex-start;gap:12px;padding:20px 24px 16px;border-bottom:1px solid var(--border)}
+.lq-drawer-titles{flex:1;min-width:0}
+.lq-drawer-eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font:500 12px var(--mono);color:var(--text-light)}
+.lq-drawer-eyebrow:empty{display:none}
+.lq-drawer-head h2{font:600 19px var(--display);letter-spacing:-.01em;margin-top:6px;overflow-wrap:anywhere}
+.lq-drawer-x{border:0;background:none;font-size:24px;line-height:1;color:#8A96A8;padding:2px 6px;border-radius:6px}
+.lq-drawer-x:hover{background:#F4F6F9;color:var(--text)}
+.lq-drawer-body{flex:1;overflow-y:auto;padding:18px 24px 24px;display:flex;flex-direction:column;gap:18px}
+.lq-drawer-foot{display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid var(--border)}
+.lq-drawer-foot .sp{flex:1}
+.lq-kick{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);margin-bottom:8px}
+.lq-box{border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.lq-list{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.lq-list-row{display:flex;align-items:center;gap:10px;min-height:42px;padding:8px 14px;font-size:13.5px;border-top:1px solid #EEF1F5}
+.lq-list-row:first-child{border-top:0}
+.lq-list-row .grow{flex:1;min-width:0}
+.lq-list-row small{display:block;font-size:12px;color:var(--text-light)}
+.lq-meter{height:6px;border-radius:3px;background:#EEF1F5;overflow:hidden;margin-top:6px}
+.lq-meter i{display:block;height:6px;background:#1660D6;border-radius:3px}
+.lq-meter i.warn{background:#D97706}.lq-meter i.full{background:#B42318}
+.lq-chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font:500 11.5px var(--body);white-space:nowrap}
+.lq-chip.ok{background:var(--ok-soft);color:var(--success)}.lq-chip.warn{background:var(--warn-soft);color:var(--warning)}
+.lq-chip.err{background:#FEF3F2;color:var(--danger)}.lq-chip.n{background:#EEF1F5;color:#46546A}.lq-chip.b{background:#EAF1FD;color:#1660D6}.lq-chip.dk{background:#0B1628;color:#fff}
+.lq-kv{display:grid;grid-template-columns:130px 1fr;row-gap:9px;font-size:13.5px}
+.lq-kv dt{color:var(--text-light)}
+.lq-empty{font-size:13px;color:var(--text-light);padding:12px 14px}
+.lq-check{display:flex;align-items:center;gap:10px;min-height:38px;padding:6px 12px;border-top:1px solid #EEF1F5;font-size:13.5px;cursor:pointer}
+.lq-check:first-child{border-top:0}
+.lq-check input{width:16px;height:16px;accent-color:#1660D6}
+.lq-radio{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;cursor:pointer}
+.lq-radio:has(input:checked){border-color:#1660D6;background:#F2F7FF}
+.lq-radio.locked{opacity:.55;cursor:not-allowed}
+.lq-radio input{accent-color:#1660D6}
+.lq-radio .note{margin-left:auto;font-size:12px;color:var(--text-light)}
+.lq-tree{color:#AEB8C7;margin-right:6px}
+@media(max-width:600px){.lq-drawer{width:100vw}.lq-drawer-body{padding:16px}.lq-kv{grid-template-columns:110px 1fr}}
+.form-group label.lq-radio,.form-group label.lq-check{display:flex;margin:0;font-weight:400;font-size:13.5px;color:var(--text)}
+.lq-radio input,.lq-check input,.form-group .lq-radio input,.form-group .lq-check input{width:16px;height:16px;flex:none;padding:0;margin:0;box-shadow:none}
+.lq-check[hidden],.form-group label.lq-check[hidden],.form-group label.lq-check[hidden]{display:none}
+.lq-list input[type="search"]{box-shadow:none}

@@ -412,25 +412,15 @@
                     Tüm Roller
                 </option>
 
-                <option value="ADMIN">
-                    ADMIN
-                </option>
+                <option value="ADMIN">Yönetici</option>
 
-                <option value="ACCOUNTANT_MANAGER">
-                    ACCOUNTANT_MANAGER
-                </option>
+                <option value="ACCOUNTANT_MANAGER">Muhasebe müdürü</option>
 
-                <option value="ACCOUNTANT">
-                    ACCOUNTANT
-                </option>
+                <option value="ACCOUNTANT">Muhasebeci</option>
 
-                <option value="CONTROLLER">
-                    CONTROLLER
-                </option>
+                <option value="CONTROLLER">Kontrolör</option>
 
-                <option value="VIEWER">
-                    VIEWER
-                </option>
+                <option value="VIEWER">İzleyici</option>
 
             </select>
 
@@ -469,7 +459,6 @@
 
             <tr>
                 <th>Kullanıcı</th>
-                <th>E-posta</th>
                 <th>Rol</th>
                 <th>Durum</th>
                 <th>Şirketler</th>
@@ -483,7 +472,7 @@
 
             <tr>
                 <td
-                    colspan="7"
+                    colspan="6"
                     class="table-state"
                 >
                     Kullanıcılar yükleniyor...
@@ -632,7 +621,7 @@ function roleOptionsHtml(
                         : ""
                 }
             >
-                ${role}
+                ${(typeof ROLE_TR !== "undefined" && ROLE_TR[role]) || role}
             </option>
 
         `)
@@ -689,7 +678,7 @@ async function loadUsers() {
 
         <tr>
             <td
-                colspan="7"
+                colspan="6"
                 class="table-state"
             >
                 Kullanıcılar yükleniyor...
@@ -733,7 +722,7 @@ async function loadUsers() {
                 <tr>
 
                     <td
-                        colspan="7"
+                        colspan="6"
                         class="table-state error"
                     >
                         ${escapeHtml(
@@ -796,7 +785,7 @@ async function loadUsers() {
             <tr>
 
                 <td
-                    colspan="7"
+                    colspan="6"
                     class="table-state error"
                 >
                     Kullanıcılar yüklenemedi.
@@ -880,7 +869,7 @@ function renderCurrentUsers() {
             <tr>
 
                 <td
-                    colspan="7"
+                    colspan="6"
                     class="table-state"
                 >
                     Filtrelere uygun kullanıcı bulunamadı.
@@ -965,173 +954,31 @@ function renderUserSummary(users) {
    USER ROW
 ============================================================ */
 
+const ROLE_TR = { ADMIN: "Yönetici", ACCOUNTANT_MANAGER: "Muhasebe müdürü", ACCOUNTANT: "Muhasebeci", CONTROLLER: "Kontrolör", VIEWER: "İzleyici" };
+
+function initials(user) {
+    const src = [user.first_name, user.last_name].filter(Boolean);
+    const txt = src.length ? src.map(x => x[0]).join("") : String(user.username || "?")[0];
+    return escapeHtml(txt.slice(0, 2).toLocaleUpperCase("tr-TR"));
+}
+
 function renderUserRow(user) {
-
-    const fullName =
-        [
-            user.first_name,
-            user.last_name
-        ]
-        .filter(Boolean)
-        .join(" ");
-
-
-    const companies =
-        Array.isArray(
-            user.companies
-        )
-            ? user.companies
-            : [];
-
-
-    const visibleCompanies =
-        companies
-            .slice(0,2)
-            .map(
-                company =>
-                    escapeHtml(
-                        company.company_name
-                    )
-            )
-            .join(", ");
-
-
-    const moreCompanies =
-        companies.length > 2
-            ? `
-                <span class="company-more">
-                    +${companies.length - 2}
-                </span>
-              `
-            : "";
-
-
-    const companyHtml =
-        companies.length
-            ? `
-                <div
-                    class="company-list"
-                    title="${escapeHtml(
-                        companies
-                            .map(
-                                company =>
-                                    company.company_name
-                            )
-                            .join(", ")
-                    )}"
-                >
-                    ${visibleCompanies}
-                    ${moreCompanies}
-                </div>
-              `
-            : `
-                <span
-                    style="color:var(--text-light)"
-                >
-                    —
-                </span>
-              `;
-
-
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+    const companies = Array.isArray(user.companies) ? user.companies : [];
+    const companyHtml = companies.length
+        ? `<div style="display:flex;gap:4px;align-items:center" title="${escapeHtml(companies.map(c => c.company_name).join(", "))}"><span class="lq-chip n">${escapeHtml(companies[0].company_name || "-")}</span>${companies.length > 1 ? `<span class="lq-chip n">+${companies.length - 1}</span>` : ""}</div>`
+        : '<span style="color:var(--text-light)">—</span>';
+    const status = user.status === "INACTIVE" ? '<span class="lq-chip n">Pasif</span>' : '<span class="lq-chip ok">Aktif</span>';
     return `
-
         <tr>
-
-            <td>
-
-                <div class="user-name">
-
-                    <strong>
-                        ${escapeHtml(
-                            fullName ||
-                            user.username ||
-                            "-"
-                        )}
-                    </strong>
-
-                    ${
-                        fullName
-                            ? `
-                                <small>
-                                    ${escapeHtml(
-                                        user.username ||
-                                        ""
-                                    )}
-                                </small>
-                              `
-                            : ""
-                    }
-
-                    ${
-                        user.must_change_password
-                            ? `
-                                <small
-                                    class="password-warning"
-                                >
-                                    Şifre değişikliği bekleniyor
-                                </small>
-                              `
-                            : ""
-                    }
-
-                </div>
-
-            </td>
-
-
-            <td>
-                ${escapeHtml(
-                    user.email || "-"
-                )}
-            </td>
-
-
-            <td>
-
-                <span class="role-badge-table">
-                    ${escapeHtml(
-                        user.role ||
-                        "VIEWER"
-                    )}
-                </span>
-
-            </td>
-
-
-            <td>
-                ${getStatusBadge(
-                    user.status
-                )}
-            </td>
-
-
-            <td>
-                ${companyHtml}
-            </td>
-
-
-            <td>
-                ${formatDateShort(
-                    user.created_at
-                )}
-            </td>
-
-
-            <td>
-
-                <button
-                    class="btn btn-sm btn-outline"
-                    onclick="editUser('${user.id}')"
-                >
-                    Düzenle
-                </button>
-
-            </td>
-
-        </tr>
-
-    `;
-
+            <td><div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:15px;background:#EAF1FD;color:#1660D6;font:600 11.5px var(--body);display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(user)}</span>
+                <div style="min-width:0"><strong style="font-weight:500">${escapeHtml(fullName || user.username || "-")}</strong><small style="display:block;color:var(--text-light);font-size:12px">${escapeHtml(user.email || user.username || "")}</small></div></div></td>
+            <td><span class="lq-chip ${user.role === "ADMIN" ? "dk" : "b"}">${escapeHtml(ROLE_TR[user.role] || user.role || "-")}</span></td>
+            <td><div style="display:flex;gap:6px;align-items:center">${status}${user.must_change_password ? '<span class="lq-chip warn" title="Kullanıcı ilk girişte şifresini değiştirmedi">İlk şifre</span>' : ""}</div></td>
+            <td>${companyHtml}</td>
+            <td style="white-space:nowrap">${formatDateShort(user.created_at)}</td>
+            <td><button class="btn btn-sm btn-outline" type="button" onclick="editUser('${escapeHtml(String(user.id))}')">Düzenle</button></td>
+        </tr>`;
 }
 
 
@@ -1186,291 +1033,74 @@ function changeUsersPage(
 ============================================================ */
 
 function editUser(userId) {
-
-    const user =
-        usersMap[userId];
-
-
-    if (!user) {
-
-        alert(
-            "Kullanıcı verileri bulunamadı. Lütfen listeyi yenileyin."
-        );
-
-        return;
-
-    }
-
-
-    const currentCompanyIds =
-        (user.companies || [])
-            .map(
-                company =>
-                    company.company_id
-            );
-
-
-    const companyOptions =
-        allCompanies
-            .map(company => `
-
-                <option
-                    value="${company.id}"
-                    ${
-                        currentCompanyIds
-                            .includes(
-                                company.id
-                            )
-                            ? "selected"
-                            : ""
-                    }
-                >
-                    ${escapeHtml(
-                        company.name
-                    )}
-                    (${escapeHtml(
-                        company.code
-                    )})
-                </option>
-
-            `)
-            .join("");
-
-
-    let roleOptions =
-        roleOptionsHtml(
-            user.role
-        );
-
-
-    if (
-        !getAssignableRoles()
-            .includes(
-                user.role
-            )
-    ) {
-
-        roleOptions = `
-
-            <option
-                value="${escapeHtml(
-                    user.role
-                )}"
-                selected
-            >
-                ${escapeHtml(
-                    user.role
-                )}
-                (değiştirilemez)
-            </option>
-
-        ` + roleOptions;
-
-    }
-
-
-    const content = `
-
-        <form
-            id="editUserForm"
-            onsubmit="saveUserEdit(event,'${user.id}')"
-        >
-
-            <div class="form-group">
-
-                <label>
-                    Kullanıcı Adı
-                </label>
-
-                <input
-                    type="text"
-                    value="${escapeHtml(
-                        user.username
-                    )}"
-                    readonly
-                    style="background:var(--paper)"
-                >
-
+    const user = usersMap[userId];
+    if (!user) { alert("Kullanıcı verileri bulunamadı. Lütfen listeyi yenileyin."); return; }
+    const current = new Set((user.companies || []).map(c => String(c.company_id)));
+    const assignable = getAssignableRoles();
+    const roles = ["ADMIN", "ACCOUNTANT_MANAGER", "ACCOUNTANT", "CONTROLLER", "VIEWER"];
+    const roleHtml = roles.filter(r => assignable.includes(r) || r === user.role).map(r => {
+        const locked = !assignable.includes(r);
+        return `<label class="lq-radio${locked ? " locked" : ""}"><input type="radio" name="role" value="${r}" ${r === user.role ? "checked" : ""} ${locked && r !== user.role ? "disabled" : ""}><span>${escapeHtml(ROLE_TR[r] || r)}</span>${locked ? '<span class="note">değiştiremezsiniz</span>' : ""}</label>`;
+    }).join("");
+    const companyHtml = allCompanies.length
+        ? allCompanies.map(c => `<label class="lq-check" data-name="${escapeHtml(String(c.name || "").toLocaleLowerCase("tr-TR"))} ${escapeHtml(String(c.code || "").toLocaleLowerCase("tr-TR"))}"><input type="checkbox" name="company_ids" value="${escapeHtml(String(c.id))}" ${current.has(String(c.id)) ? "checked" : ""}><span>${escapeHtml(c.name)} <small style="color:var(--text-light);font-family:var(--mono)">${escapeHtml(c.code || "")}</small></span></label>`).join("")
+        : '<div class="lq-empty">Şirket listesi yüklenemedi.</div>';
+    const isAdmin = (getCurrentAdminUser() || {}).role === "ADMIN";
+    const body = `
+        <form id="editUserForm" onsubmit="saveUserEdit(event,'${escapeHtml(String(user.id))}')">
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+                <div class="form-group"><label for="euFirst">Ad</label><input id="euFirst" type="text" name="first_name" maxlength="100" value="${escapeHtml(user.first_name || "")}"></div>
+                <div class="form-group"><label for="euLast">Soyad</label><input id="euLast" type="text" name="last_name" maxlength="100" value="${escapeHtml(user.last_name || "")}"></div>
             </div>
-
-
-            <div class="form-group">
-
-                <label>Ad</label>
-
-                <input
-                    type="text"
-                    name="first_name"
-                    maxlength="100"
-                    value="${escapeHtml(
-                        user.first_name ||
-                        ""
-                    )}"
-                >
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>Soyad</label>
-
-                <input
-                    type="text"
-                    name="last_name"
-                    maxlength="100"
-                    value="${escapeHtml(
-                        user.last_name ||
-                        ""
-                    )}"
-                >
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>E-posta</label>
-
-                <input
-                    type="email"
-                    name="email"
-                    maxlength="150"
-                    value="${escapeHtml(
-                        user.email ||
-                        ""
-                    )}"
-                >
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>Rol</label>
-
-                <select
-                    name="role"
-                    required
-                >
-                    ${roleOptions}
-                </select>
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>Durum</label>
-
-                <select
-                    name="status"
-                    required
-                >
-
-                    <option
-                        value="ACTIVE"
-                        ${
-                            user.status ===
-                            "ACTIVE"
-                                ? "selected"
-                                : ""
-                        }
-                    >
-                        ACTIVE
-                    </option>
-
-                    <option
-                        value="INACTIVE"
-                        ${
-                            user.status ===
-                            "INACTIVE"
-                                ? "selected"
-                                : ""
-                        }
-                    >
-                        INACTIVE
-                    </option>
-
-                </select>
-
-                <small>
-                    Pasif kullanıcı giriş yapamaz ve
-                    lisans kullanıcı limitine dahil edilmez.
-                </small>
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>
-                    Erişebildiği Şirketler
-                </label>
-
-                <select
-                    name="company_ids"
-                    multiple
-                    size="6"
-                >
-                    ${companyOptions}
-                </select>
-
-                <div class="company-selector-help">
-                    Birden fazla şirket seçilebilir.
-                    Seçim bırakılmazsa tüm şirket
-                    atamaları kaldırılır.
-                </div>
-
-            </div>
-
-
-            <div
-                id="editFormError"
-                style="
-                    color:var(--danger);
-                    margin-bottom:12px;
-                    display:none;
-                "
-            ></div>
-
-
-            <div class="modal-footer">
-
-                <button
-                    type="button"
-                    class="btn btn-outline"
-                    onclick="closeModal()"
-                >
-                    İptal
-                </button>
-
-                <button
-                    type="submit"
-                    class="btn btn-primary"
-                    id="editSubmitBtn"
-                >
-                    Değişiklikleri Kaydet
-                </button>
-
-            </div>
-
+            <div class="form-group"><label for="euEmail">E-posta</label><input id="euEmail" type="email" name="email" maxlength="150" value="${escapeHtml(user.email || "")}"><small>Kullanıcı adı: ${escapeHtml(user.username || "-")} (değişmez)</small></div>
+            <div class="form-group"><label>Rol</label><div style="display:flex;flex-direction:column;gap:6px">${roleHtml}</div></div>
+            <div class="form-group"><label style="display:flex">Erişebildiği şirketler<span id="euCount" style="margin-left:auto;font-weight:400;color:var(--text-light)"></span></label>
+                <div class="lq-list"><input type="search" id="euSearch" placeholder="Şirket ara" aria-label="Şirket ara" style="width:100%;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:10px 12px;font-size:13px">
+                <div id="euCompanies" style="max-height:240px;overflow-y:auto">${companyHtml}</div></div>
+                <small>Hiçbiri seçilmezse tüm şirket atamaları kaldırılır.</small></div>
+            <div class="form-group"><label>Durum</label><div style="display:flex;gap:8px">
+                <label class="lq-radio" style="flex:1"><input type="radio" name="status" value="ACTIVE" ${user.status !== "INACTIVE" ? "checked" : ""}><span>Aktif</span></label>
+                <label class="lq-radio" style="flex:1"><input type="radio" name="status" value="INACTIVE" ${user.status === "INACTIVE" ? "checked" : ""}><span>Pasif</span></label></div>
+                <small>Pasif kullanıcı giriş yapamaz ve lisans kullanıcı limitine sayılmaz.</small></div>
+            <div id="editFormError" role="alert" style="color:var(--danger);display:none"></div>
         </form>
-
-    `;
-
-
-    showModal(
-        `Kullanıcı Düzenle: ${
-            escapeHtml(
-                user.username
-            )
-        }`,
-        content
-    );
-
+        ${isAdmin ? `<details class="lq-box"><summary style="cursor:pointer;font-size:13.5px;font-weight:500">Şifreyi sıfırla</summary>
+            <form id="resetPwForm" onsubmit="resetUserPasswordFromDrawer(event,'${escapeHtml(String(user.id))}')" style="margin-top:12px">
+                <div class="form-group"><label for="euPw">Geçici şifre</label><input id="euPw" type="text" name="new_password" minlength="10" maxlength="128" required autocomplete="off"><small>En az 10 karakter. Kullanıcıya güvenli bir kanaldan iletin.</small></div>
+                <div id="resetPwMsg" role="status" style="font-size:13px;margin-bottom:8px"></div>
+                <button class="btn btn-outline" type="submit" id="resetPwBtn">Şifreyi sıfırla</button>
+            </form></details>` : ""}`;
+    showDrawer({
+        eyebrow: `<span>${escapeHtml(ROLE_TR[user.role] || user.role || "")}</span>${user.must_change_password ? '<span class="lq-chip warn">İlk şifre bekleniyor</span>' : ""}`,
+        title: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "Kullanıcı",
+        body,
+        footer: '<span class="sp"></span><button class="btn btn-outline" type="button" onclick="closeDrawer()">Vazgeç</button><button class="btn btn-primary" type="submit" form="editUserForm" id="editSubmitBtn">Kaydet</button>'
+    });
+    const box = document.getElementById("euCompanies");
+    const count = () => { document.getElementById("euCount").textContent = `${box.querySelectorAll("input:checked").length} seçili`; };
+    box.addEventListener("change", count); count();
+    document.getElementById("euSearch").addEventListener("input", e => {
+        const q = e.target.value.trim().toLocaleLowerCase("tr-TR");
+        box.querySelectorAll(".lq-check").forEach(el => { el.hidden = q && !el.dataset.name.includes(q); });
+    });
 }
 
+async function resetUserPasswordFromDrawer(event, userId) {
+    event.preventDefault();
+    const form = event.target, btn = document.getElementById("resetPwBtn"), msg = document.getElementById("resetPwMsg");
+    const pw = form.new_password.value;
+    if (pw.length < 10) { msg.style.color = "var(--danger)"; msg.textContent = "En az 10 karakter olmalı."; return; }
+    if (!confirm("Kullanıcının şifresi sıfırlansın mı? Mevcut şifresi geçersiz olur.")) return;
+    btn.disabled = true;
+    try {
+        const r = await AdminAPI.resetUserPassword(userId, pw);
+        if (r && r.success !== false && !r.error) {
+            msg.style.color = "var(--success)"; msg.textContent = "Şifre sıfırlandı. Kullanıcı ilk girişte yeni şifre belirleyecek.";
+            form.new_password.value = "";
+        } else { msg.style.color = "var(--danger)"; msg.textContent = describeApiError(r); }
+    } catch (e) { msg.style.color = "var(--danger)"; msg.textContent = "Bağlantı hatası: " + e.message; }
+    finally { btn.disabled = false; }
+}
 
 /* ============================================================
    SAVE EDIT
@@ -1517,16 +1147,7 @@ async function saveUserEdit(
 
 
     const company_ids =
-        Array
-            .from(
-                form
-                    .company_ids
-                    .selectedOptions
-            )
-            .map(
-                option =>
-                    option.value
-            );
+        Array.from(form.querySelectorAll('input[name="company_ids"]:checked')).map(el => el.value);
 
 
     const data = {
@@ -1571,7 +1192,7 @@ async function saveUserEdit(
 
         if (result.success) {
 
-            closeModal();
+            closeDrawer();
 
             await loadUsers();
 
@@ -1875,16 +1496,7 @@ async function createUser(event) {
 
 
     const company_ids =
-        Array
-            .from(
-                form
-                    .company_ids
-                    .selectedOptions
-            )
-            .map(
-                option =>
-                    option.value
-            );
+        Array.from(form.querySelectorAll('input[name="company_ids"]:checked')).map(el => el.value);
 
 
     const data = {
