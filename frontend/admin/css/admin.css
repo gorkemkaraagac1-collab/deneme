@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 /* TFRS16 / Financial Intelligence — shared admin UI
    Replaces the old blue admin skin while preserving every existing HTML class.
    No API, auth, AdminAPI, modal or business logic is changed.
@@ -18,33 +19,32 @@
    arasındaki temel mühür kırmızısı.
    Regresyon koruması: test/admin-css-variables.test.js */
 :root{
-  --primary:#0B1326;
+  --primary:#07101F;
   --primary-light:#1B2A4A;
   --primary-dark:#07101F;
-  --accent:#B08D57;
-  --accent-hover:#967440;
-  --success:#2F6B3F;
-  --danger:#8F2A20;
-  --warning:#8F6A1B;
-  --bg:#F7F4EA;
+  --accent:#1660D6;
+  --accent-hover:#0F4FB5;
+  --success:#15803D;
+  --danger:#B42318;
+  --warning:#B45309;
+  --bg:#F4F6F9;
   --card-bg:#FFFFFF;
-  --text:#1B2A4A;
-  --text-light:#69758C;
-  --border:#DED5BA;
-  --shadow:0 10px 28px rgba(11,19,38,.07);
+  --text:#0B1628;
+  --text-light:#5E6A7D;
+  --border:#E3E7EE;
+  --shadow:0 10px 28px rgba(11,22,40,.07);
   --radius:12px;
-  --sidebar-width:252px;
-  --header-height:66px;
-  --paper:#EFE9D8;
-  --seal:#8F2A20;
-  --seal-soft:#F4DFDA;
-  --ok-soft:#E1EEE3;
-  --warn-soft:#F5ECD6;
-  --display:Cambria,Georgia,serif;
-  --body:Cambria,Georgia,serif;
-  --mono:Cambria,Georgia,serif;
+  --sidebar-width:248px;
+  --header-height:64px;
+  --paper:#F8FAFC;
+  --seal:#1660D6;
+  --seal-soft:#FEF3F2;
+  --ok-soft:#E6F6EE;
+  --warn-soft:#FFF6E5;
+  --display:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 *{margin:0;padding:0;box-sizing:border-box}
 html{background:var(--bg)}
@@ -64,11 +64,6 @@ a{color:inherit}
 .sidebar-brand{
  padding:20px;border-bottom:1px solid rgba(176,141,87,.18);
  font:600 18px var(--display);letter-spacing:.01em;color:#EDE7D3;
-}
-.sidebar-brand:before{
- content:"16";display:inline-flex;align-items:center;justify-content:center;
- width:32px;height:32px;border:1px solid #C9AD7C;border-radius:50%;
- font:600 10px var(--mono);color:#C9AD7C;margin-right:10px;vertical-align:middle;
 }
 .sidebar-brand small{
  display:block;margin:7px 0 0 43px;font:10px var(--mono);
@@ -226,7 +221,7 @@ a{color:inherit}
  font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;
  white-space:nowrap;
 }
-.btn-primary{background:var(--seal);color:#fff}.btn-primary:hover{background:#752219}
+.btn-primary{background:var(--seal);color:#fff}.btn-primary:hover{background:#0F4FB5}
 .btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#245631}
 .btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:#752219}
 .btn-warning{background:var(--warning);color:#fff}.btn-warning:hover{background:#705315}
@@ -326,3 +321,51 @@ hr{border:0;border-top:1px solid var(--border)}
  .activity-item .action{min-width:auto}
  .modal{width:96vw;max-height:92vh;padding:17px}
 }
+
+/* ============================================================
+   v2 yönetim görünümü (LeaseQant uygulamasıyla aynı dil)
+   ============================================================ */
+body{font-size:14px}
+.sidebar{background:#07101F;color:#C4CEDD;border-right:0;display:flex;flex-direction:column}
+.lq-rail-brand{display:flex!important;flex-direction:row!important;align-items:center!important;gap:10px;height:64px;padding:0 18px!important;border-bottom:1px solid rgba(141,179,238,.14)!important}
+.lq-rail-logo img{height:30px;width:auto;display:block}
+.lq-rail-tag{margin-left:auto;height:20px;padding:0 7px;border-radius:5px;background:rgba(255,181,71,.14);color:#FFB547;font:600 10px var(--mono);letter-spacing:.08em;display:inline-flex;align-items:center}
+.sidebar-nav{flex:1;padding:12px}
+.sidebar-nav .nav-label{padding:16px 10px 6px;font:600 10.5px var(--mono);letter-spacing:.1em;color:#5E6A7D;text-transform:uppercase}
+.sidebar-nav a{height:38px;padding:0 10px;gap:10px;color:#C4CEDD;font-size:13.5px;border-radius:8px}
+.sidebar-nav a:hover{background:rgba(141,179,238,.08);color:#fff}
+.sidebar-nav a.active{background:rgba(22,96,214,.22);color:#fff;box-shadow:inset 3px 0 0 #8DB3EE}
+.lq-rail-ico{width:18px;height:18px;flex-shrink:0;opacity:.9}
+.lq-rail-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lq-rail-badge{min-width:22px;height:20px;padding:0 6px;border-radius:10px;font:600 11px var(--mono);display:inline-flex;align-items:center;justify-content:center;background:rgba(141,179,238,.16);color:#8DB3EE}
+.lq-rail-badge[hidden]{display:none}
+[data-rail-badge="licenses"]{background:rgba(255,181,71,.18);color:#FFB547}
+.lq-rail-foot{padding:12px;border-top:1px solid rgba(141,179,238,.14)}
+.lq-rail-app{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;border:1px solid rgba(141,179,238,.22);color:#fff;text-decoration:none;font-size:13px}
+.lq-rail-app:hover{background:rgba(141,179,238,.08)}
+.top-header{background:#fff;border-bottom:1px solid var(--border)}
+.top-header .page-title{font:600 19px var(--display);letter-spacing:-.01em}
+.top-header .user-info .username{font:500 13px var(--body)}
+.top-header .user-info .role-badge{font:600 11px var(--body);letter-spacing:0;background:#EAF1FD;color:#1660D6}
+.btn-logout{border-radius:8px;font-size:12.5px}
+.btn-logout:hover{background:#FEF3F2;color:var(--danger);border-color:#F3C7C2}
+.stat-card{border-left:1px solid var(--border)}
+.stat-card .stat-number{font:600 26px var(--display);letter-spacing:-.02em}
+.btn{font-size:13px;font-weight:500;border-radius:8px;padding:8px 14px}
+.btn-sm{font-size:12.5px;padding:5px 10px}
+.btn-outline{border-color:#CBD3DF}
+.btn-outline:hover{background:#F4F6F9;border-color:#AEB8C7}
+.table-container{border-radius:12px}
+.table-container table{font-size:13px}
+.table-container th{background:#F8FAFC;font:600 11px var(--mono);color:#5E6A7D}
+.table-container tbody tr:hover td{background:#F8FAFC}
+.table-toolbar input,.table-toolbar select{font-size:13px;border-color:#CBD3DF;border-radius:8px}
+.table-toolbar input:focus,.table-toolbar select:focus,.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#1660D6;box-shadow:0 0 0 3px rgba(22,96,214,.15)}
+.form-group label{font-size:12.5px;font-weight:500;color:#243247}
+.form-group input,.form-group select,.form-group textarea{font-size:13.5px;border-color:#CBD3DF;border-radius:8px}
+.badge{font:500 11.5px var(--body);padding:3px 9px}
+.badge-inactive{background:#EEF1F5;color:#46546A}
+.badge-expired{background:#FEF3F2;color:#B42318}
+.modal-header h3{font:600 18px var(--display)}
+:focus-visible{outline-color:#1660D6}
+.btn,a.btn{text-decoration:none}

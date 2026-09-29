@@ -3,1145 +3,319 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Genel Bakış - LeaseQant</title>
-    <link rel="stylesheet" href="css/admin.css">
-
+    <title>Genel bakış · Yönetim · LeaseQant</title>
+    <link rel="stylesheet" href="css/admin.css?v=20260929-2">
     <style>
-        /* Yalnızca admin dashboard'a özel stiller.
-           Ortak admin.css yapısına dokunmuyoruz. */
-
-        .admin-dashboard {
-            display: grid;
-            gap: 22px;
-        }
-
-        .dashboard-intro {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        .dashboard-intro h1 {
-            font: 600 25px var(--display);
-            color: var(--text);
-            margin-bottom: 4px;
-        }
-
-        .dashboard-intro p {
-            color: var(--text-light);
-            font-size: 13px;
-        }
-
-        .dashboard-section-title {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .dashboard-section-title h2 {
-            font: 600 16px var(--display);
-            color: var(--text);
-        }
-
-        .dashboard-section-title span {
-            color: var(--text-light);
-            font: 10px var(--mono);
-        }
-
-        .overview-grid {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 14px;
-        }
-
-        .overview-card {
-            position: relative;
-            min-width: 0;
-            padding: 18px;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            text-decoration: none;
-            overflow: hidden;
-            transition: .15s ease;
-        }
-
-        .overview-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--accent);
-        }
-
-        .overview-card.success::before {
-            background: var(--success);
-        }
-
-        .overview-card.warning::before {
-            background: var(--warning);
-        }
-
-        .overview-card.danger::before {
-            background: var(--danger);
-        }
-
-        a.overview-card:hover {
-            transform: translateY(-2px);
-            border-color: #C9AD7C;
-            box-shadow: var(--shadow);
-        }
-
-        .overview-icon {
-            width: 34px;
-            height: 34px;
-            display: grid;
-            place-items: center;
-            margin-bottom: 14px;
-            border-radius: 9px;
-            background: var(--paper);
-            font-size: 16px;
-        }
-
-        .overview-value {
-            min-height: 37px;
-            font: 600 27px var(--mono);
-            color: var(--text);
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .overview-label {
-            margin-top: 3px;
-            color: var(--text-light);
-            font-size: 11px;
-        }
-
-        .overview-link {
-            display: block;
-            margin-top: 12px;
-            color: var(--accent-hover);
-            font: 600 9px var(--mono);
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .dashboard-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr);
-            gap: 18px;
-            align-items: start;
-        }
-
-        .dashboard-panel {
-            min-width: 0;
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-        }
-
-        .dashboard-panel-head {
-            min-height: 56px;
-            padding: 15px 18px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .dashboard-panel-head h3 {
-            font: 600 15px var(--display);
-        }
-
-        .dashboard-panel-head a {
-            color: var(--accent-hover);
-            font: 600 10px var(--mono);
-            text-decoration: none;
-        }
-
-        .dashboard-panel-body {
-            padding: 0 18px;
-        }
-
-        .dashboard-activity {
-            display: grid;
-            grid-template-columns: 128px 145px minmax(150px, 1fr) auto;
-            gap: 12px;
-            align-items: center;
-            padding: 13px 0;
-            border-bottom: 1px solid var(--border);
-            font-size: 11px;
-        }
-
-        .dashboard-activity:last-child {
-            border-bottom: 0;
-        }
-
-        .activity-time {
-            color: var(--text-light);
-            font: 10px var(--mono);
-        }
-
-        .activity-action {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            color: var(--text);
-            font: 600 10px var(--mono);
-        }
-
-        .activity-detail {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            color: var(--text-light);
-        }
-
-        .activity-status {
-            padding: 4px 8px;
-            border-radius: 999px;
-            white-space: nowrap;
-            font: 600 9px var(--mono);
-        }
-
-        .activity-status.success {
-            color: var(--success);
-            background: var(--ok-soft);
-        }
-
-        .activity-status.failed {
-            color: var(--danger);
-            background: var(--seal-soft);
-        }
-
-        .quick-actions {
-            display: grid;
-            gap: 8px;
-            padding: 14px;
-        }
-
-        .quick-action {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 11px 12px;
-            color: var(--text);
-            background: #fff;
-            border: 1px solid transparent;
-            border-radius: 9px;
-            text-decoration: none;
-            transition: .15s;
-        }
-
-        .quick-action:hover {
-            background: var(--paper);
-            border-color: var(--border);
-        }
-
-        .quick-action-icon {
-            width: 34px;
-            height: 34px;
-            flex: 0 0 34px;
-            display: grid;
-            place-items: center;
-            border-radius: 9px;
-            background: var(--primary);
-            color: #fff;
-            font-size: 15px;
-        }
-
-        .quick-action strong {
-            display: block;
-            margin-bottom: 1px;
-            font-size: 11px;
-        }
-
-        .quick-action small {
-            display: block;
-            color: var(--text-light);
-            font-size: 9.5px;
-        }
-
-        .dashboard-state {
-            padding: 28px 10px;
-            color: var(--text-light);
-            text-align: center;
-            font-size: 12px;
-        }
-
-        .dashboard-state.error {
-            color: var(--danger);
-        }
-
-        .dashboard-refresh {
-            background: #fff;
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .dashboard-refresh:hover {
-            background: var(--paper);
-        }
-
-        .dashboard-refresh:disabled {
-            opacity: .55;
-            cursor: wait;
-        }
-
-        .skeleton {
-            display: inline-block;
-            width: 55px;
-            height: 25px;
-            border-radius: 6px;
-            background:
-                linear-gradient(
-                    90deg,
-                    var(--paper) 25%,
-                    #f8f5eb 50%,
-                    var(--paper) 75%
-                );
-            background-size: 200% 100%;
-            animation: dashboardLoading 1.2s infinite linear;
-        }
-
-        @keyframes dashboardLoading {
-            from { background-position: 200% 0; }
-            to { background-position: -200% 0; }
-        }
-
-        @media (max-width: 1250px) {
-            .overview-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-
-        @media (max-width: 900px) {
-            .overview-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .dashboard-layout {
-                grid-template-columns: 1fr;
-            }
-
-            .dashboard-activity {
-                grid-template-columns: 105px minmax(120px, 1fr) auto;
-            }
-
-            .activity-detail {
-                grid-column: 1 / -1;
-                padding-bottom: 2px;
-            }
-        }
-
-        @media (max-width: 600px) {
-            .overview-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .dashboard-intro {
-                align-items: flex-start;
-            }
-
-            .dashboard-activity {
-                grid-template-columns: 1fr auto;
-                gap: 6px 10px;
-            }
-
-            .activity-time {
-                grid-column: 1;
-            }
-
-            .activity-action {
-                grid-column: 1;
-            }
-
-            .activity-detail {
-                grid-column: 1 / -1;
-                white-space: normal;
-            }
-
-            .activity-status {
-                grid-column: 2;
-                grid-row: 1 / span 2;
-            }
-        }
+        .gb{display:flex;flex-direction:column;gap:20px}
+        .gb-intro{display:flex;align-items:center;gap:12px}
+        .gb-intro p{color:var(--text-light);font-size:13px;flex:1}
+        .gb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+        .gb-kpi{display:block;background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+        .gb-kpi:hover{border-color:#AEB8C7;box-shadow:var(--shadow)}
+        .gb-k{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-light)}
+        .gb-v{font:600 26px var(--display);letter-spacing:-.02em;margin-top:8px}
+        .gb-v.warn{color:var(--warning)}
+        .gb-s{font-size:12px;color:var(--text-light);margin-top:4px;min-height:16px}
+        .gb-row{display:grid;gap:20px}
+        .gb-row.a{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}
+        .gb-row.b{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+        .gb-card{background:#fff;border:1px solid var(--border);border-radius:12px;min-width:0}
+        .gb-head{display:flex;align-items:center;gap:10px;padding:16px 18px}
+        .gb-head h2{font-size:15px;font-weight:600;flex:1}
+        .gb-head small{display:block;font-size:12px;color:var(--text-light);font-weight:400;margin-top:2px}
+        .gb-head a{font-size:12.5px;color:var(--accent);text-decoration:none}
+        .gb-count{min-width:24px;height:22px;padding:0 7px;border-radius:11px;background:#0B1628;color:#fff;font:600 12px var(--mono);display:inline-flex;align-items:center;justify-content:center}
+        .gb-todo{display:flex;align-items:center;gap:14px;padding:14px 18px;border-top:1px solid #EEF1F5}
+        .gb-dot{width:10px;height:10px;border-radius:5px;flex-shrink:0;background:#8A96A8}
+        .gb-dot.warn{background:#D97706}.gb-dot.info{background:#1660D6}.gb-dot.err{background:#B42318}
+        .gb-todo div{flex:1;min-width:0}
+        .gb-todo strong{display:block;font-size:14px;font-weight:500}
+        .gb-todo span{display:block;font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .gb-empty{padding:18px;border-top:1px solid #EEF1F5;font-size:13px;color:var(--text-light)}
+        .gb-empty.ok{color:var(--success)}
+        .gb-empty.err{color:var(--danger)}
+        .gb-act{display:flex;gap:12px;padding:11px 18px;border-top:1px solid #EEF1F5}
+        .gb-act time{font:12px var(--mono);color:#8A96A8;width:84px;flex-shrink:0;padding-top:2px}
+        .gb-act div{flex:1;min-width:0}
+        .gb-act strong{display:block;font-size:13.5px;font-weight:500}
+        .gb-act span{display:block;font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .gb-pill{height:22px;padding:0 8px;border-radius:11px;font-size:11.5px;font-weight:500;display:inline-flex;align-items:center;flex-shrink:0}
+        .gb-pill.ok{background:var(--ok-soft);color:var(--success)}.gb-pill.err{background:#FEF3F2;color:var(--danger)}
+        .gb-body{padding:0 18px 16px}
+        .gb-grid{display:grid;align-items:center;gap:6px;font-size:13px}
+        .gb-grid .m{font:500 10.5px var(--mono);color:#8A96A8;text-align:center}
+        .gb-grid .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px}
+        .gb-cell{height:24px;border-radius:5px;border:1px dashed #CBD3DF;display:flex;align-items:center;justify-content:center}
+        .gb-cell.closed{background:#0B1628;border:0;color:#fff}
+        .gb-cell.reopened{background:#FFF6E5;border:2px solid #F0B35B}
+        .gb-legend{display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--text-light)}
+        .gb-use{display:flex;align-items:center;gap:12px;height:34px;font-size:13px}
+        .gb-use .n{width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .gb-bar{flex:1;height:6px;border-radius:3px;background:#EEF1F5;overflow:hidden}
+        .gb-bar i{display:block;height:6px;border-radius:3px;background:#1660D6}
+        .gb-bar i.warn{background:#D97706}.gb-bar i.full{background:#B42318}
+        .gb-use .v{width:64px;text-align:right;font:12.5px var(--mono)}
+        @media(max-width:1100px){.gb-row.a,.gb-row.b{grid-template-columns:1fr}.gb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media(max-width:600px){.gb-kpis{gap:10px}.gb-v{font-size:22px}.gb-act time{width:64px}.gb-use .n{width:120px}}
     </style>
 </head>
-
 <body>
 
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"
-         style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
-
-        <img
-            src="../../logo-nav.png"
-            alt="LeaseQant"
-            style="height:28px;width:auto;display:block;object-fit:contain;margin-bottom:4px;"
-        >
-
-        <small style="opacity:.7">Admin</small>
-    </div>
-
-    <div class="sidebar-nav">
-
-        <div class="nav-label">Yönetim</div>
-
-        <a href="index.html" class="active">
-            <span class="icon">📊</span>
-            Dashboard
-        </a>
-
-        <a href="companies.html">
-            <span class="icon">🏢</span>
-            Companies
-        </a>
-
-        <a href="users.html">
-            <span class="icon">👤</span>
-            Users
-        </a>
-
-        <a href="licenses.html">
-            <span class="icon">🔑</span>
-            Licenses
-        </a>
-
-        <a href="plans.html">
-            <span class="icon">📦</span>
-            Plans
-        </a>
-
-        <a href="faq.html">
-            <span class="icon">❓</span>
-            SSS
-        </a>
-
-        <a href="opening-balances.html">
-            <span class="icon">🧾</span>
-            Açılış Bakiyeleri
-        </a>
-
-        <a href="../../tfrs16.html">
-            <span class="icon">🧮</span>
-            TFRS16 Hesaplama Motoru
-        </a>
-
-        <a href="tfrs16.html">
-            <span class="icon">🧾</span>
-            TFRS16 Customers
-        </a>
-
-        <a href="periods.html" data-admin-only>
-            <span class="icon">🔒</span>
-            Dönem Yönetimi
-        </a>
-
-        <a href="inflation-indices.html">
-            <span class="icon">📈</span>
-            Enflasyon Endeksleri
-        </a>
-
-        <a href="fx-rates.html">
-            <span class="icon">💱</span>
-            TCMB Kurları
-        </a>
-
-        <a href="audit.html">
-            <span class="icon">📋</span>
-            Audit Log
-        </a>
-
-    </div>
-</nav>
-
+<nav class="sidebar" id="sidebar" aria-label="Yönetim menüsü"></nav>
 
 <div class="main-content">
-
     <header class="top-header">
-
-        <div class="page-title">
-            Admin Genel Bakış
-        </div>
-
+        <div class="page-title">Genel bakış</div>
         <div class="user-info">
-
-            <span
-                class="username"
-                id="adminUsername"
-            >
-                Loading...
-            </span>
-
-            <span class="role-badge">
-                ADMIN
-            </span>
-
-            <button
-                class="btn-logout"
-                type="button"
-                onclick="logout()"
-            >
-                Çıkış
-            </button>
-
+            <span class="username" id="adminUsername">…</span>
+            <span class="role-badge"></span>
+            <button class="btn-logout" type="button" onclick="logout()">Çıkış</button>
         </div>
-
     </header>
 
-
     <main class="page-content">
+        <div class="gb">
+            <div class="gb-intro">
+                <p><span id="adminWelcome">Hoş geldiniz</span> · <span id="gbStamp">yükleniyor…</span></p>
+                <button class="btn btn-outline" id="refreshDashboardButton" type="button" onclick="loadDashboard()">↻ Yenile</button>
+            </div>
 
-        <div class="admin-dashboard">
-
-            <!-- ==================================================
-                 INTRO
-            =================================================== -->
-
-            <section class="dashboard-intro">
-
-                <div>
-                    <h1>Yönetim Merkezi</h1>
-
-                    <p id="adminWelcome">
-                        Yönetim verileri hazırlanıyor...
-                    </p>
-                </div>
-
-                <button
-                    class="dashboard-refresh"
-                    id="refreshDashboardButton"
-                    type="button"
-                    onclick="loadDashboard()"
-                >
-                    ↻ Verileri Yenile
-                </button>
-
+            <section class="gb-kpis" aria-label="Özet">
+                <a class="gb-kpi" href="companies.html"><div class="gb-k">Toplam şirket</div><div class="gb-v" id="statCompanies">—</div><div class="gb-s" id="statTfrs16"></div></a>
+                <a class="gb-kpi" href="users.html"><div class="gb-k">Aktif kullanıcı</div><div class="gb-v" id="statUsers">—</div><div class="gb-s"></div></a>
+                <a class="gb-kpi" href="licenses.html"><div class="gb-k">Aktif lisans</div><div class="gb-v" id="statLicenses">—</div><div class="gb-s"></div></a>
+                <a class="gb-kpi" href="licenses.html?expiring=30"><div class="gb-k">30 gün içinde bitecek</div><div class="gb-v warn" id="statExpiringLicenses">—</div><div class="gb-s" id="statExpiringNext"></div></a>
             </section>
 
-
-            <!-- ==================================================
-                 KPI
-            =================================================== -->
-
-            <section>
-
-                <div class="dashboard-section-title">
-                    <h2>Genel Durum</h2>
-                    <span>Canlı yönetim verileri</span>
+            <section class="gb-row a">
+                <div class="gb-card">
+                    <div class="gb-head"><h2>Dikkat gerektirenler<small>Lisans, kur ve endeks kayıtlarından derlenir</small></h2><span class="gb-count" id="todoCount" hidden></span></div>
+                    <div id="todoList" aria-live="polite"><div class="gb-empty">Yükleniyor…</div></div>
                 </div>
-
-                <div class="overview-grid">
-
-                    <a
-                        href="companies.html"
-                        class="overview-card"
-                    >
-                        <div class="overview-icon">🏢</div>
-
-                        <div
-                            class="overview-value"
-                            id="statCompanies"
-                        >
-                            <span class="skeleton"></span>
-                        </div>
-
-                        <div class="overview-label">
-                            Toplam Şirket
-                        </div>
-
-                        <span class="overview-link">
-                            Şirketleri Yönet →
-                        </span>
-                    </a>
-
-
-                    <a
-                        href="users.html"
-                        class="overview-card success"
-                    >
-                        <div class="overview-icon">👤</div>
-
-                        <div
-                            class="overview-value"
-                            id="statUsers"
-                        >
-                            <span class="skeleton"></span>
-                        </div>
-
-                        <div class="overview-label">
-                            Aktif Kullanıcı
-                        </div>
-
-                        <span class="overview-link">
-                            Kullanıcıları Gör →
-                        </span>
-                    </a>
-
-
-                    <a
-                        href="licenses.html"
-                        class="overview-card success"
-                    >
-                        <div class="overview-icon">🔑</div>
-
-                        <div
-                            class="overview-value"
-                            id="statLicenses"
-                        >
-                            <span class="skeleton"></span>
-                        </div>
-
-                        <div class="overview-label">
-                            Aktif Lisans
-                        </div>
-
-                        <span class="overview-link">
-                            Lisansları Yönet →
-                        </span>
-                    </a>
-
-
-                    <a
-                        href="tfrs16.html"
-                        class="overview-card"
-                    >
-                        <div class="overview-icon">🧮</div>
-
-                        <div
-                            class="overview-value"
-                            id="statTfrs16"
-                        >
-                            <span class="skeleton"></span>
-                        </div>
-
-                        <div class="overview-label">
-                            TFRS16 Müşterisi
-                        </div>
-
-                        <span class="overview-link">
-                            Müşterileri Gör →
-                        </span>
-                    </a>
-
-
-                    <a
-                        href="licenses.html?expiring=30"
-                        class="overview-card warning"
-                    >
-                        <div class="overview-icon">⚠️</div>
-
-                        <div
-                            class="overview-value"
-                            id="statExpiringLicenses"
-                        >
-                            <span class="skeleton"></span>
-                        </div>
-
-                        <div class="overview-label">
-                            30 Gün İçinde Bitecek Lisans
-                        </div>
-
-                        <span class="overview-link">
-                            İncele →
-                        </span>
-                    </a>
-
+                <div class="gb-card">
+                    <div class="gb-head"><h2>Son yönetim işlemleri</h2><a href="audit.html">Tüm denetim izi →</a></div>
+                    <div id="recentActivity" aria-live="polite"><div class="gb-empty">Yükleniyor…</div></div>
                 </div>
-
             </section>
 
-
-            <!-- ==================================================
-                 CONTENT
-            =================================================== -->
-
-            <section class="dashboard-layout">
-
-                <!-- RECENT ACTIVITY -->
-
-                <div class="dashboard-panel">
-
-                    <div class="dashboard-panel-head">
-
-                        <h3>Son Yönetim İşlemleri</h3>
-
-                        <a href="audit.html">
-                            Tüm Denetim Kayıtları →
-                        </a>
-
-                    </div>
-
-                    <div
-                        class="dashboard-panel-body"
-                        id="recentActivity"
-                        aria-live="polite"
-                    >
-                        <div class="dashboard-state">
-                            Yönetim işlemleri yükleniyor...
-                        </div>
-                    </div>
-
+            <section class="gb-row b">
+                <div class="gb-card">
+                    <div class="gb-head"><h2>Dönem kapanışları · son 6 ay</h2><a href="periods.html">Dönem yönetimi →</a></div>
+                    <div class="gb-body" id="periodGrid"><div class="gb-empty" style="border:0;padding:0">Yükleniyor…</div></div>
                 </div>
-
-
-                <!-- QUICK ACTIONS -->
-
-                <aside class="dashboard-panel">
-
-                    <div class="dashboard-panel-head">
-                        <h3>Hızlı İşlemler</h3>
-                    </div>
-
-                    <div class="quick-actions">
-
-                        <a
-                            href="companies.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                🏢
-                            </span>
-
-                            <span>
-                                <strong>Şirket Yönetimi</strong>
-                                <small>
-                                    Şirketleri görüntüle ve yönet
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="users.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                👤
-                            </span>
-
-                            <span>
-                                <strong>Kullanıcı Yönetimi</strong>
-                                <small>
-                                    Kullanıcı ve roller
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="licenses.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                🔑
-                            </span>
-
-                            <span>
-                                <strong>Lisans Yönetimi</strong>
-                                <small>
-                                    Plan ve kullanım limitleri
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="periods.html"
-                            class="quick-action"
-                            data-admin-only
-                        >
-                            <span class="quick-action-icon">
-                                🔒
-                            </span>
-
-                            <span>
-                                <strong>Dönem Yönetimi</strong>
-                                <small>
-                                    Dönem kapatma ve yeniden açma
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="fx-rates.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                💱
-                            </span>
-
-                            <span>
-                                <strong>TCMB Kurları</strong>
-                                <small>
-                                    Döviz kuru yönetimi
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="inflation-indices.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                📈
-                            </span>
-
-                            <span>
-                                <strong>Enflasyon Endeksleri</strong>
-                                <small>
-                                    TMS 29 endeks yönetimi
-                                </small>
-                            </span>
-                        </a>
-
-
-                        <a
-                            href="audit.html"
-                            class="quick-action"
-                        >
-                            <span class="quick-action-icon">
-                                📋
-                            </span>
-
-                            <span>
-                                <strong>Denetim İzi</strong>
-                                <small>
-                                    Sistem hareketlerini incele
-                                </small>
-                            </span>
-                        </a>
-
-                    </div>
-
-                </aside>
-
+                <div class="gb-card">
+                    <div class="gb-head"><h2>Lisans kullanımı · kullanıcı</h2><a href="licenses.html">Lisanslar →</a></div>
+                    <div class="gb-body" id="licenseUsage"><div class="gb-empty" style="border:0;padding:0">Yükleniyor…</div></div>
+                </div>
             </section>
-
         </div>
-
     </main>
-
 </div>
 
-
-<script src="../js/admin.js"></script>
-
+<script src="../js/admin.js?v=20260929-2"></script>
 <script>
+/* Genel bakış. Tutarlar/sayılar sunucudan gelir; burada yalnızca
+   sayma ve sıralama yapılır. Her kutu kendi kaynağına bağlıdır:
+   biri başarısız olursa yalnızca o kutu hata gösterir. */
+const ACTION_LABEL = {
+    CREATE_USER: "Kullanıcı oluşturuldu", UPDATE_USER: "Kullanıcı güncellendi", RESET_PASSWORD: "Şifre sıfırlandı",
+    CREATE_COMPANY: "Şirket oluşturuldu", UPDATE_COMPANY_STATUS: "Şirket durumu değişti",
+    CREATE_LICENSE: "Lisans atandı", EXTEND_LICENSE: "Lisans süresi uzatıldı", CANCEL_LICENSE: "Lisans iptal edildi",
+    UPDATE_LICENSE_LIMITS: "Lisans limiti güncellendi", UPDATE_PLAN: "Plan güncellendi",
+    PERIOD_CLOSED: "Dönem kapatıldı", PERIOD_REOPENED: "Dönem yeniden açıldı",
+    INFLATION_INDEX_SYNCED: "Endeks senkronize edildi", INFLATION_INDEX_OVERRIDDEN: "Endeks değiştirildi",
+    INFLATION_INDEX_MANUAL_ENTRY_CREATED: "Endeks elle girildi", INFLATION_INDEX_VERIFIED: "Endeks doğrulandı",
+    INFLATION_INDEX_REJECTED: "Endeks reddedildi"
+};
+const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const LOCK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
-    let dashboardLoading = false;
+let dashboardLoading = false;
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const fmtInt = v => num(v).toLocaleString("tr-TR");
 
-    function setDashboardLoading() {
+function actionLabel(code) { return ACTION_LABEL[code] || String(code || "İşlem"); }
 
-        const ids = [
-            "statCompanies",
-            "statUsers",
-            "statLicenses",
-            "statTfrs16",
-            "statExpiringLicenses"
-        ];
+function timeLabel(ts) {
+    const d = new Date(ts);
+    if (isNaN(d)) return "—";
+    const today = new Date();
+    const same = d.toDateString() === today.toDateString();
+    const hm = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+    return same ? hm : `${d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" })} ${hm}`;
+}
 
-        ids.forEach(id => {
+function renderRecentActivity(items) {
+    const box = document.getElementById("recentActivity");
+    if (!Array.isArray(items) || !items.length) {
+        box.innerHTML = '<div class="gb-empty">Henüz yönetim işlemi yok.</div>';
+        return;
+    }
+    box.innerHTML = items.slice(0, 8).map(item => {
+        const who = escapeHtml(item.user_username || "Sistem");
+        const company = item.company_name ? ` → ${escapeHtml(item.company_name)}` : "";
+        const ok = item.success !== false;
+        return `<div class="gb-act"><time datetime="${escapeHtml(item.timestamp || "")}">${timeLabel(item.timestamp)}</time>
+            <div><strong title="${escapeHtml(item.action || "")}">${escapeHtml(actionLabel(item.action))}</strong><span>${who}${company}</span></div>
+            <span class="gb-pill ${ok ? "ok" : "err"}">${ok ? "Başarılı" : "Hata"}</span></div>`;
+    }).join("");
+}
 
-            const element =
-                document.getElementById(id);
+function daysLeft(expiresAt) {
+    const t = Date.parse(expiresAt);
+    if (!Number.isFinite(t)) return null;
+    return Math.ceil((t - Date.now()) / 86400000);
+}
 
-            if (element) {
-                element.innerHTML =
-                    '<span class="skeleton"></span>';
-            }
+function renderTodo(sources) {
+    const box = document.getElementById("todoList");
+    const count = document.getElementById("todoCount");
+    const todos = [];
+    const failed = [];
 
+    if (sources.expiring === null) failed.push("lisans");
+    else {
+        const rows = sources.expiring.filter(l => String(l.status || "").toLowerCase() === "active")
+            .map(l => ({ l, d: l.days_remaining != null ? num(l.days_remaining) : daysLeft(l.expires_at) }))
+            .sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9));
+        if (rows.length) todos.push({ tone: "warn", title: `${rows.length} lisans 30 gün içinde bitiyor`,
+            detail: rows.slice(0, 3).map(r => `${r.l.company_name || r.l.company_code || "Şirket"} · ${r.d != null ? r.d + " gün" : "tarih yok"}`).join("  ·  "),
+            href: "licenses.html?expiring=30", cta: "Lisanslara git" });
+    }
+    if (sources.fx === null) failed.push("kur");
+    else if (sources.fx.length) {
+        const pairs = {};
+        sources.fx.forEach(r => { const k = `${r.fromCurrency}/${r.toCurrency}`; pairs[k] = (pairs[k] || 0) + 1; });
+        todos.push({ tone: "info", title: `${sources.fx.length} TCMB kuru doğrulama bekliyor`,
+            detail: Object.entries(pairs).map(([k, v]) => `${k} ${v}`).join(" · "), href: "fx-rates.html", cta: "Kurları doğrula" });
+    }
+    if (sources.cpi === null) failed.push("endeks");
+    else if (sources.cpi.length) {
+        const months = sources.cpi.map(r => r.month).filter(Boolean).sort();
+        todos.push({ tone: "info", title: `${sources.cpi.length} TÜFE endeksi doğrulama bekliyor`,
+            detail: months.slice(0, 6).join(", ") + (months.length > 6 ? " …" : ""), href: "inflation-indices.html", cta: "Endeksleri doğrula" });
+    }
+    if (sources.licenses) {
+        sources.licenses.filter(l => l.status === "ACTIVE" && num(l.effective_max_users) > 0 && num(l.current_users) >= num(l.effective_max_users))
+            .forEach(l => todos.push({ tone: "err", title: `${l.company_name || "Şirket"} kullanıcı limitinde`,
+                detail: `${fmtInt(l.current_users)} / ${fmtInt(l.effective_max_users)} kullanıcı · yeni kullanıcı eklenemez`,
+                href: "licenses.html", cta: "Lisansa git" }));
+    }
+
+    count.hidden = !todos.length;
+    count.textContent = todos.length;
+    let html = todos.map(t => `<div class="gb-todo"><span class="gb-dot ${t.tone}"></span>
+        <div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.detail || "")}</span></div>
+        <a class="btn btn-outline btn-sm" href="${t.href}">${escapeHtml(t.cta)} →</a></div>`).join("");
+    if (!todos.length && !failed.length) html = '<div class="gb-empty ok">Bekleyen iş yok.</div>';
+    if (failed.length) html += `<div class="gb-empty err">Şu kaynaklar okunamadı: ${escapeHtml(failed.join(", "))}. Liste eksik olabilir.</div>`;
+    box.innerHTML = html;
+}
+
+function lastMonths(n) {
+    const out = [], d = new Date();
+    d.setDate(1);
+    for (let i = n; i >= 1; i--) {
+        const x = new Date(d.getFullYear(), d.getMonth() - i, 1);
+        out.push({ key: `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`, label: MONTHS_TR[x.getMonth()] });
+    }
+    return out;
+}
+
+function renderPeriodGrid(periods, companies) {
+    const box = document.getElementById("periodGrid");
+    if (periods === null || companies === null) { box.innerHTML = '<div class="gb-empty err" style="border:0;padding:0">Dönem kayıtları okunamadı.</div>'; return; }
+    const months = lastMonths(6);
+    const state = {};
+    periods.forEach(p => {
+        const k = `${p.company_id}|${p.period_key}`;
+        const s = p.reopened_at ? "reopened" : "closed";
+        if (state[k] !== "closed") state[k] = s;
+    });
+    const active = companies.filter(c => String(c.status || "ACTIVE").toUpperCase() === "ACTIVE");
+    const withData = active.filter(c => months.some(m => state[`${c.id}|${m.key}`]));
+    const list = (withData.length ? withData : active).slice(0, 6);
+    if (!list.length) { box.innerHTML = '<div class="gb-empty" style="border:0;padding:0">Aktif şirket yok.</div>'; return; }
+    const cols = `minmax(0,1fr) repeat(${months.length},34px)`;
+    let html = `<div class="gb-grid" style="grid-template-columns:${cols}"><span></span>${months.map(m => `<span class="m">${m.label}</span>`).join("")}`;
+    list.forEach(c => {
+        html += `<span class="n" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`;
+        months.forEach(m => {
+            const s = state[`${c.id}|${m.key}`];
+            const title = `${c.name} · ${m.key} · ${s === "closed" ? "kapalı" : s === "reopened" ? "yeniden açılmış" : "açık"}`;
+            html += `<span class="gb-cell ${s || ""}" title="${escapeHtml(title)}">${s === "closed" ? LOCK_SVG : ""}</span>`;
         });
+    });
+    html += `</div><div class="gb-legend"><span>■ Kapalı</span><span style="color:var(--warning)">□ Yeniden açılmış</span><span>┈ Açık</span>${active.length > list.length ? `<span>+${active.length - list.length} şirket daha</span>` : ""}</div>`;
+    box.innerHTML = html;
+}
 
-        document.getElementById(
-            "recentActivity"
-        ).innerHTML = `
-            <div class="dashboard-state">
-                Yönetim işlemleri yükleniyor...
-            </div>
-        `;
+function renderLicenseUsage(licenses) {
+    const box = document.getElementById("licenseUsage");
+    if (licenses === null) { box.innerHTML = '<div class="gb-empty err" style="border:0;padding:0">Lisanslar okunamadı.</div>'; return; }
+    const rows = licenses.filter(l => l.status === "ACTIVE").map(l => {
+        const used = num(l.current_users), max = l.effective_max_users == null ? null : num(l.effective_max_users);
+        return { name: l.company_name || l.company_code || "Şirket", used, max, ratio: max ? used / max : 0 };
+    }).sort((a, b) => b.ratio - a.ratio || b.used - a.used).slice(0, 6);
+    if (!rows.length) { box.innerHTML = '<div class="gb-empty" style="border:0;padding:0">Aktif lisans yok.</div>'; return; }
+    box.innerHTML = rows.map(r => {
+        const pct = r.max ? Math.min(100, Math.round(r.ratio * 100)) : 8;
+        const cls = r.max && r.ratio >= 1 ? "full" : r.max && r.ratio >= .8 ? "warn" : "";
+        return `<div class="gb-use"><span class="n" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span><div class="gb-bar"><i class="${cls}" style="width:${pct}%"></i></div><span class="v">${fmtInt(r.used)} / ${r.max ? fmtInt(r.max) : "∞"}</span></div>`;
+    }).join("");
+}
+
+async function loadDashboard() {
+    if (dashboardLoading) return;
+    dashboardLoading = true;
+    const btn = document.getElementById("refreshDashboardButton");
+    btn.disabled = true;
+    const safe = p => p.catch(() => null);
+    try {
+        const [dash, licenses, periods, companies, badges] = await Promise.all([
+            safe(AdminAPI.getDashboard()),
+            safe(AdminAPI.getLicenses()),
+            safe(AdminAPI.getPeriods({ includeReopened: true })),
+            safe(AdminAPI.getCompanies({ limit: 500 })),
+            safe(window.__lqRailBadges ? (p => { window.__lqRailBadges = null; return p; })(window.__lqRailBadges) : loadRailBadges())
+        ]);
+
+        if (dash && dash.success) {
+            const d = dash.data || {};
+            document.getElementById("statCompanies").textContent = fmtInt(d.companies);
+            document.getElementById("statUsers").textContent = fmtInt(d.users);
+            document.getElementById("statLicenses").textContent = fmtInt(d.active_licenses);
+            document.getElementById("statExpiringLicenses").textContent = fmtInt(d.expiring_licenses_30d);
+            document.getElementById("statTfrs16").textContent = `${fmtInt(d.tfrs16_customers)} şirkette TFRS 16 sözleşmesi`;
+            renderRecentActivity(d.recent_activity);
+        } else {
+            ["statCompanies", "statUsers", "statLicenses", "statExpiringLicenses"].forEach(id => { document.getElementById(id).textContent = "—"; });
+            const msg = typeof describeApiError === "function" ? describeApiError(dash, "Özet okunamadı.") : "Özet okunamadı.";
+            document.getElementById("recentActivity").innerHTML = `<div class="gb-empty err">${escapeHtml(msg)}</div>`;
+        }
+
+        const licRows = licenses && licenses.success !== false && Array.isArray(licenses.data) ? licenses.data.map(normalizeLicense) : null;
+        const arr = (v, key) => (v && Array.isArray(v[key]) ? v[key] : null);
+        const exp = badges ? (arr(badges.expiring, "data") || arr(badges.expiring, "licenses")) : null;
+        renderTodo({ expiring: exp, fx: badges ? arr(badges.fx, "rates") : null, cpi: badges ? arr(badges.cpi, "data") : null, licenses: licRows });
+        if (exp) {
+            const next = exp.map(l => (l.days_remaining != null ? num(l.days_remaining) : daysLeft(l.expires_at))).filter(v => v != null).sort((a, b) => a - b)[0];
+            document.getElementById("statExpiringNext").textContent = next != null ? `En yakını ${next} gün sonra` : "";
+        }
+        renderPeriodGrid(arr(periods, "periods"), arr(companies, "data"));
+        renderLicenseUsage(licRows);
+        document.getElementById("gbStamp").textContent = "son yenileme " + new Date().toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+    } finally {
+        dashboardLoading = false;
+        btn.disabled = false;
     }
-
-
-    function setDashboardError(message) {
-
-        const ids = [
-            "statCompanies",
-            "statUsers",
-            "statLicenses",
-            "statTfrs16",
-            "statExpiringLicenses"
-        ];
-
-        ids.forEach(id => {
-
-            const element =
-                document.getElementById(id);
-
-            if (element) {
-                element.textContent = "—";
-            }
-
-        });
-
-        document.getElementById(
-            "recentActivity"
-        ).innerHTML = `
-            <div class="dashboard-state error">
-                ${escapeHtml(
-                    message ||
-                    "Dashboard verileri yüklenemedi."
-                )}
-            </div>
-        `;
-    }
-
-
-    function renderRecentActivity(items) {
-
-        const container =
-            document.getElementById(
-                "recentActivity"
-            );
-
-        if (
-            !Array.isArray(items) ||
-            items.length === 0
-        ) {
-
-            container.innerHTML = `
-                <div class="dashboard-state">
-                    Henüz yönetim işlemi bulunmuyor.
-                </div>
-            `;
-
-            return;
-        }
-
-
-        container.innerHTML =
-            items.map(item => {
-
-                const user =
-                    escapeHtml(
-                        item.user_username ||
-                        "System"
-                    );
-
-                const company =
-                    item.company_name
-                        ? ` → ${escapeHtml(
-                            item.company_name
-                        )}`
-                        : "";
-
-                const entity =
-                    item.entity_type
-                        ? ` (${escapeHtml(
-                            item.entity_type
-                        )})`
-                        : "";
-
-                return `
-                    <div class="dashboard-activity">
-
-                        <span class="activity-time">
-                            ${formatDate(
-                                item.timestamp
-                            )}
-                        </span>
-
-                        <span
-                            class="activity-action"
-                            title="${escapeHtml(
-                                item.action || ""
-                            )}"
-                        >
-                            ${escapeHtml(
-                                item.action || "-"
-                            )}
-                        </span>
-
-                        <span class="activity-detail">
-                            ${user}${company}${entity}
-                        </span>
-
-                        <span
-                            class="
-                                activity-status
-                                ${
-                                    item.success
-                                        ? "success"
-                                        : "failed"
-                                }
-                            "
-                        >
-                            ${
-                                item.success
-                                    ? "BAŞARILI"
-                                    : "HATA"
-                            }
-                        </span>
-
-                    </div>
-                `;
-
-            }).join("");
-    }
-
-
-    async function loadDashboard() {
-
-        if (dashboardLoading) {
-            return;
-        }
-
-        dashboardLoading = true;
-
-        const refreshButton =
-            document.getElementById(
-                "refreshDashboardButton"
-            );
-
-        if (refreshButton) {
-
-            refreshButton.disabled = true;
-
-            refreshButton.textContent =
-                "↻ Yükleniyor...";
-
-        }
-
-        setDashboardLoading();
-
-
-        try {
-
-            const result =
-                await AdminAPI.getDashboard();
-
-
-            if (!result || !result.success) {
-
-                const message =
-                    typeof describeApiError ===
-                    "function"
-                        ? describeApiError(
-                            result,
-                            "Dashboard verileri yüklenemedi."
-                        )
-                        : (
-                            result?.error ||
-                            "Dashboard verileri yüklenemedi."
-                        );
-
-                setDashboardError(message);
-
-                return;
-            }
-
-
-            const data =
-                result.data || {};
-
-
-            document.getElementById(
-                "statCompanies"
-            ).textContent =
-                data.companies ?? 0;
-
-
-            document.getElementById(
-                "statUsers"
-            ).textContent =
-                data.users ?? 0;
-
-
-            document.getElementById(
-                "statLicenses"
-            ).textContent =
-                data.active_licenses ?? 0;
-
-
-            document.getElementById(
-                "statTfrs16"
-            ).textContent =
-                data.tfrs16_customers ?? 0;
-
-
-            document.getElementById(
-                "statExpiringLicenses"
-            ).textContent =
-                data.expiring_licenses_30d ?? 0;
-
-
-            renderRecentActivity(
-                data.recent_activity
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                "Dashboard load error:",
-                error
-            );
-
-            setDashboardError(
-                "Sunucuya ulaşılamadı. Verileri yenileyerek tekrar deneyin."
-            );
-
-        } finally {
-
-            dashboardLoading = false;
-
-            if (refreshButton) {
-
-                refreshButton.disabled =
-                    false;
-
-                refreshButton.textContent =
-                    "↻ Verileri Yenile";
-
-            }
-
-        }
-
-    }
-
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        async () => {
-
-            const authenticated =
-                await checkAdminAuth();
-
-
-            if (authenticated) {
-                loadDashboard();
-            }
-
-        }
-    );
-
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    const ok = await checkAdminAuth();
+    if (ok === false) return;
+    loadDashboard();
+});
 </script>
-
 </body>
 </html>

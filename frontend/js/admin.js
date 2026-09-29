@@ -736,7 +736,7 @@ try {
     const roleBadgeElement =
         document.querySelector(".role-badge");
     if (roleBadgeElement) {
-        roleBadgeElement.textContent = user.role || "";
+        roleBadgeElement.textContent = ADMIN_ROLE_LABEL[user.role] || user.role || "";
     }
 
     /*
@@ -750,6 +750,9 @@ try {
         document
             .querySelectorAll("[data-admin-only]")
             .forEach(el => { el.style.display = "none"; });
+    }
+    else if (typeof loadRailBadges === "function") {
+        window.__lqRailBadges = loadRailBadges();
     }
 
     /*
@@ -1229,4 +1232,110 @@ async function submitAssignLicense(event) {
         submitBtn.disabled = false;
         submitBtn.textContent = "Assign License";
     }
+}
+
+// ============================================================
+// YÖNETİM RAYI (v2) — tüm admin sayfalarında tek, tutarlı menü
+// ------------------------------------------------------------
+// Her sayfanın kendi <nav class="sidebar"> içeriği farklıydı
+// (sıra, eksik bağlantılar, İngilizce etiketler). Burada tek
+// kanonik liste ile yeniden kurulur. Yalnızca Şirketler ve
+// Kullanıcılar ACCOUNTANT_MANAGER'a açıktır; diğerleri
+// data-admin-only ile checkAdminAuth tarafından gizlenir.
+// ============================================================
+const ADMIN_RAIL_ICON = {
+    genel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    sirket: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10"/><path d="M8 7h4M8 11h4M8 15h4M3 21h18"/>',
+    kullanici: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    lisans: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14 9l2 2"/>',
+    donem: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    acilis: '<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    kur: '<path d="M7 4v16M4 9l12-4M4 14l12-4"/><path d="M16 20a4 4 0 0 0 4-4"/>',
+    endeks: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+    denetim: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+    sss: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>',
+    uygulama: '<path d="M7 17L17 7M9 7h8v8"/>'
+};
+const ADMIN_RAIL = [
+    { href: "index.html", label: "Genel bakış", icon: "genel", adminOnly: true },
+    { group: "Müşteriler" },
+    { href: "companies.html", label: "Şirketler", icon: "sirket", also: ["tfrs16.html"] },
+    { href: "users.html", label: "Kullanıcılar", icon: "kullanici" },
+    { href: "licenses.html", label: "Lisanslar ve planlar", icon: "lisans", adminOnly: true, also: ["plans.html"], badge: "licenses" },
+    { group: "Muhasebe verisi", adminOnly: true },
+    { href: "periods.html", label: "Dönem yönetimi", icon: "donem", adminOnly: true },
+    { href: "opening-balances.html", label: "Açılış bakiyeleri", icon: "acilis", adminOnly: true },
+    { href: "fx-rates.html", label: "Döviz kurları", icon: "kur", adminOnly: true, badge: "fx" },
+    { href: "inflation-indices.html", label: "Enflasyon endeksleri", icon: "endeks", adminOnly: true, badge: "cpi" },
+    { group: "Sistem", adminOnly: true },
+    { href: "audit.html", label: "Denetim izi", icon: "denetim", adminOnly: true },
+    { href: "faq.html", label: "Site SSS", icon: "sss", adminOnly: true }
+];
+
+function adminRailSvg(name) {
+    return `<svg class="lq-rail-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADMIN_RAIL_ICON[name] || ""}</svg>`;
+}
+
+function buildAdminRail() {
+    const nav = document.getElementById("sidebar");
+    if (!nav || nav.dataset.lqRail === "1") return;
+    const page = (window.location.pathname.split("/").pop() || "index.html").toLowerCase();
+    const items = ADMIN_RAIL.map(item => {
+        const gate = item.adminOnly ? " data-admin-only" : "";
+        if (item.group) return `<div class="nav-label"${gate}>${escapeHtml(item.group)}</div>`;
+        const active = item.href === page || (item.also || []).includes(page);
+        const badge = item.badge ? `<span class="lq-rail-badge" data-rail-badge="${item.badge}" hidden></span>` : "";
+        return `<a href="${item.href}"${active ? ' class="active" aria-current="page"' : ""}${gate}>${adminRailSvg(item.icon)}<span class="lq-rail-label">${escapeHtml(item.label)}</span>${badge}</a>`;
+    }).join("");
+    nav.innerHTML = `
+        <div class="sidebar-brand lq-rail-brand">
+            <a href="index.html" class="lq-rail-logo"><img src="../../logo-nav.png" alt="LeaseQant"></a>
+            <span class="lq-rail-tag">YÖNETİM</span>
+        </div>
+        <div class="sidebar-nav" role="navigation" aria-label="Yönetim menüsü">${items}</div>
+        <div class="lq-rail-foot">
+            <a class="lq-rail-app" href="../../tfrs16.html">${adminRailSvg("uygulama")}<span>Uygulamaya geç</span></a>
+        </div>`;
+    nav.dataset.lqRail = "1";
+    document.documentElement.setAttribute("data-lq-admin", "2");
+}
+
+const ADMIN_ROLE_LABEL = {
+    ADMIN: "Yönetici",
+    ACCOUNTANT_MANAGER: "Muhasebe müdürü",
+    ACCOUNTANT: "Muhasebeci",
+    CONTROLLER: "Kontrolör",
+    VIEWER: "İzleyici"
+};
+
+function setRailBadge(key, count) {
+    const el = document.querySelector(`[data-rail-badge="${key}"]`);
+    if (!el) return;
+    const n = Number(count) || 0;
+    el.textContent = n > 99 ? "99+" : String(n);
+    el.hidden = n === 0;
+    el.title = key === "licenses" ? `${n} lisans 30 gün içinde bitiyor` : `${n} kayıt doğrulama bekliyor`;
+}
+
+/* Yalnızca ADMIN için: rozet sayıları. Hata olursa rozet gizli kalır. */
+async function loadRailBadges() {
+    const safe = p => p.then(r => r.json()).catch(() => null);
+    const headers = AdminAPI.getHeaders();
+    const [expiring, fx, cpi] = await Promise.all([
+        safe(fetch(`${AdminAPI.baseURL}/licenses/expiring?days=30`, { headers })),
+        safe(fetch(`${API_BASE_URL}/api/fx-rates/pending`, { headers })),
+        safe(fetch(`${AdminAPI.baseURL}/inflation-indices?status=PENDING`, { headers }))
+    ]);
+    const len = v => (Array.isArray(v) ? v.length : 0);
+    const exp = expiring && (expiring.data || expiring.licenses);
+    setRailBadge("licenses", len(Array.isArray(exp) ? exp.filter(l => String(l.status || "").toLowerCase() === "active") : exp));
+    setRailBadge("fx", len(fx && fx.rates));
+    setRailBadge("cpi", len(cpi && cpi.data));
+    return { expiring, fx, cpi };
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", buildAdminRail);
+} else {
+    buildAdminRail();
 }
