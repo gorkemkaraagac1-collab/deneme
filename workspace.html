@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07101f">
+  <meta name="description" content="LeaseQant kiralama muhasebesi çalışma alanı">
+  <title>LeaseQant — Çalışma Alanı</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/workspace-v3.css?v=20260928-2">
+  <script defer src="js/shell.js"></script>
+  <script defer src="js/private-calculation-api.js"></script>
+  <script defer src="js/private-tfrs16-facade.js"></script>
+  <script defer src="js/tfrs16-report-authority-ui.js"></script>
+  <script defer src="js/workspace-v3-utils.js"></script>
+  <script defer src="js/workspace-v3.js?v=20260928-2"></script>
+</head>
+<body>
+  <div class="lq-app" id="workspaceApp">
+    <header class="brandbar">
+      <a class="brand" href="workspace.html" aria-label="LeaseQant çalışma alanı">
+        <img src="logo-nav.png" alt="LeaseQant">
+      </a>
+      <nav class="primary-nav" aria-label="Ana menü">
+        <button type="button" data-nav="overview" class="nav-link">Genel Bakış</button>
+        <button type="button" data-nav="contracts" class="nav-link">Sözleşmeler</button>
+        <button type="button" data-nav="calculations" class="nav-link">Hesaplamalar</button>
+        <button type="button" data-nav="journals" class="nav-link">Yevmiye</button>
+        <button type="button" data-nav="disclosures" class="nav-link">Dipnotlar</button>
+        <button type="button" data-nav="close" class="nav-link">Kapanış</button>
+      </nav>
+      <div class="brand-actions">
+        <button type="button" class="icon-button" data-action="global-search" aria-label="Sözleşme ara" title="Ara (Ctrl+K)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.2 4.2"></path></svg>
+        </button>
+        <a class="icon-button" href="contact.html" aria-label="Yardım" title="Yardım">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.7 9a2.4 2.4 0 1 1 4.2 1.6c-1 .9-1.9 1.2-1.9 2.7M12 17h.01"></path></svg>
+        </a>
+        <span class="user-chip" id="userChip" aria-live="polite">…</span>
+        <button type="button" class="logout-button" data-action="logout">Çıkış</button>
+      </div>
+    </header>
+
+    <section class="contextbar" aria-label="Şirket ve raporlama dönemi">
+      <div class="context-crumb"><span class="context-dot"></span><span id="contextViewLabel">Genel Bakış</span></div>
+      <label class="context-field company-context"><span>Şirket</span><select id="companySelect" aria-label="Aktif şirket"><option value="">Şirketler yükleniyor…</option></select></label>
+      <label class="context-field"><span>Dönem başlangıcı</span><input id="periodStart" type="date" aria-label="Dönem başlangıcı"></label>
+      <label class="context-field"><span>Dönem sonu</span><input id="periodEnd" type="date" aria-label="Dönem sonu"></label>
+      <span class="lock-badge status-neutral" id="periodLockBadge"><span class="status-symbol">·</span><span>Dönem durumu aranıyor</span></span>
+      <button type="button" class="context-refresh" data-action="refresh" aria-label="Verileri yenile" title="Verileri yenile">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.5 11a7.5 7.5 0 0 1 13-4L20 12M4 17v-5h5m10.5 1a7.5 7.5 0 0 1-13 4L4 12"></path></svg>
+      </button>
+    </section>
+
+    <main class="page-shell" id="pageShell" tabindex="-1">
+      <div class="page-loading" id="appStatus" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span><span>Güvenli oturum ve şirket kapsamı doğrulanıyor…</span>
+      </div>
+      <div id="pageHost" hidden></div>
+    </main>
+
+    <footer class="app-footer"><span>LeaseQant</span><span id="footerSource">Hesaplama ve rapor verileri doğrulanmış sunucu kaynaklarından gelir.</span></footer>
+  </div>
+
+  <div class="overlay" id="modalHost" hidden></div>
+  <div class="toast-host" id="toastHost" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

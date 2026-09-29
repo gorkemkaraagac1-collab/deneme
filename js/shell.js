@@ -19,7 +19,7 @@ window.fetch = (input, init = {}) => {
   return _gkFetch(input, init);
 };
 
-  const isProtectedEnginePage = /\/tfrs16\.html$/i.test(window.location.pathname);
+  const isProtectedEnginePage = /\/(?:tfrs16|workspace)\.html$/i.test(window.location.pathname);
 
   // Engine pages must never render their local cache without a valid backend
   // session. The redirect runs before the UI runtime script is loaded.
