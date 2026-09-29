@@ -28,3 +28,11 @@ test('kullanıcı düzenleme panelde; şirket erişimi onay kutularıyla gönder
  assert.doesNotMatch(s,/company_ids\s*\.selectedOptions/);
  assert.match(s,/resetUserPassword\(userId, pw\)/);
 });
+test('lisans sayfası: gerçek durum seçenekleri, sekmeler, doğru satır işlemleri',()=>{
+ const s=fs.readFileSync(path.join(__dirname,'../frontend/admin/licenses.html'),'utf8');
+ assert.doesNotMatch(s,/<option value="INACTIVE">/);
+ assert.match(s,/class="lq-tabs"/);
+ assert.match(s,/license\.status === "ACTIVE"\s*\n?\s*\?/);
+ assert.match(s,/Yeni lisans/);
+ assert.match(fs.readFileSync(path.join(__dirname,'../frontend/admin/plans.html'),'utf8'),/class="lq-tabs"/);
+});

@@ -386,6 +386,7 @@
 
 
 <main class="page-content">
+    <nav class="lq-tabs" aria-label="Lisans bölümleri"><a href="licenses.html" class="on" aria-current="page">Lisanslar</a><a href="plans.html">Planlar</a></nav>
 
 <div class="licenses-page">
 
@@ -476,7 +477,7 @@
             </div>
 
             <div class="summary-label">
-                Pasif / İptal
+                Süresi dolmuş / iptal
             </div>
 
         </div>
@@ -492,7 +493,7 @@
             </div>
 
             <div class="summary-label">
-                Custom Plan
+                Özel (custom) plan
             </div>
 
         </div>
@@ -530,10 +531,6 @@
 
                 <option value="ACTIVE">
                     Aktif
-                </option>
-
-                <option value="INACTIVE">
-                    Pasif
                 </option>
 
                 <option value="CANCELLED">
@@ -778,11 +775,9 @@ function renderPlanFilter() {
             </option>
 
         `).join("")}
-
-        <option value="custom">
-            Custom
-        </option>
-
+        ${allPlans.some(plan => String(plan.id || plan.plan_id || "").toLowerCase() === "custom")
+            ? ""
+            : '<option value="custom">Custom</option>'}
     `;
 
 }
@@ -1191,6 +1186,13 @@ function renderLicenses() {
    LICENSE ROW
 ============================================================ */
 
+function licenseStatusChip(status) {
+    if (status === "ACTIVE") return '<span class="lq-chip ok">Aktif</span>';
+    if (status === "CANCELLED") return '<span class="lq-chip n">İptal edildi</span>';
+    if (status === "EXPIRED") return '<span class="lq-chip err">Süresi doldu</span>';
+    return `<span class="lq-chip n">${escapeHtml(status || "—")}</span>`;
+}
+
 function renderLicenseRow(
     license
 ) {
@@ -1302,11 +1304,7 @@ function renderLicenseRow(
             </td>
 
 
-            <td>
-                ${getStatusBadge(
-                    license.status
-                )}
-            </td>
+            <td>${licenseStatusChip(license.status)}</td>
 
 
             <td>
@@ -1343,47 +1341,13 @@ function renderLicenseRow(
             <td>
 
                 <div class="action-group">
-
-                    ${
-                        isCustom
-                            ? `
-                                <button
-                                    class="btn btn-sm btn-outline"
-                                    onclick="openEditLimitsById('${license.id}')"
-                                >
-                                    Limitler
-                                </button>
-                              `
-                            : ""
-                    }
-
-
-                    <button
-                        class="btn btn-sm btn-success"
-                        onclick="openExtendLicenseModal('${license.id}')"
-                    >
-                        Süre Uzat
-                    </button>
-
-
-                    ${
-                        license.status ===
-                        "ACTIVE"
-                            ? `
-                                <button
-                                    class="btn btn-sm btn-danger"
-                                    onclick="cancelLicense('${license.id}')"
-                                >
-                                    İptal Et
-                                </button>
-                              `
-                            : ""
-                    }
-
+                    ${license.status === "ACTIVE"
+                        ? `${isCustom ? `<button class="btn btn-sm btn-outline" type="button" onclick="openEditLimitsById('${escapeHtml(String(license.id))}')">Limitler</button>` : ""}
+                           <button class="btn btn-sm btn-outline" type="button" onclick="openExtendLicenseModal('${escapeHtml(String(license.id))}')">Süre uzat</button>
+                           <button class="btn btn-sm btn-outline" style="color:var(--danger);border-color:#F3C7C2" type="button" onclick="cancelLicense('${escapeHtml(String(license.id))}')">İptal et</button>`
+                        : `<button class="btn btn-sm btn-primary" type="button" onclick="openAssignModal('${escapeHtml(String(license.company_id || ""))}')">Yeni lisans</button>`}
                 </div>
-
             </td>
-
         </tr>
 
     `;
