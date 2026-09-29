@@ -447,10 +447,10 @@
       <section class="lq-pg-card lq-pg-table" aria-label="Sözleşme listesi">
         <div class="lq-pg-tr is-head">${sortBtn("id", "SÖZLEŞME")}${sortBtn("supplier", "KİRAYA VEREN")}${sortBtn("company", "ŞİRKET")}<span>SINIF</span>${sortBtn("end", "BİTİŞ", "is-r")}<span class="is-r">KALAN</span>${sortBtn("payment", "DÖNEMSEL ÖDEME", "is-r")}${sortBtn("liability", "KİRA YÜK.", "is-r")}<span class="is-r">KHV</span><span>KAPSAM</span><span>DURUM</span></div>
         ${rows.length ? rows.map(r => `<div class="lq-pg-tr" role="button" tabindex="0" data-open-contract="${esc(r.c.id)}" aria-label="${esc(r.c.id)} sözleşmesini aç">
-          <span class="lq-pg-mono lq-pg-link">${esc(r.c.id)}</span><span class="lq-pg-ell">${esc(r.c.supplier || "—")}</span><span class="lq-pg-ell lq-pg-muted">${esc(r.c.company || "—")}</span><span class="lq-pg-muted lq-pg-ell">${esc(r.c.assetClass || "—")}</span>
-          <span class="lq-pg-mono is-r">${esc(trDate(r.c.endDate))}</span><span class="lq-pg-mono is-r${r.left !== null && r.left <= 3 && r.active ? " is-warn" : ""}">${r.left === null ? "—" : `${r.left} ay`}</span>
-          <span class="lq-pg-mono is-r">${acc2(Number(r.c.monthlyPayment))}<small> ${esc(String(r.c.currency || "").toUpperCase())}${freq(r.c.paymentFrequency)}</small></span>
-          <span class="lq-pg-mono is-r">${acc0(r.liability)}</span><span class="lq-pg-mono is-r">${acc0(r.rou)}</span><span>${scopeChip(r)}</span><span>${statusChip(r.c)}</span></div>`).join("")
+          <span data-label="Sözleşme" class="lq-pg-mono lq-pg-link">${esc(r.c.id)}</span><span data-label="Kiraya veren" class="lq-pg-ell">${esc(r.c.supplier || "—")}</span><span data-label="Şirket" class="lq-pg-ell lq-pg-muted">${esc(r.c.company || "—")}</span><span data-label="Sınıf" class="lq-pg-muted lq-pg-ell">${esc(r.c.assetClass || "—")}</span>
+          <span data-label="Bitiş" class="lq-pg-mono is-r">${esc(trDate(r.c.endDate))}</span><span data-label="Kalan süre" class="lq-pg-mono is-r${r.left !== null && r.left <= 3 && r.active ? " is-warn" : ""}">${r.left === null ? "—" : `${r.left} ay`}</span>
+          <span data-label="Dönemsel ödeme" class="lq-pg-mono is-r">${acc2(Number(r.c.monthlyPayment))}<small> ${esc(String(r.c.currency || "").toUpperCase())}${freq(r.c.paymentFrequency)}</small></span>
+          <span data-label="Kira yükümlülüğü" class="lq-pg-mono is-r">${acc0(r.liability)}</span><span data-label="Kullanım hakkı varlığı" class="lq-pg-mono is-r">${acc0(r.rou)}</span><span data-label="Kapsam">${scopeChip(r)}</span><span data-label="Durum">${statusChip(r.c)}</span></div>`).join("")
           : `<div class="lq-pg-emptyrow"><strong>${base.length ? "Bu görünümde sözleşme yok" : "Henüz sözleşme yok"}</strong><span>${base.length ? "Filtreleri veya görünümü değiştirin." : "Yeni sözleşme ekleyin veya Excel'den içe aktarın."}</span></div>`}
         <div class="lq-pg-tr is-foot"><span>${list.length} sözleşme gösteriliyor</span><span class="lq-pg-muted">Tutarlar ${esc(trDate(p.reportingDate))} sunucu raporundan; kapsam dışı sözleşmede boş.</span></div>
       </section>
@@ -543,11 +543,27 @@
     drawFinancialTab();
   }
 
+  function labelFinancialRow(line, cols) {
+    const template = doc.createElement("template");
+    template.innerHTML = line;
+    const row = template.content.querySelector(".lq-pg-ftr:not(.is-head)");
+    if (!row) return line;
+    Array.from(row.children).forEach((cell, index) => {
+      const label = cell.classList.contains("lq-pg-rowerr") ? "Kaynak durumu" : cols[index]?.label;
+      if (!label) return;
+      const plain = doc.createElement("span");
+      plain.innerHTML = label;
+      const text = plain.textContent.trim();
+      if (text) cell.setAttribute("data-label", text);
+    });
+    return template.innerHTML;
+  }
+
   function frTable(cols, lines, cls = "") {
     const tpl = `minmax(150px,1.3fr) repeat(${cols.length - 1}, minmax(80px,1fr))`;
     return `<section class="lq-pg-card lq-pg-ftable ${cls}"><div class="lq-pg-fscroll"><div class="lq-pg-fgrid" style="--cols:${tpl}">
       <div class="lq-pg-ftr is-head">${cols.map((c, i) => `<span class="${i ? "is-r" : ""}${c.warn ? " is-warn" : ""}">${c.label}</span>`).join("")}</div>
-      ${lines.join("")}</div></div></section>`;
+      ${lines.map(line => labelFinancialRow(line, cols)).join("")}</div></div></section>`;
   }
 
   function drawFinancialTab() {
@@ -610,7 +626,7 @@
       data.forEach(({ c, r }) => { if (r.ok) { try { AUI().rawRows(r.v, "audit").forEach(a => ev.push({ ...a, company: c.name || c.id })); } catch (_) {} } });
       ev.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
       html = `<section class="lq-pg-card lq-pg-pad"><span class="lq-pg-kick">DÖNEM OLAYLARI · ${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))}</span>${ev.length
-        ? `<div class="lq-pg-events">${ev.slice(0, 200).map(a => `<span class="lq-pg-mono">${esc(String(a.timestamp || "").replace("T", " ").slice(0, 16))}</span><button type="button" class="lq-pg-mono lq-pg-link" data-fr="open" data-id="${esc(a.contract_id)}">${esc(a.contract_id || "—")}</button><span>${esc(a.action || "Olay")}</span><span class="lq-pg-muted">${esc(a.company)} · ${esc(a.actor || "")}</span>`).join("")}</div>`
+        ? `<div class="lq-pg-events">${ev.slice(0, 200).map(a => `<div class="lq-pg-event"><span data-label="Zaman" class="lq-pg-mono">${esc(String(a.timestamp || "").replace("T", " ").slice(0, 16))}</span><button type="button" data-label="Sözleşme" class="lq-pg-mono lq-pg-link" data-fr="open" data-id="${esc(a.contract_id)}">${esc(a.contract_id || "—")}</button><span data-label="Olay">${esc(a.action || "Olay")}</span><span data-label="Şirket ve kullanıcı" class="lq-pg-muted">${esc(a.company)} · ${esc(a.actor || "")}</span></div>`).join("")}</div>`
         : '<p class="lq-pg-empty">Bu dönemde sunucuya kayıtlı olay yok.</p>'}</section>`;
     }
     body.innerHTML = html;
