@@ -441,10 +441,10 @@
     const caret = focusSearch ? doc.activeElement.selectionStart : null;
     host.innerHTML = head("Sözleşmeler", `<span class="lq-pg-num">${base.length}</span> kayıt · ${esc(trDate(p.reportingDate))} tutarları`,
       btn("Dışa aktar", 'data-cact="export"') + btn("Excel'den içe aktar", 'data-cact="import"') + btn("+ Yeni sözleşme", 'data-cact="new"', "primary"))
-      + `<div class="lq-pg-tabs" role="tablist" aria-label="Görünümler">${VIEWS.map(([k, l]) => `<button type="button" role="tab" data-cview="${k}" aria-selected="${s.view === k}">${l} <span class="lq-pg-num${k === "out" && counts.out ? " is-warn" : ""}">${counts[k]}</span></button>`).join("")}</div>
+      + `<div class="lq-pg-tabs" role="tablist" aria-label="Sözleşme görünümleri">${VIEWS.map(([k, l]) => `<button type="button" role="tab" id="lqContractsTab-${k}" aria-controls="lqContractsViewPanel" tabindex="${s.view === k ? 0 : -1}" data-cview="${k}" aria-selected="${s.view === k}">${l} <span class="lq-pg-num${k === "out" && counts.out ? " is-warn" : ""}">${counts[k]}</span></button>`).join("")}</div>
       <div class="lq-pg-filters"><label class="lq-pg-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><input data-cf="search" aria-label="Sözleşme ara" placeholder="Sözleşme no, kiraya veren…" value="${esc(s.search)}"></label>
         ${companiesOpts.length > 1 ? sel("company", "Şirket", s.company, companiesOpts) : ""}${classes.length ? sel("assetClass", "Sınıf", s.assetClass, classes.map(c => [c, c])) : ""}${currencies.length > 1 ? sel("currency", "Para birimi", s.currency, currencies.map(c => [c, c])) : ""}</div>
-      <section class="lq-pg-card lq-pg-table" aria-label="Sözleşme listesi">
+      <section class="lq-pg-card lq-pg-table" id="lqContractsViewPanel" role="tabpanel" tabindex="0" aria-labelledby="lqContractsTab-${s.view}" aria-label="Sözleşme listesi">
         <div class="lq-pg-tr is-head">${sortBtn("id", "SÖZLEŞME")}${sortBtn("supplier", "KİRAYA VEREN")}${sortBtn("company", "ŞİRKET")}<span>SINIF</span>${sortBtn("end", "BİTİŞ", "is-r")}<span class="is-r">KALAN</span>${sortBtn("payment", "DÖNEMSEL ÖDEME", "is-r")}${sortBtn("liability", "KİRA YÜK.", "is-r")}<span class="is-r">KHV</span><span>KAPSAM</span><span>DURUM</span></div>
         ${rows.length ? rows.map(r => `<div class="lq-pg-tr" role="button" tabindex="0" data-open-contract="${esc(r.c.id)}" aria-label="${esc(r.c.id)} sözleşmesini aç">
           <span data-label="Sözleşme" class="lq-pg-mono lq-pg-link">${esc(r.c.id)}</span><span data-label="Kiraya veren" class="lq-pg-ell">${esc(r.c.supplier || "—")}</span><span data-label="Şirket" class="lq-pg-ell lq-pg-muted">${esc(r.c.company || "—")}</span><span data-label="Sınıf" class="lq-pg-muted lq-pg-ell">${esc(r.c.assetClass || "—")}</span>
@@ -530,7 +530,7 @@
     const p = period();
     const company = activeCompany();
     box.innerHTML = head("Hesaplama sonuçları", `${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))} · yükleniyor…`, btn("Excel (CSV)", 'data-fr="csv"'))
-      + `<div class="lq-pg-tabs" role="tablist">${FR_TABS.map(([k, l]) => `<button type="button" role="tab" data-frtab="${k}" aria-selected="${fr.tab === k}">${l}</button>`).join("")}</div><div id="lqFrBody">${skel(5)}</div>`;
+      + `<div class="lq-pg-tabs" role="tablist" aria-label="Finansal raporlama görünümleri">${FR_TABS.map(([k, l]) => `<button type="button" role="tab" id="lqFinancialTab-${k}" aria-controls="lqFrBody" tabindex="${fr.tab === k ? 0 : -1}" data-frtab="${k}" aria-selected="${fr.tab === k}">${l}</button>`).join("")}</div><div id="lqFrBody" role="tabpanel" tabindex="0" aria-labelledby="lqFinancialTab-${fr.tab}">${skel(5)}</div>`;
     let scope = [];
     try { scope = await companies(); } catch (e) { if (seq === fr.seq) $("lqFrBody").innerHTML = `<p class="lq-pg-empty">${esc(errText(e))}</p>`; return; }
     if (company !== "ALL") scope = scope.filter(c => String(c.id) === String(company));
@@ -569,7 +569,12 @@
   function drawFinancialTab() {
     const body = $("lqFrBody");
     if (!body || !fr.data) return;
-    $("lqFinancial").querySelectorAll("[data-frtab]").forEach(b => b.setAttribute("aria-selected", String(b.getAttribute("data-frtab") === fr.tab)));
+    $("lqFinancial").querySelectorAll("[data-frtab]").forEach(b => {
+      const selected = b.getAttribute("data-frtab") === fr.tab;
+      b.setAttribute("aria-selected", String(selected));
+      b.tabIndex = selected ? 0 : -1;
+    });
+    body.setAttribute("aria-labelledby", `lqFinancialTab-${fr.tab}`);
     const data = fr.data;
     const p = period();
     const name = c => `<span class="is-name">${esc(c.name || c.id)}</span>`;
