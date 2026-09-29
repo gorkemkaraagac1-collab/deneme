@@ -162,9 +162,76 @@
     }
     return true;
   }
+  /* UI v2 (tasarım: Yevmiye kayıtları). Tutarlar ve toplamlar sunucudan gelir;
+     burada toplam alınmaz, yalnızca filtrelenir ve çizilir. */
+  const KIND_LABELS={PERIOD:"Dönem hareketi",INITIAL:"İlk muhasebeleştirme",RECLASSIFICATION:"Kısa / uzun vade sınıflaması"};
+  const trDate=iso=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));return m?`${m[3]}.${m[2]}.${m[1]}`:"—";};
+  function voucherCard(voucher,filter) {
+    const term=String(filter||"").toLowerCase();
+    const lines=voucher.lines.filter(line=>!term||(line.accountCode+" "+line.accountName+" "+voucher.contractId).toLowerCase().includes(term));
+    if (term && !lines.length) return "";
+    return `<article class="lq-jr-card"><header><span class="lq-jr-mono lq-jr-muted">${escape(voucher.voucherNo)}</span><span class="lq-jr-mono">${escape(trDate(voucher.postingDate))}</span>
+      <strong>${escape(KIND_LABELS[voucher.eventType]||voucher.eventType)}</strong><span class="lq-jr-mono lq-jr-link">${escape(voucher.contractId)}</span>
+      <span class="lq-jr-ok">✓ Dengede</span></header>
+      <div class="lq-jr-line is-head"><span>HESAP</span><span>HESAP ADI</span><span>AÇIKLAMA</span><span class="is-r">BORÇ</span><span class="is-r">ALACAK</span></div>
+      ${lines.map(line=>`<div class="lq-jr-line"><span class="lq-jr-mono">${escape(line.accountCode)}</span><span class="${line.credit>0&&!line.debit?"is-credit":""}">${escape(line.accountName)}</span><span class="lq-jr-muted">${escape(line.description||"")}</span><span class="lq-jr-mono is-r">${line.debit?amount(line.debit):""}</span><span class="lq-jr-mono is-r">${line.credit?amount(line.credit):""}</span></div>`).join("")}
+      ${!voucher.lines.length?'<p class="lq-jr-muted lq-jr-pad">Sunucu bu dönem için fiş hareketi olmadığını doğruladı.</p>':""}
+      <footer><span class="lq-jr-muted">${escape(voucher.supplier||"")} · ${escape(voucher.currency)}</span><span class="lq-jr-mono">Borç ${amount(voucher.totalDebit)} · Alacak ${amount(voucher.totalCredit)}</span></footer></article>`;
+  }
+  function renderIntoV2(container,packages) {
+    const vouchers=packages.flatMap(pkg=>pkg.vouchers);
+    const summaries=packages.flatMap(pkg=>pkg.summaryByCurrency||[]);
+    const count=packages.reduce((n,pkg)=>n+pkg.voucherCount,0);
+    const kinds=[...new Set(vouchers.map(v=>v.eventType))];
+    const kpi=summaries.length===1
+      ? `<div><span class="lq-jr-kick">FİŞ</span><b class="lq-jr-mono">${count}</b></div><div><span class="lq-jr-kick">TOPLAM BORÇ · ${escape(summaries[0].currency)}</span><b class="lq-jr-mono">${amount(summaries[0].totalDebit)}</b></div><div><span class="lq-jr-kick">TOPLAM ALACAK · ${escape(summaries[0].currency)}</span><b class="lq-jr-mono">${amount(summaries[0].totalCredit)}</b></div><div><span class="lq-jr-kick">DENGE</span><b class="lq-jr-ok">✓ Tüm fişler dengede</b></div>`
+      : `<div><span class="lq-jr-kick">FİŞ</span><b class="lq-jr-mono">${count}</b></div>${summaries.map(x=>`<div><span class="lq-jr-kick">${escape(x.currency)} BORÇ / ALACAK</span><b class="lq-jr-mono">${amount(x.totalDebit)} / ${amount(x.totalCredit)}</b></div>`).join("")}<div><span class="lq-jr-kick">DENGE</span><b class="lq-jr-ok">✓ Dengede</b></div>`;
+    container.innerHTML=`<div class="lq-jr">
+      <div class="lq-jr-note"><strong>Önizleme.</strong> Bu fişler muhasebe sisteminize aktarılmadı; fiş numaraları geçicidir. Dışa aktarılan dosya ERP'nize sizin tarafınızdan yüklenir.</div>
+      <div class="lq-jr-kpis">${kpi}</div>
+      <div class="lq-jr-bar"><div class="lq-jr-seg" role="group" aria-label="Görünüm"><button type="button" data-jr-view="voucher" aria-pressed="true">Fiş bazlı</button><button type="button" data-jr-view="line" aria-pressed="false">Satır bazlı</button></div>
+        <label class="lq-jr-search"><span class="lq-sr">Fiş satırlarında ara</span><input data-journal-filter placeholder="Hesap, hesap adı veya sözleşme ara"></label>
+        <label class="lq-sr">Sırala <select data-journal-sort><option value="">Sunucu sırası</option><option value="accountCode">Hesap kodu</option><option value="accountName">Hesap adı</option></select></label>
+        <span class="lq-jr-grow"></span>
+        <details class="lq-jr-export"><summary>Dışa aktar ▾</summary><div>${['xlsx','csv','txt','logo','mikro'].map(format=>`<button type="button" data-journal-export="${format}">${{xlsx:"Excel (xlsx)",csv:"CSV",txt:"Metin (txt)",logo:"Logo biçimi",mikro:"Mikro biçimi"}[format]}</button>`).join("")}<button type="button" data-journal-print>Yazdır / PDF</button></div></details></div>
+      <div class="lq-jr-body"><div data-journal-body></div>
+        <aside class="lq-jr-aside"><span class="lq-jr-kick">ÖZET</span>
+          <div class="lq-jr-kv"><span>Fiş türü</span><span>${escape(kinds.map(k=>KIND_LABELS[k]||k).join(", ")||"—")}</span></div>
+          <div class="lq-jr-kv"><span>Dönem</span><span class="lq-jr-mono">${escape(trDate(packages[0]?.periodStart))} – ${escape(trDate(packages[0]?.periodEnd))}</span></div>
+          <div class="lq-jr-kv"><span>Hesap eşlemesi</span><span class="lq-jr-mono">${escape([...new Set(vouchers.map(v=>v.accountMappingVersion))].join(", ")||"—")}</span></div>
+          <div class="lq-jr-kv"><span>Canlı kayıt</span><span>Kapalı</span></div>
+          <p class="lq-jr-muted">Tutarlar sunucudaki doğrulanmış hesaplamadan gelir; sözleşmesel fiştir, gerçekleşen ödeme veya defter kaydı değildir.</p></aside></div></div>`;
+    const target=container.querySelector('[data-journal-body]');
+    let view="voucher";
+    const redraw=()=>{
+      const filter=container.querySelector('[data-journal-filter]').value;
+      if (view==="voucher") target.innerHTML=vouchers.map(v=>voucherCard(v,filter)).join("")||'<p class="lq-jr-muted lq-jr-pad">Aramayla eşleşen fiş satırı yok.</p>';
+      else {
+        const sort=container.querySelector('[data-journal-sort]').value;
+        let rows=packages.flatMap(rowsForPackage);
+        if (filter) rows=rows.filter(row=>(row.accountCode+" "+row.accountName+" "+row.contractId).toLowerCase().includes(filter.toLowerCase()));
+        if (sort) rows=[...rows].sort((a,b)=>String(a[sort]??"").localeCompare(String(b[sort]??"")));
+        target.innerHTML=`<div class="lq-jr-card"><div class="lq-jr-line is-head is-wide"><span>FİŞ</span><span>SÖZLEŞME</span><span>HESAP</span><span>HESAP ADI</span><span class="is-r">BORÇ</span><span class="is-r">ALACAK</span></div>${rows.map(row=>`<div class="lq-jr-line is-wide"><span class="lq-jr-mono lq-jr-muted">${escape(row.voucherNo)}</span><span class="lq-jr-mono">${escape(row.contractId)}</span><span class="lq-jr-mono">${escape(row.accountCode)}</span><span>${escape(row.accountName)}</span><span class="lq-jr-mono is-r">${row.debit?amount(row.debit):""}</span><span class="lq-jr-mono is-r">${row.credit?amount(row.credit):""}</span></div>`).join("")}</div>`;
+      }
+    };
+    redraw();
+    container.querySelector('[data-journal-filter]').addEventListener('input',redraw);
+    container.querySelector('[data-journal-sort]').addEventListener('change',redraw);
+    container.querySelectorAll('[data-jr-view]').forEach(button=>button.addEventListener('click',()=>{
+      view=button.dataset.jrView;container.querySelectorAll('[data-jr-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));redraw();}));
+    container.querySelectorAll('[data-journal-export]').forEach(button=>button.addEventListener('click',()=>exportPackages(packages,button.dataset.journalExport)));
+    container.querySelector('[data-journal-print]').addEventListener('click',()=>{
+      const page=global.open("","_blank");
+      if (!page) fail("JOURNAL_EXPORT_UNAVAILABLE");
+      page.opener=null;
+      page.document.write('<!doctype html><meta charset="utf-8"><title>Yevmiye önizleme</title>'+packages.map(pkg=>renderPackage(pkg)).join(""));
+      page.document.close();page.print();
+    });
+  }
   function renderInto(container,packages) {
     if (!container) return;
     packages.forEach(requireAccepted);
+    if (global.document?.documentElement?.getAttribute("data-lq-ui")==="2") return renderIntoV2(container,packages);
     container.innerHTML=`<label>Fiş satırlarında ara <input data-journal-filter></label>
       <label>Sırala <select data-journal-sort><option value="">Backend sırası</option><option value="accountCode">Hesap kodu</option><option value="accountName">Hesap adı</option></select></label>
       <div>${['xlsx','csv','txt','logo','mikro'].map(format=>`<button type="button" data-journal-export="${format}">${format.toUpperCase()}</button>`).join(" ")} <button type="button" data-journal-print>Yazdır / PDF</button></div><div data-journal-body></div>`;
