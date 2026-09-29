@@ -3,11 +3,11 @@
 /**
  * Release gate for the TFRS 16 private-calculation cutover.
  *
- * This is intentionally a source-level check.  The public UI runtime is still
- * needed by the report, journal, modification and sublease views, so deleting
- * it before those consumers are migrated would create a silent Pages outage.
- * The gate makes the supported API-primary/rollback shape explicit and fails
- * if a future edit breaks it.
+ * This is intentionally a source-level check. The legacy TFRS16 URL now
+ * redirects into the authenticated workspace. Keep checking the legacy
+ * engine's private-only compatibility boundary while also verifying that the
+ * active workspace loads its authenticated API and reporting authorities
+ * before its UI controller.
  */
 
 "use strict";
@@ -19,7 +19,9 @@ const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => fs.existsSync(path.join(root, relativePath));
 
-const html = read("tfrs16.html");
+const legacyEntry = read("tfrs16.html");
+const html = read("workspace.html");
+const workspace = read("js/workspace-v3.js");
 const adapter = read("js/private-calculation-api.js");
 const facade = read("js/private-tfrs16-facade.js");
 const engine = read("js/tfrs16-ui.js");
@@ -39,6 +41,7 @@ const journalUi = read("js/tfrs16-journal-ui.js");
 const authorityUi = read("js/tfrs16-report-authority-ui.js");
 const pagesWorkflow = read(".github/workflows/pages.yml");
 const publicRuntimeSource = [
+  legacyEntry,
   html,
   ...fs.readdirSync(path.join(root, "js"))
     .filter(file => file.endsWith(".js"))
@@ -46,39 +49,40 @@ const publicRuntimeSource = [
 ].join("\n");
 
 const checks = [
-  ["Authority modules load before main UI", ["tfrs16-journal-ui.js","tfrs16-report-authority-ui.js"].every(name => html.includes('src="js/'+name) && html.indexOf(name) < html.indexOf("tfrs16-ui.js")) && html.indexOf("tfrs16-disclosure-ui.js") < html.indexOf("tfrs16-reporting-ui.js") && /DOMContentLoaded/.test(coordinator)],
+  ["workspace loads private authorities before its UI controller", ["js/private-calculation-api.js","js/private-tfrs16-facade.js","js/tfrs16-report-authority-ui.js","js/workspace-v3-utils.js","js/workspace-v3.js"].every(name => html.includes(`src="${name}`)) && html.indexOf("js/private-calculation-api.js") < html.indexOf("js/private-tfrs16-facade.js") && html.indexOf("js/private-tfrs16-facade.js") < html.indexOf("js/tfrs16-report-authority-ui.js") && html.indexOf("js/tfrs16-report-authority-ui.js") < html.indexOf("js/workspace-v3.js") && /DOMContentLoaded/.test(workspace)],
   ["Journal preview DTO has no active browser journal builder", /loadJournalAuthorityPackage/.test(journalUi) && /requireAccepted/.test(journalUi) && !/calculateLease|calculateJournal/.test(journalUi)],
   ["legacy public engine asset is removed", !exists("js/tfrs16-engine.js")],
-  ["TFRS16 page loads the UI runtime asset", html.includes('src="js/tfrs16-ui.js') && !html.includes("tfrs16-engine.js")],
+  ["legacy TFRS16 URL redirects without loading its old runtime", /location\.replace\(['"]workspace\.html/.test(legacyEntry) && /href="workspace\.html"/.test(legacyEntry) && !/src=["']js\/(?:tfrs16-ui|tfrs16-engine)\.js/.test(legacyEntry)],
   ["private adapter is loaded", html.includes('src="js/private-calculation-api.js')],
   ["private TFRS16 facade is loaded", html.includes('src="js/private-tfrs16-facade.js')],
-  ["private adapter loads before the TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("tfrs16-ui.js")],
-  ["private facade loads between adapter and TFRS16 UI runtime", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("tfrs16-ui.js")],
+  ["workspace API requests preserve authenticated transport", /headers\.set\('Authorization', `Bearer \$\{token\(\)\}`\)/.test(workspace) && /credentials:\s*'include'/.test(workspace)],
+  ["private adapter loads before the workspace UI controller", html.indexOf("private-calculation-api.js") < html.indexOf("workspace-v3.js")],
+  ["private facade loads between adapter and workspace UI controller", html.indexOf("private-calculation-api.js") < html.indexOf("private-tfrs16-facade.js") && html.indexOf("private-tfrs16-facade.js") < html.indexOf("workspace-v3.js")],
   ["private result bridge exists", exists("js/tfrs16-private-result-bridge.js") && /LeaseQantTfrs16PrivateResultBridge/.test(privateResultBridge)],
-  ["private result bridge loads before the TFRS16 UI runtime", html.indexOf("tfrs16-private-result-bridge.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-private-result-bridge.js')],
+  ["workspace avoids loading the legacy calculation UI runtime", !html.includes("tfrs16-private-result-bridge.js") && !html.includes('src="js/tfrs16-ui.js')],
   ["private result bridge exposes all compatibility readers", /function calculate\(/.test(privateResultBridge) && /function calculateEngine\(/.test(privateResultBridge) && /function getEscalatedPayments\(/.test(privateResultBridge)],
   ["compatibility calculation wrappers delegate to the private result bridge", /LeaseQantTfrs16PrivateResultBridge/.test(engine) && /bridge\.calculate\(contract\)/.test(engine) && /bridge\.calculateEngine\(contract\)/.test(engine) && /bridge\.getEscalatedPayments\(contract\)/.test(engine)],
   ["private calculation consumer is exported for the result bridge", /getPrivateCalculationForConsumer,/.test(engine)],
   ["TFRS16 UI coordinator exists", exists("js/tfrs16-ui-coordinator.js")],
   ["TFRS16 private cache UI module exists", exists("js/tfrs16-private-cache-ui.js") && /LeaseQantTfrs16PrivateCacheUi/.test(privateCacheUi)],
-  ["TFRS16 private cache UI module loads before the runtime", html.indexOf("tfrs16-private-cache-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-private-cache-ui.js')],
-  ["reporting-date cache exists and loads before the runtime", exists("js/tfrs16-reporting-date-cache.js") && html.indexOf("tfrs16-reporting-date-cache.js") < html.indexOf("tfrs16-ui.js")],
+  ["workspace calculation actions use the private calculation API", /LeaseQantPrivateCalculation\.calculate\(contract\)/.test(workspace) && !/calculateLeaseEngine/.test(workspace)],
+  ["report authority loads before the workspace UI controller", html.indexOf("tfrs16-report-authority-ui.js") < html.indexOf("workspace-v3.js") && /LeaseQantReportingAuthorityUi/.test(workspace)],
   ["reporting-date cache delegates to the private facade", /LeaseQantPrivateTfrs16Facade/.test(reportingDateCache) && /loadReportingDate/.test(reportingDateCache)],
-  ["TFRS16 UI coordinator loads after the runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-ui-coordinator.js") && html.includes("src=\"js/tfrs16-ui-coordinator.js")],
+  ["workspace controller defers startup until the document is ready", /document\.readyState === 'loading'[\s\S]{0,160}addEventListener\('DOMContentLoaded',bootstrap/.test(workspace)],
   ["TFRS16 detail UI module exists", exists("js/tfrs16-detail-ui.js") && /LeaseQantTfrs16DetailUi/.test(detailUi)],
-  ["TFRS16 detail UI module loads before the runtime", html.indexOf("tfrs16-detail-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-ui.js')],
+  ["workspace contract detail uses server data and calculation", /async function renderContractDetail\(/.test(workspace) && /api\(`\/api\/contracts\//.test(workspace) && /LeaseQantPrivateCalculation\.calculate\(contract\)/.test(workspace)],
   ["TFRS16 detail events UI module exists", exists("js/tfrs16-detail-events-ui.js") && /LeaseQantTfrs16DetailEvents/.test(detailEventsUi)],
-  ["TFRS16 detail events UI module loads before the runtime", html.indexOf("tfrs16-detail-events-ui.js") < html.indexOf("tfrs16-ui.js") && html.includes('src="js/tfrs16-detail-events-ui.js')],
+  ["workspace binds navigation and actions through delegated events", /document\.addEventListener\('click'/.test(workspace) && /document\.addEventListener\('change'/.test(workspace)],
   ["detail event wiring uses the external UI module", /LeaseQantTfrs16DetailEvents\?\.bind/.test(engine) && /initModificationEvents/.test(detailEventsUi) && /bindContractDetailTabs/.test(detailEventsUi) && !/setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]{0,2200}initModificationEvents\(contract/.test(engine)],
   ["UI runtime exposes the coordinator boot hook", /window\.__GK_TFRS16_UI_BOOT__\s*=\s*__gkTfrs16Boot/.test(engine)],
   ["UI coordinator guards duplicate startup", /__GK_TFRS16_UI_COORDINATOR_RAN__/.test(coordinator) && /DOMContentLoaded/.test(coordinator)],
-  ["TMS21 FX UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-fx-ui.js") && html.includes('src="js/tfrs16-fx-ui.js')],
+  ["workspace reporting uses the trusted reporting authority", /LeaseQantReportingAuthorityUi/.test(workspace) && /ui\.load\(periodIntent\(companyId\)\)/.test(workspace)],
   ["TMS21 FX UI markup lives outside the public UI runtime", /window\.LeaseQantTfrs16FxUi\?\.render/.test(engine) && fxUi.includes("TMS 21 — FONKSİYONEL PARA BİRİMİ ÇEVRİMİ") && !engine.includes("Kur bilgisi alınıyor...")],
   ["TMS21 FX loading fallback lives outside the public UI runtime", /function mount\(container, contract\)/.test(fxUi) && /LeaseQantTfrs16FxUi\?\.mount/.test(engine) && !/TMS 21 arayüzü yüklenemedi/.test(engine)],
-  ["Portfolio UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-portfolio-ui.js") && html.includes('src="js/tfrs16-portfolio-ui.js')],
+  ["workspace portfolio uses the authenticated contracts API", /async function loadContracts\(/.test(workspace) && /api\('\/api\/contracts'\)/.test(workspace)],
   ["Portfolio table markup lives outside the public UI runtime", /window\.LeaseQantTfrs16PortfolioUi\?\.renderTable/.test(engine) && portfolioUi.includes("contractsTableBody") && portfolioUi.includes("row-action") && !engine.includes("class=\"row-action\"")],
   ["Portfolio UI has a private read-only bridge", /getPortfolioContracts/.test(engine) && /openDetail/.test(engine) && /formatPortfolioAmount/.test(engine)],
-  ["Reporting UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-reporting-ui.js") && html.includes('src="js/tfrs16-reporting-ui.js')],
+  ["workspace exposes supported reporting and disclosure views", /calculations:/.test(workspace) && /disclosures:/.test(workspace) && /function renderCalculations\(/.test(workspace) && /function renderDisclosures\(/.test(workspace)],
   ["Reporting page shells live outside the public UI runtime", reportingUi.includes("renderFinancialReporting") && reportingUi.includes("renderRiskControls") && !engine.includes("Portföy genelinde bilanço/gelir tablosu KPI'ları")],
   ["Reporting UI uses the private-result bridge", /renderFinancialReportingBody/.test(reportingUi) && /renderFinancialReportingBody:/.test(engine) && /renderRiskControlsBody:/.test(engine)],
   ["Consolidation page entry lives in the reporting UI module", /renderConsolidation/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderConsolidation/.test(engine)],
@@ -101,7 +105,7 @@ const checks = [
   ["Contract detail tab panel shells remain namespaced", /renderContractDetailPanels,/.test(reportingUi) && /gk-detail-tab/.test(reportingUi) && /slbSectionContainer/.test(reportingUi) && /subleaseSectionContainer/.test(reportingUi)],
   ["Contract detail tab DOM state lives outside the public UI runtime", /function applyContractDetailTab\(/.test(reportingUi) && /function bindContractDetailTabs\(/.test(reportingUi) && (/bindContractDetailTabs/.test(engine) || /bindContractDetailTabs/.test(detailEventsUi)) && !/function gkApplyDetailTab\(/.test(engine) && !/querySelectorAll\("#detailContent \.gk-detail-tab-btn"\)/.test(engine)],
   ["Governance UI reads through explicit engine bridges", /renderConsolidationBody/.test(reportingUi) && /renderAuditTrailBody/.test(reportingUi) && /renderConsolidationBody:/.test(engine) && /renderAuditTrailBody:/.test(engine)],
-  ["Operations UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-operations-ui.js") && html.includes('src="js/tfrs16-operations-ui.js')],
+  ["workspace journal is a server-authorized preview", /getJournalAuthorityPackage\(intent, false\)/.test(workspace) && /Canlı muhasebe aktarımı kapalı/.test(workspace)],
   ["Change management entrypoint lives outside the public UI runtime", /renderModificationReassessment/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderModificationReassessment/.test(engine)],
   ["Special-flow entrypoints live outside the public UI runtime", /renderSaleAndLeaseback/.test(operationsUi) && /renderSublease/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderSaleAndLeaseback/.test(engine) && /LeaseQantTfrs16OperationsUi\?\.renderSublease/.test(engine)],
   ["Accounting center entrypoint lives outside the public UI runtime", /renderAccountingCenter/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.renderAccountingCenter/.test(engine)],
@@ -129,12 +133,10 @@ const checks = [
   ["Payment schedule event bridge covers export and reporting refreshes", /exportSchedule\?\.\(contract\)/.test(operationsUi) && /renderFxTranslation\?\.\(contract\)/.test(operationsUi) && /exportSchedule: exportPaymentSchedule/.test(engine)],
   ["Payment schedule export presentation lives outside the public UI runtime", /function exportPaymentScheduleFile\(/.test(operationsUi) && /LeaseQantTfrs16OperationsUi\?\.exportPaymentScheduleFile/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}XLSX\.utils\.book_new/.test(engine) && !/async function exportPaymentSchedule\([\s\S]{0,5200}link\.download\s*=/.test(engine)],
   ["Payment schedule export keeps XLSX and CSV fallback in the UI module", /XLSX\.utils\.book_new/.test(operationsUi) && /link\.download\s*=/.test(operationsUi) && /exportPaymentScheduleFile,/.test(operationsUi)],
-  ["shadow comparator loads after the API-primary flag", html.indexOf("LEASEQANT_CALCULATION_API_PRIMARY") < html.indexOf("private-calculation-shadow.js")],
-  // FAZ 2 (2026-09-15): ?api=0 rollback kaldırıldı (Burhan'ın kararı — private
-  // backend'e tam bağımlılık). Flag artık sabit true; URL parametresiyle
-  // geçersiz kılınamaz, ve getPrivateCalculationForConsumer()'da artık local
-  // fallback dalı yok — aşağıdaki check bunu doğruluyor.
-  ["API-primary is hardcoded true — no more api=0 URL override", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*=\s*true\s*;/.test(html) && !/params\.get\("api"\)/.test(html)],
+  ["workspace does not load shadow or browser-calculation fallbacks", !html.includes("private-calculation-shadow.js") && !/LEASEQANT_CALCULATION_SHADOW|calculateLeaseEngine/.test(workspace)],
+  // The active workspace has no URL switch that can route calculations back
+  // to a browser engine; the legacy compatibility runtime is checked below.
+  ["workspace has no URL rollback flag and keeps calculations server-side", !/params\.get\(["']api["']\)/.test(legacyEntry + html + workspace) && /LeaseQantPrivateCalculation\.calculate\(contract\)/.test(workspace) && !/calculateLeaseEngine/.test(workspace)],
   ["consumer boundary has no local calculation fallback branch", !/function getPrivateCalculationForConsumer\(contract\)\s*\{[\s\S]{0,600}calculateLeaseEngineImpl\(contract\)/.test(engine)],
   ["adapter targets the private lease calculation endpoint", /\/api\/calculations\/lease/.test(adapter)],
   ["adapter targets the bounded private batch endpoint", /\/api\/calculations\/lease\/batch/.test(adapter)],
