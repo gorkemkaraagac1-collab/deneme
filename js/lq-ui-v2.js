@@ -10,6 +10,118 @@
   if (root.getAttribute("data-lq-ui") !== "2") return;
 
   const $ = id => document.getElementById(id);
+  const STATE_CLASSES = [
+    ".lq-pg-empty", ".lq-pg-emptyrow", ".lq-cv-empty", ".lq-cv-kpi-note",
+    ".lq-cv-kpis.is-loading", ".lq-op-empty", ".lq-op-source-state",
+    ".lq-authority-empty", ".lq-dn-err", ".empty-state", ".lq-pg-skel"
+  ].join(",");
+  const STATE_SELECTOR = ["[role='alert']", "[role='status']", "[aria-busy='true']", STATE_CLASSES].join(",");
+  const STATUS_PARAGRAPHS = "#mainContent p, #v26PageHost p, #detailContent p, #lqDashboard p, #contractsView p";
+  const UNAUTHORIZED_WORDS = /\b(?:401|403)\b|oturum açmanız|oturum süresi doldu|erişim yetkiniz yok|yetkiniz yok|yetkisiz|unauthorized|forbidden|access denied/i;
+  const LOADING_WORDS = /yükleniyor|loading|paket yüklenince gösterilir/i;
+  const ERROR_WORDS = /alınamadı|gösterilemiyor|bir hata oluştu|hata oluştu|başarısız|ulaşılamadı|erişilemiyor|kullanılamıyor|failed|\berror\b|timeout/i;
+  const BLOCKED_WORDS = /kaynak gerekli|kaynak hazır değil|kaynak bekleniyor|kaynak yok|kaynağı yok|kaynak bulunamadı|kapsam dışı|desteklenmiyor|politika kararı gerekli|girdi gerekli|hesaplanamaz|sertifikalı.*(?:değil|yok)|erişilebilir şirket kaynağı bulunamadı/i;
+  const EMPTY_WORDS = /henüz .*?(?:yok|bulunmuyor)|(?:bu dönem|bu görünüm|bu şirket|bu sözleşme).*?(?:yok|bulunmuyor|bulunamadı)|(?:aramayla|arama ile|filtreyle|filtre ile) eşleşen.*?yok|fiş hareketi olmadığını doğruladı|sözleşme seçildiğinde|şirket seçin|^—$/i;
+  const originalStateAttrs = new WeakMap();
+
+  function inferredState(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const saved = originalStateAttrs.get(el);
+    const originalBusy = !saved || saved["aria-busy"] === "true";
+    if (el.matches(".lq-pg-skel, .lq-cv-kpis.is-loading") || (originalBusy && el.getAttribute("aria-busy") === "true")) return "loading";
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    const originalAlert = (!saved || saved.role === "alert") && el.getAttribute("role") === "alert";
+    if (UNAUTHORIZED_WORDS.test(text)) return "unauthorized";
+    if (originalAlert || el.matches(".lq-dn-err")) return "error";
+    if (LOADING_WORDS.test(text)) return "loading";
+    if (el.matches(".lq-op-source-state")) return "blocked";
+    if (BLOCKED_WORDS.test(text)) return "blocked";
+    if (!text || EMPTY_WORDS.test(text) || el.matches(".lq-pg-emptyrow, .lq-cv-empty, .lq-op-empty, .lq-authority-empty, .empty-state")) return "empty";
+    if (ERROR_WORDS.test(text)) return "error";
+    return null;
+  }
+
+  function restoreState(el) {
+    if (!el?.hasAttribute("data-lq-ui-state")) return;
+    const saved = originalStateAttrs.get(el);
+    el.classList.remove("lq-v2-state", "lq-v2-metric-state");
+    el.removeAttribute("data-lq-ui-state");
+    if (saved) {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === null) el.removeAttribute(name);
+        else el.setAttribute(name, value);
+      }
+      originalStateAttrs.delete(el);
+    }
+  }
+
+  function decorateState(el, state, metric = false) {
+    if (!el || !state) { restoreState(el); return; }
+    if (!originalStateAttrs.has(el)) {
+      originalStateAttrs.set(el, Object.fromEntries(["role", "aria-live", "aria-atomic", "aria-busy"].map(name => [name, el.getAttribute(name)])));
+    }
+    el.dataset.lqUiState = state;
+    el.classList.add(metric ? "lq-v2-metric-state" : "lq-v2-state");
+    if (el.matches(".lq-pg-skel")) return; // skeleton visuals stay aria-hidden; their existing screen-reader label remains.
+    const announceAsAlert = state === "error" || state === "unauthorized";
+    const setIfChanged = (name, value) => { if (el.getAttribute(name) !== value) el.setAttribute(name, value); };
+    setIfChanged("role", announceAsAlert ? "alert" : "status");
+    setIfChanged("aria-live", announceAsAlert ? "assertive" : "polite");
+    setIfChanged("aria-atomic", "true");
+    if (state === "loading") setIfChanged("aria-busy", "true");
+    else if (el.hasAttribute("aria-busy")) el.removeAttribute("aria-busy");
+  }
+
+  function stateElements(scope = document) {
+    const found = new Set();
+    const addMatches = selector => {
+      if (scope.nodeType === 1 && scope.matches?.(selector)) found.add(scope);
+      scope.querySelectorAll?.(selector).forEach(el => found.add(el));
+    };
+    addMatches(STATE_SELECTOR);
+    addMatches(STATUS_PARAGRAPHS);
+    return new Set(Array.from(found).filter(el => {
+      if (el.hasAttribute("data-lq-ui-state")) return true;
+      const explicit = el.matches(STATE_SELECTOR);
+      if (explicit) return true;
+      const parent = el.parentElement?.closest(`${STATE_CLASSES}, [role='alert'], [role='status'], [aria-busy='true']`);
+      if (parent) return false;
+      return Boolean(inferredState(el));
+    }));
+  }
+
+  function scanPageStates(scope = document) {
+    let count = 0;
+    stateElements(scope).forEach(el => {
+      const state = inferredState(el);
+      const metric = VALUE_IDS.includes(el.id);
+      if (state) { decorateState(el, state, metric); count++; }
+      else restoreState(el);
+    });
+    return count;
+  }
+
+  const sharedStateApi = Object.freeze({ classify: inferredState, decorate: decorateState, scan: scanPageStates });
+  global.LeaseQantUiV2States = sharedStateApi;
+
+  function watchPageStates() {
+    const target = document.body || root;
+    if (!target || typeof global.MutationObserver !== "function") return;
+    scanPageStates(target);
+    new global.MutationObserver(records => {
+      records.forEach(record => {
+        if (record.type === "characterData") {
+          const parent = record.target.parentElement?.closest(`${STATE_SELECTOR}, ${STATUS_PARAGRAPHS}`);
+          if (parent) scanPageStates(parent);
+        }
+        if (record.type === "childList" && record.target.nodeType === 1) {
+          const parent = record.target.closest(`${STATE_SELECTOR}, ${STATUS_PARAGRAPHS}`);
+          if (parent) scanPageStates(parent);
+        }
+        record.addedNodes?.forEach(node => { if (node.nodeType === 1) scanPageStates(node); });
+      });
+    }).observe(target, { childList: true, subtree: true, characterData: true });
+  }
 
   /* ---------- Tutar mı, durum metni mi? ---------- */
   const VALUE_IDS = [
@@ -20,23 +132,25 @@
     "lqLiabilityBars", "lqAssetLegend"
   ];
   const NUMERIC = /^[(\-−]?\s*(?:[₺$€£]\s?)?\d[\d.\s]*(?:,\d+)?\s*%?\)?(?:\s?(?:TRY|USD|EUR|GBP|TL|₺))?$/;
-  const ERROR_WORDS = /alınamadı|hata|başarısız|kullanılamıyor/i;
-  const NEUTRAL_WORDS = /şirket seçin|sözleşme yok|aktif sözleşme yok|yükleniyor/i;
-
+  const METRIC_ERROR_WORDS = /alınamadı|hata|başarısız|kullanılamıyor/i;
   function classify(el) {
     if (!el) return;
     if (el.children.length) {
       el.removeAttribute("data-lq-state");
       el.removeAttribute("data-lq-tone");
+      restoreState(el);
       return;
     }
     const text = (el.textContent || "").trim();
     let state = "value";
     if (!text || text === "—") state = "empty";
     else if (!NUMERIC.test(text)) state = "status";
+    const metricState = state === "value" ? null : inferredState(el) || (state === "empty" ? "empty" : (METRIC_ERROR_WORDS.test(text) ? "error" : "blocked"));
+    if (metricState) decorateState(el, metricState, true);
+    else restoreState(el);
     if (el.getAttribute("data-lq-state") !== state) el.setAttribute("data-lq-state", state);
     if (state === "status") {
-      const tone = ERROR_WORDS.test(text) ? "error" : (NEUTRAL_WORDS.test(text) ? "neutral" : "warn");
+      const tone = metricState === "error" || metricState === "unauthorized" ? "error" : (metricState === "empty" || metricState === "loading" ? "neutral" : "warn");
       if (el.getAttribute("data-lq-tone") !== tone) el.setAttribute("data-lq-tone", tone);
     } else {
       el.removeAttribute("data-lq-tone");
@@ -224,6 +338,7 @@
     buildContextBar();
     watchValues();
     watchJournalPage();
+    watchPageStates();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
