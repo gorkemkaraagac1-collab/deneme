@@ -55,7 +55,15 @@
     if (x) x.setAttribute("aria-label", "Detayı kapat");
   }
 
+  /* Sayfa bağlam çubuğunun (dönem şeridi, şirket) altında açılır. */
+  function measureContext() {
+    const bar = $("lqContextBar");
+    const h = bar ? Math.round(bar.getBoundingClientRect().bottom) : 0;
+    root.style.setProperty("--lq-ctx-h", `${Math.max(0, h)}px`);
+  }
+
   function onOpened() {
+    measureContext();
     lastFocus = doc.activeElement && doc.activeElement !== doc.body ? doc.activeElement : null;
     const id = selectedId();
     const title = ($("detailTitle")?.textContent || "").trim();
@@ -147,6 +155,7 @@
       if (nav) closeDetail();
     }, true);
 
+    global.addEventListener("resize", () => { if (isOpen()) measureContext(); });
     global.addEventListener("popstate", onHistory);
     global.addEventListener("hashchange", onHistory);
     const initial = idFromHash(global.location.hash);
