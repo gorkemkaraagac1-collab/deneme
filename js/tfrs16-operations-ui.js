@@ -545,6 +545,26 @@ ${footer}
     bridge().injectV26Styles?.();
     return true;
   }
+  function isUiV2() {
+    return document.documentElement?.getAttribute("data-lq-ui") === "2";
+  }
+  function operationPageHeader(title, subtitle) {
+    return `<header class="lq-pg-head"><div><h1 class="lq-pg-h1">${escapeHtml(title)}</h1><div class="lq-pg-sub">${escapeHtml(subtitle)}</div></div></header>`;
+  }
+  function operationContractSummary(contract) {
+    if (!contract) return `<p class="lq-op-empty">Sözleşme seçildiğinde özet burada gösterilir.</p>`;
+    const facts = [
+      ["Sözleşme", contract.id], ["Şirket", contract.company], ["Kiraya veren", contract.supplier],
+      ["Dönem", contract.startDate || contract.endDate ? `${formatOperationDate(contract.startDate)} – ${formatOperationDate(contract.endDate)}` : null]
+    ].filter(([, value]) => value != null && String(value).trim() !== "");
+    return `<dl class="lq-op-summary-list">${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("") || `<div><dt>Sözleşme</dt><dd>Özet kaynağı gerekli</dd></div>`}</dl>`;
+  }
+  function operationSourceState(message = "Kaynak gerekli") {
+    return `<div class="lq-op-source-state" role="status"><span class="lq-pg-need">${escapeHtml(message)}</span><p>Ölçüm ve finansal etki yalnızca doğrulanmış sunucu paketi geldiğinde gösterilir.</p></div>`;
+  }
+  function operationImpactPanel(contract, title, description, resultMountId = "") {
+    return `<aside class="lq-op-side"><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">SÖZLEŞME ÖZETİ</span><h2 class="lq-op-side-title">${escapeHtml(title)}</h2>${operationContractSummary(contract)}</section><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">ETKİ ÖNİZLEMESİ</span><h2 class="lq-op-side-title">İşlem etkisi</h2><p class="lq-op-side-copy">${escapeHtml(description)}</p>${resultMountId ? `<div id="${escapeHtml(resultMountId)}">${operationSourceState()}</div>` : operationSourceState()}</section></aside>`;
+  }
   function sortedContracts() {
     return contracts().slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
   }
@@ -561,16 +581,25 @@ ${footer}
       const list = sortedContracts();
       if (!selectedSlbContractId && list.length) selectedSlbContractId = list[0].id;
       const selected = list.find(contract => contract.id === selectedSlbContractId) || null;
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Satış ve Geri Kiralama (SLB)</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16.98-103 kapsamındaki satış-ve-geri-kiralama işlemleri sözleşme bazında yönetiliyor.</p></div>
-          <div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
-            <select id="v26SlbContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${list.length ? options(list, selectedSlbContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>
-            ${selectedBanner(selected)}
-          </div><div id="slbSectionContainer"></div>
-        </div>`;
+      if (isUiV2()) {
+        container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("Satış ve geri kiralama", "TFRS 16.98–103 · Sözleşmeye bağlı işlem bilgisi ve sunucu doğrulamalı etki")}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26SlbContractSelect">Sözleşme</label><select id="v26SlbContractSelect">${list.length ? options(list, selectedSlbContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>${selectedBanner(selected)}</div><div id="slbSectionContainer"></div></section>${operationImpactPanel(selected, "Satış ve geri kiralama", "Taslak alanları tarayıcıda ölçüm üretmez. Sonuç, özel sunucu paketinden alınır.", "lqOpImpactResult")}</div></div>`;
+      } else {
+        container.innerHTML = `
+          <div class="gk-v26-page">
+            <div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Satış ve Geri Kiralama (SLB)</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16.98-103 kapsamındaki satış-ve-geri-kiralama işlemleri sözleşme bazında yönetiliyor.</p></div>
+            <div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label>
+              <select id="v26SlbContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${list.length ? options(list, selectedSlbContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>
+              ${selectedBanner(selected)}
+            </div><div id="slbSectionContainer"></div>
+          </div>`;
+      }
       container.querySelector("#v26SlbContractSelect")?.addEventListener("change", event => { selectedSlbContractId = event.target.value; render(); });
-      if (selected) bridge().renderSlbSection?.(selected);
+      if (selected) {
+        bridge().renderSlbSection?.(selected);
+        const resultBox = isUiV2() ? container.querySelector("#slbResultContainer") : null;
+        const resultMount = container.querySelector("#lqOpImpactResult");
+        if (resultBox && resultMount) resultMount.replaceChildren(resultBox);
+      }
     };
     render();
   }
@@ -581,16 +610,25 @@ ${footer}
       const list = sortedContracts();
       if (!selectedSubleaseContractId && list.length) selectedSubleaseContractId = list[0].id;
       const selected = list.find(contract => contract.id === selectedSubleaseContractId) || null;
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Alt Kiralama (Sublease)</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16.B58 kapsamındaki alt kiralama işlemleri sözleşme bazında yönetiliyor.</p></div>
-          <div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (Ana Kira)</label>
-            <select id="v26SubleaseContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${list.length ? options(list, selectedSubleaseContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>
-            ${selectedBanner(selected)}
-          </div><div id="subleaseSectionContainer"></div>
-        </div>`;
+      if (isUiV2()) {
+        container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("Alt kiralama", "TFRS 16.B58 · Ana kiradan doğan kullanım hakkına göre sınıflandırma")}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26SubleaseContractSelect">Sözleşme (ana kira)</label><select id="v26SubleaseContractSelect">${list.length ? options(list, selectedSubleaseContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>${selectedBanner(selected)}</div><div id="subleaseSectionContainer"></div></section>${operationImpactPanel(selected, "Alt kiralama", "Ana kira ve alt kiralama ayrı akışlardır. Finansal etki yalnızca doğrulanmış sunucu sonucundan gösterilir.", "lqOpImpactResult")}</div></div>`;
+      } else {
+        container.innerHTML = `
+          <div class="gk-v26-page">
+            <div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Alt Kiralama (Sublease)</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">TFRS 16.B58 kapsamındaki alt kiralama işlemleri sözleşme bazında yönetiliyor.</p></div>
+            <div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (Ana Kira)</label>
+              <select id="v26SubleaseContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${list.length ? options(list, selectedSubleaseContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>
+              ${selectedBanner(selected)}
+            </div><div id="subleaseSectionContainer"></div>
+          </div>`;
+      }
       container.querySelector("#v26SubleaseContractSelect")?.addEventListener("change", event => { selectedSubleaseContractId = event.target.value; render(); });
-      if (selected) bridge().renderSubleaseSection?.(selected);
+      if (selected) {
+        bridge().renderSubleaseSection?.(selected);
+        const resultBox = isUiV2() ? container.querySelector("#subleaseResultContainer") : null;
+        const resultMount = container.querySelector("#lqOpImpactResult");
+        if (resultBox && resultMount) resultMount.replaceChildren(resultBox);
+      }
     };
     render();
   }
@@ -666,7 +704,11 @@ ${footer}
         body = `${typeof renderMod === "function" ? renderMod(selected) : ""}${typeof renderReass === "function" ? renderReass(selected) : ""}`;
       }
       const pending = buildPendingApprovals();
-      container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.</p></div>${pendingHtml(pending)}<div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label><select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${optionsHtml}</select>${selectedBanner(selected)}</div>${body}</div>`;
+      if (isUiV2()) {
+        container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("İşlemler", "Modifikasyon ve yeniden değerlendirme · sözleşme bazında yönetim")}${pendingHtml(pending)}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26ModReassContractSelect">Sözleşme</label><select id="v26ModReassContractSelect">${optionsHtml}</select>${selectedBanner(selected)}</div><div class="lq-op-events">${body}</div></section>${operationImpactPanel(selected, "Modifikasyon ve yeniden değerlendirme", "Taslak kayıt tek başına ölçüm oluşturmaz. Mevcut Uygula akışı ve doğrulanmış sunucu sonucu korunur.")}</div></div>`;
+      } else {
+        container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.</p></div>${pendingHtml(pending)}<div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label><select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${optionsHtml}</select>${selectedBanner(selected)}</div>${body}</div>`;
+      }
 
       container.querySelector("#v26ModReassContractSelect")?.addEventListener("change", event => { selectedModReassContractId = event.target.value; render(); });
       container.querySelectorAll("[data-pending-approve]").forEach(button => button.addEventListener("click", async () => {
@@ -813,6 +855,20 @@ ${footer}
   // calculation and persistence orchestration.
   function renderSlbForm(contract) {
     const saved = contract?.saleAndLeaseback || null;
+    if (isUiV2()) return `
+      <div class="lq-op-flow-form" data-lq-operation-form="sale-and-leaseback">
+        <header class="lq-op-form-head"><span class="lq-pg-kick">TFRS 16.98–103</span><h2>Satış ve geri kiralama</h2><p>Satış koşulları ve geri kiralama bilgilerini girin. Hesaplama mevcut sunucu akışında yapılır.</p></header>
+        <div class="lq-op-field-grid">
+          <label>Önceki net defter değeri<input id="slbCarryingAmount" type="number" step="0.01" value="${escapeHtml(saved?.previousCarryingAmount ?? "")}" /></label>
+          <label>Gerçeğe uygun değer<input id="slbFairValue" type="number" step="0.01" value="${escapeHtml(saved?.fairValueOfAsset ?? "")}" /></label>
+          <label>Satış bedeli (tahsil edilen)<input id="slbSaleProceeds" type="number" step="0.01" value="${escapeHtml(saved?.saleProceeds ?? "")}" /></label>
+          <label class="lq-op-check"><input id="slbQualifiesAsSale" type="checkbox" ${saved?.qualifiesAsSale ? "checked" : ""} />Devir TFRS 15 anlamında satış sayılıyor</label>
+        </div>
+        <label class="lq-op-note-field">Mesleki muhakeme notu (gerekçe)<textarea id="slbNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
+        <button id="slbCalculateButton" type="button" class="primary-button lq-op-primary-button">Hesapla ve Kaydet</button>
+        <div id="slbResultContainer" class="lq-op-result-slot">${operationSourceState()}</div>
+      </div>
+    `;
     return `
       <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
         <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TFRS 16.98-103 — SATIŞ VE GERİ KİRALAMA (SLB)</div>
@@ -855,6 +911,22 @@ ${footer}
   // private calculation and persistence orchestration.
   function renderSubleaseForm(contract) {
     const saved = contract?.sublease || null;
+    if (isUiV2()) return `
+      <div class="lq-op-flow-form" data-lq-operation-form="sublease">
+        <header class="lq-op-form-head"><span class="lq-pg-kick">TFRS 16.B58</span><h2>Alt kiralama</h2><p>Sınıflandırma ana kiradan doğan kullanım hakkına göre yapılır; ana kira ve alt kiralama ayrı akışlardır.</p></header>
+        <div class="lq-op-field-grid">
+          <label>Alt kiralama aylık bedeli<input id="subleaseMonthlyPayment" type="number" step="0.01" value="${escapeHtml(saved?.monthlyPayment ?? "")}" /></label>
+          <label>İskonto oranı (yıllık %)<input id="subleaseDiscountRate" type="number" step="0.01" value="${escapeHtml(saved?.discountRate ?? "")}" /></label>
+          <label>Başlangıç tarihi<input id="subleaseStartDate" type="date" value="${escapeHtml(saved?.startDate ? String(saved.startDate).slice(0,10) : "")}" /></label>
+          <label>Bitiş tarihi<input id="subleaseEndDate" type="date" value="${escapeHtml(saved?.endDate ? String(saved.endDate).slice(0,10) : "")}" /></label>
+          <label>ROU tahsis oranı<input id="subleaseRouRatio" type="number" step="0.01" min="0.01" max="1" value="${escapeHtml(saved?.rouAllocationRatio ?? 1)}" /></label>
+          <label>Sınıflandırma<select id="subleaseClassification"><option value="OPERATING" ${saved?.classification !== "FINANCE" ? "selected" : ""}>Operating</option><option value="FINANCE" ${saved?.classification === "FINANCE" ? "selected" : ""}>Finance</option></select></label>
+        </div>
+        <label class="lq-op-note-field">Mesleki muhakeme notu (sınıflandırma gerekçesi)<textarea id="subleaseNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
+        <button id="subleaseCalculateButton" type="button" class="primary-button lq-op-primary-button">Hesapla ve Kaydet</button>
+        <div id="subleaseResultContainer" class="lq-op-result-slot">${operationSourceState()}</div>
+      </div>
+    `;
     return `
       <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px;">
         <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">TFRS 16.B58 — ALT KİRALAMA (SUBLEASE)</div>
