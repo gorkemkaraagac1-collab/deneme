@@ -807,3 +807,66 @@ html[data-lq-ui="2"] .lq-charts-msg .lq-inline-action { font-size: 13px; font-we
 html[data-lq-ui="2"] .lq-charts-msg strong { font-weight: 600 !important; }
 html[data-lq-ui="2"] .lq-rec-row b { white-space: nowrap; }
 html[data-lq-ui="2"] .lq-rec-row span { min-width: 0; }
+
+/* ---------- Faz 5: tam sayfa sözleşme detayı (js/lq-contract-page.js) ---------- */
+/* #detailModal aynı öğe; v2'de ray yanındaki içerik alanını kaplayan sayfa olur.
+   Diğer modallar (1300) bu sayfanın üstünde açılmaya devam eder. */
+html[data-lq-ui="2"] #detailModal.lq-detail-page {
+  inset: 0 0 0 var(--lq-rail-w) !important;
+  z-index: 1250 !important;
+  background: var(--lq-bg) !important;
+  backdrop-filter: none !important;
+  padding: 0 !important;
+  display: flex; align-items: stretch !important; justify-content: stretch !important;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page.hidden { display: none !important; }
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-card {
+  width: 100% !important; max-width: none !important; height: 100% !important; max-height: none !important;
+  border-radius: 0 !important; box-shadow: none !important; background: var(--lq-bg) !important;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-header {
+  display: grid !important; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
+  background: #fff !important; padding: 14px 32px !important; border-bottom: 1px solid var(--lq-line) !important;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-header h2 { font-size: 20px !important; outline: none; }
+html[data-lq-ui="2"] .lq-cp-back {
+  display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px 0 8px;
+  border: 1px solid var(--lq-line) !important; border-radius: 8px !important; background: #fff !important;
+  color: var(--lq-ink-2) !important; font: 500 13px/1 "IBM Plex Sans", system-ui, sans-serif; cursor: pointer;
+}
+html[data-lq-ui="2"] .lq-cp-back:hover { color: var(--lq-primary) !important; border-color: var(--lq-primary) !important; }
+html[data-lq-ui="2"] .lq-cp-back:focus-visible, html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-close:focus-visible { outline: 2px solid var(--lq-primary); outline-offset: 2px; }
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-body {
+  background: var(--lq-bg) !important; padding: 24px 32px 32px !important; flex: 1 1 auto; overflow: auto;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-body > * { max-width: 1440px; margin-left: auto; margin-right: auto; }
+html[data-lq-ui="2"] #detailModal.lq-detail-page .gk-detail-tabs {
+  position: sticky; top: -24px; z-index: 4; display: flex; gap: 2px; overflow-x: auto;
+  background: var(--lq-bg) !important; border-bottom: 1px solid var(--lq-line) !important; margin-bottom: 20px !important; padding-top: 4px;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .gk-detail-tab-btn {
+  background: transparent !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important;
+  padding: 10px 14px !important; color: var(--lq-ink-2) !important; font-weight: 500 !important; white-space: nowrap;
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .gk-detail-tab-btn.active { color: var(--lq-primary) !important; border-bottom-color: var(--lq-primary) !important; }
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-footer {
+  background: #fff !important; border-top: 1px solid var(--lq-line) !important; padding: 12px 32px !important;
+  display: flex; justify-content: space-between;
+}
+@media (max-width: 900px) {
+  html[data-lq-ui="2"] #detailModal.lq-detail-page { inset: 56px 0 0 0 !important; z-index: 1150 !important; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-header { grid-template-columns: auto 1fr auto; padding: 10px 14px !important; gap: 10px; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-header h2 { font-size: 16px !important; overflow-wrap: anywhere; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-header p { display: none; }
+  html[data-lq-ui="2"] .lq-cp-back span { display: none; }
+  html[data-lq-ui="2"] .lq-cp-back { padding: 0 8px; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-body { padding: 16px 14px 24px !important; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .gk-detail-tabs { top: -16px; }
+  html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-footer { padding: 10px 14px !important; }
+}
+@media print {
+  html[data-lq-ui="2"] #detailModal.lq-detail-page { position: static !important; inset: auto !important; }
+  html[data-lq-ui="2"] .lq-cp-back, html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-footer { display: none !important; }
+}
+html[data-lq-ui="2"] #detailModal.lq-detail-page .modal-body > :first-child { margin-top: 0 !important; }
+html[data-lq-ui="2"] #detailModal.lq-detail-page #detailTitle:focus { outline: none !important; box-shadow: none !important; }
