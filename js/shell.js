@@ -19,7 +19,7 @@ window.fetch = (input, init = {}) => {
   return _gkFetch(input, init);
 };
 
-  const isProtectedEnginePage = /\/(?:tfrs16|workspace)\.html$/i.test(window.location.pathname);
+  const isProtectedEnginePage = /\/tfrs16\.html$/i.test(window.location.pathname);
 
   // Engine pages must never render their local cache without a valid backend
   // session. The redirect runs before the UI runtime script is loaded.
@@ -31,6 +31,8 @@ window.fetch = (input, init = {}) => {
   }
 
   window.logout = function logout() {
+    // Sunucu çerezi (gk_session) ve sekmedeki oturum anahtarı da silinmeli;
+    // aksi halde aynı sekmede korumalı sayfaya dönülünce oturum açık kalır.
     [
       "access_token",
       "gk_backend_jwt",
@@ -38,8 +40,15 @@ window.fetch = (input, init = {}) => {
       "gk_tfrs16_v21_session_v1",
       "gk_tfrs16_contracts_v7",
       "gk_tfrs16_active_company_v1"
-    ].forEach(key => localStorage.removeItem(key));
-    window.location.replace("login.html");
+    ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
+    let token = "";
+    try { token = sessionStorage.getItem("gk_session_token") || ""; sessionStorage.removeItem("gk_session_token"); } catch (_) {}
+    const done = () => window.location.replace("login.html");
+    const headers = token ? { Authorization: "Bearer " + token } : {};
+    const timer = setTimeout(done, 3000);
+    _gkFetch("https://api.leaseqant.com/api/auth/logout", { method: "POST", credentials: "include", headers })
+      .catch(() => {})
+      .finally(() => { clearTimeout(timer); done(); });
   };
 
   const VIEW_TITLES = {
