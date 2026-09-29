@@ -21,11 +21,17 @@ html[data-lq-ui="2"] .lq-date > input.lq-date-text {
   letter-spacing: .02em;
   box-sizing: border-box;
 }
-html[data-lq-ui="2"] .lq-date > input.lq-date-text::placeholder { color: #7A8699; letter-spacing: .04em; }
+html[data-lq-ui="2"] .lq-date > input.lq-date-text::placeholder { color: var(--lq-ink-3, #5E6A7D); letter-spacing: .04em; }
 html[data-lq-ui="2"] .lq-date > input.lq-date-text:focus {
   border-color: var(--lq-primary, #1660D6) !important;
   box-shadow: 0 0 0 3px rgba(22, 96, 214, .15) !important;
   outline: none !important;
+}
+html[data-lq-ui="2"] .lq-date > input.lq-date-text:focus-visible,
+html[data-lq-ui="2"] .lq-date > .lq-date-pick:focus-visible {
+  outline: 2px solid var(--lq-primary, #1660D6) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
 }
 html[data-lq-ui="2"] .lq-date > input.lq-date-text[aria-invalid="true"] {
   border-color: var(--lq-danger, #B42318) !important;
