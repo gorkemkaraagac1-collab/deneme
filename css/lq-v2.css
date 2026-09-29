@@ -1528,3 +1528,47 @@ html[data-lq-ui="2"] .lq-v2-report .lq-sr-only { position: absolute; width: 1px;
   html[data-lq-ui="2"] .lq-v2-report .lq-rc-table table { min-width: 440px; }
   html[data-lq-ui="2"] .lq-v2-report .lq-rc-table td:last-child { width: auto; }
 }
+
+/* Ortak boş, yükleniyor, hata ve kapsam/yetki durumları — yalnızca v2 */
+html[data-lq-ui="2"] .lq-v2-state {
+  box-sizing: border-box;
+  border: 1px solid var(--lq-line) !important;
+  border-radius: var(--lq-radius-sm) !important;
+  background-color: var(--lq-surface-2) !important;
+  color: var(--lq-ink-2) !important;
+  padding: 10px 12px;
+}
+html[data-lq-ui="2"] .lq-v2-state[data-lq-ui-state="empty"],
+html[data-lq-ui="2"] .lq-v2-state[data-lq-ui-state="loading"] {
+  border-left: 3px solid var(--lq-line-strong) !important;
+}
+html[data-lq-ui="2"] .lq-v2-state[data-lq-ui-state="blocked"] {
+  border-color: var(--lq-warn) !important;
+  border-left: 3px solid var(--lq-warn) !important;
+  background-color: var(--lq-warn-soft) !important;
+  color: var(--lq-ink) !important;
+}
+html[data-lq-ui="2"] .lq-v2-state[data-lq-ui-state="error"],
+html[data-lq-ui="2"] .lq-v2-state[data-lq-ui-state="unauthorized"] {
+  border-color: var(--lq-danger) !important;
+  border-left: 3px solid var(--lq-danger) !important;
+  background-color: var(--lq-danger-soft) !important;
+  color: var(--lq-danger) !important;
+}
+html[data-lq-ui="2"] .lq-v2-state.lq-pg-skel {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 8px 0;
+}
+html[data-lq-ui="2"] .lq-v2-state.lq-pg-emptyrow { padding: 32px 16px; }
+html[data-lq-ui="2"] .lq-v2-state.lq-cv-empty { padding: 14px 16px; }
+html[data-lq-ui="2"] .lq-v2-state.lq-cv-kpi-note { padding: 14px 18px; }
+html[data-lq-ui="2"] .lq-v2-state.lq-op-source-state { padding: 12px 14px; }
+html[data-lq-ui="2"] .lq-v2-state.lq-authority-empty { padding: 18px; }
+html[data-lq-ui="2"] .lq-v2-state.empty-state { padding: 40px 16px !important; }
+html[data-lq-ui="2"] .lq-v2-metric-state {
+  color: var(--lq-ink-2) !important;
+}
+html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="blocked"] { color: var(--lq-warn) !important; }
+html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="error"],
+html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="unauthorized"] { color: var(--lq-danger) !important; }
