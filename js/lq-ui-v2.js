@@ -10,6 +10,103 @@
   if (root.getAttribute("data-lq-ui") !== "2") return;
 
   const $ = id => document.getElementById(id);
+
+  /* ---------- Klavye ve adlandırma ---------- */
+  function syncNavigationAccessibility(nav) {
+    if (!nav) return;
+    nav.querySelectorAll(".nav-item").forEach(item => {
+      if (item.classList.contains("active")) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    });
+    nav.querySelectorAll(".lq-nav-dropdown").forEach(drop => {
+      const trigger = drop.querySelector(":scope > .lq-nav-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", String(drop.classList.contains("open")));
+    });
+  }
+
+  function initNavigationAccessibility() {
+    const nav = $("sidebarNav");
+    const toggle = $("menuToggle");
+    if (toggle && nav) {
+      toggle.setAttribute("aria-controls", nav.id);
+      const syncToggle = () => toggle.setAttribute("aria-label",
+        toggle.getAttribute("aria-expanded") === "true" ? "Ana menüyü kapat" : "Ana menüyü aç");
+      syncToggle();
+      new MutationObserver(syncToggle).observe(toggle, { attributes: true, attributeFilter: ["aria-expanded"] });
+    }
+    if (!nav) return;
+    syncNavigationAccessibility(nav);
+    new MutationObserver(() => syncNavigationAccessibility(nav)).observe(nav, {
+      attributes: true, subtree: true, attributeFilter: ["class"]
+    });
+    nav.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      const open = nav.querySelector(".lq-nav-dropdown.open");
+      if (open) {
+        open.classList.remove("open");
+        const trigger = open.querySelector(":scope > .lq-nav-trigger");
+        trigger?.setAttribute("aria-expanded", "false");
+        trigger?.focus();
+      } else if (nav.classList.contains("mobile-open")) {
+        nav.classList.remove("mobile-open");
+        toggle?.setAttribute("aria-expanded", "false");
+        toggle?.focus();
+      } else return;
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  }
+
+  function initTabKeyboard() {
+    document.addEventListener("keydown", event => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const tab = event.target.closest?.('.lq-pg-tabs [role="tab"]');
+      if (!tab) return;
+      const list = tab.closest('[role="tablist"]');
+      const tabs = Array.from(list?.querySelectorAll('[role="tab"]') || []).filter(item => !item.disabled);
+      const index = tabs.indexOf(tab);
+      if (index < 0 || !tabs.length) return;
+      let nextIndex = -1;
+      if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = tabs.length - 1;
+      else if (list.getAttribute("aria-orientation") === "vertical") {
+        if (event.key === "ArrowDown") nextIndex = (index + 1) % tabs.length;
+        else if (event.key === "ArrowUp") nextIndex = (index + tabs.length - 1) % tabs.length;
+      } else {
+        if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") nextIndex = (index + tabs.length - 1) % tabs.length;
+      }
+      if (nextIndex < 0) return;
+      event.preventDefault();
+      const next = tabs[nextIndex];
+      const dataKey = Array.from(next.attributes).find(attribute => attribute.name.startsWith("data-"));
+      const keyName = dataKey?.name;
+      const keyValue = dataKey?.value;
+      const scope = tab.closest("#lqContracts, #lqFinancial") || document;
+      next.click();
+      const currentList = scope.querySelector?.('.lq-pg-tabs[role="tablist"]');
+      const replacement = currentList && keyName
+        ? Array.from(currentList.querySelectorAll('[role="tab"]')).find(item => item.getAttribute(keyName) === keyValue)
+        : null;
+      (replacement || (next.isConnected ? next : null))?.focus();
+    });
+  }
+
+  function labelExistingDialogs() {
+    const doc = global.document;
+    const labelDialog = dialog => {
+      if (dialog.hasAttribute("aria-labelledby") || dialog.hasAttribute("aria-label")) return;
+      const heading = dialog.querySelector("h1, h2, h3");
+      const label = heading?.textContent?.replace(/\s+/g, " ").trim();
+      if (label) dialog.setAttribute("aria-label", label);
+    };
+    const detail = $("detailModal");
+    if (detail && !detail.hasAttribute("aria-labelledby") && $("detailTitle")) detail.setAttribute("aria-labelledby", "detailTitle");
+    doc.querySelectorAll('[role="dialog"], [role="alertdialog"]').forEach(labelDialog);
+    if (doc.body) new MutationObserver(() => {
+      doc.querySelectorAll('[role="dialog"], [role="alertdialog"]').forEach(labelDialog);
+    }).observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role"] });
+  }
   const STATE_CLASSES = [
     ".lq-pg-empty", ".lq-pg-emptyrow", ".lq-cv-empty", ".lq-cv-kpi-note",
     ".lq-cv-kpis.is-loading", ".lq-op-empty", ".lq-op-source-state",
@@ -335,6 +432,9 @@
   }
 
   function init() {
+    initNavigationAccessibility();
+    initTabKeyboard();
+    labelExistingDialogs();
     buildContextBar();
     watchValues();
     watchJournalPage();

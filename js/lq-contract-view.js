@@ -117,15 +117,15 @@
       <div class="lq-cv-titlebar"><div class="lq-cv-titles"><div class="lq-cv-h1row"><h1 class="lq-cv-h1">${esc(title)}</h1>${statusChip(c.status)}${scope}</div>
       <div class="lq-cv-meta">${meta}</div></div>
       <div class="lq-cv-actions">
-        <div class="lq-cv-menu"><button type="button" class="lq-cv-btn is-dark" data-lq-cv="menu" aria-haspopup="true" aria-expanded="false">İşlemler <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
-          <div class="lq-cv-pop" role="menu" hidden>
+        <div class="lq-cv-menu"><button type="button" class="lq-cv-btn is-dark" data-lq-cv="menu" aria-haspopup="true" aria-controls="lqCvActionsMenu" aria-expanded="false">İşlemler <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+          <div class="lq-cv-pop" id="lqCvActionsMenu" role="menu" aria-label="Sözleşme işlemleri" hidden>
             <button type="button" role="menuitem" data-lq-cv-go="events:modification">Modifikasyon / yeniden değerlendirme</button>
             <button type="button" role="menuitem" data-lq-cv-go="events:slb">Satış ve geri kiralama</button>
             <button type="button" role="menuitem" data-lq-cv-go="events:sublease">Alt kiralama</button>
             <button type="button" role="menuitem" data-lq-cv-go="accounting">Yevmiye fişi</button>
           </div></div>
-        <div class="lq-cv-menu"><button type="button" class="lq-cv-btn is-icon" data-lq-cv="more" aria-label="Diğer işlemler" aria-haspopup="true" aria-expanded="false">⋯</button>
-          <div class="lq-cv-pop is-right" role="menu" hidden>
+        <div class="lq-cv-menu"><button type="button" class="lq-cv-btn is-icon" data-lq-cv="more" aria-label="Diğer işlemler" aria-haspopup="true" aria-controls="lqCvMoreMenu" aria-expanded="false">⋯</button>
+          <div class="lq-cv-pop is-right" id="lqCvMoreMenu" role="menu" aria-label="Diğer sözleşme işlemleri" hidden>
             <button type="button" role="menuitem" data-lq-cv-act="pdf">Rapor (PDF)</button>
             <button type="button" role="menuitem" data-lq-cv-act="html">Rapor (HTML)</button>
             <button type="button" role="menuitem" data-lq-cv-act="csv" ${state.report?.row?.status === "SUPPORTED" ? "" : "disabled"}>Hesaplama tablosu (CSV)</button>
@@ -158,7 +158,7 @@
 
   function tabsHtml() {
     return `<div class="lq-cv-tabs" role="tablist" aria-label="Sözleşme sekmeleri">${TABS.map(([id, label]) =>
-      `<button type="button" role="tab" data-lq-cv-tab="${id}" aria-selected="${state.tab === id}" tabindex="${state.tab === id ? 0 : -1}">${label}</button>`).join("")}</div>
+      `<button type="button" role="tab" id="lqCvTab-${id}" aria-controls="lqCvPanel" data-lq-cv-tab="${id}" aria-selected="${state.tab === id}" tabindex="${state.tab === id ? 0 : -1}">${label}</button>`).join("")}</div>
       <div class="lq-cv-subs" role="group" aria-label="Olay türü" ${state.tab === "events" ? "" : "hidden"}>${SUBS.map(([id, label]) =>
       `<button type="button" data-lq-cv-sub="${id}" aria-pressed="${state.sub === id}">${label}</button>`).join("")}</div>`;
   }
@@ -233,7 +233,7 @@
     const shell = doc.createElement("div");
     shell.className = "lq-cv-shell";
     shell.innerHTML = `<header class="lq-cv-head"></header><div class="lq-cv-kpiwrap"></div><div class="lq-cv-notices"></div><div class="lq-cv-tabwrap"></div>
-      <div class="lq-cv-body"><div class="lq-cv-main"><div class="lq-cv-calc"></div><div class="lq-cv-engine"></div></div><div class="lq-cv-side"></div></div>`;
+      <div class="lq-cv-body" id="lqCvPanel" role="tabpanel" tabindex="0" aria-labelledby="lqCvTab-calc"><div class="lq-cv-main"><div class="lq-cv-calc"></div><div class="lq-cv-engine"></div></div><div class="lq-cv-side"></div></div>`;
     // Motorun öğeleri: standart paneli yan sütuna, uyarılar üstte, paneller ana alana taşınır.
     const std = content.querySelector(":scope > .gk-v26-auto-detect");
     const notices = [];
@@ -293,6 +293,7 @@
       b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1;
       if (on && focus) b.focus();
     });
+    shell.querySelector("#lqCvPanel")?.setAttribute("aria-labelledby", `lqCvTab-${state.tab}`);
     const subs = shell.querySelector(".lq-cv-subs");
     if (subs) {
       subs.hidden = state.tab !== "events";
@@ -377,13 +378,27 @@
 
   function onKey(e) {
     const tab = e.target.closest?.("[data-lq-cv-tab]");
-    if (tab && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+    if (tab && ["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) {
       const list = Array.from(tab.parentElement.querySelectorAll("[data-lq-cv-tab]"));
-      const i = list.indexOf(tab) + (e.key === "ArrowRight" ? 1 : -1);
-      const next = list[(i + list.length) % list.length];
+      const index = list.indexOf(tab);
+      const nextIndex = e.key === "Home" ? 0 : e.key === "End" ? list.length - 1
+        : (index + (e.key === "ArrowRight" ? 1 : -1) + list.length) % list.length;
+      const next = list[nextIndex];
       state.tab = next.getAttribute("data-lq-cv-tab"); applyTab(true); e.preventDefault();
     }
-    if (e.key === "Escape" && e.target.closest?.(".lq-cv-menu")) { closeMenus(); e.stopPropagation(); }
+    const menu = e.target.closest?.(".lq-cv-menu");
+    if (e.key === "Escape" && menu?.querySelector(".lq-cv-pop:not([hidden])")) {
+      closeMenus(); menu.querySelector("[aria-haspopup='true']")?.focus(); e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    const item = e.target.closest?.('[role="menuitem"]');
+    if (item && ["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
+      const items = Array.from(item.closest('[role="menu"]')?.querySelectorAll('[role="menuitem"]:not([disabled])') || []);
+      const index = items.indexOf(item);
+      const nextIndex = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1
+        : (index + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      if (items[nextIndex]) { e.preventDefault(); items[nextIndex].focus(); }
+    }
   }
 
   function onReport(e) {

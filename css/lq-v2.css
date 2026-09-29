@@ -469,7 +469,7 @@ html[data-lq-ui="2"] .btn-secondary, html[data-lq-ui="2"] .btn-ghost {
 }
 html[data-lq-ui="2"] .btn-secondary:hover, html[data-lq-ui="2"] .btn-ghost:hover { background: var(--lq-surface-2) !important; }
 html[data-lq-ui="2"] .btn-danger { background: var(--lq-surface) !important; border: 1px solid var(--lq-danger) !important; color: var(--lq-danger) !important; }
-html[data-lq-ui="2"] .btn:disabled, html[data-lq-ui="2"] button:disabled { opacity: 1 !important; background: #E3E7EE !important; border-color: #E3E7EE !important; color: var(--lq-ink-3) !important; cursor: not-allowed !important; }
+html[data-lq-ui="2"] .btn:disabled, html[data-lq-ui="2"] button:disabled { opacity: 1 !important; background: #E3E7EE !important; border-color: #E3E7EE !important; color: var(--lq-ink-2) !important; cursor: not-allowed !important; }
 
 /* ---------- Modal ve formlar ---------- */
 html[data-lq-ui="2"] .modal-overlay {
@@ -543,7 +543,15 @@ html[data-lq-ui="2"] .form-field textarea:focus {
 }
 html[data-lq-ui="2"] .form-field input:not(.lq-date-text):disabled,
 html[data-lq-ui="2"] .form-field select:disabled,
-html[data-lq-ui="2"] .form-field textarea:disabled { background: var(--lq-surface-2) !important; color: var(--lq-ink-3) !important; }
+html[data-lq-ui="2"] .form-field textarea:disabled { background: var(--lq-surface-2) !important; color: var(--lq-ink-2) !important; }
+html[data-lq-ui="2"] .form-field input:not(.lq-date-text):focus-visible,
+html[data-lq-ui="2"] .form-field select:focus-visible,
+html[data-lq-ui="2"] .form-field textarea:focus-visible,
+html[data-lq-ui="2"] .lq-pg-search input:focus-visible {
+  outline: 2px solid var(--lq-primary) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
 html[data-lq-ui="2"] .form-field input:user-invalid,
 html[data-lq-ui="2"] .form-field select:user-invalid { border-color: var(--lq-danger) !important; }
 html[data-lq-ui="2"] input[type="checkbox"], html[data-lq-ui="2"] input[type="radio"] { accent-color: var(--lq-primary); width: 16px; height: 16px; }
