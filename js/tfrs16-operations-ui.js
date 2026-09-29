@@ -565,6 +565,82 @@ ${footer}
   function operationImpactPanel(contract, title, description, resultMountId = "") {
     return `<aside class="lq-op-side"><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">SÖZLEŞME ÖZETİ</span><h2 class="lq-op-side-title">${escapeHtml(title)}</h2>${operationContractSummary(contract)}</section><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">ETKİ ÖNİZLEMESİ</span><h2 class="lq-op-side-title">İşlem etkisi</h2><p class="lq-op-side-copy">${escapeHtml(description)}</p>${resultMountId ? `<div id="${escapeHtml(resultMountId)}">${operationSourceState()}</div>` : operationSourceState()}</section></aside>`;
   }
+  function enhanceChangeFlow(container) {
+    if (!isUiV2()) return;
+    const flows = [
+      {
+        key: "modification",
+        formId: "modificationDate",
+        submitId: "createModificationButton",
+        titleId: "lqModificationFlowTitle",
+        labels: [
+          { title: "Değişikliği tanımla", ids: ["modificationDate", "modificationEffectiveDate", "modificationType", "modificationReason"] },
+          { title: "Yeni şartları gir", ids: ["modificationNewPayment", "modificationNewEndDate", "modificationNewDiscountRate", "modificationScopeReduction", "modificationScopeIncrease"] }
+        ]
+      },
+      {
+        key: "reassessment",
+        formId: "reassessmentDate",
+        submitId: "createReassessmentButton",
+        titleId: "lqReassessmentFlowTitle",
+        labels: [
+          { title: "Değişikliği tanımla", ids: ["reassessmentDate", "reassessmentEffectiveDate", "reassessmentType", "reassessmentReason"] },
+          { title: "Yeni şartları gir", ids: ["reassessmentNewPayment", "reassessmentNewEndDate", "reassessmentNewDiscountRate", "reassessmentRenewalOption", "reassessmentTerminationOption", "reassessmentPurchaseOption"] }
+        ]
+      }
+    ];
+
+    for (const flow of flows) {
+      const form = container.querySelector(`#${flow.formId}`);
+      const submit = container.querySelector(`#${flow.submitId}`);
+      const formCard = submit?.closest('div[style*="padding:14px"]');
+      const fieldGrid = formCard?.querySelector('div[style*="display:grid"]');
+      const eventSection = formCard?.parentElement;
+      if (!form || !submit || !formCard || !fieldGrid || !eventSection) continue;
+
+      eventSection.classList.add("lq-op-event-block", `is-${flow.key}`);
+      const sectionHeading = eventSection.querySelector("h3");
+      if (sectionHeading) {
+        sectionHeading.id = flow.titleId;
+        eventSection.setAttribute("aria-labelledby", flow.titleId);
+      }
+      formCard.classList.add("lq-op-change-form");
+
+      const stepper = document.createElement("ol");
+      stepper.className = "lq-op-stepper";
+      stepper.setAttribute("aria-label", flow.key === "reassessment" ? "Yeniden değerlendirme akışı" : "Modifikasyon akışı");
+      stepper.innerHTML = '<li><span aria-hidden="true">1</span><span>Olay ve tarih</span></li><li><span aria-hidden="true">2</span><span>Yeni şartlar</span></li><li><span aria-hidden="true">3</span><span>Etkiyi gözden geçir</span></li>';
+      eventSection.insertBefore(stepper, formCard);
+
+      const stageList = document.createElement("div");
+      stageList.className = "lq-op-stage-list";
+      for (const [index, stageConfig] of flow.labels.entries()) {
+        const stage = document.createElement("section");
+        const headingId = `${flow.key}FlowStage${index + 1}`;
+        stage.className = "lq-op-stage";
+        stage.setAttribute("aria-labelledby", headingId);
+        const heading = document.createElement("h4");
+        heading.className = "lq-op-stage-title";
+        heading.id = headingId;
+        heading.textContent = `${String(index + 1).padStart(2, "0")} · ${stageConfig.title}`;
+        const fields = document.createElement("div");
+        fields.className = "lq-op-stage-fields";
+        stage.append(heading, fields);
+        for (const id of stageConfig.ids) {
+          const input = formCard.querySelector(`#${id}`);
+          const label = input?.closest("label");
+          if (label) fields.appendChild(label);
+        }
+        stageList.appendChild(stage);
+      }
+      fieldGrid.replaceWith(stageList);
+
+      const actionRow = document.createElement("div");
+      actionRow.className = "lq-op-form-actions";
+      actionRow.appendChild(submit);
+      formCard.appendChild(actionRow);
+    }
+  }
   function sortedContracts() {
     return contracts().slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
   }
@@ -706,6 +782,7 @@ ${footer}
       const pending = buildPendingApprovals();
       if (isUiV2()) {
         container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("İşlemler", "Modifikasyon ve yeniden değerlendirme · sözleşme bazında yönetim")}${pendingHtml(pending)}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26ModReassContractSelect">Sözleşme</label><select id="v26ModReassContractSelect">${optionsHtml}</select>${selectedBanner(selected)}</div><div class="lq-op-events">${body}</div></section>${operationImpactPanel(selected, "Modifikasyon ve yeniden değerlendirme", "Taslak kayıt tek başına ölçüm oluşturmaz. Mevcut Uygula akışı ve doğrulanmış sunucu sonucu korunur.")}</div></div>`;
+        enhanceChangeFlow(container);
       } else {
         container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.</p></div>${pendingHtml(pending)}<div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label><select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${optionsHtml}</select>${selectedBanner(selected)}</div>${body}</div>`;
       }

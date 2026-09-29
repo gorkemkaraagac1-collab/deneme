@@ -2,6 +2,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {JSDOM}=require('jsdom');
 const source=fs.readFileSync(path.join(__dirname,'../js/tfrs16-operations-ui.js'),'utf8');
+function changeSection(kind) {
+ const mod=kind==='modification';
+ const submit=mod?'createModificationButton':'createReassessmentButton';
+ const title=mod?'Kira Modifikasyonu':'Kira Reassessment İşlemi';
+ const first=mod?['modificationDate','modificationEffectiveDate','modificationType','modificationReason']:['reassessmentDate','reassessmentEffectiveDate','reassessmentType','reassessmentReason'];
+ const second=mod?['modificationNewPayment','modificationNewEndDate','modificationNewDiscountRate','modificationScopeReduction','modificationScopeIncrease']:['reassessmentNewPayment','reassessmentNewEndDate','reassessmentNewDiscountRate','reassessmentRenewalOption','reassessmentTerminationOption','reassessmentPurchaseOption'];
+ const fields=ids=>ids.map(id=>`<label>${id}<input id="${id}" /></label>`).join('');
+ return `<div style="margin-top:28px"><div><h3>${title}</h3></div><div style="padding:14px"><div style="display:grid">${fields([...first,...second])}</div><button id="${submit}" type="button">Oluştur</button></div><div><button type="button" data-${mod?'mod':'reass'}-action="apply" data-${mod?'mod':'reass'}-id="EV-1">Uygula</button></div></div>`;
+}
 test('modification page opens when the separate pending-approvals report is unavailable',()=>{
  const dom=new JSDOM('<main id="host"></main>',{url:'https://example.test/tfrs16.html',runScripts:'outside-only'}),w=dom.window;
  w.GK_TFRS16={getOperationContracts:()=>[],getModificationReport:()=>{throw Error('REPORTING_AUTHORITY_UNAVAILABLE');},
@@ -21,8 +30,8 @@ function operationDom(uiVersion='2') {
   formatDate:value=>{const s=String(value||'');return /^\d{4}-\d{2}-\d{2}$/.test(s)?`${s.slice(8,10)}.${s.slice(5,7)}.${s.slice(0,4)}`:s;},
   v26SelectedContractBanner:()=>'',
   getModificationReport:()=>({rows:[]}),getReassessmentReport:()=>({rows:[]}),
-  renderModificationManagementSection:()=>'<section><button type="button" id="createModificationButton">Modifikasyon Oluştur</button></section>',
-  renderReassessmentManagementSection:()=>'<section><button type="button" id="createReassessmentButton">Reassessment Oluştur</button></section>',
+  renderModificationManagementSection:()=>changeSection('modification'),
+  renderReassessmentManagementSection:()=>changeSection('reassessment'),
   initModificationEventsById:()=>{},initReassessmentEventsById:()=>{},
   renderSlbSection:contract=>{w.document.getElementById('slbSectionContainer').innerHTML=w.LeaseQantTfrs16OperationsUi.renderSlbForm(contract);},
   renderSubleaseSection:contract=>{w.document.getElementById('subleaseSectionContainer').innerHTML=w.LeaseQantTfrs16OperationsUi.renderSubleaseForm(contract);}
@@ -31,16 +40,32 @@ function operationDom(uiVersion='2') {
  return {dom,w,ui:w.LeaseQantTfrs16OperationsUi,host:w.document.getElementById('host')};
 }
 
-test('v2 modification and reassessment retain existing controls in a source-honest two-column page',()=>{
+test('v2 modification and reassessment arrange existing controls into source-honest flow stages',()=>{
  const {dom,w,ui,host}=operationDom();
  ui.renderModificationReassessment(host);
  assert.ok(host.querySelector('.lq-op-layout'));
  assert.ok(host.querySelector('.lq-op-main #v26ModReassContractSelect'));
  assert.ok(host.querySelector('#createModificationButton'));
  assert.ok(host.querySelector('#createReassessmentButton'));
+ assert.equal(host.querySelectorAll('.lq-op-event-block').length,2);
+ assert.equal(host.querySelectorAll('.lq-op-stepper').length,2);
+ assert.ok(host.querySelector('.lq-op-stepper[aria-label="Yeniden değerlendirme akışı"]'));
+ assert.equal(host.querySelector('#modificationDate').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'01 · Değişikliği tanımla');
+ assert.equal(host.querySelector('#modificationNewPayment').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'02 · Yeni şartları gir');
+ assert.equal(host.querySelector('#reassessmentReason').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'01 · Değişikliği tanımla');
+ assert.equal(host.querySelector('#reassessmentPurchaseOption').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'02 · Yeni şartları gir');
+ assert.equal(host.querySelector('#createModificationButton').closest('.lq-op-form-actions')?.className,'lq-op-form-actions');
  assert.match(host.querySelector('.lq-op-side').textContent,/Kaynak gerekli/);
  assert.match(host.querySelector('.lq-op-summary-list').textContent,/28\.02\.2025/);
  assert.doesNotMatch(host.textContent,/0,00|0\.00/);
+ const calls=[];
+ ui.bindModificationEvents({}, {submitForm:()=>calls.push('mod-create'),handleAction:(action,id)=>calls.push(`mod-${action}-${id}`)});
+ ui.bindReassessmentEvents({}, {submitForm:()=>calls.push('reass-create'),handleAction:(action,id)=>calls.push(`reass-${action}-${id}`)});
+ host.querySelector('#createModificationButton').click();
+ host.querySelector('[data-mod-action="apply"]').click();
+ host.querySelector('#createReassessmentButton').click();
+ host.querySelector('[data-reass-action="apply"]').click();
+ assert.deepEqual(calls,['mod-create','mod-apply-EV-1','reass-create','reass-apply-EV-1']);
  dom.window.close();
 });
 
@@ -90,5 +115,7 @@ test('legacy operations markup remains outside the v2 layer',()=>{
  assert.equal(host.querySelector('.lq-op-page'),null);
  assert.ok(host.querySelector('#createModificationButton'));
  assert.ok(host.querySelector('#createReassessmentButton'));
+ assert.equal(host.querySelectorAll('.lq-op-stepper').length,0);
+ assert.equal(host.querySelectorAll('.lq-op-stage').length,0);
  dom.window.close();
 });
