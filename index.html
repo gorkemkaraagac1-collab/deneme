@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/site-tanitim.css?v=20260929-3" />
   <style>
     :root {
       --bg: #f4f6f9;
@@ -491,6 +492,7 @@
       </a>
       <ul class="nav-links">
         <li><a href="#urun">Platform</a></li>
+        <li><a href="#tanitim">Tanıtım</a></li>
         <li><a href="#is-akisi">Kapanış Akışı</a></li>
         <li><a href="#standartlar">Standartlar</a></li>
         <li><a href="#ozellikler">Kontrol &amp; Raporlama</a></li>
@@ -514,6 +516,7 @@
         <div class="hero-actions">
           <a href="login.html" class="btn btn-primary">Demo Talep Et →</a>
           <a href="#is-akisi" class="btn btn-ghost">Platformu Keşfet ↓</a>
+          <a href="#tanitim" class="btn btn-ghost btn-tour">▶ 1 dakikalık tanıtım</a>
         </div>
         <div class="hero-trust">
           <span><span class="check">✓</span> Toplu yevmiye</span>
@@ -688,6 +691,37 @@
   </section>
 
 
+
+  <section class="tour" id="tanitim" aria-labelledby="tourTitle">
+    <div class="container tour-inner">
+      <div>
+        <div class="tour-eyebrow">Ürün turu · 52 saniye</div>
+        <h2 id="tourTitle">Bir ay sonu kapanışı, bir dakikada.</h2>
+        <p class="tour-lead">Genel bakıştan yükümlülük köprüsüne, sözleşmeden yevmiyeye ve dipnota kadar LeaseQant'ın TFRS 16 çalışma alanını görün.</p>
+        <ol class="tour-chapters" aria-label="Video bölümleri">
+          <li><button type="button" data-tour-at="4"><time>0:04</time>Genel Bakış ve kapanış adımları</button></li>
+          <li><button type="button" data-tour-at="10.5"><time>0:10</time>Yükümlülük köprüsü ve TMS 21 kur farkı</button></li>
+          <li><button type="button" data-tour-at="16.5"><time>0:16</time>Sözleşme portföyü</button></li>
+          <li><button type="button" data-tour-at="22.5"><time>0:22</time>Ay ay ödeme planı</button></li>
+          <li><button type="button" data-tour-at="29"><time>0:29</time>Beş adımda yeni sözleşme</button></li>
+          <li><button type="button" data-tour-at="35"><time>0:35</time>Dengeli yevmiye önizlemesi</button></li>
+          <li><button type="button" data-tour-at="41"><time>0:41</time>Dipnot tabloları</button></li>
+        </ol>
+      </div>
+      <div>
+        <div class="tour-player">
+          <video id="tourVideo" preload="none" playsinline poster="frontend/media/leaseqant-tanitim-poster.jpg" aria-label="LeaseQant ürün tanıtım videosu">
+            <source src="frontend/media/leaseqant-tanitim.mp4" type="video/mp4" />
+            <source src="frontend/media/leaseqant-tanitim.webm" type="video/webm" />
+          </video>
+          <button type="button" class="tour-play" id="tourPlay" aria-label="Tanıtım videosunu oynat">
+            <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(255,255,255,.18)"></circle><path d="M10 8l6 4-6 4z" fill="#fff"></path></svg>Tanıtımı izle</span>
+          </button>
+        </div>
+        <p class="tour-note">Sessiz video · Görüntüler örnek veriyle hazırlanmıştır.</p>
+      </div>
+    </div>
+  </section>
 
   <section class="workflow" id="is-akisi">
     <div class="container">
@@ -956,5 +990,6 @@
       </div>
     </div>
   </footer>
+  <script src="js/site-tanitim.js?v=20260929-1" defer></script>
 </body>
 </html>
