@@ -415,3 +415,8 @@ body{font-size:14px}
 .lq-radio input,.lq-check input,.form-group .lq-radio input,.form-group .lq-check input{width:16px;height:16px;flex:none;padding:0;margin:0;box-shadow:none}
 .lq-check[hidden],.form-group label.lq-check[hidden],.form-group label.lq-check[hidden]{display:none}
 .lq-list input[type="search"]{box-shadow:none}
+.lq-tabs{display:flex;gap:22px;border-bottom:1px solid var(--border);margin:-8px 0 20px}
+.lq-tabs a{height:40px;display:flex;align-items:center;font-size:14px;color:var(--text-light);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.lq-tabs a.on{color:var(--text);font-weight:600;border-bottom-color:#1660D6}
+.lq-tabs a:hover{color:var(--text)}
+.company-cell{min-width:170px}.action-group{flex-wrap:nowrap!important;white-space:nowrap}
