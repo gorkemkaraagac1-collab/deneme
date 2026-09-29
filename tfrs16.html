@@ -1,26 +1,1294 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
-  <title>LeaseQant — Çalışma Alanı</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LeaseQant — TFRS 16 Kiralama Yönetimi</title>
+  <meta name="description" content="TFRS 16 kiralama muhasebesi — sözleşme, hesaplama, kapanış ve raporlama" />
+  <link rel="stylesheet" href="css/lq-date-fields.css?v=20260928-ui-v2-faz3" />
+  <script src="js/lq-date-fields.js?v=20260928-ui-v2-faz3" defer></script>
   <script>
+    /* UI v2 bayrağı: varsayılan açık; ?ui=legacy eski görünümü açar, tercih bu tarayıcıda saklanır. */
     (function () {
-      var params = new URLSearchParams(window.location.search);
-      var aliases = {
-        contracts: 'contracts', close: 'close', accountingCenter: 'journals',
-        financialReporting: 'calculations', footnotes: 'disclosures', riskControls: 'close'
-      };
-      if (!params.has('view') && aliases[params.get('open')]) params.set('view', aliases[params.get('open')]);
-      params.delete('open'); params.delete('ui');
-      var query = params.toString();
-      window.location.replace('workspace.html' + (query ? '?' + query : '') + window.location.hash);
+      var ui = "2";
+      try {
+        var q = new URLSearchParams(location.search).get("ui");
+        if (q === "legacy" || q === "2") localStorage.setItem("lq-ui", q);
+        if (localStorage.getItem("lq-ui") === "legacy") ui = "1";
+      } catch (e) {}
+      document.documentElement.setAttribute("data-lq-ui", ui);
     })();
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/leaseqant-dark.css?v=20260928-contract-detail-r1" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/lq-v2.css?v=20260928-ui-v2-faz4" />
+  <!-- SheetJS for Excel import/export (engine uses XLSX) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
-<body>
-  <p>LeaseQant yeni çalışma alanına yönlendiriliyor…</p>
-  <p>Yönlendirme başlamazsa <a href="workspace.html">çalışma alanını açın</a>.</p>
+<body data-lq-ui-version="10.0">
+  <div class="app" id="app">
+    <!-- ========== V10 FINAL TOP NAVIGATION ========== -->
+    <aside class="sidebar lq-legacy-sidebar" id="sidebar" aria-hidden="true"></aside>
+
+    <header class="topbar lq-topnav-shell" id="lqTopnav">
+      <a class="lq-topnav-brand" href="#" aria-label="LeaseQant Dashboard">
+        <img src="logo-nav.png" alt="LeaseQant">
+      </a>
+
+      <button type="button" class="menu-toggle lq-mobile-nav-toggle" id="menuToggle"
+              aria-label="Menüyü aç" aria-expanded="false">☰</button>
+
+      <nav class="lq-topnav" id="sidebarNav" aria-label="Ana navigasyon">
+        <button type="button" class="nav-item lq-dashboard-nav" data-lq-dashboard="true">
+          Genel Bakış
+        </button>
+        <button type="button" class="nav-item" data-view="contracts" data-open="">
+          Sözleşmeler
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="accountingCenter">
+          Yevmiye
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="close">
+          Kapanış
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="financialReporting">
+          <span class="icon">📊</span><span>Finansal Raporlama</span>
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="footnotes">
+          Dipnotlar
+        </button>
+        <button type="button" class="nav-item" data-view="page" data-open="riskControls">
+          Kontroller
+        </button>
+
+        <div class="lq-nav-dropdown">
+          <button type="button" class="lq-nav-trigger" aria-expanded="false">
+            İşlemler <span>⌄</span>
+          </button>
+          <div class="lq-nav-menu lq-nav-menu-compact">
+            <div class="lq-nav-menu-title">İŞLEMLER</div>
+            <button type="button" class="nav-item" data-view="page" data-open="modification">
+              <span class="icon">🔁</span><span>Modifikasyon &amp; Reassessment</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="slb">
+              <span class="icon">🏢</span><span>Satış ve Geri Kiralama</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="sublease">
+              <span class="icon">🔄</span><span>Alt Kiralama</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="lq-nav-dropdown lq-nav-dropdown-settings">
+          <button type="button" class="lq-nav-trigger" aria-expanded="false">
+            Ayarlar <span>⌄</span>
+          </button>
+          <div class="lq-nav-menu">
+            <div class="lq-nav-menu-title">AYARLAR</div>
+            <button type="button" class="nav-item" data-view="page" data-open="accountMapping">
+              <span class="icon">📒</span><span>Hesap Planı</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="fxRates">
+              <span class="icon">💱</span><span>Döviz Kurları</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="inflation">
+              <span class="icon">📈</span><span>Enflasyon Endeksleri</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="companies">
+              <span class="icon">🏢</span><span>Şirket Yönetimi</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="groups">
+              <span class="icon">👥</span><span>Gruplar</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="eliminations">
+              <span class="icon">↔️</span><span>Eliminasyonlar</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="consolidation">
+              <span class="icon">📊</span><span>Konsolidasyon</span>
+            </button>
+            <button type="button" class="nav-item" data-view="page" data-open="audit">
+              <span class="icon">🕵️</span><span>Denetim İzi</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="lq-topnav-tools">
+        <div class="lq-hidden-page-meta" aria-hidden="true">
+          <span id="pageTitle">Dashboard</span>
+          <span id="pageSubtitle">Portföy kontrol merkezi</span>
+        </div>
+
+        <select class="company-select" id="v26ActiveCompanySelect" title="Aktif şirket">
+          <option value="ALL">Tüm Şirketler</option>
+        </select>
+
+        <button type="button" class="btn btn-ghost btn-sm" id="cleanupButton"
+                title="Eski logları temizle">🧹</button>
+
+        <div class="lq-user-menu">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-meta">
+            <strong id="userName">Kullanıcı</strong>
+            <span id="userRole">Oturum</span>
+          </div>
+          <button type="button" class="shell-logout" id="logoutButton" onclick="logout()">
+            Çıkış
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ========== MAIN ========== -->
+    <main class="main" id="mainContent">
+      <!-- LeaseQant Portfolio Dashboard — visual/read-only layer.
+           Existing contractsView and all engine hooks remain intact. -->
+      <section class="lq-dashboard" id="lqDashboard" hidden>
+        <div class="lq-dash-head">
+          <div class="lq-welcome">
+            <div class="lq-welcome-kicker">PORTFÖY KONTROL MERKEZİ</div>
+            <h1>Merhaba, <span id="lqGreetingName">Görkem</span> <span class="lq-wave">👋</span></h1>
+            <p>Portföyünüzün güncel görünümü aşağıda.</p>
+          </div>
+          <div>
+            <div class="lq-overline">PORTFÖY KONTROL MERKEZİ</div>
+            <h1>Genel Bakış</h1>
+            <p id="lqDashboardSubtitle">TFRS 16 portföyü · kapanış, yükümlülük ve risk görünümü</p>
+          </div>
+          <div class="lq-dash-head-actions">
+            <span class="lq-live-dot"><i></i> Yetkili şirket kapsamı</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="lqGoContracts">Sözleşmelere git →</button>
+          </div>
+        </div>
+
+        <div class="lq-hero-metrics">
+          <article class="lq-metric lq-metric-primary">
+            <div class="lq-metric-label">Kira yükümlülüğü</div>
+            <div class="lq-metric-value" id="lqTotalLiability">—</div>
+            <div class="lq-metric-foot"><span class="lq-status-dot"></span><span id="lqLiabilityNote">Şirket bazında backend kapsamı</span></div>
+          </article>
+          <article class="lq-metric">
+            <div class="lq-metric-label">Kullanım hakkı varlığı</div>
+            <div class="lq-metric-value" id="lqTotalRou">—</div>
+            <div class="lq-metric-foot"><span class="lq-status-dot"></span><span>ROU net defter değeri</span></div>
+          </article>
+          <article class="lq-metric">
+            <div class="lq-metric-label">Aktif sözleşme</div>
+            <div class="lq-metric-value" id="lqActiveContracts">—</div>
+            <div class="lq-metric-foot"><span class="lq-status-dot"></span><span id="lqCompanyScope">Seçili şirket kapsamı</span></div>
+          </article>
+          <article class="lq-metric">
+            <div class="lq-metric-label">Kısa vadeli yükümlülük</div>
+            <div class="lq-metric-value" id="lqCurrentLiability">—</div>
+            <div class="lq-metric-foot"><span class="lq-status-dot warning"></span><span>12 ay içinde ödenecek anapara</span></div>
+          </article>
+        </div>
+
+        <section class="lq-cfo-strip" aria-label="CFO kapanış görünümü">
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">12 AYLIK NAKİT GÖRÜNÜMÜ</span><h3>Ödeme yükü</h3></div>
+              <strong id="lqNext12Payments">—</strong>
+            </div>
+            <div class="lq-progress"><i id="lqPaymentProgress"></i></div>
+            <p>Backend sözleşmesel ödeme görünümü; gerçek ödeme kanıtı değildir.</p>
+          </article>
+
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">DÖNEM GİDERİ</span><h3>Faiz + amortisman</h3></div>
+              <span class="lq-cfo-state" id="lqExpenseState">Motor verisi</span>
+            </div>
+            <div class="lq-dual-metric">
+              <div><small>Aylık faiz</small><strong id="lqMonthlyInterest">—</strong></div>
+              <div><small>Amortisman</small><strong id="lqMonthlyDep">—</strong></div>
+            </div>
+          </article>
+
+          <article class="lq-cfo-card">
+            <div class="lq-cfo-top">
+              <div><span class="lq-card-kicker">KAPANIŞ HAZIRLIĞI</span><h3>Kapanış hazırlığı</h3></div>
+              <strong class="lq-readiness-score" id="lqReadinessScore">—</strong>
+            </div>
+            <div class="lq-readiness-list">
+              <span><i id="lqReadyContracts"></i>Sözleşme portföyü</span>
+              <span><i id="lqReadyCompany"></i>Şirket kapsamı</span>
+              <span><i id="lqReadyPeriod"></i>Raporlama dönemi</span>
+            </div>
+            <button type="button" class="lq-inline-action" data-open-target="close">Kapanış panelini aç →</button>
+          </article>
+        </section>
+
+        <div class="lq-dashboard-grid">
+          <article class="lq-dash-card lq-chart-card">
+            <div class="lq-card-head">
+              <div><span class="lq-card-kicker">PORTFÖY TRENDİ</span><h3>Sözleşme vade yoğunluğu</h3></div>
+              <span class="lq-chip">Gerçek vade</span>
+            </div>
+            <div class="lq-bar-chart" id="lqLiabilityBars" aria-label="Portföy görünüm grafiği"></div>
+            <div class="lq-axis"></div>
+          </article>
+
+          <article class="lq-dash-card">
+            <div class="lq-card-head">
+              <div><span class="lq-card-kicker">YÜKÜMLÜLÜK</span><h3>Vade yapısı</h3></div>
+            </div>
+            <div class="lq-split-visual">
+              <div class="lq-split-ring"><div><strong id="lqCurrentPct">—</strong><small>Kısa vade</small></div></div>
+              <div class="lq-split-legend">
+                <div><i class="current"></i><span>Kısa vadeli</span><strong id="lqCurrentLegend">—</strong></div>
+                <div><i class="noncurrent"></i><span>Uzun vadeli</span><strong id="lqNonCurrentLegend">—</strong></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="lq-dash-card">
+            <div class="lq-card-head">
+              <div><span class="lq-card-kicker">PORTFÖY</span><h3>Varlık sınıfı dağılımı</h3></div>
+            </div>
+            <div class="lq-asset-body">
+              <div class="lq-asset-ring"></div>
+              <div class="lq-asset-legend" id="lqAssetLegend">
+                <div><i></i><span>Portföy verisi hazırlanıyor</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="lq-dash-card lq-control-card">
+            <div class="lq-card-head">
+              <div><span class="lq-card-kicker">KAPANIŞ VE KONTROL</span><h3>Kapanış kontrolü</h3></div>
+              <span class="lq-chip lq-chip-green">Kontrol</span>
+            </div>
+            <div class="lq-control-list">
+              <button type="button" data-open-target="close"><span><i class="ok"></i>Kapanış Paneli</span><b>→</b></button>
+              <button type="button" data-open-target="accountingCenter"><span><i class="ok"></i>Toplu Fiş Merkezi</span><b>→</b></button>
+              <button type="button" data-open-target="footnotes"><span><i></i>Dipnotlar</span><b>→</b></button>
+              <button type="button" data-open-target="audit"><span><i></i>Denetim İzi</span><b>→</b></button>
+            </div>
+          </article>
+        </div>
+
+        <div class="lq-bottom-grid">
+          <article class="lq-dash-card">
+            <div class="lq-card-head">
+              <div><span class="lq-card-kicker">AKSİYON MERKEZİ</span><h3>Yaklaşan işlemler</h3></div>
+              <button type="button" class="lq-text-btn" id="lqOpenRisk">Risk &amp; Kontroller →</button>
+            </div>
+            <div class="lq-action-list">
+              <div><span class="lq-action-icon amber">↻</span><p><strong>Yenileme kontrolleri</strong><small>90 gün içindeki sözleşmeleri gözden geçirin</small></p><span class="lq-action-badge" id="lqRenewalCount">—</span></div>
+              <div><span class="lq-action-icon blue">◆</span><p><strong>Modifikasyonlar</strong><small>İşaretlenmiş sözleşme değişikliklerini takip edin</small></p><span class="lq-action-badge" id="lqModificationCount">—</span></div>
+              <div><span class="lq-action-icon green">✓</span><p><strong>Raporlama dönemi</strong><small>Yevmiye ve dipnot üretimine hazır çalışma alanı</small></p><span class="lq-action-badge">Kaynak gerekli</span></div>
+            </div>
+          </article>
+
+          <article class="lq-dash-card lq-standard-card">
+            <div class="lq-card-head"><div><span class="lq-card-kicker">RAPORLAMA KATMANI</span><h3>Standartlar</h3></div></div>
+            <div class="lq-standard-row"><span>TFRS 16</span><strong>Kiralama çekirdeği</strong><i>Aktif</i></div>
+            <div class="lq-standard-row"><span>TMS 29</span><strong>Enflasyon düzeltmesi</strong><i>Entegre</i></div>
+            <div class="lq-standard-row"><span>TMS 21</span><strong>Kur çevrimi</strong><i>Entegre</i></div>
+          </article>
+        </div>
+      </section>
+
+      <div class="main-inner" id="contractsView" data-lq-workspace="contracts">
+        <!-- KPI -->
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card accent-blue">
+            <div class="kpi-label">Aktif sözleşme</div>
+            <div class="kpi-value" id="kpiContractCount">—</div>
+            <div class="kpi-hint">Portföydeki kiralama sayısı</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Kira yükümlülüğü</div>
+            <div class="kpi-value" id="kpiLiability">—</div>
+            <div class="kpi-hint">Toplam kira yükümlülüğü</div>
+          </div>
+          <div class="kpi-card accent-green">
+            <div class="kpi-label">Kullanım hakkı varlığı</div>
+            <div class="kpi-value" id="kpiRou">—</div>
+            <div class="kpi-hint">ROU net defter değeri</div>
+          </div>
+          <div class="kpi-card accent-amber">
+            <div class="kpi-label">Kısa vadeli yükümlülük</div>
+            <div class="kpi-value" id="kpiCurrent">—</div>
+            <div class="kpi-hint">12 ay içinde ödenecek anapara</div>
+          </div>
+        </div>
+        <div id="kpiDataAsOf" class="kpi-data-as-of" aria-live="polite"></div>
+        <span id="kpiNext12Payments" hidden>—</span>
+        <span id="kpiMonthlyInterest" hidden>—</span>
+        <span id="kpiDepreciation" hidden>—</span>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <div class="search-box">
+              <input type="search" id="searchInput" placeholder="Sözleşme, tedarikçi veya şirket ara…" autocomplete="off" />
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-secondary" id="bulkImportButton">
+              ⬆ Excel içe aktar
+            </button>
+            <button type="button" class="btn btn-primary" id="newContractButton">
+              + Yeni sözleşme
+            </button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table" id="contractsTable">
+              <thead>
+                <tr>
+                  <th>Sözleşme</th>
+                  <th>Şirket</th>
+                  <th>Tedarikçi</th>
+                  <th>Başlangıç</th>
+                  <th>Bitiş</th>
+                  <th class="num">Aylık ödeme</th>
+                  <th>Para birimi</th>
+                  <th>Durum</th>
+                  <th>Yenileme</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="contractsTableBody">
+                <tr>
+                  <td colspan="10">
+                    <div class="empty-state">
+                      <div class="empty-icon">📂</div>
+                      <h4>Henüz sözleşme yok</h4>
+                      <p>Yeni sözleşme ekleyin veya Excel şablonu ile toplu içe aktarın. Giriş yaptıysanız veriler sunucudan yüklenir.</p>
+                      <button type="button" class="btn btn-primary" onclick="document.getElementById('newContractButton')?.click()">+ İlk sözleşmeyi ekle</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="paginationContainer" style="display:none;">
+            <span id="paginationInfo">0 kayıt</span>
+            <div class="pagination-controls" id="paginationControls"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Engine-rendered advanced pages land here -->
+      <div id="v26PageHost"></div>
+    </main>
+  </div>
+
+  <!-- ========== NEW / EDIT CONTRACT MODAL ========== -->
+  <div class="modal-overlay hidden" id="contractModal" role="dialog" aria-modal="true" aria-labelledby="contractModalTitle">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2 id="contractModalTitle">Yeni sözleşme</h2>
+          <p>TFRS 16 başlangıç tanıma için gerekli alanlar</p>
+        </div>
+        <button type="button" class="modal-close" id="closeModal" aria-label="Kapat">×</button>
+      </div>
+      <form id="contractForm" autocomplete="off">
+        <div class="modal-body">
+          <input type="hidden" id="companyId" name="companyId" />
+
+          <div class="form-section">
+            <div class="form-section-title">Temel bilgiler</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="contractId">Sözleşme ID *</label>
+                <input type="text" id="contractId" name="contractId" required placeholder="Örn. LEASE-001" autocomplete="off" />
+              </div>
+              <div class="form-field">
+                <label for="company">Şirket *</label>
+                <input type="text" id="company" name="company" required placeholder="Şirket adı" />
+              </div>
+              <div class="form-field">
+                <label for="supplier">Tedarikçi / Kiraya veren *</label>
+                <input type="text" id="supplier" name="supplier" required placeholder="Örn. ABC Plaza" />
+              </div>
+              <div class="form-field">
+                <label for="startDate">Başlangıç tarihi *</label>
+                <input type="date" id="startDate" name="startDate" required />
+              </div>
+              <div class="form-field">
+                <label for="endDate">Bitiş tarihi *</label>
+                <input type="date" id="endDate" name="endDate" required />
+              </div>
+              <div class="form-field">
+                <label for="monthlyPayment">Dönemsel ödeme *</label>
+                <input type="number" id="monthlyPayment" name="monthlyPayment" min="0" step="0.01" required placeholder="0" />
+              </div>
+              <div class="form-field">
+                <label for="discountRate">İskonto oranı (% yıllık) *</label>
+                <input type="number" id="discountRate" name="discountRate" min="0" step="0.01" required placeholder="Örn. 18" />
+              </div>
+              <div class="form-field">
+                <label for="currency">Para birimi</label>
+                <select id="currency" name="currency">
+                  <option value="TRY">TRY</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="assetClass">Varlık sınıfı</label>
+                <select id="assetClass" name="assetClass">
+                  <option value="">Seçiniz</option>
+                  <option value="Arsa">Arsa / Bina</option>
+                  <option value="Makine">Makine</option>
+                  <option value="Taşıt">Taşıt</option>
+                  <option value="Diğer">Diğer</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="usefulLifeMonths">Varlığın faydalı ömrü (yıl)</label>
+                <input type="number" id="usefulLifeMonths" name="usefulLifeMonths" min="1" max="50" step="1" placeholder="Örn. 20" />
+                <small>Mülkiyet devri veya satın alma opsiyonu makul ölçüde kesinse TFRS 16.32 uyarınca kullanılır. İçe aktarma/API alanı ay cinsindendir; bu form yıl olarak alır.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Ödeme &amp; opsiyonlar</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="paymentFrequency">Ödeme sıklığı</label>
+                <select id="paymentFrequency" name="paymentFrequency">
+                  <option value="monthly">Aylık</option>
+                  <option value="quarterly">Çeyreklik</option>
+                  <option value="annual">Yıllık</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="paymentTiming">Ödeme zamanı</label>
+                <select id="paymentTiming" name="paymentTiming">
+                  <option value="arrears">Dönem sonu (arrears)</option>
+                  <option value="advance">Dönem başı (advance)</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="renewalDate">Yenileme değerlendirme tarihi</label>
+                <input type="date" id="renewalDate" name="renewalDate" />
+              </div>
+              <div class="form-field">
+                <label for="leaseIncreaseType">Artış tipi</label>
+                <select id="leaseIncreaseType" name="leaseIncreaseType">
+                  <option value="none">Yok</option>
+                  <option value="fixedRate">Sabit oran</option>
+                  <option value="index">Endeks (CPI)</option>
+                  <option value="fixed">Sabit tutar</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="leaseIncreaseRate">Artış oranı / tutarı</label>
+                <input type="number" id="leaseIncreaseRate" name="leaseIncreaseRate" step="0.01" placeholder="0" />
+              </div>
+              <div class="form-field index-escalation-field" id="indexEscalationFields" style="display:none;grid-column:1 / -1;">
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
+                  <label for="indexBaseRate">Baz endeks<input type="number" id="indexBaseRate" name="indexBaseRate" min="0" step="0.0001" placeholder="100" /></label>
+                  <label for="indexCurrentRate">Mevcut endeks<input type="number" id="indexCurrentRate" name="indexCurrentRate" min="0" step="0.0001" placeholder="112.5" /></label>
+                  <label for="indexReviewMonth">Gözden geçirme ayı<input type="number" id="indexReviewMonth" name="indexReviewMonth" min="1" max="12" step="1" placeholder="1" /></label>
+                  <label for="indexReviewDay">Gözden geçirme günü<input type="number" id="indexReviewDay" name="indexReviewDay" min="1" max="31" step="1" placeholder="1" /></label>
+                </div>
+                <small>Endeks tipi seçildiğinde başlangıç ve güncel endeks değerlerini girin. Dönemsel yeniden ölçüm bu değerleri kullanır.</small>
+              </div>
+              <div class="form-field">
+                <label for="variablePayment">Tahmini değişken ödeme</label>
+                <input type="number" id="variablePayment" name="variablePayment" min="0" step="0.01" value="0" />
+                <small>Bilgi/tahmin alanıdır; ciro-kullanım ödemelerinde liability hesabına girmez.</small>
+              </div>
+              <div class="form-field">
+                <label for="variablePaymentType">Değişken ödeme türü</label>
+                <select id="variablePaymentType" name="variablePaymentType">
+                  <option value="CIRO_KULLANIM">Ciro / kullanım / performansa bağlı</option>
+                  <option value="ENDEKS_ORAN">Endeks / orana bağlı</option>
+                  <option value="OZUNDE_SABIT">Özünde sabit ödeme</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="inSubstanceFixedPayment">Özünde sabit ödeme tutarı</label>
+                <input type="number" id="inSubstanceFixedPayment" name="inSubstanceFixedPayment"
+                       min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Her ödeme döneminde kira cash flow'una eklenecek kaçınılamayan tutar.</small>
+              </div>
+              <div class="form-field">
+                <label for="initialDirectCosts">İlk doğrudan maliyetler</label>
+                <input type="number" id="initialDirectCosts" name="initialDirectCosts" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label for="leaseIncentives">Başlangıçta alınmış kira teşviki</label>
+                <input type="number" id="leaseIncentives" name="leaseIncentives" min="0" step="0.01" value="0" />
+                <small>Başlangıç tarihinde veya öncesinde alınmış teşvik; ROU varlığından düşülür.</small>
+              </div>
+              <div class="form-field">
+                <label for="leaseIncentiveReceivables">Gelecekte alınacak kira teşvikleri</label>
+                <textarea id="leaseIncentiveReceivables" name="leaseIncentiveReceivables" rows="4"
+                  placeholder="2027-03-31 | 200000 | Teşvik açıklaması"></textarea>
+                <small>Her satır: Tarih | Tutar | Açıklama. Gelecekte alınacak teşvikler ilgili tarihte lease cash flow'dan düşülür.</small>
+              </div>
+              <div class="form-field">
+                <label for="explicitPaymentSchedule">Özel / düzensiz ödeme takvimi</label>
+                <textarea id="explicitPaymentSchedule" name="explicitPaymentSchedule" rows="5"
+                  placeholder="2027-02-15 | 100000 | 1. ödeme&#10;2027-03-31 | 100000 | 2. ödeme&#10;2027-05-10 | 125000 | 3. ödeme"></textarea>
+                <small>Opsiyonel. Her satır: Ödeme tarihi | Tutar | Açıklama. Doldurulursa standart aylık/çeyreklik/yıllık ödeme tarihleri yerine bu gerçek tarihler ve tutarlar kullanılır.</small>
+              </div>
+              <div class="form-field">
+                <label for="rentFreePeriods">Kira ücretsiz dönemler</label>
+                <textarea id="rentFreePeriods" name="rentFreePeriods" rows="4"
+                  placeholder="2027-01-01 | 2027-03-31 | İlk 3 ay kira ücretsiz"></textarea>
+                <small>Her satır: Başlangıç tarihi | Bitiş tarihi | Açıklama. Bu dönemdeki düzenli kira ödemeleri 0 kabul edilir.</small>
+              </div>
+              <div class="form-field">
+                <label for="prepayments">Peşin ödemeler</label>
+                <input type="number" id="prepayments" name="prepayments" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label for="restorationObligation">Restorasyon yükümlülüğü</label>
+                <input type="number" id="restorationObligation" name="restorationObligation" min="0" step="0.01" value="0" />
+              </div>
+              <div class="form-field">
+                <label>
+                  <input type="checkbox" id="renewalOptionExpectedToExercise" name="renewalOptionExpectedToExercise" disabled />
+                  Yenileme opsiyonu kullanılacak
+                </label>
+                <small>Yenilemenin makul ölçüde kesin olduğu durumda işaretleyin.</small>
+              </div>
+              <div class="form-field">
+                <label for="renewalEndDate">Yenileme sonrası bitiş tarihi</label>
+                <input type="date" id="renewalEndDate" name="renewalEndDate" disabled />
+                <small>Opsiyon dönemi dahil yeni lease bitiş tarihi.</small>
+              </div>
+              <div class="form-field">
+                <label for="terminationDate">Fesih tarihi</label>
+                <input type="date" id="terminationDate" name="terminationDate" disabled />
+                <small>Fesih opsiyonunun kullanılacağı tarih.</small>
+              </div>
+              <div class="form-field">
+                <label for="terminationPenalty">Fesih cezası</label>
+                <input type="number" id="terminationPenalty" name="terminationPenalty" min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Fesih halinde ödenecek sözleşmesel ceza; yoksa 0.</small>
+              </div>
+              <div class="form-field">
+                <label for="purchaseOptionPrice">Satın alma opsiyonu bedeli</label>
+                <input type="number" id="purchaseOptionPrice" name="purchaseOptionPrice"
+                       min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Satın alma opsiyonu makul ölçüde kesin ise kullanım bedelini girin.</small>
+              </div>
+              <div class="form-field">
+                <label for="expectedResidualValueGuaranteePayment">Beklenen kalıntı değer garantisi ödemesi</label>
+                <input type="number" id="expectedResidualValueGuaranteePayment"
+                       name="expectedResidualValueGuaranteePayment"
+                       min="0" step="0.01" value="0" placeholder="0" disabled />
+                <small>Garanti kapsamında kiracının ödemeyi beklediği tutar; garanti yoksa 0.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Muafiyet &amp; bayraklar</div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label><input type="checkbox" id="shortTermLease" name="shortTermLease" /> Kısa vadeli kiralama (≤12 ay)</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="lowValueAsset" name="lowValueAsset" /> Düşük değerli varlık</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueWhenNewConfirmed" name="lowValueWhenNewConfirmed" disabled /> Yeni durumdaki değerinin düşük olduğu teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueStandaloneUseConfirmed" name="lowValueStandaloneUseConfirmed" disabled /> Tek başına veya hazır kaynaklarla kullanılabildiği teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueNotHighlyDependentConfirmed" name="lowValueNotHighlyDependentConfirmed" disabled /> Diğer varlıklara yüksek derecede bağımlı / ilişkili olmadığı teyit edildi</label>
+              </div>
+              <div class="form-field low-value-confirmation">
+                <label><input type="checkbox" id="lowValueNoSubleaseConfirmed" name="lowValueNoSubleaseConfirmed" disabled /> Sublease edilmediği / edilmesinin beklenmediği teyit edildi</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="renewalOption" name="renewalOption" /> Yenileme opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="terminationOption" name="terminationOption" /> Fesih opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="purchaseOption" name="purchaseOption" /> Satın alma opsiyonu</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="residualValueGuarantee" name="residualValueGuarantee" /> Kalıntı değer garantisi</label>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="ownershipTransfer" name="ownershipTransfer" /> Mülkiyet devri</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelModal">İptal</button>
+          <button type="submit" class="btn btn-primary" id="saveContractButton">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========== BULK IMPORT MODAL ========== -->
+  <div class="modal-overlay hidden" id="bulkImportModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2>Excel ile toplu içe aktarım</h2>
+          <p>Şablonu indirin, doldurun ve yükleyin</p>
+        </div>
+        <button type="button" class="modal-close" id="closeBulkModal" aria-label="Kapat">×</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:#64748b;margin-bottom:14px;line-height:1.5;">
+          Önce şablonu indirip kolon başlıklarını koruyarak doldurun. Ardından dosyayı seçin;
+          sistem önizleme ve doğrulama gösterir.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <button type="button" class="btn btn-secondary" id="downloadTemplateButton">⬇ Şablon indir</button>
+        </div>
+        <div class="form-field">
+          <label for="bulkFileInput">Excel dosyası (.xlsx)</label>
+          <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" />
+        </div>
+        <div id="bulkImportStatus" style="margin-top:12px;font-size:13px;color:#64748b;"></div>
+        <div id="bulkPreview" style="margin-top:12px;overflow:auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelBulkImport">İptal</button>
+        <button type="button" class="btn btn-primary" id="confirmBulkImport">İçe aktar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CONTRACT DETAIL MODAL ========== -->
+  <div class="modal-overlay hidden" id="detailModal" role="dialog" aria-modal="true">
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <div>
+          <h2 id="detailTitle">Sözleşme detayı</h2>
+          <p id="detailModalSubtitle">Hesaplama, plan ve işlemler</p>
+        </div>
+        <button type="button" class="modal-close" id="closeDetailModal" aria-label="Kapat">×</button>
+      </div>
+      <div class="modal-body" id="detailContent">
+        <!-- Engine / openDetail fills this -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger btn-sm" id="deleteContract">Sözleşmeyi sil</button>
+        <button type="button" class="btn btn-secondary" id="closeDetailModalFooter">Kapat</button>
+        <!-- Legacy action hooks retained for compatibility; the UI runtime renders
+             the visible actions inside the detail content. -->
+        <div hidden>
+          <button id="applyEarlyPaymentButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.applyEarlyPayment(cid);">Erken ödeme</button>
+          <button id="exportReportPdfButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'pdf');">PDF</button>
+          <button id="exportReportHtmlButton" type="button" onclick="const cid=window.GK_TFRS16.getSelectedContractId(); if(cid) window.GK_TFRS16.exportReport(cid, 'html');">HTML</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner" aria-label="Yükleniyor"></div>
+  </div>
+
+  <div class="toast-host" id="toastHost"></div>
+
+  <script>
+/* Main content view ownership: explicit navigation outranks default startup. */
+(() => {
+  let activeView = null;
+  function activate(view) {
+    activeView = view;
+    const dash = document.getElementById('lqDashboard');
+    const contracts = document.getElementById('contractsView');
+    const host = document.getElementById('v26PageHost');
+    if (dash) { dash.hidden = view !== 'dashboard'; dash.style.display = view === 'dashboard' ? '' : 'none'; }
+    if (contracts) contracts.style.display = view === 'contracts' ? '' : 'none';
+    if (host) host.style.display = view === 'dashboard' || view === 'contracts' ? 'none' : 'block';
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active',
+      view === 'dashboard' ? el.hasAttribute('data-lq-dashboard') :
+      view === 'contracts' ? el.dataset.view === 'contracts' : el.dataset.open === view));
+  }
+  window.LeaseQantMainView = Object.freeze({
+    activate,
+    current: () => activeView,
+    showDefaultDashboard: () => {
+      if (activeView === null && !window.__gkDeepLinkOpened) activate('dashboard');
+    }
+  });
+})();
+  </script>
+  <!-- Shell helpers (before engine) -->
+  <script src="js/shell.js?v=20260927-reporting-visibility-1"></script>
+  <!-- TFRS 16 private-result UI runtime -->
+  <script src="js/lq-reporting-period.js?v=20260928-ui-v2-faz2"></script>
+  <script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>
+  <script src="js/private-tfrs16-facade.js?v=20260927-journal-authority-1"></script>
+  <script src="js/tfrs16-reporting-date-cache.js?v=20260920-dashboard-fix-1"></script>
+  <script src="js/tfrs16-private-result-bridge.js?v=20260917-result-bridge-slice1"></script>
+  <script src="js/tfrs16-detail-ui.js?v=20260927-journal-authority-1"></script>
+  <script src="js/tfrs16-detail-events-ui.js?v=20260917-detail-events-slice1"></script>
+  <script src="js/tfrs16-form-bridge-ui.js?v=20260917-form-bridge-1"></script>
+  <script src="js/tfrs16-private-cache-ui.js?v=20260917-private-cache-1"></script>
+  <script src="js/tfrs16-journal-ui.js?v=20260927-journal-authority-1"></script>
+  <script src="js/tfrs16-report-authority-ui.js?v=20260928-ui-v2-faz2"></script>
+  <script src="js/tfrs16-ui.js?v=20260928-contract-detail-r1"></script>
+  <script src="js/tfrs16-private-hydration-ui.js?v=20260920-dashboard-hydration-1"></script>
+  <script src="js/tfrs16-ui-coordinator.js?v=20260917-coordinator-3"></script>
+  <script src="js/tfrs16-inflation-ui.js?v=20260915-ui-slice1"></script>
+  <script src="js/tfrs16-fx-ui.js?v=20260916-ui-slice3"></script>
+  <script src="js/tfrs16-portfolio-ui.js?v=20260915-ui-slice3"></script>
+  <script src="js/tfrs16-disclosure-ui.js?v=20260928-ui-v2-faz2"></script>
+  <script src="js/tfrs16-reporting-ui.js?v=20260928-contract-detail-r1"></script>
+  <script src="js/tfrs16-operations-ui.js?v=20260916-ui-slice17"></script>
+  <script>
+    // Kontrollü canlı parity testi için açık opt-in: ?shadow=1.
+    // API-primary is permanently enabled. URL parameters cannot disable the
+    // private calculation boundary; a missing private result fails closed and
+    // the public bundle contains no calculation fallback; unavailable
+    // private results are reported as "henüz hazır değil".
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("shadow") === "1") {
+        window.LEASEQANT_CALCULATION_SHADOW = true;
+        window.LEASEQANT_CALCULATION_SHADOW_DEBUG = true;
+      }
+      window.LEASEQANT_CALCULATION_API_PRIMARY = true;
+    })();
+  </script>
+  <script src="js/private-calculation-shadow.js?v=20260914-2"></script>
+  <script src="js/lq-ui-v2.js?v=20260928-ui-v2-faz2"></script>
+  <script src="js/lq-dashboard-charts.js?v=20260928-ui-v2-faz4"></script>
+
+<script type="text/plain" data-report-auth-retired>
+/* LeaseQant Dashboard Bridge V3
+   Uses only the application's existing read-only public bridge.
+   No accounting calculation or persistence is performed here. */
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const dash = $("lqDashboard");
+  const contractsView = $("contractsView");
+  if (!dash || !contractsView) return;
+
+  const api = () => window.GK_TFRS16 || {};
+  const safeContracts = () => {
+    const bridge = api();
+    try {
+      if (typeof bridge.getPortfolioContracts === "function") return bridge.getPortfolioContracts() || [];
+      if (typeof bridge.getContractsSnapshot === "function") return bridge.getContractsSnapshot() || [];
+    } catch (_) {}
+    return [];
+  };
+  const activeCompanyMatch = contract => {
+    try {
+      return typeof api().v26ContractMatchesActiveCompany === "function"
+        ? api().v26ContractMatchesActiveCompany(contract)
+        : true;
+    } catch (_) { return true; }
+  };
+  const scopedContracts = () => safeContracts().filter(activeCompanyMatch);
+  const activeContracts = list => list.filter(c => String(c?.status || "active").toLowerCase() === "active");
+
+  const copyKpi = (from,to) => {
+    const v = ($(from)?.textContent || "").trim();
+    if (v && v !== "—") $(to).textContent = v;
+  };
+  const numeric = value => {
+    const s = String(value || "").trim();
+    if (!s || s === "—") return null;
+    const cleaned = s.replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".");
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+  };
+  const formatAmount = value => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency", currency: "TRY", minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n);
+  };
+  const fmtCount = n => new Intl.NumberFormat("tr-TR").format(n || 0);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  function renderAssetClasses(list){
+    const host = $("lqAssetLegend");
+    const ring = document.querySelector(".lq-asset-ring");
+    if (!host || !ring) return;
+    const counts = new Map();
+    list.forEach(c => {
+      const key = String(c?.assetClass || "Diğer").trim() || "Diğer";
+      counts.set(key,(counts.get(key)||0)+1);
+    });
+    const rows = [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);
+    const total = rows.reduce((s,r)=>s+r[1],0);
+    if (!total) {
+      host.innerHTML = '<div><i></i><span>Henüz sınıflandırılmış aktif sözleşme yok</span></div>';
+      ring.style.background = "#172b4a";
+      return;
+    }
+    const palette = ["#3478f6","#60a5fa","#1d4ed8","#243652"];
+    let cursor=0, stops=[];
+    rows.forEach((r,i)=>{
+      const next=cursor+(r[1]/total*100);
+      stops.push(`${palette[i]} ${cursor.toFixed(1)}% ${next.toFixed(1)}%`);
+      cursor=next;
+    });
+    ring.style.background=`conic-gradient(${stops.join(",")})`;
+    host.innerHTML=rows.map((r,i)=>{
+      const pct=Math.round(r[1]/total*100);
+      return `<div><i style="background:${palette[i]}"></i><span><strong>${pct}%</strong> ${esc(r[0])}</span></div>`;
+    }).join("");
+  }
+
+  function renderAlerts(list){
+    const bridge=api();
+    let renewals=0;
+    if (typeof bridge.isRenewalWithin90Days === "function") {
+      list.forEach(c=>{ try { if(bridge.isRenewalWithin90Days(c)) renewals++; } catch(_){} });
+    }
+    const modifications=list.filter(c=>c?.modification===true || (Array.isArray(c?.modifications)&&c.modifications.length>0)).length;
+    if ($("lqRenewalCount")) $("lqRenewalCount").textContent=fmtCount(renewals);
+    if ($("lqModificationCount")) $("lqModificationCount").textContent=fmtCount(modifications);
+  }
+
+  function renderMaturity(){
+    const dashboard=window.__GK_TFRS16_DASHBOARD_METRICS__;
+    const group=dashboard?.groups?.length===1 ? dashboard.groups[0] : null;
+    const liability=group ? Number(group.liability) : numeric($("kpiLiability")?.textContent);
+    const current=group ? Number(group.current) : numeric($("kpiCurrent")?.textContent);
+    const nonCurrent=group ? Number(group.nonCurrent) : (liability !== null && current !== null ? liability-current : null);
+    if (liability === null || current === null || liability <= 0) {
+      $("lqCurrentPct").textContent="—";
+      $("lqCurrentLegend").textContent=$("kpiCurrent")?.textContent?.trim() || "—";
+      $("lqNonCurrentLegend").textContent="—";
+      return;
+    }
+    const pct=Math.max(0,Math.min(100,current/liability*100));
+    $("lqCurrentPct").textContent=`${pct.toFixed(0)}%`;
+    $("lqCurrentLegend").textContent=group ? formatAmount(current) : $("kpiCurrent")?.textContent?.trim() || "—";
+    $("lqNonCurrentLegend").textContent=Number.isFinite(nonCurrent) ? formatAmount(nonCurrent) : "—";
+    document.querySelector(".lq-split-ring")?.style.setProperty("--current-pct",`${pct}%`);
+  }
+
+  function renderBars(list){
+    /* Contract end-date concentration: real portfolio data, no accounting estimate.
+       This intentionally does NOT pretend to be a liability forecast. */
+    const host=$("lqLiabilityBars");
+    const axis=document.querySelector(".lq-axis");
+    const title=document.querySelector(".lq-chart-card .lq-card-head h3");
+    if (!host || !axis) return;
+    if (title) title.textContent="Sözleşme vade yoğunluğu";
+    const now=new Date();
+    const buckets=Array.from({length:12},(_,i)=>{
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      return {y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleDateString("tr-TR",{month:"short"}),count:0};
+    });
+    list.forEach(c=>{
+      const d=new Date(c?.endDate);
+      if(Number.isNaN(d.getTime())) return;
+      const idx=(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth());
+      if(idx>=0&&idx<12) buckets[idx].count++;
+    });
+    const max=Math.max(1,...buckets.map(x=>x.count));
+    host.innerHTML=buckets.map(x=>`<i title="${x.count} sözleşme" style="--h:${Math.max(4,x.count/max*100).toFixed(1)}%"></i>`).join("");
+    axis.innerHTML=buckets.map(x=>`<span>${esc(x.label)}</span>`).join("");
+    const chip=document.querySelector(".lq-chart-card .lq-chip");
+    if(chip) chip.textContent="Gerçek vade";
+  }
+
+  function syncDashboard(){
+    if (window.LeaseQantReportingAuthorityUi?.refreshDashboardPresentation) {
+      window.LeaseQantReportingAuthorityUi.refreshDashboardPresentation();
+      return;
+    }
+    const dashboard=window.__GK_TFRS16_DASHBOARD_METRICS__;
+    if (dashboard) {
+      if ($("lqTotalLiability")) $("lqTotalLiability").textContent=dashboard.liabilityText || "—";
+      if ($("lqTotalRou")) $("lqTotalRou").textContent=dashboard.rouText || "—";
+      if ($("lqCurrentLiability")) $("lqCurrentLiability").textContent=dashboard.currentText || "—";
+      if ($("lqNext12Payments")) $("lqNext12Payments").textContent=dashboard.next12PaymentsText || "—";
+      if ($("lqMonthlyInterest")) $("lqMonthlyInterest").textContent=dashboard.monthlyInterestText || "—";
+      if ($("lqMonthlyDep")) $("lqMonthlyDep").textContent=dashboard.monthlyDepreciationText || "—";
+      if ($("lqDashboardSubtitle")) $("lqDashboardSubtitle").textContent=`TFRS 16 portföyü · ${dashboard.reportingDate || "son doğrulanmış dönem"}`;
+      if (Number.isFinite(Number(dashboard.closeScore)) && $("lqReadinessScore")) $("lqReadinessScore").textContent=`${Math.round(Number(dashboard.closeScore))}%`;
+    }
+    if (!dashboard) {
+      copyKpi("kpiLiability","lqTotalLiability");
+      copyKpi("kpiRou","lqTotalRou");
+      copyKpi("kpiContractCount","lqActiveContracts");
+      copyKpi("kpiCurrent","lqCurrentLiability");
+    }
+
+    const select=$("v26ActiveCompanySelect");
+    if(select && $("lqCompanyScope")){
+      $("lqCompanyScope").textContent=select.options?.[select.selectedIndex]?.text || "Tüm Şirketler";
+    }
+
+    const list=activeContracts(scopedContracts());
+    // KPI count remains engine-rendered; fallback only if it has not rendered yet.
+    if (($("lqActiveContracts")?.textContent || "").trim()==="—" && list.length) {
+      $("lqActiveContracts").textContent=fmtCount(list.length);
+    }
+    renderAssetClasses(list);
+    renderAlerts(list);
+    renderMaturity();
+    renderBars(list);
+
+    // CFO strip: read-only mirrors from any existing KPI IDs exposed by current UI.
+    const firstText = ids => {
+      for (const id of ids) {
+        const v = ($(id)?.textContent || "").trim();
+        if (v && v !== "—") return v;
+      }
+      return "—";
+    };
+    if (!(dashboard?.next12PaymentsText) && $("lqNext12Payments")) $("lqNext12Payments").textContent =
+      firstText(["kpiNext12Payments","kpiNext12","kpiNext12Months","next12Months","next12Payments"]);
+    if (!(dashboard?.monthlyInterestText) && $("lqMonthlyInterest")) $("lqMonthlyInterest").textContent =
+      firstText(["kpiMonthlyInterest","monthlyInterest","portfolioMonthlyInterest"]);
+    if (!(dashboard?.monthlyDepreciationText) && $("lqMonthlyDep")) $("lqMonthlyDep").textContent =
+      firstText(["kpiDepreciation","monthlyDepreciation","portfolioDepreciation"]);
+
+    // Readiness is operational UI readiness only, not an accounting opinion.
+    const portfolioReady = list.length > 0;
+    const companyReady = !!$("v26ActiveCompanySelect")?.value || !!$("v26ActiveCompanySelect");
+    const periodCandidates = ["reportingMonth","journalMonth","closePeriod","v26ReportingPeriod"];
+    const periodReady = periodCandidates.some(id => {
+      const el=$(id); return !!(el && (el.value || el.textContent?.trim()));
+    });
+    const checks=[portfolioReady,companyReady,periodReady];
+    const score=Number.isFinite(Number(dashboard?.closeScore)) ? Math.round(Number(dashboard.closeScore)) : Math.round(checks.filter(Boolean).length/checks.length*100);
+    if ($("lqReadinessScore")) $("lqReadinessScore").textContent=`${score}%`;
+    [["lqReadyContracts",portfolioReady],["lqReadyCompany",companyReady],["lqReadyPeriod",periodReady]].forEach(([id,ok])=>{
+      const el=$(id); if(el) el.className=ok?"ready":"pending";
+    });
+
+    const asOf=($("kpiDataAsOf")?.textContent || "").trim();
+    if($("lqDashboardSubtitle")) {
+      $("lqDashboardSubtitle").textContent = asOf
+        ? `TFRS 16 portföyü · ${asOf}`
+        : "TFRS 16 portföyü · kapanış, yükümlülük ve risk görünümü";
+    }
+  }
+
+  function setDashboard(active){
+    window.LeaseQantMainView.activate(active ? 'dashboard' : 'contracts');
+    if(active){
+      document.querySelector("[data-lq-dashboard]")?.classList.add("active");
+      if($("pageTitle")) $("pageTitle").textContent="Dashboard";
+      if($("pageSubtitle")) $("pageSubtitle").textContent="Portföy kontrol merkezi";
+      syncDashboard();
+    }else{
+      document.querySelector('.nav-item[data-view="contracts"]')?.classList.add("active");
+    }
+  }
+
+  document.querySelector("[data-lq-dashboard]")?.addEventListener("click",()=>setDashboard(true));
+  $("lqGoContracts")?.addEventListener("click",()=>{setDashboard(false);document.querySelector('.nav-item[data-view="contracts"]')?.click();});
+  $("lqOpenRisk")?.addEventListener("click",()=>{setDashboard(false);document.querySelector('.nav-item[data-open="riskControls"]')?.click();});
+  document.querySelectorAll("[data-open-target]").forEach(btn=>btn.addEventListener("click",()=>{
+    setDashboard(false);
+    document.querySelector(`.nav-item[data-open="${btn.dataset.openTarget}"]`)?.click();
+  }));
+  document.querySelectorAll(".nav-item:not([data-lq-dashboard])").forEach(btn=>btn.addEventListener("click",()=>window.LeaseQantMainView.activate(btn.dataset.open || 'contracts')));
+  $("v26ActiveCompanySelect")?.addEventListener("change",()=>setTimeout(syncDashboard,300));
+  const observer=new MutationObserver(()=>{if(!dash.hidden) syncDashboard();});
+  ["kpiLiability","kpiRou","kpiContractCount","kpiCurrent","kpiDataAsOf"].forEach(id=>{
+    const el=$(id); if(el) observer.observe(el,{childList:true,subtree:true,characterData:true});
+  });
+
+  window.LeaseQantDashboard={refresh:syncDashboard,show:()=>setDashboard(true)};
+  window.addEventListener("load",()=>setTimeout(()=>{window.LeaseQantMainView.showDefaultDashboard();syncDashboard();},500));
+})();
+</script>
+<script>
+/* REPORT-AUTH-R1 dashboard navigation. Numbers are rendered from verified backend packages. */
+(() => {
+  const dash=document.getElementById('lqDashboard'),contracts=document.getElementById('contractsView');
+  if(!dash||!contracts)return;
+  const refresh=()=>window.LeaseQantReportingAuthorityUi?.refreshDashboardPresentation();
+  const show=active=>{window.LeaseQantMainView.activate(active?'dashboard':'contracts');refresh();};
+  document.querySelector('[data-lq-dashboard]')?.addEventListener('click',()=>show(true));
+  document.getElementById('lqGoContracts')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-view="contracts"]')?.click();});
+  document.getElementById('lqOpenRisk')?.addEventListener('click',()=>{show(false);document.querySelector('.nav-item[data-open="riskControls"]')?.click();});
+  document.querySelectorAll('[data-open-target]').forEach(el=>el.addEventListener('click',()=>{show(false);document.querySelector(`.nav-item[data-open="${el.dataset.openTarget}"]`)?.click();}));
+  document.querySelectorAll('.nav-item:not([data-lq-dashboard])').forEach(el=>el.addEventListener('click',()=>window.LeaseQantMainView.activate(el.dataset.open || 'contracts')));
+  document.getElementById('v26ActiveCompanySelect')?.addEventListener('change',refresh);
+  const observer=new MutationObserver(refresh);const asOf=document.getElementById('kpiDataAsOf');if(asOf)observer.observe(asOf,{childList:true,subtree:true,characterData:true});
+  window.LeaseQantDashboard={refresh,show:()=>show(true)};window.addEventListener('load',()=>setTimeout(()=>{window.LeaseQantMainView.showDefaultDashboard();refresh();},500));
+})();
+</script>
+
+
+
+<script>
+/* LeaseQant V7 detail presentation helper — no data mutation. */
+(() => {
+  const modal=document.getElementById("v191FunctionalModal");
+  if(!modal) return;
+  const mark=()=> {
+    const content=modal.querySelector(".modal-content");
+    if(content) content.setAttribute("data-lq-detail-workspace","true");
+  };
+  mark();
+  new MutationObserver(mark).observe(modal,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V8 close-workspace presentation helper — no accounting/data mutation. */
+(() => {
+  const host=document.getElementById("v26PageHost");
+  if(!host) return;
+
+  const tag=(name)=>{
+    host.setAttribute("data-lq-workspace",name||"module");
+    host.classList.add("lq-premium-module");
+  };
+
+  document.querySelectorAll('.nav-item[data-open]').forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const name=btn.getAttribute("data-open")||"module";
+      if(["close","accountingCenter","footnotes","riskControls","audit"].includes(name)){
+        setTimeout(()=>tag(name),0);
+      }
+    });
+  });
+
+  new MutationObserver(()=>{
+    if(host.childElementCount) host.classList.add("lq-premium-module");
+  }).observe(host,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V9 governance presentation helper — presentation state only. */
+(() => {
+  const host=document.getElementById("v26PageHost");
+  if(!host) return;
+  let current="";
+  document.querySelectorAll('.nav-item[data-open]').forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const name=btn.getAttribute("data-open")||"";
+      if(["footnotes","riskControls","audit"].includes(name)){
+        current=name;
+        host.setAttribute("data-lq-workspace",name);
+      }
+    });
+  });
+  new MutationObserver(()=>{
+    if(current && ["footnotes","riskControls","audit"].includes(current)){
+      host.setAttribute("data-lq-workspace",current);
+    }
+  }).observe(host,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* LeaseQant V10 FINAL Top Navigation — presentation controller only. */
+(() => {
+  const nav=document.getElementById("sidebarNav");
+  const toggle=document.getElementById("menuToggle");
+  if(!nav) return;
+
+  const closeDropdowns=(except=null)=>{
+    document.querySelectorAll(".lq-nav-dropdown.open").forEach(d=>{
+      if(d!==except){
+        d.classList.remove("open");
+        d.querySelector(".lq-nav-trigger")?.setAttribute("aria-expanded","false");
+      }
+    });
+  };
+
+  document.querySelectorAll(".lq-nav-dropdown").forEach(drop=>{
+    const trigger=drop.querySelector(".lq-nav-trigger");
+    trigger?.addEventListener("click",e=>{
+      e.stopPropagation();
+      const willOpen=!drop.classList.contains("open");
+      closeDropdowns(drop);
+      drop.classList.toggle("open",willOpen);
+      trigger.setAttribute("aria-expanded",String(willOpen));
+    });
+  });
+
+  toggle?.addEventListener("click",e=>{
+    e.stopPropagation();
+    const open=nav.classList.toggle("mobile-open");
+    toggle.setAttribute("aria-expanded",String(open));
+  });
+
+  nav.querySelectorAll(".nav-item").forEach(item=>{
+    item.addEventListener("click",()=>{
+      closeDropdowns();
+      if(window.matchMedia("(max-width: 900px)").matches){
+        nav.classList.remove("mobile-open");
+        toggle?.setAttribute("aria-expanded","false");
+      }
+    });
+  });
+
+  document.addEventListener("click",e=>{
+    if(!e.target.closest(".lq-nav-dropdown")) closeDropdowns();
+    if(window.matchMedia("(max-width: 900px)").matches &&
+       !e.target.closest("#sidebarNav") && !e.target.closest("#menuToggle")){
+      nav.classList.remove("mobile-open");
+      toggle?.setAttribute("aria-expanded","false");
+    }
+  });
+
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){
+      closeDropdowns();
+      nav.classList.remove("mobile-open");
+      toggle?.setAttribute("aria-expanded","false");
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* LeaseQant V10.1 visual parity helper — presentation only. */
+(() => {
+  const syncGreeting=()=>{
+    const source=(document.getElementById("userName")?.textContent||"").trim();
+    const target=document.getElementById("lqGreetingName");
+    if(!target) return;
+    const first=source && source!=="Kullanıcı" ? source.split(/\s+/)[0] : "Görkem";
+    target.textContent=first;
+  };
+  syncGreeting();
+  const u=document.getElementById("userName");
+  if(u) new MutationObserver(syncGreeting).observe(u,{childList:true,subtree:true,characterData:true});
+})();
+</script>
+
+
+<script>
+/* Purchase option price field state — UI only. */
+(() => {
+  const option = document.getElementById("purchaseOption");
+  const price = document.getElementById("purchaseOptionPrice");
+  const renewal = document.getElementById("renewalOption");
+  const renewalExpected = document.getElementById("renewalOptionExpectedToExercise");
+  const renewalEndDate = document.getElementById("renewalEndDate");
+  const variableType = document.getElementById("variablePaymentType");
+  const inSubstanceFixed = document.getElementById("inSubstanceFixedPayment");
+  const termination = document.getElementById("terminationOption");
+  const terminationDate = document.getElementById("terminationDate");
+  const terminationPenalty = document.getElementById("terminationPenalty");
+  const rvg = document.getElementById("residualValueGuarantee");
+  const rvgPayment = document.getElementById("expectedResidualValueGuaranteePayment");
+  const escalationType = document.getElementById("leaseIncreaseType");
+  const indexFields = document.getElementById("indexEscalationFields");
+  if (!option || !price) return;
+
+  const sync = () => {
+    price.disabled = !option.checked;
+    price.required = option.checked;
+    if (!option.checked) price.value = "0";
+
+    if (renewal && renewalExpected && renewalEndDate) {
+      renewalExpected.disabled = !renewal.checked;
+      if (!renewal.checked) renewalExpected.checked = false;
+
+      const renewalActive = renewal.checked && renewalExpected.checked;
+      renewalEndDate.disabled = !renewalActive;
+      renewalEndDate.required = renewalActive;
+      if (!renewalActive) renewalEndDate.value = "";
+    }
+
+    if (variableType && inSubstanceFixed) {
+      const ozundeSabit = variableType.value === "OZUNDE_SABIT";
+      inSubstanceFixed.disabled = !ozundeSabit;
+      inSubstanceFixed.required = ozundeSabit;
+      if (!ozundeSabit) inSubstanceFixed.value = "0";
+    }
+
+    if (termination && terminationDate && terminationPenalty) {
+      terminationDate.disabled = !termination.checked;
+      terminationPenalty.disabled = !termination.checked;
+      terminationDate.required = termination.checked;
+      if (!termination.checked) {
+        terminationDate.value = "";
+        terminationPenalty.value = "0";
+      }
+    }
+
+    if (rvg && rvgPayment) {
+      rvgPayment.disabled = !rvg.checked;
+      rvgPayment.required = rvg.checked;
+      if (!rvg.checked) rvgPayment.value = "0";
+    }
+
+    if (indexFields && escalationType) {
+      indexFields.style.display = escalationType.value === "index" ? "block" : "none";
+    }
+  };
+
+  option.addEventListener("change", sync);
+  renewal?.addEventListener("change", sync);
+  renewalExpected?.addEventListener("change", sync);
+  variableType?.addEventListener("change", sync);
+  termination?.addEventListener("change", sync);
+  rvg?.addEventListener("change", sync);
+  escalationType?.addEventListener("change", sync);
+  document.getElementById("contractModal")?.addEventListener("click", () => setTimeout(sync, 0), { capture: true });
+  sync();
+})();
+</script>
+
 </body>
 </html>
+
+<script>
+/* Control 6 — low-value eligibility confirmation field state (UI only). */
+(() => {
+  const lowValue = document.getElementById("lowValueAsset");
+  const confirmationIds = [
+    "lowValueWhenNewConfirmed",
+    "lowValueStandaloneUseConfirmed",
+    "lowValueNotHighlyDependentConfirmed",
+    "lowValueNoSubleaseConfirmed"
+  ];
+
+  const syncLowValueEligibilityState = () => {
+    const enabled = lowValue?.checked === true;
+    confirmationIds.forEach(id => {
+      const field = document.getElementById(id);
+      if (field) field.disabled = !enabled;
+    });
+  };
+
+  lowValue?.addEventListener("change", syncLowValueEligibilityState);
+  document.getElementById("newContractButton")?.addEventListener("click", () =>
+    setTimeout(syncLowValueEligibilityState, 0)
+  );
+  document.getElementById("contractForm")?.addEventListener("reset", () =>
+    setTimeout(syncLowValueEligibilityState, 0)
+  );
+
+  new MutationObserver(syncLowValueEligibilityState).observe(
+    document.getElementById("contractModal") || document.body,
+    { attributes: true, subtree: true, attributeFilter: ["class"] }
+  );
+
+  syncLowValueEligibilityState();
+})();
+</script>

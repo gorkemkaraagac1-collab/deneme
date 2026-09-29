@@ -234,5 +234,5 @@ test('standalone portal/CFO retired demo is inert; current pages load real repor
   assert.ok(doc.querySelector('script[src^="js/tfrs16-report-authority-ui.js"]'));assert.ok(!doc.getElementById('printBtn'));assert.ok(!doc.getElementById('contractTableBody'));
   const active=Array.from(doc.querySelectorAll('script:not([type="text/plain"])')).map(s=>s.textContent).join('\n');assert.ok(!active.includes('const CONTRACTS='));assert.match(active,/LeaseQantReportingAuthorityUi.page/);
  }
- const html=fs.readFileSync(path.join(root,'workspace.html'),'utf8');assert.ok(html.indexOf('js/tfrs16-report-authority-ui.js')<html.indexOf('js/workspace-v3.js'));assert.ok(!html.includes('js/tfrs16-ui.js'));
+ const html=fs.readFileSync(path.join(root,'tfrs16.html'),'utf8');assert.ok(html.indexOf('js/tfrs16-report-authority-ui.js')<html.indexOf('js/tfrs16-ui.js'));
 });
