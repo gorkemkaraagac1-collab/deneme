@@ -102,7 +102,6 @@
   function closeDetail() { ($("closeDetailModal") || $("closeDetailModalFooter"))?.click(); }
 
   function headHtml(c, p) {
-    const months = monthsBetween(c.startDate, c.endDate);
     const title = c.description || c.assetName || c.supplier || c.id;
     const scope = state.report?.row
       ? (state.report.row.status === "SUPPORTED" ? '<span class="lq-cv-chip is-ok-outline">Sertifikalı kapsam</span>' : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
@@ -110,7 +109,7 @@
     const meta = [
       `<span class="lq-cv-mono lq-cv-strong">${esc(c.id)}</span>`,
       c.supplier ? esc(c.supplier) : "", c.assetClass ? esc(c.assetClass) : "",
-      `${trDate(c.startDate)} – ${trDate(c.endDate)}${months ? ` (${months} ay)` : ""}`,
+      `${trDate(c.startDate)} – ${trDate(c.endDate)} · Süre: kanonik kaynak gerekli`,
       `${frequencyText(c.paymentFrequency)}, ${timingText(c.paymentTiming)}`, esc(c.currency || "")
     ].filter(Boolean).join(" · ");
     return `<nav class="lq-cv-crumb" aria-label="Konum"><button type="button" data-lq-cv="back">Sözleşmeler</button><span aria-hidden="true">/</span><span>${esc(c.company || "—")}</span><span aria-hidden="true">/</span><span class="lq-cv-here">${esc(c.id)}</span></nav>
@@ -169,7 +168,7 @@
     if (r.error || r.row?.status !== "SUPPORTED") {
       const code = r.error?.code || r.row?.reason;
       return `<div class="lq-cv-card lq-cv-pad lq-cv-empty"><h3>Bu sözleşme için doğrulanmış hesaplama tablosu yok</h3><p>${esc(reasonText(code))}</p>
-        <p class="lq-cv-muted">Motorun hesapladığı ödeme planı ve fişler "Ödeme planı" sekmesinde görünür; bunlar sertifikalı rapor rotasından geçmediği için bu tabloya alınmaz.</p>
+        <p class="lq-cv-muted">Ödeme planı da aynı doğrulanmış sunucu kaynağını bekler. İlk muhasebeleştirme fişi ayrı bir yetkili kaynakla sunulur.</p>
         <button type="button" class="lq-cv-btn" data-lq-cv-go="schedule">Ödeme planını aç</button></div>`;
     }
     const sch = scheduleModel(r.row.scheduleRows, r.period);
@@ -234,7 +233,7 @@
     shell.className = "lq-cv-shell";
     shell.innerHTML = `<header class="lq-cv-head"></header><div class="lq-cv-kpiwrap"></div><div class="lq-cv-notices"></div><div class="lq-cv-tabwrap"></div>
       <div class="lq-cv-body" id="lqCvPanel" role="tabpanel" tabindex="0" aria-labelledby="lqCvTab-calc"><div class="lq-cv-main"><div class="lq-cv-calc"></div><div class="lq-cv-engine"></div></div><div class="lq-cv-side"></div></div>`;
-    // Motorun öğeleri: standart paneli yan sütuna, uyarılar üstte, paneller ana alana taşınır.
+    // UI v2 replaces currency-inferred standards with source evidence.
     const std = content.querySelector(":scope > .gk-v26-auto-detect");
     const notices = [];
     Array.from(content.children).forEach(ch => {
@@ -247,9 +246,9 @@
     engineTabs.hidden = true;
     engineTabs.classList.add("lq-cv-engine-tabs");
     shell.querySelector(".lq-cv-engine").append(engineTabs, ...panels);
+    std?.remove();
     content.classList.add("lq-cv");
     render(c);
-    if (std) shell.querySelector(".lq-cv-slot-std")?.append(std);
     applyTab(false);
   }
 
@@ -257,15 +256,52 @@
     const shell = $("detailContent")?.querySelector(":scope > .lq-cv-shell");
     if (!shell) return;
     c = c || contractOf(state.contractId) || { id: state.contractId };
-    const std = shell.querySelector(".lq-cv-slot-std > *");
     shell.querySelector(".lq-cv-head").innerHTML = headHtml(c);
     shell.querySelector(".lq-cv-kpiwrap").innerHTML = kpiHtml(c);
     shell.querySelector(".lq-cv-tabwrap").innerHTML = tabsHtml();
     shell.querySelector(".lq-cv-calc").innerHTML = calcHtml();
     shell.querySelector(".lq-cv-side").innerHTML = asideHtml(c);
-    if (std) shell.querySelector(".lq-cv-slot-std")?.append(std);
+    renderStandards(shell);
+    renderSchedule(shell);
     renderAudit(shell);
     shell.setAttribute("data-tab", state.tab);
+  }
+
+  function renderSchedule(shell) {
+    const target = shell.querySelector("[data-authoritative-report-schedule]");
+    if (!target) return;
+    const r = state.report;
+    if (!r) { target.innerHTML = '<p role="status">Ödeme planı için kaynak doğrulanıyor…</p>'; return; }
+    if (r.error || r.row?.status !== "SUPPORTED") {
+      target.innerHTML = `<p role="status">Ödeme planı için kaynak gerekli. ${esc(reasonText(r.error?.code || r.row?.reason))}</p>`;
+      return;
+    }
+    const rows = r.row.scheduleRows;
+    if (!Array.isArray(rows) || !rows.length) {
+      target.innerHTML = '<p role="status">Ödeme planı satırları için kaynak gerekli.</p>'; return;
+    }
+    const columns = [["date", "Tarih"], ["openingLiability", "Açılış yükümlülüğü"], ["interest", "Faiz"],
+      ["payment", "Sözleşmesel ödeme"], ["principal", "Anapara"], ["closingLiability", "Kapanış yükümlülüğü"], ["depreciation", "Amortisman"]];
+    target.innerHTML = `<section class="lq-cv-card"><h3>Doğrulanmış sözleşmesel ödeme planı</h3>
+      <p>${esc(trDate(r.period?.reportingDate))} · ${esc(r.row.currency)} · Sunucu raporu</p>
+      <div class="lq-cv-tscroll"><table aria-label="Doğrulanmış ödeme planı"><thead><tr>${columns.map(([, label]) => `<th scope="col">${label}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(row => `<tr>${columns.map(([key]) => `<td>${key === "date" ? esc(trDate(row[key])) : isNum(row[key]) ? money(row[key]) : "Kaynak gerekli"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="lq-cv-foot">Sözleşmesel plandır; gerçekleşen ödeme veya defter kanıtı değildir. Tarihler sunucu kaynağından değiştirilmeden gösterilir.</p></section>`;
+    const journal = shell.querySelector("[data-authoritative-initial-journal]");
+    if (journal && !journal.previousElementSibling?.hasAttribute("data-lq-initial-journal-heading")) {
+      journal.insertAdjacentHTML("beforebegin", '<h3 data-lq-initial-journal-heading>İlk muhasebeleştirme fişi — ayrı sunucu önizlemesi</h3>');
+    }
+  }
+
+  function renderStandards(shell) {
+    const slot = shell.querySelector(".lq-cv-slot-std");
+    if (!slot) return;
+    const r = state.report;
+    const route = !r?.error && r?.row?.status === "SUPPORTED" ? r.row.route : null;
+    slot.innerHTML = `<section class="lq-cv-card lq-cv-pad"><span class="lq-cv-kick">STANDART VE KAYNAK</span>
+      <p>${route ? `Onaylı rapor rotası: ${esc(route)}` : "Onaylı rapor rotası için kaynak gerekli."}</p>
+      <p>TMS 29 uygulaması için onaylı dönem kanıtı gerekli.</p>
+      ${r?.period?.reportingDate ? `<p>Raporlama tarihi: ${esc(trDate(r.period.reportingDate))}</p>` : ""}</section>`;
   }
 
   function renderAudit(shell) {

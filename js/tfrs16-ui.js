@@ -10324,6 +10324,12 @@ ${renderAccountingCenterBulkPromo()}
   }
 
   async function renderPaymentScheduleTable(contract) {
+    // UI v2 consumes the verified reporting package; the retired converter
+    // must never be revived as an alternative financial authority.
+    if (document.documentElement.getAttribute("data-lq-ui") === "2") {
+      const content = document.getElementById("detailContent");
+      return window.LeaseQantReportingAuthorityUi?.renderContractDetails(content, contract);
+    }
     const periodType =
       document.getElementById(
         "schedulePeriodType"
