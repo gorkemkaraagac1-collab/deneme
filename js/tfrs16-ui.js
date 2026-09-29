@@ -30588,6 +30588,9 @@ ${renderAccountingCenterBulkPromo()}
   });
 
   function v26HookContractDetail() {
+    // The v2 detail owns source-evidenced standards. The legacy observer
+    // must not reinsert currency-inferred badges after that panel renders.
+    if (document.documentElement.getAttribute("data-lq-ui") === "2") return;
     if (window.__GK_TFRS16_V26_DETAIL_HOOK__) return;
     window.__GK_TFRS16_V26_DETAIL_HOOK__ = true;
     const observer = new MutationObserver(() => {

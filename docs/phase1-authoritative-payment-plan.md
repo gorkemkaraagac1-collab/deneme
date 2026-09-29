@@ -45,3 +45,11 @@ The five existing environment failures are not successful accounting verificatio
 - The live session was returned to General Overview. No browser width/filter was modified.
 
 FAZ 1 — BLOCKED — canonical backend date/duration evidence, isolated backend prerequisites, and post-deployment live acceptance are outstanding. Do not start Phase 2.
+
+## 2026-09-29 — post-merge acceptance and remaining observer defect
+
+PR #518 was merged at 441e3f45c87c2bc3eba8c11793fe645587e637e9. The Pages deployment and published policy/lint/check workflows for that commit completed successfully. A fresh authenticated read-only session opened the contract through the normal menu and selected the payment tab. The formatted server schedule and explicit duration-source message were observed live. The legacy standards badge nevertheless reappeared above the new detail panel.
+
+Root cause: v26HookContractDetail observes the whole document and recreates the removed currency-derived panel after v2 rendering. Removing the initial node alone was insufficient. The corrective change prevents registration of this legacy observer in UI v2; legacy retains its original observer. A jsdom regression covers initial rendering, subsequent DOM changes and legacy reinsertion.
+
+Validation for the correction: 7/7 detail tests; full suite 83 passed with the same 5 missing-environment failures; public boundary PASS; cutover 185 assertions PASS. The correction requires its own PR and publication before live badge acceptance. Canonical duration, persisted-date evidence and the remaining Phase 1 acceptance checks are still open. No Phase 2 work, accounting-policy change or live posting was performed.

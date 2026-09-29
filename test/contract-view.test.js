@@ -101,3 +101,27 @@ test('UI v2 active payment-table entry delegates before retired converter/privat
  assert.equal(await context.renderPaymentScheduleTable(contract),'verified');
  assert.deepEqual(observed,[content,contract]);
 });
+
+test('late legacy standards observer cannot reinsert currency-derived badge in v2; legacy keeps its hook',async()=>{
+ const runtime=fs.readFileSync(path.join(__dirname,'../js/tfrs16-ui.js'),'utf8');
+ const start=runtime.indexOf('  function v26HookContractDetail()');
+ const hook=runtime.slice(start,runtime.indexOf('\n  try {',start));
+ for(const ui of ['2','legacy']){
+  const {dom,w,d}=await page(ui);
+  w.eval(`let selectedContractId='K1'; let contracts=[{id:'K1'}]; function renderContractStandardsPanel(){return '<div class="gk-v26-auto-detect">currency-inferred badge</div>';}`+hook+';v26HookContractDetail();');
+  d.getElementById('detailContent').innerHTML=engineHtml;
+  await tick();
+  if(ui==='2'){
+   assert.equal(d.querySelector('.gk-v26-auto-detect'),null);
+   assert.equal(w.__GK_TFRS16_V26_DETAIL_HOOK__,undefined);
+   // Subsequent unrelated UI changes must not recreate the obsolete panel.
+   d.body.append(d.createElement('div'));await tick();
+   assert.equal(d.querySelector('.gk-v26-auto-detect'),null);
+  }else{
+   assert.equal(w.__GK_TFRS16_V26_DETAIL_HOOK__,true);
+   d.querySelector('.gk-v26-auto-detect').remove();await tick();
+   assert.match(d.querySelector('.gk-v26-auto-detect').textContent,/currency-inferred badge/);
+  }
+  dom.window.close();
+ }
+});
