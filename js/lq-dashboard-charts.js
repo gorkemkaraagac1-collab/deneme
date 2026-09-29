@@ -1,8 +1,7 @@
 /* LeaseQant UI v2 — Faz 4: Genel Bakış grafikleri.
    - Kaynak: özel hesaplama sınırındaki dipnot paketi
      (LeaseQantPrivateTfrs16Facade.loadLeaseDisclosureAvailability + loadLeaseDisclosure).
-     Bu modül hesaplama yapmaz; paketteki tutarları çizer. Tek türetilen değerler
-     görsel mutabakat farklarıdır ve ekranda "fark" olarak etiketlenir.
+     Bu modül finansal değer türetmez; paketteki tutar ve mutabakat durumlarını gösterir.
    - Yalnızca tek şirket seçiliyken ve ortak raporlama döneminde çalışır.
    - Paket kapsamı (şirket, dönem, popülasyon, para birimi, doğrulama) dipnot
      ekranıyla aynı kurallarla denetlenir; uyuşmazsa grafik çizilmez.
@@ -24,95 +23,33 @@
     NOT_CALCULABLE: "Hesaplama kaynağı gerekli",
     BACKEND_FIELD_MISSING: "Sunucu alanı henüz yok"
   });
-  const TOLERANCE = 0.5;
 
   /* ---------- Saf yardımcılar (testte doğrudan çağrılır) ---------- */
   const isNum = v => typeof v === "number" && Number.isFinite(v);
   const hasValue = f => !!f && typeof f === "object" && VALUE_STATUSES.has(f.status) && isNum(f.value);
   const statusText = f => STATUS_LABELS[f && f.status] || STATUS_LABELS.BACKEND_FIELD_MISSING;
 
-  /* Kira yükümlülüğü köprüsü.
-     Açılış + ilk muhasebeleştirme + faiz − ödemeler ± modifikasyon ± yeniden ölçüm
-     ± TMS 21 kur farkı (+ mutabakat farkı) = kapanış.
-     Ödemeler gerçekleşen nakit çıkışından alınır; yoksa planlanan ödeme kullanılır
-     ve satır "planlanan" olarak işaretlenir. Mutabakat farkı paketin açıkça
-     vermediği hareketleri (ör. TMS 29 parasal kazanç/kayıp) gizlemeden gösterir. */
+  /* Hareketler kaynak değerleriyle gösterilir; mutabakat sunucudan gelir. */
   function bridgeModel(pkg) {
-    const q = (pkg && pkg.quantitative) || {};
-    const l = (pkg && pkg.periodMovement && pkg.periodMovement.liability) || {};
-    const maturity = (pkg && pkg.maturityAnalysis) || {};
-    const opening = l.opening;
-    const closing = l.closing || maturity.discountedLeaseLiabilityCarryingAmount;
-
-    const actual = l.actualCashOutflow || q.totalCashOutflowForLeases;
-    const scheduled = l.scheduledContractualCash || q.scheduledContractualCash;
-    const paymentPlanned = !hasValue(actual) && hasValue(scheduled);
-    const payment = hasValue(actual) ? actual : (paymentPlanned ? scheduled : (actual || scheduled));
-
-    const steps = [
-      { id: "additions", label: "İlk muhasebeleştirme girişleri", field: l.initialRecognitionAdditions },
-      { id: "interest", label: "Faiz gideri (etkin faiz)", field: l.interest || q.interestExpense },
-      { id: "payments", label: paymentPlanned ? "Kira ödemeleri (planlanan)" : "Kira ödemeleri", field: payment,
-        note: paymentPlanned ? "Gerçekleşen ödeme kaynağı yok; planlanan sözleşme ödemesi gösteriliyor." : "", negate: true },
-      { id: "modifications", label: "Modifikasyonlar", field: l.modifications },
-      { id: "remeasurements", label: "Yeniden ölçüm", field: l.remeasurements },
-      { id: "tms21", label: "TMS 21 kur farkı", field: l.tms21Movement }
-    ].map(s => {
-      if (s.field && s.field.status === "NOT_APPLICABLE") return { ...s, kind: "na", status: statusText(s.field) };
-      if (!hasValue(s.field)) return { ...s, kind: "missing", status: statusText(s.field) };
-      let v = s.field.value;
-      if (s.negate) v = -Math.abs(v);
-      return { ...s, kind: v >= 0 ? "up" : "down", value: v };
-    });
-
-    const rows = [];
-    const openingOk = hasValue(opening), closingOk = hasValue(closing);
-    rows.push(openingOk ? { id: "opening", label: "Açılış", kind: "total", value: opening.value }
-      : { id: "opening", label: "Açılış", kind: "missing", status: statusText(opening) });
-
-    let running = openingOk ? opening.value : 0;
-    const extents = openingOk ? [running] : [0];
-    steps.forEach(s => {
-      if (s.kind === "missing" || s.kind === "na") { rows.push(s); return; }
-      const from = running;
-      running += s.value;
-      rows.push({ ...s, from, to: running });
-      extents.push(from, running);
-    });
-
-    let residual = null;
-    if (openingOk && closingOk) {
-      const diff = closing.value - running;
-      if (Math.abs(diff) > TOLERANCE) {
-        residual = diff;
-        const from = running;
-        running += diff;
-        rows.push({ id: "residual", kind: "residual", value: diff, from, to: running,
-          label: "Mutabakat farkı",
-          note: "Pakette ayrı satırı olmayan hareketler: TMS 29 parasal kazanç/kayıp, kaynağı gelmeyen kalemler"
-            + (paymentPlanned ? ", planlanan ile gerçekleşen ödeme farkı." : ".") });
-        extents.push(from, running);
-      }
-    }
-    rows.push(closingOk ? { id: "closing", label: "Kapanış", kind: "total", value: closing.value }
-      : { id: "closing", label: "Kapanış", kind: "missing", status: statusText(closing) });
-    if (closingOk) extents.push(closing.value);
-
-    const missing = rows.filter(r => r.kind === "missing").length;
-    /* Eksen: hareketler bakiyeye göre küçük kaldığında okunabilsin diye eksen
-       sıfırdan değil, en düşük ara bakiyenin biraz altından başlar; bu durumda
-       açılış/kapanış çubukları "kesik eksen" işaretiyle çizilir. */
-    const lo = Math.min(...extents), hi = Math.max(...extents);
-    let min = Math.min(0, lo), max = Math.max(0, hi);
-    if (lo > 0) {
-      const cut = lo - Math.max((hi - lo) * 0.35, hi * 0.02);
-      if (cut > 0 && cut > hi * 0.25) min = cut;
-    }
-    return {
-      rows, residual, paymentPlanned, missing, min, max, axisCut: min > 0,
-      currency: (closing && closing.currency) || (opening && opening.currency) || (pkg && pkg.period && pkg.period.presentationCurrency) || "",
-      complete: openingOk && closingOk && missing === 0
-    };
+    const q = pkg?.quantitative || {}, l = pkg?.periodMovement?.liability || {};
+    const rows = [
+      ["opening", "Açılış", l.opening],
+      ["additions", "İlk muhasebeleştirme girişleri", l.initialRecognitionAdditions],
+      ["interest", "Faiz gideri (etkin faiz)", l.interest || q.interestExpense],
+      ["payments", "Gerçekleşen kira nakit çıkışı", l.actualCashOutflow || q.totalCashOutflowForLeases],
+      ["modifications", "Modifikasyonlar", l.modifications],
+      ["remeasurements", "Yeniden ölçüm", l.remeasurements],
+      ["tms21", "TMS 21 kur farkı", l.tms21Movement],
+      ["closing", "Kapanış", l.closing || pkg?.maturityAnalysis?.discountedLeaseLiabilityCarryingAmount]
+    ].map(([id, label, field]) => ({ id, label,
+      kind: hasValue(field) ? "total" : field?.status === "NOT_APPLICABLE" ? "na" : "missing",
+      value: hasValue(field) ? field.value : null, status: statusText(field) }));
+    const reconciled = pkg?.reconciliation?.periodMovementReconciled;
+    return { rows, residual: null, paymentPlanned: false,
+      missing: rows.filter(r => r.kind === "missing").length,
+      reconciled: typeof reconciled === "boolean" ? reconciled : null,
+      complete: reconciled === true && rows.every(r => r.kind !== "missing"),
+      currency: pkg?.period?.presentationCurrency || "" };
   }
 
   /* Vade analizi: iskonto edilmemiş dilimler ve defter değerine mutabakat. */
@@ -132,11 +69,11 @@
     const totalField = { status: m.undiscountedTotalStatus || m.status, value: m.undiscountedTotal };
     const total = hasValue(totalField) ? totalField.value : null;
     const carryingValue = hasValue(carrying) ? carrying.value : null;
-    const finance = total !== null && carryingValue !== null ? total - carryingValue : null;
-    const bandSum = bands.every(b => b.value !== null) ? bands.reduce((a, b) => a + b.value, 0) : null;
+    const finance = null; // Onaylı sunucu alanı bulunmuyor.
+    const matched = pkg?.reconciliation?.maturityBucketsMatchUndiscountedTotal;
     return {
       supported: true, currency, bands, total, carrying: carryingValue, finance,
-      bandsMatchTotal: bandSum !== null && total !== null ? Math.abs(bandSum - total) <= TOLERANCE : null,
+      bandsMatchTotal: typeof matched === "boolean" ? matched : null,
       max: Math.max(0, ...bands.map(b => b.value || 0))
     };
   }
@@ -152,7 +89,8 @@
     const items = f.value.filter(i => i && isNum(i.value))
       .map(i => ({ label: i.assetClass || "Sınıflandırılmamış", value: i.value, currency: i.currency || currency }))
       .sort((a, b) => b.value - a.value);
-    const total = items.reduce((a, b) => a + b.value, 0);
+    const closing = pkg?.periodMovement?.rou?.closing;
+    const total = hasValue(closing) ? closing.value : null;
     return { supported: true, currency, items, total,
       max: Math.max(0, ...items.map(i => i.value)) };
   }
@@ -186,40 +124,12 @@
   /* ---------- Biçimlendirme ---------- */
   const nf0 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
   const nf2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const signed = v => (v > 0 ? "+" : v < 0 ? "−" : "") + nf0.format(Math.abs(v));
   const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const pct = (v, min, span) => ((v - min) / span) * 100;
 
   function renderBridge(model) {
-    const span = (model.max - model.min) || 1;
-    const zero = pct(0, model.min, span);
-    const rows = model.rows.map(r => {
-      if (r.kind === "missing" || r.kind === "na") {
-        return `<div class="lq-wf-row is-${r.kind}" role="row"><span class="lq-wf-label" role="rowheader">${esc(r.label)}</span>`
-          + `<span class="lq-wf-track" role="cell"><span class="lq-wf-need">${esc(r.status)}</span></span>`
-          + `<span class="lq-wf-val" role="cell">—</span></div>`;
-      }
-      let left, width, val;
-      if (r.kind === "total") {
-        const base = model.axisCut ? model.min : 0;
-        const a = pct(Math.min(base, r.value), model.min, span), b = pct(Math.max(base, r.value), model.min, span);
-        left = a; width = b - a; val = nf0.format(r.value);
-      } else {
-        const a = pct(Math.min(r.from, r.to), model.min, span), b = pct(Math.max(r.from, r.to), model.min, span);
-        left = a; width = b - a; val = signed(r.value);
-      }
-      const title = `${r.label}: ${nf2.format(r.value)} ${model.currency}`.trim();
-      return `<div class="lq-wf-row is-${r.kind}" role="row" title="${esc(title)}">`
-        + `<span class="lq-wf-label" role="rowheader">${esc(r.label)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span>`
-        + `<span class="lq-wf-track" role="cell">${model.axisCut ? "" : `<i class="lq-wf-zero" style="left:${zero.toFixed(3)}%"></i>`}`
-        + `<b class="lq-wf-bar${model.axisCut && r.kind === "total" ? " is-cut" : ""}" style="left:${left.toFixed(3)}%;width:${Math.max(width, 0.4).toFixed(3)}%"></b></span>`
-        + `<span class="lq-wf-val" role="cell">${esc(val)}</span></div>`;
-    }).join("");
-    const foot = model.complete
-      ? (model.residual === null ? `<p class="lq-chart-note is-ok">Açılış ve hareketler kapanışla mutabık.</p>` : "")
-      : `<p class="lq-chart-note">${model.missing} kalem için kaynak yok; köprü eksik kalemler sıfır sayılmadan çizildi.</p>`;
-    const axis = model.axisCut ? `<p class="lq-chart-axis">Eksen ${nf0.format(model.min)} ${esc(model.currency)} değerinden başlar; açılış ve kapanış çubukları kesiktir.</p>` : "";
-    return `<div class="lq-wf" role="table" aria-label="Kira yükümlülüğü köprüsü">${rows}</div>${foot}${axis}`;
+    const rows = model.rows.map(r => `<div class="lq-wf-row is-${r.kind}" role="row"><span class="lq-wf-label" role="rowheader">${esc(r.label)}</span><span class="lq-wf-track" role="cell">${r.value === null ? esc(r.status) : "Sunucu kaynağı"}</span><span class="lq-wf-val" role="cell">${r.value === null ? "—" : nf2.format(r.value)}</span></div>`).join("");
+    const note = model.complete ? "Sunucu dönem hareketi mutabakatını doğruladı." : model.reconciled === false ? "Sunucu dönem hareketi mutabakatını doğrulamadı." : "Dönem hareketi mutabakatı için onaylı sunucu kaynağı gerekli.";
+    return `<div class="lq-wf" role="table" aria-label="Kira yükümlülüğü kaynak hareketleri">${rows}</div><p class="lq-chart-note">${esc(note)} Eksik kalemler sıfır sayılmaz.</p>`;
   }
 
   function renderMaturity(model) {
@@ -234,9 +144,9 @@
         + `<span class="lq-mat-label">${esc(b.label)}</span></div>`).join("");
     const line = (label, v, cls) => `<div class="lq-rec-row ${cls || ""}"><span>${esc(label)}</span><b>${v === null ? "—" : (cls === "is-sub" ? `(${nf0.format(v)})` : nf0.format(v))}</b></div>`;
     const rec = line("İskonto edilmemiş toplam", model.total)
-      + line("− Gelecek dönem finansman gideri (fark)", model.finance, "is-sub")
-      + line("= Kira yükümlülüğü defter değeri", model.carrying, "is-total");
-    const warn = model.bandsMatchTotal === false ? `<p class="lq-chart-note">Dilim toplamı iskonto edilmemiş toplamla uyuşmuyor.</p>` : "";
+      + line("Gelecek dönem finansman gideri · kaynak gerekli", model.finance, "is-sub")
+      + line("Kira yükümlülüğü defter değeri", model.carrying, "is-total");
+    const warn = `<p class="lq-chart-note">${model.bandsMatchTotal === true ? "Sunucu vade dilimi mutabakatını doğruladı." : model.bandsMatchTotal === false ? "Sunucu vade dilimi mutabakatını doğrulamadı." : "Vade dilimi mutabakatı için sunucu kaynağı gerekli."}</p>`;
     return `<div class="lq-mat" role="img" aria-label="İskonto edilmemiş vade dilimleri">${bars}</div><div class="lq-rec">${rec}</div>${warn}`;
   }
 
@@ -245,13 +155,12 @@
     if (!model.items.length) return `<p class="lq-chart-empty">Varlık sınıfı kırılımı boş.</p>`;
     const max = model.max || 1;
     const rows = model.items.map((i, n) => {
-      const share = model.total ? (i.value / model.total) * 100 : 0;
       return `<div class="lq-cls-row" title="${esc(`${i.label}: ${nf2.format(i.value)} ${i.currency}`)}">`
         + `<span class="lq-cls-label"><i class="lq-cls-dot c${n % 6}"></i>${esc(i.label)}</span>`
         + `<span class="lq-cls-track"><b class="c${n % 6}" style="width:${Math.max((i.value / max) * 100, 0.5).toFixed(2)}%"></b></span>`
-        + `<span class="lq-cls-val">${nf0.format(i.value)}<small>%${nf0.format(share)}</small></span></div>`;
+        + `<span class="lq-cls-val">${nf0.format(i.value)}</span></div>`;
     }).join("");
-    return `<div class="lq-cls">${rows}</div><div class="lq-rec"><div class="lq-rec-row is-total"><span>Kullanım hakkı varlığı — kapanış</span><b>${nf0.format(model.total)}</b></div></div>`;
+    return `<div class="lq-cls">${rows}</div><div class="lq-rec"><div class="lq-rec-row is-total"><span>Kullanım hakkı varlığı — kapanış</span><b>${model.total === null ? "Kaynak gerekli" : nf0.format(model.total)}</b></div></div>`;
   }
 
   const helpers = Object.freeze({ bridgeModel, maturityModel, assetModel, scopeOk, errorMessage, renderBridge, renderMaturity, renderAssets });
