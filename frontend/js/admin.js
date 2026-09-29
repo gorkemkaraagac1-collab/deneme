@@ -855,9 +855,18 @@ return d.toLocaleDateString(
 
 }
 
+// Veritabanı lisans durumunu küçük harfle tutar (active/expired/cancelled);
+// arayüz büyük harfle karşılaştırır. Yüklemede tek yerden normalize edilir.
+function normalizeLicense(license) {
+if (!license || typeof license !== "object") return license;
+return { ...license, status: String(license.status || "").toUpperCase() };
+}
+
 function getStatusBadge(status) {
 
 const map = {
+    CANCELLED:
+        "badge-expired",
     ACTIVE:
         "badge-active",
     INACTIVE:
@@ -983,6 +992,7 @@ localStorage.removeItem(
 localStorage.removeItem(
     "current_user"
 );
+try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
 window.location.href =
     "../login.html";
 
