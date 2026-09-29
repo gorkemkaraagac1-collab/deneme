@@ -750,9 +750,11 @@ async function loadCompanies() {
         }
 
         companiesCache =
-            Array.isArray(result.data)
+            (Array.isArray(result.data)
                 ? result.data
-                : [];
+                : []).map(c => c && c.active_license
+                    ? { ...c, active_license: normalizeLicense(c.active_license) }
+                    : c);
 
         renderCompanySummary(companiesCache);
 
@@ -1425,9 +1427,9 @@ async function viewCompany(id) {
                 : [];
 
         const licenses =
-            Array.isArray(company.licenses)
+            (Array.isArray(company.licenses)
                 ? company.licenses
-                : [];
+                : []).map(normalizeLicense);
 
         const summary =
             company.contracts_summary || {

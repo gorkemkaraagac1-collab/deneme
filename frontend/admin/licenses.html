@@ -911,9 +911,9 @@ async function loadLicenses() {
 
 
         licensesCache =
-            Array.isArray(result.data)
+            (Array.isArray(result.data)
                 ? result.data
-                : [];
+                : []).map(normalizeLicense);
 
 
         renderLicenseSummary(
