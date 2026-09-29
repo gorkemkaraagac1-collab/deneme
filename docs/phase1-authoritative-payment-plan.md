@@ -38,7 +38,7 @@ The five existing environment failures are not successful accounting verificatio
 
 ## Riskler / kalan kanıt
 
-- The private backend repository request returned 404. No canonical PostgreSQL DATE, API schedule-generation implementation, duration field, or independent date evidence was available. The observed 27/28 distinction remains unresolved. Dates were not shifted to hide it.
+- Initial connector access to the private backend returned 404; subsequently authorized repository access restored source inspection. The current reporting DTO has no canonical duration field. Canonical PostgreSQL DATE, live server revision parity and independent persisted-date evidence remain unavailable; the observed 27/28 distinction is not closed. Dates were not shifted to hide it.
 - No server DTO extension or accounting-policy change was invented. Canonical duration and approved standards evidence remain required.
 - No merge or deployment was performed. Published changes have not been tested at desktop/mobile widths or through live legacy regression. Local tests are not live acceptance.
 - No customer data, credentials, raw source packages, or Test financial values are committed here. No save/import/apply/lock/posting action was performed.
