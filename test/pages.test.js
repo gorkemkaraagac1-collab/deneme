@@ -44,3 +44,43 @@ test('v2 page hosts are inserted into the existing views without removing them',
  assert.equal(d.querySelectorAll('#lqContracts [data-open-contract]').length,4);
  dom.window.close();
 });
+
+ test('disclosure loading is separate from completeness, missing and unsupported issues are actions',()=>{
+ const dom=new JSDOM('<html data-lq-ui="legacy"><body></body></html>',{runScripts:'outside-only'});
+ dom.window.eval(src);
+ const state=dom.window.LeaseQantPages.disclosureState;
+ const incomplete=state({validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cash'},{fieldId:'cash'}],supportStatus:[{requirementId:'fx',supportedStatus:'NOT_SUPPORTED'}]});
+ assert.equal(incomplete.complete,false);assert.equal(incomplete.issues.join(','),'cash,fx');
+ assert.equal(state({validation:{status:'COMPLETE_FOR_SUPPORTED_SCOPE'},missingInputs:[{fieldId:'cash'}]}).complete,false);
+ assert.equal(state({validation:{status:'COMPLETE_FOR_SUPPORTED_SCOPE'},missingInputs:[],supportStatus:[]}).complete,true);
+ assert.equal(state(null).complete,false);
+ assert.equal(state({validation:{status:'PASSED'}}).complete,false);
+ dom.window.close();
+ });
+
+async function overview(disclosureError=false){
+ const dom=new JSDOM('<html data-lq-ui="2"><body><select id="v26ActiveCompanySelect"><option value="c1">Holding</option></select><section id="lqDashboard"></section></body></html>',{url:'https://leaseqant.com/tfrs16.html',runScripts:'outside-only'});
+ const w=dom.window;
+ const period={periodStart:'2026-08-01',periodEnd:'2026-08-31',reportingDate:'2026-08-31'};
+ w.LeaseQantReportingAuthorityUi={defaultPeriod:()=>period,companies:async()=>[],load:async()=>({identity:{presentationCurrency:'TRY',companyName:'Holding'},period,totals:{leaseLiability:m(100),currentLiability:m(20),nonCurrentLiability:m(80)},population:{count:1,includedCount:1,excludedCount:0,exclusions:[]},controls:{status:'PASS',checks:[{status:'PASS'}]}})};
+ w.GK_TFRS16={getPortfolioContracts:()=>[C[1]]};
+ w.LeaseQantDashboardCharts={scopeOk:()=>true,assetModel:()=>({supported:false,status:'Girdi gerekli'}),bridgeModel:()=>({currency:'TRY'}),renderBridge:()=>'<p>Sunucu mutabakat kaynağı gerekli</p>',maturityModel:()=>({supported:false}),renderMaturity:()=>'<p>Kaynak gerekli</p>'};
+ w.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async()=>({}),loadLeaseDisclosure:async()=>{if(disclosureError)throw Error('offline');return {validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cashLedger'}],supportStatus:[{requirementId:'fx',supportedStatus:'NOT_SUPPORTED'}]};}};
+ w.eval(src);await new Promise(r=>setTimeout(r,160));return dom;
+}
+test('real overview warns on loaded but incomplete disclosure and lists source actions',async()=>{
+ const dom=await overview(),d=dom.window.document;
+ assert.match(d.getElementById('lqOvRunway').textContent,/2 eksik/);
+ assert.match(d.getElementById('lqOvActions').textContent,/cashLedger/);
+ assert.match(d.getElementById('lqOvActions').textContent,/fx/);
+ assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/Bekleyen işlem yok/);
+ assert.equal(d.querySelector('#lqOvKpis .lq-pg-split'),null);
+ assert.match(d.getElementById('lqOvKpis').textContent,/oranı için sunucu kaynağı gerekli/);
+ dom.window.close();
+});
+test('real overview never declares no pending action after disclosure load failure',async()=>{
+ const dom=await overview(true),d=dom.window.document;
+ assert.match(d.getElementById('lqOvActions').textContent,/Dipnot paketi alınamadı/);
+ assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/Bekleyen işlem yok/);
+ dom.window.close();
+});

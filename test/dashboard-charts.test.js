@@ -8,10 +8,11 @@ function pkgFor(over={}){
   identity:{companyId:'c1',currencyEvidenceId:'ev1'},
   period:{reportingPeriodStart:'2026-08-01',reportingDate:'2026-08-31',presentationCurrency:'TRY'},
   population:{populationId:'p1',includedContractIds:['a','b'],includedCalculationIds:['k1','k2']},
-  validation:{status:'PASSED'},
+  validation:{status:'COMPLETE_FOR_SUPPORTED_SCOPE'},
+  reconciliation:{periodMovementReconciled:true,maturityBucketsMatchUndiscountedTotal:true},
   periodMovement:{liability:{opening:S(1000),initialRecognitionAdditions:S(200),interest:S(30),
    actualCashOutflow:S(150),scheduledContractualCash:S(150),modifications:{status:'ZERO_CONFIRMED',value:0},
-   remeasurements:{status:'ZERO_CONFIRMED',value:0},tms21Movement:S(40),closing:S(1120)},rou:{}},
+   remeasurements:{status:'ZERO_CONFIRMED',value:0},tms21Movement:S(40),closing:S(1120)},rou:{closing:S(1000)}},
   quantitative:{rouCarryingAmountByAssetClass:{status:'SUPPORTED',value:[{assetClass:'Araç',value:300},{assetClass:'Bina',value:700}]}},
   maturityAnalysis:{status:'SUPPORTED',currency:'TRY',bands:[{bandId:'b1',label:'1 yıla kadar',undiscountedCashFlow:600},{bandId:'b2',label:'1–5 yıl',undiscountedCashFlow:700}],
    undiscountedTotal:1300,undiscountedTotalStatus:'SUPPORTED',discountedLeaseLiabilityCarryingAmount:S(1120)},
@@ -30,34 +31,35 @@ async function page(ui='2',facade){
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
-test('bridge: payments reduce, balanced package has no residual',async()=>{
+test('bridge: preserves source payments and uses server reconciliation',async()=>{
  const {dom,w}=await page('legacy');const {bridgeModel}=w.LeaseQantDashboardCharts;
  const m=bridgeModel(pkgFor());
  assert.equal(m.residual,null);assert.equal(m.complete,true);
- assert.equal(m.rows.find(r=>r.id==='payments').value,-150);
+ assert.equal(m.rows.find(r=>r.id==='payments').value,150);
  assert.equal(m.rows.find(r=>r.id==='tms21').value,40);
  assert.equal(m.rows.map(r=>r.id).join(','),['opening','additions','interest','payments','modifications','remeasurements','tms21','closing'].join(','));
  dom.window.close();
 });
-test('bridge: unexplained difference is shown as reconciliation row, missing field is not zero',async()=>{
+test('bridge: never derives a residual or TMS29 attribution from missing movements',async()=>{
  const {dom,w}=await page('legacy');const {bridgeModel}=w.LeaseQantDashboardCharts;
  const p=pkgFor();p.periodMovement.liability.closing=S(1100);p.periodMovement.liability.tms21Movement={status:'REQUIRES_ENTITY_INPUT',value:null};
- const m=bridgeModel(p);
+ p.reconciliation={};const m=bridgeModel(p);
  assert.equal(m.rows.find(r=>r.id==='tms21').kind,'missing');
- assert.equal(m.residual,20);assert.equal(m.complete,false);
- assert.match(m.rows.find(r=>r.id==='residual').note,/TMS 29/);
+ assert.equal(m.residual,null);assert.equal(m.complete,false);
+ assert.equal(m.rows.find(r=>r.id==='residual'),undefined);assert.doesNotMatch(w.LeaseQantDashboardCharts.renderBridge(m),/TMS 29/);assert.equal(m.reconciled,null);
  dom.window.close();
 });
-test('bridge: planned payments are labelled when actual cash is unavailable',async()=>{
+test('bridge: planned cash never substitutes missing ledger cash',async()=>{
  const {dom,w}=await page('legacy');const {bridgeModel}=w.LeaseQantDashboardCharts;
  const p=pkgFor();p.periodMovement.liability.actualCashOutflow={status:'REQUIRES_LEDGER_DATA',value:null};
- const m=bridgeModel(p);assert.equal(m.paymentPlanned,true);assert.match(m.rows.find(r=>r.id==='payments').label,/planlanan/);
+ const m=bridgeModel(p);assert.equal(m.paymentPlanned,false);assert.equal(m.rows.find(r=>r.id==='payments').kind,'missing');assert.equal(m.rows.find(r=>r.id==='payments').value,null);
  dom.window.close();
 });
-test('maturity reconciles undiscounted total to carrying amount; asset classes sorted',async()=>{
+test('maturity uses server reconciliation and asset total without financial derivation',async()=>{
  const {dom,w}=await page('legacy');const {maturityModel,assetModel}=w.LeaseQantDashboardCharts;
- const m=maturityModel(pkgFor());assert.equal(m.finance,180);assert.equal(m.bandsMatchTotal,true);
+ const m=maturityModel(pkgFor());assert.equal(m.finance,null);assert.equal(m.bandsMatchTotal,true);
  const a=assetModel(pkgFor());assert.equal(a.items.map(i=>i.label).join(','),'Bina,Araç');assert.equal(a.total,1000);
+ const p=pkgFor();delete p.reconciliation;delete p.periodMovement.rou.closing;assert.equal(maturityModel(p).bandsMatchTotal,null);assert.equal(assetModel(p).total,null);
  const n=maturityModel(pkgFor({maturityAnalysis:{status:'NOT_CALCULABLE',limitation:'x'}}));assert.equal(n.supported,false);
  dom.window.close();
 });
