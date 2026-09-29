@@ -6,7 +6,7 @@
 
 ## Ne değişti
 
-Yalnızca `html[data-lq-ui="2"]` altında iki form, “Değişikliği tanımla” ve “Yeni şartları gir” aşamalarında gruplanıp üç basamaklı akış göstergesiyle sunulur. Üçüncü basamak, mevcut sunucu kaynaklı etki paneline yönlendirir. Alanlar, sözleşme seçimi, form kimlikleri, durum/aksiyon düğmeleri ve motorun mevcut oluşturma, düzenleme, uygulama ve iptal callback'leri korunur. Tarayıcıda yeni tutar, oran veya bakiye hesaplanmaz; kaynak yoksa mevcut “Kaynak gerekli” durumu görünür. Legacy görünüm bu geliştirmeyi kullanmaz.
+Yalnızca `html[data-lq-ui="2"]` altında iki form, “Değişikliği tanımla” ve “Yeni şartları gir” aşamalarında gruplanıp üç basamaklı akış göstergesiyle sunulur. Üçüncü basamak etkiyi gözden geçirme alanıdır. Alanlar, sözleşme seçimi, form kimlikleri, durum/aksiyon düğmeleri ve motorun mevcut oluşturma, düzenleme, uygulama ve iptal callback'leri korunur. Tarayıcıda yeni tutar, oran veya bakiye hesaplanmaz. Modifikasyon/yeniden değerlendirme ekranında doğrulanmış özel sunucu önizlemesi bu PR kapsamında bağlanmadığından etki paneli “Kaynak gerekli” gösterir. Legacy görünüm bu geliştirmeyi kullanmaz.
 
 ## Test sonucu
 
@@ -18,4 +18,4 @@ Yalnızca `html[data-lq-ui="2"]` altında iki form, “Değişikliği tanımla�
 
 ## Riskler
 
-Bu değişiklik sunucu önizleme kaynağı eklemez. Etki kartı ancak mevcut güvenilir sunucu sonucu sağlandığında sayısal sonuç gösterebilir; aksi halde kaynak gereksinimi gösterilir. Finansal uygulama semantiği değişmez.
+Modifikasyon/yeniden değerlendirme için sayısal sunucu önizleme bağlantısı bu PR'ın kapsamında değildir; bu ekrandaki etki kartı “Kaynak gerekli” kalır. Güvenilir sunucu paketi ayrı bir çalışma ile bağlanmadan finansal tutar gösterilmez. Finansal uygulama semantiği değişmez.
