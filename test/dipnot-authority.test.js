@@ -208,7 +208,10 @@ test('active Dipnotlar delegates only to disclosure UI, without old accounting h
     assert.equal(active.includes(forbidden), false, forbidden);
   }
   assert.match(active, /disclosure\.renderFootnotes\(container\)/);
-  assert.match(fs.readFileSync(path.join(root, 'tfrs16.html'), 'utf8'), /tfrs16-disclosure-ui\.js/);
+  const workspace = fs.readFileSync(path.join(root, 'workspace.html'), 'utf8');
+  assert.match(workspace, /workspace-v3\.js/);
+  assert.match(fs.readFileSync(path.join(root, 'js/workspace-v3.js'), 'utf8'), /\/api\/reports\/lease-disclosure\/drafts/);
+  assert.match(fs.readFileSync(path.join(root, 'tfrs16.html'), 'utf8'), /footnotes: 'disclosures'/);
 
   let requestedPeriod;
   const calls = [];
