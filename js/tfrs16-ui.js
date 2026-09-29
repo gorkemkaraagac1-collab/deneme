@@ -2449,6 +2449,16 @@ window.fetch = (input, init = {}) => {
 
   function renderAccountMappingPage(container) {
     if (!container) return;
+    if (document.documentElement.getAttribute("data-lq-ui") === "2") {
+      const ui = window.LeaseQantTfrs16JournalUi;
+      if (!ui?.renderAccountMapping) { container.innerHTML = '<p role="alert">Onaylı hesap eşleme servisi hazır değil.</p>'; return; }
+      ui.renderAccountMapping(container, {
+        companies: typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [],
+        companyId: container.dataset.companyId || (typeof getActiveCompanyId === "function" ? getActiveCompanyId() : ""),
+        contracts
+      });
+      return;
+    }
     if (typeof injectV26Styles === "function") injectV26Styles();
 
     // V27 — sessionCompanies (backend lisans) ve v26LoadCompanies (sözleşme/
@@ -8982,6 +8992,8 @@ ${renderAccountingCenterBulkPromo()}
     try {
       if (!ui) journalAuthorityUnavailable();
       if (preview) preview.innerHTML = "<p>Güvenilir yevmiye yükleniyor...</p>";
+      const requestControls = ["accountingYear","accountingMonth","accountingPeriod","accountingCustomStart","accountingCustomEnd"].map(control);
+      const requestValues = requestControls.map(c => c?.value);
       const year = Number(control("accountingYear")?.value);
       const period = control("accountingPeriod")?.value;
       const month = Number(control("accountingMonth")?.value);
@@ -8991,6 +9003,7 @@ ${renderAccountingCenterBulkPromo()}
       if (!range?.periodStart || !range?.periodEnd) throw new Error("Geçerli raporlama dönemi gerekiyor");
       const pkg = await ui.loadSingle(contract,{kind:period === "closing" ? "RECLASSIFICATION" : "PERIOD",
         periodStart:v23DateKey(range.periodStart),periodEnd:v23DateKey(range.periodEnd)});
+      if (!preview?.isConnected || requestControls.some((c,i) => c && (!c.isConnected || c.value !== requestValues[i]))) return null;
       ui.renderInto(preview,[pkg]);
       return pkg;
     } catch(error) {
@@ -9011,6 +9024,8 @@ ${renderAccountingCenterBulkPromo()}
     try {
       if (!ui) journalAuthorityUnavailable();
       ui.clearBulk();
+      const requestControls = ["bulkAccountingYear","bulkAccountingMonth","bulkAccountingPeriod","bulkAccountingStartDate","bulkAccountingEndDate"].map(id => document.getElementById(id));
+      const requestValues = requestControls.map(c => c?.value);
       const year = Number(document.getElementById("bulkAccountingYear")?.value);
       const period = document.getElementById("bulkAccountingPeriod")?.value;
       const month = Number(document.getElementById("bulkAccountingMonth")?.value);
@@ -9021,6 +9036,7 @@ ${renderAccountingCenterBulkPromo()}
         periodStart:v23DateKey(range.periodStart),periodEnd:v23DateKey(range.periodEnd),
         displayReference:document.getElementById("bulkVoucherNumber")?.value?.trim() || "",
         description:document.getElementById("bulkVoucherDescription")?.value?.trim() || "TFRS 16 sözleşmesel önizleme"});
+      if (requestControls.some((c,i) => c && (!c.isConnected || c.value !== requestValues[i]))) { ui.clearBulk();return; }
       // Compatibility reporting caches retain server vouchers; no browser
       // accounting, account mapping, numbering or totals are created here.
       bulkJournalData = packages.flatMap(pkg=>pkg.vouchers.map(voucher=>({...voucher,
@@ -11259,6 +11275,7 @@ ${renderAccountingCenterBulkPromo()}
     modal?.classList.remove(
       "hidden"
     );
+    window.LeaseQantTfrs16JournalUi?.bindPeriodControls(content,"accounting",`single:${contract.companyId}:${contract.id}`);
     window.LeaseQantReportingAuthorityUi?.renderContractDetails(content,contract);
     const initialTarget = content?.querySelector("[data-authoritative-initial-journal]");
     const journalUi = window.LeaseQantTfrs16JournalUi;
@@ -11383,6 +11400,7 @@ ${renderAccountingCenterBulkPromo()}
       "flex";
 
     populateBulkYears();
+    window.LeaseQantTfrs16JournalUi?.bindPeriodControls(modal,"bulkAccounting","bulk");
 
     const today =
       new Date();

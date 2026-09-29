@@ -4,6 +4,7 @@
   "use strict";
   const accepted = new WeakSet();
   let bulkPackages = [];
+  let bulkSequence = 0;
   const escape = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const amount = value => new Intl.NumberFormat("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
   function fail(code="JOURNAL_AUTHORITY_UNAVAILABLE") { const error=new Error(code);error.code=code;throw error; }
@@ -63,9 +64,10 @@
   function loadSingle(contract,period) {
     return load({companyId:contract.companyId,contractIds:[contract.id],...period},false);
   }
-  function clearBulk() { bulkPackages=[]; }
+  function clearBulk() { bulkPackages=[];++bulkSequence; }
   async function loadBulk(contracts,period) {
     clearBulk();
+    const sequence = bulkSequence;
     try {
       const groups=new Map();
       contracts.forEach(contract=>{
@@ -76,9 +78,10 @@
       if (!groups.size) fail("JOURNAL_POPULATION_EMPTY");
       const results=[];
       for (const [companyId,contractIds] of groups) results.push(await load({companyId,contractIds,...period},true));
+      if (sequence !== bulkSequence) fail("JOURNAL_REQUEST_SUPERSEDED");
       bulkPackages=results;
       return results;
-    } catch(error) { clearBulk();throw error; }
+    } catch(error) { if (sequence === bulkSequence) clearBulk();throw error; }
   }
   function rowsForPackage(pkg) {
     requireAccepted(pkg);
@@ -251,7 +254,81 @@
       page.document.close();page.print();
     });
   }
-  global.LeaseQantTfrs16JournalUi={acceptPackage,loadSingle,loadBulk,clearBulk,
+  const periodChoices = new Map();
+  const boundPeriodControls = new WeakSet();
+  function bindPeriodControls(container, prefix, scope) {
+    if (global.document?.documentElement.getAttribute("data-lq-ui") !== "2" || !container) return;
+    const ids = ["Year", "Month", "Period", ...(prefix === "bulkAccounting" ? ["StartDate", "EndDate"] : ["CustomStart", "CustomEnd"])];
+    const controls = ids.map(id => container.querySelector("#" + prefix + id));
+    if (!controls[0] || !controls[1]) return;
+    const common = global.LeaseQantReportingPeriod?.get?.() || global.LeaseQantReportingAuthorityUi?.defaultPeriod?.();
+    const date = /^(\d{4})-(\d{2})-/.exec(common?.periodStart || "");
+    const saved = periodChoices.get(scope);
+    if (!saved && !date) return; // Missing common period is never replaced by January.
+    const values = saved || [date[1], String(Number(date[2])), "monthly", common.periodStart, common.periodEnd];
+    controls.forEach((control, i) => {
+      if (!control) return;
+      if (control.tagName === "SELECT" && !Array.from(control.options).some(o => o.value === values[i])) {
+        const option = global.document.createElement("option");option.value = values[i];option.textContent = values[i];control.append(option);
+      }
+      control.value = values[i];
+    });
+    if (!boundPeriodControls.has(controls[0])) {
+      boundPeriodControls.add(controls[0]);
+      controls.forEach(control => control?.addEventListener("change", () => {
+        periodChoices.set(scope, controls.map(c => c?.value || ""));
+        const preview = container.querySelector(prefix === "bulkAccounting" ? "#bulkJournalPreview" : "#journalPreview");
+        if (preview) preview.innerHTML = '<p>Seçilen dönem için önizlemeyi yeniden alın.</p>';
+        if (prefix === "bulkAccounting") {
+          clearBulk();
+          const summary = container.querySelector("#bulkJournalSummary");if (summary) summary.innerHTML = "";
+          const exp = container.querySelector("#exportBulkJournals");if (exp) exp.disabled = true;
+        }
+      }));
+    }
+  }
+
+  function mappingHtml(pkg) {
+    requireAccepted(pkg);
+    if (pkg.vouchers.some(v => !v.accountMappingId || !/^[a-f0-9]{64}$/.test(v.accountMappingHash || ""))) fail("JOURNAL_MAPPING_EVIDENCE_INVALID");
+    return pkg.vouchers.map(voucher => `<section class="gk-v26-card"><h3>${escape(voucher.contractId)} · dönem fişinde kullanılan hesaplar</h3>
+      <p>Sunucuda onaylı eşleme · sürüm ${escape(voucher.accountMappingVersion)} · kimlik ${escape(voucher.accountMappingId)}<br>Kaynak hash: <code>${escape(voucher.accountMappingHash)}</code><br>Yevmiye kaynağı: ${escape(voucher.journalId)} · ${escape(trDate(voucher.periodStart))}–${escape(trDate(voucher.periodEnd))}</p>
+      <table class="gk-v26-table"><thead><tr><th>Muhasebe amacı</th><th>Hesap kodu</th><th>Hesap adı</th></tr></thead><tbody>${voucher.lines.map(line => `<tr><td>${escape(line.accountPurpose)}</td><td>${escape(line.accountCode)}</td><td>${escape(line.accountName)}</td></tr>`).join("")}</tbody></table></section>`).join("");
+  }
+
+  function renderAccountMapping(container, options) {
+    let sequence = 0;
+    const companies = options.companies || [];
+    container.innerHTML = `<div class="gk-v26-page"><h2>Onaylı hesap eşleme kaynağı</h2><p>Fişlerde sunucunun onayladığı şirket eşlemesi kullanılır. Aşağıda dönem fişlerinde kullanılan hesaplar gösterilir; eşlemenin tüm kapsamı değildir. Değişiklikler yetkili sunucu onay sürecinde yapılmalıdır. Yerel varsayılanlar fiş kaynağı değildir.</p><label>Şirket <select id="amCompanySelect">${companies.map(c => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join("")}</select></label><div id="amStatus" role="status" aria-live="polite"></div><div data-approved-mapping></div></div>`;
+    const select = container.querySelector("#amCompanySelect"), target = container.querySelector("[data-approved-mapping]"), status = container.querySelector("#amStatus");
+    if (companies.some(c => String(c.id) === String(options.companyId))) select.value = String(options.companyId);
+    async function refresh() {
+      const seq = ++sequence, companyId = select.value;
+      container.dataset.companyId = companyId;
+      target.innerHTML = "";status.textContent = "Onaylı fiş eşleme kaynağı yükleniyor…";
+      try {
+        const period = global.LeaseQantReportingPeriod?.get?.() || global.LeaseQantReportingAuthorityUi?.defaultPeriod?.();
+        if (!period?.periodStart || !period?.periodEnd) fail("JOURNAL_SCOPE_REQUIRED");
+        const contracts = (options.contracts || []).filter(c => String(c.companyId) === companyId && c.status === "active");
+        if (!contracts.length) fail("JOURNAL_POPULATION_EMPTY");
+        const pkg = await load({companyId, contractIds:contracts.map(c => c.id), kind:"PERIOD", periodStart:period.periodStart,periodEnd:period.periodEnd},true);
+        if (seq !== sequence || !target.isConnected || select.value !== companyId) return;
+        target.innerHTML = mappingHtml(pkg);
+        status.textContent = "Doğrulanmış sunucu fişi · salt okunur. Tam eşleme yönetim kaynağı bu arayüzde bulunmuyor.";
+      } catch(error) {
+        if (seq !== sequence || !target.isConnected) return;
+        status.textContent = "Onaylı eşleme kaynağı alınamadı; yerel varsayılan gösterilmez.";
+        target.innerHTML = errorHtml(error);
+      }
+    }
+    select.addEventListener("change",refresh);
+    const unsubscribe = global.LeaseQantReportingPeriod?.subscribe?.(() => {
+      if (!target.isConnected) { unsubscribe?.();return; }
+      refresh();
+    });
+    refresh();
+  }
+  global.LeaseQantTfrs16JournalUi={acceptPackage,loadSingle,loadBulk,clearBulk,bindPeriodControls,mappingHtml,renderAccountMapping,
     rowsForPackage,renderPackage,renderInto,errorHtml,serialize,exportPackages,bulkRows,databasePreview,
     exportBulk:format=>exportPackages(bulkPackages,format),renderBulk:container=>renderInto(container,bulkPackages)};
 })(window);

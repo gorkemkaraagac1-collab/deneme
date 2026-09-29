@@ -724,6 +724,7 @@ ${footer}
           </div></div>`;
       container.querySelector("#v26AccountingContractSelect")?.addEventListener("change", event => { selectedAccountingContractId = event.target.value; render(); });
       if (selected) {
+        global.LeaseQantTfrs16JournalUi?.bindPeriodControls(container,"accounting",`single:${selected.companyId}:${selected.id}`);
         container.querySelector("#generateJournal")?.addEventListener("click", () => bridge().generateSelectedJournal?.(selected));
         container.querySelector("#openBulkJournalButton")?.addEventListener("click", () => bridge().openBulkJournalModal?.());
       }
