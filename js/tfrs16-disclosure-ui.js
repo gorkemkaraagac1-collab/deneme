@@ -166,10 +166,39 @@
      tutar üretilmez. Mutabakat kontrolleri sunucunun reconciliation alanından. */
   const SECTION = { asset: ["14.3", "Kullanım hakkı varlıkları"], liability: ["14.4", "Kira yükümlülükleri"], liquidity: ["14.5", "Vade analizi (iskonto edilmemiş)"] };
   const trDateD = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? `${m[3]}.${m[2]}.${m[1]}` : "—"; };
+  const GAP_LABELS = Object.freeze({
+    rouDepreciationByAssetClass: "Varlık sınıfına göre amortisman", rouCarryingAmountByAssetClass: "Varlık sınıfına göre kapanış",
+    totalCashOutflowForLeases: "Gerçekleşen toplam kira nakdi", actualPrincipalCashOutflow: "Gerçekleşen anapara nakdi",
+    actualInterestCashOutflow: "Gerçekleşen faiz nakdi", actualOtherLeaseCashOutflow: "Diğer gerçekleşen kira nakdi",
+    variableLeasePaymentExpense: "Değişken kira gideri", IFRS16_58_IFRS7_MATURITY: "Onaylı vade politikası ve iskonto edilmemiş plan",
+    leasingActivity: "Kiralama faaliyetinin niteliği", unrecognizedVariableExposure: "Tanımlanmamış değişken ödeme riski",
+    extensionTerminationExposure: "Uzatma ve fesih seçenekleri", residualValueGuaranteeExposure: "Kalıntı değer garantileri",
+    notYetCommencedCommitments: "Henüz başlamamış kiralama taahhütleri", leaseRestrictionsOrCovenants: "Kiralama kısıtları ve taahhütleri",
+    saleAndLeasebackInformation: "Satış ve geri kiralama açıklaması", shortTermElection: "Kısa vadeli kiralama tercihi",
+    lowValueElection: "Düşük değerli varlık tercihi", rentConcessionExpedient: "Kira imtiyazı kolaylaştırıcı uygulaması"
+  });
+  const VALIDATION_LABELS = Object.freeze({
+    COMPLETE_FOR_SUPPORTED_SCOPE: "Desteklenen açıklama kapsamı tamam", INCOMPLETE_INPUT_REQUIRED: "Onaylı girdiler eksik",
+    UNSUPPORTED_REQUIREMENT_PRESENT: "Desteklenmeyen açıklama gerekliliği var", FAILED_VALIDATION: "Sunucu doğrulaması başarısız"
+  });
+  function sourceGaps(pkg) {
+    const gaps = [], seen = new Set();
+    const add = (id, status) => {
+      if (!id || seen.has(id) || VALUE_STATUSES.has(status) || status === "NOT_APPLICABLE") return;
+      seen.add(id);gaps.push({id, label:GAP_LABELS[id] || "Açıklama gerekliliği", status:status || "BACKEND_FIELD_MISSING"});
+    };
+    (Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : []).forEach(x => add(x.fieldId, x.status));
+    (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).forEach(x => add(x.requirementId, x.supportedStatus));
+    Object.entries(pkg?.qualitative || {}).forEach(([id, field]) => add(id,field?.status));
+    return gaps;
+  }
   function designHtml({ state, companies, tabs, body, pkg, escapeHtml: e }) {
     const ready = state.status === "ready" && pkg;
     const rowsBy = ready ? Object.fromEntries(tabs.map(([k]) => [k, rowsForTab(pkg, k)])) : {};
     const missing = ready ? Object.values(rowsBy).flat().filter(r => !VALUE_STATUSES.has(r.status) && r.status !== "NOT_APPLICABLE").length : 0;
+    const gaps = ready ? sourceGaps(pkg) : [];
+    const complete = ready && pkg.validation?.status === "COMPLETE_FOR_SUPPORTED_SCOPE" && !missing && !gaps.length;
+    const validationLabel = VALIDATION_LABELS[pkg?.validation?.status] || "Tamlık doğrulanmadı";
     const docAmount = row => {
       if (!VALUE_STATUSES.has(row.status) || typeof row.value !== "number" || !Number.isFinite(row.value)) {
         return `<span class="lq-dn-need${row.status === "NOT_APPLICABLE" ? " is-na" : ""}">${e(STATUS_LABELS[row.status] || "Kaynak gerekli")}</span>`;
@@ -182,7 +211,7 @@
       const [no, title] = SECTION[key];
       const rows = rowsBy[key] || [];
       return `<section class="lq-dn-sec${state.tab === key ? " is-active" : ""}" id="lqNote-${key}" data-disclosure-section="${key}">
-        ${state.tab === key ? '<span class="lq-dn-flag">Motor tablosu · kilitli</span>' : ""}
+        ${state.tab === key ? '<span class="lq-dn-flag">Sunucu kaynak tablosu · salt okunur</span>' : ""}
         <h3>${no} ${e(title)}</h3><div class="lq-dn-cap">(${e(trDateD(state.reportingDate))} itibarıyla · ${e(pkg?.period?.presentationCurrency || "")})</div>
         <div class="lq-dn-grid"><span></span><span class="is-h">${e(trDateD(state.reportingDate))}</span>
         ${rows.map(r => `<span class="${isTotal(r.label) ? "is-total" : ""}">${e(r.label)}${r.note ? `<small>${e(r.note)}</small>` : ""}</span><span class="is-n${isTotal(r.label) ? " is-total" : ""}">${docAmount(r)}</span>`).join("")}</div></section>`;
@@ -199,13 +228,13 @@
       const [no, title] = SECTION[k];
       const n = ready ? (rowsBy[k] || []).filter(r => !VALUE_STATUSES.has(r.status) && r.status !== "NOT_APPLICABLE").length : null;
       const tone = !ready ? "na" : n ? "warn" : "ok";
-      return `<button type="button" data-disclosure-tab="${k}" class="lq-dn-out${state.tab === k ? " is-active" : ""}" aria-current="${state.tab === k}"><i class="is-${tone}" aria-hidden="true">${tone === "ok" ? "✓" : tone === "warn" ? "!" : "–"}</i><span><b>${no} ${e(title)}</b><small>${!ready ? "Kaynak bekleniyor" : n ? `${n} kalem kaynak gerekli` : "Otomatik · motor"}</small></span></button>`;
+      return `<button type="button" data-disclosure-tab="${k}" class="lq-dn-out${state.tab === k ? " is-active" : ""}" aria-current="${state.tab === k}"><i class="is-${tone}" aria-hidden="true">${tone === "ok" ? "✓" : tone === "warn" ? "!" : "–"}</i><span><b>${no} ${e(title)}</b><small>${!ready ? "Kaynak bekleniyor" : n ? `${n} kalem kaynak gerekli` : "Görünen satırlar kaynaklı"}</small></span></button>`;
     }).join("");
     const companyName = (companies.find(c => c.id === state.companyId) || {}).name || state.companyId;
     return `<div class="lq-dn">
       <div class="lq-dn-top"><div class="lq-dn-title"><strong>14. Kiralama İşlemleri</strong><span>${e(companyName)} · ${e(trDateD(state.periodStart))} – ${e(trDateD(state.reportingDate))} · Şablon: TFRS 16 Kiracı</span></div>
-        ${ready ? `<span class="lq-dn-chip">${e(pkg.validation?.status === "PASSED" || pkg.validation?.status === "VALID" ? "Doğrulandı" : (pkg.validation?.status || "Doğrulama"))}</span>` : ""}
-        ${ready ? `<span class="lq-dn-chip ${missing ? "is-warn" : "is-ok"}">${missing ? `${missing} kalem kaynak gerekli` : "Tüm kalemler kaynaklı"}</span>` : ""}
+        ${ready ? `<span class="lq-dn-chip">${e(validationLabel)}</span>` : ""}
+        ${ready ? `<span class="lq-dn-chip ${complete ? "is-ok" : "is-warn"}">${complete ? "Desteklenen kapsam tamam" : `${missing} sayısal satır · ${gaps.length} kaynak / destek gerekliliği`}</span>` : ""}
         <button type="button" class="lq-dn-btn" id="disclosureExport" ${ready ? "" : "disabled"}>Seçili bölümü dışa aktar</button></div>
       <div class="lq-dn-ctx"><label>Şirket <select id="disclosureCompany" ${state.producing ? "disabled" : ""}>${companies.map(item => `<option value="${e(item.id)}" ${item.id === state.companyId ? "selected" : ""}>${e(item.name || item.id)}</option>`).join("")}</select></label>
         <label>Dönem başlangıcı <input id="disclosureStart" type="date" value="${e(state.periodStart)}" max="${e(state.reportingDate)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>
@@ -213,7 +242,7 @@
         ${state.error?.code === "DISCLOSURE_PERIOD_INVALID" ? `<p id="disclosure-period-error" role="alert" class="lq-dn-err">${e(errorLabel(state.error))}</p>` : `<span id="disclosure-period-error" class="sr-only"></span>`}</div>
       <div class="lq-dn-body">
         <nav class="lq-dn-outline" aria-label="Dipnot anahattı"><span class="lq-dn-kick">ANAHAT</span>${outline}
-          <p class="lq-dn-muted">Anlatı bölümleri (14.1, 14.2, 14.6–14.11) bu sürümde metin editörü olarak yok; sayısal tablolar motor kaynaklıdır.</p></nav>
+          <p class="lq-dn-muted">Anlatı bölümleri (14.1, 14.2, 14.6–14.11) bu sürümde metin editörü olarak yok; sayısal tablolar sunucu kaynaklıdır. Eksik şirket beyanları kaynak gereklilikleri bölümünde listelenir.</p></nav>
         <div class="lq-dn-paper"><article class="lq-dn-doc">
           <div class="lq-dn-dochead">${e(String(companyName).toLocaleUpperCase("tr-TR"))}<br>${e(trDateD(state.reportingDate))} Tarihinde Sona Eren Döneme Ait Finansal Tablolara İlişkin Dipnotlar</div>
           <h2>14. KİRALAMA İŞLEMLERİ</h2><div class="lq-dn-cap">(Tutarlar aksi belirtilmedikçe ${e(pkg?.period?.presentationCurrency || "sunum para birimi")} olarak ifade edilmiştir.)</div>
@@ -221,11 +250,17 @@
         </article></div>
         <aside class="lq-dn-aside">
           <section><span class="lq-dn-kick">SEÇİLİ BLOK · ${e(SECTION[state.tab][0])}</span>
-            <div class="lq-dn-kv"><span>Kaynak</span><span>Motor · otomatik</span></div>
+            <div class="lq-dn-kv"><span>Kaynak</span><span>${ready ? "Sunucu paketi yüklendi" : "Paket bekleniyor"}</span></div>
             <div class="lq-dn-kv"><span>Kaynak hesaplama</span><span>${e(ready ? String(pkg.population?.includedCount ?? "—") : "—")}</span></div>
-            <div class="lq-dn-kv"><span>Doğrulama</span><span>${e(ready ? pkg.validation?.status || "—" : "—")}</span></div>
+            <div class="lq-dn-kv"><span>Doğrulama</span><span>${e(ready ? validationLabel : "—")}</span></div>
             <div class="lq-dn-kv"><span>Dipnot kimliği</span><span class="lq-dn-mono">${e(ready ? String(pkg.identity?.disclosureId || "—").slice(0, 14) : "—")}</span></div>
             <div class="lq-dn-kv"><span>Manuel düzeltme</span><span>Yok</span></div></section>
+          <section data-disclosure-source-gaps><span class="lq-dn-kick">KAYNAK VE DESTEK GEREKLİLİKLERİ</span>
+            ${ready ? `<p>${complete ? "Desteklenen kapsamda eksik gereklilik bildirilmedi." : "Paket yüklenmesi açıklama tamlığını kanıtlamaz."}</p>
+              <p>Varlık sınıfları ve şirket beyanları onaylı şirket girdisi; vade analizi onaylı politika ve sunucu planı; gerçekleşen nakit defter kanıtı gerektirir. Planlanan ödeme defter nakdinin yerine geçmez.</p>
+              <ul>${gaps.map(g => `<li><strong>${e(g.label)}</strong><br>${e(STATUS_LABELS[g.status] || "Kaynak doğrulaması gerekli")}<details><summary>Kaynak kimliği</summary><code>${e(g.id)}</code> · ${e(g.status)}</details></li>`).join("")}</ul>
+              <details><summary>Doğrulama ve destek sınırı</summary><p>${e(pkg.validation?.status)} · ${e(pkg.certification?.status || "Sertifikasyon kanıtı verilmedi")}</p><p>Bu görünüm eksik veriyi kaydetmez veya tamamlamaz. Şirket girdisi ve politika onayı bu arayüzde sunulmuyor; desteklenmeyen kapsam için yeni hesaplama yapılmaz.</p></details>` : '<p>Paket yüklenince gereklilikler gösterilir.</p>'}
+          </section>
           <section><span class="lq-dn-kick">MUTABAKAT KONTROLLERİ</span>${checkHtml}</section>
         </aside></div></div>`;
   }
@@ -425,5 +460,5 @@
     draw();
   }
 
-  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, rowsForTab, exportRows, errorLabel, validPeriodRange });
+  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, rowsForTab, exportRows, errorLabel, validPeriodRange, sourceGaps });
 })(window);

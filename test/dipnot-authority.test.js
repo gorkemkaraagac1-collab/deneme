@@ -452,3 +452,25 @@ test('disclosure response from a different company is rejected before any value 
   assert.doesNotMatch(container.innerHTML, /91,23/);
   assert.match(container.innerHTML, /Dipnot paketi alınamadı/);
 });
+
+test('v2 source gaps include qualitative inputs and support requirements without inventing amounts',()=>{
+ const window={};load('js/tfrs16-disclosure-ui.js',window);
+ const gaps=window.LeaseQantTfrs16DisclosureUi.sourceGaps({missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'},{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],qualitative:{leasingActivity:{status:'REQUIRES_ENTITY_INPUT'},shortTermElection:{status:'NOT_APPLICABLE'}},supportStatus:[{requirementId:'IFRS-UNSUPPORTED',supportedStatus:'NOT_SUPPORTED'},{requirementId:'IFRS-SUPPORTED',supportedStatus:'SUPPORTED'}]});
+ assert.equal(gaps.length,3);assert.equal(gaps.find(g=>g.id==='totalCashOutflowForLeases').status,'REQUIRES_LEDGER_DATA');assert.ok(gaps.find(g=>g.id==='leasingActivity'));assert.ok(gaps.find(g=>g.id==='IFRS-UNSUPPORTED'));assert.ok(gaps.every(g=>!Object.hasOwn(g,'value')));
+});
+
+test('real v2 disclosure shows full source gaps separately from numerical table gaps',async()=>{
+ const dom=new JSDOM('<html data-lq-ui="2"><body><main id="footnotes"></main></body></html>',{url:'https://example.test/tfrs16.html'}),window=dom.window;
+ window.GK_TFRS16={getUnifiedCompanyOptions:()=>[{id:'COMPANY-1',name:'Synthetic Test'}],getActiveCompanyId:()=> 'COMPANY-1',setActiveScreenRefreshCallback:()=>{}};
+ let requested;
+ window.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async period=>{requested=period;return {...period,populationId:'POP-TEST',contractIds:['CONTRACT-1'],calculationIds:['CALC-1'],currencyProfile:{presentationCurrency:'TRY',evidenceId:'CURRENCY-TEST'}};},loadLeaseDisclosure:async()=>({...fixture(requested),validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],qualitative:{leasingActivity:{status:'REQUIRES_ENTITY_INPUT'}},supportStatus:[{requirementId:'IFRS-UNSUPPORTED',supportedStatus:'NOT_SUPPORTED'}]})};
+ load('js/tfrs16-disclosure-ui.js',window);const target=window.document.getElementById('footnotes');window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);await new Promise(r=>setTimeout(r,20));
+ assert.match(target.textContent,/3 kaynak \/ destek gerekliliği/);assert.match(target.textContent,/Desteklenmeyen açıklama gerekliliği var/);assert.match(target.textContent,/Kiralama faaliyetinin niteliği/);assert.match(target.textContent,/Defter verisi gerekli/);
+ assert.doesNotMatch(target.textContent,/Tüm kalemler kaynaklı|Motor · otomatik/);assert.equal(target.querySelectorAll('[data-disclosure-source-gaps] li').length,3);assert.equal(target.querySelector('[data-disclosure-source-gaps] input'),null);assert.match(target.textContent,/DISCLOSURE_BACKEND_IMPLEMENTED_NOT_CERTIFIED/);dom.window.close();
+});
+
+test('legacy disclosure presentation retains its existing structure',async()=>{
+ const window={document:{documentElement:{getAttribute:()=> 'legacy'}},GK_TFRS16:{getUnifiedCompanyOptions:()=>[],getActiveCompanyId:()=>'',setActiveScreenRefreshCallback:()=>{}}};load('js/tfrs16-disclosure-ui.js',window);
+ const target={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);
+ assert.match(target.innerHTML,/gk-v26-page/);assert.doesNotMatch(target.innerHTML,/data-disclosure-source-gaps/);
+});
