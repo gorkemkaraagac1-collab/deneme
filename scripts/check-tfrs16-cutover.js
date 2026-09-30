@@ -241,7 +241,14 @@ const checks = [
   // bölündüğü için eski tek-dosya yakınlık kontrolü yerine her ikisinin
   // de varlığını ayrı ayrı doğruluyoruz.
   ["TMS29 apply uses the private result and journal", /infl-apply-btn/.test(reportingUi) && /loadPrivateTms29Result\(adjustment\.period/.test(engine) && /privateResult\.journal/.test(engine)],
-  ["TMS29 writes persist through the contracts API", /inflCreateBtn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-apply-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine) && /infl-cancel-btn[\s\S]{0,5200}persistContractToApi\(contract, true\)/.test(engine)],
+  ["TMS29 writes persist through the contracts API", [
+    ["const createDraft = async () =>", "const applyAdjustment = async"],
+    ["const applyAdjustment = async", "const cancelAdjustment = async"],
+    ["const cancelAdjustment = async", "const binder = window.LeaseQantTfrs16ReportingUi"]
+  ].every(([start, end]) => {
+    const from = engine.indexOf(start), to = engine.indexOf(end, from);
+    return from >= 0 && to > from && /await persistContractToApi\(contract, true\)/.test(engine.slice(from, to));
+  })],
   ["sale-and-leaseback preview reads the dedicated private result", /Private satış ve geri kiralama sonucu henüz hazır değil/.test(engine) && /facade\.loadSaleAndLeaseback\(input\)/.test(engine)],
   ["sublease preview requires the private special-flow envelope", /Private alt kiralama sonucu henüz hazır değil/.test(engine) && /specialFlows\?\.sublease/.test(engine)],
   ["shadow comparator is present", /LEASEQANT_CALCULATION_SHADOW/.test(shadow)],

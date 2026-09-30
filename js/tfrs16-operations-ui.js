@@ -505,17 +505,35 @@ ${footer}
     if (autoRun) calculateAndRender?.(false);
   }
 
-  // This gates form persistence on a successful server calculation. It is
-  // not a persisted-event authorization token; the backend still owns that.
-  function bindSlbPreviewFlow(handlers) {
-    const form = document.querySelector('[data-lq-operation-form="sale-and-leaseback"]');
-    const calculate = document.getElementById("slbCalculateButton");
-    const save = document.getElementById("slbSaveButton");
-    const resultBox = document.getElementById("slbResultContainer");
+  function bindSlbPreviewFlow(handlers, prefix = "slb") {
+    const form = document.querySelector(`[data-lq-operation-form="${prefix === "slb" ? "sale-and-leaseback" : "sublease"}"]`);
+    const calculate = document.getElementById(prefix + "CalculateButton");
+    const save = document.getElementById(prefix + "SaveButton");
+    const resultBox = document.getElementById(prefix + "ResultContainer");
     if (!form || !calculate || !save || !resultBox) return;
     let sequence = 0, accepted = null, saving = false;
     const fingerprint = input => JSON.stringify(input);
     const connected = () => form.isConnected && resultBox.isConnected;
+    function showFailure(error, action) {
+      const messages = {
+        OPERATION_SALE_ASSESSMENT_REQUIRED: "Sözleşmede onaylı TFRS 15 satış değerlendirmesi bulunmuyor.",
+        OPERATION_SALE_ASSESSMENT_CONFLICT: "Satış seçimi sözleşmedeki onaylı değerlendirmeyle eşleşmiyor.",
+        IDENTIFICATION_MODE_REQUIRED: "Sözleşmenin kiralama değerlendirme yöntemi ve onaylı kaynağı gerekli.",
+        EVIDENCE_REQUIRED: "Bu işlem için onaylı değerlendirme kaynağı gerekli.",
+        LEASEBACK_PV_REQUIRED: "Satış işlemi için onaylı geri kiralama bugünkü değer kaynağı gerekli.",
+        OPERATION_PREVIEW_STALE: "Sözleşme değişti. Sunucu önizlemesini yeniden alın.",
+        OPERATION_PREVIEW_EXPIRED_OR_INVALID: "Önizlemenin süresi doldu veya doğrulanamadı. Yeniden önizleme alın.",
+        OPERATION_SOURCE_UNAVAILABLE: "Sunucu kaynağı yüklenemedi. Tekrar deneyin.",
+        PERIOD_CLOSED: "Bu dönem kapalı. Form kaydedilemez.",
+        OPERATION_WRITE_ROLE_DENIED: "Bu işlem için kayıt yetkiniz bulunmuyor."
+      };
+      resultBox.replaceChildren();
+      const message = document.createElement("p");
+      message.textContent = messages[error?.code] || `${action} tamamlanamadı. Yeniden önizleme alın.`;
+      const details = document.createElement("details"), summary = document.createElement("summary"), code = document.createElement("code");
+      summary.textContent = "Teknik ayrıntı"; code.textContent = error?.code || "OPERATION_REQUEST_FAILED";
+      details.append(summary, code); resultBox.append(message, details);
+    }
     function invalidate() {
       sequence += 1;
       accepted = null;
@@ -525,25 +543,27 @@ ${footer}
     }
     form.addEventListener("input", invalidate);
     form.addEventListener("change", invalidate);
+    const unsubscribe = window.LeaseQantReportingPeriod?.subscribe?.(() => { if (connected()) invalidate(); else unsubscribe?.(); });
     calculate.addEventListener("click", async () => {
       if (saving) return;
       const request = ++sequence;
       accepted = null;
       save.disabled = true;
       calculate.disabled = true;
-      const input = JSON.parse(fingerprint(handlers.readInput()));
-      const key = fingerprint(input);
       resultBox.textContent = "Sunucu önizlemesi yükleniyor…";
       try {
+        const input = JSON.parse(fingerprint(handlers.readInput()));
+        const key = fingerprint(input);
         const result = await handlers.preview(input);
         if (!connected() || request !== sequence) return;
         if (key !== fingerprint(handlers.readInput())) { invalidate(); return; }
         if (!result) throw new Error("Sunucu önizlemesi alınamadı.");
         resultBox.innerHTML = handlers.render(result);
-        accepted = { input, key };
-        save.disabled = false;
+        const canSave = handlers.canSave ? handlers.canSave(result) : true;
+        accepted = canSave ? { input, key, result } : null;
+        save.disabled = !canSave;
       } catch (error) {
-        if (connected() && request === sequence) resultBox.textContent = `Önizleme alınamadı: ${error?.message || String(error)}`;
+        if (connected() && request === sequence) showFailure(error, "Önizleme");
       } finally {
         if (connected() && request === sequence) calculate.disabled = false;
       }
@@ -551,17 +571,17 @@ ${footer}
     save.addEventListener("click", async () => {
       if (saving || !accepted || !connected()) return;
       if (accepted.key !== fingerprint(handlers.readInput())) { invalidate(); return; }
-      const input = accepted.input;
+      const { input, result } = accepted;
       saving = true;
       accepted = null;
-      const controls = Array.from(form.querySelectorAll("input, textarea, button"));
+      const controls = Array.from(form.querySelectorAll("input, select, textarea, button"));
       const states = controls.map(control => control.disabled);
       controls.forEach(control => { control.disabled = true; });
       try {
-        await handlers.save(input);
+        await handlers.save(input, result);
         if (connected()) resultBox.textContent = "Form kaydedildi. Bu işlem muhasebe olayı uygulama veya defter kaydı onayı değildir.";
       } catch (error) {
-        if (connected()) resultBox.textContent = `Kaydedilemedi: ${error?.message || String(error)}. Yeniden önizleme alın.`;
+        if (connected()) showFailure(error, "Kayıt");
       } finally {
         saving = false;
         controls.forEach((control, index) => { control.disabled = states[index]; });
@@ -569,6 +589,9 @@ ${footer}
         calculate.disabled = false;
       }
     });
+    // The caller releases the subscription when a form is replaced. Local
+    // input identity still rejects silent scope/period changes before save.
+    return () => { sequence += 1; accepted = null; unsubscribe?.(); };
   }
 
   function bindSubleaseEvents(contract, handlers = {}) {
@@ -985,7 +1008,7 @@ ${footer}
         <p style="margin:6px 0;color:#64748b;font-size:11px;">${result.note}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
           <div>Ana Kira ROU (Tahsis Öncesi)<br><strong>${formatCurrency(result.headLeaseRouCarryingAmount)}</strong></div>
-          <div>Devredilen ROU (Tahsis: %${(result.rouAllocationRatio*100).toFixed(0)})<br><strong>${formatCurrency(result.allocatedRouCarryingAmount)}</strong></div>
+          <div>Devredilen ROU (Tahsis: ${new Intl.NumberFormat("tr-TR", { style: "percent", maximumFractionDigits: 0 }).format(result.rouAllocationRatio)})<br><strong>${formatCurrency(result.allocatedRouCarryingAmount)}</strong></div>
           <div>Net Yatırım (Alt Kiralama PV)<br><strong>${formatCurrency(result.netInvestment)}</strong></div>
           <div>Satış Kâr/Zararı<br><strong style="color:${result.sellingProfitLoss < 0 ? '#dc2626' : '#16a34a'};">${formatCurrency(result.sellingProfitLoss)}</strong></div>
         </div>
@@ -1011,7 +1034,7 @@ ${footer}
         <label class="lq-op-note-field">Mesleki muhakeme notu (gerekçe)<textarea id="slbNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
         <button id="slbCalculateButton" type="button" class="primary-button lq-op-primary-button">Sunucu önizlemesini al</button>
         <button id="slbSaveButton" type="button" class="primary-button lq-op-primary-button" disabled>Önizlenen formu kaydet</button>
-        <p>Bu önizleme gönderilen sözleşme bilgileriyle hesaplanır. Kayıtlı olay kimliği ve sürümüyle bağlanmış bir uygulama onayı değildir.</p>
+        <p>Önizleme kayıtlı sözleşmenin güncel sürümünü kullanır ve kayıt oluşturmaz. Form kaydı muhasebe olayı veya defter kaydı onayı değildir.</p>
         <div id="slbResultContainer" class="lq-op-result-slot">${operationSourceState()}</div>
       </div>
     `;
@@ -1069,7 +1092,9 @@ ${footer}
           <label>Sınıflandırma<select id="subleaseClassification"><option value="OPERATING" ${saved?.classification !== "FINANCE" ? "selected" : ""}>Operating</option><option value="FINANCE" ${saved?.classification === "FINANCE" ? "selected" : ""}>Finance</option></select></label>
         </div>
         <label class="lq-op-note-field">Mesleki muhakeme notu (sınıflandırma gerekçesi)<textarea id="subleaseNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
-        <button id="subleaseCalculateButton" type="button" class="primary-button lq-op-primary-button">Hesapla ve Kaydet</button>
+        <div class="lq-op-form-actions"><button id="subleaseCalculateButton" type="button" class="primary-button lq-op-primary-button">Sunucu önizlemesini al</button>
+        <button id="subleaseSaveButton" type="button" class="secondary-button" disabled>Önizlenen formu kaydet</button></div>
+        <p>Önizleme kayıt oluşturmaz. Form kaydı muhasebe olayı veya defter kaydı onayı değildir.</p>
         <div id="subleaseResultContainer" class="lq-op-result-slot">${operationSourceState()}</div>
       </div>
     `;

@@ -18,7 +18,7 @@ test.after(async()=>{fs.writeFileSync('/tmp/report-auth-r1-browser-proof.json',J
 async function pageFor(name,{beforeNavigate}={}){const context=await browser.newContext({timezoneId:'Europe/Istanbul'}),page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,300));});page.on('requestfailed',r=>errors.push(new URL(r.url()).pathname+':'+r.failure()?.errorText));page.diagnosticErrors=errors;
  await page.addInitScript(({token,origin})=>{
   localStorage.setItem('access_token',token);sessionStorage.setItem('gk_session_token',token);window.LEASEQANT_API_BASE=origin;
-  const NativeDate=Date;window.Date=class extends NativeDate{constructor(...a){super(...(a.length?a:['2026-01-17T10:00:00Z']));}static now(){return new NativeDate('2026-01-17T10:00:00Z').getTime();}};
+  const NativeDate=Date;window.Date=class extends NativeDate{constructor(...a){super(...(a.length?a:['2026-02-17T10:00:00Z']));}static now(){return new NativeDate('2026-02-17T10:00:00Z').getTime();}};
  },{token,origin});
  // Legacy private hydration uses an absolute URL: proxy it exclusively to the disposable local app.
  await page.route('https://api.leaseqant.com/**',async route=>{
@@ -39,8 +39,8 @@ test('API contract list renders while private calculations are still pending',as
  try{
   await Promise.all([contractsResponse,calculationRequest]);
   await page.locator('#sidebarNav [data-view="contracts"]').click();
-  await page.locator('#contractsTableBody tr').first().waitFor({state:'visible',timeout:5000});
-  assert.ok((await page.locator('#contractsTableBody tr').count())>0,'Authenticated API contract list should render before private balances finish');
+  await page.locator('#lqContracts [data-open-contract]').first().waitFor({state:'visible',timeout:5000});
+  assert.ok((await page.locator('#lqContracts [data-open-contract]').count())>0,'Authenticated API contract list should render before private balances finish');
  }finally{releasePrivate();await context.close();}
 });
 for(const name of ['dashboard.html','financial-decision-cockpit.html'])test('real browser '+name+' renders fresh authenticated local backend DTO and blocks mixed totals',async()=>{
@@ -59,8 +59,11 @@ test('whole TFRS16 boot, shell CFO navigation and failed-source branch use backe
  const visual=await page.evaluate(()=>({liability:document.getElementById('lqTotalLiability').textContent,current:document.getElementById('lqCurrentLegend').textContent,noncurrent:document.getElementById('lqNonCurrentLegend').textContent,readiness:document.getElementById('lqReadinessScore').textContent,ratio:document.getElementById('lqCurrentPct').textContent}));
  assert.equal(visual.liability,'Şirket seçin');assert.equal(visual.readiness,'Veri hazır değil');assert.equal(visual.ratio,'Veri hazır değil');assert.ok(!visual.noncurrent.includes('NaN'));
  await page.screenshot({path:'/tmp/report-auth-r1-tfrs16-dashboard.png',fullPage:true});
- // Wait for the real shell rewiring before exercising its public navigation hook.
- await page.waitForTimeout(2700);await page.evaluate(()=>window.GK_TFRS16.v191OpenCfoDashboard());await page.locator('[data-report-export="csv"]').waitFor();
+ // Exercise the visible v2 navigation after the shell finishes booting.
+ await page.waitForTimeout(2700);await page.locator('#sidebarNav [data-open="financialReporting"]').click();
+ await page.locator('#lqFinancial').waitFor();
+ await page.locator('#v26PageHost details.lq-pg-legacy > summary').click();
+ await page.locator('[data-report-export="csv"]').waitFor();
  assert.equal(await page.locator('[data-report-company]').isVisible(),true);assert.equal(await page.locator('#lqDashboard').isVisible(),false);
  const p=await page.evaluate(()=>window.LeaseQantReportingAuthorityUi.read());assert.equal(p.sourceStatus,'SERVER_PERSISTED_PRIVATE_REPORTING');
  const stored=await context.request.post(origin+'/api/reports/authority',{headers:{Authorization:'Bearer '+token},data:p.period});assert.equal(stored.status(),200);assert.deepEqual(p,(await stored.json()).data);
@@ -89,17 +92,16 @@ test('real authenticated navigation opens modification and each responsive KPI s
  const expected=new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(single.package.totals.leaseLiability.value)+' TRY';
  await page.waitForFunction(text=>document.getElementById('lqTotalLiability')?.textContent===text,expected);
  await page.locator('#sidebarNav [data-view="contracts"]').click();
- assert.equal(await page.locator('#kpiLiability').innerText(),expected);
- assert.ok((await page.locator('#contractsTableBody tr').count())>0,'Supported company contract should appear in the Contracts table');
+ assert.ok((await page.locator('#lqContracts [data-open-contract]').count())>0,'Supported company contract should appear in the Contracts table');
  await page.locator('#v26ActiveCompanySelect').selectOption(zero.body.companyId);
- await page.waitForFunction(()=>document.getElementById('kpiLiability')?.textContent==='0 TRY');
- assert.equal(await page.locator('#kpiContractCount').innerText(),'0');
+ await page.locator('#lqContracts .lq-pg-emptyrow').waitFor();
+ assert.equal(await page.locator('#lqContracts [data-open-contract]').count(),0);
  await page.locator('#v26ActiveCompanySelect').selectOption('ALL');
- await page.waitForFunction(()=>document.getElementById('kpiLiability')?.textContent==='Şirket seçin');
+ await page.locator('#lqContracts [data-open-contract]').first().waitFor();
  await page.locator('[data-lq-dashboard]').click();
  await page.locator('.lq-nav-dropdown:has([data-open="modification"]) .lq-nav-trigger').click();
  await page.locator('#sidebarNav [data-open="modification"]').click();
- await page.getByRole('heading',{name:'Modifikasyon & Reassessment'}).waitFor();
+ await page.getByRole('heading',{name:'İşlemler'}).waitFor();
  assert.ok(!(await page.locator('#v26PageHost').innerText()).includes('REPORTING_AUTHORITY_UNAVAILABLE'));
  await page.locator('.lq-nav-dropdown:has([data-open="eliminations"]) .lq-nav-trigger').click();
  await page.locator('#sidebarNav [data-open="eliminations"]').click();

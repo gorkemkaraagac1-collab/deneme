@@ -360,6 +360,25 @@
     return requestCalculation("/api/calculations/lease/sale-and-leaseback", { input }, options);
   }
 
+  async function previewPersistedOperation(contractId, intent, options) {
+    if (typeof contractId !== "string" || !contractId.trim()) throw new TypeError("Persisted contract ID is required");
+    const data = await requestDisclosure("/api/calculations/lease/" + encodeURIComponent(contractId) + "/operation-preview", "POST", intent, options);
+    if (data.version !== "PERSISTED_OPERATION_PREVIEW_V1" || data.contractId !== contractId
+      || data.companyId !== intent.companyId || data.operation !== intent.operation
+      || data.sourceTrustStatus !== "PERSISTED_STATE_PREVIEW" || typeof data.receipt !== "string"
+      || !data.receipt || !data.result || typeof data.result !== "object") {
+      throw createRequestError(502, { code: "OPERATION_PREVIEW_RESPONSE_INVALID" });
+    }
+    return data;
+  }
+
+  async function saveOperationForm(contractId, intent, receipt, options) {
+    if (typeof receipt !== "string" || !receipt) throw new TypeError("Server preview receipt is required");
+    const data = await requestDisclosure("/api/calculations/lease/" + encodeURIComponent(contractId) + "/operation-form", "POST", { intent, receipt }, options);
+    if (data.saved !== true || data.authority !== "FORM_ONLY") throw createRequestError(502, { code: "OPERATION_SAVE_RESPONSE_INVALID" });
+    return data;
+  }
+
   async function calculateModificationPreview(contract, input, options) {
     if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
       throw new TypeError("contract must be an object");
@@ -417,6 +436,8 @@
     calculateCloseControls,
     calculateEarlyPayment,
     calculateSaleAndLeaseback,
+    previewPersistedOperation,
+    saveOperationForm,
     calculateModificationPreview,
     calculateReassessmentPreview,
     applyModification,
