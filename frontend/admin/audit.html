@@ -558,6 +558,13 @@
 <option value="">Tüm varlıklar</option>
 </select>
 
+                <select id="filterCompany" onchange="filtersChanged()" aria-label="Şirket">
+                    <option value="">Tüm şirketler</option>
+                </select>
+
+                <label class="lq-date-f">Başlangıç <input type="date" id="filterFrom" onchange="filtersChanged()"></label>
+                <label class="lq-date-f">Bitiş <input type="date" id="filterTo" onchange="filtersChanged()"></label>
+
             </div>
 
         </div>
@@ -825,6 +832,13 @@ async function loadAudit() {
     if (entity) {
         params.entity_type = entity;
     }
+    // v2: sunucu tarafı şirket ve tarih filtreleri
+    const companyF = (document.getElementById("filterCompany") || {}).value;
+    const fromF = (document.getElementById("filterFrom") || {}).value;
+    const toF = (document.getElementById("filterTo") || {}).value;
+    if (companyF) params.company_id = companyF;
+    if (fromF) params.from = fromF;
+    if (toF) params.to = toF;
 
 
     try {
@@ -1633,6 +1647,19 @@ function openAuditDetail(index) {
             <div><div class="lq-kick">Değişiklik</div>${diff}</div>${raw}`
     });
 }
+
+(async function fillCompanyFilter() {
+    try {
+        const r = await AdminAPI.getCompanies({ limit: 500 });
+        const sel = document.getElementById("filterCompany");
+        (r && Array.isArray(r.data) ? r.data : []).forEach(c => {
+            const o = document.createElement("option");
+            o.value = String(c.id);
+            o.textContent = `${c.name}${c.code ? ` · ${c.code}` : ""}`;
+            sel.appendChild(o);
+        });
+    } catch (_) { /* filtre boş kalır */ }
+})();
 </script>
 
 </body>

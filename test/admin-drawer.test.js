@@ -91,3 +91,9 @@ test('denetim izi: güncel işlem filtreleri ve değişiklik paneli; SSS sırala
  assert.equal(d.window.auditActionLabel('EXTEND_LICENSE'),'Lisans süresi uzatıldı');
  assert.equal(d.window.auditActionLabel('YENI_KOD'),'YENI_KOD');
 });
+test('denetim izi şirket/tarih filtresini sunucuya gönderir; dönem sunucu adını kullanır',()=>{
+ const a=fs.readFileSync(path.join(__dirname,'../frontend/admin/audit.html'),'utf8');
+ assert.match(a,/params\.company_id = companyF/);assert.match(a,/params\.from = fromF/);assert.match(a,/params\.to = toF/);
+ const p=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
+ assert.match(p,/userName\(period\.closed_by, period\.closed_by_name\)/);
+});
