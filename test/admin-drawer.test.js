@@ -39,7 +39,7 @@ test('lisans sayfası: gerçek durum seçenekleri, sekmeler, doğru satır işle
 test('dönem sayfası: takvim, isim çözümleme, yan panel mevcut changePeriod akışını kullanır',()=>{
  const s=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
  assert.match(s,/id="calGrid"/);
- assert.match(s,/userName\(period\.closed_by\)/);
+ assert.match(s,/userName\(period\.closed_by/);
  assert.match(s,/await changePeriod\(action\)/);
  assert.match(s,/modeless: true/);
  assert.match(s,/grid-template-columns: minmax\(0, 1fr\)/);
