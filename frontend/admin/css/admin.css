@@ -475,3 +475,13 @@ body{font-size:14px}
 #openingTable th{text-align:left;padding:10px 14px;background:#F8FAFC;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--text-light);border-bottom:1px solid var(--border);white-space:nowrap}
 #openingTable td{padding:10px 14px;border-bottom:1px solid #EEF1F5;vertical-align:middle}
 #openingTable .money-value,#openingTable .date-value,#openingTable .id-value{font-family:var(--mono);white-space:nowrap}
+.lq-diff{width:100%;border-collapse:collapse;font-size:12.5px}
+.lq-diff th{text-align:left;font:600 11px var(--mono);color:var(--text-light);padding:8px 12px;background:#F8FAFC;border-bottom:1px solid var(--border)}
+.lq-diff td{padding:8px 12px;border-top:1px solid #EEF1F5;font-family:var(--mono);overflow-wrap:anywhere;vertical-align:top;color:#8A96A8}
+.lq-diff tr.chg td{color:var(--text)}
+.lq-diff tr.chg td.old{color:var(--danger);text-decoration:line-through}
+.lq-diff tr.chg td.new{color:var(--success);font-weight:600}
+.lq-json{background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;overflow:auto;max-height:220px;margin-bottom:12px}
+.lq-faq-preview{background:#F4F6F9;border:1px solid var(--border);border-radius:10px;padding:4px 16px}
+.lq-faq-preview .q{font-weight:600;font-size:15px;padding:12px 0;border-bottom:1px solid #D6DCE5}
+.lq-faq-preview .a{font-size:14px;line-height:1.6;color:#46546A;padding:10px 0 12px}

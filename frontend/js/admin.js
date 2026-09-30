@@ -1402,3 +1402,29 @@ function closeDrawer() {
     if (lqDrawerReturnFocus && lqDrawerReturnFocus.isConnected) lqDrawerReturnFocus.focus({ preventScroll: true });
     lqDrawerReturnFocus = null;
 }
+
+
+// ============================================================
+// DENETİM İZİ ETİKETLERİ (Genel bakış ve Denetim izi ortak)
+// Sunucunun yazdığı işlem kodları; bilinmeyen kod olduğu gibi gösterilir.
+// ============================================================
+const ADMIN_ACTION_LABEL = {
+    CREATE_USER: "Kullanıcı oluşturuldu", UPDATE_USER: "Kullanıcı güncellendi", RESET_PASSWORD: "Şifre sıfırlandı",
+    CREATE_COMPANY: "Şirket oluşturuldu", UPDATE_COMPANY_STATUS: "Şirket durumu değişti",
+    CREATE_LICENSE: "Lisans atandı", EXTEND_LICENSE: "Lisans süresi uzatıldı", CANCEL_LICENSE: "Lisans iptal edildi",
+    UPDATE_LICENSE_LIMITS: "Lisans limiti güncellendi", UPDATE_PLAN: "Plan güncellendi",
+    PERIOD_CLOSED: "Dönem kapatıldı", PERIOD_REOPENED: "Dönem yeniden açıldı",
+    INFLATION_INDEX_SYNCED: "Endeks TÜİK'ten alındı", INFLATION_INDEX_OVERRIDDEN: "Endeks değiştirildi",
+    INFLATION_INDEX_MANUAL_ENTRY_CREATED: "Endeks elle girildi", INFLATION_INDEX_VERIFIED: "Endeks doğrulandı",
+    INFLATION_INDEX_REJECTED: "Endeks reddedildi",
+    LESSEE_DISCLOSURE_PROFILE_APPROVED: "Dipnot profili onaylandı",
+    LESSEE_DISCLOSURE_MATURITY_POLICY_APPROVED: "Vade politikası onaylandı",
+    LESSEE_DISCLOSURE_ENTITY_INPUT_APPROVED: "Dipnot girdisi onaylandı",
+    MODIFICATION_ROLLED_BACK: "Modifikasyon geri alındı", REASSESSMENT_ROLLED_BACK: "Yeniden değerlendirme geri alındı"
+};
+const ADMIN_ENTITY_LABEL = {
+    user: "Kullanıcı", company: "Şirket", license: "Lisans", period: "Dönem",
+    INFLATION_INDEX: "Endeks", MODIFICATION: "Modifikasyon", REASSESSMENT: "Yeniden değerlendirme", plan: "Plan"
+};
+function auditActionLabel(code) { return ADMIN_ACTION_LABEL[code] || String(code || "İşlem"); }
+function auditEntityLabel(code) { return ADMIN_ENTITY_LABEL[code] || String(code || "—"); }

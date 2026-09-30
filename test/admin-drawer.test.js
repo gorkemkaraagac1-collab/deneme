@@ -78,3 +78,16 @@ test('kur ve endeks: senkron mesajı inserted okur, değişim sütunları ve isi
  assert.match(cpi,/personName\(record\.retrievedBy\)/);
  assert.doesNotMatch(cpi,/colspan="8"/);
 });
+test('denetim izi: güncel işlem filtreleri ve değişiklik paneli; SSS sıralaması eşit değerlerde de çalışır',()=>{
+ const a=fs.readFileSync(path.join(__dirname,'../frontend/admin/audit.html'),'utf8');
+ assert.doesNotMatch(a,/<option value="LOGIN">/);
+ assert.match(a,/PERIOD_CLOSED/);assert.match(a,/function auditDiffRows/);
+ const f=fs.readFileSync(path.join(__dirname,'../frontend/admin/faq.html'),'utf8');
+ assert.match(f,/\(i \+ 1\) \* 10/);assert.match(f,/function sanitizeFaqPreview/);
+ const {JSDOM,VirtualConsole}=require('jsdom');
+ const d=new JSDOM('<!doctype html><body></body>',{runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ d.window.fetch=()=>Promise.resolve({ok:true,json:()=>Promise.resolve({})});
+ d.window.eval(fs.readFileSync(path.join(__dirname,'../frontend/js/admin.js'),'utf8'));
+ assert.equal(d.window.auditActionLabel('EXTEND_LICENSE'),'Lisans süresi uzatıldı');
+ assert.equal(d.window.auditActionLabel('YENI_KOD'),'YENI_KOD');
+});
