@@ -8,6 +8,7 @@
     REQUIRES_LEDGER_DATA: "Defter verisi gerekli",
     REQUIRES_ENTITY_INPUT: "Şirket girdisi gerekli",
     NOT_SUPPORTED: "Desteklenmiyor",
+    NOT_YET_SUPPORTED: "Henüz desteklenmiyor", OUT_OF_SCOPE: "Açıklama kapsamı dışında",
     NOT_DISCLOSURE_READY: "Dipnot için güvenilir kaynak hazır değil",
     NOT_APPLICABLE: "Uygulanmıyor",
     NOT_PROVIDED: "Kaynak veri gerekli",
@@ -175,12 +176,17 @@
     extensionTerminationExposure: "Uzatma ve fesih seçenekleri", residualValueGuaranteeExposure: "Kalıntı değer garantileri",
     notYetCommencedCommitments: "Henüz başlamamış kiralama taahhütleri", leaseRestrictionsOrCovenants: "Kiralama kısıtları ve taahhütleri",
     saleAndLeasebackInformation: "Satış ve geri kiralama açıklaması", shortTermElection: "Kısa vadeli kiralama tercihi",
-    lowValueElection: "Düşük değerli varlık tercihi", rentConcessionExpedient: "Kira imtiyazı kolaylaştırıcı uygulaması"
+    lowValueElection: "Düşük değerli varlık tercihi", rentConcessionExpedient: "Kira imtiyazı kolaylaştırıcı uygulaması",
+    IFRS16_53C_SHORT_TERM_LEASE_EXPENSE: "Kısa vadeli kiralama gideri", IFRS16_53D_LOW_VALUE_LEASE_EXPENSE: "Düşük değerli kiralama gideri",
+    IFRS16_53F_SUBLEASE_INCOME: "Alt kiralama geliri", IFRS16_53I_SALE_LEASEBACK_GAIN_LOSS: "Satış ve geri kiralama kazanç/kaybı",
+    IFRS16_55_SHORT_TERM_COMMITMENTS: "Kısa vadeli kiralama taahhütleri", IFRS16_56_INVESTMENT_PROPERTY_ROU: "Yatırım amaçlı gayrimenkul kullanım hakkı",
+    IFRS16_57_REVALUED_ROU: "Yeniden değerlenmiş kullanım hakkı", IFRS16_61_97_LESSOR_DISCLOSURE_BOUNDARY: "Kiraya veren açıklama kapsamı"
   });
   const VALIDATION_LABELS = Object.freeze({
     COMPLETE_FOR_SUPPORTED_SCOPE: "Desteklenen açıklama kapsamı tamam", INCOMPLETE_INPUT_REQUIRED: "Onaylı girdiler eksik",
     UNSUPPORTED_REQUIREMENT_PRESENT: "Desteklenmeyen açıklama gerekliliği var", FAILED_VALIDATION: "Sunucu doğrulaması başarısız"
   });
+  const SUPPORTED_REQUIREMENTS = new Set(["SUPPORTED", "SUPPORTED_AUTOMATIC", "SUPPORTED_WITH_ENTITY_INPUT", "SUPPORTED_WITH_LEDGER_INPUT", "SUPPORTED_WITH_DISCLOSURE_INPUT", "NOT_APPLICABLE"]);
   function sourceGaps(pkg) {
     const gaps = [], seen = new Set();
     const add = (id, status) => {
@@ -188,7 +194,11 @@
       seen.add(id);gaps.push({id, label:GAP_LABELS[id] || "Açıklama gerekliliği", status:status || "BACKEND_FIELD_MISSING"});
     };
     (Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : []).forEach(x => add(x.fieldId, x.status));
-    (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).forEach(x => add(x.requirementId, x.supportedStatus));
+    (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).forEach(x => {
+      // Capability support does not establish that entity/ledger inputs exist.
+      // Missing input evidence comes from missingInputs and qualitative fields.
+      if (!SUPPORTED_REQUIREMENTS.has(x.supportedStatus)) add(x.requirementId, x.supportedStatus);
+    });
     Object.entries(pkg?.qualitative || {}).forEach(([id, field]) => add(id,field?.status));
     return gaps;
   }

@@ -103,7 +103,8 @@
 
   function disclosureState(pkg) {
     const missing = Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : [];
-    const unsupported = (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).filter(x => x.supportedStatus === "NOT_SUPPORTED");
+    const supported = new Set(["SUPPORTED", "SUPPORTED_AUTOMATIC", "SUPPORTED_WITH_ENTITY_INPUT", "SUPPORTED_WITH_LEDGER_INPUT", "SUPPORTED_WITH_DISCLOSURE_INPUT", "NOT_APPLICABLE"]);
+    const unsupported = (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).filter(x => !supported.has(x.supportedStatus));
     const issues = [...new Set([...missing.map(x => x.fieldId || x.requirementId || "Eksik kaynak"), ...unsupported.map(x => x.requirementId || "Desteklenmeyen gereklilik")])];
     const status = pkg?.validation?.status;
     const complete = status === "COMPLETE_FOR_SUPPORTED_SCOPE" && issues.length === 0;
