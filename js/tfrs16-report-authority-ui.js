@@ -142,10 +142,32 @@
  }
  function errorHtml(e){return `<p role="alert">Rapor şu anda gösterilemiyor. ${esc(reasonLabel(e?.code))}</p><details><summary>Teknik ayrıntı</summary><code>${esc(e?.code||'REPORTING_AUTHORITY_UNAVAILABLE')}</code></details>`;}
  function isUiV2(){return global.document?.documentElement?.getAttribute('data-lq-ui')==='2';}
- function periodAuthorityNote(){
-  return `<aside class="lq-pg-note lq-rc-role-note" role="note"><div><strong>Dönem kilidi · Kaynak gerekli</strong><p>Dönem kapatma/açma yalnızca ADMIN yetkisindedir. Bu ekranda sunucu tarafından doğrulanmış rol veya kilit durumunu değiştiren işlem bulunmadığından yetki doğrulanmış gösterilmez; hiçbir kapatma/açma adımı tamamlandı sayılmaz ve işlem düğmesi sunulmaz.</p></div></aside>`;
+ function lockPeriodKey(period){
+  if(!validPeriodRange(period.periodStart,period.periodEnd)||period.periodStart.slice(8)!=='01'
+   ||period.periodStart.slice(0,7)!==period.periodEnd.slice(0,7))return null;
+  const last=new Date(`${period.periodEnd}T00:00:00Z`);last.setUTCDate(last.getUTCDate()+1);
+  return last.getUTCDate()===1?period.periodStart.slice(0,7):null;
  }
- function closeSummaryHtml(p){
+ async function loadPeriodLock(intent){
+  const periodKey=lockPeriodKey(intent);if(!periodKey)return {state:'UNSUPPORTED_RANGE'};
+  const f=global.LeaseQantPrivateCalculation?.getPeriodLockStatus;
+  if(typeof f!=='function')return {state:'UNAVAILABLE',code:'PERIOD_STATUS_SOURCE_REQUIRED'};
+  try{
+   const data=await f({companyId:intent.companyId,periodKey});
+   if(!data||data.companyId!==intent.companyId||data.periodKey!==periodKey||!['OPEN','LOCKED'].includes(data.status)
+    ||(data.status==='OPEN'?data.lockedAt!==null:typeof data.lockedAt!=='string'||!Number.isFinite(Date.parse(data.lockedAt))))fail('PERIOD_STATUS_RESPONSE_INVALID');
+   return {state:data.status,companyId:data.companyId,periodKey,lockedAt:data.lockedAt};
+  }catch(error){return {state:'UNAVAILABLE',code:error?.code||'PERIOD_STATUS_UNAVAILABLE'};}
+ }
+ function lockLabel(lock){return ({OPEN:'Açık',LOCKED:'Kilitli',LOADING:'Sunucu durumu yükleniyor…',UNSUPPORTED_RANGE:'Tam aylık dönem seçin',UNAVAILABLE:'Sunucu durumu alınamadı'}[lock?.state]||'Sunucu durumu gerekli');}
+ function periodAuthorityNote(lock){
+  const known=lock?.state==='OPEN'||lock?.state==='LOCKED';
+  const evidence=known?`<p>Şirket: ${esc(lock.companyId)} · Dönem: ${esc(lock.periodKey)} · Salt okunur sunucu yanıtı${lock.lockedAt?` · Kilit tarihi: ${esc(trDate(lock.lockedAt.slice(0,10)))}`:''}</p>`:
+   lock?.state==='UNSUPPORTED_RANGE'?'<p>Kilit kaynağı yalnızca tek bir tam ayı destekler; seçili tarih aralığının kilit durumu varsayılmaz.</p>':
+   lock?.state==='UNAVAILABLE'?`<p>Eksik veya başarısız yanıt açık dönem olarak kabul edilmez.</p><details><summary>Teknik ayrıntı</summary><code>${esc(lock.code)}</code></details>`:'';
+  return `<aside class="lq-pg-note lq-rc-role-note" role="note" data-period-lock-state="${esc(lock?.state||'UNKNOWN')}"><div><strong>Dönem kilidi · ${esc(lockLabel(lock))}</strong>${evidence}<p>Dönem kapatma/açma yalnızca ADMIN yetkisindedir. Kilit durumu kullanıcı rolünü veya işlem yetkisini doğrulamaz. Bu ekran salt okunurdur; kapatma/açma işlemi sunulmaz.</p></div></aside>`;
+ }
+ function closeSummaryHtml(p,lock){
   const checks=Array.isArray(p.controls?.checks)?p.controls.checks:[];
   const coverageOk=p.population.coverage==='COMPLETE_POPULATION'&&p.population.excludedCount===0;
   const controlsReady=p.controls.status==='SUPPORTED_CALCULATION_DIAGNOSTICS';
@@ -153,7 +175,7 @@
   const steps=[
    ['Sözleşme kapsamı',coverageOk?'done':'warn',coverageOk?'Tam kapsam doğrulandı':statusLabel(p.population.coverage)],
    ['Hesaplama kontrolleri',!controlsReady?'unknown':attention.length?'warn':'done',!controlsReady?statusLabel(p.controls.status):attention.length?`${attention.length} kontrol inceleme istiyor`:`${checks.length} kontrol geçti`],
-   ['Dönem kilidi','unknown','Sunucu durumu gerekli']
+   ['Dönem kilidi',lock?.state==='LOCKED'?'done':lock?.state==='OPEN'?'warn':'unknown',lockLabel(lock)]
   ];
   const verified=steps.filter(row=>row[1]==='done').length;
   const stepHtml=steps.map(([label,state,note],i)=>`${i?'<i class="lq-pg-rail is-todo"></i>':''}<span class="lq-pg-step is-${state}"><b aria-hidden="true">${state==='done'?'✓':state==='warn'?'!':''}</b><span>${esc(label)}<small>${esc(note)}</small></span></span>`).join('');
@@ -166,23 +188,23 @@
     <div class="lq-rc-facts"><div><span>Şirket</span><strong>${esc(p.identity.companyName)}</strong></div><div><span>Dönem</span><strong>${esc(trDate(p.period.periodStart))} – ${esc(trDate(p.period.periodEnd))}</strong></div><div><span>Sözleşme</span><strong>${new Intl.NumberFormat('tr-TR').format(p.population.count)}</strong></div><div><span>Hesaplama kontrolleri</span><strong>${esc(statusLabel(p.controls.status))}</strong></div><div><span>Dahil</span><strong>${new Intl.NumberFormat('tr-TR').format(p.population.includedCount)}</strong></div><div><span>Kaynak bekleyen</span><strong>${new Intl.NumberFormat('tr-TR').format(p.population.excludedCount)}</strong></div></div>
    </section>
    <section class="lq-pg-card lq-pg-pad lq-rc-actions"><div class="lq-pg-cardhead"><div><span class="lq-pg-kick">AKSİYON MERKEZİ</span><h2>İnceleme gerekenler</h2></div><button type="button" class="lq-pg-btn is-link" data-rc-go-controls>Kontrollere git →</button></div><div class="lq-rc-action-list">${actionHtml}</div></section>
-   ${periodAuthorityNote()}<p class="lq-rc-disclaimer" role="status">Bu paket doğrulanmış hesaplama kontrolü sağlar; dönem kapatma, yevmiye kaydı veya canlı kayıt onayı değildir.</p>
+   ${periodAuthorityNote(lock)}<p class="lq-rc-disclaimer" role="status">Bu paket doğrulanmış hesaplama kontrolü sağlar; dönem kapatma, yevmiye kaydı veya canlı kayıt onayı değildir.</p>
   </section>`;
  }
- function controlsTableHtml(p,filter='',sort=''){
+ function controlsTableHtml(p,filter='',sort='',lock){
   let rows=rawRows(p,'controls').slice();
   const term=String(filter||'').trim().toLocaleLowerCase('tr-TR');
   if(term)rows=rows.filter(row=>`${row.description||''} ${row.status||''}`.toLocaleLowerCase('tr-TR').includes(term));
   if(sort)rows.sort((a,b)=>String(a[sort]||'').localeCompare(String(b[sort]||''),'tr-TR'));
-  if(!rows.length)return `<section class="lq-pg-card lq-pg-pad"><span class="lq-pg-kick">SUNUCU KONTROL PAKETİ</span><p class="lq-pg-empty" role="status">${p.population.count===0?'Bu dönemde aktif sözleşme yok; kontrol satırı bulunmuyor.':'Bu dönem için gösterilecek kontrol satırı bulunmuyor.'}</p><p class="lq-rc-disclaimer">Boş liste, dönemin kapatıldığı veya bütün işlemlerin tamamlandığı anlamına gelmez.</p>${periodAuthorityNote()}</section>`;
+  if(!rows.length)return `<section class="lq-pg-card lq-pg-pad"><span class="lq-pg-kick">SUNUCU KONTROL PAKETİ</span><p class="lq-pg-empty" role="status">${p.population.count===0?'Bu dönemde aktif sözleşme yok; kontrol satırı bulunmuyor.':'Bu dönem için gösterilecek kontrol satırı bulunmuyor.'}</p><p class="lq-rc-disclaimer">Boş liste, dönemin kapatıldığı veya bütün işlemlerin tamamlandığı anlamına gelmez.</p>${periodAuthorityNote(lock)}</section>`;
   return `<section class="lq-pg-card lq-pg-pad lq-rc-data-card"><div class="lq-pg-cardhead"><div><span class="lq-pg-kick">SUNUCU KONTROL PAKETİ</span><h2>Hesaplama kontrolleri</h2></div><span class="lq-pg-muted lq-pg-small">${rows.length} satır</span></div>
    <div class="lq-pg-filters"><label class="lq-pg-search"><span aria-hidden="true">⌕</span><input data-report-filter type="search" aria-label="Kontrollerde ara" placeholder="Kontrollerde ara" value="${esc(filter)}"></label><label class="lq-pg-select"><span class="lq-sr-only">Kontrol sıralaması</span><select data-report-sort aria-label="Kontrol sıralaması"><option value="">Sunucu sırası</option><option value="description"${sort==='description'?' selected':''}>Kontrol adı</option><option value="status"${sort==='status'?' selected':''}>Durum</option></select></label>${['xlsx','csv','txt','html','pdf'].map(f=>`<button class="lq-pg-btn lq-rc-export" data-report-export="${f}" type="button">${f.toUpperCase()}</button>`).join('')}</div>
    <div class="lq-pg-table lq-rc-table"><table><thead><tr><th scope="col">Kontrol</th><th scope="col">Durum</th></tr></thead><tbody>${rows.map(row=>`<tr data-check-row><td>${esc(row.description||'Kontrol adı kaynakta yok')}</td><td><span class="lq-pg-pill ${row.status==='PASS'?'is-ok':row.status==='FAIL'||row.status==='WARNING'?'is-warn':'is-muted'}">${esc(statusLabel(row.status))}</span></td></tr>`).join('')}</tbody></table></div>
-   <p class="lq-rc-disclaimer">Sonuçlar seçili şirket ve dönem için sunucu paketinden gelir. Hesaplama kontrolü, dönem kapatma veya yevmiye kaydı değildir.</p>${periodAuthorityNote()}</section>`;
+   <p class="lq-rc-disclaimer">Sonuçlar seçili şirket ve dönem için sunucu paketinden gelir. Hesaplama kontrolü, dönem kapatma veya yevmiye kaydı değildir.</p>${periodAuthorityNote(lock)}</section>`;
  }
  async function pageV2Controls(container,title){
   const isClose=/ay sonu|kapanış/i.test(String(title||'')),firstTab=isClose?'close':'controls';
-  let activeTab=firstTab,filter='',sort='',epoch=0;
+  let activeTab=firstTab,filter='',sort='',epoch=0,periodLock=null;
   const heading=isClose?'Dönem Kapanışı':'Kontroller';
   container.innerHTML=`<div class="lq-pg lq-rc-page"><header class="lq-pg-head"><div><span class="lq-pg-kick">TFRS 16 · DÖNEM SONU</span><h1 class="lq-pg-h1">${esc(heading)}</h1><div class="lq-pg-sub" data-rc-period>Rapor dönemi yükleniyor…</div></div></header>
    <section class="lq-pg-card lq-pg-pad lq-rc-filter-card"><div class="lq-rc-period-fields"><label>Şirket<select data-report-company aria-label="Şirket"></select></label><label>Başlangıç<input type="date" data-report-start aria-label="Dönem başlangıcı"></label><label>Bitiş<input type="date" data-report-end aria-label="Dönem sonu"></label><button class="lq-pg-btn is-primary" data-report-load type="button">Raporu getir</button></div><p data-report-period-error role="alert" hidden></p></section>
@@ -190,12 +212,12 @@
    <div id="lqRcOutput" data-report-output class="lq-rc-output" role="tabpanel" aria-labelledby="${firstTab==='close'?'lqRcCloseTab':'lqRcControlsTab'}"><p class="lq-pg-empty" role="status">Güvenilir rapor yükleniyor…</p></div></div>`;
   const output=container.querySelector('[data-report-output]'),startField=container.querySelector('[data-report-start]'),endField=container.querySelector('[data-report-end]'),loadButton=container.querySelector('[data-report-load]'),periodError=container.querySelector('[data-report-period-error]'),companyField=container.querySelector('[data-report-company]');
   let scope=[];
-  const syncPeriod=()=>{const valid=validPeriodRange(startField.value,endField.value);endField.min=startField.value||'';startField.max=endField.value||'';startField.setAttribute('aria-invalid',String(!valid));endField.setAttribute('aria-invalid',String(!valid));loadButton.disabled=!valid;periodError.hidden=valid;periodError.textContent=valid?'':'Dönem başlangıcı, dönem sonundan sonra olamaz. İki tarihi kontrol edin.';current=null;++epoch;output.replaceChildren();return valid;};
+  const syncPeriod=()=>{const valid=validPeriodRange(startField.value,endField.value);endField.min=startField.value||'';startField.max=endField.value||'';startField.setAttribute('aria-invalid',String(!valid));endField.setAttribute('aria-invalid',String(!valid));loadButton.disabled=!valid;periodError.hidden=valid;periodError.textContent=valid?'':'Dönem başlangıcı, dönem sonundan sonra olamaz. İki tarihi kontrol edin.';current=null;periodLock=null;++epoch;output.replaceChildren();return valid;};
   const refreshHeading=()=>{const company=scope.find(row=>String(row.id)===String(companyField.value));const periodStart=startField.value,periodEnd=endField.value;const el=container.querySelector('[data-rc-period]');if(el)el.textContent=`${company?.name||'Şirket kaynağı gerekli'} · ${trDate(periodStart)} – ${trDate(periodEnd)}`;};
   const draw=(p)=>{
    container.querySelectorAll('[data-rc-tab]').forEach(tab=>{const selected=tab.dataset.rcTab===activeTab;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});
    output.setAttribute('aria-labelledby',activeTab==='close'?'lqRcCloseTab':'lqRcControlsTab');
-   output.innerHTML=activeTab==='close'?closeSummaryHtml(p):controlsTableHtml(p,filter,sort);
+   output.innerHTML=activeTab==='close'?closeSummaryHtml(p,periodLock):controlsTableHtml(p,filter,sort,periodLock);
    output.querySelector('[data-report-filter]')?.addEventListener('input',event=>{filter=event.currentTarget.value;draw(p);const input=output.querySelector('[data-report-filter]');if(input){input.focus();input.setSelectionRange(filter.length,filter.length);}});
    output.querySelector('[data-report-sort]')?.addEventListener('change',event=>{sort=event.currentTarget.value;draw(p);});
    output.querySelectorAll('[data-report-export]').forEach(button=>button.addEventListener('click',()=>exportPackage(p,button.dataset.reportExport,'controls')));
@@ -205,7 +227,9 @@
    if(!syncPeriod())return;
    const revision=++epoch;current=null;output.innerHTML='<p class="lq-pg-empty" role="status">Güvenilir rapor yükleniyor…</p>';
    try{const companyId=companyField.value,periodStart=startField.value,periodEnd=endField.value;if(!companyId)fail('REPORTING_COMPANY_SOURCE_REQUIRED');
-    const p=await load({companyId,periodStart,periodEnd,reportingDate:periodEnd});if(revision!==epoch||!output.isConnected)return;current=p;draw(p);
+    const intent={companyId,periodStart,periodEnd,reportingDate:periodEnd};
+    const p=await load(intent);if(revision!==epoch||!output.isConnected)return;current=p;periodLock={state:'LOADING'};draw(p);
+    const lock=await loadPeriodLock(intent);if(revision!==epoch||!output.isConnected)return;periodLock=lock;draw(p);
    }catch(e){if(revision===epoch){current=null;output.innerHTML=`<section class="lq-pg-card lq-pg-pad lq-rc-error">${errorHtml(e)}</section>`;}}
   };
   try{
