@@ -36,3 +36,20 @@ test('lisans sayfası: gerçek durum seçenekleri, sekmeler, doğru satır işle
  assert.match(s,/Yeni lisans/);
  assert.match(fs.readFileSync(path.join(__dirname,'../frontend/admin/plans.html'),'utf8'),/class="lq-tabs"/);
 });
+test('dönem sayfası: takvim, isim çözümleme, yan panel mevcut changePeriod akışını kullanır',()=>{
+ const s=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
+ assert.match(s,/id="calGrid"/);
+ assert.match(s,/userName\(period\.closed_by\)/);
+ assert.match(s,/await changePeriod\(action\)/);
+ assert.match(s,/modeless: true/);
+ assert.match(s,/grid-template-columns: minmax\(0, 1fr\)/);
+});
+test('modeless panel arka sayfayı kilitlemez',()=>{
+ const {JSDOM,VirtualConsole}=require('jsdom');
+ const d=new JSDOM('<!doctype html><body></body>',{url:'https://leaseqant.com/frontend/admin/periods.html',runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ d.window.fetch=()=>Promise.resolve({ok:true,json:()=>Promise.resolve({})});d.window.eval(fs.readFileSync(path.join(__dirname,'../frontend/js/admin.js'),'utf8'));
+ d.window.showDrawer({title:'x',modeless:true});
+ assert.ok(d.window.document.getElementById('lqDrawer').classList.contains('modeless'));
+ assert.ok(d.window.document.documentElement.classList.contains('lq-drawer-side'));
+ d.window.closeDrawer();assert.ok(!d.window.document.documentElement.classList.contains('lq-drawer-side'));
+});

@@ -11,6 +11,7 @@
     <style>
         .periods-page {
             display: grid;
+            grid-template-columns: minmax(0, 1fr);
             gap: 20px;
         }
 
@@ -416,6 +417,21 @@
 
     </section>
 
+
+    <!-- KAPANIŞ TAKVİMİ -->
+    <section class="lq-cal-card" aria-labelledby="calTitle">
+        <div class="lq-cal-head">
+            <h2 id="calTitle">Kapanış takvimi</h2>
+            <div class="lq-cal-year" role="group" aria-label="Yıl">
+                <button type="button" class="btn btn-sm btn-outline" id="calPrev" aria-label="Önceki yıl">‹</button>
+                <span id="calYear" class="lq-cal-y"></span>
+                <button type="button" class="btn btn-sm btn-outline" id="calNext" aria-label="Sonraki yıl">›</button>
+            </div>
+            <div class="lq-cal-legend"><span><i class="lq-cal-k closed"></i>Kapalı</span><span><i class="lq-cal-k reopened"></i>Yeniden açılmış</span><span><i class="lq-cal-k"></i>Açık</span></div>
+        </div>
+        <div class="lq-cal-scroll"><div id="calGrid" class="lq-cal-grid" aria-live="polite">Yükleniyor…</div></div>
+        <p class="lq-cal-note">Bir hücreye tıklayın: o dönemin ayrıntısı ve kapatma / yeniden açma işlemi sağ panelde açılır.</p>
+    </section>
 
     <!-- SUMMARY -->
 
@@ -1118,7 +1134,7 @@ function renderPeriods() {
 
                             <span class="actor">
                                 ${escapeHtml(
-                                    period.closed_by ||
+                                    userName(period.closed_by) ||
                                     "—"
                                 )}
                             </span>
@@ -1143,7 +1159,7 @@ function renderPeriods() {
 
                             <span class="actor">
                                 ${escapeHtml(
-                                    period.reopened_by ||
+                                    userName(period.reopened_by) ||
                                     "—"
                                 )}
                             </span>
@@ -1292,7 +1308,8 @@ async function changePeriod(
         );
 
 
-        await loadPeriods();
+        await Promise.all([loadPeriods(), loadCalendar()]);
+        if (calSelected) openCalendarCell(calSelected.companyId, calSelected.periodKey);
 
 
     } catch (error) {
@@ -1418,8 +1435,8 @@ document.addEventListener(
         try {
 
             await loadCompanies();
-
-            await loadPeriods();
+            await Promise.all([loadPeriods(), loadCalendar(), loadUserNames()]);
+            renderPeriods();
 
 
         } catch (error) {
@@ -1435,6 +1452,141 @@ document.addEventListener(
     }
 );
 
+
+/* ============================================================
+   KAPANIŞ TAKVİMİ (v2) — şirket × ay. Veri GET /periods
+   (yeniden açılanlar dahil); tablo filtrelerinden bağımsızdır.
+   Kapatma/yeniden açma mevcut changePeriod akışını kullanır.
+============================================================ */
+const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const MONTHS_LONG = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const LOCK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+let calYear = new Date().getFullYear();
+let calState = new Map();
+let calCompanies = [];
+let calSelected = null;
+const userNames = new Map();
+
+function userName(id) {
+    if (!id) return "";
+    return userNames.get(String(id)) || String(id);
+}
+
+async function loadUserNames() {
+    try {
+        const r = await AdminAPI.getUsers({ limit: 500 });
+        (r && Array.isArray(r.data) ? r.data : []).forEach(u => {
+            const n = [u.first_name, u.last_name].filter(Boolean).join(" ");
+            userNames.set(String(u.id), n || u.username || String(u.id));
+        });
+    } catch (_) { /* ad çözülemezse kimlik gösterilir */ }
+}
+
+function keyOf(y, m) { return `${y}-${String(m + 1).padStart(2, "0")}`; }
+function periodLabel(k) { const [y, m] = k.split("-"); return `${MONTHS_LONG[Number(m) - 1]} ${y}`; }
+function shiftKey(k, d) { const [y, m] = k.split("-").map(Number); const x = new Date(y, m - 1 + d, 1); return keyOf(x.getFullYear(), x.getMonth()); }
+function stateOf(companyId, k) {
+    const p = calState.get(`${companyId}|${k}`);
+    return p ? (p.reopened_at ? "reopened" : "closed") : "open";
+}
+
+async function loadCalendar() {
+    const grid = document.getElementById("calGrid");
+    document.getElementById("calYear").textContent = calYear;
+    try {
+        const [pr, cr] = await Promise.all([
+            AdminAPI.getPeriods({ includeReopened: true }),
+            AdminAPI.getCompanies({ limit: 500 })
+        ]);
+        if (!pr || !pr.success) throw new Error(describeApiError(pr));
+        calState = new Map();
+        (Array.isArray(pr.periods) ? pr.periods : []).forEach(p => {
+            const k = `${p.company_id}|${p.period_key}`;
+            const prev = calState.get(k);
+            // Aynı dönem için birden çok kayıt: güncel kilit (yeniden açılmamış) önceliklidir.
+            if (!prev || (prev.reopened_at && !p.reopened_at) ||
+                (Boolean(prev.reopened_at) === Boolean(p.reopened_at) && String(p.closed_at) > String(prev.closed_at))) {
+                calState.set(k, p);
+            }
+        });
+        calCompanies = (cr && Array.isArray(cr.data) ? cr.data : [])
+            .filter(c => String(c.status || "ACTIVE").toUpperCase() === "ACTIVE");
+        renderCalendar();
+    } catch (e) {
+        grid.innerHTML = `<div class="lq-empty" style="color:var(--danger)">${escapeHtml(e.message || "Takvim yüklenemedi.")}</div>`;
+    }
+}
+
+function renderCalendar() {
+    const grid = document.getElementById("calGrid");
+    if (!calCompanies.length) { grid.innerHTML = '<div class="lq-empty">Aktif şirket yok.</div>'; return; }
+    const now = new Date(), curKey = keyOf(now.getFullYear(), now.getMonth());
+    let html = '<div class="lq-cal-row lq-cal-months"><span></span>' + MONTHS_TR.map(m => `<span>${m}</span>`).join("") + "</div>";
+    calCompanies.forEach(c => {
+        html += `<div class="lq-cal-row"><span class="lq-cal-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`;
+        for (let m = 0; m < 12; m++) {
+            const k = keyOf(calYear, m), st = stateOf(c.id, k);
+            const sel = calSelected && calSelected.companyId === String(c.id) && calSelected.periodKey === k;
+            const label = `${c.name} · ${periodLabel(k)} · ${st === "closed" ? "kapalı" : st === "reopened" ? "yeniden açılmış" : "açık"}`;
+            html += `<button type="button" class="lq-cal-k ${st}${sel ? " sel" : ""}${k > curKey ? " future" : ""}" data-c="${escapeHtml(String(c.id))}" data-k="${k}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${st === "closed" ? LOCK : st === "reopened" ? "açık" : ""}</button>`;
+        }
+        html += "</div>";
+    });
+    grid.innerHTML = html;
+}
+
+function openCalendarCell(companyId, periodKey) {
+    calSelected = { companyId: String(companyId), periodKey };
+    renderCalendar();
+    const company = calCompanies.find(c => String(c.id) === String(companyId))
+        || { name: companyNames.get(String(companyId)) || companyId };
+    const p = calState.get(`${companyId}|${periodKey}`) || null;
+    const st = stateOf(companyId, periodKey);
+    const stChip = st === "closed" ? '<span class="lq-chip dk">Kapalı</span>'
+        : st === "reopened" ? '<span class="lq-chip warn">Yeniden açılmış</span>' : '<span class="lq-chip n">Açık</span>';
+    const stTxt = x => (x === "closed" ? "kapalı" : x === "reopened" ? "yeniden açılmış" : "açık");
+    const prevK = shiftKey(periodKey, -1), nextK = shiftKey(periodKey, 1);
+    let rows = "";
+    if (p) {
+        rows += `<dt>Kapatan</dt><dd>${escapeHtml(userName(p.closed_by) || "—")}</dd><dt>Kapanış</dt><dd>${escapeHtml(formatTime(p.closed_at))}</dd>`;
+        if (p.reopened_at) rows += `<dt>Yeniden açan</dt><dd>${escapeHtml(userName(p.reopened_by) || "—")}</dd><dt>Yeniden açılış</dt><dd>${escapeHtml(formatTime(p.reopened_at))}</dd>`;
+    }
+    rows += `<dt>Önceki dönem</dt><dd>${periodLabel(prevK)} · ${stTxt(stateOf(companyId, prevK))}</dd><dt>Sonraki dönem</dt><dd>${periodLabel(nextK)} · ${stTxt(stateOf(companyId, nextK))}</dd>`;
+    const note = st === "closed"
+        ? '<div class="lq-box" style="background:var(--warn-soft);border-color:#F5D9A8;color:#7A4A0B;font-size:13px;line-height:1.5">Yeniden açarsanız bu dönemde sözleşme ekleme, modifikasyon ve toplu yevmiye yeniden mümkün olur. İşlem denetim izine yazılır.</div>'
+        : '<div class="lq-box" style="font-size:13px;line-height:1.5;color:var(--text-light)">Kapatılan dönemde yeni sözleşme, silme, modifikasyon, yeniden değerlendirme ve toplu yevmiye engellenir. İşlem denetim izine yazılır.</div>';
+    const action = st === "closed"
+        ? `<button type="button" class="btn btn-outline" style="color:var(--warning);border-color:#F0B35B" onclick="calAction('reopen')">Dönemi yeniden aç</button>`
+        : `<button type="button" class="btn btn-primary" onclick="calAction('close')">Dönemi kapat</button>`;
+    showDrawer({
+        eyebrow: `<span>SEÇİLİ DÖNEM</span>${stChip}`,
+        title: `${company.name} · ${periodLabel(periodKey)}`,
+        body: `<dl class="lq-kv">${rows}</dl>${note}<div id="calMsg" role="status" style="font-size:13px"></div>`,
+        footer: `<span class="sp"></span>${action}`,
+        modeless: true
+    });
+}
+
+async function calAction(action) {
+    if (!calSelected) return;
+    const sel = { ...calSelected };
+    document.getElementById("company").value = sel.companyId;
+    document.getElementById("period").value = sel.periodKey;
+    await changePeriod(action);
+    const msg = document.getElementById("message");
+    const box = document.getElementById("calMsg");
+    if (box && msg && msg.textContent) {
+        box.textContent = msg.textContent;
+        box.style.color = /error/.test(msg.className) ? "var(--danger)" : "var(--success)";
+    }
+}
+
+document.getElementById("calGrid").addEventListener("click", e => {
+    const b = e.target.closest(".lq-cal-k[data-c]");
+    if (b) openCalendarCell(b.dataset.c, b.dataset.k);
+});
+document.getElementById("calPrev").addEventListener("click", () => { calYear--; document.getElementById("calYear").textContent = calYear; renderCalendar(); });
+document.getElementById("calNext").addEventListener("click", () => { calYear++; document.getElementById("calYear").textContent = calYear; renderCalendar(); });
 </script>
 
 </body>
