@@ -104,6 +104,22 @@
     return requestDisclosure('/api/reports/authority/companies', 'GET', null, reportingRequestOptions(options));
   }
 
+  async function getPeriodLockStatus(intent, options) {
+    if (!intent || typeof intent.companyId !== "string" || !intent.companyId.trim()
+      || intent.companyId.length > 50 || typeof intent.periodKey !== "string"
+      || !/^\d{4}-(0[1-9]|1[0-2])$/.test(intent.periodKey)) {
+      throw new TypeError("An exact company and monthly period are required");
+    }
+    const query = new URLSearchParams({ companyId: intent.companyId, periodKey: intent.periodKey });
+    const data = await requestDisclosure('/api/periods/lock-status?' + query, 'GET', null, reportingRequestOptions(options));
+    if (data.companyId !== intent.companyId || data.periodKey !== intent.periodKey
+      || !['OPEN', 'LOCKED'].includes(data.status)
+      || (data.status === 'OPEN' ? data.lockedAt !== null : typeof data.lockedAt !== 'string' || !Number.isFinite(Date.parse(data.lockedAt)))) {
+      throw createRequestError(200, { code: 'PERIOD_STATUS_RESPONSE_INVALID' });
+    }
+    return Object.freeze({ companyId: data.companyId, periodKey: data.periodKey, status: data.status, lockedAt: data.lockedAt });
+  }
+
   async function getLeaseDisclosure(availability, options) {
     const fields = ["companyId", "reportingPeriodStart", "reportingPeriodEnd", "reportingDate", "populationId"];
     if (!availability || availability.sourceTrustStatus !== "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED"
@@ -411,6 +427,7 @@
     getJournalAuthorityPackage,
     getReportingAuthorityPackage,
     getReportingCompanies,
+    getPeriodLockStatus,
     getLeaseDisclosure,
     apiBase: getApiBase,
     timeoutMs: DEFAULT_TIMEOUT_MS
