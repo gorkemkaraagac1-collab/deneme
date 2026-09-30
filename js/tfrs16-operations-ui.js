@@ -505,6 +505,72 @@ ${footer}
     if (autoRun) calculateAndRender?.(false);
   }
 
+  // This gates form persistence on a successful server calculation. It is
+  // not a persisted-event authorization token; the backend still owns that.
+  function bindSlbPreviewFlow(handlers) {
+    const form = document.querySelector('[data-lq-operation-form="sale-and-leaseback"]');
+    const calculate = document.getElementById("slbCalculateButton");
+    const save = document.getElementById("slbSaveButton");
+    const resultBox = document.getElementById("slbResultContainer");
+    if (!form || !calculate || !save || !resultBox) return;
+    let sequence = 0, accepted = null, saving = false;
+    const fingerprint = input => JSON.stringify(input);
+    const connected = () => form.isConnected && resultBox.isConnected;
+    function invalidate() {
+      sequence += 1;
+      accepted = null;
+      save.disabled = true;
+      calculate.disabled = false;
+      resultBox.textContent = "Girdiler değişti. Sunucu önizlemesini yeniden alın.";
+    }
+    form.addEventListener("input", invalidate);
+    form.addEventListener("change", invalidate);
+    calculate.addEventListener("click", async () => {
+      if (saving) return;
+      const request = ++sequence;
+      accepted = null;
+      save.disabled = true;
+      calculate.disabled = true;
+      const input = JSON.parse(fingerprint(handlers.readInput()));
+      const key = fingerprint(input);
+      resultBox.textContent = "Sunucu önizlemesi yükleniyor…";
+      try {
+        const result = await handlers.preview(input);
+        if (!connected() || request !== sequence) return;
+        if (key !== fingerprint(handlers.readInput())) { invalidate(); return; }
+        if (!result) throw new Error("Sunucu önizlemesi alınamadı.");
+        resultBox.innerHTML = handlers.render(result);
+        accepted = { input, key };
+        save.disabled = false;
+      } catch (error) {
+        if (connected() && request === sequence) resultBox.textContent = `Önizleme alınamadı: ${error?.message || String(error)}`;
+      } finally {
+        if (connected() && request === sequence) calculate.disabled = false;
+      }
+    });
+    save.addEventListener("click", async () => {
+      if (saving || !accepted || !connected()) return;
+      if (accepted.key !== fingerprint(handlers.readInput())) { invalidate(); return; }
+      const input = accepted.input;
+      saving = true;
+      accepted = null;
+      const controls = Array.from(form.querySelectorAll("input, textarea, button"));
+      const states = controls.map(control => control.disabled);
+      controls.forEach(control => { control.disabled = true; });
+      try {
+        await handlers.save(input);
+        if (connected()) resultBox.textContent = "Form kaydedildi. Bu işlem muhasebe olayı uygulama veya defter kaydı onayı değildir.";
+      } catch (error) {
+        if (connected()) resultBox.textContent = `Kaydedilemedi: ${error?.message || String(error)}. Yeniden önizleme alın.`;
+      } finally {
+        saving = false;
+        controls.forEach((control, index) => { control.disabled = states[index]; });
+        save.disabled = true;
+        calculate.disabled = false;
+      }
+    });
+  }
+
   function bindSubleaseEvents(contract, handlers = {}) {
     const { calculateAndRender, autoRun } = handlers;
     document.getElementById("subleaseCalculateButton")?.addEventListener("click", () => {
@@ -943,7 +1009,9 @@ ${footer}
           <label class="lq-op-check"><input id="slbQualifiesAsSale" type="checkbox" ${saved?.qualifiesAsSale ? "checked" : ""} />Devir TFRS 15 anlamında satış sayılıyor</label>
         </div>
         <label class="lq-op-note-field">Mesleki muhakeme notu (gerekçe)<textarea id="slbNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
-        <button id="slbCalculateButton" type="button" class="primary-button lq-op-primary-button">Hesapla ve Kaydet</button>
+        <button id="slbCalculateButton" type="button" class="primary-button lq-op-primary-button">Sunucu önizlemesini al</button>
+        <button id="slbSaveButton" type="button" class="primary-button lq-op-primary-button" disabled>Önizlenen formu kaydet</button>
+        <p>Bu önizleme gönderilen sözleşme bilgileriyle hesaplanır. Kayıtlı olay kimliği ve sürümüyle bağlanmış bir uygulama onayı değildir.</p>
         <div id="slbResultContainer" class="lq-op-result-slot">${operationSourceState()}</div>
       </div>
     `;
@@ -1053,5 +1121,5 @@ ${footer}
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbPreviewFlow, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
 })(window);
