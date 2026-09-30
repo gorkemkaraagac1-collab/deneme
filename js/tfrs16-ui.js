@@ -10750,6 +10750,48 @@ ${renderAccountingCenterBulkPromo()}
 
     container.innerHTML = formHtml;
 
+    if (document.documentElement.getAttribute("data-lq-ui") === "2") {
+      const bindPreview = window.LeaseQantTfrs16OperationsUi?.bindSlbPreviewFlow;
+      if (typeof bindPreview !== "function") return;
+      bindPreview({
+        readInput: () => ({
+          previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
+          fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
+          saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
+          qualifiesAsSale: !!document.getElementById("slbQualifiesAsSale")?.checked,
+          professionalJudgmentNote: document.getElementById("slbNote")?.value || "",
+          leasebackContract: contract
+        }),
+        preview: async input => {
+          const facade = window.LeaseQantPrivateTfrs16Facade;
+          if (typeof facade?.loadSaleAndLeaseback !== "function") throw new Error("Sunucu önizleme kaynağı hazır değil.");
+          return facade.loadSaleAndLeaseback(input);
+        },
+        render: renderSlbResultHtml,
+        save: async input => {
+          const previous = contract.saleAndLeaseback ? cloneModificationValue(contract.saleAndLeaseback) : null;
+          contract.saleAndLeaseback = {
+            previousCarryingAmount: input.previousCarryingAmount,
+            fairValueOfAsset: input.fairValueOfAsset,
+            saleProceeds: input.saleProceeds,
+            qualifiesAsSale: input.qualifiesAsSale,
+            professionalJudgmentNote: input.professionalJudgmentNote,
+            savedAt: new Date().toISOString()
+          };
+          try {
+            await persistContractToApi(contract, true);
+            const idx = contracts.findIndex(c => c.id === contract.id);
+            if (idx >= 0) contracts[idx] = contract;
+            saveContracts(contracts);
+          } catch (error) {
+            contract.saleAndLeaseback = previous;
+            throw error;
+          }
+        }
+      });
+      return;
+    }
+
     async function runAndRenderSlb(persist) {
       const resultBox = document.getElementById("slbResultContainer");
       const input = {
