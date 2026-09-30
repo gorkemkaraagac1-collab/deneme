@@ -474,3 +474,10 @@ test('legacy disclosure presentation retains its existing structure',async()=>{
  const target={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);
  assert.match(target.innerHTML,/gk-v26-page/);assert.doesNotMatch(target.innerHTML,/data-disclosure-source-gaps/);
 });
+
+test('real backend support vocabulary separates capability from absent evidence',()=>{
+ const window={};load('js/tfrs16-disclosure-ui.js',window);const sourceGaps=window.LeaseQantTfrs16DisclosureUi.sourceGaps;
+ const pkg={missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],supportStatus:[{requirementId:'AUTO',supportedStatus:'SUPPORTED_AUTOMATIC'},{requirementId:'ENTITY',supportedStatus:'SUPPORTED_WITH_ENTITY_INPUT'},{requirementId:'LEDGER',supportedStatus:'SUPPORTED_WITH_LEDGER_INPUT'},{requirementId:'DISC',supportedStatus:'SUPPORTED_WITH_DISCLOSURE_INPUT'},{requirementId:'UNSUPPORTED',supportedStatus:'NOT_YET_SUPPORTED'},{requirementId:'BOUNDARY',supportedStatus:'OUT_OF_SCOPE'}]};
+ const gaps=sourceGaps(pkg);assert.equal(gaps.map(x=>x.id).join(','),'totalCashOutflowForLeases,UNSUPPORTED,BOUNDARY');assert.equal(gaps[0].status,'REQUIRES_LEDGER_DATA');
+ assert.equal(sourceGaps({supportStatus:[{requirementId:'UNKNOWN',supportedStatus:'FUTURE_UNKNOWN'}]}).length,1);
+});

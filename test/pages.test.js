@@ -84,3 +84,9 @@ test('real overview never declares no pending action after disclosure load failu
  assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/Bekleyen işlem yok/);
  dom.window.close();
 });
+
+test('overview uses actual capability vocabulary and preserves unsupported and out-of-scope actions',()=>{
+ const dom=load(),state=dom.window.LeaseQantPages.disclosureState;
+ const p={validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cash'}],supportStatus:[{requirementId:'auto',supportedStatus:'SUPPORTED_AUTOMATIC'},{requirementId:'input',supportedStatus:'SUPPORTED_WITH_ENTITY_INPUT'},{requirementId:'unsupported',supportedStatus:'NOT_YET_SUPPORTED'},{requirementId:'boundary',supportedStatus:'OUT_OF_SCOPE'}]};
+ assert.equal(state(p).issues.join(','),'cash,unsupported,boundary');assert.equal(state(p).complete,false);dom.window.close();
+});
