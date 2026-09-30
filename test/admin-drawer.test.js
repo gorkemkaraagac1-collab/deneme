@@ -53,3 +53,18 @@ test('modeless panel arka sayfayı kilitlemez',()=>{
  assert.ok(d.window.document.documentElement.classList.contains('lq-drawer-side'));
  d.window.closeDrawer();assert.ok(!d.window.document.documentElement.classList.contains('lq-drawer-side'));
 });
+test('açılış bakiyeleri: tırnaklı ve noktalı virgüllü CSV doğru okunur, yalnızca 5 kolon zorunlu',()=>{
+ const {JSDOM,VirtualConsole}=require('jsdom');
+ const html=fs.readFileSync(path.join(__dirname,'../frontend/admin/opening-balances.html'),'utf8');
+ const script=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].pop()[1];
+ const fn=script.slice(script.indexOf('const REQUIRED_HEADERS'),script.indexOf('let validRows'))+script.slice(script.indexOf('function splitCsvLine'),script.indexOf('function parseCsv'))+script.slice(script.indexOf('function parseCsv'),script.indexOf('/* ====',script.indexOf('function parseCsv')));
+ const d=new JSDOM('<textarea id="csv"></textarea>',{runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ d.window.eval(fn+';window.parseCsv=parseCsv;');
+ d.window.document.getElementById('csv').value='﻿company_id;contract_id;opening_date;opening_rou_asset;opening_lease_liability;source_reference;extra\nC1;K1;2025-01-01;100;90;"Kira, ""Gebze""";zzz\n';
+ const rows=d.window.parseCsv();
+ assert.equal(rows.length,1);assert.equal(rows[0].source_reference,'Kira, "Gebze"');assert.equal(rows[0].contract_id,'K1');
+ assert.equal(rows[0].extra,undefined);assert.equal(rows[0].discount_rate,undefined);
+ d.window.document.getElementById('csv').value='company_id,contract_id\nC1,K1';
+ assert.throws(()=>d.window.parseCsv(),/opening_date/);
+ assert.match(html,/opening-balances\/approve/);
+});
