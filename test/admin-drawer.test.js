@@ -39,7 +39,7 @@ test('lisans sayfası: gerçek durum seçenekleri, sekmeler, doğru satır işle
 test('dönem sayfası: takvim, isim çözümleme, yan panel mevcut changePeriod akışını kullanır',()=>{
  const s=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
  assert.match(s,/id="calGrid"/);
- assert.match(s,/userName\(period\.closed_by\)/);
+ assert.match(s,/userName\(period\.closed_by/);
  assert.match(s,/await changePeriod\(action\)/);
  assert.match(s,/modeless: true/);
  assert.match(s,/grid-template-columns: minmax\(0, 1fr\)/);
@@ -90,4 +90,10 @@ test('denetim izi: güncel işlem filtreleri ve değişiklik paneli; SSS sırala
  d.window.eval(fs.readFileSync(path.join(__dirname,'../frontend/js/admin.js'),'utf8'));
  assert.equal(d.window.auditActionLabel('EXTEND_LICENSE'),'Lisans süresi uzatıldı');
  assert.equal(d.window.auditActionLabel('YENI_KOD'),'YENI_KOD');
+});
+test('denetim izi şirket/tarih filtresini sunucuya gönderir; dönem sunucu adını kullanır',()=>{
+ const a=fs.readFileSync(path.join(__dirname,'../frontend/admin/audit.html'),'utf8');
+ assert.match(a,/params\.company_id = companyF/);assert.match(a,/params\.from = fromF/);assert.match(a,/params\.to = toF/);
+ const p=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
+ assert.match(p,/userName\(period\.closed_by, period\.closed_by_name\)/);
 });

@@ -1134,7 +1134,7 @@ function renderPeriods() {
 
                             <span class="actor">
                                 ${escapeHtml(
-                                    userName(period.closed_by) ||
+                                    userName(period.closed_by, period.closed_by_name) ||
                                     "—"
                                 )}
                             </span>
@@ -1159,7 +1159,7 @@ function renderPeriods() {
 
                             <span class="actor">
                                 ${escapeHtml(
-                                    userName(period.reopened_by) ||
+                                    userName(period.reopened_by, period.reopened_by_name) ||
                                     "—"
                                 )}
                             </span>
@@ -1467,7 +1467,9 @@ let calCompanies = [];
 let calSelected = null;
 const userNames = new Map();
 
-function userName(id) {
+function userName(id, serverName) {
+    // Sunucu adı gönderiyorsa (closed_by_name / reopened_by_name) o önceliklidir.
+    if (serverName) return serverName;
     if (!id) return "";
     return userNames.get(String(id)) || String(id);
 }
@@ -1548,8 +1550,8 @@ function openCalendarCell(companyId, periodKey) {
     const prevK = shiftKey(periodKey, -1), nextK = shiftKey(periodKey, 1);
     let rows = "";
     if (p) {
-        rows += `<dt>Kapatan</dt><dd>${escapeHtml(userName(p.closed_by) || "—")}</dd><dt>Kapanış</dt><dd>${escapeHtml(formatTime(p.closed_at))}</dd>`;
-        if (p.reopened_at) rows += `<dt>Yeniden açan</dt><dd>${escapeHtml(userName(p.reopened_by) || "—")}</dd><dt>Yeniden açılış</dt><dd>${escapeHtml(formatTime(p.reopened_at))}</dd>`;
+        rows += `<dt>Kapatan</dt><dd>${escapeHtml(userName(p.closed_by, p.closed_by_name) || "—")}</dd><dt>Kapanış</dt><dd>${escapeHtml(formatTime(p.closed_at))}</dd>`;
+        if (p.reopened_at) rows += `<dt>Yeniden açan</dt><dd>${escapeHtml(userName(p.reopened_by, p.reopened_by_name) || "—")}</dd><dt>Yeniden açılış</dt><dd>${escapeHtml(formatTime(p.reopened_at))}</dd>`;
     }
     rows += `<dt>Önceki dönem</dt><dd>${periodLabel(prevK)} · ${stTxt(stateOf(companyId, prevK))}</dd><dt>Sonraki dönem</dt><dd>${periodLabel(nextK)} · ${stTxt(stateOf(companyId, nextK))}</dd>`;
     const note = st === "closed"
