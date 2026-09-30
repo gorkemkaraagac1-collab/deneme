@@ -68,3 +68,13 @@ test('açılış bakiyeleri: tırnaklı ve noktalı virgüllü CSV doğru okunur
  assert.throws(()=>d.window.parseCsv(),/opening_date/);
  assert.match(html,/opening-balances\/approve/);
 });
+test('kur ve endeks: senkron mesajı inserted okur, değişim sütunları ve isimler',()=>{
+ const fx=fs.readFileSync(path.join(__dirname,'../frontend/admin/fx-rates.html'),'utf8');
+ assert.match(fx,/Array\.isArray\(result\.inserted\)/);
+ assert.match(fx,/<th>Günlük değişim<\/th>/);
+ assert.doesNotMatch(fx,/colspan="5"/);
+ const cpi=fs.readFileSync(path.join(__dirname,'../frontend/admin/inflation-indices.html'),'utf8');
+ assert.match(cpi,/<th>Aylık değişim<\/th>/);
+ assert.match(cpi,/personName\(record\.retrievedBy\)/);
+ assert.doesNotMatch(cpi,/colspan="8"/);
+});

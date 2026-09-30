@@ -713,6 +713,7 @@
                     <th>Tarih</th>
                     <th>Parite</th>
                     <th>Kur</th>
+                    <th>Günlük değişim</th>
                     <th>Durum</th>
                     <th>İşlemler</th>
                 </tr>
@@ -725,7 +726,7 @@
                 <tr>
 
                     <td
-                        colspan="5"
+                        colspan="6"
                         class="table-state"
                     >
                         Kurlar yükleniyor...
@@ -1040,7 +1041,7 @@ async function loadRates() {
         <tr>
 
             <td
-                colspan="5"
+                colspan="6"
                 class="table-state"
             >
                 Kurlar yükleniyor...
@@ -1102,7 +1103,7 @@ async function loadRates() {
             <tr>
 
                 <td
-                    colspan="5"
+                    colspan="6"
                     class="table-state error"
                 >
                     ${safe(
@@ -1193,7 +1194,7 @@ function renderRates() {
             <tr>
 
                 <td
-                    colspan="5"
+                    colspan="6"
                     class="table-state"
                 >
                     ${
@@ -1271,9 +1272,8 @@ function renderRates() {
                         </td>
 
 
-                        <td data-label="Durum">
-
-                            <span class="pending-badge">
+                        <td data-label="Günlük değişim">${changeCell(rate)}</td>
+                        <td data-label="Durum"> <span class="pending-badge">
 
                                 <span
                                     class="pending-dot"
@@ -1687,19 +1687,13 @@ async function syncRates() {
             );
 
 
-        let message =
-            result.message ||
-            "TCMB senkronizasyonu tamamlandı.";
-
-
-        if (
-            result.created !== undefined
-        ) {
-
-            message +=
-                ` ${Number(result.created)} yeni kayıt oluşturuldu.`;
-
-        }
+        // Sunucu { inserted: [...], skipped: [tarih...] } döndürür; eski kod
+        // hiç gelmeyen result.created'i okuduğu için sayı hiç görünmüyordu.
+        const insertedCount = Array.isArray(result.inserted) ? result.inserted.length : Number(result.created || 0);
+        const skippedCount = Array.isArray(result.skipped) ? result.skipped.length : 0;
+        let message = `TCMB senkronizasyonu tamamlandı: ${insertedCount} yeni kur eklendi`
+            + (skippedCount ? `, ${skippedCount} gün atlandı (hafta sonu, tatil veya zaten kayıtlı).` : ".")
+            + (insertedCount ? " Yeni kurlar doğrulanana kadar hesaplamaya girmez." : "");
 
 
         setFxMessage(
@@ -1786,6 +1780,36 @@ document.addEventListener(
     }
 );
 
+
+/* v2: aynı paritede bir önceki bekleyen kura göre günlük değişim.
+   Yalnızca göz kontrolü içindir; hesaplamaya girmez. %3'ü aşan
+   hareket işaretlenir. */
+function changeCell(rate) {
+    const pair = `${rate.fromCurrency}/${rate.toCurrency}`;
+    const same = pendingRatesCache
+        .filter(r => `${r.fromCurrency}/${r.toCurrency}` === pair && String(r.rateDate) < String(rate.rateDate))
+        .sort((a, b) => String(b.rateDate).localeCompare(String(a.rateDate)));
+    const prev = same[0];
+    const cur = Number(rate.rate), pv = prev ? Number(prev.rate) : NaN;
+    if (!prev || !Number.isFinite(cur) || !Number.isFinite(pv) || pv === 0) return '<span style="color:var(--text-light)">—</span>';
+    const pct = (cur / pv - 1) * 100;
+    const txt = `${pct >= 0 ? "+" : ""}${pct.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+    return Math.abs(pct) > 3
+        ? `<span class="lq-chip warn" title="Bir önceki bekleyen kur: ${safe(formatRate(prev.rate))}">${txt} · kontrol et</span>`
+        : `<span style="font-family:var(--mono)" title="Bir önceki bekleyen kur: ${safe(formatRate(prev.rate))}">${txt}</span>`;
+}
+
+(function defaultFxRange() {
+    const f = document.getElementById("fromDate"), t = document.getElementById("toDate");
+    if (!f || !t) return;
+    const d = new Date(), pad = n => String(n).padStart(2, "0");
+    const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (f.value === "2019-01-01" && t.value === "2019-12-31") {
+        f.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+        t.value = today;
+    }
+    t.max = today;
+})();
 </script>
 
 </body>
