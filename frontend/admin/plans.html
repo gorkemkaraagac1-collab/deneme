@@ -1233,6 +1233,34 @@ document.addEventListener(
     }
 );
 
+
+/* v2: planlar kart olarak; tablo aynı veriyle DOM'da kalır ama gizlenir. */
+(function wrapRenderPlansAsCards() {
+    const original = renderPlans;
+    renderPlans = function () {
+        original();
+        const tbody = document.getElementById("plansTableBody");
+        const host = tbody.closest(".table-container") || tbody.closest("table");
+        let grid = document.getElementById("planCards");
+        if (!grid) {
+            grid = document.createElement("div");
+            grid.id = "planCards";
+            grid.className = "lq-plan-cards";
+            host.parentNode.insertBefore(grid, host);
+            host.style.display = "none";
+        }
+        if (!allPlans.length) { grid.innerHTML = '<div class="lq-empty">Tanımlı lisans planı bulunamadı.</div>'; return; }
+        const lim = v => (v === null || v === undefined || v === "" ? "∞" : Number(v).toLocaleString("tr-TR"));
+        grid.innerHTML = allPlans.map(plan => `
+            <article class="lq-plan-card">
+                <header><div><h3>${escapeHtml(plan.name || "-")}</h3><span class="id">${escapeHtml(String(plan.id || ""))}</span></div>
+                    <button class="btn btn-sm btn-outline" type="button" onclick="openEditModal('${escapeHtml(String(plan.id))}')">Düzenle</button></header>
+                <p>${escapeHtml(plan.description || "Açıklama yok.")}</p>
+                <dl><div><dt>Kullanıcı</dt><dd>${lim(plan.max_users)}</dd></div><div><dt>Sözleşme</dt><dd>${lim(plan.max_contracts)}</dd></div><div><dt>Şirket</dt><dd>${lim(plan.max_companies)}</dd></div></dl>
+                ${String(plan.id).toLowerCase() === "custom" ? '<small>Custom planda limitler her lisansta ayrıca belirlenir.</small>' : ""}
+            </article>`).join("");
+    };
+})();
 </script>
 
 </body>
