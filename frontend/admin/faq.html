@@ -2013,51 +2013,25 @@ async function moveFaq(
          * kullanıcıya yansıtılır.
          */
 
-        const [
-            resultCurrent,
-            resultTarget
-        ] =
-            await Promise.all([
-
-                AdminAPI.updateFaq(
-                    current.id,
-                    {
-                        sortOrder:
-                            target.sort_order
-                    }
-                ),
-
-                AdminAPI.updateFaq(
-                    target.id,
-                    {
-                        sortOrder:
-                            current.sort_order
-                    }
-                )
-
-            ]);
-
-
-        if (
-            !resultCurrent.success ||
-            !resultTarget.success
-        ) {
-
-            const failedResult =
-                !resultCurrent.success
-                    ? resultCurrent
-                    : resultTarget;
-
-
-            throw new Error(
-                describeApiError(
-                    failedResult
-                )
-            );
-
+        /*
+         * Önceki yöntem iki kaydın sort_order değerini takas ediyordu;
+         * değerler eşitse hiçbir şey değişmiyordu. Şimdi yeni sıra
+         * kurulup tüm liste 10'ar aralıkla numaralanır; yalnızca
+         * değeri değişen kayıtlar güncellenir.
+         */
+        const reordered = allFaqs.slice();
+        reordered[index] = target;
+        reordered[targetIndex] = current;
+        const updates = reordered
+            .map((faq, i) => ({ faq, sortOrder: (i + 1) * 10 }))
+            .filter(u => Number(u.faq.sort_order) !== u.sortOrder);
+        const results = await Promise.all(
+            updates.map(u => AdminAPI.updateFaq(u.faq.id, { sortOrder: u.sortOrder }))
+        );
+        const failed = results.find(r => !r || !r.success);
+        if (failed) {
+            throw new Error(describeApiError(failed));
         }
-
-
     } catch (error) {
 
         console.error(
@@ -2114,6 +2088,39 @@ document.addEventListener(
     }
 );
 
+
+/* v2: cevap alanının sitede nasıl görüneceğine canlı önizleme.
+   Site yalnızca b, strong, em, code ve br etiketlerine izin verir;
+   önizleme aynı kuralla temizler. */
+function sanitizeFaqPreview(value) {
+    const t = document.createElement("template");
+    t.innerHTML = String(value == null ? "" : value);
+    const allowed = { STRONG: 1, CODE: 1, EM: 1, B: 1, BR: 1 };
+    Array.from(t.content.querySelectorAll("*")).forEach(node => {
+        if (allowed[node.tagName]) { Array.from(node.attributes).forEach(a => node.removeAttribute(a.name)); return; }
+        if (/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|SVG|MATH)$/i.test(node.tagName)) { node.remove(); return; }
+        node.replaceWith(document.createTextNode(node.textContent || ""));
+    });
+    return t.innerHTML;
+}
+
+function attachFaqPreview() {
+    const q = document.getElementById("faqQuestion"), a = document.getElementById("faqAnswer");
+    if (!q || !a || document.getElementById("faqPreview")) return;
+    a.closest(".form-group").insertAdjacentHTML("afterend", `
+        <div class="form-group"><label>Sitede önizleme</label>
+            <div id="faqPreview" class="lq-faq-preview"><div class="q"></div><div class="a"></div></div>
+            <small>İzinli biçim: &lt;b&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;code&gt;, &lt;br&gt;. Diğer etiketler düz metne çevrilir.</small></div>`);
+    const paint = () => {
+        const box = document.getElementById("faqPreview");
+        box.querySelector(".q").textContent = q.value || "Soru";
+        box.querySelector(".a").innerHTML = sanitizeFaqPreview(a.value) || '<span style="color:#8A96A8">Cevap</span>';
+    };
+    q.addEventListener("input", paint); a.addEventListener("input", paint); paint();
+}
+
+new MutationObserver(() => attachFaqPreview())
+    .observe(document.getElementById("modalBody") || document.body, { childList: true, subtree: true });
 </script>
 
 </body>
