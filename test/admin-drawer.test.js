@@ -97,3 +97,12 @@ test('denetim izi şirket/tarih filtresini sunucuya gönderir; dönem sunucu ad�
  const p=fs.readFileSync(path.join(__dirname,'../frontend/admin/periods.html'),'utf8');
  assert.match(p,/userName\(period\.closed_by, period\.closed_by_name\)/);
 });
+test('yeni kullanıcı: şirketler onay kutusuyla seçilir (önceki sürüm boş gönderiyordu), varsayılan rol İzleyici',()=>{
+ const s=fs.readFileSync(path.join(__dirname,'../frontend/admin/users.html'),'utf8');
+ assert.doesNotMatch(s,/<select\s+name="company_ids"/);
+ assert.match(s,/id="cuCompanies"/);
+ assert.match(s,/roleOptionsHtml\("VIEWER"\)/);
+ const t=fs.readFileSync(path.join(__dirname,'../frontend/admin/tfrs16.html'),'utf8');
+ assert.match(t,/location\.replace\("companies\.html"\)/);
+ assert.match(fs.readFileSync(path.join(__dirname,'../frontend/admin/plans.html'),'utf8'),/lq-plan-card/);
+});

@@ -1244,6 +1244,19 @@ async function saveUserEdit(
    CREATE USER
 ============================================================ */
 
+function createCompanyChecks() {
+    if (!allCompanies.length) return '<div class="lq-empty">Şirket listesi yüklenemedi.</div>';
+    return allCompanies.map(c => `<label class="lq-check" data-name="${escapeHtml(String(c.name || "").toLocaleLowerCase("tr-TR"))} ${escapeHtml(String(c.code || "").toLocaleLowerCase("tr-TR"))}"><input type="checkbox" name="company_ids" value="${escapeHtml(String(c.id))}"><span>${escapeHtml(c.name)} <small style="color:var(--text-light);font-family:var(--mono)">${escapeHtml(c.code || "")}</small></span></label>`).join("");
+}
+
+// Arama kutusu: modal içeriği her açılışta yeniden çizildiği için olay belge düzeyinde dinlenir.
+document.addEventListener("input", e => {
+    if (e.target && e.target.id === "cuSearch") {
+        const q = e.target.value.trim().toLocaleLowerCase("tr-TR");
+        document.querySelectorAll("#cuCompanies .lq-check").forEach(el => { el.hidden = q && !el.dataset.name.includes(q); });
+    }
+});
+
 function showCreateUserModal() {
 
     const companyOptions =
@@ -1266,7 +1279,7 @@ function showCreateUserModal() {
 
 
     const roleOptions =
-        roleOptionsHtml();
+        roleOptionsHtml("VIEWER"); // varsayılan en düşük yetki; yönetici bilinçli seçer
 
 
     const content = `
@@ -1390,13 +1403,8 @@ function showCreateUserModal() {
                     Erişebildiği Şirketler
                 </label>
 
-                <select
-                    name="company_ids"
-                    multiple
-                    size="6"
-                >
-                    ${companyOptions}
-                </select>
+                <div class="lq-list"><input type="search" id="cuSearch" placeholder="Şirket ara" aria-label="Şirket ara" style="width:100%;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:10px 12px;font-size:13px">
+                <div id="cuCompanies" style="max-height:220px;overflow-y:auto">${createCompanyChecks()}</div></div>
 
                 <div class="company-selector-help">
                     Kullanıcıya bir veya birden fazla
