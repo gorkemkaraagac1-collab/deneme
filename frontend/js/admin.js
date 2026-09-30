@@ -1375,8 +1375,11 @@ function ensureDrawer() {
     document.addEventListener("keydown", e => { if (e.key === "Escape" && !root.hidden && !document.querySelector(".modal-overlay.active")) closeDrawer(); });
     return root;
 }
-function showDrawer({ title = "", eyebrow = "", body = "", footer = "" } = {}) {
+function showDrawer({ title = "", eyebrow = "", body = "", footer = "", modeless = false } = {}) {
     const root = ensureDrawer();
+    // modeless: arkadaki sayfa tıklanabilir kalır (örn. takvimde başka hücre seçmek).
+    root.classList.toggle("modeless", !!modeless);
+    root.querySelector(".lq-drawer").setAttribute("aria-modal", modeless ? "false" : "true");
     if (root.hidden) lqDrawerReturnFocus = document.activeElement;
     document.getElementById("lqDrawerTitle").textContent = title;
     document.getElementById("lqDrawerEyebrow").innerHTML = eyebrow;
@@ -1386,6 +1389,7 @@ function showDrawer({ title = "", eyebrow = "", body = "", footer = "" } = {}) {
     foot.hidden = !footer;
     root.hidden = false;
     document.documentElement.classList.add("lq-drawer-open");
+    document.documentElement.classList.toggle("lq-drawer-side", !!modeless);
     root.querySelector(".lq-drawer").focus({ preventScroll: true });
     return root;
 }
@@ -1394,6 +1398,7 @@ function closeDrawer() {
     if (!root || root.hidden) return;
     root.hidden = true;
     document.documentElement.classList.remove("lq-drawer-open");
+    document.documentElement.classList.remove("lq-drawer-side");
     if (lqDrawerReturnFocus && lqDrawerReturnFocus.isConnected) lqDrawerReturnFocus.focus({ preventScroll: true });
     lqDrawerReturnFocus = null;
 }
