@@ -853,6 +853,7 @@
             <tr>
                 <th>Ay</th>
                 <th>Endeks Değeri</th>
+                <th>Aylık değişim</th>
                 <th>Kaynak</th>
                 <th>Durum</th>
                 <th>Giren</th>
@@ -869,7 +870,7 @@
             <tr>
 
                 <td
-                    colspan="8"
+                    colspan="9"
                     class="table-state"
                 >
                     Endeks kayıtları yükleniyor...
@@ -1058,7 +1059,7 @@ async function loadIndices() {
         <tr>
 
             <td
-                colspan="8"
+                colspan="9"
                 class="table-state"
             >
                 Endeks kayıtları yükleniyor...
@@ -1097,7 +1098,7 @@ async function loadIndices() {
                 <tr>
 
                     <td
-                        colspan="8"
+                        colspan="9"
                         class="table-state error"
                     >
                         ${escapeHtml(
@@ -1119,10 +1120,8 @@ async function loadIndices() {
         }
 
 
-        inflationIndicesCache =
-            Array.isArray(result.data)
-                ? result.data
-                : [];
+        inflationIndicesCache = Array.isArray(result.data) ? result.data : [];
+        await loadIndexContext();
 
 
         renderSummary();
@@ -1143,7 +1142,7 @@ async function loadIndices() {
             <tr>
 
                 <td
-                    colspan="8"
+                    colspan="9"
                     class="table-state error"
                 >
                     Endeks kayıtları yüklenemedi.
@@ -1267,7 +1266,7 @@ function renderIndices() {
             <tr>
 
                 <td
-                    colspan="8"
+                    colspan="9"
                     class="table-state"
                 >
                     Seçilen kriterlere uygun endeks kaydı bulunamadı.
@@ -1362,6 +1361,7 @@ function renderIndices() {
                         </td>
 
 
+                        <td data-label="Aylık değişim">${monthlyChangeCell(record)}</td>
                         <td data-label="Kaynak">
 
                             <span
@@ -1391,20 +1391,14 @@ function renderIndices() {
 
                         <td data-label="Giren">
 
-                            ${escapeHtml(
-                                record.retrievedBy ||
-                                "—"
-                            )}
+                            ${escapeHtml(personName(record.retrievedBy) || "—")}
 
                         </td>
 
 
                         <td data-label="Doğrulayan">
 
-                            ${escapeHtml(
-                                record.verifiedBy ||
-                                "—"
-                            )}
+                            ${escapeHtml(personName(record.verifiedBy) || "—")}
 
                         </td>
 
@@ -2385,6 +2379,50 @@ document.addEventListener(
     }
 );
 
+
+/* v2: bir önceki ayın DOĞRULANMIŞ endeksine göre aylık değişim (göz
+   kontrolü için; hesaplamaya girmez) ve kullanıcı adları. */
+const verifiedByMonth = new Map();
+const peopleById = new Map();
+let indexContextLoaded = false;
+
+async function loadIndexContext() {
+    if (indexContextLoaded) return;
+    indexContextLoaded = true;
+    try {
+        const [v, u] = await Promise.all([
+            AdminAPI.getInflationIndices({ status: "VERIFIED" }),
+            AdminAPI.getUsers({ limit: 500 }).catch(() => null)
+        ]);
+        (v && Array.isArray(v.data) ? v.data : []).forEach(r => verifiedByMonth.set(r.month, Number(r.value)));
+        (u && Array.isArray(u.data) ? u.data : []).forEach(x => {
+            const n = [x.first_name, x.last_name].filter(Boolean).join(" ");
+            peopleById.set(String(x.id), n || x.username || String(x.id));
+        });
+    } catch (_) { indexContextLoaded = false; }
+}
+
+function personName(id) { return id ? (peopleById.get(String(id)) || String(id)) : ""; }
+
+function prevMonth(m) {
+    const [y, mo] = String(m || "").split("-").map(Number);
+    if (!y || !mo) return null;
+    const d = new Date(y, mo - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthlyChangeCell(record) {
+    const pm = prevMonth(record.month);
+    const prev = pm ? verifiedByMonth.get(pm) : undefined;
+    const cur = Number(record.value);
+    if (!Number.isFinite(prev) || !Number.isFinite(cur) || prev === 0) return '<span style="color:var(--text-light)" title="Önceki ayın doğrulanmış endeksi yok">—</span>';
+    const pct = (cur / prev - 1) * 100;
+    const txt = `${pct >= 0 ? "+" : ""}${pct.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+    const odd = pct < 0 || pct > 10;
+    return odd
+        ? `<span class="lq-chip warn" title="${escapeHtml(pm)} doğrulanmış: ${prev}">${txt} · kontrol et</span>`
+        : `<span style="font-family:var(--mono)" title="${escapeHtml(pm)} doğrulanmış: ${prev}">${txt}</span>`;
+}
 </script>
 
 </body>
