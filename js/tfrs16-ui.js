@@ -716,7 +716,11 @@ window.fetch = (input, init = {}) => {
         ? Number(contract.indexReviewDay)
         : null,
       renewalOption: contract.renewalOption === true,
-      renewalOptionExpectedToExercise: contract.renewalOptionExpectedToExercise === true,
+      // null = karar girilmedi; sunucu opsiyon varken kararı zorunlu tutar.
+      renewalOptionExpectedToExercise: typeof contract.renewalOptionExpectedToExercise === "boolean" ? contract.renewalOptionExpectedToExercise : null,
+      terminationOptionExpectedToExercise: typeof contract.terminationOptionExpectedToExercise === "boolean" ? contract.terminationOptionExpectedToExercise : null,
+      purchaseOptionExpectedToExercise: typeof contract.purchaseOptionExpectedToExercise === "boolean" ? contract.purchaseOptionExpectedToExercise : null,
+      leaseTermEvidenceReference: contract.leaseTermEvidenceReference ? String(contract.leaseTermEvidenceReference) : null,
       renewalEndDate: contract.renewalEndDate || null,
       terminationOption: contract.terminationOption === true,
       terminationDate: contract.terminationDate || null,
@@ -14270,7 +14274,7 @@ ${renderAccountingCenterBulkPromo()}
       "Yıllık Artış Oranı": 0,
       "Sabit Artış Tutarı": 0,
       "Değişken Ödeme": 0,
-      "Varlığın Faydalı Ömrü": "",
+      "Varlığın Faydalı Ömrü (Yıl)": "",
       "Baz Endeks Oranı": "",
       "Güncel Endeks Oranı": "",
       "Endeks Güncelleme Ayı": "",
@@ -14280,7 +14284,16 @@ ${renderAccountingCenterBulkPromo()}
       "Satın Alma Opsiyonu": "Hayır",
       "Mülkiyet Devri": "Hayır",
       "Kısa Vadeli Kiralama İstisnası": "Hayır",
-      "Düşük Değerli Varlık İstisnası": "Hayır"
+      "Düşük Değerli Varlık İstisnası": "Hayır",
+      // Opsiyon varsa doldurulur (TFRS 16.18–21): karar Evet/Hayır, Evet ise tarih.
+      "Kira Süresi Değerlendirme Referansı": "",
+      "Yenileme Opsiyonu Kullanımı Makul Ölçüde Kesin": "",
+      "Yenileme Sonrası Bitiş Tarihi": "",
+      "Fesih Opsiyonu Kullanımı Makul Ölçüde Kesin": "",
+      "Fesih Tarihi": "",
+      "Fesih Cezası": "",
+      "Satın Alma Opsiyonu Kullanımı Makul Ölçüde Kesin": "",
+      "Satın Alma Opsiyon Bedeli": ""
     }
   ];
 
@@ -19924,7 +19937,18 @@ ${renderAccountingCenterBulkPromo()}
         leaseIncreaseRate: ["escalation rate", "annual increase rate", "increase rate", "yıllık artış oranı", "yillik artis orani"],
         fixedIncrease: ["fixed increase", "fixed escalation amount", "sabit artış tutarı", "sabit artis tutari"],
         variablePayment: ["variable payment", "değişken ödeme", "degisken odeme"],
-        usefulLifeMonths: ["useful life months", "useful life", "faydalı ömür", "faydali omur", "varlığın faydalı ömrü", "varligin faydali omru"],
+        // Şablondaki "Varlığın Faydalı Ömrü" yıl cinsindendir; ay girilecekse
+        // ayrı "(Ay)" sütunu kullanılır.
+        usefulLifeMonths: ["useful life months", "faydalı ömür (ay)", "faydali omur ay", "varlığın faydalı ömrü (ay)", "varligin faydali omru ay"],
+        usefulLifeYears: ["useful life years", "useful life", "faydalı ömür", "faydali omur", "faydalı ömür (yıl)", "varlığın faydalı ömrü", "varligin faydali omru", "varlığın faydalı ömrü (yıl)", "varligin faydali omru yil"],
+        leaseTermEvidenceReference: ["lease term evidence reference", "kira süresi değerlendirme referansı", "kira suresi degerlendirme referansi"],
+        renewalOptionExpectedToExercise: ["renewal reasonably certain", "yenileme opsiyonu kullanımı makul ölçüde kesin", "yenileme opsiyonu kullanimi makul olcude kesin"],
+        renewalEndDate: ["renewal end date", "yenileme sonrası bitiş tarihi", "yenileme sonrasi bitis tarihi"],
+        terminationOptionExpectedToExercise: ["termination reasonably certain", "fesih opsiyonu kullanımı makul ölçüde kesin", "fesih opsiyonu kullanimi makul olcude kesin"],
+        terminationDate: ["termination option date", "fesih tarihi"],
+        terminationPenalty: ["termination penalty", "fesih cezası", "fesih cezasi"],
+        purchaseOptionExpectedToExercise: ["purchase reasonably certain", "satın alma opsiyonu kullanımı makul ölçüde kesin", "satin alma opsiyonu kullanimi makul olcude kesin"],
+        purchaseOptionPrice: ["purchase option price", "satın alma opsiyon bedeli", "satin alma opsiyon bedeli"],
         renewalOption: ["renewal option", "yenileme opsiyonu", "yenileme opsiyonu makul ölçüde kesin", "yenileme opsiyonu makul olcude kesin"],
         terminationOption: ["termination option", "fesih opsiyonu", "fesih opsiyonu makul ölçüde kesin değil", "fesih opsiyonu makul olcude kesin degil"],
         purchaseOption: ["purchase option", "satın alma opsiyonu", "satin alma opsiyonu", "satın alma opsiyonu makul ölçüde kesin", "satin alma opsiyonu makul olcude kesin"],
@@ -20071,6 +20095,27 @@ ${renderAccountingCenterBulkPromo()}
     return integrationBoolean(value);
   }
 
+  function integrationOptionalText(row, aliases) {
+    const value = integrationFindValue(row, aliases);
+    const text = value === undefined || value === null ? "" : String(value).trim();
+    return text ? text : undefined;
+  }
+
+  function integrationOptionalDate(row, aliases) {
+    const value = integrationFindValue(row, aliases);
+    if (value === undefined || value === null || value === "") return undefined;
+    const result = normalizeIntegrationDate(value);
+    return result && typeof result === "object" ? undefined : result;
+  }
+
+  // Ay sütunu doluysa o kullanılır; aksi halde yıl sütunu aya çevrilir.
+  function integrationUsefulLifeMonths(row, fields) {
+    const months = integrationOptionalNumber(row, fields.usefulLifeMonths || []);
+    if (months !== undefined) return months > 0 ? Math.round(months) : undefined;
+    const years = integrationOptionalNumber(row, fields.usefulLifeYears || []);
+    return years !== undefined && years > 0 ? Math.round(years * 12) : undefined;
+  }
+
   function integrationOptionalEscalationType(row, aliases) {
     const value = integrationFindValue(row, aliases);
     if (value === undefined || value === null || value === "") return undefined;
@@ -20093,6 +20138,7 @@ ${renderAccountingCenterBulkPromo()}
     if (!raw) return undefined;
     if (["1", "monthly", "aylik", "ay"].includes(raw)) return "monthly";
     if (["3", "quarterly", "quarter", "ceyrek", "uc aylik", "3 aylik"].includes(raw)) return "quarterly";
+    if (["6", "semiannual", "semi annual", "alti aylik", "6 aylik"].includes(raw)) return "semiannual";
     if (["12", "annual", "yearly", "yillik", "yil"].includes(raw)) return "annual";
     return undefined;
   }
@@ -20338,7 +20384,15 @@ ${renderAccountingCenterBulkPromo()}
       leaseIncreaseRate: integrationOptionalNumber(row, fields.leaseIncreaseRate || []),
       fixedIncrease: integrationOptionalNumber(row, fields.fixedIncrease || []),
       variablePayment: integrationOptionalNumber(row, fields.variablePayment || []),
-      usefulLifeMonths: integrationOptionalNumber(row, fields.usefulLifeMonths || []),
+      usefulLifeMonths: integrationUsefulLifeMonths(row, fields),
+      leaseTermEvidenceReference: integrationOptionalText(row, fields.leaseTermEvidenceReference || []),
+      renewalOptionExpectedToExercise: integrationOptionalBoolean(row, fields.renewalOptionExpectedToExercise || []),
+      renewalEndDate: integrationOptionalDate(row, fields.renewalEndDate || []),
+      terminationOptionExpectedToExercise: integrationOptionalBoolean(row, fields.terminationOptionExpectedToExercise || []),
+      terminationDate: integrationOptionalDate(row, fields.terminationDate || []),
+      terminationPenalty: integrationOptionalNumber(row, fields.terminationPenalty || []),
+      purchaseOptionExpectedToExercise: integrationOptionalBoolean(row, fields.purchaseOptionExpectedToExercise || []),
+      purchaseOptionPrice: integrationOptionalNumber(row, fields.purchaseOptionPrice || []),
       renewalOption: integrationOptionalBoolean(row, fields.renewalOption || []),
       terminationOption: integrationOptionalBoolean(row, fields.terminationOption || []),
       purchaseOption: integrationOptionalBoolean(row, fields.purchaseOption || []),
@@ -20578,6 +20632,14 @@ ${renderAccountingCenterBulkPromo()}
     if (data.fixedIncrease !== undefined) base.fixedIncrease = data.fixedIncrease;
     if (data.variablePayment !== undefined) base.variablePayment = data.variablePayment;
     if (data.usefulLifeMonths !== undefined) base.usefulLifeMonths = data.usefulLifeMonths;
+    for (const key of ["leaseTermEvidenceReference", "renewalEndDate", "terminationDate", "terminationPenalty", "purchaseOptionPrice"]) {
+      if (data[key] !== undefined) base[key] = data[key];
+    }
+    // Opsiyon kararları satırdan gelir; boş hücre "karar girilmedi" demektir ve
+    // eski kayıttaki değer (önceden boş=Hayır saklanıyordu) varsayım olarak kalmaz.
+    for (const key of ["renewalOptionExpectedToExercise", "terminationOptionExpectedToExercise", "purchaseOptionExpectedToExercise"]) {
+      base[key] = typeof data[key] === "boolean" ? data[key] : null;
+    }
     if (data.indexBaseRate !== undefined) base.indexBaseRate = data.indexBaseRate;
     if (data.indexCurrentRate !== undefined) base.indexCurrentRate = data.indexCurrentRate;
     if (data.indexReviewMonth !== undefined) base.indexReviewMonth = data.indexReviewMonth;

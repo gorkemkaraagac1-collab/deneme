@@ -4,7 +4,9 @@
  'use strict';
  const accepted=new WeakSet(),pending=new Map();let current=null,dashboardEpoch=0;
  const metrics=['rouCarryingAmount','leaseLiability','currentLiability','nonCurrentLiability','periodInterest','periodDepreciation',
-  'contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability'];
+  'contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability','exemptLeaseExpense'];
+ // Server measurement routes this client accepts (sunucu rapor rotaları).
+ const ROUTES=new Set(['P1_PLAIN_MONTHLY_ARREARS','ENGINE_REGULAR_GRID_V2','IFRS16_6_SHORT_TERM_EXPENSE','IFRS16_6_LOW_VALUE_EXPENSE']);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const fail=(code='REPORTING_AUTHORITY_UNAVAILABLE')=>{const e=new Error(code);e.code=code;throw e;};
  const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
@@ -28,7 +30,7 @@
   p.contracts.forEach(r=>{
    if(r.companyId!==intent.companyId||ids.has(r.contractId)||!p.population.contractIds.includes(r.contractId))fail('REPORTING_RESPONSE_INVALID');ids.add(r.contractId);
    if(r.status==='SUPPORTED'){
-    if(r.route!=='P1_PLAIN_MONTHLY_ARREARS'||!p.identity.currencyEvidenceId||p.identity.functionalCurrency!=='TRY'||p.identity.presentationCurrency!=='TRY'||r.currency!=='TRY'||r.currencyEvidenceId!==p.identity.currencyEvidenceId||!r.calculationId||!r.sourceInputHash||!r.sourceResultHash||!r.economicSignature||!Array.isArray(r.scheduleRows))fail('REPORTING_RESPONSE_INVALID');
+    if(!ROUTES.has(r.route)||!p.identity.currencyEvidenceId||p.identity.functionalCurrency!=='TRY'||p.identity.presentationCurrency!=='TRY'||r.currency!=='TRY'||r.currencyEvidenceId!==p.identity.currencyEvidenceId||!r.calculationId||!r.sourceInputHash||!r.sourceResultHash||!r.economicSignature||!Array.isArray(r.scheduleRows))fail('REPORTING_RESPONSE_INVALID');
     metrics.forEach(k=>{checkMetric(r.metrics?.[k]);if(r.metrics[k].status==='NOT_READY'||stable(r.metrics[k].sourceIds)!==stable([r.calculationId,r.sourceInputHash,r.sourceResultHash]))fail('REPORTING_RESPONSE_INVALID');});
    }else if(r.status!=='NOT_READY'||!r.reason||r.metrics!==null)fail('REPORTING_RESPONSE_INVALID');
   });

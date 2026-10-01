@@ -39,8 +39,23 @@
 
   const REASONS = {
     REPORTING_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili yok.",
-    REPORTING_ROUTE_NOT_SUPPORTED: "Ödeme sıklığı veya zamanlaması sertifikalı rotada değil (yalnızca aylık, dönem sonu).",
-    REPORTING_SOURCE_FACTS_NOT_READY: "Sözleşme verisi sertifikalı rota için eksik.",
+    REPORTING_ROUTE_NOT_SUPPORTED: "Ödeme sıklığı veya zamanlaması desteklenmiyor.",
+    REPORTING_SOURCE_FACTS_NOT_READY: "Sözleşme verisi hesaplama için eksik.",
+    LEASE_TERM_EVIDENCE_REQUIRED: "Opsiyonlu sözleşmede kira süresi değerlendirme referansı girilmemiş (TFRS 16.18–21).",
+    RENEWAL_OPTION_JUDGEMENT_REQUIRED: "Yenileme opsiyonunun kullanımının makul ölçüde kesin olup olmadığı girilmemiş.",
+    TERMINATION_OPTION_JUDGEMENT_REQUIRED: "Fesih opsiyonunun kullanımının makul ölçüde kesin olup olmadığı girilmemiş.",
+    PURCHASE_OPTION_JUDGEMENT_REQUIRED: "Satın alma opsiyonunun kullanımının makul ölçüde kesin olup olmadığı girilmemiş.",
+    RENEWAL_END_DATE_REQUIRED: "Yenileme kesin; yenileme sonrası bitiş tarihi sözleşme bitişinden sonra olmalı.",
+    TERMINATION_DATE_REQUIRED: "Fesih kesin; fesih tarihi başlangıç ile bitiş arasında olmalı.",
+    LEASE_TERM_OPTIONS_CONFLICT: "Yenileme ve fesih aynı anda makul ölçüde kesin olamaz.",
+    TERMINATION_PENALTY_MEASUREMENT_UNSUPPORTED: "Fesih kesin ve ceza var; ceza ödemesinin ölçümü henüz desteklenmiyor.",
+    PURCHASE_OPTION_PRICE_MEASUREMENT_UNSUPPORTED: "Satın alma kesin ve bedel var; bedel ödemesinin ölçümü henüz desteklenmiyor.",
+    SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna işaretli ama kira süresi 12 ayı aşıyor.",
+    REPORTING_FX_RATE_REQUIRED: "Çeviri için gereken tarihte doğrulanmış TCMB kuru yok (Yönetim → Döviz kurları).",
+    REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Modifikasyon veya yeniden değerlendirme içeren sözleşmeler raporda henüz desteklenmiyor.",
+    REPORTING_FEATURE_NOT_SUPPORTED: "Sözleşmede raporun henüz desteklemediği bir özellik var.",
+    PAYMENT_STUB_UNSUPPORTED: "Kira süresi ödeme dönemlerine tam bölünmüyor.",
+    ESCALATION_POLICY_UNSUPPORTED: "Özel artış dönemi/tabanı desteklenmiyor.",
     REPORTING_SOURCE_NOT_READY: "Bu dönem için doğrulanmış hesaplama kaynağı yok.",
     REPORTING_COMPANY_ACCESS_DENIED: "Bu şirketin raporlarına erişim yetkiniz yok.",
     REPORTING_POPULATION_LIMIT: "Şirketin aktif sözleşme sayısı rapor sınırını aşıyor."
@@ -90,7 +105,7 @@
   const period = () => {
     try { return global.LeaseQantReportingAuthorityUi?.defaultPeriod?.() || null; } catch (_) { return null; }
   };
-  const frequencyText = f => ({ monthly: "Aylık", quarterly: "Çeyreklik", annual: "Yıllık", yearly: "Yıllık" }[String(f || "").toLowerCase()] || "Aylık");
+  const frequencyText = f => ({ monthly: "Aylık", quarterly: "Çeyreklik", semiannual: "Altı aylık", annual: "Yıllık", yearly: "Yıllık" }[String(f || "").toLowerCase()] || "Aylık");
   const timingText = t => String(t || "").toLowerCase() === "advance" ? "dönem başı" : "dönem sonu";
   const statusChip = s => {
     const v = String(s || "active").toLowerCase();
@@ -105,7 +120,7 @@
     const months = monthsBetween(c.startDate, c.endDate);
     const title = c.description || c.assetName || c.supplier || c.id;
     const scope = state.report?.row
-      ? (state.report.row.status === "SUPPORTED" ? '<span class="lq-cv-chip is-ok-outline">Sertifikalı kapsam</span>' : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
+      ? (state.report.row.status === "SUPPORTED" ? '<span class="lq-cv-chip is-ok-outline">${state.report.row.exemption ? "İstisna" : "Kapsamda"}</span>' : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
       : "";
     const meta = [
       `<span class="lq-cv-mono lq-cv-strong">${esc(c.id)}</span>`,
@@ -196,7 +211,13 @@
     const row = (k, v, cls = "") => `<div class="lq-cv-kv"><span>${k}</span><span class="${cls}">${v}</span></div>`;
     let scope;
     if (!r) scope = '<p class="lq-cv-muted">Kaynak doğrulanıyor…</p>';
-    else if (r.row?.status === "SUPPORTED") scope = `<div class="lq-cv-scope is-ok"><span class="lq-cv-dot" aria-hidden="true">✓</span><div><strong>Sertifikalı rota</strong><span>Aylık ödeme · dönem sonu · ${esc(r.row.currency || "")}</span></div></div><p class="lq-cv-muted">Tutarlar sunucudaki doğrulanmış hesaplamadan gelir. Endeks, kur veya modifikasyon eklenirse kapsam yeniden değerlendirilir.</p>`;
+    else if (r.row?.status === "SUPPORTED") {
+      const row = r.row, exempt = row.exemption === "SHORT_TERM" ? "Kısa vadeli kiralama istisnası (TFRS 16.6)"
+        : row.exemption === "LOW_VALUE" ? "Düşük değerli varlık istisnası (TFRS 16.6)" : null;
+      const fx = row.fxTranslation ? ` · ${esc(row.fxTranslation.sourceCurrency)} → ${esc(row.fxTranslation.presentationCurrency)} (TCMB)` : "";
+      const term = row.leaseTerm?.judgement ? `<p class="lq-cv-muted">Kira süresi değerlendirmesi: ${esc(row.leaseTerm.judgement.evidenceReference)}${row.leaseTerm.endDate !== row.leaseTerm.contractualEndDate ? ` · ölçülen bitiş ${esc(trDate(row.leaseTerm.endDate))}` : ""}</p>` : "";
+      scope = `<div class="lq-cv-scope is-ok"><span class="lq-cv-dot" aria-hidden="true">✓</span><div><strong>${exempt ? "İstisna · bilanço dışı" : "Kapsamda"}</strong><span>${exempt ? esc(exempt) : `${esc(frequencyText(c.paymentFrequency))}, ${esc(timingText(c.paymentTiming))}`}${fx}</span></div></div>${term}<p class="lq-cv-muted">${exempt ? "Yükümlülük ve kullanım hakkı varlığı oluşmaz; ödemeler kira süresi boyunca doğrusal gider yazılır." : "Tutarlar sunucudaki hesaplamadan gelir."}${row.fxTranslation ? " Yükümlülük dönem sonu, kullanım hakkı varlığı başlangıç tarihi kuruyla çevrilir (TMS 21)." : ""}</p>`;
+    }
     else scope = `<div class="lq-cv-scope is-warn"><span class="lq-cv-dot" aria-hidden="true">!</span><div><strong>Kapsam dışı</strong><span>${esc(reasonText(r.error?.code || r.row?.reason))}</span></div></div>`;
     const inc = c.leaseIncreaseType && c.leaseIncreaseType !== "none"
       ? `${esc(c.leaseIncreaseType)}${c.leaseIncreaseRate ? ` · %${esc(nf2.format(c.leaseIncreaseRate))}` : ""}` : "Yok";
