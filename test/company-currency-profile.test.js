@@ -37,3 +37,9 @@ test('form, sunucunun kabul ettiği alanlarla POST eder ve hata kodunu Türkçe 
  assert.deepEqual(JSON.parse(calls[1].init.body),{companyId:'C1',functionalCurrency:'TRY',presentationCurrency:'TRY',effectiveFrom:'2026-01-01',evidenceId:'EV-1',sourceReference:'REF-1',reason:'ilk kayıt'});
  assert.match(w.document.getElementById('cpStatus').textContent,/çakışan onaylı bir profil/);
 });
+test('liste endpointi yoksa da kayıt formu görünür',async()=>{
+ const {w}=win([{success:false,error:'Endpoint not found'}]);mount(w,'C1');
+ await w.loadCompanyCurrencyProfile('C1',true);
+ assert.match(w.document.getElementById('companyCurrencyProfile').textContent,/Liste alınamadı/);
+ assert.ok(w.document.getElementById('currencyProfileForm'));
+});

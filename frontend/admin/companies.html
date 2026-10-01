@@ -1360,12 +1360,12 @@ async function loadCompanyCurrencyProfile(companyId, canManage) {
     let result;
     try { result = await AdminAPI.getCompanyCurrencyProfiles(companyId); } catch (error) { result = { error: error.message }; }
     if (!host.isConnected || host.dataset.companyId !== companyId) return;
-    if (!result || !result.success || !Array.isArray(result.data)) {
-        host.innerHTML = `<div class="lq-kick">Para birimi profili</div><div class="lq-box"><span class="lq-chip err">Alınamadı</span> <span style="font-size:12.5px;color:var(--text-light)">${escapeHtml(describeApiError(result, "Profil bilgisi alınamadı."))}</span></div>`;
-        return;
-    }
-    const current = currentCompanyProfiles(result.data);
-    const rows = current.length
+    // Liste alınamasa da kayıt formu gösterilir; çakışan profil varsa sunucu reddeder.
+    const listed = !!(result && result.success && Array.isArray(result.data));
+    const current = listed ? currentCompanyProfiles(result.data) : [];
+    const rows = !listed
+        ? `<div class="lq-box"><span class="lq-chip err">Liste alınamadı</span> <span style="font-size:12.5px;color:var(--text-light)">${escapeHtml(describeApiError(result, "Profil bilgisi alınamadı."))}</span></div>`
+        : current.length
         ? `<div class="lq-list">${current.map(p => `<div class="lq-list-row"><span class="grow" style="font-family:var(--mono)">${escapeHtml(p.functionalCurrency)} → ${escapeHtml(p.presentationCurrency)}</span><span style="font-size:12px;color:var(--text-light)">${formatDateShort(p.effectiveFrom)} – ${p.effectiveThrough ? formatDateShort(p.effectiveThrough) : "süresiz"}</span><span class="lq-chip ok">Onaylı · ${escapeHtml(p.version)}</span></div>`).join("")}</div>`
         : `<div class="lq-box" style="display:flex;align-items:center;gap:10px"><span class="lq-chip err">Profil yok</span><span style="font-size:12.5px;color:var(--text-light)">TFRS 16 raporları bu şirket için tutar göstermez.</span></div>`;
     const form = canManage ? `<form id="currencyProfileForm" style="margin-top:12px" onsubmit="submitCompanyCurrencyProfile(event,'${escapeHtml(companyId)}')">
