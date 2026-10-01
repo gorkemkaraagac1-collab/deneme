@@ -1329,9 +1329,87 @@ async function viewCompany(id) {
     showDrawer({
         eyebrow: `<span>${escapeHtml(company.code || "")}</span>${status === "ACTIVE" ? '<span class="lq-chip ok">Aktif</span>' : '<span class="lq-chip n">Pasif</span>'}<span class="lq-chip n">${parentName ? "Bağlı şirket" : "Ana şirket"}</span>`,
         title: company.name || "Şirket",
-        body: licenseHtml + meta + childrenHtml + usersHtml + portfolioHtml,
+        body: licenseHtml + meta + `<div id="companyCurrencyProfile" data-company-id="${escapeHtml(String(company.id))}"><div class="lq-kick">Para birimi profili</div><div class="lq-box" style="font-size:12.5px;color:var(--text-light)">Yükleniyor…</div></div>` + childrenHtml + usersHtml + portfolioHtml,
         footer
     });
+    loadCompanyCurrencyProfile(String(company.id), canManage);
+}
+
+/* =========================================================
+   PARA BİRİMİ PROFİLİ
+   TFRS 16 raporları şirketin onaylı fonksiyonel/sunum para birimi
+   profilini ister; yoksa tüm sözleşmeler REPORTING_CURRENCY_PROFILE_REQUIRED
+   ile tutarsız döner. Profil yalnızca platform yöneticisi tarafından,
+   kanıt ve kaynak referansıyla kaydedilir (sunucu onaylar ve denetime yazar).
+========================================================= */
+const PROFILE_ERROR_TEXT = {
+    DISCLOSURE_PROFILE_PERIOD_OVERLAP: "Bu tarih aralığıyla çakışan onaylı bir profil zaten var.",
+    DISCLOSURE_ONBOARDING_CURRENCY_INVALID: "Geçerli bir ISO 4217 para birimi kodu girin (ör. TRY).",
+    DISCLOSURE_ONBOARDING_DATE_INVALID: "Tarihleri kontrol edin; bitiş başlangıçtan önce olamaz.",
+    DISCLOSURE_ONBOARDING_FIELD_REQUIRED: "Zorunlu alanları doldurun.",
+    DISCLOSURE_ONBOARDING_COMPANY_NOT_FOUND: "Şirket aktif değil veya bulunamadı."
+};
+
+function currentCompanyProfiles(profiles) {
+    return profiles.filter(p => p.approvalStatus === "APPROVED" && !p.superseded);
+}
+
+async function loadCompanyCurrencyProfile(companyId, canManage) {
+    const host = document.getElementById("companyCurrencyProfile");
+    if (!host || host.dataset.companyId !== companyId) return;
+    let result;
+    try { result = await AdminAPI.getCompanyCurrencyProfiles(companyId); } catch (error) { result = { error: error.message }; }
+    if (!host.isConnected || host.dataset.companyId !== companyId) return;
+    if (!result || !result.success || !Array.isArray(result.data)) {
+        host.innerHTML = `<div class="lq-kick">Para birimi profili</div><div class="lq-box"><span class="lq-chip err">Alınamadı</span> <span style="font-size:12.5px;color:var(--text-light)">${escapeHtml(describeApiError(result, "Profil bilgisi alınamadı."))}</span></div>`;
+        return;
+    }
+    const current = currentCompanyProfiles(result.data);
+    const rows = current.length
+        ? `<div class="lq-list">${current.map(p => `<div class="lq-list-row"><span class="grow" style="font-family:var(--mono)">${escapeHtml(p.functionalCurrency)} → ${escapeHtml(p.presentationCurrency)}</span><span style="font-size:12px;color:var(--text-light)">${formatDateShort(p.effectiveFrom)} – ${p.effectiveThrough ? formatDateShort(p.effectiveThrough) : "süresiz"}</span><span class="lq-chip ok">Onaylı · ${escapeHtml(p.version)}</span></div>`).join("")}</div>`
+        : `<div class="lq-box" style="display:flex;align-items:center;gap:10px"><span class="lq-chip err">Profil yok</span><span style="font-size:12.5px;color:var(--text-light)">TFRS 16 raporları bu şirket için tutar göstermez.</span></div>`;
+    const form = canManage ? `<form id="currencyProfileForm" style="margin-top:12px" onsubmit="submitCompanyCurrencyProfile(event,'${escapeHtml(companyId)}')">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px">
+          <div class="form-group"><label for="cpFunctional">Fonksiyonel para birimi</label><input id="cpFunctional" name="functionalCurrency" required maxlength="3" pattern="[A-Za-z]{3}" value="TRY" autocomplete="off"></div>
+          <div class="form-group"><label for="cpPresentation">Sunum para birimi</label><input id="cpPresentation" name="presentationCurrency" required maxlength="3" pattern="[A-Za-z]{3}" value="TRY" autocomplete="off"></div>
+          <div class="form-group"><label for="cpFrom">Geçerlilik başlangıcı</label><input id="cpFrom" name="effectiveFrom" type="date" required></div>
+          <div class="form-group"><label for="cpThrough">Geçerlilik bitişi</label><input id="cpThrough" name="effectiveThrough" type="date"><small>Boş bırakılırsa süresiz.</small></div>
+        </div>
+        <div class="form-group"><label for="cpEvidence">Kanıt kimliği</label><input id="cpEvidence" name="evidenceId" required maxlength="150" placeholder="ör. Yönetim kurulu kararı 2026/04"></div>
+        <div class="form-group"><label for="cpSource">Kaynak referansı</label><input id="cpSource" name="sourceReference" required maxlength="200" placeholder="ör. Ticaret sicil / muhasebe politikası belgesi"></div>
+        <div class="form-group"><label for="cpReason">Gerekçe</label><textarea id="cpReason" name="reason" required maxlength="1000" rows="2"></textarea></div>
+        <div id="cpStatus" role="status" aria-live="polite" style="font-size:12.5px;margin-bottom:8px"></div>
+        <button class="btn btn-primary" type="submit">${current.length ? "Yeni dönem profili kaydet" : "Profili kaydet ve onayla"}</button>
+      </form>` : "";
+    host.innerHTML = `<div class="lq-kick">Para birimi profili</div>${rows}${form}`;
+}
+
+async function submitCompanyCurrencyProfile(event, companyId) {
+    event.preventDefault();
+    const form = event.target, status = document.getElementById("cpStatus"), button = form.querySelector("button[type=submit]");
+    const v = name => form.elements[name].value.trim();
+    const body = {
+        companyId,
+        functionalCurrency: v("functionalCurrency").toUpperCase(),
+        presentationCurrency: v("presentationCurrency").toUpperCase(),
+        effectiveFrom: v("effectiveFrom"),
+        evidenceId: v("evidenceId"),
+        sourceReference: v("sourceReference"),
+        reason: v("reason")
+    };
+    if (v("effectiveThrough")) body.effectiveThrough = v("effectiveThrough");
+    button.disabled = true;
+    status.textContent = "Kaydediliyor…";
+    status.style.color = "";
+    let result;
+    try { result = await AdminAPI.createCompanyCurrencyProfile(body); } catch (error) { result = { error: error.message }; }
+    button.disabled = false;
+    if (!result || !result.success) {
+        status.textContent = PROFILE_ERROR_TEXT[result && result.code] || describeApiError(result, "Profil kaydedilemedi.");
+        status.style.color = "var(--danger)";
+        return;
+    }
+    await loadCompanyCurrencyProfile(companyId, true);
 }
 
 /* =========================================================

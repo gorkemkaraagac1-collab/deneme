@@ -167,6 +167,16 @@ async getCompany(id) {
         );
     return response.json();
 },
+async getCompanyCurrencyProfiles(companyId) {
+    const response = await fetch(`${this.baseURL}/company-profiles?companyId=${encodeURIComponent(companyId)}`,
+        { method: "GET", headers: this.getHeaders() });
+    return response.json();
+},
+async createCompanyCurrencyProfile(body) {
+    const response = await fetch(`${this.baseURL}/company-profiles`,
+        { method: "POST", headers: this.getHeaders(), body: JSON.stringify(body) });
+    return response.json();
+},
 /*
  * ========================================================
  * USERS
