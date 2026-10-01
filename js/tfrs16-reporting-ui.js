@@ -390,6 +390,9 @@
     const lockHtml = lockMessage
       ? `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:700;">🔒 ${esc(lockMessage)}</div>`
       : "";
+    // UI v2 detail figures come from the server reporting package; the
+    // legacy client-side calculation status would contradict it.
+    if (global.document?.documentElement?.getAttribute("data-lq-ui") === "2") return lockHtml;
     let sourceHtml = "";
     if (isAdmin) {
       if (calculationSource === "private-api") {

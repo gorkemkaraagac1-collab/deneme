@@ -21054,9 +21054,16 @@ ${renderAccountingCenterBulkPromo()}
       updateLoadingProgress(20, `Excel dosyası okunuyor...`);
       const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
       updateLoadingProgress(35, `Excel sayfası hazırlanıyor...`);
-      const firstSheet = workbook.SheetNames?.[0];
-      if (!firstSheet) return { success: false, error: "EMPTY_WORKBOOK" };
-      rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+      // Çok sayfalı dosyada (talimat, beklenen sonuçlar vb.) sözleşme
+      // sayfası "Sözleşme ID" başlığından bulunur; yoksa ilk sayfa okunur.
+      const sheetNames = workbook.SheetNames || [];
+      if (!sheetNames.length) return { success: false, error: "EMPTY_WORKBOOK" };
+      const idAliases = (INTEGRATION_PROFILES.GENERIC.fields.contractId || []).map(integrationNormalizeHeader);
+      const contractSheet = sheetNames.find(sheetName => {
+        const header = (XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" })[0] || []);
+        return header.some(cell => idAliases.includes(integrationNormalizeHeader(cell)));
+      }) || sheetNames[0];
+      rows = XLSX.utils.sheet_to_json(workbook.Sheets[contractSheet], { defval: "" });
       updateLoadingProgress(rows.length > LARGE_IMPORT_ROW_THRESHOLD ? 40 : 70, `${rows.length} Excel kaydı bulundu.`);
     } catch (error) {
       return { success: false, error: error?.message || String(error) };

@@ -116,16 +116,24 @@
 
   function closeDetail() { ($("closeDetailModal") || $("closeDetailModalFooter"))?.click(); }
 
+  // Option judgements can change the measured lease term (TFRS 16.18-21).
+  function measuredTermText(c) {
+    const term = state.report?.row?.status === "SUPPORTED" ? state.report.row.leaseTerm : null;
+    if (!term || !term.endDate || term.endDate === term.contractualEndDate) return "";
+    const measured = monthsBetween(term.startDate || c.startDate, term.endDate);
+    return ` · ölçülen kira süresi ${trDate(term.endDate)}${measured ? ` (${measured} ay)` : ""}`;
+  }
+
   function headHtml(c, p) {
     const months = monthsBetween(c.startDate, c.endDate);
     const title = c.description || c.assetName || c.supplier || c.id;
     const scope = state.report?.row
-      ? (state.report.row.status === "SUPPORTED" ? '<span class="lq-cv-chip is-ok-outline">${state.report.row.exemption ? "İstisna" : "Kapsamda"}</span>' : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
+      ? (state.report.row.status === "SUPPORTED" ? `<span class="lq-cv-chip is-ok-outline">${state.report.row.exemption ? "İstisna" : "Kapsamda"}</span>` : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
       : "";
     const meta = [
       `<span class="lq-cv-mono lq-cv-strong">${esc(c.id)}</span>`,
       c.supplier ? esc(c.supplier) : "", c.assetClass ? esc(c.assetClass) : "",
-      `${trDate(c.startDate)} – ${trDate(c.endDate)}${months ? ` (${months} ay)` : ""}`,
+      `${trDate(c.startDate)} – ${trDate(c.endDate)}${months ? ` (${months} ay)` : ""}${measuredTermText(c)}`,
       `${frequencyText(c.paymentFrequency)}, ${timingText(c.paymentTiming)}`, esc(c.currency || "")
     ].filter(Boolean).join(" · ");
     return `<nav class="lq-cv-crumb" aria-label="Konum"><button type="button" data-lq-cv="back">Sözleşmeler</button><span aria-hidden="true">/</span><span>${esc(c.company || "—")}</span><span aria-hidden="true">/</span><span class="lq-cv-here">${esc(c.id)}</span></nav>
@@ -162,11 +170,19 @@
     const done = sch.total && sch.remaining != null ? sch.total - sch.remaining : null;
     const pct = sch.total && done != null ? Math.round((done / sch.total) * 100) : 0;
     const rd = trDate(r.period.reportingDate);
+    // Balances are in the presentation currency; commencement figures and
+    // the schedule stay in the contract currency.
+    const pc = esc(r.row.currency || ""), sc = esc(r.row.sourceCurrency || r.row.currency || "");
+    const init = r.row.initialRecognition;
+    const initLiab = init && isNum(init.liability) ? init.liability : sch.initialLiability;
+    const exempt = !!r.row.exemption;
     return `<div class="lq-cv-kpis">
-      ${cell("BAŞLANGIÇ YÜKÜMLÜLÜĞÜ", money(sch.initialLiability), `${trDate(c.startDate)} · İO %${esc(nf2.format(Number(c.discountRate) || 0))}`)}
-      ${cell(`KİRA YÜK. · ${rd}`, money(metricValue(m.leaseLiability)), `Kısa ${money0(metricValue(m.currentLiability))} · Uzun ${money0(metricValue(m.nonCurrentLiability))}`)}
-      ${cell(`KHV NDD · ${rd}`, money(metricValue(m.rouCarryingAmount)), `Dönem amortismanı ${money0(metricValue(m.periodDepreciation))}`)}
-      ${cell("DÖNEM FAİZİ", money(metricValue(m.periodInterest)), `Sözleşmesel ödeme ${money0(metricValue(m.contractualPayments))}`)}
+      ${cell(`BAŞLANGIÇ YÜKÜMLÜLÜĞÜ · ${sc}`, money(initLiab), `NDD ${init && isNum(init.rou) ? money0(init.rou) : "—"} · ${trDate(c.startDate)} · İO %${esc(nf2.format(Number(c.discountRate) || 0))}`)}
+      ${cell(`KİRA YÜK. · ${rd} · ${pc}`, money(metricValue(m.leaseLiability)), `Kısa ${money0(metricValue(m.currentLiability))} · Uzun ${money0(metricValue(m.nonCurrentLiability))}`)}
+      ${cell(`KHV NDD · ${rd} · ${pc}`, money(metricValue(m.rouCarryingAmount)), `Dönem amortismanı ${money0(metricValue(m.periodDepreciation))}`)}
+      ${exempt
+        ? cell(`İSTİSNA KİRA GİDERİ · ${pc}`, money(metricValue(m.exemptLeaseExpense)), `Doğrusal · sözleşmesel ödeme ${money0(metricValue(m.contractualPayments))}`)
+        : cell(`DÖNEM FAİZİ · ${pc}`, money(metricValue(m.periodInterest)), `Sözleşmesel ödeme ${money0(metricValue(m.contractualPayments))}`)}
       ${cell("KALAN ÖDEME", sch.remaining != null ? `${sch.remaining} / ${sch.total}` : "—", "", `<div class="lq-cv-bar" role="img" aria-label="Ödemelerin %${pct}'i geçti"><i style="width:${pct}%"></i></div>`)}
     </div>`;
   }
@@ -188,7 +204,7 @@
         <button type="button" class="lq-cv-btn" data-lq-cv-go="schedule">Ödeme planını aç</button></div>`;
     }
     const sch = scheduleModel(r.row.scheduleRows, r.period);
-    const cur = r.row.currency || "";
+    const cur = r.row.sourceCurrency || r.row.currency || "";
     const head = `<div class="lq-cv-trow is-head"><span>DÖNEM</span><span>TARİH</span><span>AÇILIŞ YÜK.</span><span>FAİZ</span><span>ÖDEME</span><span>ANAPARA</span><span>KAPANIŞ YÜK.</span><span>AMORTİSMAN</span></div>`;
     const body = sch.groups.map(g => {
       const open = state.openYears.has(g.year) ? state.openYears.get(g.year) : g.open;

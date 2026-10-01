@@ -200,7 +200,9 @@
     const cell = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
     const text = [keys.map(cell).join(";"), ...rows.map(r => keys.map(k => cell(r[k])).join(";"))].join("\r\n");
     const url = global.URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
-    const a = doc.createElement("a"); a.href = url; a.download = name; a.click();
+    // Safari only starts a download from an anchor that is in the document.
+    const a = doc.createElement("a"); a.href = url; a.download = name; a.hidden = true;
+    doc.body.appendChild(a); a.click(); a.remove();
     global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
   }
 
@@ -465,7 +467,7 @@
       if (r.scope === "error") return '<span class="lq-pg-pill is-muted" title="Rapor alınamadı">Alınamadı</span>';
       return '<span class="lq-pg-pill is-muted">—</span>';
     };
-    const freq = f => ({ quarterly: "/çey", annual: "/yıl", yearly: "/yıl" }[String(f || "").toLowerCase()] || "/ay");
+    const freq = f => ({ quarterly: "/çey", semiannual: "/6 ay", annual: "/yıl", yearly: "/yıl" }[String(f || "").toLowerCase()] || "/ay");
     const statusChip = c => { const a = String(c.status || "").toLowerCase() === "active"; return `<span class="lq-pg-tag ${a ? "is-ok" : "is-muted"}">${a ? "Aktif" : esc(c.status === "draft" ? "Taslak" : "Pasif")}</span>`; };
     const focusSearch = doc.activeElement && doc.activeElement.getAttribute("data-cf") === "search";
     const caret = focusSearch ? doc.activeElement.selectionStart : null;
