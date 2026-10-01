@@ -102,6 +102,7 @@
   function closeDetail() { ($("closeDetailModal") || $("closeDetailModalFooter"))?.click(); }
 
   function headHtml(c, p) {
+    const months = monthsBetween(c.startDate, c.endDate);
     const title = c.description || c.assetName || c.supplier || c.id;
     const scope = state.report?.row
       ? (state.report.row.status === "SUPPORTED" ? '<span class="lq-cv-chip is-ok-outline">Sertifikalı kapsam</span>' : '<span class="lq-cv-chip is-warn-outline">Kapsam dışı</span>')
@@ -109,7 +110,7 @@
     const meta = [
       `<span class="lq-cv-mono lq-cv-strong">${esc(c.id)}</span>`,
       c.supplier ? esc(c.supplier) : "", c.assetClass ? esc(c.assetClass) : "",
-      `${trDate(c.startDate)} – ${trDate(c.endDate)} · Süre: kanonik kaynak gerekli`,
+      `${trDate(c.startDate)} – ${trDate(c.endDate)}${months ? ` (${months} ay)` : ""}`,
       `${frequencyText(c.paymentFrequency)}, ${timingText(c.paymentTiming)}`, esc(c.currency || "")
     ].filter(Boolean).join(" · ");
     return `<nav class="lq-cv-crumb" aria-label="Konum"><button type="button" data-lq-cv="back">Sözleşmeler</button><span aria-hidden="true">/</span><span>${esc(c.company || "—")}</span><span aria-hidden="true">/</span><span class="lq-cv-here">${esc(c.id)}</span></nav>

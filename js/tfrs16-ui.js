@@ -1,5 +1,32 @@
 const __gkTfrs16Boot = () => {
 
+  // Finansal veri tarayıcıda kalıcı tutulmaz: kaynak her zaman API/DB'dir.
+  // Bu modüldeki gk_tfrs16_* anahtarları yalnızca sayfa belleğinde yaşar;
+  // oturum token'ları, arayüz tercihleri ve backend'e gönderilmeyi bekleyen
+  // denetim kuyruğu tarayıcı deposunda kalır. Eski sürümlerden kalan yerel
+  // finansal kopyalar açılışta silinir.
+  const localStorage = (() => {
+    const real = window.localStorage;
+    const persistent = new Set([
+      "access_token", "gk_backend_jwt", "current_user",
+      "gk_tfrs16_active_company_v1", "gk_tfrs16_reporting_currency_v1",
+      "gk_tfrs16_audit_pending_sync_v1", "gk_tfrs16_audit_rejected_sync_v1"
+    ]);
+    const isLocalData = key => /^gk_tfrs16_/.test(String(key)) && !persistent.has(String(key));
+    const memory = new Map();
+    try {
+      for (let i = real.length - 1; i >= 0; i--) {
+        const key = real.key(i);
+        if (isLocalData(key)) real.removeItem(key);
+      }
+    } catch (_) { /* Storage may be unavailable; memory store still works. */ }
+    return {
+      getItem: key => isLocalData(key) ? (memory.has(String(key)) ? memory.get(String(key)) : null) : real.getItem(key),
+      setItem: (key, value) => isLocalData(key) ? void memory.set(String(key), String(value)) : real.setItem(key, value),
+      removeItem: key => isLocalData(key) ? void memory.delete(String(key)) : real.removeItem(key)
+    };
+  })();
+
   // Core form event bridge lives in the UI-only module loaded before this runtime.
 
 
@@ -821,7 +848,7 @@ window.fetch = (input, init = {}) => {
     } catch (error) {
       backendContractsHydrationError = error;
       console.warn(
-        "[TFRS16] API'den sözleşme yüklenemedi, localStorage kullanılıyor:",
+        "[TFRS16] API'den sözleşme yüklenemedi; yerel kopya kullanılmaz:",
         error?.message || error
       );
       try { window.dispatchEvent(new CustomEvent("gk-backend-hydration-failed")); } catch (_) { /* Event bridge is best-effort. */ }
