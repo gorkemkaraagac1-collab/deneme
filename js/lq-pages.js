@@ -41,9 +41,24 @@
   };
   const REASONS = {
     REPORTING_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili yok",
-    REPORTING_ROUTE_NOT_SUPPORTED: "Aylık / dönem sonu dışında ödeme",
+    REPORTING_ROUTE_NOT_SUPPORTED: "Desteklenmeyen ödeme sıklığı/zamanı",
     REPORTING_SOURCE_FACTS_NOT_READY: "Sözleşme verisi eksik",
-    REPORTING_SOURCE_NOT_READY: "Doğrulanmış kaynak yok"
+    REPORTING_SOURCE_NOT_READY: "Doğrulanmış kaynak yok",
+    LEASE_TERM_EVIDENCE_REQUIRED: "Kira süresi değerlendirme referansı eksik",
+    RENEWAL_OPTION_JUDGEMENT_REQUIRED: "Yenileme opsiyonu kararı eksik",
+    TERMINATION_OPTION_JUDGEMENT_REQUIRED: "Fesih opsiyonu kararı eksik",
+    PURCHASE_OPTION_JUDGEMENT_REQUIRED: "Satın alma opsiyonu kararı eksik",
+    RENEWAL_END_DATE_REQUIRED: "Yenileme sonrası bitiş tarihi eksik",
+    TERMINATION_DATE_REQUIRED: "Fesih tarihi eksik veya süre dışında",
+    LEASE_TERM_OPTIONS_CONFLICT: "Yenileme ve fesih birlikte kesin olamaz",
+    TERMINATION_PENALTY_MEASUREMENT_UNSUPPORTED: "Kesin fesihte ceza ölçümü desteklenmiyor",
+    PURCHASE_OPTION_PRICE_MEASUREMENT_UNSUPPORTED: "Kesin satın almada bedel ölçümü desteklenmiyor",
+    SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna için süre 12 ayı aşıyor",
+    REPORTING_FX_RATE_REQUIRED: "Doğrulanmış TCMB kuru eksik",
+    REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Modifikasyon/yeniden değerlendirme raporda henüz yok",
+    REPORTING_FEATURE_NOT_SUPPORTED: "Desteklenmeyen sözleşme özelliği",
+    PAYMENT_STUB_UNSUPPORTED: "Kira süresi ödeme dönemlerine tam bölünmüyor",
+    ESCALATION_POLICY_UNSUPPORTED: "Özel artış dönemi desteklenmiyor"
   };
   const reason = code => REASONS[code] || "Kaynak hazır değil";
   const ICON_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>';
@@ -301,7 +316,7 @@
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KULLANIM HAKKI VARLIĞI (NDD)</span><span class="lq-pg-big">${valueOr(t.rouCarryingAmount)}</span>
         ${assetM?.supported && assetM.items.length && assetM.total ? `<div class="lq-pg-split is-classes">${assetM.items.slice(0, 5).map((it, i) => `<i class="c${i}" style="width:${Math.max(2, Math.round((it.value / assetM.total) * 100))}%" title="${esc(it.label)}"></i>`).join("")}</div><div class="lq-pg-small lq-pg-muted">${esc(assetM.items.slice(0, 3).map(i => i.label).join(" · "))}</div>` : `<div class="lq-pg-small lq-pg-muted">Tarihi esas</div>`}${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">DÖNEM GİDERİ · ${esc(monthName(p.reportingDate).toLocaleUpperCase("tr-TR"))}</span>
-        <div class="lq-pg-kv2 is-big"><span><small>Faiz</small>${valueOr(t.periodInterest)}</span><span><small>Amortisman</small>${valueOr(t.periodDepreciation)}</span></div>${gapShort}${srcLine}</article>
+        <div class="lq-pg-kv2 is-big"><span><small>Faiz</small>${valueOr(t.periodInterest)}</span><span><small>Amortisman</small>${valueOr(t.periodDepreciation)}</span></div>${mv(t.exemptLeaseExpense) ? `<div class="lq-pg-small lq-pg-muted">İstisna kira gideri (TFRS 16.6) ${acc0(mv(t.exemptLeaseExpense))}</div>` : ""}${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">AKTİF SÖZLEŞME</span><span class="lq-pg-big">${activeCount}</span>
         <div class="lq-pg-chips">${pkg ? `<span class="lq-pg-chipx">${pkg.population.includedCount} sertifikalı</span>${pkg.population.excludedCount ? `<span class="lq-pg-chipx is-warn">${pkg.population.excludedCount} kapsam dışı</span>` : ""}` : ""}</div>
         ${btn("Portföyü aç", 'data-pg="contracts" data-view="all"', "link")}</article>`;
@@ -322,7 +337,7 @@
     // Aksiyon merkezi
     const ending = compContracts.filter(c => { const n = daysBetween(p.reportingDate, c.endDate); return String(c.status).toLowerCase() === "active" && n !== null && n >= 0 && n <= 90; }).length;
     const acts = [];
-    if (pkg?.population.excludedCount) acts.push(["warn", `${pkg.population.excludedCount} sözleşme sertifikalı rotada değil`, "Listele", 'data-pg="contracts" data-view="out"']);
+    if (pkg?.population.excludedCount) acts.push(["warn", `${pkg.population.excludedCount} sözleşme hesaplanamadı`, "Listele", 'data-pg="contracts" data-view="out"']);
     if (failing) acts.push(["danger", `${failing} hesaplama kontrolü uyarı veriyor`, "İncele", 'data-pg="nav" data-key="riskControls"']);
     if (!pkg || pkg.controls.status === "NOT_READY") acts.push(["warn", "Rapor veya kontrol kaynağı doğrulanamadı", "İncele", 'data-pg="nav" data-key="riskControls"']);
     if (!d.ok) acts.push(["warn", "Dipnot paketi alınamadı: " + errText(d.e), "İncele", 'data-pg="nav" data-key="footnotes"']);
@@ -344,7 +359,7 @@
       const byReason = {};
       pkg.population.exclusions.forEach(x => { byReason[x.reason] = (byReason[x.reason] || 0) + 1; });
       sc.innerHTML = `<span class="lq-pg-kick">MOTOR KAPSAMI</span><div class="lq-pg-split is-scope"><i style="width:${Math.round((inc / tot) * 100)}%"></i><i style="width:${Math.round((exc / tot) * 100)}%"></i></div>
-        <div class="lq-pg-legend"><span><i class="is-ok"></i>Sertifikalı rota</span><b>${inc}</b>${Object.entries(byReason).map(([k, n]) => `<span><i class="is-warn"></i>${esc(reason(k))}</span><b>${n}</b>`).join("")}</div>`;
+        <div class="lq-pg-legend"><span><i class="is-ok"></i>Hesaplanan</span><b>${inc}</b>${Object.entries(byReason).map(([k, n]) => `<span><i class="is-warn"></i>${esc(reason(k))}</span><b>${n}</b>`).join("")}</div>`;
     } else sc.innerHTML = `<span class="lq-pg-kick">MOTOR KAPSAMI</span><p class="lq-pg-empty">${pkg ? "Bu dönemde aktif sözleşme yok." : esc(errText(r.e))}</p>`;
   }
 
@@ -444,7 +459,7 @@
     const sel = (id, label, cur, opts) => `<label class="lq-pg-select"><span class="lq-sr">${label}</span><select data-cf="${id}" aria-label="${label}"><option value="all">${label}: Tümü</option>${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${label}: ${esc(t)}</option>`).join("")}</select></label>`;
     const sortBtn = (key, label, cls = "") => `<button type="button" class="lq-pg-th ${cls}" data-sort="${key}" aria-sort="${s.sort === key ? (s.dir === "asc" ? "ascending" : "descending") : "none"}">${label}${s.sort === key ? (s.dir === "asc" ? " ↑" : " ↓") : ""}</button>`;
     const scopeChip = r => {
-      if (r.scope === "ok") return '<span class="lq-pg-pill is-ok">Sertifikalı</span>';
+      if (r.scope === "ok") return '<span class="lq-pg-pill is-ok">Kapsamda</span>';
       if (r.scope === "out") return `<span class="lq-pg-pill is-warn" title="${esc(reason(r.reason))}">Kapsam dışı</span>`;
       if (r.scope === "loading") return '<span class="lq-pg-pill is-muted">…</span>';
       if (r.scope === "error") return '<span class="lq-pg-pill is-muted" title="Rapor alınamadı">Alınamadı</span>';

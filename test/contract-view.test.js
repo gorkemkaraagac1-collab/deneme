@@ -53,7 +53,7 @@ test('server report fills KPIs and calculation rows; unsupported route explains 
  assert.match(shell.querySelector('.lq-cv-trow.is-cur').textContent,/\(15,00\)/);
  assert.match(content.querySelector('[data-authoritative-report-audit]').textContent,/CONTRACT_UPDATED/);
  w.dispatchEvent(new w.CustomEvent('lq:contract-report',{detail:{contractId:'K1',package:{period:{periodStart:'2026-08-01',periodEnd:'2026-08-31',reportingDate:'2026-08-31'}},row:{status:'NOT_READY',reason:'REPORTING_ROUTE_NOT_SUPPORTED',metrics:null,scheduleRows:[]}}}));
- assert.match(shell.querySelector('.lq-cv-calc').textContent,/sertifikalı rotada değil/);
+ assert.match(shell.querySelector('.lq-cv-calc').textContent,/Ödeme sıklığı veya zamanlaması desteklenmiyor/);
  assert.match(shell.querySelector('.lq-cv-head').textContent,/Kapsam dışı/);
  dom.window.close();
 });
