@@ -23,7 +23,7 @@ async function pageFor(){
  const context=await browser.newContext({timezoneId:'Europe/Istanbul'}),page=await context.newPage(),responses=[];
  await page.addInitScript(({token})=>{
   localStorage.setItem('access_token',token);sessionStorage.setItem('gk_session_token',token);
-  const D=Date;window.Date=class extends D{constructor(...a){super(...(a.length?a:['2026-01-31T10:00:00Z']));}static now(){return new D('2026-01-31T10:00:00Z').getTime();}};
+  const D=Date;window.Date=class extends D{constructor(...a){super(...(a.length?a:['2026-02-01T10:00:00Z']));}static now(){return new D('2026-02-01T10:00:00Z').getTime();}};
  },{token});
  await page.route('https://api.leaseqant.com/**',async route=>{
   const req=route.request(),url=new URL(req.url()),response=await context.request.fetch(origin+url.pathname+url.search,{method:req.method(),headers:req.headers(),data:req.postData()||undefined});
@@ -37,7 +37,9 @@ async function pageFor(){
 }
 test('actual Dipnot navigation, trusted identifiers, raw export and API failure preserve authority',async()=>{
  const {page,context,responses}=await pageFor();
- await page.evaluate(()=>window.__gkOpenInMainByKey('footnotes'));await page.locator('#disclosureExport').waitFor();
+ await page.locator('#v26ActiveCompanySelect').selectOption(proof.companyId);
+ await page.locator('#sidebarNav [data-open="footnotes"]').click();await page.locator('#disclosureExport').waitFor();
+ await page.waitForFunction(()=>document.querySelector('#lqNote-asset .is-n'));
  const p=responses.filter(r=>r.path==='/api/reports/lease-disclosure').at(-1)?.package;assert.ok(p);assert.equal(p.identity.companyId,proof.companyId);
  const parity=await page.evaluate(pkg=>{
   let exported;window.XLSX={utils:{book_new:()=>({}),json_to_sheet:r=>{exported=r;return r;},book_append_sheet:()=>{}},writeFile:()=>{}};
@@ -46,17 +48,21 @@ test('actual Dipnot navigation, trusted identifiers, raw export and API failure 
   return out;
  },p);
  for(const r of parity){assert.equal(r.exported,['SUPPORTED','ZERO_CONFIRMED'].includes(r.status)?r.raw:null);assert.equal(r.exportStatus,r.status);}
- await page.route('https://api.leaseqant.com/api/reports/lease-disclosure/availability**',r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,code:'DISCLOSURE_TRUSTED_SOURCE_REQUIRED'}),headers:{'access-control-allow-origin':origin,'access-control-allow-credentials':'true'}}));
- await page.evaluate(()=>window.__gkOpenInMainByKey('footnotes'));await page.locator('[role="alert"]').waitFor();assert.equal(await page.locator('#disclosureExport').count(),0);
+ await page.route('https://api.leaseqant.com/api/reports/lease-disclosure/availability**',r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,code:'DISCLOSURE_SOURCE_UNAVAILABLE'}),headers:{'access-control-allow-origin':origin,'access-control-allow-credentials':'true'}}));
+ await page.locator('#sidebarNav [data-view="contracts"]').click();
+ await page.locator('#sidebarNav [data-open="footnotes"]').click();await page.locator('#v26PageHost .lq-dn-state [role="alert"]').waitFor();assert.equal(await page.locator('#disclosureExport').isDisabled(),true);
  evidence.push({area:'DISC',actualHtml:true,rows:parity,fallbackCount:0,apiFailureUnavailable:true});await context.close();
 });
 test('actual contract Journal button uses backend voucher and raw download; failed API clears preview',async()=>{
  const {page,context,responses}=await pageFor();
- await page.evaluate(id=>window.GK_TFRS16.openDetail(id),proof.contractId);
- await page.locator('#detailContent [data-detail-tab-target="accounting"]').click();
+ await page.locator('#sidebarNav [data-view="contracts"]').click();
+ await page.locator('#lqContracts [data-open-contract="'+proof.contractId+'"]').click();
+ await page.locator('#detailContent [data-lq-cv-tab="accounting"]').click();
  await page.locator('#generateJournal').waitFor();
  await page.locator('#accountingYear').selectOption('2026');await page.locator('#accountingPeriod').selectOption('monthly');await page.locator('#accountingMonth').selectOption('1');
- await page.locator('#generateJournal').click({force:true});await page.locator('#journalPreview [data-journal-export="csv"]').waitFor();
+ await page.locator('#generateJournal').click();
+ await page.locator('#journalPreview .lq-jr-export > summary').click();
+ await page.locator('#journalPreview [data-journal-export="csv"]').waitFor();
  const p=responses.filter(r=>r.path==='/api/journals/preview'&&r.package.kind==='PERIOD').at(-1)?.package;assert.ok(p);
  const rows=await page.evaluate(async pkg=>{const ui=window.LeaseQantTfrs16JournalUi,accepted=await ui.acceptPackage(pkg,{companyId:pkg.companyId,contractIds:pkg.contractIds,kind:pkg.kind,periodStart:pkg.periodStart,periodEnd:pkg.periodEnd});return ui.rowsForPackage(accepted);},p);
  const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#journalPreview [data-journal-export="csv"]').click()]);
@@ -67,7 +73,11 @@ test('actual contract Journal button uses backend voucher and raw download; fail
 });
 test('actual Financial Reporting navigation retains server DTO after late shell boot',async()=>{
  const {page,context}=await pageFor();
- await page.evaluate(()=>window.__gkOpenInMainByKey('financialReporting'));await page.locator('[data-report-export="csv"]').waitFor();
+ await page.locator('#v26ActiveCompanySelect').selectOption(proof.companyId);
+ await page.locator('#sidebarNav [data-open="financialReporting"]').click();
+ await page.locator('#lqFinancial').waitFor();
+ await page.locator('#v26PageHost details.lq-pg-legacy > summary').click();
+ await page.locator('[data-report-export="csv"]').waitFor();
  const p=await page.evaluate(()=>window.LeaseQantReportingAuthorityUi.read());assert.equal(p.identity.companyId,proof.companyId);assert.equal(p.totals.leaseLiability.value,proof.reporting.totals.leaseLiability.value);
  evidence.push({area:'Financial Reporting',actualHtml:true,rawLiability:p.totals.leaseLiability.value,fallbackCount:0});await context.close();
 });

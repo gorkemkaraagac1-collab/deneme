@@ -4,13 +4,17 @@ const fs = require('node:fs'), path = require('node:path');
 const { JSDOM } = require('jsdom');
 const ui = fs.readFileSync(path.join(__dirname, '../js/tfrs16-operations-ui.js'), 'utf8');
 const runtime = fs.readFileSync(path.join(__dirname, '../js/tfrs16-ui.js'), 'utf8');
-const runtimeSection = runtime.slice(runtime.indexOf('  function renderSlbSection(contract)'), runtime.indexOf('  function renderSlbJournalHtml('));
+const runtimeSection = runtime.slice(runtime.indexOf('  function bindPersistedOperationForm(contract'), runtime.indexOf('  function renderSlbJournalHtml('));
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function setup(preview) {
   const dom = new JSDOM('<html data-lq-ui="2"><div id="slbSectionContainer"></div></html>', { runScripts: 'outside-only' });
   const w = dom.window, calls = [], contract = { id: 'C1', companyId: 'CO1', revision: 1 };
   w.eval(ui);
-  w.LeaseQantPrivateTfrs16Facade = { loadSaleAndLeaseback: async input => { calls.push(['preview', JSON.parse(JSON.stringify(input))]); return preview ? preview(input) : { testResult: true }; } };
+  w.LeaseQantReportingPeriod = { get: () => ({reportingDate: '2026-08-31'}) };
+  w.LeaseQantPrivateTfrs16Facade = {
+    previewPersistedOperation: async (id, intent) => { calls.push(['preview', JSON.parse(JSON.stringify(intent))]); const result = preview ? await preview(intent) : {testResult:true}; return {result,receipt:'opaque-test-receipt',saveAuthority:'FORM_ONLY'}; },
+    saveOperationForm: async (id,intent,receipt) => { await w.persistContractToApi(intent); assert.equal(receipt,'opaque-test-receipt'); }
+  };
   w.persistContractToApi = async value => { calls.push(['persist', JSON.parse(JSON.stringify(value))]); };
   w.saveContracts = () => calls.push(['local-save']);
   w.contracts = [contract];
@@ -30,7 +34,7 @@ test('actual v2 detail runtime previews without writes; explicit save uses the p
   assert.equal(get('slbSaveButton').disabled, false);
   get('slbSaveButton').click(); get('slbSaveButton').click(); await tick();
   assert.deepEqual(calls.map(c => c[0]), ['preview', 'persist', 'local-save']);
-  assert.equal(calls[1][1].saleAndLeaseback.saleProceeds, calls[0][1].saleProceeds);
+  assert.equal(calls[1][1].input.saleProceeds, calls[0][1].input.saleProceeds);
   assert.equal(get('slbSaveButton').disabled, true);
   dom.window.close();
 });
@@ -59,7 +63,7 @@ test('preview failure never enables persistence; save failure rolls back and req
   assert.deepEqual(failed.calls.map(c => c[0]), ['preview']); failed.dom.window.close();
   const s = setup(); s.w.persistContractToApi = async () => { throw Error('write rejected'); };
   s.get('slbCalculateButton').click(); await tick(); s.get('slbSaveButton').click(); await tick();
-  assert.equal(s.contract.saleAndLeaseback, null);
+  assert.equal(s.contract.saleAndLeaseback, undefined);
   assert.equal(s.get('slbSaveButton').disabled, true);
   assert.match(s.get('slbResultContainer').textContent, /Yeniden önizleme/);
   assert.deepEqual(s.calls.map(c => c[0]), ['preview']); s.dom.window.close();

@@ -166,6 +166,14 @@
     return copyResult(await value.calculateSaleAndLeaseback(input, options));
   }
 
+  async function previewPersistedOperation(contractId, intent, options) {
+    return copyResult(await adapter().previewPersistedOperation(contractId, intent, options));
+  }
+
+  async function saveOperationForm(contractId, intent, receipt, options) {
+    return copyResult(await adapter().saveOperationForm(contractId, intent, receipt, options));
+  }
+
   async function loadModificationPreview(contract, input, options) {
     const value = adapter();
     if (typeof value.calculateModificationPreview !== "function") {
@@ -237,6 +245,8 @@
     loadCloseControls,
     loadEarlyPayment,
     loadSaleAndLeaseback,
+    previewPersistedOperation,
+    saveOperationForm,
     loadModificationPreview,
     loadReassessmentPreview,
     applyModification,

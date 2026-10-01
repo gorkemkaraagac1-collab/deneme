@@ -165,7 +165,7 @@
   const evidence=known?`<p>Şirket: ${esc(lock.companyId)} · Dönem: ${esc(lock.periodKey)} · Salt okunur sunucu yanıtı${lock.lockedAt?` · Kilit tarihi: ${esc(trDate(lock.lockedAt.slice(0,10)))}`:''}</p>`:
    lock?.state==='UNSUPPORTED_RANGE'?'<p>Kilit kaynağı yalnızca tek bir tam ayı destekler; seçili tarih aralığının kilit durumu varsayılmaz.</p>':
    lock?.state==='UNAVAILABLE'?`<p>Eksik veya başarısız yanıt açık dönem olarak kabul edilmez.</p><details><summary>Teknik ayrıntı</summary><code>${esc(lock.code)}</code></details>`:'';
-  return `<aside class="lq-pg-note lq-rc-role-note" role="note" data-period-lock-state="${esc(lock?.state||'UNKNOWN')}"><div><strong>Dönem kilidi · ${esc(lockLabel(lock))}</strong>${evidence}<p>Dönem kapatma/açma yalnızca ADMIN yetkisindedir. Kilit durumu kullanıcı rolünü veya işlem yetkisini doğrulamaz. Bu ekran salt okunurdur; kapatma/açma işlemi sunulmaz.</p></div></aside>`;
+  return `<aside class="lq-pg-note lq-rc-role-note" role="note" data-period-lock-state="${esc(lock?.state||'UNKNOWN')}"><div><strong>Dönem kilidi · ${esc(lockLabel(lock))}</strong>${evidence}<p>Dönem kapatma/açma yalnızca ADMIN yetkisindedir ve sunucu tarafından doğrulanmış rol gerektirir. Kilit durumu kullanıcı rolünü veya işlem yetkisini doğrulamaz; yetki doğrulanmış gösterilmez. Bu ekran salt okunurdur; kapatma/açma işlemi sunulmaz.</p></div></aside>`;
  }
  function closeSummaryHtml(p,lock){
   const checks=Array.isArray(p.controls?.checks)?p.controls.checks:[];

@@ -10731,6 +10731,41 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
+  function bindPersistedOperationForm(contract, operation, prefix, readFields, render) {
+    const ui = window.LeaseQantTfrs16OperationsUi;
+    const container = document.getElementById(prefix === "slb" ? "slbSectionContainer" : "subleaseSectionContainer");
+    container?._lqPreviewDispose?.();
+    const key = prefix === "slb" ? "saleAndLeaseback" : "sublease";
+    const dispose = ui?.bindSlbPreviewFlow?.({
+      readInput: () => ({
+        intent: { companyId: contract.companyId, operation, input: readFields(),
+          reportingDate: window.LeaseQantReportingPeriod?.get?.().reportingDate },
+        localContractState: contract,
+        activeCompanyId: typeof getActiveCompanyId === "function" ? getActiveCompanyId() : contract.companyId
+      }),
+      preview: async ({ intent, activeCompanyId }) => {
+        if (activeCompanyId && activeCompanyId !== "ALL" && activeCompanyId !== intent.companyId) {
+          const error = new Error("Aktif şirket sözleşmenin şirketiyle eşleşmiyor."); error.code = "OPERATION_COMPANY_CHANGED"; throw error;
+        }
+        const facade = window.LeaseQantPrivateTfrs16Facade;
+        if (typeof facade?.previewPersistedOperation !== "function") throw new Error("Sunucu önizleme kaynağı hazır değil.");
+        return facade.previewPersistedOperation(contract.id, intent);
+      },
+      render: envelope => render(envelope.result),
+      canSave: envelope => envelope?.saveAuthority === "FORM_ONLY" && typeof envelope.receipt === "string" && !!envelope.receipt,
+      save: async ({ intent }, envelope) => {
+        const facade = window.LeaseQantPrivateTfrs16Facade;
+        if (typeof facade?.saveOperationForm !== "function") throw new Error("Onaylı form kayıt kaynağı hazır değil.");
+        await facade.saveOperationForm(contract.id, intent, envelope.receipt);
+        contract[key] = { ...contract[key], ...intent.input };
+        const idx = contracts.findIndex(c => c.id === contract.id);
+        if (idx >= 0) contracts[idx] = contract;
+        saveContracts(contracts);
+      }
+    }, prefix);
+    if (container) container._lqPreviewDispose = dispose;
+  }
+
   function renderSlbSection(contract) {
     const container = document.getElementById("slbSectionContainer");
     if (!container) return;
@@ -10751,44 +10786,13 @@ ${renderAccountingCenterBulkPromo()}
     container.innerHTML = formHtml;
 
     if (document.documentElement.getAttribute("data-lq-ui") === "2") {
-      const bindPreview = window.LeaseQantTfrs16OperationsUi?.bindSlbPreviewFlow;
-      if (typeof bindPreview !== "function") return;
-      bindPreview({
-        readInput: () => ({
-          previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
-          fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
-          saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
-          qualifiesAsSale: !!document.getElementById("slbQualifiesAsSale")?.checked,
-          professionalJudgmentNote: document.getElementById("slbNote")?.value || "",
-          leasebackContract: contract
-        }),
-        preview: async input => {
-          const facade = window.LeaseQantPrivateTfrs16Facade;
-          if (typeof facade?.loadSaleAndLeaseback !== "function") throw new Error("Sunucu önizleme kaynağı hazır değil.");
-          return facade.loadSaleAndLeaseback(input);
-        },
-        render: renderSlbResultHtml,
-        save: async input => {
-          const previous = contract.saleAndLeaseback ? cloneModificationValue(contract.saleAndLeaseback) : null;
-          contract.saleAndLeaseback = {
-            previousCarryingAmount: input.previousCarryingAmount,
-            fairValueOfAsset: input.fairValueOfAsset,
-            saleProceeds: input.saleProceeds,
-            qualifiesAsSale: input.qualifiesAsSale,
-            professionalJudgmentNote: input.professionalJudgmentNote,
-            savedAt: new Date().toISOString()
-          };
-          try {
-            await persistContractToApi(contract, true);
-            const idx = contracts.findIndex(c => c.id === contract.id);
-            if (idx >= 0) contracts[idx] = contract;
-            saveContracts(contracts);
-          } catch (error) {
-            contract.saleAndLeaseback = previous;
-            throw error;
-          }
-        }
-      });
+      bindPersistedOperationForm(contract, "SALE_AND_LEASEBACK", "slb", () => ({
+        previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
+        fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
+        saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
+        qualifiesAsSale: !!document.getElementById("slbQualifiesAsSale")?.checked,
+        professionalJudgmentNote: document.getElementById("slbNote")?.value || ""
+      }), renderSlbResultHtml);
       return;
     }
 
@@ -10912,6 +10916,19 @@ ${renderAccountingCenterBulkPromo()}
       : "";
 
     container.innerHTML = formHtml;
+
+    if (document.documentElement.getAttribute("data-lq-ui") === "2") {
+      bindPersistedOperationForm(contract, "SUBLEASE", "sublease", () => ({
+        monthlyPayment: Number(document.getElementById("subleaseMonthlyPayment")?.value),
+        discountRate: Number(document.getElementById("subleaseDiscountRate")?.value),
+        startDate: document.getElementById("subleaseStartDate")?.value,
+        endDate: document.getElementById("subleaseEndDate")?.value,
+        classification: document.getElementById("subleaseClassification")?.value,
+        rouAllocationRatio: Number(document.getElementById("subleaseRouRatio")?.value),
+        professionalJudgmentNote: document.getElementById("subleaseNote")?.value || ""
+      }), renderSubleaseResultHtml);
+      return;
+    }
 
     async function runAndRenderSublease(persist) {
       const resultBox = document.getElementById("subleaseResultContainer");
