@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="css/app.css" />
   <link rel="stylesheet" href="css/leaseqant-dark.css?v=20260928-contract-detail-r1" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/lq-v2.css?v=20260929-ui-v2-wz1" />
+  <link rel="stylesheet" href="css/lq-v2.css?v=20261001-admin-link" />
   <!-- SheetJS for Excel import/export (engine uses XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -136,6 +136,7 @@
             <strong id="userName">Kullanıcı</strong>
             <span id="userRole">Oturum</span>
           </div>
+          <a class="shell-logout lq-admin-link" id="adminPanelLink" href="frontend/admin/index.html" hidden>Yönetim paneli</a>
           <button type="button" class="shell-logout" id="logoutButton" onclick="logout()">
             Çıkış
           </button>
@@ -731,7 +732,7 @@
 })();
   </script>
   <!-- Shell helpers (before engine) -->
-  <script src="js/shell.js?v=20260927-reporting-visibility-1"></script>
+  <script src="js/shell.js?v=20261001-admin-link"></script>
   <!-- TFRS 16 private-result UI runtime -->
   <script src="js/lq-reporting-period.js?v=20260928-ui-v2-faz2"></script>
   <script src="js/private-calculation-api.js?v=20260927-report-authority-1"></script>

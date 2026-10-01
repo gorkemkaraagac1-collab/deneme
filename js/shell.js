@@ -293,6 +293,9 @@ window.fetch = (input, init = {}) => {
       if (nameEl) nameEl.textContent = displayName || "Oturum açık";
       if (roleEl) roleEl.textContent = role || "JWT aktif";
       if (av) av.textContent = (displayName || "U").slice(0, 1).toUpperCase();
+      // Yönetim paneli yalnızca ADMIN'e açık (checkAdminAuth varsayılanı).
+      const adminLink = document.getElementById("adminPanelLink");
+      if (adminLink) adminLink.hidden = role.toUpperCase() !== "ADMIN";
     } catch (_) {}
   }
 

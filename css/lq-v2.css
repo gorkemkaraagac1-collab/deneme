@@ -651,6 +651,8 @@ html[data-lq-ui="2"] .lq-asset-legend { flex: 1 1 auto !important; min-width: 0 
 /* Kullanıcı alanı: çıkış ayrı satırda, ad kesilmez */
 html[data-lq-ui="2"] .lq-user-menu { flex-wrap: wrap !important; }
 html[data-lq-ui="2"] .lq-user-menu .shell-logout { flex: 1 0 100% !important; margin-top: 6px; }
+html[data-lq-ui="2"] .lq-user-menu .lq-admin-link { display: flex; align-items: center; justify-content: center; text-decoration: none !important; }
+html[data-lq-ui="2"] .lq-user-menu .lq-admin-link[hidden] { display: none !important; }
 
 /* Arama ikonu metnin üstüne binmez */
 html[data-lq-ui="2"] .search-box { position: relative; }
