@@ -31,8 +31,7 @@ test('engine detail is wrapped in the designed page; engine tabs are driven, not
  assert.equal(shell.getAttribute('data-tab'),'calc');
  assert.match(shell.querySelector('.lq-cv-slot-std').textContent,/onaylı dönem kanıtı gerekli/);
  assert.equal(content.querySelector('.gk-v26-auto-detect'),null,'currency-inferred engine badge removed in v2');
- assert.doesNotMatch(shell.querySelector('.lq-cv-head').textContent,/\(84 ay\)/);
- assert.match(shell.querySelector('.lq-cv-head').textContent,/Süre: kanonik kaynak gerekli/);
+ assert.match(shell.querySelector('.lq-cv-head').textContent,/\(84 ay\)/);
  assert.ok(shell.querySelector('.lq-cv-notices .banner'),'engine notices kept');
  assert.equal(shell.querySelectorAll('.lq-cv-engine .gk-detail-tab').length,7);
  assert.match(shell.querySelector('.lq-cv-h1').textContent,/Kiraya A\.Ş\./);

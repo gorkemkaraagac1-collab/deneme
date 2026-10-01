@@ -6,6 +6,8 @@
      raporlama paketi (LeaseQantReportingAuthorityUi.load) ve dipnot paketi
      (LeaseQantPrivateTfrs16Facade.loadLeaseDisclosure*). Bu modül toplam, oran
      veya bakiye hesaplamaz; yalnızca sayar, sıralar, filtreler ve çizer.
+     Tek istisna köprü grafiğindeki "mutabakat farkı"dır (kapanış − hareketler);
+     ekranda "fark" diye etiketlidir (LeaseQantDashboardCharts.bridgeModel).
    - Eski ekranlar DOM'da kalır (gizlenir); düğmeler eski öğeleri tıklar
      (#newContractButton, #bulkImportButton, menü öğeleri), kayıt akışları değişmez.
    - html[data-lq-ui="2"] değilse hiçbir şey yapmaz. */
@@ -290,14 +292,14 @@
       ? `<div class="lq-pg-small is-warn">${pkg.population.excludedCount} sözleşme kapsam dışı (${esc(reason(reasonAll[0]))}); eksik toplam gösterilmez.</div>` : "";
     const gapShort = gapNote ? '<div class="lq-pg-small is-warn">Eksik kapsam · toplam yok</div>' : "";
     const liab = mv(t.leaseLiability), curL = mv(t.currentLiability), ncL = mv(t.nonCurrentLiability);
-
+    const shortPct = liab && curL !== null ? Math.max(0, Math.min(100, Math.round((curL / liab) * 100))) : null;
     const assetM = d.ok ? charts().assetModel?.(d.v) : null;
     $("lqOvKpis").innerHTML = `
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KİRA YÜKÜMLÜLÜĞÜ</span><span class="lq-pg-big">${valueOr(t.leaseLiability)}</span>
-        <div class="lq-pg-small lq-pg-muted">Kısa vade oranı için sunucu kaynağı gerekli</div>
+        ${shortPct !== null ? `<div class="lq-pg-split" role="img" aria-label="Kısa vade %${shortPct}"><i style="width:${shortPct}%"></i><i style="width:${100 - shortPct}%"></i></div>` : ""}
         <div class="lq-pg-kv2"><span>Kısa ${acc0(curL)}</span><span>Uzun ${acc0(ncL)}</span></div>${gapNote}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KULLANIM HAKKI VARLIĞI (NDD)</span><span class="lq-pg-big">${valueOr(t.rouCarryingAmount)}</span>
-        <div class="lq-pg-small lq-pg-muted">Varlık sınıfı oranları için sunucu kaynağı gerekli</div>${gapShort}${srcLine}</article>
+        ${assetM?.supported && assetM.items.length && assetM.total ? `<div class="lq-pg-split is-classes">${assetM.items.slice(0, 5).map((it, i) => `<i class="c${i}" style="width:${Math.max(2, Math.round((it.value / assetM.total) * 100))}%" title="${esc(it.label)}"></i>`).join("")}</div><div class="lq-pg-small lq-pg-muted">${esc(assetM.items.slice(0, 3).map(i => i.label).join(" · "))}</div>` : `<div class="lq-pg-small lq-pg-muted">Tarihi esas</div>`}${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">DÖNEM GİDERİ · ${esc(monthName(p.reportingDate).toLocaleUpperCase("tr-TR"))}</span>
         <div class="lq-pg-kv2 is-big"><span><small>Faiz</small>${valueOr(t.periodInterest)}</span><span><small>Amortisman</small>${valueOr(t.periodDepreciation)}</span></div>${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">AKTİF SÖZLEŞME</span><span class="lq-pg-big">${activeCount}</span>
@@ -348,10 +350,37 @@
 
   /* Dikey köprü (tasarımdaki gibi). Ölçek görseldir; tutarlar paketten gelir. */
   function columnBridge(bm) {
-    return charts().renderBridge(bm);
+    const rows = bm.rows;
+    const vals = [0];
+    rows.forEach(r => { if (r.kind === "total") vals.push(r.value); else if (isNum(r.from)) vals.push(r.from, r.to); });
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const H = 190;
+    let base = 0;
+    if (lo > 0) { const cut = lo - Math.max((hi - lo) * 0.6, hi * 0.03); if (cut > hi * 0.3) base = cut; lo = base; }
+    const span = (hi - lo) || 1;
+    const y = v => ((v - lo) / span) * H;
+    const mn = Math.max(Math.abs(hi), Math.abs(lo)) >= 1e6;
+    const fmt = v => mn ? (v < 0 ? `(${(Math.abs(v) / 1e6).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : (v / 1e6).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : acc0(v);
+    const cols = rows.map(r => {
+      let bar = "", label = "";
+      if (r.kind === "total") { bar = `<i class="is-total" style="bottom:0;height:${Math.max(2, y(r.value)).toFixed(1)}px"></i>`; label = fmt(r.value); }
+      else if (r.kind === "missing" || r.kind === "na") { bar = `<em class="lq-pg-need${r.kind === "na" ? " is-na" : ""}">${esc(r.kind === "na" ? "Uyg." : "Kaynak")}</em>`; label = "—"; }
+      else { const b = Math.min(y(r.from), y(r.to)), h = Math.abs(y(r.to) - y(r.from)); bar = `<i class="is-${r.kind}" style="bottom:${b.toFixed(1)}px;height:${Math.max(2, h).toFixed(1)}px"></i>`; label = r.value > 0 ? `+${fmt(r.value)}` : fmt(r.value); }
+      const short = { opening: "Açılış", additions: "Yeni", interest: "Faiz", payments: "Ödemeler", modifications: "Modifikasyon", remeasurements: "Yen. ölçüm", tms21: "Kur farkı TMS 21", residual: "Mutabakat farkı", closing: "Kapanış" }[r.id] || r.label;
+      return `<div class="lq-pg-col is-${r.kind}" title="${esc(r.label)}${r.note ? " — " + esc(r.note) : ""}"><span class="lq-pg-colv">${label}</span><div class="lq-pg-colbar" style="height:${H}px">${bar}</div><span class="lq-pg-coll">${esc(short)}</span></div>`;
+    }).join("");
+    const foot = bm.residual !== null
+      ? `<p class="lq-pg-small is-warn">Mutabakat farkı ${acc0(bm.residual)}: pakette ayrı satırı olmayan hareketler (TMS 29 parasal kazanç/kayıp vb.).</p>`
+      : (bm.complete ? `<p class="lq-pg-small is-ok">${ICON_CHECK} Hareketler kapanışla mutabık.</p>` : `<p class="lq-pg-small is-warn">${bm.missing} kalem için kaynak yok; sıfır sayılmadı.</p>`);
+    return `${mn ? '<p class="lq-pg-small lq-pg-muted lq-pg-unit">milyon</p>' : ""}<div class="lq-pg-cols" role="img" aria-label="Kira yükümlülüğü köprüsü">${cols}</div>${base ? `<p class="lq-pg-small lq-pg-muted">Eksen ${nf0.format(base)} değerinden başlar.</p>` : ""}${foot}`;
   }
   function maturityColumns(mm) {
-    return charts().renderMaturity(mm);
+    if (!mm.supported) return `<p class="lq-pg-empty">${esc(mm.status)}${mm.limitation ? ` — ${esc(mm.limitation)}` : ""}</p>`;
+    const max = mm.max || 1;
+    const cols = mm.bands.map((b, i) => `<div class="lq-pg-mcol"><span class="lq-pg-colv">${b.value === null ? "—" : acc0(b.value)}</span><div class="lq-pg-mbar"><i class="${i ? "is-soft" : ""}" style="height:${b.value === null ? 0 : Math.max(2, Math.round((b.value / max) * 100))}%"></i></div><span class="lq-pg-coll">${esc(b.label)}</span></div>`).join("");
+    const rec = mm.total !== null && mm.carrying !== null
+      ? `<div class="lq-pg-recon"><span>${acc0(mm.total)} − ${acc0(mm.finance)} finansman gideri = ${acc0(mm.carrying)}</span>${mm.bandsMatchTotal === false ? '<b class="is-warn">Dilim toplamı uyuşmuyor</b>' : `<b class="is-ok">${ICON_CHECK}Defter değeri</b>`}</div>` : "";
+    return `<div class="lq-pg-mcols">${cols}</div>${rec}`;
   }
 
   /* =========================================================
@@ -569,7 +598,7 @@
     if (fr.tab === "liability" || fr.tab === "rou") {
       const liab = fr.tab === "liability";
       const cols = liab
-        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "GERÇEKLEŞEN NAKİT ÇIKIŞI" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
+        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "ÖDEMELER" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: "FARK · TMS 29 / DİĞER", warn: true }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
         : [{ label: "ŞİRKET" }, { label: "AÇILIŞ NDD" }, { label: "İLK MUHASEBELEŞTİRME" }, { label: "SONRAKİ İLAVELER" }, { label: "AMORTİSMAN" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "TMS 29 DÜZELTMESİ", warn: true }, { label: `KAPANIŞ NDD ${trDate(p.periodEnd)}` }];
       const lines = data.map(({ c, d }) => {
         if (!d.ok) return errRow(c, d.e, cols.length - 1);
@@ -578,16 +607,16 @@
           const l = m.liability || {};
           const bm = charts().bridgeModel(d.v);
           const pay = bm.rows.find(r => r.id === "payments");
-          const recon = bm.complete ? `<span class="is-ok lq-pg-c">${ICON_CHECK} Sunucu doğruladı</span>` : `<span class="lq-pg-need">${bm.reconciled === false ? "Sunucu doğrulamadı" : "Sunucu kaynağı gerekli"}</span>`;
-          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
+          const recon = bm.residual === null ? (bm.complete ? `<span class="is-ok lq-pg-c">${ICON_CHECK}</span>` : `<span class="lq-pg-need">Eksik</span>`) : `<span class="lq-pg-need">Fark</span>`;
+          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}${bm.paymentPlanned ? "<small> plan</small>" : ""}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-warn">${bm.residual === null ? "—" : acc0(bm.residual)}</span><span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
         }
         const r = m.rou || {};
         const dep = fv(r.depreciation);
-        return `<div class="lq-pg-ftr">${name(c)}${fieldCell(r.opening)}${fieldCell(r.initialRecognitionAdditions)}${fieldCell(r.subsequentAdditions)}${dep !== null ? `<span>${acc0(dep)}</span>` : fieldCell(r.depreciation)}${fieldCell(r.modifications)}${fieldCell(r.remeasurements)}${fieldCell(r.tms29Movement)}<span class="is-strong">${acc0(fv(r.closing))}</span></div>`;
+        return `<div class="lq-pg-ftr">${name(c)}${fieldCell(r.opening)}${fieldCell(r.initialRecognitionAdditions)}${fieldCell(r.subsequentAdditions)}${dep !== null ? `<span>${acc0(-Math.abs(dep))}</span>` : fieldCell(r.depreciation)}${fieldCell(r.modifications)}${fieldCell(r.remeasurements)}${fieldCell(r.tms29Movement)}<span class="is-strong">${acc0(fv(r.closing))}</span></div>`;
       });
       html = frTable(cols, lines) + notice(liab
-        ? "Hareketler sunucu kaynak değerleriyle gösterilir. Gerçekleşen nakit için defter kanıtı gerekir; planlanan ödeme yerine kullanılmaz. Mutabakat yalnızca sunucunun açık doğrulamasına dayanır."
-        : "Kullanım hakkı hareketleri sunucu kaynak değerleriyle gösterilir. TMS 29 düzeltmesi yalnızca onaylı sunucu alanıyla sunulur; eksik kaynak sıfır sayılmaz.");
+        ? "<strong>Fark sütunu</strong> kapanış ile paketteki hareketlerin toplamı arasındaki farktır; pakette TMS 29 parasal kazanç/kayıp için ayrı alan olmadığından bu sütunda görünür. Kira yükümlülüğü parasal kalemdir; kur farkı TMS 21 uyarınca kâr veya zarardadır."
+        : "Kullanım hakkı varlığı parasal olmayan kalemdir; kur farkı oluşmaz. TMS 29 uygulanıyorsa düzeltme ayrı sütundadır.");
     } else if (fr.tab === "expense" || fr.tab === "split") {
       const exp = fr.tab === "expense";
       const cols = exp ? [{ label: "ŞİRKET" }, { label: "DÖNEM FAİZİ" }, { label: "DÖNEM AMORTİSMANI" }, { label: "SÖZLEŞMESEL ÖDEME" }, { label: "GELECEK 12 AY FAİZ" }, { label: "KAPSAM" }]

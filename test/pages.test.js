@@ -64,7 +64,7 @@ async function overview(disclosureError=false){
  const period={periodStart:'2026-08-01',periodEnd:'2026-08-31',reportingDate:'2026-08-31'};
  w.LeaseQantReportingAuthorityUi={defaultPeriod:()=>period,companies:async()=>[],load:async()=>({identity:{presentationCurrency:'TRY',companyName:'Holding'},period,totals:{leaseLiability:m(100),currentLiability:m(20),nonCurrentLiability:m(80)},population:{count:1,includedCount:1,excludedCount:0,exclusions:[]},controls:{status:'PASS',checks:[{status:'PASS'}]}})};
  w.GK_TFRS16={getPortfolioContracts:()=>[C[1]]};
- w.LeaseQantDashboardCharts={scopeOk:()=>true,assetModel:()=>({supported:false,status:'Girdi gerekli'}),bridgeModel:()=>({currency:'TRY'}),renderBridge:()=>'<p>Sunucu mutabakat kaynağı gerekli</p>',maturityModel:()=>({supported:false}),renderMaturity:()=>'<p>Kaynak gerekli</p>'};
+ w.LeaseQantDashboardCharts={scopeOk:()=>true,assetModel:()=>({supported:false,status:'Girdi gerekli'}),bridgeModel:()=>({currency:'TRY',rows:[],residual:null,missing:0,complete:false}),renderBridge:()=>'<p>Sunucu mutabakat kaynağı gerekli</p>',maturityModel:()=>({supported:false}),renderMaturity:()=>'<p>Kaynak gerekli</p>'};
  w.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async()=>({}),loadLeaseDisclosure:async()=>{if(disclosureError)throw Error('offline');return {validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cashLedger'}],supportStatus:[{requirementId:'fx',supportedStatus:'NOT_SUPPORTED'}]};}};
  w.eval(src);await new Promise(r=>setTimeout(r,160));return dom;
 }
@@ -74,8 +74,7 @@ test('real overview warns on loaded but incomplete disclosure and lists source a
  assert.match(d.getElementById('lqOvActions').textContent,/cashLedger/);
  assert.match(d.getElementById('lqOvActions').textContent,/fx/);
  assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/Bekleyen işlem yok/);
- assert.equal(d.querySelector('#lqOvKpis .lq-pg-split'),null);
- assert.match(d.getElementById('lqOvKpis').textContent,/oranı için sunucu kaynağı gerekli/);
+ assert.ok(d.querySelector('#lqOvKpis .lq-pg-split'));
  dom.window.close();
 });
 test('real overview never declares no pending action after disclosure load failure',async()=>{
