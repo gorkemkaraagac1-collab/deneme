@@ -43,3 +43,14 @@ test('liste endpointi yoksa da kayıt formu görünür',async()=>{
  assert.match(w.document.getElementById('companyCurrencyProfile').textContent,/Liste alınamadı/);
  assert.ok(w.document.getElementById('currencyProfileForm'));
 });
+test('Düzelt formu doldurur ve supersedesId ile gönderir',async()=>{
+ const {w,calls}=win([{success:true,data:[{id:'P1',functionalCurrency:'TRY',presentationCurrency:'TRY',effectiveFrom:'2026-09-28',effectiveThrough:null,approvalStatus:'APPROVED',version:'V1',superseded:false}]},{success:true,data:{}},{success:true,data:[]}]);
+ mount(w,'C1');await w.loadCompanyCurrencyProfile('C1',true);
+ w.document.querySelector('[data-profile-correct="P1"]').click();
+ const f=w.document.getElementById('currencyProfileForm');
+ assert.equal(f.elements.effectiveFrom.value,'2026-09-28');
+ f.elements.effectiveFrom.value='2026-09-01';f.elements.evidenceId.value='EV';f.elements.sourceReference.value='REF';f.elements.reason.value='başlangıç düzeltmesi';
+ await w.submitCompanyCurrencyProfile({preventDefault(){},target:f},'C1');
+ const body=JSON.parse(calls[1].init.body);
+ assert.equal(body.supersedesId,'P1');assert.equal(body.effectiveFrom,'2026-09-01');assert.equal(body.effectiveThrough,undefined);
+});
