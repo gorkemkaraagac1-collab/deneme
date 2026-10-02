@@ -970,7 +970,10 @@ window.fetch = (input, init = {}) => {
     // cache before any KPI/table/detail consumer is allowed to render. This
     // prevents a first paint from touching the public calculation engine.
     if (isPrivateCalculationApiReady()) {
-      const hydration = await ensurePrivateCalculationCache(contracts);
+      // Short-term / low-value exempt leases have no liability or ROU
+      // measurement (IFRS 16.6); their expense comes from the server report.
+      const measuredContracts = contracts.filter(contract => contract?.shortTermLease !== true && contract?.lowValueAsset !== true);
+      const hydration = await ensurePrivateCalculationCache(measuredContracts);
       if (hydration.failed > 0) {
         console.error("Private hesaplama API önbelleği eksik dolduruldu:", hydration);
       }
@@ -978,9 +981,10 @@ window.fetch = (input, init = {}) => {
       // Keep the release-gate contract explicit: the initial pass warms the
       // current month-end reporting date, then the fallback pass below handles a
       // verified data horizon that ends earlier.
-      const reportingHydration = await ensurePrivateReportingDateCache(contracts, requestedKpiDate);
+      const reportingHydration = await ensurePrivateReportingDateCache(measuredContracts, requestedKpiDate);
       if (reportingHydration.failed > 0) {
-        console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration);
+        console.error("Private reporting-date API önbelleği eksik dolduruldu:", reportingHydration.failed,
+          (reportingHydration.results || []).filter(item => item?.error).map(item => `${item.contract?.id}: ${item.error?.code || item.error?.message}`));
       }
       // If the requested month-end is beyond the verified data horizon, warm
       // only the latest available period for each affected currency. This
