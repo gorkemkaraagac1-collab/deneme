@@ -3070,6 +3070,17 @@ window.fetch = (input, init = {}) => {
       : entries;
   }
 
+
+  // Server lifecycle error codes shown in Turkish (sunucu hata kodları).
+  const LIFECYCLE_ERROR_TEXT = {
+    PAYMENT_L3_CALENDAR_UNSUPPORTED: "Modifikasyon ve yeniden değerlendirme şu an yalnız aylık ödemeli sözleşmelerde destekleniyor.",
+    GROUP_A_INSUFFICIENT_EVIDENCE: "Kiralama tanımlama değerlendirmesi eksik.",
+    GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
+  };
+  function lifecycleErrorText(error) {
+    return LIFECYCLE_ERROR_TEXT[error?.code] || error?.message || String(error);
+  }
+
   async function createReassessment(contract, input) {
     ensureReassessmentState(contract);
     const lockCheck = assertPeriodWritable(contract, input?.effectiveDate || new Date());
@@ -3082,7 +3093,7 @@ window.fetch = (input, init = {}) => {
     } catch (error) {
       return {
         valid: false,
-        errors: [`Private reassessment önizlemesi alınamadı: ${error?.message || error}`]
+        errors: [`Yeniden değerlendirme önizlemesi alınamadı: ${lifecycleErrorText(error)}`]
       };
     }
     if (!result.valid) return result;
@@ -3283,7 +3294,7 @@ window.fetch = (input, init = {}) => {
     } catch (error) {
       return {
         valid: false,
-        errors: [`Private reassessment önizlemesi alınamadı: ${error?.message || error}`]
+        errors: [`Yeniden değerlendirme önizlemesi alınamadı: ${lifecycleErrorText(error)}`]
       };
     }
 
@@ -3784,7 +3795,7 @@ window.fetch = (input, init = {}) => {
     } catch (error) {
       return {
         valid: false,
-        errors: [`Private modifikasyon önizlemesi alınamadı: ${error?.message || error}`]
+        errors: [`Modifikasyon önizlemesi alınamadı: ${lifecycleErrorText(error)}`]
       };
     }
 
@@ -4026,7 +4037,7 @@ window.fetch = (input, init = {}) => {
     } catch (error) {
       return {
         valid: false,
-        errors: [`Private modifikasyon önizlemesi alınamadı: ${error?.message || error}`]
+        errors: [`Modifikasyon önizlemesi alınamadı: ${lifecycleErrorText(error)}`]
       };
     }
 
