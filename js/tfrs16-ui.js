@@ -3082,7 +3082,7 @@ window.fetch = (input, init = {}) => {
 
   // Server lifecycle error codes shown in Turkish (sunucu hata kodları).
   const LIFECYCLE_ERROR_TEXT = {
-    PAYMENT_L3_CALENDAR_UNSUPPORTED: "Modifikasyon ve yeniden değerlendirme şu an yalnız aylık ödemeli sözleşmelerde destekleniyor.",
+    PAYMENT_L3_CALENDAR_UNSUPPORTED: "Aylık olmayan peşin ödemeli sözleşmelerde modifikasyon ve yeniden değerlendirme henüz desteklenmiyor.",
     GROUP_A_INSUFFICIENT_EVIDENCE: "Kiralama tanımlama değerlendirmesi eksik.",
     GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
   };
