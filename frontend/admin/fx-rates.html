@@ -1452,48 +1452,33 @@ async function verifyRate(
 
 async function bulkVerifyRates() {
 
-    const from =
-        document.getElementById(
-            "fromDate"
-        ).value;
+    // Toplu doğrulama listede bekleyen kurların tarih aralığını kapsar; üstteki
+    // tarih alanları yalnızca TCMB senkronizasyonu içindir. Önceden o alanlar
+    // kullanıldığı için senkronizasyon aralığı dışındaki bekleyenler (ör. geçen
+    // haftanın kurları) "0 kayıt doğrulandı" ile kalıyordu.
+    const pendingDates = pendingRatesCache
+        .map(rate => String(rate.rateDate || "").slice(0, 10))
+        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .sort();
 
-
-    const to =
-        document.getElementById(
-            "toDate"
-        ).value;
-
-
-    if (
-        !from ||
-        !to
-    ) {
-
-        setFxMessage(
-            "Toplu doğrulama için başlangıç ve bitiş tarihi seçmelisiniz.",
-            "error"
-        );
-
+    if (!pendingDates.length) {
+        setFxMessage("Doğrulanacak bekleyen kur yok.", "info");
         return;
-
     }
 
-
-    if (from > to) {
-
-        setFxMessage(
-            "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
-            "error"
-        );
-
-        return;
-
-    }
-
+    const shift = (date, days) => {
+        const d = new Date(`${date}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + days);
+        return d.toISOString().slice(0, 10);
+    };
+    // Bir günlük pay, sunucu/tarayıcı saat dilimi farkıyla kayabilecek uç
+    // tarihleri de kapsar; aralıktaki tüm bekleyenler zaten listededir.
+    const from = shift(pendingDates[0], -1);
+    const to = shift(pendingDates[pendingDates.length - 1], 1);
 
     const confirmed =
         confirm(
-            `${from} - ${to} tarih aralığındaki TCMB bekleyen kur kayıtları toplu olarak doğrulansın mı?`
+            `${pendingRatesCache.length} bekleyen TCMB kuru (${formatRateDate(pendingDates[0])} – ${formatRateDate(pendingDates[pendingDates.length - 1])}) toplu olarak doğrulansın mı?`
         );
 
 
