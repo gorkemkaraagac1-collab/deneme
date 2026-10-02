@@ -205,7 +205,7 @@ const checks = [
   ["reporting accrual parses schedule dates defensively", /const eventDate = parseDate\(schedule\[i\]\?\.date\)/.test(engine) && /const rowDate = parseDate\(row\?\.date\)/.test(engine)],
   ["engine gates private results behind API-primary", /window\.LEASEQANT_CALCULATION_API_PRIMARY\s*===\s*true/.test(engine)],
   ["initial refresh waits for private cache hydration", /function refresh\(\)\s*\{[\s\S]{0,500}Array\.isArray\(contracts\)[\s\S]{0,180}PRIVATE_CALCULATION_CACHE\.size === 0/.test(engine)],
-  ["initial hydration warms private month-end reporting-date results", /const requestedKpiDate = getDashboardReportingDate\(new Date\(\)\)[\s\S]{0,260}ensurePrivateReportingDateCache\(contracts, requestedKpiDate\)/.test(engine)],
+  ["initial hydration warms private month-end reporting-date results", /const requestedKpiDate = getDashboardReportingDate\(new Date\(\)\)[\s\S]{0,260}ensurePrivateReportingDateCache\((?:contracts|measuredContracts), requestedKpiDate\)/.test(engine)],
   ["API-primary classification reads the private reporting-date envelope", /function calculateLiabilitySplitAsOf\([\s\S]{0,1800}getPrivateReportingDateResult\(contract, reportingDate\)/.test(engine) && /PRIVATE_REPORTING_DATE_NOT_READY/.test(engine)],
   ["Authority report module requires verified backend packages", /requirePackage/.test(authorityUi) && /REPORTING_PACKAGE_NOT_VERIFIED/.test(authorityUi) && /SERVER_PERSISTED_PRIVATE_REPORTING/.test(authorityUi)],
   // FAZ 2 (2026-09-15): local fallback dalı kaldırıldığı için artık
