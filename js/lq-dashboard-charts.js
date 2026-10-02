@@ -44,16 +44,19 @@
     const opening = l.opening;
     const closing = l.closing || maturity.discountedLeaseLiabilityCarryingAmount;
 
+    // The liability is settled by its contractual lease payments. Total cash
+    // outflow (16.53(g)) also carries short-term/low-value and variable
+    // payments that never touched the liability, so it is not the bridge line.
     const actual = l.actualCashOutflow || q.totalCashOutflowForLeases;
     const scheduled = l.scheduledContractualCash || q.scheduledContractualCash;
-    const paymentPlanned = !hasValue(actual) && hasValue(scheduled);
-    const payment = hasValue(actual) ? actual : (paymentPlanned ? scheduled : (actual || scheduled));
+    const paymentPlanned = hasValue(scheduled);
+    const payment = paymentPlanned ? scheduled : actual;
 
     const steps = [
       { id: "additions", label: "İlk muhasebeleştirme girişleri", field: l.initialRecognitionAdditions },
       { id: "interest", label: "Faiz gideri (etkin faiz)", field: l.interest || q.interestExpense },
-      { id: "payments", label: paymentPlanned ? "Kira ödemeleri (planlanan)" : "Kira ödemeleri", field: payment,
-        note: paymentPlanned ? "Gerçekleşen ödeme kaynağı yok; planlanan sözleşme ödemesi gösteriliyor." : "", negate: true },
+      { id: "payments", label: paymentPlanned ? "Kira ödemeleri (sözleşmesel)" : "Kira ödemeleri", field: payment,
+        note: paymentPlanned ? "Yükümlülüğü azaltan sözleşmesel ödemeler; istisna kira ödemeleri hariç." : "", negate: true },
       { id: "modifications", label: "Modifikasyonlar", field: l.modifications },
       { id: "remeasurements", label: "Yeniden ölçüm", field: l.remeasurements },
       { id: "tms21", label: "TMS 21 kur farkı", field: l.tms21Movement }
