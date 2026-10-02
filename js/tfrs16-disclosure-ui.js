@@ -85,6 +85,7 @@
       fieldRow("Modifikasyon hareketi", liability.modifications),
       fieldRow("Yeniden değerlendirme / ölçüm hareketi", liability.remeasurements),
       fieldRow("TMS 21 kur hareketi", liability.tms21Movement),
+      ...(movement.modificationGainLoss ? [fieldRow("Kısmi fesih kazancı (+) / kaybı (−) (TFRS 16.46(a))", movement.modificationGainLoss)] : []),
       fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
       // Exemption lines only when the server package carries them.
       ...[["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
