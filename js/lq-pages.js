@@ -619,7 +619,7 @@
     if (fr.tab === "liability" || fr.tab === "rou") {
       const liab = fr.tab === "liability";
       const cols = liab
-        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "ÖDEMELER" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: "FARK · TMS 29 / DİĞER", warn: true }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
+        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "KİRA ÖDEMELERİ (SÖZLEŞMESEL)" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: "FARK · TMS 29 / DİĞER", warn: true }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
         : [{ label: "ŞİRKET" }, { label: "AÇILIŞ NDD" }, { label: "İLK MUHASEBELEŞTİRME" }, { label: "SONRAKİ İLAVELER" }, { label: "AMORTİSMAN" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "TMS 29 DÜZELTMESİ", warn: true }, { label: `KAPANIŞ NDD ${trDate(p.periodEnd)}` }];
       const lines = data.map(({ c, d }) => {
         if (!d.ok) return errRow(c, d.e, cols.length - 1);
@@ -629,7 +629,7 @@
           const bm = charts().bridgeModel(d.v);
           const pay = bm.rows.find(r => r.id === "payments");
           const recon = bm.residual === null ? (bm.complete ? `<span class="is-ok lq-pg-c">${ICON_CHECK}</span>` : `<span class="lq-pg-need">Eksik</span>`) : `<span class="lq-pg-need">Fark</span>`;
-          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}${bm.paymentPlanned ? "<small> plan</small>" : ""}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-warn">${bm.residual === null ? "—" : acc0(bm.residual)}</span><span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
+          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}${""}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-warn">${bm.residual === null ? "—" : acc0(bm.residual)}</span><span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
         }
         const r = m.rou || {};
         const dep = fv(r.depreciation);
