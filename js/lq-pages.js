@@ -58,7 +58,11 @@
     REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Endeks/enflasyon düzeltmesi, erken ödeme vb. olaylar raporda henüz yok",
     REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Düzensiz ödeme planında modifikasyon henüz raporlanmıyor",
     REPORTING_LIFECYCLE_EVENT_NOT_APPLIED: "Olayın durumu veya yürürlük tarihi eksik",
-        REPORTING_LIFECYCLE_EXEMPTION_NOT_SUPPORTED: "İstisna kapsamındaki sözleşmede modifikasyon desteklenmiyor",
+    REPORTING_SALE_LEASEBACK_NOT_SUPPORTED: "Satış ve geri kiralama raporda henüz yok",
+    REPORTING_FINANCE_SUBLEASE_NOT_SUPPORTED: "Finansal alt kiralama raporda henüz yok",
+    REPORTING_SUBLEASE_CURRENCY_NOT_SUPPORTED: "Alt kiralama para birimi ana kiralamadan farklı",
+    REPORTING_SUBLEASE_INVALID: "Alt kiralama şartları eksik veya geçersiz",
+    REPORTING_LIFECYCLE_EXEMPTION_NOT_SUPPORTED: "İstisna kapsamındaki sözleşmede modifikasyon desteklenmiyor",
     REPORTING_FEATURE_NOT_SUPPORTED: "Desteklenmeyen sözleşme özelliği",
     PAYMENT_STUB_UNSUPPORTED: "Kira süresi ödeme dönemlerine tam bölünmüyor",
     ESCALATION_POLICY_UNSUPPORTED: "Özel artış dönemi desteklenmiyor"
