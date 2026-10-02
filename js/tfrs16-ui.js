@@ -3087,7 +3087,13 @@ window.fetch = (input, init = {}) => {
     GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
   };
   function lifecycleErrorText(error) {
-    return LIFECYCLE_ERROR_TEXT[error?.code] || error?.message || String(error);
+    const known = LIFECYCLE_ERROR_TEXT[error?.code];
+    if (known) return known;
+    // Show the blocking Group A gate and reason codes so the cause is visible.
+    const details = error?.details || error?.body || {};
+    const reasons = Array.isArray(details.reasonCodes) && details.reasonCodes.length ? details.reasonCodes.join(", ") : (error?.code || "");
+    const suffix = [details.gate, reasons].filter(Boolean).join(" · ");
+    return `${error?.message || String(error)}${suffix ? ` (${suffix})` : ""}`;
   }
 
   async function createReassessment(contract, input) {
