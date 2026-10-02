@@ -405,7 +405,12 @@ window.fetch = (input, init = {}) => {
       indexReviewMonth: details.indexReviewMonth !== null && details.indexReviewMonth !== undefined ? Number(details.indexReviewMonth) : null,
       indexReviewDay: details.indexReviewDay !== null && details.indexReviewDay !== undefined ? Number(details.indexReviewDay) : null,
       renewalOption: details.renewalOption === true,
-      renewalOptionExpectedToExercise: details.renewalOptionExpectedToExercise === true,
+      // Lease-term judgements (IFRS 16.18-21): null means "not judged yet",
+      // which is different from "not reasonably certain" (false).
+      renewalOptionExpectedToExercise: typeof details.renewalOptionExpectedToExercise === "boolean" ? details.renewalOptionExpectedToExercise : null,
+      terminationOptionExpectedToExercise: typeof details.terminationOptionExpectedToExercise === "boolean" ? details.terminationOptionExpectedToExercise : null,
+      purchaseOptionExpectedToExercise: typeof details.purchaseOptionExpectedToExercise === "boolean" ? details.purchaseOptionExpectedToExercise : null,
+      leaseTermEvidenceReference: details.leaseTermEvidenceReference ? String(details.leaseTermEvidenceReference) : null,
       renewalEndDate: details.renewalEndDate || null,
       terminationOption: details.terminationOption === true,
       terminationDate: details.terminationDate || null,
