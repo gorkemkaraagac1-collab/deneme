@@ -11,7 +11,8 @@ function inputs(canEdit) {
       'notYetCommencedCommitments', 'leaseRestrictionsOrCovenants', 'saleAndLeasebackInformation', 'shortTermElection', 'lowValueElection',
       'rentConcessionExpedient'].map(k => [k, field('Sistem metni')])),
     maturity: { source: 'SYSTEM_DEFAULT', bands: [{ label: '1 yıla kadar', fromDaysInclusive: 0, throughDaysInclusive: 365 },
-      { label: '1 yıldan uzun', fromDaysInclusive: 366, throughDaysInclusive: null }], defaultBands: [] } };
+      { label: '1 yıldan uzun', fromDaysInclusive: 366, throughDaysInclusive: null }], defaultBands: [] },
+    tms29: { applies: true, source: 'SYSTEM_DEFAULT', default: true } };
 }
 const tick = () => new Promise(r => setTimeout(r, 0));
 function setup(data) {
@@ -52,4 +53,16 @@ test('read-only users see values without editing controls', async () => {
   assert.equal(w.document.querySelector('[data-class]'), null);
   assert.equal(w.document.querySelector('[data-di="save"]').disabled, true);
   assert.match(w.document.querySelector('.lq-di-body').textContent, /Salt okunur/);
+});
+
+test('TMS 29 setting is sent when toggled', async () => {
+  const { w, saved } = setup(inputs(true));
+  w.LeaseQantDisclosureInputsUi.open({ companyId: 'CO', period });
+  await tick();
+  const box = w.document.querySelector('[data-tms29]');
+  assert.equal(box.checked, true);
+  box.checked = false; box.dispatchEvent(new w.Event('change', { bubbles: true }));
+  w.document.querySelector('[data-di="save"]').click();
+  await tick(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(saved[0].changes)), { tms29Applies: false });
 });

@@ -183,7 +183,10 @@
     if (d.assetClassContracts?.length) parts.push(`varlık sınıfı (${d.assetClassContracts.length} sözleşme, sözleşmedeki sınıftan)`);
     if (d.entityInputFields?.length) parts.push(`şirket beyanları (${d.entityInputFields.length} alan, sözleşme kayıtlarından)`);
     if (d.cashFromContractualSchedule?.length) parts.push("gerçekleşen kira nakdi (defter verisi yok, ödeme planından)");
-    const outage = d.unavailableProviders?.length ? " Bazı girdi kaynaklarına ulaşılamadı; ilgili alanlar eksik gösteriliyor." : "";
+    if (d.tms29) parts.push("TMS 29 uygulama kararı (TRY ve 31.12.2023 sonrası için uygulanır)");
+    const outage = (d.unavailableProviders || []).includes("tms29IndexProvider")
+      ? " TÜFE endekslerine ulaşılamadı; kullanım hakkı tutarları hesaplanamıyor."
+      : d.unavailableProviders?.length ? " Bazı girdi kaynaklarına ulaşılamadı; ilgili alanlar eksik gösteriliyor." : "";
     if (!parts.length && !outage) return "";
     return `<div class="lq-dn-muted" data-system-defaults role="note" style="margin:8px 0;padding:10px 12px;border:1px solid #F2D7A6;background:#FFF8EC;border-radius:8px">`
       + `<strong>Sistem varsayılanı kullanılan girdiler:</strong> ${escapeHtml(parts.join("; ") || "—")}.${escapeHtml(outage)}`
