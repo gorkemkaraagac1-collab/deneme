@@ -14448,8 +14448,9 @@ ${renderAccountingCenterBulkPromo()}
         // deseniyle (persistContractToApi'deki ile aynı ilke) tutarlı
         // olacak şekilde ÖNCE API'ye siliniyor, yerel state SADECE
         // başarılı olursa değiştiriliyor.
+        let deleteResult = null;
         try {
-          await deleteContractFromApi(deletedId);
+          deleteResult = await deleteContractFromApi(deletedId);
         } catch (apiErr) {
           console.error("API silme hatası:", apiErr);
           showAlert(
@@ -14466,7 +14467,7 @@ ${renderAccountingCenterBulkPromo()}
           entityType: "CONTRACT",
           entityId: contract.id,
           contractId: contract.id,
-          reason: "Contract deleted",
+          reason: deleteResult?.archived ? "Contract archived (trusted calculation history kept)" : "Contract deleted",
           oldValue: deletedSnapshot,
           newValue: null,
           metadata: { deletedContractSnapshot: deletedSnapshot, auditRetention: "central" }
@@ -14486,6 +14487,12 @@ ${renderAccountingCenterBulkPromo()}
         closeDetail();
 
         refresh();
+
+        // Sözleşmenin güvenilir hesaplama geçmişi varsa sunucu silmek
+        // yerine arşivler: kayıtlar korunur, listeden ve raporlardan çıkar.
+        if (deleteResult?.archived) {
+          showAlert(`${deletedId} hesaplama geçmişi korunduğu için silinmedi, arşivlendi. Sözleşme listelerden ve raporlardan çıkarıldı.`);
+        }
       }
     );
 
