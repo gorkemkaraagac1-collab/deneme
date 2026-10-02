@@ -90,7 +90,8 @@
       // Exemption lines only when the server package carries them.
       ...[["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
         ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
-        ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments]]
+        ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments],
+        ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null]]
         .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field))
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
