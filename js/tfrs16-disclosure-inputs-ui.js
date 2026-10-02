@@ -12,7 +12,8 @@
     ["unrecognizedVariableExposure", "Ölçüme dahil edilmeyen değişken ödemeler"], ["residualValueGuaranteeExposure", "Kalıntı değer garantileri"],
     ["notYetCommencedCommitments", "Henüz başlamamış kiralama taahhütleri"], ["leaseRestrictionsOrCovenants", "Kiralama kısıtları ve taahhütleri"],
     ["saleAndLeasebackInformation", "Satış ve geri kiralama"], ["shortTermElection", "Kısa vadeli kiralama istisnası"],
-    ["lowValueElection", "Düşük değerli varlık istisnası"], ["rentConcessionExpedient", "Kira imtiyazı kolaylaştırıcı uygulaması"]];
+    ["lowValueElection", "Düşük değerli varlık istisnası"], ["rentConcessionExpedient", "Kira imtiyazı kolaylaştırıcı uygulaması"],
+    ["investmentPropertyRou", "Yatırım amaçlı gayrimenkul kullanım hakkı (TFRS 16.56)"], ["revaluedRou", "Yeniden değerlenmiş kullanım hakkı (TFRS 16.57)"]];
   const ERRORS = { DISCLOSURE_INPUT_REASON_REQUIRED: "'Uygulanmaz' için gerekçe yazın.", DISCLOSURE_INPUT_TEXT_REQUIRED: "Metin boş olamaz.",
     DISCLOSURE_INPUT_BANDS_INVALID: "Vade dilimleri artan ve birbirini izleyen gün sınırlarıyla girilmeli; son dilim açık uçludur.",
     DISCLOSURE_INPUT_WRITE_DENIED: "Bu işlem için yazma yetkiniz yok.", PERIOD_CLOSED: "Dönem kapalı; değişiklik yapılamaz.",
@@ -97,7 +98,7 @@
                 : esc((CLASSES.find(([k]) => k === value) || [, value])[1])}</td>
               <td>${chip(source)}${editable && source === "COMPANY" ? ` <button type="button" class="lq-di-link" data-class-reset="${esc(c.id)}">Varsayılan</button>` : ""}</td></tr>`;
           }).join("") || '<tr><td colspan="4" class="lq-di-muted">Bu dönemde sözleşme yok.</td></tr>'}</tbody></table></section>
-        <section class="lq-di-sec"><h3>Şirket beyanları</h3><div style="display:grid;gap:10px">${FIELDS.map(([key, label]) => {
+        <section class="lq-di-sec"><h3>Şirket beyanları</h3><div style="display:grid;gap:10px">${FIELDS.filter(([key]) => data.disclosures[key]).map(([key, label]) => {
           const pending = changes.disclosures[key];
           const current = pending === undefined ? data.disclosures[key] : pending === null ? { ...data.disclosures[key].default, source: "SYSTEM_DEFAULT" } : { ...pending, source: "COMPANY" };
           const na = current.status === "NOT_APPLICABLE";

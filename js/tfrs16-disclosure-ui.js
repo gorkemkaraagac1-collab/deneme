@@ -42,12 +42,15 @@
     };
   }
 
+  const CLASS_LABELS = Object.freeze({ PROPERTY: "Gayrimenkul", VEHICLES: "Taşıtlar", PLANT_EQUIPMENT: "Makine ve ekipman",
+    IT_EQUIPMENT: "Bilgi teknolojileri ekipmanı", OTHER: "Diğer" });
+
   function classRows(label, field) {
     if (!field || !VALUE_STATUSES.has(field.status) || !Array.isArray(field.value)) {
       return [fieldRow(label, field)];
     }
     if (!field.value.length) return [fieldRow(label, field)];
-    return field.value.map(item => fieldRow(`${label} — ${item.assetClass || "?"}`, {
+    return field.value.map(item => fieldRow(`${label} — ${CLASS_LABELS[item.assetClass] || item.assetClass || "?"}`, {
       value: item.value, status: field.status, currency: item.currency || field.currency,
       fieldId: field.fieldId, sourceIds: item.sourceIds || field.sourceIds,
       evidenceIds: item.evidenceIds || field.evidenceIds
@@ -82,7 +85,12 @@
       fieldRow("Modifikasyon hareketi", liability.modifications),
       fieldRow("Yeniden değerlendirme / ölçüm hareketi", liability.remeasurements),
       fieldRow("TMS 21 kur hareketi", liability.tms21Movement),
-      fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount)
+      fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
+      // Exemption lines only when the server package carries them.
+      ...[["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
+        ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
+        ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments]]
+        .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field))
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
       maturity.discountedLeaseLiabilityCarryingAmount)];
@@ -217,6 +225,8 @@
     notYetCommencedCommitments: "Henüz başlamamış kiralama taahhütleri", leaseRestrictionsOrCovenants: "Kiralama kısıtları ve taahhütleri",
     saleAndLeasebackInformation: "Satış ve geri kiralama açıklaması", shortTermElection: "Kısa vadeli kiralama tercihi",
     lowValueElection: "Düşük değerli varlık tercihi", rentConcessionExpedient: "Kira imtiyazı kolaylaştırıcı uygulaması",
+    investmentPropertyRou: "Yatırım amaçlı gayrimenkul kullanım hakkı", revaluedRou: "Yeniden değerlenmiş kullanım hakkı",
+    shortTermLeaseCommitments: "Kısa vadeli kiralama taahhütleri",
     IFRS16_53C_SHORT_TERM_LEASE_EXPENSE: "Kısa vadeli kiralama gideri", IFRS16_53D_LOW_VALUE_LEASE_EXPENSE: "Düşük değerli kiralama gideri",
     IFRS16_53F_SUBLEASE_INCOME: "Alt kiralama geliri", IFRS16_53I_SALE_LEASEBACK_GAIN_LOSS: "Satış ve geri kiralama kazanç/kaybı",
     IFRS16_55_SHORT_TERM_COMMITMENTS: "Kısa vadeli kiralama taahhütleri", IFRS16_56_INVESTMENT_PROPERTY_ROU: "Yatırım amaçlı gayrimenkul kullanım hakkı",
