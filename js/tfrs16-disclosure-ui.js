@@ -167,6 +167,15 @@
      tutar üretilmez. Mutabakat kontrolleri sunucunun reconciliation alanından. */
   const SECTION = { asset: ["14.3", "Kullanım hakkı varlıkları"], liability: ["14.4", "Kira yükümlülükleri"], liquidity: ["14.5", "Vade analizi (iskonto edilmemiş)"] };
   const trDateD = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? `${m[3]}.${m[2]}.${m[1]}` : "—"; };
+  // Contracts whose liability roll-forward does not foot (server check).
+  function movementExceptionsHtml(rec) {
+    const list = Array.isArray(rec?.periodMovementExceptions) ? rec.periodMovementExceptions : [];
+    if (!list.length) return "";
+    const nf = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `<div class="lq-dn-muted" data-movement-exceptions><strong>Hareketi tutmayan sözleşmeler (${list.length})</strong><ul>${list.map(x =>
+      `<li>${escapeHtml(x.contractId)} · fark ${escapeHtml(nf.format(Number(x.difference) || 0))} ${escapeHtml(x.currency || "")}</li>`).join("")}</ul></div>`;
+  }
+
   // Trusted source rejections the user can act on (sunucu ret gerekçeleri).
   const SOURCE_REASON_LABELS = Object.freeze({
     LEASE_TERM_EVIDENCE_REQUIRED: "Kira süresi değerlendirme referansı eksik",
@@ -249,7 +258,7 @@
     const checkHtml = ready ? checks.map(([k, label]) => {
       const v = rec[k];
       return `<div class="lq-dn-check ${v === true ? "is-ok" : v === false ? "is-bad" : "is-na"}"><b aria-hidden="true">${v === true ? "✓" : v === false ? "✗" : "–"}</b><span>${e(label)}${v === null || v === undefined ? "<small>Kaynak verisi yok</small>" : ""}</span></div>`;
-    }).join("") : '<p class="lq-dn-muted">Paket yüklenince gösterilir.</p>';
+    }).join("") + movementExceptionsHtml(rec) : '<p class="lq-dn-muted">Paket yüklenince gösterilir.</p>';
     const outline = tabs.map(([k]) => {
       const [no, title] = SECTION[k];
       const n = ready ? (rowsBy[k] || []).filter(r => !VALUE_STATUSES.has(r.status) && r.status !== "NOT_APPLICABLE").length : null;
