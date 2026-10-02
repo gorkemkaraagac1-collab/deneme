@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Defter Verileri - LeaseQant</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <style>
+        .lg-page { display: grid; gap: 20px; }
+        .lg-intro h1 { margin: 0 0 4px; font: 600 24px var(--display); }
+        .lg-intro p { max-width: 860px; margin: 0; color: var(--text-light); font-size: 12.5px; line-height: 1.6; }
+        .lg-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+        .lg-row .form-group { margin: 0; min-width: 240px; }
+        .lg-status { font-size: 12.5px; margin-top: 10px; }
+        .lg-status.is-err { color: var(--danger); }
+        .lg-status.is-ok { color: #0F766E; }
+        .lg-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .lg-table th, .lg-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+        .lg-table td.num, .lg-table th.num { text-align: right; font-family: var(--mono); }
+        .lg-totals { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+        .lg-errors { max-height: 220px; overflow: auto; font-size: 12px; color: var(--danger); }
+        .lg-scroll { overflow-x: auto; }
+    </style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main-content">
+<header class="top-header">
+    <div class="page-title">Defter Verileri</div>
+    <div class="user-info">
+        <span class="username" id="adminUsername">Loading...</span>
+        <span class="role-badge">ADMIN</span>
+        <button class="btn-logout" onclick="logout()">Çıkış</button>
+    </div>
+</header>
+<div class="content-area lg-page">
+    <section class="lg-intro">
+        <h1>Gerçekleşen kira ödemeleri</h1>
+        <p>Muhasebe defterindeki kira ödemelerini Excel ile yükleyin. Dipnotlarda (TFRS 16.53(e) ve (g)) yüklenen dönemler için defter verisi kullanılır;
+           defter verisi olmayan dönem ve kalemler sözleşmesel ödeme planından hesaplanır ve dipnotta "plan bazlı tahmin" olarak işaretlenir.
+           Aynı fiş, nakit türü ve sözleşme ikinci kez yüklenirse tekrar sayılmaz.</p>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">1 · Şirket ve dosya</div>
+        <div class="lg-row">
+            <div class="form-group">
+                <label for="lgCompany">Şirket</label>
+                <select id="lgCompany"></select>
+            </div>
+            <div class="form-group">
+                <label for="lgFile">Excel dosyası (.xlsx)</label>
+                <input id="lgFile" type="file" accept=".xlsx,.xls">
+            </div>
+            <button class="btn btn-outline" type="button" id="lgTemplate">Şablonu indir</button>
+        </div>
+        <p class="lg-status" style="color:var(--text-light)">Sütunlar: Fiş Tarihi · Sözleşme ID (isteğe bağlı) · Tutar · Para Birimi · Nakit Türü (Anapara / Faiz / Diğer / Değişken) · Fiş No.
+           "Diğer" kısa vadeli ve düşük değerli kira ödemeleri içindir; "Değişken" ciroya/kullanıma bağlı ödemelerdir. Para birimi şirketin sunum para birimi olmalıdır.</p>
+    </section>
+
+    <section class="lq-box" id="lgPreviewBox" hidden>
+        <div class="lq-kick">2 · Ön izleme</div>
+        <div class="lg-totals" id="lgTotals"></div>
+        <div class="lg-scroll"><table class="lg-table" id="lgPreview"></table></div>
+        <div class="lg-row" style="margin-top:12px">
+            <button class="btn btn-primary" type="button" id="lgUpload">Defter verisini yükle</button>
+        </div>
+        <div class="lg-status" id="lgUploadStatus" role="status" aria-live="polite"></div>
+        <div class="lg-errors" id="lgErrors"></div>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">Yüklemeler</div>
+        <div class="lg-status" id="lgBatchStatus"></div>
+        <div class="lg-scroll"><table class="lg-table" id="lgBatches"></table></div>
+    </section>
+</div>
+</main>
+
+<script src="../js/admin.js"></script>
+<script>
+const CASH_TYPES = { "anapara": "PRINCIPAL", "principal": "PRINCIPAL", "faiz": "INTEREST", "interest": "INTEREST",
+    "diger": "OTHER", "other": "OTHER", "degisken": "VARIABLE", "variable": "VARIABLE" };
+const CASH_LABEL = { PRINCIPAL: "Anapara", INTEREST: "Faiz", OTHER: "Diğer", VARIABLE: "Değişken" };
+const LEDGER_ERRORS = { LEDGER_DATE_INVALID: "Tarih geçersiz", LEDGER_AMOUNT_INVALID: "Tutar geçersiz", LEDGER_CASH_TYPE_INVALID: "Nakit türü geçersiz",
+    LEDGER_DOCUMENT_REQUIRED: "Fiş No zorunlu", LEDGER_CONTRACT_NOT_FOUND: "Sözleşme bu şirkette yok",
+    LEDGER_PROFILE_NOT_COVERING_DATE: "Bu tarih için şirketin onaylı para birimi profili yok", LEDGER_CURRENCY_NOT_PRESENTATION: "Para birimi şirketin sunum para birimi değil" };
+let parsedRows = [], sourceFile = null;
+
+const norm = v => String(v ?? "").toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/[^a-z0-9]+/g, " ").trim();
+const HEADERS = { postingDate: ["fis tarihi", "tarih", "odeme tarihi", "posting date", "date"], contractId: ["sozlesme id", "sozlesme", "contract id"],
+    amount: ["tutar", "amount"], currency: ["para birimi", "currency"], cashType: ["nakit turu", "tur", "cash type", "type"],
+    documentReference: ["fis no", "fis numarasi", "belge no", "document", "document reference"] };
+const pick = (row, key) => { const hit = Object.keys(row).find(k => HEADERS[key].includes(norm(k))); return hit === undefined ? "" : row[hit]; };
+function isoDate(value) {
+    if (value instanceof Date && !Number.isNaN(value.getTime()))
+        return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+    const s = String(value || "").trim();
+    let m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(s);
+    if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : s;
+}
+function amount(value) {
+    if (typeof value === "number") return value;
+    const s = String(value || "").trim().replace(/\s/g, "");
+    // Turkish "1.234,56" or plain "1234.56"
+    return Number(/,\d{1,2}$/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, ""));
+}
+function status(id, text, kind) { const el = document.getElementById(id); el.textContent = text || ""; el.className = `lg-status${kind ? ` is-${kind}` : ""}`; }
+const money = n => Number(n || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+async function readFile(file) {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    // The sheet whose header row has a "Fiş Tarihi"/"Tutar" column.
+    const name = wb.SheetNames.find(n => {
+        const header = (XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "" })[0] || []).map(norm);
+        return header.some(h => HEADERS.amount.includes(h)) && header.some(h => HEADERS.postingDate.includes(h));
+    }) || wb.SheetNames[0];
+    return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "" }).map(row => ({
+        postingDate: isoDate(pick(row, "postingDate")), contractId: String(pick(row, "contractId") || "").trim(),
+        amount: amount(pick(row, "amount")), currency: String(pick(row, "currency") || "").trim().toUpperCase(),
+        cashType: CASH_TYPES[norm(pick(row, "cashType"))] || String(pick(row, "cashType") || "").trim(),
+        documentReference: String(pick(row, "documentReference") || "").trim()
+    })).filter(r => r.postingDate || r.amount || r.documentReference);
+}
+
+function renderPreview() {
+    const box = document.getElementById("lgPreviewBox");
+    box.hidden = !parsedRows.length;
+    if (!parsedRows.length) return;
+    const totals = {};
+    parsedRows.forEach(r => { totals[r.cashType] = (totals[r.cashType] || 0) + (Number.isFinite(r.amount) ? r.amount : 0); });
+    document.getElementById("lgTotals").innerHTML = `<span class="lq-chip b">${parsedRows.length} satır</span>`
+        + Object.entries(totals).map(([t, v]) => `<span class="lq-chip n">${escapeHtml(CASH_LABEL[t] || t)} · ${money(v)}</span>`).join("");
+    document.getElementById("lgPreview").innerHTML = `<thead><tr><th>Satır</th><th>Fiş tarihi</th><th>Sözleşme</th><th class="num">Tutar</th><th>Para birimi</th><th>Nakit türü</th><th>Fiş No</th></tr></thead><tbody>`
+        + parsedRows.slice(0, 50).map((r, i) => `<tr><td>${i + 2}</td><td>${escapeHtml(r.postingDate)}</td><td>${escapeHtml(r.contractId || "—")}</td><td class="num">${Number.isFinite(r.amount) ? money(r.amount) : "?"}</td><td>${escapeHtml(r.currency)}</td><td>${escapeHtml(CASH_LABEL[r.cashType] || r.cashType)}</td><td>${escapeHtml(r.documentReference)}</td></tr>`).join("")
+        + `</tbody>` + (parsedRows.length > 50 ? `<tfoot><tr><td colspan="7">… ve ${parsedRows.length - 50} satır daha</td></tr></tfoot>` : "");
+}
+
+async function upload() {
+    const companyId = document.getElementById("lgCompany").value;
+    const button = document.getElementById("lgUpload");
+    document.getElementById("lgErrors").innerHTML = "";
+    if (!companyId || !parsedRows.length) return;
+    button.disabled = true; status("lgUploadStatus", "Yükleniyor…");
+    try {
+        const response = await fetch(`${AdminAPI.baseURL}/ledger-postings`, { method: "POST", headers: AdminAPI.getHeaders(),
+            body: JSON.stringify({ companyId, rows: parsedRows, sourceFile }) });
+        const result = await response.json();
+        if (!result.success) {
+            status("lgUploadStatus", result.code === "LEDGER_TABLE_NOT_MIGRATED"
+                ? "Defter tablosu veritabanında henüz oluşturulmamış (migration 011)." : `Yükleme reddedildi: ${result.error || result.code}`, "err");
+            if (Array.isArray(result.details)) document.getElementById("lgErrors").innerHTML = `<ul>${result.details.map(d =>
+                `<li>Satır ${escapeHtml(String(d.line))}: ${escapeHtml(LEDGER_ERRORS[d.code] || d.code)}</li>`).join("")}</ul>`;
+            return;
+        }
+        const d = result.data;
+        status("lgUploadStatus", `${d.inserted} satır yüklendi${d.duplicates ? `, ${d.duplicates} satır daha önce yüklendiği için atlandı` : ""}.`, "ok");
+        parsedRows = []; document.getElementById("lgFile").value = "";
+        await loadBatches();
+    } catch (error) {
+        status("lgUploadStatus", `Yükleme başarısız: ${error.message}`, "err");
+    } finally { button.disabled = false; }
+}
+
+async function loadBatches() {
+    const companyId = document.getElementById("lgCompany").value;
+    const table = document.getElementById("lgBatches");
+    if (!companyId) { table.innerHTML = ""; return; }
+    try {
+        const response = await fetch(`${AdminAPI.baseURL}/ledger-postings?companyId=${encodeURIComponent(companyId)}`, { headers: AdminAPI.getHeaders() });
+        const result = await response.json();
+        if (!result.success) { status("lgBatchStatus", describeApiError(result, "Yüklemeler alınamadı."), "err"); return; }
+        if (!result.data.migrated) { status("lgBatchStatus", "Defter tablosu henüz oluşturulmamış (migration 011). O zamana kadar dipnotlar plan bazlı tahmin kullanır.", "err"); table.innerHTML = ""; return; }
+        status("lgBatchStatus", result.data.batches.length ? "" : "Bu şirket için yüklenmiş defter verisi yok; dipnotlar plan bazlı tahmin kullanır.");
+        table.innerHTML = result.data.batches.length ? `<thead><tr><th>Yükleme</th><th>Dosya</th><th>Fiş tarihleri</th><th class="num">Satır</th><th class="num">Toplam</th><th>Durum</th><th></th></tr></thead><tbody>`
+            + result.data.batches.map(b => `<tr><td>${b.uploaded_at ? formatDate(b.uploaded_at) : "—"}</td><td>${escapeHtml(b.source_file || "—")}</td>
+                <td>${escapeHtml(formatDateShort(b.first_date))} – ${escapeHtml(formatDateShort(b.last_date))}</td><td class="num">${b.rows}</td>
+                <td class="num">${money(b.total)} ${escapeHtml(b.currency || "")}</td>
+                <td>${b.status === "ACTIVE" ? '<span class="lq-chip ok">Geçerli</span>' : '<span class="lq-chip n">İptal</span>'}</td>
+                <td>${b.status === "ACTIVE" ? `<button class="btn btn-outline" type="button" data-void="${escapeHtml(b.batch_id)}">İptal et</button>` : ""}</td></tr>`).join("") + `</tbody>` : "";
+    } catch (error) { status("lgBatchStatus", `Yüklemeler alınamadı: ${error.message}`, "err"); }
+}
+
+async function voidBatch(batchId) {
+    if (!confirm("Bu yüklemedeki tüm satırlar iptal edilsin mi? Dipnotlar bu satırları artık kullanmaz.")) return;
+    const companyId = document.getElementById("lgCompany").value;
+    const response = await fetch(`${AdminAPI.baseURL}/ledger-postings/batches/${encodeURIComponent(batchId)}/void`, { method: "POST",
+        headers: AdminAPI.getHeaders(), body: JSON.stringify({ companyId }) });
+    const result = await response.json();
+    status("lgBatchStatus", result.success ? `${result.data.voided} satır iptal edildi.` : describeApiError(result, "İptal edilemedi."), result.success ? "ok" : "err");
+    await loadBatches();
+}
+
+function downloadTemplate() {
+    const rows = [
+        { "Fiş Tarihi": "30.06.2026", "Sözleşme ID": "LEASE-001", "Tutar": 98000, "Para Birimi": "TRY", "Nakit Türü": "Anapara", "Fiş No": "MHS-2026-06-0145" },
+        { "Fiş Tarihi": "30.06.2026", "Sözleşme ID": "LEASE-001", "Tutar": 27000, "Para Birimi": "TRY", "Nakit Türü": "Faiz", "Fiş No": "MHS-2026-06-0145" },
+        { "Fiş Tarihi": "30.06.2026", "Sözleşme ID": "", "Tutar": 4200, "Para Birimi": "TRY", "Nakit Türü": "Diğer", "Fiş No": "MHS-2026-06-0190" }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Defter");
+    XLSX.writeFile(wb, "LeaseQant_Defter_Kira_Odemeleri.xlsx");
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    const ok = await checkAdminAuth();
+    if (ok === false) return;
+    const select = document.getElementById("lgCompany");
+    const result = await AdminAPI.getCompanies({ limit: 500 });
+    const companies = (result.success ? result.data || [] : []).filter(c => (c.status || "ACTIVE") === "ACTIVE");
+    select.innerHTML = companies.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`).join("");
+    select.addEventListener("change", () => { parsedRows = []; renderPreview(); loadBatches(); });
+    document.getElementById("lgFile").addEventListener("change", async event => {
+        const file = event.target.files[0];
+        status("lgUploadStatus", ""); document.getElementById("lgErrors").innerHTML = "";
+        if (!file) return;
+        try { parsedRows = await readFile(file); sourceFile = file.name; renderPreview(); }
+        catch (error) { parsedRows = []; renderPreview(); status("lgBatchStatus", `Dosya okunamadı: ${error.message}`, "err"); }
+    });
+    document.getElementById("lgUpload").addEventListener("click", upload);
+    document.getElementById("lgTemplate").addEventListener("click", downloadTemplate);
+    document.getElementById("lgBatches").addEventListener("click", event => {
+        const button = event.target.closest("[data-void]");
+        if (button) voidBatch(button.dataset.void);
+    });
+    await loadBatches();
+});
+</script>
+</body>
+</html>
