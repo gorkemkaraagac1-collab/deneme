@@ -167,6 +167,22 @@
      tutar üretilmez. Mutabakat kontrolleri sunucunun reconciliation alanından. */
   const SECTION = { asset: ["14.3", "Kullanım hakkı varlıkları"], liability: ["14.4", "Kira yükümlülükleri"], liquidity: ["14.5", "Vade analizi (iskonto edilmemiş)"] };
   const trDateD = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? `${m[3]}.${m[2]}.${m[1]}` : "—"; };
+  // Trusted source rejections the user can act on (sunucu ret gerekçeleri).
+  const SOURCE_REASON_LABELS = Object.freeze({
+    LEASE_TERM_EVIDENCE_REQUIRED: "Kira süresi değerlendirme referansı eksik",
+    RENEWAL_OPTION_JUDGEMENT_REQUIRED: "Yenileme opsiyonu kararı eksik",
+    TERMINATION_OPTION_JUDGEMENT_REQUIRED: "Fesih opsiyonu kararı eksik",
+    PURCHASE_OPTION_JUDGEMENT_REQUIRED: "Satın alma opsiyonu kararı eksik",
+    RENEWAL_END_DATE_REQUIRED: "Yenileme sonrası bitiş tarihi eksik",
+    TERMINATION_DATE_REQUIRED: "Fesih tarihi eksik veya süre dışında",
+    TERMINATION_PENALTY_MEASUREMENT_UNSUPPORTED: "Kesin fesihte ceza ölçümü desteklenmiyor",
+    PURCHASE_OPTION_PRICE_MEASUREMENT_UNSUPPORTED: "Kesin satın almada bedel ölçümü desteklenmiyor",
+    SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna için süre 12 ayı aşıyor",
+    REPORTING_FX_RATE_REQUIRED: "Doğrulanmış TCMB kuru eksik (Yönetim → Döviz kurları)",
+    TRUSTED_ROUTE_UNSUPPORTED: "Desteklenmeyen sözleşme yapısı (ör. uygulanmış modifikasyon)",
+    DISCLOSURE_ENTITY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili yok",
+    CALCULATION_CONTRACT_INACTIVE: "Sözleşme aktif değil"
+  });
   const GAP_LABELS = Object.freeze({
     rouDepreciationByAssetClass: "Varlık sınıfına göre amortisman", rouCarryingAmountByAssetClass: "Varlık sınıfına göre kapanış",
     totalCashOutflowForLeases: "Gerçekleşen toplam kira nakdi", actualPrincipalCashOutflow: "Gerçekleşen anapara nakdi",
@@ -337,8 +353,15 @@
         const succeeded = results.filter(result => result?.success === true);
         const failed = results.filter(result => result?.success !== true);
         if (failed.length) {
-          const codes = [...new Set(failed.map(result => result?.code || "TRUSTED_DISCLOSURE_SOURCE_FAILED"))];
-          state.productionSummary = `${succeeded.length}/${contractIds.length} sözleşme için kaynak oluşturuldu. Kalan işlem sunucu tarafından reddedildi: ${codes.join(", ")}.`;
+          // Group by reason so the user sees which contracts need what.
+          const byCode = new Map();
+          failed.forEach(result => {
+            const code = result?.code || "TRUSTED_DISCLOSURE_SOURCE_FAILED";
+            if (!byCode.has(code)) byCode.set(code, []);
+            byCode.get(code).push(String(result?.contractId || "?"));
+          });
+          const reasons = [...byCode].map(([code, ids]) => `${SOURCE_REASON_LABELS[code] ? `${SOURCE_REASON_LABELS[code]} [${code}]` : code} (${ids.join(", ")})`);
+          state.productionSummary = `${succeeded.length}/${contractIds.length} sözleşme için kaynak oluşturuldu. Kalan sözleşmeler: ${reasons.join("; ")}.`;
           state.producing = false;
           draw();
           return;
