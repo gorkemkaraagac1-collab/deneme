@@ -60,13 +60,14 @@
     doc.body.appendChild(back);
     const body = back.querySelector(".lq-di-body"), msg = back.querySelector(".lq-di-msg"), save = back.querySelector('[data-di="save"]');
     let data = null;
-    const changes = { assetClassByContract: {}, disclosures: {}, maturityBands: undefined };
+    const changes = { assetClassByContract: {}, disclosures: {}, maturityBands: undefined, tms29Applies: undefined };
     const close = () => { back.remove(); doc.removeEventListener("keydown", onKey); };
     const onKey = event => { if (event.key === "Escape") close(); };
     doc.addEventListener("keydown", onKey);
     back.addEventListener("click", event => { if (event.target === back || event.target.closest('[data-di="close"]')) close(); });
     const setMsg = (text, kind) => { msg.textContent = text || ""; msg.className = `lq-di-msg${kind ? ` is-${kind}` : ""}`; };
-    const dirty = () => Object.keys(changes.assetClassByContract).length || Object.keys(changes.disclosures).length || changes.maturityBands !== undefined;
+    const dirty = () => Object.keys(changes.assetClassByContract).length || Object.keys(changes.disclosures).length
+      || changes.maturityBands !== undefined || changes.tms29Applies !== undefined;
     const refreshSave = () => { save.disabled = !data?.canEdit || !dirty(); };
 
     function bandsHtml(bands, editable) {
@@ -85,6 +86,14 @@
       const bandSource = changes.maturityBands === null ? "SYSTEM_DEFAULT" : changes.maturityBands ? "COMPANY" : data.maturity.source;
       body.innerHTML = `${!editable ? '<p class="lq-di-muted">Salt okunur görünüm: değişiklik için sözleşme yazma yetkisi gerekir.</p>' : ""}
         ${data.companyInput?.carriedForwardFrom ? `<p class="lq-di-muted">Şirket değerleri ${esc(data.companyInput.carriedForwardFrom.start)} – ${esc(data.companyInput.carriedForwardFrom.end)} döneminden devrediyor; kaydederseniz bu dönem için yeni kayıt oluşur.</p>` : ""}
+        ${data.tms29 ? (() => {
+          const applies = changes.tms29Applies === undefined ? data.tms29.applies : changes.tms29Applies === null ? data.tms29.default : changes.tms29Applies;
+          const source = changes.tms29Applies === undefined ? data.tms29.source : changes.tms29Applies === null ? "SYSTEM_DEFAULT" : "COMPANY";
+          return `<section class="lq-di-sec"><h3>Yüksek enflasyon (TMS 29) ${chip(source)}</h3><div class="lq-di-field">
+            <label class="lq-di-row"><input type="checkbox" data-tms29 ${applies ? "checked" : ""} ${editable ? "" : "disabled"}> Kullanım hakkı varlıkları TMS 29 uyarınca TÜFE ile düzeltilsin</label>
+            <span class="lq-di-muted">Varsayılan: fonksiyonel para birimi TRY ve 31.12.2023 ve sonrası biten dönemlerde uygulanır (KGK). Kira yükümlülüğü parasal kalemdir, düzeltilmez.</span>
+            ${editable && source === "COMPANY" ? '<div><button type="button" class="lq-di-link" data-tms29-reset>Varsayılana dön</button></div>' : ""}</div></section>`;
+        })() : ""}
         <section class="lq-di-sec"><h3>Vade dilimleri (iskonto edilmemiş) ${chip(bandSource)}</h3>${bandsHtml(bands, editable)}
           ${editable ? `<div class="lq-di-row" style="margin-top:6px"><button type="button" class="lq-di-link" data-band-add>Dilim ekle</button>
           ${bandSource === "COMPANY" ? '<button type="button" class="lq-di-link" data-band-reset>Varsayılana dön</button>' : ""}</div>` : ""}</section>
@@ -123,6 +132,7 @@
     body.addEventListener("change", event => {
       const t = event.target;
       if (t.dataset.class) { changes.assetClassByContract[t.dataset.class] = t.value; render(); return; }
+      if (t.dataset.tms29 !== undefined) { changes.tms29Applies = t.checked; render(); return; }
       if (t.dataset.na) {
         const key = t.dataset.na, text = body.querySelector(`[data-text="${key}"]`)?.value || "";
         changes.disclosures[key] = t.checked ? { status: "NOT_APPLICABLE", reason: text } : { value: text };
@@ -139,7 +149,8 @@
     });
     body.addEventListener("click", event => {
       const t = event.target;
-      if (t.dataset.classReset) { changes.assetClassByContract[t.dataset.classReset] = null; render(); }
+      if (t.dataset.tms29Reset !== undefined) { changes.tms29Applies = null; render(); }
+      else if (t.dataset.classReset) { changes.assetClassByContract[t.dataset.classReset] = null; render(); }
       else if (t.dataset.textReset) { changes.disclosures[t.dataset.textReset] = null; render(); }
       else if (t.dataset.bandReset !== undefined) { changes.maturityBands = null; render(); }
       else if (t.dataset.bandAdd !== undefined) {
@@ -160,10 +171,11 @@
       if (Object.keys(changes.assetClassByContract).length) payload.assetClassByContract = changes.assetClassByContract;
       if (Object.keys(changes.disclosures).length) payload.disclosures = changes.disclosures;
       if (changes.maturityBands !== undefined) payload.maturityBands = changes.maturityBands;
+      if (changes.tms29Applies !== undefined) payload.tms29Applies = changes.tms29Applies;
       try {
         const result = await api.saveDisclosureInputs(companyId, period, payload);
         data = { ...result.inputs, canEdit: data.canEdit };
-        changes.assetClassByContract = {}; changes.disclosures = {}; changes.maturityBands = undefined;
+        changes.assetClassByContract = {}; changes.disclosures = {}; changes.maturityBands = undefined; changes.tms29Applies = undefined;
         render(); setMsg("Kaydedildi. Dipnot yenileniyor.", "ok");
         onSaved?.();
       } catch (error) {
