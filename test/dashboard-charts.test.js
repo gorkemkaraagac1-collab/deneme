@@ -48,10 +48,14 @@ test('bridge: unexplained difference is shown as reconciliation row, missing fie
  assert.match(m.rows.find(r=>r.id==='residual').note,/TMS 29/);
  dom.window.close();
 });
-test('bridge: planned payments are labelled when actual cash is unavailable',async()=>{
+test('bridge: the liability is settled by contractual payments, not total cash outflow',async()=>{
  const {dom,w}=await page('legacy');const {bridgeModel}=w.LeaseQantDashboardCharts;
  const p=pkgFor();p.periodMovement.liability.actualCashOutflow={status:'REQUIRES_LEDGER_DATA',value:null};
- const m=bridgeModel(p);assert.equal(m.paymentPlanned,true);assert.match(m.rows.find(r=>r.id==='payments').label,/planlanan/);
+ const m=bridgeModel(p);assert.equal(m.paymentPlanned,true);assert.match(m.rows.find(r=>r.id==='payments').label,/sözleşmesel/);
+ // Total cash incl. exempt lease payments does not replace the contractual line.
+ const withCash=pkgFor();const sched=withCash.periodMovement.liability.scheduledContractualCash;
+ if(sched){withCash.periodMovement.liability.actualCashOutflow={status:'SUPPORTED',value:sched.value+3000};
+  assert.equal(bridgeModel(withCash).rows.find(r=>r.id==='payments').value,-Math.abs(sched.value));}
  dom.window.close();
 });
 test('maturity reconciles undiscounted total to carrying amount; asset classes sorted',async()=>{
