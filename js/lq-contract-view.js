@@ -53,7 +53,7 @@
     SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna işaretli ama kira süresi 12 ayı aşıyor.",
     REPORTING_FX_RATE_REQUIRED: "Çeviri için gereken tarihte doğrulanmış TCMB kuru yok (Yönetim → Döviz kurları).",
     REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Endeks/enflasyon düzeltmesi, erken ödeme gibi olaylar içeren sözleşmeler raporda henüz desteklenmiyor.",
-    REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Aylık olmayan peşin ödemeli sözleşmelerde modifikasyon ve yeniden değerlendirme henüz raporlanmıyor.",
+    REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Düzensiz ödeme planlı sözleşmelerde modifikasyon ve yeniden değerlendirme henüz raporlanmıyor.",
     REPORTING_LIFECYCLE_EVENT_NOT_APPLIED: "Uygulanan olayın durumu veya yürürlük tarihi eksik.",
     REPORTING_LIFECYCLE_EXEMPTION_NOT_SUPPORTED: "Kısa vadeli / düşük değerli istisna kapsamındaki sözleşmede modifikasyon desteklenmiyor.",
     REPORTING_FEATURE_NOT_SUPPORTED: "Sözleşmede raporun henüz desteklemediği bir özellik var.",

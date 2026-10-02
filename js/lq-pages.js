@@ -56,7 +56,7 @@
     SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna için süre 12 ayı aşıyor",
     REPORTING_FX_RATE_REQUIRED: "Doğrulanmış TCMB kuru eksik",
     REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Endeks/enflasyon düzeltmesi, erken ödeme vb. olaylar raporda henüz yok",
-    REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Aylık olmayan peşin ödemede modifikasyon henüz raporlanmıyor",
+    REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Düzensiz ödeme planında modifikasyon henüz raporlanmıyor",
     REPORTING_LIFECYCLE_EVENT_NOT_APPLIED: "Olayın durumu veya yürürlük tarihi eksik",
         REPORTING_LIFECYCLE_EXEMPTION_NOT_SUPPORTED: "İstisna kapsamındaki sözleşmede modifikasyon desteklenmiyor",
     REPORTING_FEATURE_NOT_SUPPORTED: "Desteklenmeyen sözleşme özelliği",
