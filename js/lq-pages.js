@@ -55,7 +55,11 @@
     PURCHASE_OPTION_PRICE_MEASUREMENT_UNSUPPORTED: "Kesin satın almada bedel ölçümü desteklenmiyor",
     SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna için süre 12 ayı aşıyor",
     REPORTING_FX_RATE_REQUIRED: "Doğrulanmış TCMB kuru eksik",
-    REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Modifikasyon/yeniden değerlendirme raporda henüz yok",
+    REPORTING_LIFECYCLE_EVENTS_NOT_SUPPORTED: "Endeks/enflasyon düzeltmesi, erken ödeme vb. olaylar raporda henüz yok",
+    REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED: "Modifikasyon yalnız aylık ödemeli sözleşmede raporlanıyor",
+    REPORTING_LIFECYCLE_EVENT_NOT_APPLIED: "Olayın durumu veya yürürlük tarihi eksik",
+    REPORTING_LIFECYCLE_FX_NOT_SUPPORTED: "Yabancı para sözleşmede modifikasyon henüz raporlanmıyor",
+    REPORTING_LIFECYCLE_EXEMPTION_NOT_SUPPORTED: "İstisna kapsamındaki sözleşmede modifikasyon desteklenmiyor",
     REPORTING_FEATURE_NOT_SUPPORTED: "Desteklenmeyen sözleşme özelliği",
     PAYMENT_STUB_UNSUPPORTED: "Kira süresi ödeme dönemlerine tam bölünmüyor",
     ESCALATION_POLICY_UNSUPPORTED: "Özel artış dönemi desteklenmiyor"
