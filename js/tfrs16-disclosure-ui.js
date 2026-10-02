@@ -167,6 +167,21 @@
      tutar üretilmez. Mutabakat kontrolleri sunucunun reconciliation alanından. */
   const SECTION = { asset: ["14.3", "Kullanım hakkı varlıkları"], liability: ["14.4", "Kira yükümlülükleri"], liquidity: ["14.5", "Vade analizi (iskonto edilmemiş)"] };
   const trDateD = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? `${m[3]}.${m[2]}.${m[1]}` : "—"; };
+  // Which inputs came from system defaults or the contractual schedule.
+  function systemDefaultsHtml(d) {
+    if (!d) return "";
+    const parts = [];
+    if (d.maturityPolicy) parts.push("vade dilimleri (TFRS 7.B11 örnek dilimleri)");
+    if (d.assetClassContracts?.length) parts.push(`varlık sınıfı (${d.assetClassContracts.length} sözleşme, sözleşmedeki sınıftan)`);
+    if (d.entityInputFields?.length) parts.push(`şirket beyanları (${d.entityInputFields.length} alan, sözleşme kayıtlarından)`);
+    if (d.cashFromContractualSchedule?.length) parts.push("gerçekleşen kira nakdi (defter verisi yok, ödeme planından)");
+    const outage = d.unavailableProviders?.length ? " Bazı girdi kaynaklarına ulaşılamadı; ilgili alanlar eksik gösteriliyor." : "";
+    if (!parts.length && !outage) return "";
+    return `<div class="lq-dn-muted" data-system-defaults role="note" style="margin:8px 0;padding:10px 12px;border:1px solid #F2D7A6;background:#FFF8EC;border-radius:8px">`
+      + `<strong>Sistem varsayılanı kullanılan girdiler:</strong> ${escapeHtml(parts.join("; ") || "—")}.${escapeHtml(outage)}`
+      + ` Defter verisi Yönetim → Defter verileri sayfasından yüklenebilir.</div>`;
+  }
+
   // Contracts whose liability roll-forward does not foot (server check).
   function movementExceptionsHtml(rec) {
     const list = Array.isArray(rec?.periodMovementExceptions) ? rec.periodMovementExceptions : [];
@@ -275,6 +290,7 @@
         <label>Dönem başlangıcı <input id="disclosureStart" type="date" value="${e(state.periodStart)}" max="${e(state.reportingDate)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>
         <label>Dönem sonu <input id="disclosureDate" type="date" value="${e(state.reportingDate)}" min="${e(state.periodStart)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>
         ${state.error?.code === "DISCLOSURE_PERIOD_INVALID" ? `<p id="disclosure-period-error" role="alert" class="lq-dn-err">${e(errorLabel(state.error))}</p>` : `<span id="disclosure-period-error" class="sr-only"></span>`}</div>
+      ${ready ? systemDefaultsHtml(pkg?.provenance?.systemDefaults) : ""}
       <div class="lq-dn-body">
         <nav class="lq-dn-outline" aria-label="Dipnot anahattı"><span class="lq-dn-kick">ANAHAT</span>${outline}
           <p class="lq-dn-muted">Anlatı bölümleri (14.1, 14.2, 14.6–14.11) bu sürümde metin editörü olarak yok; sayısal tablolar sunucu kaynaklıdır. Eksik şirket beyanları kaynak gereklilikleri bölümünde listelenir.</p></nav>
