@@ -158,6 +158,9 @@
   function errorLabel(error) {
     if (error?.status === 401) return "Oturum açmanız gerekiyor.";
     if (error?.status === 403) return "Bu şirketin dipnotlarına erişim yetkiniz yok.";
+    if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" && Array.isArray(error.details?.staleContractIds) && error.details.staleContractIds.length) {
+      return `${error.details.staleContractIds.length} sözleşme son dipnot kaynağından sonra değişti (${error.details.staleContractIds.slice(0, 5).join(", ")}${error.details.staleContractIds.length > 5 ? "…" : ""}). Güncel dipnot için kaynağı yeniden oluşturun.`;
+    }
     if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return "Seçilen dönem için doğrulanmış dipnot hesaplama kaydı bulunamadı. Dipnotlar yalnızca onaylı, kaynak bağlı hesaplama kaydı bulunduğunda gösterilir.";
     if (error?.code === "DISCLOSURE_PERIOD_INVALID") return "Dönem başlangıcı, dönem sonundan sonra olamaz. İki tarihi kontrol edin.";
     if (error?.code === "DISCLOSURE_CALCULATION_SOURCE_MISMATCH") return "Dipnot kaynağı ile doğrulanmış hesaplama kaydı uyuşmuyor.";
