@@ -285,6 +285,7 @@
       <div class="lq-dn-top"><div class="lq-dn-title"><strong>14. Kiralama İşlemleri</strong><span>${e(companyName)} · ${e(trDateD(state.periodStart))} – ${e(trDateD(state.reportingDate))} · Şablon: TFRS 16 Kiracı</span></div>
         ${ready ? `<span class="lq-dn-chip">${e(validationLabel)}</span>` : ""}
         ${ready ? `<span class="lq-dn-chip ${complete ? "is-ok" : "is-warn"}">${complete ? "Desteklenen kapsam tamam" : `${missing} sayısal satır · ${gaps.length} kaynak / destek gerekliliği`}</span>` : ""}
+        <button type="button" class="lq-dn-btn" id="disclosureInputs" ${state.companyId && validPeriodRange(state.periodStart, state.reportingDate) ? "" : "disabled"}>Varsayımları düzenle</button>
         <button type="button" class="lq-dn-btn" id="disclosureExport" ${ready ? "" : "disabled"}>Seçili bölümü dışa aktar</button></div>
       <div class="lq-dn-ctx"><label>Şirket <select id="disclosureCompany" ${state.producing ? "disabled" : ""}>${companies.map(item => `<option value="${e(item.id)}" ${item.id === state.companyId ? "selected" : ""}>${e(item.name || item.id)}</option>`).join("")}</select></label>
         <label>Dönem başlangıcı <input id="disclosureStart" type="date" value="${e(state.periodStart)}" max="${e(state.reportingDate)}" aria-describedby="disclosure-period-error" ${state.producing ? "disabled" : ""}></label>
@@ -513,6 +514,12 @@
         if (state.status === "ready") exportRows(rowsForTab(state.pkg, state.tab), state.tab, state.pkg);
       });
       container.querySelector("#disclosureCreateTrustedSource")?.addEventListener("click", createTrustedSources);
+      container.querySelector("#disclosureInputs")?.addEventListener("click", () => {
+        global.LeaseQantDisclosureInputsUi?.open({ companyId: state.companyId,
+          companyName: (companies.find(item => item.id === state.companyId) || {}).name, period: period(),
+          // Saved inputs change the package; reload it.
+          onSaved: () => { state.key = null; state.sequence++; draw(); } });
+      });
     };
     bridge.setActiveScreenRefreshCallback?.(() => { state.key = null; state.sequence++; draw(); });
     draw();

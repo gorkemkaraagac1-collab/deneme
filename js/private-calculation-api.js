@@ -27,13 +27,14 @@
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? global.setTimeout(() => controller.abort(), timeoutMs) : null;
     const headers = { Accept: "application/json" };
-    if (method === "POST") headers["Content-Type"] = "application/json";
+    const hasBody = method === "POST" || method === "PUT";
+    if (hasBody) headers["Content-Type"] = "application/json";
     const token = config.reportingBearer || getBearerToken();
     if (token) headers.Authorization = "Bearer " + token;
     try {
       const response = await global.fetch(getApiBase() + path, {
         method, credentials: "include", headers,
-        ...(method === "POST" ? { body: JSON.stringify(payload) } : {}),
+        ...(hasBody ? { body: JSON.stringify(payload) } : {}),
         signal: controller ? controller.signal : undefined
       });
       const body = await response.json().catch(() => null);
@@ -55,6 +56,17 @@
     } finally {
       if (timer) global.clearTimeout(timer);
     }
+  }
+
+  // Company disclosure inputs (asset classes, narratives, maturity bands).
+  async function getDisclosureInputs(companyId, period, options) {
+    const query = new URLSearchParams({ companyId: String(companyId || ""),
+      reportingPeriodStart: String(period?.reportingPeriodStart || ""), reportingPeriodEnd: String(period?.reportingPeriodEnd || "") });
+    return requestDisclosure(`/api/reports/lease-disclosure/inputs?${query}`, "GET", null, options);
+  }
+  async function saveDisclosureInputs(companyId, period, changes, options) {
+    return requestDisclosure("/api/reports/lease-disclosure/inputs", "PUT", { companyId,
+      reportingPeriodStart: period.reportingPeriodStart, reportingPeriodEnd: period.reportingPeriodEnd, ...changes }, options);
   }
 
   async function getLeaseDisclosureAvailability(period, options) {
@@ -443,6 +455,8 @@
     applyModification,
     applyReassessment,
     getLeaseDisclosureAvailability,
+    getDisclosureInputs,
+    saveDisclosureInputs,
     executeTrustedDisclosureCalculation,
     createTrustedDisclosureSnapshot,
     getJournalAuthorityPackage,
