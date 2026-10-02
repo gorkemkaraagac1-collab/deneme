@@ -4597,19 +4597,21 @@ window.fetch = (input, init = {}) => {
   const PAYMENT_FREQUENCY_CODE_TO_WORD = {
     "1": "monthly",
     "3": "quarterly",
+    "6": "semiannual",
     "12": "annual"
   };
 
   const PAYMENT_FREQUENCY_WORD_TO_CODE = {
     monthly: "1",
     quarterly: "3",
+    semiannual: "6",
     annual: "12"
   };
 
   function normalizePaymentFrequencyValue(value) {
     const raw = String(value || "").trim().toLowerCase();
     return PAYMENT_FREQUENCY_CODE_TO_WORD[raw] ||
-      (["monthly", "quarterly", "annual"].includes(raw) ? raw : "monthly");
+      (["monthly", "quarterly", "semiannual", "annual"].includes(raw) ? raw : "monthly");
   }
 
   function normalizeLeaseIncreaseTypeValue(value) {
@@ -4663,6 +4665,7 @@ window.fetch = (input, init = {}) => {
   function resolveFrequencyStepMonths(frequency) {
     const f = String(frequency || "monthly").trim().toLowerCase();
     if (f === "3" || f === "quarterly" || f === "quarter") return 3;
+    if (f === "6" || f === "semiannual" || f === "semi-annual") return 6;
     if (f === "12" || f === "annual" || f === "annually" || f === "yearly") return 12;
     return 1; // monthly / "1" / unknown
   }
@@ -14754,10 +14757,10 @@ ${renderAccountingCenterBulkPromo()}
 
   function controlPayment(contract, config) {
     const payment = Number(contract?.monthlyPayment);
-    const validFrequency = ["monthly", "quarterly", "annual"].includes(String(contract?.paymentFrequency || "monthly").toLowerCase());
+    const validFrequency = ["monthly", "quarterly", "semiannual", "annual"].includes(String(contract?.paymentFrequency || "monthly").toLowerCase());
     const validTiming = ["arrears", "advance"].includes(String(contract?.paymentTiming || "arrears").toLowerCase());
     if (!Number.isFinite(payment) || payment <= 0) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Payment must be a finite positive amount.", "> 0", contract?.monthlyPayment, "Correct the payment amount before calculation.");
-    if (!validFrequency || !validTiming) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Payment frequency or timing is invalid.", "monthly/quarterly/annual and advance/arrears", { frequency: contract?.paymentFrequency, timing: contract?.paymentTiming }, "Correct payment frequency and payment timing.");
+    if (!validFrequency || !validTiming) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Payment frequency or timing is invalid.", "monthly/quarterly/semiannual/annual and advance/arrears", { frequency: contract?.paymentFrequency, timing: contract?.paymentTiming }, "Correct payment frequency and payment timing.");
     return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Payment assumptions are valid.", "Positive payment and supported payment convention", { payment, frequency: contract.paymentFrequency, timing: contract.paymentTiming }, "No action required.");
   }
 
@@ -20170,9 +20173,9 @@ ${renderAccountingCenterBulkPromo()}
     const raw = integrationNormalizeHeader(value);
     if (!raw) return undefined;
     if (["1", "monthly", "aylik", "ay"].includes(raw)) return "monthly";
-    if (["3", "quarterly", "quarter", "ceyrek", "uc aylik", "3 aylik"].includes(raw)) return "quarterly";
-    if (["6", "semiannual", "semi annual", "alti aylik", "6 aylik"].includes(raw)) return "semiannual";
-    if (["12", "annual", "yearly", "yillik", "yil"].includes(raw)) return "annual";
+    if (["3", "quarterly", "quarter", "ceyrek", "ceyreklik", "uc aylik", "3 aylik", "3 ayda bir", "uc ayda bir"].includes(raw)) return "quarterly";
+    if (["6", "semiannual", "semi annual", "semi-annual", "alti aylik", "6 aylik", "6 ayda bir", "alti ayda bir", "yarim yillik", "yari yillik"].includes(raw)) return "semiannual";
+    if (["12", "annual", "yearly", "yillik", "yil", "yilda bir"].includes(raw)) return "annual";
     return undefined;
   }
 

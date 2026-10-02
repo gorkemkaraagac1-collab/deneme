@@ -89,7 +89,9 @@
   REQUIRES_CONFIGURATION:'Yapılandırma gerekli',REQUIRES_ENTITY_INPUT:'Şirket verisi gerekli',
   COMPLETE_POPULATION:'Tam kapsam',UNAVAILABLE:'Kapsam hazır değil',SUPPORTED_CALCULATION_DIAGNOSTICS:'Hesaplama kontrolleri mevcut'}[status]
   ||'Kaynak doğrulaması gerekli');}
- function reasonLabel(reason){if(reason==='REPORTING_CURRENCY_PROFILE_REQUIRED'||reason==='DISCLOSURE_ENTITY_PROFILE_REQUIRED')return 'Onaylı para birimi profili gerekli';
+ function reasonLabel(reason){if(reason==='REPORTING_FX_RATE_REQUIRED')return 'Doğrulanmış TCMB kuru yok (dönem sonu gelecekte veya kur eksik)';
+  if(reason==='REPORTING_LIFECYCLE_FREQUENCY_NOT_SUPPORTED')return 'Aylık olmayan peşin ödemede modifikasyon henüz raporlanmıyor';
+  if(reason==='REPORTING_CURRENCY_PROFILE_REQUIRED'||reason==='DISCLOSURE_ENTITY_PROFILE_REQUIRED')return 'Onaylı para birimi profili gerekli';
   if(reason==='REPORTING_INTENT_INVALID'||reason==='REPORTING_PERIOD_NOT_SUPPORTED')return 'Dönem tarihlerini kontrol edin';
   if(reason==='REPORTING_ROUTE_NOT_SUPPORTED')return 'Bu sözleşme türü için rapor rotası desteklenmiyor';
   if(reason==='ACTUAL_LEDGER_CASH_REQUIRED'||String(reason).includes('LEDGER'))return 'Doğrulanmış defter verisi gerekli';
