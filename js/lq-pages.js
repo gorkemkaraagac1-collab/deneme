@@ -62,6 +62,7 @@
     REPORTING_SALE_LEASEBACK_FAILED_SALE_NOT_SUPPORTED: "Satış sayılmayan devir raporda henüz yok",
     REPORTING_SALE_LEASEBACK_COMBINATION_NOT_SUPPORTED: "Satış/geri kiralama birleşimi desteklenmiyor",
     REPORTING_SALE_LEASEBACK_NOT_SUPPORTED: "Satış ve geri kiralama raporda henüz yok",
+    REPORTING_FINANCE_SUBLEASE_LIFECYCLE_NOT_SUPPORTED: "Finansal alt kiralama ile modifikasyon birlikte henüz raporlanmıyor",
     REPORTING_FINANCE_SUBLEASE_NOT_SUPPORTED: "Finansal alt kiralama raporda henüz yok",
     REPORTING_SUBLEASE_CURRENCY_NOT_SUPPORTED: "Alt kiralama para birimi ana kiralamadan farklı",
     REPORTING_SUBLEASE_INVALID: "Alt kiralama şartları eksik veya geçersiz",

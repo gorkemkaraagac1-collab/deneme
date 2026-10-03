@@ -59,6 +59,7 @@
     REPORTING_SALE_LEASEBACK_FAILED_SALE_NOT_SUPPORTED: "Satış sayılmayan devir finansal borçtur (TFRS 16.103); raporda henüz desteklenmiyor.",
     REPORTING_SALE_LEASEBACK_COMBINATION_NOT_SUPPORTED: "Satış ve geri kiralama, modifikasyon veya alt kiralama ile birlikte henüz raporlanmıyor.",
     REPORTING_SALE_LEASEBACK_NOT_SUPPORTED: "Satış ve geri kiralama içeren sözleşmeler raporda henüz desteklenmiyor.",
+    REPORTING_FINANCE_SUBLEASE_LIFECYCLE_NOT_SUPPORTED: "Finansal alt kiralama ile modifikasyon birlikte henüz raporlanmıyor",
     REPORTING_FINANCE_SUBLEASE_NOT_SUPPORTED: "Finansal kiralama olarak sınıflandırılan alt kiralama raporda henüz desteklenmiyor; faaliyet kiralaması alt kiralamalar destekleniyor.",
     REPORTING_SUBLEASE_CURRENCY_NOT_SUPPORTED: "Alt kiralamanın para birimi ana kiralamayla aynı olmalı.",
     REPORTING_SUBLEASE_INVALID: "Alt kiralama şartları (tutar, başlangıç/bitiş, sıklık) eksik veya geçersiz.",
