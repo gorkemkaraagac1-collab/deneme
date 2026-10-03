@@ -289,6 +289,8 @@
     if (!engineTabs) return; // hata ekranı vb.: motorun çıktısı olduğu gibi kalır
     const id = selectedId();
     const c = contractOf(id) || { id };
+    // Every (re)open re-reads the server; a saved change must not show the old route.
+    state.report = null;
     if (state.contractId !== id) {
       state.contractId = id; state.tab = "calc"; state.sub = "modification"; state.openYears = new Map();
       state.report = null;
@@ -504,6 +506,9 @@
   function onReport(e) {
     const d = e.detail || {};
     if (String(d.contractId) !== String(state.contractId)) return;
+    // Ignore a package for another reporting period (late response).
+    const want = period();
+    if (d.package?.period?.reportingDate && want?.reportingDate && d.package.period.reportingDate !== want.reportingDate) return;
     state.report = d.error
       ? { error: d.error, period: d.period || period() }
       : { package: d.package, row: d.row, period: d.package?.period };
