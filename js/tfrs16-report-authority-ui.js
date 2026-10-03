@@ -48,8 +48,11 @@
   const f=global.LeaseQantPrivateCalculation?.getReportingCompanies;if(typeof f!=='function')fail();
   const response=await f();if(!Array.isArray(response?.companies))fail('REPORTING_RESPONSE_INVALID');return response.companies;
  }
- async function load(intent){
+ let detailSeq=0;
+ async function load(intent,options){
   const f=global.LeaseQantPrivateCalculation?.getReportingAuthorityPackage;if(typeof f!=='function')fail();
+  // A fresh read never joins a request started before a save.
+  if(options?.fresh)return Promise.resolve(f(intent)).then(p=>acceptPackage(p,intent));
   const key=stable(intent);
   if(!pending.has(key))pending.set(key,Promise.resolve(f(intent)).then(p=>acceptPackage(p,intent)).finally(()=>pending.delete(key)));
   return pending.get(key);
@@ -348,10 +351,12 @@
  }
  async function renderContractDetails(container,contract){
   const targets=['summary','schedule','audit'].map(kind=>({kind,target:container?.querySelector('[data-authoritative-report-'+kind+']')}));
-  const notify=detail=>{try{global.dispatchEvent(new CustomEvent('lq:contract-report',{detail:{contractId:contract.id,...detail}}));}catch(_){}};
+  const seq=++detailSeq;
+  const notify=detail=>{if(seq!==detailSeq)return;try{global.dispatchEvent(new CustomEvent('lq:contract-report',{detail:{contractId:contract.id,...detail}}));}catch(_){}};
   let pkg=null,found=null;
-  try{const p=await load({companyId:contract.companyId,...defaultPeriod()}),row=p.contracts.find(r=>r.contractId===contract.id);pkg=p;found=row||null;
+  try{const p=await load({companyId:contract.companyId,...defaultPeriod()},{fresh:true}),row=p.contracts.find(r=>r.contractId===contract.id);pkg=p;found=row||null;
    if(!row||row.status!=='SUPPORTED')fail(row?.reason||'REPORTING_SOURCE_NOT_READY');
+   if(seq!==detailSeq)return; // a newer detail request supersedes this one
    targets.forEach(({kind,target})=>{if(!target?.isConnected)return;
     if(kind==='summary')target.innerHTML=`<p>${esc(p.period.reportingDate)} · ${esc(row.currency)} · ${esc(row.calculationId)}</p>`+
       metrics.map(k=>`<p>${esc(metricLabels[k])}: ${display(row.metrics[k])}</p>`).join('');
