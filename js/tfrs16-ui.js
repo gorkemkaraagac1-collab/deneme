@@ -6743,6 +6743,9 @@ window.fetch = (input, init = {}) => {
     try {
 
     populateContractFormFields(contract);
+    // The id is the contract's key: it cannot change while editing.
+    const idInput = document.getElementById("contractId");
+    if (idInput) idInput.readOnly = !!contract;
 
     const title =
       document.getElementById(

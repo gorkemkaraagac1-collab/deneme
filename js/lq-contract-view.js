@@ -136,6 +136,19 @@
     return `<span class="lq-cv-chip is-${tone}">${esc(label)}</span>`;
   };
 
+  // Corrects the contract's entered terms (data-entry errors); economic
+  // changes after commencement go through modification/reassessment.
+  function editContract() {
+    if (typeof global.tfrs16CanWriteContracts === "function" && !global.tfrs16CanWriteContracts()) {
+      global.alert?.("Bu işlem için yazma yetkiniz bulunmamaktadır (salt okunur rol).");
+      return;
+    }
+    const open = global.__GK_TFRS16_FORM_UI__?.openContractModal;
+    const c = contractOf(state.contractId);
+    if (typeof open !== "function" || !c) return;
+    closeDetail();
+    open(c);
+  }
   function closeDetail() { ($("closeDetailModal") || $("closeDetailModalFooter"))?.click(); }
 
   // Option judgements can change the measured lease term (TFRS 16.18-21).
@@ -174,6 +187,7 @@
             <button type="button" role="menuitem" data-lq-cv-act="pdf">Rapor (PDF)</button>
             <button type="button" role="menuitem" data-lq-cv-act="html">Rapor (HTML)</button>
             <button type="button" role="menuitem" data-lq-cv-act="csv" ${state.report?.row?.status === "SUPPORTED" ? "" : "disabled"}>Hesaplama tablosu (CSV)</button>
+            <button type="button" role="menuitem" data-lq-cv-act="edit">Sözleşmeyi düzenle</button>
             <button type="button" role="menuitem" class="is-danger" data-lq-cv-act="delete">Sözleşmeyi sil</button>
           </div></div>
       </div></div>`;
@@ -468,6 +482,7 @@
       const a = act.getAttribute("data-lq-cv-act");
       if (a === "csv") downloadCsv();
       else if (a === "delete") $("deleteContract")?.click();
+      else if (a === "edit") editContract();
       else if (a === "pdf" || a === "html") global.GK_TFRS16?.exportReport?.(state.contractId, a);
       return;
     }
