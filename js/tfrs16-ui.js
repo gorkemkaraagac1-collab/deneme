@@ -9997,10 +9997,14 @@ ${renderAccountingCenterBulkPromo()}
                 <option value="OTHER">Diğer</option>
               </select>
             </label>
-            <label style="font-size:10px;font-weight:700;">
+            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">
+              Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)
+              <textarea id="modificationNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">escapeHtml((contract.explicitPaymentSchedule || []).filter(r => r.economicDate > today).map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n"))</textarea>
+              <input id="modificationNewPayment" type="hidden" value="0">
+            </label>` : `<label style="font-size:10px;font-weight:700;">
               Yeni Aylık Ödeme
               <input id="modificationNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;">
-            </label>
+            </label>`}
             <label style="font-size:10px;font-weight:700;">
               Yeni Kira Bitiş Tarihi
               <input id="modificationNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;">
@@ -10110,6 +10114,13 @@ ${renderAccountingCenterBulkPromo()}
           document.getElementById("modificationScopeIncrease")?.value,
         status: "DRAFT"
       };
+      // Dated schedule: the revised payments after the effective date.
+      if (contract.paymentFrequency === "irregular") {
+        const parsed = parseExplicitPaymentSchedule(document.getElementById("modificationNewSchedule")?.value, contract.currency || "TRY");
+        if (parsed.errors.length) { showAlert(parsed.errors.join("\n")); return; }
+        input.modificationType = "OTHER";
+        input.newExplicitPaymentSchedule = parsed.rows.map(({ line, ...row }) => row);
+      }
 
       // createModification/updateModification artık backend'e
       // yazmayı BEKLİYOR (async) — buton çift tıklamayı önlemek
@@ -10258,7 +10269,7 @@ ${renderAccountingCenterBulkPromo()}
               <option value="COMBINED_REASSESSMENT">Birleşik Reassessment</option>
               <option value="OTHER">Diğer</option>
             </select></label>
-            <label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
+            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">escapeHtml((contract.explicitPaymentSchedule || []).filter(r => r.economicDate > today).map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n"))</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>`}
             <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yenileme Opsiyonu<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
@@ -10329,6 +10340,12 @@ ${renderAccountingCenterBulkPromo()}
         reason: document.getElementById("reassessmentReason")?.value || "",
         status: "DRAFT"
       };
+      if (contract.paymentFrequency === "irregular") {
+        const parsed = parseExplicitPaymentSchedule(document.getElementById("reassessmentNewSchedule")?.value, contract.currency || "TRY");
+        if (parsed.errors.length) { showAlert(parsed.errors.join("\n")); return; }
+        input.type = "OTHER";
+        input.newExplicitPaymentSchedule = parsed.rows.map(({ line, ...row }) => row);
+      }
 
       const originalLabel = createButton.textContent;
       createButton.disabled = true;
