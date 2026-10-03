@@ -6748,6 +6748,7 @@ window.fetch = (input, init = {}) => {
     if (idInput) idInput.readOnly = !!contract;
 
     const title =
+      document.getElementById("contractModalTitle") ||
       document.getElementById(
         "modalTitle"
       );
