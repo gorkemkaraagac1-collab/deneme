@@ -90,7 +90,7 @@
     const timing = String(val("paymentTiming") || "arrears").toLowerCase();
     const exempt = val("shortTermLease") || val("lowValueAsset");
     if (exempt) return `<div class="lq-wz-scope is-na"><i></i>Muafiyet: kullanım hakkı varlığı ve yükümlülük tanınmaz (TFRS 16.5–8)</div>`;
-    if (freq === "irregular") return `<div class="lq-wz-scope is-ok"><i></i>Düzensiz · tarihli ödemeler: rapor rotası (ENGINE_DATED_GRID_V1)</div><p>Tutarlar ödeme takviminden hesaplanır; aylık kira alanı kullanılmaz. Modifikasyon ve yeniden değerlendirme bu sözleşmelerde henüz raporlanmaz.</p>`;
+    if (freq === "irregular") return `<div class="lq-wz-scope is-ok"><i></i>Düzensiz · tarihli ödemeler: rapor rotası (ENGINE_DATED_GRID_V1)</div><p>Tutarlar ödeme takviminden hesaplanır; aylık kira alanı kullanılmaz.</p>`;
     const ok = ["monthly", "quarterly", "semiannual", "annual"].includes(freq) && ["arrears", "advance"].includes(timing);
     return ok
       ? `<div class="lq-wz-scope is-ok"><i></i>${esc(optText("paymentFrequency") || freq)} · ${esc(optText("paymentTiming") || timing)}: rapor rotası</div><p>Şirketin onaylı para birimi profili varsa tutarlar raporlarda ve sözleşme sayfasında görünür.</p>`
