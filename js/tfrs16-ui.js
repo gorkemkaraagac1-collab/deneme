@@ -388,6 +388,9 @@ window.fetch = (input, init = {}) => {
       renewalDate: details.renewalDate || null,
       paymentFrequency: details.paymentFrequency || "monthly",
       paymentTiming: details.paymentTiming || "arrears",
+      ...(details.paymentFrequency === "irregular"
+        ? { explicitPaymentSchedule: Array.isArray(details.explicitPaymentSchedule) ? details.explicitPaymentSchedule : [],
+          termMonths: details.termMonths } : {}),
       initialDirectCosts: details.initialDirectCosts !== null && details.initialDirectCosts !== undefined ? Number(details.initialDirectCosts) : 0,
       restorationObligation: details.restorationObligation !== null && details.restorationObligation !== undefined ? Number(details.restorationObligation) : 0,
       assetClass: details.assetClass || "",
@@ -694,6 +697,8 @@ window.fetch = (input, init = {}) => {
       renewalDate: contract.renewalDate || null,
       paymentFrequency: contract.paymentFrequency || "monthly",
       paymentTiming: contract.paymentTiming || "arrears",
+      ...(contract.paymentFrequency === "irregular"
+        ? { explicitPaymentSchedule: contract.explicitPaymentSchedule || [], termMonths: contract.termMonths } : {}),
       initialDirectCosts: Number(contract.initialDirectCosts) || 0,
       restorationObligation: Number(contract.restorationObligation) || 0,
       assetClass: contract.assetClass || "",
@@ -4611,7 +4616,7 @@ window.fetch = (input, init = {}) => {
   function normalizePaymentFrequencyValue(value) {
     const raw = String(value || "").trim().toLowerCase();
     return PAYMENT_FREQUENCY_CODE_TO_WORD[raw] ||
-      (["monthly", "quarterly", "semiannual", "annual"].includes(raw) ? raw : "monthly");
+      (["monthly", "quarterly", "semiannual", "annual", "irregular"].includes(raw) ? raw : "monthly");
   }
 
   function normalizeLeaseIncreaseTypeValue(value) {
@@ -6662,6 +6667,13 @@ window.fetch = (input, init = {}) => {
     );
 
     setInput(
+      "explicitPaymentSchedule",
+      Array.isArray(contract?.explicitPaymentSchedule)
+        ? contract.explicitPaymentSchedule.map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n")
+        : ""
+    );
+
+    setInput(
       "terminationPenalty",
       contract?.terminationPenalty || 0
     );
@@ -7016,11 +7028,43 @@ window.fetch = (input, init = {}) => {
    * @returns {boolean} result.valid - Sözleşme geçerli mi?
    * @returns {string[]} result.errors - Doğrulama hata mesajları
    */
+  // Dated (irregular) schedule: "YYYY-MM-DD | tutar | referans" per line.
+  // The server's dated engine measures it; the monthly amount is not used.
+  function parseExplicitPaymentSchedule(text, currency) {
+    const errors = [], rows = [];
+    String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+      const [date, amountText, reference] = line.split("|").map(part => (part || "").trim());
+      let raw = String(amountText || "").replace(/\s/g, "");
+      if (raw.includes(",")) raw = raw.replace(/\./g, "").replace(",", ".");
+      const amount = Number(raw);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !normalizeDate(date)) errors.push(`Ödeme takvimi ${index + 1}. satır: tarih YYYY-AA-GG olmalı.`);
+      else if (!(amount > 0)) errors.push(`Ödeme takvimi ${index + 1}. satır: tutar pozitif olmalı.`);
+      else rows.push({ paymentId: `P${index + 1}`, economicDate: date, amount, currency,
+        paymentClass: "FIXED_LEASE", sourceEvidenceId: reference || `SATIR-${index + 1}` });
+    });
+    const dates = rows.map(r => r.economicDate);
+    if (new Set(dates).size !== dates.length) errors.push("Ödeme takviminde aynı tarih birden fazla kez var.");
+    return { rows: rows.sort((a, b) => a.economicDate.localeCompare(b.economicDate)), errors };
+  }
+
+  // Months n with start+(n-1) months < end <= start+n months (server rule).
+  function datedTermMonths(startDate, endDate) {
+    const start = new Date(`${startDate}T00:00:00Z`), end = `${endDate}`;
+    const anchored = k => {
+      const m = start.getUTCMonth() + k, y = start.getUTCFullYear() + Math.floor(m / 12), t = ((m % 12) + 12) % 12;
+      const last = new Date(Date.UTC(y, t + 1, 0)).getUTCDate();
+      return new Date(Date.UTC(y, t, Math.min(start.getUTCDate(), last))).toISOString().slice(0, 10);
+    };
+    for (let n = 1; n <= 1200; n++) if (anchored(n) >= end) return n;
+    return null;
+  }
+
   function validateContract(
     contract
   ) {
 
     const errors = [];
+    const dated = contract.paymentFrequency === "irregular";
 
     if (!contract.id) {
       errors.push(
@@ -7040,7 +7084,13 @@ window.fetch = (input, init = {}) => {
       );
     }
 
-    if (
+    if (dated) {
+      (contract.explicitPaymentScheduleErrors || []).forEach(error => errors.push(error));
+      if (!contract.explicitPaymentSchedule?.length) errors.push("Düzensiz ödeme için ödeme takvimini doldurun.");
+      else if (contract.explicitPaymentSchedule.some(r => r.economicDate < contract.startDate || r.economicDate > contract.endDate)) {
+        errors.push("Ödeme takvimindeki tarihler sözleşme başlangıç ve bitiş tarihleri arasında olmalı.");
+      }
+    } else if (
       !contract.monthlyPayment ||
       contract.monthlyPayment <= 0
     ) {
@@ -7494,10 +7544,23 @@ window.fetch = (input, init = {}) => {
             null
         };
 
+        if (contract.paymentFrequency === "irregular") {
+          const parsed = parseExplicitPaymentSchedule(getInput("explicitPaymentSchedule"), contract.currency);
+          contract.explicitPaymentSchedule = parsed.rows;
+          contract.explicitPaymentScheduleErrors = parsed.errors;
+          contract.paymentTiming = "dated";
+          contract.monthlyPayment = 0;
+          contract.termMonths = contract.startDate && contract.endDate ? datedTermMonths(contract.startDate, contract.endDate) : null;
+        } else {
+          contract.explicitPaymentSchedule = undefined;
+          contract.termMonths = undefined;
+        }
+
         const validation =
           validateContract(
             contract
           );
+        delete contract.explicitPaymentScheduleErrors;
 
         if (!validation.valid) {
 
