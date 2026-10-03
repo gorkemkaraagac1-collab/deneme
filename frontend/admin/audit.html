@@ -562,6 +562,10 @@
                     <option value="">Tüm şirketler</option>
                 </select>
 
+                <select id="filterUser" onchange="filtersChanged()" aria-label="Kullanıcı">
+                    <option value="">Tüm kullanıcılar</option>
+                </select>
+
                 <label class="lq-date-f">Başlangıç <input type="date" id="filterFrom" onchange="filtersChanged()"></label>
                 <label class="lq-date-f">Bitiş <input type="date" id="filterTo" onchange="filtersChanged()"></label>
 
@@ -837,6 +841,8 @@ async function loadAudit() {
     const fromF = (document.getElementById("filterFrom") || {}).value;
     const toF = (document.getElementById("filterTo") || {}).value;
     if (companyF) params.company_id = companyF;
+    const userF = (document.getElementById("filterUser") || {}).value;
+    if (userF) params.user_id = userF;
     if (fromF) params.from = fromF;
     if (toF) params.to = toF;
 
@@ -1649,6 +1655,19 @@ function openAuditDetail(index) {
             <div><div class="lq-kick">Değişiklik</div>${diff}</div>${raw}`
     });
 }
+
+(async function fillUserFilter() {
+    try {
+        const r = await AdminAPI.getUsers({ limit: 500 });
+        const sel = document.getElementById("filterUser");
+        (r && Array.isArray(r.data) ? r.data : []).forEach(u => {
+            const o = document.createElement("option");
+            o.value = String(u.id);
+            o.textContent = u.username || String(u.id);
+            sel.appendChild(o);
+        });
+    } catch (_) { /* filtre boş kalır */ }
+})();
 
 (async function fillCompanyFilter() {
     try {
