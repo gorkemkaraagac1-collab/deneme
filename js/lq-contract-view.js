@@ -253,10 +253,12 @@
     if (!r) scope = '<p class="lq-cv-muted">Kaynak doğrulanıyor…</p>';
     else if (r.row?.status === "SUPPORTED") {
       const row = r.row, exempt = row.exemption === "SHORT_TERM" ? "Kısa vadeli kiralama istisnası (TFRS 16.6)"
-        : row.exemption === "LOW_VALUE" ? "Düşük değerli varlık istisnası (TFRS 16.6)" : null;
+        : row.exemption === "LOW_VALUE" ? "Düşük değerli varlık istisnası (TFRS 16.6)"
+        : row.exemption === "FINANCING_ARRANGEMENT" ? "Satış sayılmayan devir · finansman (TFRS 16.103)" : null;
+      const fin = row.financingArrangement;
       const fx = row.fxTranslation ? ` · ${esc(row.fxTranslation.sourceCurrency)} → ${esc(row.fxTranslation.presentationCurrency)} (TCMB)` : "";
       const term = row.leaseTerm?.judgement ? `<p class="lq-cv-muted">Kira süresi değerlendirmesi: ${esc(row.leaseTerm.judgement.evidenceReference)}${row.leaseTerm.endDate !== row.leaseTerm.contractualEndDate ? ` · ölçülen bitiş ${esc(trDate(row.leaseTerm.endDate))}` : ""}</p>` : "";
-      scope = `<div class="lq-cv-scope is-ok"><span class="lq-cv-dot" aria-hidden="true">✓</span><div><strong>${exempt ? "İstisna · bilanço dışı" : "Kapsamda"}</strong><span>${exempt ? esc(exempt) : `${esc(frequencyText(c.paymentFrequency))}, ${esc(timingText(c.paymentTiming))}`}${fx}</span></div></div>${term}<p class="lq-cv-muted">${exempt ? "Yükümlülük ve kullanım hakkı varlığı oluşmaz; ödemeler kira süresi boyunca doğrusal gider yazılır." : "Tutarlar sunucudaki hesaplamadan gelir."}${row.fxTranslation ? " Yükümlülük dönem sonu, kullanım hakkı varlığı başlangıç tarihi kuruyla çevrilir (TMS 21)." : ""}</p>`;
+      scope = `<div class="lq-cv-scope is-ok"><span class="lq-cv-dot" aria-hidden="true">✓</span><div><strong>${fin ? "Finansman işlemi" : exempt ? "İstisna · bilanço dışı" : "Kapsamda"}</strong><span>${exempt ? esc(exempt) : `${esc(frequencyText(c.paymentFrequency))}, ${esc(timingText(c.paymentTiming))}`}${fx}</span></div></div>${term}<p class="lq-cv-muted">${fin ? `Kira yükümlülüğü ve kullanım hakkı oluşmaz; varlık bilançoda kalır. Alınan bedel TFRS 9 finansal borcudur: dönem sonu ${money(fin.closingLiability)} ${esc(fin.currency || "")}, dönem faizi ${money(fin.interest)}.` : exempt ? "Yükümlülük ve kullanım hakkı varlığı oluşmaz; ödemeler kira süresi boyunca doğrusal gider yazılır." : "Tutarlar sunucudaki hesaplamadan gelir."}${row.fxTranslation ? " Yükümlülük dönem sonu, kullanım hakkı varlığı başlangıç tarihi kuruyla çevrilir (TMS 21)." : ""}</p>`;
     }
     else scope = `<div class="lq-cv-scope is-warn"><span class="lq-cv-dot" aria-hidden="true">!</span><div><strong>Kapsam dışı</strong><span>${esc(reasonText(r.error?.code || r.row?.reason))}</span></div></div>`;
     const inc = c.leaseIncreaseType && c.leaseIncreaseType !== "none"

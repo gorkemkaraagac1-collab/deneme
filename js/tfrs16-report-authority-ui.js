@@ -6,7 +6,7 @@
  const metrics=['rouCarryingAmount','leaseLiability','currentLiability','nonCurrentLiability','periodInterest','periodDepreciation',
   'contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability','exemptLeaseExpense'];
  // Server measurement routes this client accepts (sunucu rapor rotaları).
- const ROUTES=new Set(['P1_PLAIN_MONTHLY_ARREARS','ENGINE_REGULAR_GRID_V2','ENGINE_CHANGE_CHAIN_V1','IFRS16_100_SALE_AND_LEASEBACK','IFRS16_6_SHORT_TERM_EXPENSE','IFRS16_6_LOW_VALUE_EXPENSE']);
+ const ROUTES=new Set(['P1_PLAIN_MONTHLY_ARREARS','ENGINE_REGULAR_GRID_V2','ENGINE_CHANGE_CHAIN_V1','IFRS16_100_SALE_AND_LEASEBACK','IFRS16_6_SHORT_TERM_EXPENSE','IFRS16_6_LOW_VALUE_EXPENSE','IFRS16_103_FINANCING_ARRANGEMENT']);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const fail=(code='REPORTING_AUTHORITY_UNAVAILABLE')=>{const e=new Error(code);e.code=code;throw e;};
  const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
