@@ -4160,8 +4160,10 @@ window.fetch = (input, init = {}) => {
    * (çeyreklik/yıllık ödemeli olsa bile) sabit gösteriliyordu.
    */
   function resolvePaymentFrequencyLabel(frequency) {
+    if (String(frequency || "").toLowerCase() === "irregular") return "Düzensiz (tarihli)";
     const step = resolveFrequencyStepMonths(frequency);
     if (step === 3) return "Çeyreklik";
+    if (step === 6) return "Altı aylık";
     if (step === 12) return "Yıllık";
     return "Aylık";
   }
@@ -7039,7 +7041,7 @@ window.fetch = (input, init = {}) => {
       const amount = Number(raw);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !normalizeDate(date)) errors.push(`Ödeme takvimi ${index + 1}. satır: tarih YYYY-AA-GG olmalı.`);
       else if (!(amount > 0)) errors.push(`Ödeme takvimi ${index + 1}. satır: tutar pozitif olmalı.`);
-      else rows.push({ paymentId: `P${index + 1}`, economicDate: date, amount, currency,
+      else rows.push({ line: `${index + 1}.`, paymentId: `P${index + 1}`, economicDate: date, amount, currency,
         paymentClass: "FIXED_LEASE", sourceEvidenceId: reference || `SATIR-${index + 1}` });
     });
     const dates = rows.map(r => r.economicDate);
@@ -7087,9 +7089,11 @@ window.fetch = (input, init = {}) => {
     if (dated) {
       (contract.explicitPaymentScheduleErrors || []).forEach(error => errors.push(error));
       if (!contract.explicitPaymentSchedule?.length) errors.push("Düzensiz ödeme için ödeme takvimini doldurun.");
-      else if (contract.explicitPaymentSchedule.some(r => r.economicDate < contract.startDate || r.economicDate > contract.endDate)) {
-        errors.push("Ödeme takvimindeki tarihler sözleşme başlangıç ve bitiş tarihleri arasında olmalı.");
-      }
+      else contract.explicitPaymentSchedule.forEach(r => {
+        if (r.economicDate < contract.startDate || r.economicDate > contract.endDate) {
+          errors.push(`Ödeme takvimi ${r.line} satır (${r.economicDate}): tarih sözleşme başlangıç ve bitiş tarihleri arasında olmalı.`);
+        }
+      });
     } else if (
       !contract.monthlyPayment ||
       contract.monthlyPayment <= 0
@@ -7561,6 +7565,7 @@ window.fetch = (input, init = {}) => {
             contract
           );
         delete contract.explicitPaymentScheduleErrors;
+        if (contract.explicitPaymentSchedule) contract.explicitPaymentSchedule = contract.explicitPaymentSchedule.map(({ line, ...row }) => row);
 
         if (!validation.valid) {
 

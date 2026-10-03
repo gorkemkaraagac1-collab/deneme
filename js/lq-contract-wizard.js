@@ -76,7 +76,8 @@
     return {
       basics: val("supplier") || val("contractId") || "",
       term: m ? `${m} ay · ${opts ? `${opts} opsiyon` : "opsiyon yok"}` : "",
-      payments: pay ? `${pay} ${val("currency") || ""} · ${optText("paymentFrequency") || ""}` : "",
+      payments: val("paymentFrequency") === "irregular" ? `Takvim · ${String(val("explicitPaymentSchedule") || "").split(/\n/).filter(l => l.trim()).length} ödeme`
+        : pay ? `${pay} ${val("currency") || ""} · ${optText("paymentFrequency") || ""}` : "",
       measure: val("discountRate") ? `İO %${val("discountRate")}` : "",
       review: val("shortTermLease") || val("lowValueAsset") ? "Muafiyet seçili" : ""
     };
@@ -89,9 +90,10 @@
     const timing = String(val("paymentTiming") || "arrears").toLowerCase();
     const exempt = val("shortTermLease") || val("lowValueAsset");
     if (exempt) return `<div class="lq-wz-scope is-na"><i></i>Muafiyet: kullanım hakkı varlığı ve yükümlülük tanınmaz (TFRS 16.5–8)</div>`;
-    const ok = freq === "monthly" && timing === "arrears";
+    if (freq === "irregular") return `<div class="lq-wz-scope is-ok"><i></i>Düzensiz · tarihli ödemeler: rapor rotası (ENGINE_DATED_GRID_V1)</div><p>Tutarlar ödeme takviminden hesaplanır; aylık kira alanı kullanılmaz. Modifikasyon ve yeniden değerlendirme bu sözleşmelerde henüz raporlanmaz.</p>`;
+    const ok = ["monthly", "quarterly", "semiannual", "annual"].includes(freq) && ["arrears", "advance"].includes(timing);
     return ok
-      ? `<div class="lq-wz-scope is-ok"><i></i>Aylık · dönem sonu: sertifikalı rapor rotası</div><p>Şirketin onaylı para birimi profili varsa tutarlar raporlarda ve sözleşme sayfasında görünür.</p>`
+      ? `<div class="lq-wz-scope is-ok"><i></i>${esc(optText("paymentFrequency") || freq)} · ${esc(optText("paymentTiming") || timing)}: rapor rotası</div><p>Şirketin onaylı para birimi profili varsa tutarlar raporlarda ve sözleşme sayfasında görünür.</p>`
       : `<div class="lq-wz-scope is-warn"><i></i>${esc(optText("paymentFrequency") || freq)} · ${esc(optText("paymentTiming") || timing)}: sertifikalı rapor rotası dışında</div><p>Sözleşme kaydedilir ve motor hesaplar; ancak raporlama paketi bu sözleşme için tutar göstermez ("kapsam dışı").</p>`;
   }
 
@@ -142,6 +144,10 @@
   }
 
   function validateStep(i) {
+    // Forms opened for editing set the frequency without a change event.
+    const dated = val("paymentFrequency") === "irregular";
+    if ($("monthlyPayment")) $("monthlyPayment").required = !dated;
+    if ($("explicitPaymentSchedule")) $("explicitPaymentSchedule").required = dated;
     const bad = firstInvalid(panels[STEPS[i].id]);
     if (!bad) return true;
     bad.reportValidity?.();
@@ -201,7 +207,16 @@
     list.addEventListener("click", e => { const b = e.target.closest("[data-wz-go]"); if (b) show(Number(b.dataset.wzGo), true); });
     panels.review.addEventListener("click", e => { const b = e.target.closest("[data-wz-go]"); if (b) { const i = Number(b.dataset.wzGo); show(i, false); validateStep(i); } });
     form.addEventListener("input", () => { renderSide(); if (state.step === STEPS.length - 1) renderReview(); });
-    form.addEventListener("change", () => { renderSide(); if (state.step === STEPS.length - 1) renderReview(); });
+    // A dated schedule carries the amounts: the periodic payment is not
+    // required, the schedule is.
+    const syncDated = () => {
+      const dated = val("paymentFrequency") === "irregular";
+      const pay = $("monthlyPayment"), schedule = $("explicitPaymentSchedule");
+      if (pay) { pay.required = !dated; if (dated) pay.value = "0"; }
+      if (schedule) schedule.required = dated;
+    };
+    syncDated();
+    form.addEventListener("change", () => { syncDated(); renderSide(); if (state.step === STEPS.length - 1) renderReview(); });
     // Kaydet: önce tüm adımlar doğrulanır; gizli adımdaki alan tarayıcıyı sessizce durdurmasın
     saveBtn.addEventListener("click", e => {
       for (let i = 0; i < STEPS.length; i++) {
