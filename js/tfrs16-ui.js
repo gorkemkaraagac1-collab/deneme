@@ -14490,6 +14490,9 @@ ${renderAccountingCenterBulkPromo()}
         const deletedSnapshot = cloneAuditValue(contract);
 
         recordAuditEvent({
+          // The server already wrote this row; reusing its id keeps the
+          // browser copy from becoming a duplicate (ON CONFLICT DO NOTHING).
+          ...(deleteResult?.auditId ? { id: deleteResult.auditId } : {}),
           // Archived (kept for its trusted calculation history) is not a delete.
           action: deleteResult?.archived ? "ARCHIVE" : "DELETE",
           entityType: "CONTRACT",
