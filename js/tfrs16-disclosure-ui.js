@@ -98,7 +98,8 @@
       ...[["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
         ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
         ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments],
-        ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null]]
+        ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null],
+        ["Satış ve geri kiralama kazancı/kaybı (TFRS 16.53(i))", q.saleAndLeasebackGainLoss && q.saleAndLeasebackGainLoss.status !== "NOT_SUPPORTED" ? q.saleAndLeasebackGainLoss : null]]
         .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field))
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
