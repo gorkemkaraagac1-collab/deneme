@@ -3097,6 +3097,7 @@ window.fetch = (input, init = {}) => {
     DATED_CHANGE_AFTER_LEASE_END: "Yürürlük tarihi kira bitişinden önce olmalı.",
     DATED_CHANGE_END_INVALID: "Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalı.",
     DATED_CHANGE_RATE_INVALID: "Yeni iskonto oranı geçersiz.",
+    DATED_CHANGE_SCOPE_REDUCTION_INVALID: "Kapsam azalışı %0 ile %100 arasında (100 hariç) olmalı. Kiralamanın tamamen sona ermesi kapsam azalışı değil, fesihtir.",
     DATED_CHANGE_TERMS_REQUIRED: "Yeni ödeme takvimi, bitiş tarihi veya iskonto oranından en az biri girilmeli.",
     GROUP_A_INSUFFICIENT_EVIDENCE: "Kiralama tanımlama değerlendirmesi eksik.",
     GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
