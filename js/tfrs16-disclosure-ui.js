@@ -63,15 +63,22 @@
     const movement = pkg?.periodMovement || {};
     const rou = movement.rou || {};
     const liability = movement.liability || {};
+    // IAS 29 with an unverified CPI month: name the month instead of a
+    // generic "source required" on every ROU line.
+    const missingCpi = Array.isArray(pkg?.tms29?.missingMonths) ? pkg.tms29.missingMonths : [];
+    const cpiNote = missingCpi.length
+      ? `TMS 29: ${missingCpi.join(", ")} için doğrulanmış TÜFE yok. Endeks doğrulanınca hesaplanır (Yönetim → Enflasyon Endeksleri).`
+      : "";
+    const rouRow = (label, field) => fieldRow(label, field, cpiNote && field?.status === "NOT_CALCULABLE" ? cpiNote : undefined);
     if (tab === "asset") return [
-      fieldRow("Kullanım hakkı varlığı — açılış", rou.opening),
-      fieldRow("İlk muhasebeleştirme ilaveleri", rou.initialRecognitionAdditions || q.initialRecognitionRouAdditions),
-      fieldRow("Sonraki dönem ilaveleri", rou.subsequentAdditions),
-      fieldRow("Dönem amortismanı", rou.depreciation || q.rouDepreciationTotal),
-      fieldRow("Modifikasyon hareketi", rou.modifications),
-      fieldRow("Yeniden değerlendirme / ölçüm hareketi", rou.remeasurements),
-      fieldRow("TMS 29 kullanım hakkı hareketi", rou.tms29Movement),
-      fieldRow("Kullanım hakkı varlığı — kapanış", rou.closing || q.rouCarryingAmount),
+      rouRow("Kullanım hakkı varlığı — açılış", rou.opening),
+      rouRow("İlk muhasebeleştirme ilaveleri", rou.initialRecognitionAdditions || q.initialRecognitionRouAdditions),
+      rouRow("Sonraki dönem ilaveleri", rou.subsequentAdditions),
+      rouRow("Dönem amortismanı", rou.depreciation || q.rouDepreciationTotal),
+      rouRow("Modifikasyon hareketi", rou.modifications),
+      rouRow("Yeniden değerlendirme / ölçüm hareketi", rou.remeasurements),
+      rouRow("TMS 29 kullanım hakkı hareketi", rou.tms29Movement),
+      rouRow("Kullanım hakkı varlığı — kapanış", rou.closing || q.rouCarryingAmount),
       ...classRows("Varlık sınıfına göre amortisman", q.rouDepreciationByAssetClass),
       ...classRows("Varlık sınıfına göre kapanış", q.rouCarryingAmountByAssetClass)
     ];
