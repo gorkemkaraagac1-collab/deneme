@@ -56,6 +56,9 @@ test('bridge: the liability is settled by contractual payments, not total cash o
  const withCash=pkgFor();const sched=withCash.periodMovement.liability.scheduledContractualCash;
  if(sched){withCash.periodMovement.liability.actualCashOutflow={status:'SUPPORTED',value:sched.value+3000};
   assert.equal(bridgeModel(withCash).rows.find(r=>r.id==='payments').value,-Math.abs(sched.value));}
+ // A commencement advance is ROU cost, not a liability settlement.
+ const withAdvance=pkgFor();withAdvance.periodMovement.liability.commencementAdvance={status:'SUPPORTED',value:40};
+ assert.equal(bridgeModel(withAdvance).rows.find(r=>r.id==='payments').value,-(withAdvance.periodMovement.liability.scheduledContractualCash.value-40));
  dom.window.close();
 });
 test('maturity reconciles undiscounted total to carrying amount; asset classes sorted',async()=>{
