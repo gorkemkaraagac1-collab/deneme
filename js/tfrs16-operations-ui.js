@@ -517,6 +517,8 @@ ${footer}
     function showFailure(error, action) {
       const messages = {
         OPERATION_SALE_ASSESSMENT_REQUIRED: "Sözleşmede onaylı TFRS 15 satış değerlendirmesi bulunmuyor.",
+        OPERATION_SALE_ASSESSMENT_REFERENCE_REQUIRED: "TFRS 15 satış değerlendirmesi referansını girin.",
+        OPERATION_LEASEBACK_PV_EVIDENCE_REQUIRED: "Satış sayılıyorsa geri kiralama bugünkü değerini ve kanıt referansını girin.",
         OPERATION_SALE_ASSESSMENT_CONFLICT: "Satış seçimi sözleşmedeki onaylı değerlendirmeyle eşleşmiyor.",
         IDENTIFICATION_MODE_REQUIRED: "Sözleşmenin kiralama değerlendirme yöntemi ve onaylı kaynağı gerekli.",
         EVIDENCE_REQUIRED: "Bu işlem için onaylı değerlendirme kaynağı gerekli.",
@@ -1030,7 +1032,11 @@ ${footer}
           <label>Gerçeğe uygun değer<input id="slbFairValue" type="number" step="0.01" value="${escapeHtml(saved?.fairValueOfAsset ?? "")}" /></label>
           <label>Satış bedeli (tahsil edilen)<input id="slbSaleProceeds" type="number" step="0.01" value="${escapeHtml(saved?.saleProceeds ?? "")}" /></label>
           <label class="lq-op-check"><input id="slbQualifiesAsSale" type="checkbox" ${saved?.qualifiesAsSale ? "checked" : ""} />Devir TFRS 15 anlamında satış sayılıyor</label>
+          <label>TFRS 15 satış değerlendirmesi referansı<input id="slbSaleAssessmentRef" type="text" maxlength="200" placeholder="Belge / rapor / karar no" value="${escapeHtml(saved?.saleAssessment?.reference ?? "")}" /></label>
+          <label>Geri kiralama bugünkü değeri<input id="slbLeasebackPV" type="number" step="0.01" placeholder="Satış sayılıyorsa zorunlu" value="${escapeHtml(saved?.leasebackPV ?? "")}" /></label>
+          <label>Bugünkü değer kanıt referansı<input id="slbLeasebackPVRef" type="text" maxlength="200" placeholder="Değerleme raporu / hesap no" value="${escapeHtml(saved?.leasebackPVEvidence?.reference ?? "")}" /></label>
         </div>
+        <p class="lq-op-hint">Kaydettiğinizde değerlendirme ve bugünkü değer kanıtı sizin adınıza ve kayıt zamanıyla onaylı olarak saklanır (TFRS 16.99–100). Satış sayılmıyorsa bugünkü değer alanlarını boş bırakın.</p>
         <label class="lq-op-note-field">Mesleki muhakeme notu (gerekçe)<textarea id="slbNote" rows="3">${escapeHtml(saved?.professionalJudgmentNote || "")}</textarea></label>
         <button id="slbCalculateButton" type="button" class="primary-button lq-op-primary-button">Sunucu önizlemesini al</button>
         <button id="slbSaveButton" type="button" class="primary-button lq-op-primary-button" disabled>Önizlenen formu kaydet</button>
