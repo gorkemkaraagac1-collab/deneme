@@ -653,8 +653,26 @@ ${footer}
   function operationSourceState(message = "Kaynak gerekli") {
     return `<div class="lq-op-source-state" role="status"><span class="lq-pg-need">${escapeHtml(message)}</span><p>Ölçüm ve finansal etki yalnızca doğrulanmış sunucu paketi geldiğinde gösterilir.</p></div>`;
   }
-  function operationImpactPanel(contract, title, description, resultMountId = "") {
-    return `<aside class="lq-op-side"><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">SÖZLEŞME ÖZETİ</span><h2 class="lq-op-side-title">${escapeHtml(title)}</h2>${operationContractSummary(contract)}</section><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">ETKİ ÖNİZLEMESİ</span><h2 class="lq-op-side-title">İşlem etkisi</h2><p class="lq-op-side-copy">${escapeHtml(description)}</p>${resultMountId ? `<div id="${escapeHtml(resultMountId)}">${operationSourceState()}</div>` : operationSourceState()}</section></aside>`;
+  function operationImpactPanel(contract, title, description, resultMountId = "", contentHtml = "") {
+    const content = contentHtml || operationSourceState();
+    return `<aside class="lq-op-side"><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">SÖZLEŞME ÖZETİ</span><h2 class="lq-op-side-title">${escapeHtml(title)}</h2>${operationContractSummary(contract)}</section><section class="lq-pg-card lq-op-side-card"><span class="lq-pg-kick">ETKİ ÖNİZLEMESİ</span><h2 class="lq-op-side-title">İşlem etkisi</h2><p class="lq-op-side-copy">${escapeHtml(description)}</p>${resultMountId ? `<div id="${escapeHtml(resultMountId)}">${content}</div>` : content}</section></aside>`;
+  }
+  // The latest draft change carries the server's measurement (the preview
+  // runs on the private engine when the draft is created or updated).
+  function changeImpactHtml(contract) {
+    const drafts = [
+      ...(contract?.modifications || []).map(e => ({ e, label: "Modifikasyon" })),
+      ...(contract?.reassessments || []).map(e => ({ e, label: "Yeniden değerlendirme" }))
+    ].filter(({ e }) => String(e?.status || "").toUpperCase() === "DRAFT")
+      .sort((a, b) => String(b.e.updatedAt || b.e.createdAt || "").localeCompare(String(a.e.updatedAt || a.e.createdAt || "")));
+    const latest = drafts[0];
+    if (!latest) return operationSourceState("Taslak oluşturulunca gösterilir");
+    const e = latest.e, ccy = escapeHtml(contract.currency || "");
+    const fmt = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+    const rows = [["Eski yükümlülük", e.oldLeaseLiability], ["Yeni yükümlülük", e.revisedLeaseLiability],
+      ["Yükümlülük düzeltmesi", e.liabilityAdjustment], ["KHV düzeltmesi", e.rouAdjustment],
+      ...(Number(e.gainLoss) ? [["Kazanç / kayıp", e.gainLoss]] : [])];
+    return `<p class="lq-op-side-copy"><strong>${escapeHtml(latest.label)} taslağı</strong> · yürürlük ${escapeHtml(formatOperationDate(e.effectiveDate))}</p><dl class="lq-op-summary-list">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${fmt(v)} ${ccy}</dd></div>`).join("")}</dl>`;
   }
   function enhanceChangeFlow(container) {
     if (!isUiV2()) return;
@@ -873,7 +891,7 @@ ${footer}
       }
       const pending = buildPendingApprovals();
       if (isUiV2()) {
-        container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("İşlemler", "Modifikasyon ve yeniden değerlendirme · sözleşme bazında yönetim")}${pendingHtml(pending)}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26ModReassContractSelect">Sözleşme</label><select id="v26ModReassContractSelect">${optionsHtml}</select>${selectedBanner(selected)}</div><div class="lq-op-events">${body}</div></section>${operationImpactPanel(selected, "Modifikasyon ve yeniden değerlendirme", "Bu form finansal tutarı tarayıcıda hesaplamaz. Doğrulanmış özel sunucu önizlemesi bu panele bağlı olmadığından kaynak gerekli gösterilir.")}</div></div>`;
+        container.innerHTML = `<div class="gk-v26-page lq-pg lq-op-page">${operationPageHeader("İşlemler", "Modifikasyon ve yeniden değerlendirme · sözleşme bazında yönetim")}${pendingHtml(pending)}<div class="lq-op-layout"><section class="lq-pg-card lq-op-main"><div class="lq-op-contract-picker"><label for="v26ModReassContractSelect">Sözleşme</label><select id="v26ModReassContractSelect">${optionsHtml}</select>${selectedBanner(selected)}</div><div class="lq-op-events">${body}</div></section>${operationImpactPanel(selected, "Modifikasyon ve yeniden değerlendirme", "Tutarlar taslak oluşturulurken sunucudaki motor tarafından hesaplanır; tarayıcı hesaplama yapmaz.", "", changeImpactHtml(selected))}</div></div>`;
         enhanceChangeFlow(container);
       } else {
         container.innerHTML = `<div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Modifikasyon &amp; Reassessment</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">Kira modifikasyonu ve reassessment işlemleri artık tek bir ekranda, sözleşme bazında yönetiliyor.</p></div>${pendingHtml(pending)}<div class="gk-v26-card" style="margin-bottom:0;"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme</label><select id="v26ModReassContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${optionsHtml}</select>${selectedBanner(selected)}</div>${body}</div>`;
