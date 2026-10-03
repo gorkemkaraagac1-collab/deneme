@@ -50,13 +50,19 @@
     const actual = l.actualCashOutflow || q.totalCashOutflowForLeases;
     const scheduled = l.scheduledContractualCash || q.scheduledContractualCash;
     const paymentPlanned = hasValue(scheduled);
-    const payment = paymentPlanned ? scheduled : actual;
+    // An advance paid on the commencement date is part of the ROU cost,
+    // not a settlement of the recognised liability (IFRS 16.24(b)).
+    const advance = l.commencementAdvance;
+    const advanceValue = hasValue(advance) ? advance.value : 0;
+    const payment = paymentPlanned
+      ? (advanceValue ? { ...scheduled, value: scheduled.value - advanceValue } : scheduled)
+      : actual;
 
     const steps = [
       { id: "additions", label: "İlk muhasebeleştirme girişleri", field: l.initialRecognitionAdditions },
       { id: "interest", label: "Faiz gideri (etkin faiz)", field: l.interest || q.interestExpense },
       { id: "payments", label: paymentPlanned ? "Kira ödemeleri (sözleşmesel)" : "Kira ödemeleri", field: payment,
-        note: paymentPlanned ? "Yükümlülüğü azaltan sözleşmesel ödemeler; istisna kira ödemeleri hariç." : "", negate: true },
+        note: paymentPlanned ? `Yükümlülüğü azaltan sözleşmesel ödemeler; istisna kira ödemeleri${advanceValue ? " ve başlangıçtaki peşin ödeme (NDD maliyeti)" : ""} hariç.` : "", negate: true },
       { id: "modifications", label: "Modifikasyonlar", field: l.modifications },
       { id: "remeasurements", label: "Yeniden ölçüm", field: l.remeasurements },
       { id: "tms21", label: "TMS 21 kur farkı", field: l.tms21Movement }
