@@ -88,6 +88,7 @@
     const groups = Array.from(years, ([year, items]) => ({
       year, items, count: items.length,
       opening: items[0].openingLiability, closing: items[items.length - 1].closingLiability,
+      rouClosing: items[items.length - 1].rouClosing,
       hasCurrent: items.some(i => i.tag === "cur"), projected: items.every(i => i.tag === "proj"),
       open: year === curYear
     }));
@@ -227,14 +228,14 @@
       const j = jumps.get(i.date);
       return j ? `${money(j.opening)}<small class="lq-cv-muted" style="display:block">${j.change > 0 ? "+" : ""}${money(j.change)} değişiklik</small>` : money(i.openingLiability);
     };
-    const head = `<div class="lq-cv-trow is-head"><span>DÖNEM</span><span>TARİH</span><span>AÇILIŞ YÜK.</span><span>FAİZ</span><span>ÖDEME</span><span>ANAPARA</span><span>KAPANIŞ YÜK.</span><span>AMORTİSMAN</span></div>`;
+    const head = `<div class="lq-cv-trow is-head"><span>DÖNEM</span><span>TARİH</span><span>AÇILIŞ YÜK.</span><span>FAİZ</span><span>ÖDEME</span><span>ANAPARA</span><span>KAPANIŞ YÜK.</span><span>AMORTİSMAN</span><span>KAPANIŞ NDD</span></div>`;
     const body = sch.groups.map(g => {
       const open = state.openYears.has(g.year) ? state.openYears.get(g.year) : g.open;
       const label = g.projected ? "Projeksiyon" : `${g.count} ay`;
       const header = `<button type="button" class="lq-cv-trow is-year" data-lq-cv-year="${esc(g.year)}" aria-expanded="${open}">
-        <span>${open ? "▾" : "▸"} ${esc(g.year)}</span><span>${label}</span><span>${money(g.opening)}</span><span></span><span></span><span></span><span>${money(g.closing)}</span><span></span></button>`;
+        <span>${open ? "▾" : "▸"} ${esc(g.year)}</span><span>${label}</span><span>${money(g.opening)}</span><span></span><span></span><span></span><span>${money(g.closing)}</span><span></span><span>${isNum(g.rouClosing) ? money(g.rouClosing) : ""}</span></button>`;
       if (!open) return header;
-      return header + g.items.map(i => `<div class="lq-cv-trow is-${i.tag}"><span>${esc(i.month)}${i.tag === "cur" ? '<em class="lq-cv-tag is-cur">CARİ</em>' : (i.tag === "proj" ? '<em class="lq-cv-tag">PRJ</em>' : "")}</span><span>${trDate(i.date)}</span><span>${openingCell(i)}</span><span>${money(i.interest)}</span><span>${isNum(i.payment) ? money(-Math.abs(i.payment)) : "—"}</span><span>${money(i.principal)}</span><span class="lq-cv-strong">${money(i.closingLiability)}</span><span>${isNum(i.depreciation) ? money(-Math.abs(i.depreciation)) : "—"}</span></div>`).join("");
+      return header + g.items.map(i => `<div class="lq-cv-trow is-${i.tag}"><span>${esc(i.month)}${i.tag === "cur" ? '<em class="lq-cv-tag is-cur">CARİ</em>' : (i.tag === "proj" ? '<em class="lq-cv-tag">PRJ</em>' : "")}</span><span>${trDate(i.date)}</span><span>${openingCell(i)}</span><span>${money(i.interest)}</span><span>${isNum(i.payment) ? money(-Math.abs(i.payment)) : "—"}</span><span>${money(i.principal)}</span><span class="lq-cv-strong">${money(i.closingLiability)}</span><span>${isNum(i.depreciation) ? money(-Math.abs(i.depreciation)) : "—"}</span><span>${isNum(i.rouClosing) ? money(i.rouClosing) : "—"}</span></div>`).join("");
     }).join("");
     const hash = String(r.row.sourceResultHash || "");
     return `<section class="lq-cv-card lq-cv-table" aria-label="Hesaplama tablosu">
