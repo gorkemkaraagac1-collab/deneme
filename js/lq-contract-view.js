@@ -103,7 +103,17 @@
 
   /* ---------- Sayfa ---------- */
   const $ = id => doc.getElementById(id);
-  const state = { contractId: null, tab: "calc", sub: "modification", report: null, error: null, openYears: new Map() };
+  const state = { contractId: null, tab: "calc", sub: "modification", error: null, openYears: new Map() };
+  // A report for another reporting period is never shown, even while the
+  // new period loads (the dimmed view used to keep the old date/balances).
+  let report = null;
+  Object.defineProperty(state, "report", {
+    get() {
+      const want = period(), got = report?.period?.reportingDate;
+      return got && want?.reportingDate && got !== want.reportingDate ? null : report;
+    },
+    set(v) { report = v; }
+  });
   const TABS = [
     ["summary", "Özet"], ["schedule", "Ödeme planı"], ["calc", "Hesaplama"],
     ["events", "Olaylar"], ["accounting", "Yevmiye"], ["audit", "Denetim izi"]
@@ -520,7 +530,12 @@
     const content = $("detailContent");
     const id = state.contractId;
     const c = contractOf(id);
-    if (!content || !c || $("detailModal")?.classList.contains("hidden")) return;
+    if (!content || !c) return;
+    if ($("detailModal")?.classList.contains("hidden")) {
+      state.report = null; // a hidden detail must not reopen on the old period
+      if (content.querySelector(":scope > .lq-cv-shell")) render(c);
+      return;
+    }
     state.report = null;
     render(c);
     applyTab(false);
