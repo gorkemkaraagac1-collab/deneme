@@ -127,8 +127,8 @@
   const period = () => {
     try { return global.LeaseQantReportingAuthorityUi?.defaultPeriod?.() || null; } catch (_) { return null; }
   };
-  const frequencyText = f => ({ monthly: "Aylık", quarterly: "Çeyreklik", semiannual: "Altı aylık", annual: "Yıllık", yearly: "Yıllık" }[String(f || "").toLowerCase()] || "Aylık");
-  const timingText = t => String(t || "").toLowerCase() === "advance" ? "dönem başı" : "dönem sonu";
+  const frequencyText = f => ({ monthly: "Aylık", quarterly: "Çeyreklik", semiannual: "Altı aylık", annual: "Yıllık", yearly: "Yıllık", irregular: "Düzensiz (tarihli)" }[String(f || "").toLowerCase()] || "Aylık");
+  const timingText = t => ({ advance: "dönem başı", dated: "takvimdeki tarihlerde" }[String(t || "").toLowerCase()] || "dönem sonu");
   const statusChip = s => {
     const v = String(s || "active").toLowerCase();
     const map = { active: ["Aktif", "ok"], draft: ["Taslak", "muted"], terminated: ["Sona erdi", "muted"], expired: ["Sona erdi", "muted"], pending: ["Onay bekliyor", "warn"] };
@@ -276,7 +276,9 @@
     return `<aside class="lq-cv-aside">
       <section class="lq-cv-card lq-cv-pad"><span class="lq-cv-kick">MOTOR KAPSAMI</span>${scope}</section>
       <section class="lq-cv-card lq-cv-pad"><span class="lq-cv-kick">SÖZLEŞME BİLGİLERİ</span>
-        ${row("Dönemsel ödeme", `${money(Number(c.monthlyPayment))} ${esc(c.currency || "")}`, "lq-cv-mono")}
+        ${c.paymentFrequency === "irregular"
+          ? row("Ödeme takvimi", `${esc(String((c.explicitPaymentSchedule || []).length))} ödeme · toplam ${money((c.explicitPaymentSchedule || []).reduce((t, r) => t + Number(r.amount || 0), 0))} ${esc(c.currency || "")}`, "lq-cv-mono")
+          : row("Dönemsel ödeme", `${money(Number(c.monthlyPayment))} ${esc(c.currency || "")}`, "lq-cv-mono")}
         ${row("İskonto oranı", `%${esc(nf2.format(Number(c.discountRate) || 0))}`, "lq-cv-mono")}
         ${row("Artış", inc)}
         ${row("İlk doğrudan maliyet", money(Number(c.initialDirectCosts) || 0), "lq-cv-mono")}

@@ -467,6 +467,7 @@
                   <option value="quarterly">Çeyreklik</option>
                   <option value="semiannual">Altı aylık</option>
                   <option value="annual">Yıllık</option>
+                  <option value="irregular">Düzensiz (tarihli ödemeler)</option>
                 </select>
               </div>
               <div class="form-field">
@@ -540,7 +541,7 @@
                 <label for="explicitPaymentSchedule">Özel / düzensiz ödeme takvimi</label>
                 <textarea id="explicitPaymentSchedule" name="explicitPaymentSchedule" rows="5"
                   placeholder="2027-02-15 | 100000 | 1. ödeme&#10;2027-03-31 | 100000 | 2. ödeme&#10;2027-05-10 | 125000 | 3. ödeme"></textarea>
-                <small>Opsiyonel. Her satır: Ödeme tarihi | Tutar | Açıklama. Doldurulursa standart aylık/çeyreklik/yıllık ödeme tarihleri yerine bu gerçek tarihler ve tutarlar kullanılır.</small>
+                <small>Ödeme sıklığı "Düzensiz" seçildiğinde zorunludur. Her satır: Ödeme tarihi | Tutar | Fatura/kanıt referansı. Tarihler sözleşme süresi içinde ve birbirinden farklı olmalı; aylık kira alanı kullanılmaz.</small>
               </div>
               <div class="form-field">
                 <label for="rentFreePeriods">Kira ücretsiz dönemler</label>
