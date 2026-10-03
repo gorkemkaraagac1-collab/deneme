@@ -44,17 +44,17 @@ jobs:
           from pathlib import Path
           import os, re
 
-          page = Path('_site/tfrs16.html')
-          text = page.read_text(encoding='utf-8')
           sha = os.environ['DEPLOY_SHA']
-          updated, count = re.subn(
-              r'js/tfrs16-ui\.js\?v=[^"\']+',
-              f'js/tfrs16-ui.js?v={sha}',
-              text,
-          )
-          if count != 1:
-              raise SystemExit(f'Expected one TFRS16 UI asset reference, found {count}')
-          page.write_text(updated, encoding='utf-8')
+          # Every local script/stylesheet gets the deploy SHA: a hand-kept
+          # ?v= tag left other files cached across releases.
+          asset = re.compile(r'((?:js|css|frontend)/[^"\'?#]+\.(?:js|css))(?:\?v=[^"\']*)?(["\'])')
+          for page in Path('_site').rglob('*.html'):
+              text = page.read_text(encoding='utf-8')
+              updated, count = asset.subn(lambda m: f'{m.group(1)}?v={sha}{m.group(2)}', text)
+              if page == Path('_site/tfrs16.html') and f'js/tfrs16-ui.js?v={sha}' not in updated:
+                  raise SystemExit('TFRS16 UI asset reference was not versioned')
+              if count:
+                  page.write_text(updated, encoding='utf-8')
           PY
 
       - name: Verify public artifact boundary
