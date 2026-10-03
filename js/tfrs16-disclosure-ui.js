@@ -500,7 +500,7 @@
           + (sourceRequired ? `<p>${sourceContractIds.length ? `${sourceContractIds.length} kapsam sözleşmesi` : "Bu dönem için sözleşme kapsamı yok"}. Açıkça başlatıldığında sunucu kayıtlı sözleşme şartları ve desteklediği muhasebe yolu üzerinden hesaplama/snapshot üretir; yevmiye veya defter kaydı oluşturmaz.</p>`
             + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureCreateTrustedSource" ${!sourceContractIds.length ? "disabled" : ""}>Güvenilir kaynağı oluştur</button>` : "")
           + (state.productionSummary ? `<p role="status">${escapeHtml(state.productionSummary)}</p>` : "")
-          + `<details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code></details>`
+          + `<details><summary>Teknik ayrıntı</summary><code>${escapeHtml(state.error?.code || "DISCLOSURE_SOURCE_UNAVAILABLE")}</code>${state.error?.details?.cause ? `<pre style="white-space:pre-wrap;font-size:11px;color:#64748b">${escapeHtml(state.error.details.cause)}</pre>` : ""}</details>`
         : `${renderRows(rows)}<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureExport">↓ Dipnotu Dışa Aktar</button>`;
       const pkg = state.pkg;
       const source = pkg ? `<details style="margin-top:16px"><summary>Kaynak ve doğrulama bilgisi</summary>`

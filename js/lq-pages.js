@@ -643,7 +643,7 @@
         return `<div class="lq-pg-ftr">${name(c)}${fieldCell(r.opening)}${fieldCell(r.initialRecognitionAdditions)}${fieldCell(r.subsequentAdditions)}${dep !== null ? `<span>${acc0(-Math.abs(dep))}</span>` : fieldCell(r.depreciation)}${fieldCell(r.modifications)}${fieldCell(r.remeasurements)}${fieldCell(r.tms29Movement)}<span class="is-strong">${acc0(fv(r.closing))}</span></div>`;
       });
       html = frTable(cols, lines) + notice(liab
-        ? "<strong>Fark sütunu</strong> kapanış ile paketteki hareketlerin toplamı arasındaki farktır; pakette TMS 29 parasal kazanç/kayıp için ayrı alan olmadığından bu sütunda görünür. Kira yükümlülüğü parasal kalemdir; kur farkı TMS 21 uyarınca kâr veya zarardadır."
+        ? "<strong>Fark sütunu</strong> kapanış ile paketteki hareketlerin toplamı arasındaki farktır; pakette TMS 29 parasal kazanç/kayıp için ayrı alan olmadığından bu sütunda görünür. Kira yükümlülüğü parasal kalemdir; kur farkı TMS 21 uyarınca kâr veya zarardadır. <strong>Kira ödemeleri</strong> sözleşmesel ödemelerdir; istisna kira ödemeleri ve başlangıç tarihindeki peşin ödemeler (kullanım hakkı maliyetinin parçası, TFRS 16.24(b)) hariçtir."
         : "Kullanım hakkı varlığı parasal olmayan kalemdir; kur farkı oluşmaz. TMS 29 uygulanıyorsa düzeltme ayrı sütundadır.");
     } else if (fr.tab === "expense" || fr.tab === "split") {
       const exp = fr.tab === "expense";
