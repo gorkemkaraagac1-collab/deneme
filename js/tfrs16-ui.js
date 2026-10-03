@@ -14490,7 +14490,8 @@ ${renderAccountingCenterBulkPromo()}
         const deletedSnapshot = cloneAuditValue(contract);
 
         recordAuditEvent({
-          action: "DELETE",
+          // Archived (kept for its trusted calculation history) is not a delete.
+          action: deleteResult?.archived ? "ARCHIVE" : "DELETE",
           entityType: "CONTRACT",
           entityId: contract.id,
           contractId: contract.id,
