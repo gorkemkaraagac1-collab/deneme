@@ -1433,7 +1433,8 @@ function legacyOpenAuditDetail(index) {
                 <div>
                     ${escapeHtml(
                         event.user_username ||
-                        "System"
+                        event.actor ||
+                        "Sistem"
                     )}
                 </div>
 
