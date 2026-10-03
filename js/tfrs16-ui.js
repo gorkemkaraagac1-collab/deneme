@@ -3087,7 +3087,17 @@ window.fetch = (input, init = {}) => {
 
   // Server lifecycle error codes shown in Turkish (sunucu hata kodları).
   const LIFECYCLE_ERROR_TEXT = {
-    PAYMENT_L3_CALENDAR_UNSUPPORTED: "Düzensiz ödeme planlı sözleşmelerde modifikasyon ve yeniden değerlendirme henüz desteklenmiyor.",
+    PAYMENT_L3_CALENDAR_UNSUPPORTED: "Bu ödeme planında modifikasyon ve yeniden değerlendirme desteklenmiyor.",
+    DATED_CHANGE_PAYMENT_OUTSIDE_TERM: "Yeni ödeme takvimindeki tarihler yürürlük tarihinden SONRA ve yeni kira bitiş tarihinden önce (veya aynı gün) olmalı.",
+    DATED_CHANGE_SAME_DAY_PAYMENT: "Yeni ödeme takviminde aynı tarih birden fazla kez var.",
+    DATED_CHANGE_PAYMENT_AMOUNT_INVALID: "Yeni ödeme takvimindeki tutarlar pozitif olmalı.",
+    DATED_CHANGE_PAYMENT_DATE_INVALID: "Yeni ödeme takviminde tarih YYYY-AA-GG olmalı.",
+    DATED_CHANGE_DATE_INVALID: "Yürürlük tarihi kira başlangıcından sonra olmalı ve aynı tarihte uygulanmış başka bir değişiklik bulunmamalı.",
+    DATED_CHANGE_BEFORE_APPLIED_CHANGE: "Bu tarihten sonra uygulanmış bir değişiklik var; daha eski tarihli değişiklik eklenemez.",
+    DATED_CHANGE_AFTER_LEASE_END: "Yürürlük tarihi kira bitişinden önce olmalı.",
+    DATED_CHANGE_END_INVALID: "Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalı.",
+    DATED_CHANGE_RATE_INVALID: "Yeni iskonto oranı geçersiz.",
+    DATED_CHANGE_TERMS_REQUIRED: "Yeni ödeme takvimi, bitiş tarihi veya iskonto oranından en az biri girilmeli.",
     GROUP_A_INSUFFICIENT_EVIDENCE: "Kiralama tanımlama değerlendirmesi eksik.",
     GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
   };
@@ -7709,12 +7719,18 @@ window.fetch = (input, init = {}) => {
         );
 
         } catch (error) {
-          console.error("Sözleşme kaydedilirken hata:", error);
-          showAlert(
-            "Sözleşme kaydedilemedi: " +
-            (error?.message || String(error)) +
-            "\n\n(Teknik detay konsolda — F12/Web Inspector.)"
-          );
+          // A taken id (also by an archived contract, kept for its
+          // calculation history) is a user-fixable conflict, not a crash.
+          if (error?.status === 409 || /already exists/i.test(String(error?.message || ""))) {
+            showAlert("Bu Sözleşme ID'si zaten kullanılıyor (arşivlenmiş bir sözleşmede olabilir; arşivlenen sözleşmelerin ID'si hesaplama geçmişi için saklanır). Farklı bir ID girin.");
+          } else {
+            console.error("Sözleşme kaydedilirken hata:", error);
+            showAlert(
+              "Sözleşme kaydedilemedi: " +
+              (error?.message || String(error)) +
+              "\n\n(Teknik detay konsolda — F12/Web Inspector.)"
+            );
+          }
         } finally {
           if (submitButton) setButtonLoading(submitButton, false);
         }
