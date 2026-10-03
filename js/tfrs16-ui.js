@@ -7613,7 +7613,7 @@ window.fetch = (input, init = {}) => {
         }
 
         // PostgreSQL'e önce yaz — hata olursa yerel liste değişmez
-        await persistContractToApi(contract, Boolean(existing));
+        const persisted = await persistContractToApi(contract, Boolean(existing));
         contract.companyId =
           contract.companyId ||
           document.getElementById("companyId")?.value ||
@@ -7633,6 +7633,8 @@ window.fetch = (input, init = {}) => {
             );
 
           recordAuditEvent({
+            // The server wrote this UPDATE row; reuse its id (no duplicate).
+            ...(persisted?.auditId ? { id: persisted.auditId } : {}),
             action: "UPDATE",
             entityType: "CONTRACT",
             entityId: id,

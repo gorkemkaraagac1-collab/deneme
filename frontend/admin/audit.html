@@ -1061,7 +1061,8 @@ function renderAudit() {
 
                                 ${escapeHtml(
                                     event.user_username ||
-                                    "System"
+                                    event.actor ||
+                                    "Sistem"
                                 )}
 
                             </td>
@@ -1432,7 +1433,8 @@ function legacyOpenAuditDetail(index) {
                 <div>
                     ${escapeHtml(
                         event.user_username ||
-                        "System"
+                        event.actor ||
+                        "Sistem"
                     )}
                 </div>
 
@@ -1640,7 +1642,7 @@ function openAuditDetail(index) {
         eyebrow: `${event.success ? '<span class="lq-chip ok">Başarılı</span>' : '<span class="lq-chip err">Başarısız</span>'}<span>${escapeHtml(event.id ? String(event.id) : "")}</span>`,
         title: auditActionLabel(event.action),
         body: `<dl class="lq-kv"><dt>Zaman</dt><dd>${escapeHtml(formatDate(event.timestamp))}</dd>
-            <dt>Kullanıcı</dt><dd>${escapeHtml(event.user_username || "Sistem")}</dd>
+            <dt>Kullanıcı</dt><dd>${escapeHtml(event.user_username || event.actor || "Sistem")}</dd>
             <dt>Şirket</dt><dd>${escapeHtml(company)}</dd>
             <dt>Varlık</dt><dd>${escapeHtml(auditEntityLabel(event.entity_type))}${event.entity_id ? ` · <span style="font-family:var(--mono)">${escapeHtml(String(event.entity_id))}</span>` : ""}</dd>
             <dt>İşlem kodu</dt><dd style="font-family:var(--mono);font-size:12.5px">${escapeHtml(event.action || "—")}</dd></dl>
