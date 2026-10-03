@@ -10846,13 +10846,22 @@ ${renderAccountingCenterBulkPromo()}
     container.innerHTML = formHtml;
 
     if (document.documentElement.getAttribute("data-lq-ui") === "2") {
-      bindPersistedOperationForm(contract, "SALE_AND_LEASEBACK", "slb", () => ({
-        previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
-        fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
-        saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
-        qualifiesAsSale: !!document.getElementById("slbQualifiesAsSale")?.checked,
-        professionalJudgmentNote: document.getElementById("slbNote")?.value || ""
-      }), renderSlbResultHtml);
+      bindPersistedOperationForm(contract, "SALE_AND_LEASEBACK", "slb", () => {
+        const sale = !!document.getElementById("slbQualifiesAsSale")?.checked;
+        const pvRaw = document.getElementById("slbLeasebackPV")?.value;
+        const pvRef = (document.getElementById("slbLeasebackPVRef")?.value || "").trim();
+        return {
+          previousCarryingAmount: Number(document.getElementById("slbCarryingAmount")?.value),
+          fairValueOfAsset: Number(document.getElementById("slbFairValue")?.value),
+          saleProceeds: Number(document.getElementById("slbSaleProceeds")?.value),
+          qualifiesAsSale: sale,
+          professionalJudgmentNote: document.getElementById("slbNote")?.value || "",
+          saleAssessmentReference: (document.getElementById("slbSaleAssessmentRef")?.value || "").trim(),
+          // A failed sale carries no leaseback PV evidence (TFRS 16.103).
+          leasebackPV: sale && pvRaw !== "" && pvRaw != null ? Number(pvRaw) : null,
+          leasebackPVReference: sale ? pvRef : null
+        };
+      }, renderSlbResultHtml);
       return;
     }
 
