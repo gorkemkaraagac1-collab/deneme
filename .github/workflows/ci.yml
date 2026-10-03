@@ -17,5 +17,7 @@ jobs:
           # Presentation/transport tests are public source, excluded from Pages.
           # Private engines, source DTO evidence and mapping config stay forbidden.
           node scripts/check-authority-public-boundary.js
+      - name: Syntax-check public scripts
+        run: for f in js/*.js; do node --check "$f"; done
       - name: Verify TFRS16 private cutover gate
         run: node scripts/check-tfrs16-cutover.js

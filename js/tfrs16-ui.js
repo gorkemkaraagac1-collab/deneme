@@ -7053,6 +7053,12 @@ window.fetch = (input, init = {}) => {
     return { rows: rows.sort((a, b) => a.economicDate.localeCompare(b.economicDate)), errors };
   }
 
+  // Remaining dated payments after a date, as editable "Tarih | Tutar | Referans" lines.
+  function datedScheduleText(contract, after) {
+    return escapeHtml((contract?.explicitPaymentSchedule || []).filter(r => r.economicDate > after)
+      .map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n"));
+  }
+
   // Months n with start+(n-1) months < end <= start+n months (server rule).
   function datedTermMonths(startDate, endDate) {
     const start = new Date(`${startDate}T00:00:00Z`), end = `${endDate}`;
@@ -9999,7 +10005,7 @@ ${renderAccountingCenterBulkPromo()}
             </label>
             ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">
               Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)
-              <textarea id="modificationNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">escapeHtml((contract.explicitPaymentSchedule || []).filter(r => r.economicDate > today).map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n"))</textarea>
+              <textarea id="modificationNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">${datedScheduleText(contract, today)}</textarea>
               <input id="modificationNewPayment" type="hidden" value="0">
             </label>` : `<label style="font-size:10px;font-weight:700;">
               Yeni Aylık Ödeme
@@ -10269,7 +10275,7 @@ ${renderAccountingCenterBulkPromo()}
               <option value="COMBINED_REASSESSMENT">Birleşik Reassessment</option>
               <option value="OTHER">Diğer</option>
             </select></label>
-            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">escapeHtml((contract.explicitPaymentSchedule || []).filter(r => r.economicDate > today).map(r => `${r.economicDate} | ${r.amount} | ${r.sourceEvidenceId || ""}`).join("\n"))</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>`}
+            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">${datedScheduleText(contract, today)}</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>`}
             <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yenileme Opsiyonu<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
