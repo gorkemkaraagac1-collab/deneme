@@ -6,7 +6,7 @@
  const metrics=['rouCarryingAmount','leaseLiability','currentLiability','nonCurrentLiability','periodInterest','periodDepreciation',
   'contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability','exemptLeaseExpense'];
  // Server measurement routes this client accepts (sunucu rapor rotaları).
- const ROUTES=new Set(['P1_PLAIN_MONTHLY_ARREARS','ENGINE_REGULAR_GRID_V2','ENGINE_CHANGE_CHAIN_V1','IFRS16_6_SHORT_TERM_EXPENSE','IFRS16_6_LOW_VALUE_EXPENSE']);
+ const ROUTES=new Set(['P1_PLAIN_MONTHLY_ARREARS','ENGINE_REGULAR_GRID_V2','ENGINE_CHANGE_CHAIN_V1','IFRS16_100_SALE_AND_LEASEBACK','IFRS16_6_SHORT_TERM_EXPENSE','IFRS16_6_LOW_VALUE_EXPENSE']);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const fail=(code='REPORTING_AUTHORITY_UNAVAILABLE')=>{const e=new Error(code);e.code=code;throw e;};
  const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
@@ -89,7 +89,9 @@
   REQUIRES_CONFIGURATION:'Yapılandırma gerekli',REQUIRES_ENTITY_INPUT:'Şirket verisi gerekli',
   COMPLETE_POPULATION:'Tam kapsam',UNAVAILABLE:'Kapsam hazır değil',SUPPORTED_CALCULATION_DIAGNOSTICS:'Hesaplama kontrolleri mevcut'}[status]
   ||'Kaynak doğrulaması gerekli');}
- function reasonLabel(reason){if(reason==='REPORTING_SALE_LEASEBACK_NOT_SUPPORTED')return 'Satış ve geri kiralama raporda henüz desteklenmiyor';
+ function reasonLabel(reason){if(reason==='REPORTING_SALE_LEASEBACK_EVIDENCE_REQUIRED')return 'Satış ve geri kiralama için onaylı satış değerlendirmesi ve bugünkü değer kanıtı gerekli';
+  if(reason==='REPORTING_SALE_LEASEBACK_FAILED_SALE_NOT_SUPPORTED')return 'Satış sayılmayan devir (finansal borç) raporda henüz yok';
+  if(reason==='REPORTING_SALE_LEASEBACK_COMBINATION_NOT_SUPPORTED')return 'Satış ve geri kiralama ile modifikasyon/alt kiralama birlikte henüz desteklenmiyor';
   if(reason==='REPORTING_FINANCE_SUBLEASE_NOT_SUPPORTED')return 'Finansal alt kiralama raporda henüz desteklenmiyor';
   if(reason==='REPORTING_SUBLEASE_INVALID'||reason==='REPORTING_SUBLEASE_CURRENCY_NOT_SUPPORTED')return 'Alt kiralama şartlarını kontrol edin';
   if(reason==='REPORTING_FX_RATE_REQUIRED')return 'Doğrulanmış TCMB kuru yok (dönem sonu gelecekte veya kur eksik)';
