@@ -79,6 +79,9 @@
       rouRow("Yeniden değerlendirme / ölçüm hareketi", rou.remeasurements),
       ...(rou.subleaseDerecognition && rou.subleaseDerecognition.status !== "NOT_SUPPORTED"
         ? [rouRow("Finansal alt kiralamaya devredilen kullanım hakkı (TFRS 16.B58)", rou.subleaseDerecognition)] : []),
+      // The derecognition gain/loss belongs next to the ROU it arises from.
+      ...(q.subleaseDerecognitionGainLoss && q.subleaseDerecognitionGainLoss.status !== "NOT_SUPPORTED" && q.subleaseDerecognitionGainLoss.value
+        ? [fieldRow("Finansal alt kiralama devir kazancı/kaybı (TFRS 16.B58)", q.subleaseDerecognitionGainLoss)] : []),
       rouRow("TMS 29 kullanım hakkı hareketi", rou.tms29Movement),
       rouRow("Kullanım hakkı varlığı — kapanış", rou.closing || q.rouCarryingAmount),
       ...classRows("Varlık sınıfına göre amortisman", q.rouDepreciationByAssetClass),
@@ -101,8 +104,7 @@
         ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
         ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments],
         ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null],
-        ["Satış ve geri kiralama kazancı/kaybı (TFRS 16.53(i))", q.saleAndLeasebackGainLoss && q.saleAndLeasebackGainLoss.status !== "NOT_SUPPORTED" ? q.saleAndLeasebackGainLoss : null],
-        ["Finansal alt kiralama devir kazancı/kaybı (TFRS 16.B58)", q.subleaseDerecognitionGainLoss && q.subleaseDerecognitionGainLoss.status !== "NOT_SUPPORTED" && q.subleaseDerecognitionGainLoss.value ? q.subleaseDerecognitionGainLoss : null]]
+        ["Satış ve geri kiralama kazancı/kaybı (TFRS 16.53(i))", q.saleAndLeasebackGainLoss && q.saleAndLeasebackGainLoss.status !== "NOT_SUPPORTED" ? q.saleAndLeasebackGainLoss : null]]
         .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field))
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
