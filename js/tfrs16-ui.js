@@ -3110,6 +3110,23 @@ window.fetch = (input, init = {}) => {
   }
 
 
+  // A lifecycle form button is available only once a field differs from the
+  // values the form was rendered or loaded with (and never while saving).
+  // A button rendered disabled (closed period) stays disabled.
+  function trackFormChanges(button, ids) {
+    if (!button || button.disabled) return { reset() {}, sync() {} };
+    const read = () => JSON.stringify(ids.map(id => document.getElementById(id)?.value ?? null));
+    let baseline = read();
+    const sync = () => { button.disabled = read() === baseline; };
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      el?.addEventListener("input", sync);
+      el?.addEventListener("change", sync);
+    });
+    sync();
+    return { reset() { baseline = read(); sync(); }, sync };
+  }
+
   function modificationEconomicKey(modification) {
     if (!modification) return "";
     const terms = modification.newTerms || {};
@@ -6922,6 +6939,7 @@ window.fetch = (input, init = {}) => {
 
     let editingModificationId = null;
     const createButton = document.getElementById("createModificationButton");
+    const formChanges = trackFormChanges(createButton, ["modificationDate", "modificationEffectiveDate", "modificationType", "modificationNewPayment", "modificationNewEndDate", "modificationNewDiscountRate", "modificationScopeReduction", "modificationScopeIncrease", "modificationReason", "modificationNewSchedule"]);
 
     function resetModificationFormMode() {
       editingModificationId = null;
@@ -6936,9 +6954,11 @@ window.fetch = (input, init = {}) => {
       setValue("modificationDate", item.modificationDate || new Date().toISOString().slice(0, 10));
       setValue("modificationEffectiveDate", item.effectiveDate || "");
       setValue("modificationType", item.modificationType || "OTHER");
-      setValue("modificationNewPayment", item.newPayment ?? (Number(contract.monthlyPayment) || 0));
-      setValue("modificationNewEndDate", item.newLeaseEndDate || item.leaseEndDate || "");
-      setValue("modificationNewDiscountRate", item.newDiscountRate ?? (Number(contract.discountRate) || 0));
+      // Saved drafts keep the revised terms in newTerms.
+      const terms = item.newTerms || {};
+      setValue("modificationNewPayment", item.newPayment ?? terms.payment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("modificationNewEndDate", item.newLeaseEndDate || item.leaseEndDate || terms.leaseEndDate || terms.leaseTerm || "");
+      setValue("modificationNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? (Number(contract.discountRate) || 0));
       setValue("modificationScopeReduction", item.scopeReductionPercent || 0);
       setValue("modificationScopeIncrease", item.scopeIncreasePercent || 0);
       setValue("modificationReason", item.reason || "");
@@ -6989,6 +7009,7 @@ window.fetch = (input, init = {}) => {
 
       createButton.disabled = false;
       createButton.textContent = originalLabel;
+      formChanges.sync();
 
       if (!result.valid) {
         showAlert(changeErrorText(result));
@@ -7005,6 +7026,7 @@ window.fetch = (input, init = {}) => {
         if (!item) return;
         editingModificationId = id;
         populateModificationForm(item);
+        formChanges.reset();
         if (createButton) {
           createButton.textContent = "Modifikasyonu Güncelle";
           createButton.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -7155,6 +7177,7 @@ window.fetch = (input, init = {}) => {
 
     let editingReassessmentId = null;
     const createButton = document.getElementById("createReassessmentButton");
+    const formChanges = trackFormChanges(createButton, ["reassessmentDate", "reassessmentEffectiveDate", "reassessmentType", "reassessmentNewPayment", "reassessmentNewEndDate", "reassessmentNewDiscountRate", "reassessmentRenewalOption", "reassessmentTerminationOption", "reassessmentPurchaseOption", "reassessmentReason", "reassessmentNewSchedule"]);
 
     function resetReassessmentFormMode() {
       editingReassessmentId = null;
@@ -7169,12 +7192,14 @@ window.fetch = (input, init = {}) => {
       setValue("reassessmentDate", item.reassessmentDate || new Date().toISOString().slice(0, 10));
       setValue("reassessmentEffectiveDate", item.effectiveDate || "");
       setValue("reassessmentType", item.type || "OTHER");
-      setValue("reassessmentNewPayment", item.newPayment ?? (Number(contract.monthlyPayment) || 0));
-      setValue("reassessmentNewEndDate", item.newLeaseEndDate || item.leaseEndDate || "");
-      setValue("reassessmentNewDiscountRate", item.newDiscountRate ?? (Number(contract.discountRate) || 0));
-      setValue("reassessmentRenewalOption", String(item.newRenewalOption === true));
-      setValue("reassessmentTerminationOption", String(item.newTerminationOption === true));
-      setValue("reassessmentPurchaseOption", String(item.newPurchaseOption === true));
+      // Saved drafts keep the revised terms in newTerms.
+      const terms = item.newTerms || {};
+      setValue("reassessmentNewPayment", item.newPayment ?? terms.payment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("reassessmentNewEndDate", item.newLeaseEndDate || item.leaseEndDate || terms.leaseEndDate || terms.leaseTerm || "");
+      setValue("reassessmentNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? (Number(contract.discountRate) || 0));
+      setValue("reassessmentRenewalOption", String((item.newRenewalOption ?? terms.renewalOption) === true));
+      setValue("reassessmentTerminationOption", String((item.newTerminationOption ?? terms.terminationOption) === true));
+      setValue("reassessmentPurchaseOption", String((item.newPurchaseOption ?? terms.purchaseOption) === true));
       setValue("reassessmentReason", item.reason || "");
     }
 
@@ -7209,6 +7234,7 @@ window.fetch = (input, init = {}) => {
 
       createButton.disabled = false;
       createButton.textContent = originalLabel;
+      formChanges.sync();
 
       if (!result.valid) {
         showAlert(changeErrorText(result));
@@ -7224,6 +7250,7 @@ window.fetch = (input, init = {}) => {
         if (!item) return;
         editingReassessmentId = id;
         populateReassessmentForm(item);
+        formChanges.reset();
         if (createButton) {
           createButton.textContent = "Reassessmenti Güncelle";
           createButton.scrollIntoView({ behavior: "smooth", block: "center" });

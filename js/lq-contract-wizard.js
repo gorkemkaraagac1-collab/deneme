@@ -206,6 +206,8 @@
     footerNext.addEventListener("click", () => { if (validateStep(state.step)) show(state.step + 1, true); });
     list.addEventListener("click", e => { const b = e.target.closest("[data-wz-go]"); if (b) show(Number(b.dataset.wzGo), true); });
     panels.review.addEventListener("click", e => { const b = e.target.closest("[data-wz-go]"); if (b) { const i = Number(b.dataset.wzGo); show(i, false); validateStep(i); } });
+    form.addEventListener("input", syncSave);
+    form.addEventListener("change", syncSave);
     form.addEventListener("input", () => { renderSide(); if (state.step === STEPS.length - 1) renderReview(); });
     // A dated schedule carries the amounts: the periodic payment is not
     // required, the schedule is.
@@ -228,6 +230,15 @@
     });
   }
 
+  // Editing an existing contract: Kaydet is available only after a field
+  // differs from the values the form was opened with.
+  const snapshot = () => JSON.stringify(Array.from(form.elements).filter(el => el.name || el.id)
+    .map(el => [el.name || el.id, el.type === "checkbox" || el.type === "radio" ? el.checked : el.value]));
+  function syncSave() {
+    if (!saveBtn || saveBtn.dataset.lqBusy === "1") return;
+    saveBtn.disabled = state.baseline != null && snapshot() === state.baseline;
+  }
+
   function onOpen() {
     build();
     if (!state.built) return;
@@ -235,6 +246,9 @@
     const editing = /düzenle/i.test($("contractModalTitle")?.textContent || "");
     modal.classList.toggle("is-edit", editing);
     show(0, false);
+    state.baseline = null;
+    if (saveBtn) saveBtn.disabled = false;
+    if (editing) global.setTimeout(() => { state.baseline = snapshot(); syncSave(); }, 0);
     global.setTimeout(() => panels.basics.querySelector("input:not([type=hidden]):not(.lq-date-native), select")?.focus(), 30);
   }
 
