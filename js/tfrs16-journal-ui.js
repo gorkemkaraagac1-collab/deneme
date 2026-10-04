@@ -296,28 +296,32 @@
       <table class="gk-v26-table"><thead><tr><th>Muhasebe amacı</th><th>Hesap kodu</th><th>Hesap adı</th></tr></thead><tbody>${voucher.lines.map(line => `<tr><td>${escape(line.accountPurpose)}</td><td>${escape(line.accountCode)}</td><td>${escape(line.accountName)}</td></tr>`).join("")}</tbody></table></section>`).join("");
   }
 
+  // Ayarlar → Hesap Planı: the company's approved TFRS 16 account mapping,
+  // read-only (approval happens in Yönetim → Hesap eşlemesi).
   function renderAccountMapping(container, options) {
     let sequence = 0;
     const companies = options.companies || [];
-    container.innerHTML = `<div class="gk-v26-page"><h2>Onaylı hesap eşleme kaynağı</h2><p>Fişlerde sunucunun onayladığı şirket eşlemesi kullanılır. Aşağıda dönem fişlerinde kullanılan hesaplar gösterilir; eşlemenin tüm kapsamı değildir. Değişiklikler yetkili sunucu onay sürecinde yapılmalıdır. Yerel varsayılanlar fiş kaynağı değildir.</p><label>Şirket <select id="amCompanySelect">${companies.map(c => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join("")}</select></label><div id="amStatus" role="status" aria-live="polite"></div><div data-approved-mapping></div></div>`;
+    container.innerHTML = `<div class="gk-v26-page"><h2>Onaylı hesap eşlemesi</h2><p>TFRS 16 dönem yevmiyesi bu hesap kodlarıyla üretilir. Eşleme yönetim panelindeki "Hesap eşlemesi" ekranından onaylanır; burada salt okunur gösterilir.</p><label>Şirket <select id="amCompanySelect">${companies.map(c => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join("")}</select></label><div id="amStatus" role="status" aria-live="polite" style="margin:10px 0"></div><div data-approved-mapping></div></div>`;
     const select = container.querySelector("#amCompanySelect"), target = container.querySelector("[data-approved-mapping]"), status = container.querySelector("#amStatus");
     if (companies.some(c => String(c.id) === String(options.companyId))) select.value = String(options.companyId);
     async function refresh() {
       const seq = ++sequence, companyId = select.value;
       container.dataset.companyId = companyId;
-      target.innerHTML = "";status.textContent = "Onaylı fiş eşleme kaynağı yükleniyor…";
+      target.innerHTML = ""; status.textContent = "Onaylı hesap eşlemesi yükleniyor…";
       try {
-        const period = global.LeaseQantReportingPeriod?.get?.() || global.LeaseQantReportingAuthorityUi?.defaultPeriod?.();
-        if (!period?.periodStart || !period?.periodEnd) fail("JOURNAL_SCOPE_REQUIRED");
-        const contracts = (options.contracts || []).filter(c => String(c.companyId) === companyId && c.status === "active");
-        if (!contracts.length) fail("JOURNAL_POPULATION_EMPTY");
-        const pkg = await load({companyId, contractIds:contracts.map(c => c.id), kind:"PERIOD", periodStart:period.periodStart,periodEnd:period.periodEnd},true);
+        const api = global.LeaseQantPrivateCalculation;
+        if (typeof api?.getApprovedAccountMapping !== "function") fail("JOURNAL_MAPPING_UNAVAILABLE");
+        const mapping = await api.getApprovedAccountMapping(companyId);
         if (seq !== sequence || !target.isConnected || select.value !== companyId) return;
-        target.innerHTML = mappingHtml(pkg);
-        status.textContent = "Doğrulanmış sunucu fişi · salt okunur. Tam eşleme yönetim kaynağı bu arayüzde bulunmuyor.";
-      } catch(error) {
+        if (!mapping) {
+          status.textContent = "Bu şirket için onaylı hesap eşlemesi yok. Yönetim → Hesap eşlemesi ekranından onaylanmadan dönem yevmiyesi üretilmez.";
+          return;
+        }
+        status.textContent = `Yürürlük ${mapping.effectiveFrom} – ${mapping.effectiveThrough || "açık"} · onaylayan ${mapping.approvedBy} · referans ${mapping.approvalReference}`;
+        target.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 8px">Amaç</th><th style="text-align:left;padding:6px 8px">Hesap kodu</th><th style="text-align:left;padding:6px 8px">Hesap adı</th></tr></thead><tbody>${mapping.accounts.map(a => `<tr><td style="padding:6px 8px;border-top:1px solid #e5e7eb">${escape(a.label)}</td><td style="padding:6px 8px;border-top:1px solid #e5e7eb;font-family:monospace">${escape(a.code || "—")}</td><td style="padding:6px 8px;border-top:1px solid #e5e7eb">${escape(a.name || "Eşlemede tanımlı değil")}</td></tr>`).join("")}</tbody></table>`;
+      } catch (error) {
         if (seq !== sequence || !target.isConnected) return;
-        status.textContent = "Onaylı eşleme kaynağı alınamadı; yerel varsayılan gösterilmez.";
+        status.textContent = "Onaylı hesap eşlemesi alınamadı.";
         target.innerHTML = errorHtml(error);
       }
     }
