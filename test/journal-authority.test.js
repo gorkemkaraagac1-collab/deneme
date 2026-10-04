@@ -106,57 +106,8 @@ test('API/adapter failure cannot trigger a schedule, FX, principal or account-ma
   assert.equal(legacyCalls,0);
 });
 
-test('single and bulk active application entry functions render accepted DTOs under legacy feature mode',async()=>{
-  const dom=new JSDOM('<div id="journalPreview"></div><div id="bulkJournalPreview"></div><div id="bulkJournalSummary"></div><button id="exportBulkJournals"></button><input id="accountingYear" value="2026"><input id="accountingPeriod" value="monthly"><input id="accountingMonth" value="1"><input id="bulkAccountingYear" value="2026"><input id="bulkAccountingPeriod" value="monthly"><input id="bulkAccountingMonth" value="1">');
-  const {window,context,ui}=runtime(dom);
-  const proof=proofs.find(p=>p.fixture==='monthly' && p.body.kind==='PERIOD');
-  const contract={id:proof.body.contractIds[0],companyId:proof.body.companyId,status:'active'};
-  let calls=0;
-  window.LEASEQANT_CALCULATION_API_PRIMARY=false;
-  window.LeaseQantPrivateTfrs16Facade={loadJournalAuthorityPackage:async()=>{calls++;return proof.package;}};
-  Object.assign(context,{document:dom.window.document,contracts:[contract],bulkJournalData:[],hideLoading:()=>{},
-    escapeHtml:String,parseDate:x=>new Date(x+'T00:00:00'),v23DateKey:d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
-    getBulkJournalPeriodDates:()=>({periodStart:new Date(2026,0,1),periodEnd:new Date(2026,0,31)})});
-  const source=fs.readFileSync(path.join(root,'js/tfrs16-ui.js'),'utf8');
-  const active=source.slice(source.indexOf('  function journalAuthorityUnavailable() {'),source.indexOf('  async function legacyGenerateSelectedJournal('));
-  for(const forbidden of ['calculateLease(','buildAccrualJournalSummary(','applyAccountMappingToJournal(','appendFx','principalFn','reduce(','generateInitialEntry(']) assert.equal(active.includes(forbidden),false,forbidden);
-  vm.runInContext(active,context);
-  await vm.runInContext('generateSelectedJournal(contracts[0])',context);
-  assert.match(dom.window.document.getElementById('journalPreview').innerHTML,/SYN-/);
-  await vm.runInContext('generateBulkJournals()',context);
-  assert.match(dom.window.document.getElementById('bulkJournalPreview').innerHTML,/SYN-/);
-  assert.equal(calls,2);
-  assert.equal(dom.window.document.getElementById('exportBulkJournals').disabled,false);
-  const database = ui.databasePreview();
-  assert.equal(database.status,'SERVER_PERSISTED_PRIVATE_JOURNAL');
-  assert.deepEqual(plain(database.journalLines.map(line=>[line.debit,line.credit])),proof.package.vouchers[0].lines.map(line=>[line.debit,line.credit]));
-  assert.deepEqual(plain(ui.bulkRows().map(line=>[line.debit,line.credit])),proof.package.vouchers[0].lines.map(line=>[line.debit,line.credit]));
-  const erpEntry = source.slice(source.indexOf('  function getErpReadyJournalData('),source.indexOf('  function legacyGetErpReadyJournalData('));
-  assert.doesNotMatch(erpEntry,/getJournalSummaryReport|Number\(|reduce\(/);
-  vm.runInContext(erpEntry,context);
-  assert.deepEqual(plain(vm.runInContext('getErpReadyJournalData(new Date(2026,0,31))',context)),plain(ui.bulkRows()));
-  assert.throws(()=>vm.runInContext('getErpReadyJournalData(new Date(2026,1,28))',context),/eşleşmiyor/);
-  window.LeaseQantPrivateTfrs16Facade=null;
-  await vm.runInContext('generateSelectedJournal(contracts[0])',context);
-  assert.match(dom.window.document.getElementById('journalPreview').innerHTML,/UNAVAILABLE/);
-  await vm.runInContext('generateBulkJournals()',context);
-  assert.equal(dom.window.document.getElementById('exportBulkJournals').disabled,true);
-  assert.throws(()=>ui.exportBulk('csv'),/POPULATION_EMPTY/);
-  assert.equal(ui.databasePreview().status,'JOURNAL_AUTHORITY_UNAVAILABLE');
-  // Public compatibility exports are guarded; old initial/accounting helpers
-  // are absent from the actual contract detail composition path.
-  assert.match(source,/applyAccountMappingToJournal: journalAuthorityUnavailable/);
-  assert.match(source,/buildAppliedChangeJournalEntries: journalAuthorityUnavailable/);
-  for(const name of ['appendFxToReclassification','appendFxJournalLines','getContractFxTranslationJournal','buildFxJournalLine']) {
-    assert.ok(source.includes(name+': journalAuthorityUnavailable'),name);
-  }
-  const initial=source.slice(source.indexOf('    // Initial journal is loaded separately'),source.indexOf('\n    if (title) {',source.indexOf('    // Initial journal is loaded separately')));
-  assert.doesNotMatch(initial,/generateInitialEntry|FunctionalCurrencyJournal/);
-  const detail=fs.readFileSync(path.join(root,'js/tfrs16-detail-ui.js'),'utf8');
-  assert.match(detail,/data-authoritative-initial-journal/);
-  assert.doesNotMatch(detail,/call\("renderJournalEntry"/);
-  dom.window.close();
-});
+// The legacy single/bulk journal entry functions were removed: the TFRS 16
+// period journal (Yevmiye page) is built from trusted lease-note sources.
 
 test('filters, sorting and print/PDF serialize the verified preview, without changing accounts or amounts',async()=>{
   const dom=new JSDOM('<div id="preview"></div>');

@@ -54,7 +54,7 @@ window.fetch = (input, init = {}) => {
   const VIEW_TITLES = {
     contracts: { title: "Sözleşmeler", subtitle: "Kiralama portföyü" },
     close: { title: "Kapanış Paneli", subtitle: "Ay sonu kapanış kontrolü" },
-    accountingCenter: { title: "Toplu Fiş Merkezi", subtitle: "Muhasebe fişleri" },
+    accountingCenter: { title: "Yevmiye", subtitle: "TFRS 16 dönem yevmiyesi" },
     financialReporting: { title: "Finansal Raporlama", subtitle: "Backend rapor paketi" },
     footnotes: { title: "Dipnotlar", subtitle: "Varlık · Yükümlülük · Likidite" },
     modification: { title: "Modifikasyon & Reassessment", subtitle: "Sözleşme değişiklikleri" },

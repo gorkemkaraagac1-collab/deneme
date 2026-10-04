@@ -818,29 +818,6 @@ ${footer}
     render();
   }
 
-  function renderAccountingCenter(container) {
-    if (!prepare(container)) return;
-    const render = () => {
-      const list = sortedContracts();
-      if (!selectedAccountingContractId && list.length) selectedAccountingContractId = list[0].id;
-      const selected = list.find(contract => contract.id === selectedAccountingContractId) || null;
-      const body = !list.length ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Henüz sözleşme bulunmuyor. Önce Sözleşmeler ekranından bir sözleşme oluşturun.</div>` : !selected ? `<div style="padding:24px 0;text-align:center;color:#94a3b8;font-size:13px;">Yukarıdan bir sözleşme seçin.</div>` : (bridge().renderAccountingCenter?.(selected) || "");
-      container.innerHTML = `
-        <div class="gk-v26-page"><div style="margin-bottom:16px;"><h2 style="margin:0;font-size:20px;color:#0f172a;">Toplu Fiş Merkezi</h2><p style="margin:4px 0 0;font-size:13px;color:#64748b;">Tek sözleşme veya portföydeki tüm aktif sözleşmeler için muhasebe fişi üretimi burada yönetiliyor.</p></div>
-          <div class="gk-v26-card"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:6px;">Sözleşme (tekil fiş için)</label>
-            <select id="v26AccountingContractSelect" style="width:100%;max-width:480px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">${list.length ? options(list, selectedAccountingContractId) : '<option value="">Sözleşme bulunamadı</option>'}</select>
-            ${selectedBanner(selected)}${body}
-          </div></div>`;
-      container.querySelector("#v26AccountingContractSelect")?.addEventListener("change", event => { selectedAccountingContractId = event.target.value; render(); });
-      if (selected) {
-        global.LeaseQantTfrs16JournalUi?.bindPeriodControls(container,"accounting",`single:${selected.companyId}:${selected.id}`);
-        container.querySelector("#generateJournal")?.addEventListener("click", () => bridge().generateSelectedJournal?.(selected));
-        container.querySelector("#openBulkJournalButton")?.addEventListener("click", () => bridge().openBulkJournalModal?.());
-      }
-    };
-    render();
-  }
-
   function renderModificationReassessment(container) {
     if (!prepare(container)) return;
 
@@ -1171,5 +1148,5 @@ ${footer}
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderAccountingCenter, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbPreviewFlow, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbPreviewFlow, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
 })(window);

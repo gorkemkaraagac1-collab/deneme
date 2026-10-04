@@ -27,11 +27,6 @@
       call("renderSlbSection", contract);
       call("renderSubleaseSection", contract);
 
-      document.getElementById("generateJournal")
-        ?.addEventListener("click", () => call("generateSelectedJournal", contract));
-      document.getElementById("openBulkJournalButton")
-        ?.addEventListener("click", () => call("openBulkJournalModal"));
-
       reporting.bindContractDetailTabs?.({
         getActiveTab: () => call("getActiveTab"),
         setActiveTab: value => call("setActiveTab", value)

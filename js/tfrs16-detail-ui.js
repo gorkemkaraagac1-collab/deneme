@@ -58,7 +58,7 @@
       modificationHtml: `${call("renderModificationManagementSection", contract)}${call("renderReassessmentManagementSection", contract)}`,
       slbHtml: "",
       subleaseHtml: "",
-      accountingHtml: call("renderAccountingCenter", contract),
+      accountingHtml: '<div class="gk-v26-card" role="note" style="padding:16px;font-size:13px;line-height:1.6"><strong>TFRS 16 dönem yevmiyesi</strong><br>İlk muhasebeleştirme, faiz, ödeme, amortisman, modifikasyon, kur farkı (TMS 21) ve enflasyon düzeltmesi (TMS 29) kayıtları <strong>Yevmiye</strong> sayfasında, dipnotla aynı güvenilir kaynaktan şirket ve dönem bazında üretilir.</div>',
       auditHtml: call("renderContractAuditTab", contract, contractAuditEvents)
     }) || "";
 
