@@ -178,6 +178,9 @@
     addMatches(STATE_SELECTOR);
     addMatches(STATUS_PARAGRAPHS);
     return new Set(Array.from(found).filter(el => {
+      // Controls keep their own role: a busy Save button is not a status box
+      // (it used to stay role=status / aria-busy after the save finished).
+      if (el.matches("button, input, select, textarea, a, [role='button']")) { restoreState(el); return false; }
       if (el.hasAttribute("data-lq-ui-state")) return true;
       const explicit = el.matches(STATE_SELECTOR);
       if (explicit) return true;
