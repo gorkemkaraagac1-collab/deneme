@@ -1,5 +1,6 @@
 'use strict';
-if(process.env.DB_HOST!=='/tmp'||process.env.DB_NAME!=='leaseqant_agent_test')throw Error('Disposable local DB required; never Production');
+// Runs only against the disposable local integration database.
+if(process.env.DB_HOST!=='/tmp'||process.env.DB_NAME!=='leaseqant_agent_test'){require('node:test').test('disposable leaseqant_agent_test DB required',{skip:'disposable leaseqant_agent_test DB required'},()=>{});return;}
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const express=require('express'),bcrypt=require('bcryptjs'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),backend=path.resolve(root,'../backend'),pool=require(path.join(backend,'backend/db/pool'));

@@ -1,4 +1,6 @@
 'use strict';
+// Needs evidence from a disposable local integration run; skipped otherwise.
+if(!require('node:fs').existsSync(process.env.REPORTING_AUTHORITY_PROOF||'/tmp/report-auth-r1-numeric.json')){require('node:test').test('integration evidence report-auth-r1-numeric.json not present',{skip:'integration evidence report-auth-r1-numeric.json not present'},()=>{});return;}
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {webcrypto,createHash}=require('node:crypto'),{JSDOM}=require('jsdom');
 const root=path.resolve(__dirname,'..');

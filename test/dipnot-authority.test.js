@@ -231,7 +231,7 @@ test('active Dipnotlar delegates only to disclosure UI, without old accounting h
     }
   };
   load('js/tfrs16-disclosure-ui.js', window);
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  const container = new JSDOM('<main></main>').window.document.querySelector('main');
   window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.deepEqual(calls, ['availability', 'disclosure']);
@@ -274,8 +274,12 @@ test('disclosure uses a complete month by default and blocks reversed date range
   assert.equal(ui.validPeriodRange('2026-09-01', '2026-06-30'), false);
   ui.renderFootnotes(target);
   await new Promise(resolve => setTimeout(resolve, 0));
-  assert.deepEqual(calls[0], { companyId: 'COMPANY-1', reportingPeriodStart: '2026-08-01',
-    reportingPeriodEnd: '2026-08-31', reportingDate: '2026-08-31' });
+  // Default period: the last complete calendar month before today.
+  const now = new Date(), lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const lastMonthStart = iso(new Date(lastEnd.getFullYear(), lastEnd.getMonth(), 1)), lastMonthEnd = iso(lastEnd);
+  assert.deepEqual(calls[0], { companyId: 'COMPANY-1', reportingPeriodStart: lastMonthStart,
+    reportingPeriodEnd: lastMonthEnd, reportingDate: lastMonthEnd });
   assert.match(target.querySelector('[role="status"]').textContent, /onaylı, kaynak bağlı hesaplama kaydı/);
   assert.equal(target.querySelector('[role="alert"]'), null);
   const start = target.querySelector('#disclosureStart'), end = target.querySelector('#disclosureDate');
@@ -386,15 +390,11 @@ test('unsupported trusted route is displayed and does not render invented disclo
 });
 
 test('all three tabs render backend values; company and period controls reload the scoped package', async () => {
-  const events = {};
-  const container = {
-    innerHTML: '',
-    querySelector: selector => ({ addEventListener: (_event, listener) => { events[selector] = listener; } }),
-    querySelectorAll: () => ['asset', 'liability', 'liquidity'].map(disclosureTab => ({
-      dataset: { disclosureTab },
-      addEventListener: (_event, listener) => { events[`tab:${disclosureTab}`] = listener; }
-    }))
-  };
+  const dom = new JSDOM('<main></main>');
+  const container = dom.window.document.querySelector('main');
+  const tab = name => container.querySelector(`[data-disclosure-tab="${name}"]`).dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+  const change = (selector, value) => { const el = container.querySelector(selector); el.value = value;
+    el.dispatchEvent(new dom.window.Event('change', { bubbles: true })); };
   const requests = [];
   const window = {
     GK_TFRS16: {
@@ -417,18 +417,18 @@ test('all three tabs render backend values; company and period controls reload t
   window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(container.innerHTML, /91,23/);
-  events['tab:liability']();
+  tab('liability');
   assert.match(container.innerHTML, /80,46/);
   assert.match(container.innerHTML, /Defter verisi gerekli/);
-  events['tab:liquidity']();
+  tab('liquidity');
   assert.match(container.innerHTML, /Vade dilimleri/);
   assert.match(container.innerHTML, /Şirket girdisi gerekli/);
-  events['#disclosureCompany']({ target: { value: 'COMPANY-2' } });
+  change('#disclosureCompany', 'COMPANY-2');
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(requests.at(-1).companyId, 'COMPANY-2');
-  events['#disclosureStart']({ target: { value: '2026-01-01' } });
+  change('#disclosureStart', '2026-01-01');
   await new Promise(resolve => setTimeout(resolve, 0));
-  events['#disclosureDate']({ target: { value: '2026-06-30' } });
+  change('#disclosureDate', '2026-06-30');
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(requests.at(-1).reportingDate, '2026-06-30');
 });
@@ -446,7 +446,7 @@ test('disclosure response from a different company is rejected before any value 
     }
   };
   load('js/tfrs16-disclosure-ui.js', window);
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  const container = new JSDOM('<main></main>').window.document.querySelector('main');
   window.LeaseQantTfrs16DisclosureUi.renderFootnotes(container);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.doesNotMatch(container.innerHTML, /91,23/);
@@ -471,7 +471,7 @@ test('real v2 disclosure shows full source gaps separately from numerical table 
 
 test('legacy disclosure presentation retains its existing structure',async()=>{
  const window={document:{documentElement:{getAttribute:()=> 'legacy'}},GK_TFRS16:{getUnifiedCompanyOptions:()=>[],getActiveCompanyId:()=>'',setActiveScreenRefreshCallback:()=>{}}};load('js/tfrs16-disclosure-ui.js',window);
- const target={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);
+ const target=new JSDOM('<main></main>').window.document.querySelector('main');window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);
  assert.match(target.innerHTML,/gk-v26-page/);assert.doesNotMatch(target.innerHTML,/data-disclosure-source-gaps/);
 });
 

@@ -62,31 +62,31 @@ test('legacy UI: engine detail untouched',async()=>{
  assert.equal(content.querySelector('.lq-cv-shell'),null);dom.window.close();
 });
 
-test('real detail schedule tab uses server rows, preserves dates and separates initial journal',async()=>{
- const {dom,w,d,clicked}=await page();
+test('payment plan tab lists the contractual payments from server rows with dates as reported',async()=>{
+ const {dom,w,d}=await page();
  const content=d.getElementById('detailContent');
- content.innerHTML=engineHtml.replace('>schedule</div>', '><div data-authoritative-report-schedule></div><div data-authoritative-initial-journal>initial journal evidence</div></div>');
+ content.innerHTML=engineHtml;
  await tick();
- content.querySelector('[data-lq-cv-tab="schedule"]').click();
- assert.equal(clicked.pop(),'schedule');
  const period={periodStart:'2026-08-01',periodEnd:'2026-08-31',reportingDate:'2026-08-31'};
  const notify=row=>w.dispatchEvent(new w.CustomEvent('lq:contract-report',{detail:{contractId:'K1',package:{period},row}}));
- const rows=[{date:'2026-08-27',openingLiability:999.11,interest:12.34,payment:100,principal:87.66,closingLiability:911.45,depreciation:null}];
+ const rows=[{date:'2026-08-27',openingLiability:999.11,interest:12.34,payment:100,principal:87.66,closingLiability:911.45},
+  {date:'2026-09-27',openingLiability:911.45,interest:11.2,payment:100,principal:88.8,closingLiability:822.65},
+  {date:'2026-09-30',openingLiability:822.65,interest:0.5,payment:0,principal:-0.5,closingLiability:823.15}];
  notify({status:'SUPPORTED',route:'P1_PLAIN_MONTHLY_ARREARS',currency:'TRY',metrics:{},scheduleRows:rows});
- const table=content.querySelector('table[aria-label="Doğrulanmış ödeme planı"]');
- assert.ok(table);assert.equal(table.querySelectorAll('tbody tr').length,1);
+ content.querySelector('[data-lq-cv-tab="schedule"]').click();
+ await tick();
+ const table=content.querySelector('table[aria-label="Sözleşmesel ödeme planı"]');
+ assert.ok(table);
+ // Accrual-only rows (no payment) are not payments.
+ assert.equal(table.querySelectorAll('tbody tr').length,2);
  assert.match(table.textContent,/27\.08\.2026/);assert.doesNotMatch(table.textContent,/28\.08\.2026/);
- assert.match(table.textContent,/999,11/);assert.match(table.textContent,/12,34/);
- assert.match(table.textContent,/Kaynak gerekli/);
- assert.match(content.querySelector('.lq-cv-slot-std').textContent,/P1_PLAIN_MONTHLY_ARREARS/);
- assert.equal(content.querySelector('[data-authoritative-initial-journal]').textContent,'initial journal evidence');
- assert.equal(content.querySelectorAll('[data-lq-initial-journal-heading]').length,1);
+ assert.match(table.textContent,/Vadesi geçti/);assert.match(table.textContent,/Gelecek/);
+ // Interest/depreciation belong to the Hesaplama tab.
+ assert.doesNotMatch(table.textContent,/12,34/);
  notify({status:'NOT_READY',reason:'REPORTING_ROUTE_NOT_SUPPORTED',metrics:null,scheduleRows:[]});
- assert.equal(content.querySelector('table[aria-label="Doğrulanmış ödeme planı"]'),null);
- assert.match(content.querySelector('[data-authoritative-report-schedule]').textContent,/kaynak gerekli/);
- assert.doesNotMatch(content.querySelector('.lq-cv-slot-std').textContent,/P1_PLAIN_MONTHLY_ARREARS/);
- notify({status:'SUPPORTED',currency:'TRY',metrics:{},scheduleRows:[]});
- assert.match(content.querySelector('[data-authoritative-report-schedule]').textContent,/satırları için kaynak gerekli/);
+ await tick();
+ assert.equal(content.querySelector('table[aria-label="Sözleşmesel ödeme planı"]'),null);
+ assert.match(content.querySelector('.lq-cv-shell').textContent,/doğrulanmış ödeme planı yok/);
  dom.window.close();
 });
 

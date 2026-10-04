@@ -6,7 +6,7 @@ const adapterSource=fs.readFileSync(path.join(root,'js/private-calculation-api.j
 const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
 const tick=()=>new Promise(resolve=>setTimeout(resolve,25));
 function packageFor(intent){
- const metrics=['rouCarryingAmount','leaseLiability','currentLiability','nonCurrentLiability','periodInterest','periodDepreciation','contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability'];
+ const metrics=['rouCarryingAmount','leaseLiability','currentLiability','nonCurrentLiability','periodInterest','periodDepreciation','contractualPayments','next12MonthPayments','next12MonthPrincipal','next12MonthInterest','openingROU','openingLiability','exemptLeaseExpense'];
  const p={schemaVersion:'REPORTING_AUTHORITY_DTO_V1',identity:{companyId:intent.companyId,companyName:'Synthetic Co',populationId:'TEST-POP'},period:intent,sourceStatus:'SERVER_PERSISTED_PRIVATE_REPORTING',livePostingStatus:'NOT_READY_FOR_LIVE_POSTING',contracts:[],population:{contractIds:[],count:0,includedCount:0,excludedCount:0,exclusions:[],coverage:'COMPLETE_POPULATION'},controls:{status:'SUPPORTED_CALCULATION_DIAGNOSTICS',checks:[]},audit:{rows:[]},unsupported:{},totals:Object.fromEntries(metrics.map(k=>[k,{status:'NOT_READY',value:null,sourceIds:[]}]))};
  p.contentHash=createHash('sha256').update(stable(p)).digest('hex');return p;
 }

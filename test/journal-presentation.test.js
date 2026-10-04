@@ -39,13 +39,23 @@ test('mapping requires an accepted package and renders only server accounts and 
  const pkg=await ui.acceptPackage(raw,intent),html=ui.mappingHtml(pkg);
  assert.match(html,/TEST-INTEREST/);assert.match(html,/APPROVED-3/);assert.match(html,/mapping-1/);assert.doesNotMatch(html,/input|amSaveBtn|260\.01/);dom.window.close();
 });
-test('mapping page filters company and period, refuses cross-company response and clears previous codes',async()=>{
+const approvedMapping=(code)=>({effectiveFrom:'2025-01-01',effectiveThrough:null,approvedBy:'admin',approvalReference:'REF-1',
+ accounts:[{label:'Faiz gideri',code,name:'Faiz'}]});
+test('mapping page shows the approved account mapping of the selected company and clears it on change',async()=>{
  const {dom,w,ui}=page('2','<div id="host"></div>'),host=w.document.getElementById('host');const calls=[];
- w.LeaseQantPrivateTfrs16Facade={loadJournalAuthorityPackage:async intent=>{calls.push(intent);return fixture({...intent,companyId:'c1'});}};
- ui.renderAccountMapping(host,{companies:[{id:'c1',name:'One'},{id:'c2',name:'Two'}],companyId:'c1',contracts:[{id:'k1',companyId:'c1',status:'active'},{id:'k2',companyId:'c2',status:'active'}]});
- await new Promise(r=>setTimeout(r,35));assert.match(host.textContent,/TEST-INTEREST/);assert.equal(calls[0].periodStart,'2026-08-01');assert.equal(calls[0].contractIds.join(','),'k1');
+ w.LeaseQantPrivateCalculation={getApprovedAccountMapping:async companyId=>{calls.push(companyId);
+  if(companyId==='c2')throw Object.assign(new Error('x'),{code:'JOURNAL_MAPPING_UNAVAILABLE'});return approvedMapping('TEST-INTEREST');}};
+ ui.renderAccountMapping(host,{companies:[{id:'c1',name:'One'},{id:'c2',name:'Two'}],companyId:'c1'});
+ await new Promise(r=>setTimeout(r,10));assert.match(host.textContent,/TEST-INTEREST/);assert.match(host.textContent,/REF-1/);assert.equal(calls[0],'c1');
  host.querySelector('select').value='c2';host.querySelector('select').dispatchEvent(new w.Event('change'));
- await new Promise(r=>setTimeout(r,35));assert.doesNotMatch(host.textContent,/TEST-INTEREST/);assert.match(host.textContent,/alınamadı/);assert.equal(calls[1].contractIds.join(','),'k2');assert.equal(host.querySelector('input'),null);dom.window.close();
+ await new Promise(r=>setTimeout(r,10));assert.doesNotMatch(host.textContent,/TEST-INTEREST/);assert.match(host.textContent,/alınamadı/);
+ assert.equal(calls[1],'c2');assert.equal(host.querySelector('input'),null);dom.window.close();
+});
+test('mapping page explains when a company has no approved mapping',async()=>{
+ const {dom,w,ui}=page('2','<div id="host"></div>'),host=w.document.getElementById('host');
+ w.LeaseQantPrivateCalculation={getApprovedAccountMapping:async()=>null};
+ ui.renderAccountMapping(host,{companies:[{id:'c1',name:'One'}],companyId:'c1'});
+ await new Promise(r=>setTimeout(r,10));assert.match(host.textContent,/onaylı hesap eşlemesi yok/);dom.window.close();
 });
 
 test('custom period dates survive reopen without inheriting another contract choice',()=>{
@@ -66,8 +76,9 @@ test('period change invalidates in-flight bulk package before it can be exported
 });
 test('mapping refresh ignores a late response from the previous selected company',async()=>{
  const {dom,w,ui}=page('2','<div id="host"></div>'),host=w.document.getElementById('host');let resolveFirst;
- w.LeaseQantPrivateTfrs16Facade={loadJournalAuthorityPackage:intent=>intent.companyId==='c1'?new Promise(r=>{resolveFirst=()=>r(fixture(intent));}):Promise.resolve(fixture(intent))};
- ui.renderAccountMapping(host,{companies:[{id:'c1',name:'One'},{id:'c2',name:'Two'}],companyId:'c1',contracts:[{id:'k1',companyId:'c1',status:'active'},{id:'k2',companyId:'c2',status:'active'}]});
- host.querySelector('select').value='c2';host.querySelector('select').dispatchEvent(new w.Event('change'));await new Promise(r=>setTimeout(r,25));
- resolveFirst();await new Promise(r=>setTimeout(r,25));assert.match(host.textContent,/k2/);assert.doesNotMatch(host.textContent,/k1/);dom.window.close();
+ w.LeaseQantPrivateCalculation={getApprovedAccountMapping:companyId=>companyId==='c1'
+  ?new Promise(r=>{resolveFirst=()=>r(approvedMapping('CODE-C1'));}):Promise.resolve(approvedMapping('CODE-C2'))};
+ ui.renderAccountMapping(host,{companies:[{id:'c1',name:'One'},{id:'c2',name:'Two'}],companyId:'c1'});
+ host.querySelector('select').value='c2';host.querySelector('select').dispatchEvent(new w.Event('change'));await new Promise(r=>setTimeout(r,10));
+ resolveFirst();await new Promise(r=>setTimeout(r,10));assert.match(host.textContent,/CODE-C2/);assert.doesNotMatch(host.textContent,/CODE-C1/);dom.window.close();
 });
