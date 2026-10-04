@@ -116,27 +116,12 @@ test.describe("smoke — TFRS 16 ana akış", () => {
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 
-  test("toplu fiş modalı açılır ve kapanır (createBulkJournalModal — Faz 3 refaktör hedefi)", async ({ stubbedPage }) => {
+  test("Fişler sekmesi dönem yevmiyesine yönlendirir", async ({ stubbedPage }) => {
     await stubbedPage.goto("/tfrs16.html");
     await createContract(stubbedPage);
     await stubbedPage.locator("#detailModal").waitFor({ state: "visible" });
-
-    // "Fişler" tab'ına geç — renderAccountingCenter'ın (ve içindeki
-    // "Tüm Sözleşmeler İçin Toplu Fiş Üret" butonunun) render edildiği yer.
     await stubbedPage.click('[data-detail-tab-target="accounting"]');
-
-    // openBulkJournalModal() → createBulkJournalModal() zincirini tetikler.
-    await stubbedPage.click("#openBulkJournalButton");
-
-    const bulkModal = stubbedPage.locator("#bulkJournalModal");
-    await expect(bulkModal).toBeVisible();
-
-    // wireBulkJournalModalEvents()'in gerçekten bağladığı bir listener'ı
-    // tetikliyoruz — sadece DOM yapısını değil, event wiring'in fiilen
-    // ÇALIŞTIĞINI doğrular (bu fonksiyonun asıl risk kategorisi buydu).
-    await stubbedPage.click("#closeBulkJournalModal");
-    await expect(bulkModal).toBeHidden();
-
+    await expect(stubbedPage.locator('[role="note"]', { hasText: "TFRS 16 dönem yevmiyesi" }).first()).toBeVisible();
     expect(stubbedPage.consoleErrors).toEqual([]);
   });
 

@@ -349,6 +349,52 @@
         </aside></div></div>`;
   }
 
+  // ---------- TFRS 16 period journal (shared by Dipnotlar and Yevmiye) ----------
+  const JOURNAL_ERRORS = { JOURNAL_REQUIRES_CONFIGURATION: "Bu dönem için onaylı hesap eşlemesi yok. Yönetim → Hesap eşlemesi ekranından onaylayın.",
+    JOURNAL_TMS29_INDEX_REQUIRED: "TMS 29 için doğrulanmış TÜFE eksik", JOURNAL_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili gerekli." };
+  const JOURNAL_MOVEMENTS = { INITIAL_RECOGNITION: "İlk muhasebeleştirme", INTEREST: "Faiz", CONTRACTUAL_PAYMENT: "Sözleşmesel ödeme",
+    DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon / yeniden ölçüm", FX_DIFFERENCE: "Kur farkı (TMS 21)",
+    TMS29_RESTATEMENT: "Enflasyon düzeltmesi (TMS 29)", SUBLEASE_DERECOGNITION: "Alt kiralama devri", SUBLEASE_INCOME: "Alt kiralama geliri",
+    EXEMPT_LEASE_EXPENSE: "İstisna kira gideri", SALE_AND_LEASEBACK: "Satış ve geri kiralama (TFRS 16.100)", SUBLEASE_RECEIPT: "Alt kiralama tahsilatı" };
+  const money2 = v => Number(v || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function journalErrorText(error) {
+    const code = error?.code || error?.details?.code;
+    const [base, detail, field] = String(code || "").split(":");
+    const prefixed = { JOURNAL_ACCOUNT_MAPPING_MISSING: `Hesap eşlemesinde "${detail}" amacı tanımlı değil. Yönetim → Hesap eşlemesi ekranında eşlemeyi yeniden onaylayın (yeni amaçlar eklenmiş olabilir).`,
+      JOURNAL_SLB_SOURCE_REFRESH_REQUIRED: `${detail} için satış ve geri kiralama kaynağı eski. Bu dönem için "Güvenilir kaynağı oluştur" ile kaynağı yenileyin.`,
+      JOURNAL_SOURCE_NOT_CALCULABLE: `${detail} sözleşmesinde "${field}" tutarı hesaplanamadı (dipnotta "Kaynak gerekli").`,
+      JOURNAL_SOURCE_UNBALANCED: `${detail} sözleşmesinin fişi dengelenemedi.` }[base];
+    if (prefixed) return prefixed;
+    const months = error?.details?.missingMonths;
+    return (JOURNAL_ERRORS[code] || `Yevmiye üretilemedi (${code || "bilinmeyen hata"})`) + (months?.length ? `: ${months.join(", ")}` : "");
+  }
+  function journalSectionHtml({ ready, status, error, journal: j, tms29, title = "Dönem yevmiyesi (TFRS 16)" }) {
+    const head = `<section class="gk-v26-card lq-dn-journal" style="margin-top:16px"><h3 style="margin:0 0 6px">${escapeHtml(title)}</h3>`
+      + `<p style="margin:0 0 10px;color:#64748b;font-size:12px">Fiş satırları dipnotun güvenilir kaynaklarından üretilir (sunum para birimi${tms29 ? ", TMS 29 düzeltilmiş" : ""}). Ödemeler sözleşmesel plandır; deftere gönderilmez.</p>`
+      + `<button type="button" class="gk-v26-btn" id="disclosureJournal" ${ready && status !== "loading" ? "" : "disabled"}>${status === "loading" ? "Yevmiye hazırlanıyor…" : "Dönem yevmiyesini oluştur"}</button>`;
+    if (status === "error") return head + `<p role="alert" style="color:#991b1b">${escapeHtml(journalErrorText(error))}</p></section>`;
+    if (!j) return head + `</section>`;
+    const rows = j.summary.map(r => `<tr><td class="lq-dn-mono">${escapeHtml(r.accountCode)}</td><td>${escapeHtml(r.accountName)}</td><td style="text-align:right">${money2(r.debit)}</td><td style="text-align:right">${money2(r.credit)}</td></tr>`).join("");
+    const vouchers = j.vouchers.map(v => `<details><summary>${escapeHtml(v.contractId)} · borç ${money2(v.totalDebit)} · ${v.reconciled ? "dipnotla mutabık ✓" : "mutabakat farkı"}</summary>`
+      + `<table style="width:100%;font-size:12px"><tbody>${v.lines.map(l => `<tr><td>${escapeHtml(JOURNAL_MOVEMENTS[l.movement] || l.movement)}</td><td class="lq-dn-mono">${escapeHtml(l.accountCode)} ${escapeHtml(l.accountName)}</td><td style="text-align:right">${l.debit ? money2(l.debit) : ""}</td><td style="text-align:right">${l.credit ? money2(l.credit) : ""}</td></tr>`).join("")}</tbody></table></details>`).join("");
+    return head + `<p role="status" style="margin:10px 0">${escapeHtml(j.voucherCount)} fiş · borç ${money2(j.totalDebit)} = alacak ${money2(j.totalCredit)} ${escapeHtml(j.currency)} · ${j.reconciled ? "tüm fişler dipnot hareketiyle mutabık" : "mutabakat farkı olan fiş var"}</p>`
+      + `<table style="width:100%;font-size:12.5px"><thead><tr><th>Hesap</th><th>Hesap adı</th><th style="text-align:right">Borç</th><th style="text-align:right">Alacak</th></tr></thead><tbody>${rows}</tbody></table>`
+      + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureJournalCsv" style="margin-top:10px">↓ Yevmiyeyi CSV olarak indir</button>`
+      + `<div style="margin-top:10px">${vouchers}</div></section>`;
+  }
+  function downloadJournalCsv(j, companyId, date) {
+    const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [["Sözleşme", "Fiş tarihi", "Hareket", "Hesap kodu", "Hesap adı", "Borç", "Alacak", "Para birimi"].map(cell).join(";")]
+      .concat(j.vouchers.flatMap(v => v.lines.map(l => [v.contractId, v.postingDate, JOURNAL_MOVEMENTS[l.movement] || l.movement, l.accountCode, l.accountName,
+        String(l.debit).replace(".", ","), String(l.credit).replace(".", ","), v.currency].map(cell).join(";"))));
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const link = global.document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `tfrs16-yevmiye-${companyId}-${date}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
   // Each render owns the container only until the next render: a request
   // started for the previous period must not draw over the new one.
   let footnotesRender = 0;
@@ -562,41 +608,10 @@
           onSaved: () => { state.key = null; state.sequence++; draw(); } });
       });
     };
-    // TFRS 16 period journal from the same trusted population as the note:
-    // its lines are the note movements, so the two agree by construction.
-    const JOURNAL_ERRORS = { JOURNAL_REQUIRES_CONFIGURATION: "Bu dönem için onaylı hesap eşlemesi yok. Yönetim → Hesap eşlemesi ekranından onaylayın.",
-      JOURNAL_TMS29_INDEX_REQUIRED: "TMS 29 için doğrulanmış TÜFE eksik", JOURNAL_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili gerekli." };
-    const money2 = v => Number(v || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const MOVEMENTS = { INITIAL_RECOGNITION: "İlk muhasebeleştirme", INTEREST: "Faiz", CONTRACTUAL_PAYMENT: "Sözleşmesel ödeme",
-      DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon / yeniden ölçüm", FX_DIFFERENCE: "Kur farkı (TMS 21)",
-      TMS29_RESTATEMENT: "Enflasyon düzeltmesi (TMS 29)", SUBLEASE_DERECOGNITION: "Alt kiralama devri", SUBLEASE_INCOME: "Alt kiralama geliri",
-      EXEMPT_LEASE_EXPENSE: "İstisna kira gideri", SALE_AND_LEASEBACK: "Satış ve geri kiralama (TFRS 16.100)",
-      SUBLEASE_RECEIPT: "Alt kiralama tahsilatı" };
     function journalHtml() {
       const ready = state.status === "ready" && state.availability;
-      const j = state.journal;
-      const head = `<section class="gk-v26-card lq-dn-journal" style="margin-top:16px"><h3 style="margin:0 0 6px">Dönem yevmiyesi (TFRS 16)</h3>`
-        + `<p style="margin:0 0 10px;color:#64748b;font-size:12px">Fiş satırları bu dipnotun güvenilir kaynaklarından üretilir (sunum para birimi${state.pkg?.tms29?.applied ? ", TMS 29 düzeltilmiş" : ""}). Ödemeler sözleşmesel plandır; deftere gönderilmez.</p>`
-        + `<button type="button" class="gk-v26-btn" id="disclosureJournal" ${ready && state.journalStatus !== "loading" ? "" : "disabled"}>${state.journalStatus === "loading" ? "Yevmiye hazırlanıyor…" : "Dönem yevmiyesini oluştur"}</button>`;
-      if (state.journalStatus === "error") {
-        const code = state.journalError?.code || state.journalError?.details?.code;
-        const [base, detail, field] = String(code || "").split(":");
-        const prefixed = { JOURNAL_ACCOUNT_MAPPING_MISSING: `Hesap eşlemesinde "${detail}" amacı tanımlı değil. Yönetim → Hesap eşlemesi ekranında eşlemeyi yeniden onaylayın (yeni amaçlar eklenmiş olabilir).`,
-          JOURNAL_SLB_SOURCE_REFRESH_REQUIRED: `${detail} için satış ve geri kiralama kaynağı eski. Bu dönem için "Güvenilir kaynağı oluştur" ile kaynağı yenileyin.`,
-          JOURNAL_SOURCE_NOT_CALCULABLE: `${detail} sözleşmesinde "${field}" tutarı hesaplanamadı (dipnotta "Kaynak gerekli").`,
-          JOURNAL_SOURCE_UNBALANCED: `${detail} sözleşmesinin fişi dengelenemedi.` }[base];
-        if (prefixed) return head + `<p role="alert" style="color:#991b1b">${escapeHtml(prefixed)}</p></section>`;
-        const months = state.journalError?.details?.missingMonths;
-        return head + `<p role="alert" style="color:#991b1b">${escapeHtml((JOURNAL_ERRORS[code] || `Yevmiye üretilemedi (${code || "bilinmeyen hata"})`) + (months?.length ? `: ${months.join(", ")}` : ""))}</p></section>`;
-      }
-      if (!j) return head + `</section>`;
-      const rows = j.summary.map(r => `<tr><td class="lq-dn-mono">${escapeHtml(r.accountCode)}</td><td>${escapeHtml(r.accountName)}</td><td style="text-align:right">${money2(r.debit)}</td><td style="text-align:right">${money2(r.credit)}</td></tr>`).join("");
-      const vouchers = j.vouchers.map(v => `<details><summary>${escapeHtml(v.contractId)} · borç ${money2(v.totalDebit)} · ${v.reconciled ? "dipnotla mutabık ✓" : "mutabakat farkı"}</summary>`
-        + `<table style="width:100%;font-size:12px"><tbody>${v.lines.map(l => `<tr><td>${escapeHtml(MOVEMENTS[l.movement] || l.movement)}</td><td class="lq-dn-mono">${escapeHtml(l.accountCode)} ${escapeHtml(l.accountName)}</td><td style="text-align:right">${l.debit ? money2(l.debit) : ""}</td><td style="text-align:right">${l.credit ? money2(l.credit) : ""}</td></tr>`).join("")}</tbody></table></details>`).join("");
-      return head + `<p role="status" style="margin:10px 0">${escapeHtml(j.voucherCount)} fiş · borç ${money2(j.totalDebit)} = alacak ${money2(j.totalCredit)} ${escapeHtml(j.currency)} · ${j.reconciled ? "tüm fişler dipnot hareketiyle mutabık" : "mutabakat farkı olan fiş var"}</p>`
-        + `<table style="width:100%;font-size:12.5px"><thead><tr><th>Hesap</th><th>Hesap adı</th><th style="text-align:right">Borç</th><th style="text-align:right">Alacak</th></tr></thead><tbody>${rows}</tbody></table>`
-        + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureJournalCsv" style="margin-top:10px">↓ Yevmiyeyi CSV olarak indir</button>`
-        + `<div style="margin-top:10px">${vouchers}</div></section>`;
+      return journalSectionHtml({ ready, status: state.journalStatus, error: state.journalError, journal: state.journal,
+        tms29: state.pkg?.tms29?.applied === true });
     }
     async function loadJournal() {
       if (state.status !== "ready" || !state.availability || typeof facade?.loadPeriodJournal !== "function") return;
@@ -612,23 +627,100 @@
       }
       draw();
     }
-    function exportJournal() {
-      const j = state.journal;
-      if (!j) return;
-      const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-      const lines = [["Sözleşme", "Fiş tarihi", "Hareket", "Hesap kodu", "Hesap adı", "Borç", "Alacak", "Para birimi"].map(cell).join(";")]
-        .concat(j.vouchers.flatMap(v => v.lines.map(l => [v.contractId, v.postingDate, MOVEMENTS[l.movement] || l.movement, l.accountCode, l.accountName,
-          String(l.debit).replace(".", ","), String(l.credit).replace(".", ","), v.currency].map(cell).join(";"))));
-      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-      const link = global.document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `tfrs16-yevmiye-${state.companyId}-${state.reportingDate}.csv`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    }
+    function exportJournal() { if (state.journal) downloadJournalCsv(state.journal, state.companyId, state.reportingDate); }
     bridge.setActiveScreenRefreshCallback?.(() => { state.key = null; state.sequence++; draw(); });
     draw();
   }
 
-  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, rowsForTab, exportRows, errorLabel, validPeriodRange, sourceGaps });
+  // Yevmiye page: the TFRS 16 period journal for a company and the shared
+  // reporting period, from the same trusted sources as the lease note.
+  let journalPageRender = 0;
+  function renderPeriodJournalPage(container) {
+    if (!container) return;
+    const token = ++journalPageRender;
+    const bridge = global.GK_TFRS16 || {};
+    bridge.injectV26Styles?.();
+    const facade = global.LeaseQantPrivateTfrs16Facade;
+    const companies = (bridge.getUnifiedCompanyOptions?.() || []).filter(item => item && typeof item.id === "string" && item.id && item.id !== "ALL");
+    const active = bridge.getActiveCompanyId?.();
+    const shared = () => global.LeaseQantReportingPeriod?.get?.() || global.LeaseQantReportingAuthorityUi?.defaultPeriod?.() || {};
+    const state = { companyId: companies.some(c => c.id === active) ? active : (companies[0]?.id || ""), availability: null,
+      sourceStatus: "idle", sourceError: null, producing: false, summary: null, journal: null, journalStatus: null, journalError: null, seq: 0 };
+    const period = () => { const p = shared(); return { companyId: state.companyId, reportingPeriodStart: p.periodStart, reportingPeriodEnd: p.periodEnd, reportingDate: p.periodEnd }; };
+    const contractIds = () => {
+      const p = shared(), ids = new Set();
+      return (bridge.getPortfolioContracts?.() || []).filter(c => {
+        const id = String(c?.id ?? "").trim(), start = c?.startDate ?? c?.start_date, end = c?.endDate ?? c?.end_date;
+        if (!id || String(c?.companyId ?? c?.company_id ?? "") !== state.companyId || !isoDate(start) || !isoDate(end)
+          || end < p.periodStart || start > p.periodEnd || ids.has(id)) return false;
+        ids.add(id); return true;
+      }).map(c => String(c.id));
+    };
+    async function loadSources() {
+      const seq = ++state.seq;
+      state.availability = null; state.journal = null; state.journalStatus = null; state.journalError = null;
+      if (!state.companyId) { state.sourceStatus = "empty"; return draw(); }
+      state.sourceStatus = "loading"; draw();
+      try {
+        const availability = await facade.loadLeaseDisclosureAvailability(period());
+        if (seq !== state.seq) return;
+        state.availability = availability; state.sourceStatus = "ready";
+      } catch (error) {
+        if (seq !== state.seq) return;
+        state.sourceError = error; state.sourceStatus = "error";
+      }
+      draw();
+    }
+    async function produce() {
+      const ids = contractIds();
+      if (!ids.length || typeof facade?.createTrustedDisclosureSnapshots !== "function") return;
+      state.producing = true; draw();
+      try {
+        const results = await facade.createTrustedDisclosureSnapshots(ids, period());
+        const failed = results.filter(r => r?.success !== true);
+        state.summary = failed.length ? `${results.length - failed.length}/${ids.length} sözleşme için kaynak oluşturuldu. Kalanlar: ${failed.map(r => `${r.contractId} [${r.code || "HATA"}]`).join(", ")}` : null;
+      } catch (error) { state.summary = `Kaynak oluşturulamadı: ${error?.code || "HATA"}`; }
+      state.producing = false;
+      loadSources();
+    }
+    async function loadJournal() {
+      if (!state.availability) return;
+      const seq = state.seq;
+      state.journalStatus = "loading"; draw();
+      try {
+        const journal = await facade.loadPeriodJournal(state.availability);
+        if (seq !== state.seq) return;
+        state.journal = journal; state.journalStatus = "ready";
+      } catch (error) {
+        if (seq !== state.seq) return;
+        state.journalError = error; state.journalStatus = "error";
+      }
+      draw();
+    }
+    function draw() {
+      if (token !== journalPageRender || !container.isConnected) return;
+      const p = shared();
+      const sourceRequired = state.sourceStatus === "error" && state.sourceError?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED";
+      const sourceHtml = state.producing ? `<p role="status">Sunucu sözleşmeleri doğrulayıp güvenilir kaynak oluşturuyor…</p>`
+        : state.sourceStatus === "loading" ? `<p role="status">Güvenilir kaynaklar kontrol ediliyor…</p>`
+        : state.sourceStatus === "empty" ? `<p>Yetkili şirket bulunamadı.</p>`
+        : sourceRequired ? `<p role="status">Bu dönem için güvenilir kaynak eksik veya eski (${contractIds().length} sözleşme).</p><button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="journalPageProduce">Güvenilir kaynağı oluştur</button>`
+        : state.sourceStatus === "error" ? `<p role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.sourceError))}</p>`
+        : state.availability ? `<p role="status">${escapeHtml(state.availability.contractIds.length)} sözleşmenin güvenilir kaynağı hazır.</p>` : "";
+      container.innerHTML = `<div class="gk-v26-page"><h2>Yevmiye</h2><p style="color:#64748b">TFRS 16 dönem yevmiyesi: ilk muhasebeleştirme, faiz, ödeme, amortisman, modifikasyon, kur farkı (TMS 21), enflasyon düzeltmesi (TMS 29), alt kiralama ve satış ve geri kiralama kayıtları. Dönem üst çubuktaki raporlama döneminden alınır.</p>`
+        + `<div class="gk-v26-card"><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end"><label>Şirket<br><select id="journalPageCompany" ${state.producing ? "disabled" : ""}>${companies.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === state.companyId ? "selected" : ""}>${escapeHtml(c.name || c.id)}</option>`).join("")}</select></label>`
+        + `<div><small style="color:#64748b">Dönem</small><br><strong>${escapeHtml(p.periodStart || "—")} – ${escapeHtml(p.periodEnd || "—")}</strong></div></div>`
+        + `<div style="margin-top:12px">${sourceHtml}${state.summary ? `<p role="status">${escapeHtml(state.summary)}</p>` : ""}</div></div>`
+        + journalSectionHtml({ ready: state.sourceStatus === "ready", status: state.journalStatus, error: state.journalError, journal: state.journal, tms29: false })
+        + `</div>`;
+      container.querySelector("#journalPageCompany")?.addEventListener("change", e => { state.companyId = e.target.value; state.summary = null; loadSources(); });
+      container.querySelector("#journalPageProduce")?.addEventListener("click", produce);
+      container.querySelector("#disclosureJournal")?.addEventListener("click", loadJournal);
+      container.querySelector("#disclosureJournalCsv")?.addEventListener("click", () => { if (state.journal) downloadJournalCsv(state.journal, state.companyId, p.periodEnd); });
+    }
+    const unsubscribe = global.LeaseQantReportingPeriod?.subscribe?.(() => { if (token !== journalPageRender || !container.isConnected) { unsubscribe?.(); return; } state.summary = null; loadSources(); });
+    loadSources();
+  }
+
+  global.LeaseQantTfrs16DisclosureUi = Object.freeze({ renderFootnotes, renderPeriodJournalPage, rowsForTab, exportRows, errorLabel, validPeriodRange, sourceGaps });
 })(window);
