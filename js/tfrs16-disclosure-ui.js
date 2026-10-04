@@ -570,7 +570,8 @@
     const MOVEMENTS = { INITIAL_RECOGNITION: "İlk muhasebeleştirme", INTEREST: "Faiz", CONTRACTUAL_PAYMENT: "Sözleşmesel ödeme",
       DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon / yeniden ölçüm", FX_DIFFERENCE: "Kur farkı (TMS 21)",
       TMS29_RESTATEMENT: "Enflasyon düzeltmesi (TMS 29)", SUBLEASE_DERECOGNITION: "Alt kiralama devri", SUBLEASE_INCOME: "Alt kiralama geliri",
-      EXEMPT_LEASE_EXPENSE: "İstisna kira gideri" };
+      EXEMPT_LEASE_EXPENSE: "İstisna kira gideri", SALE_AND_LEASEBACK: "Satış ve geri kiralama (TFRS 16.100)",
+      SUBLEASE_RECEIPT: "Alt kiralama tahsilatı" };
     function journalHtml() {
       const ready = state.status === "ready" && state.availability;
       const j = state.journal;
@@ -579,6 +580,12 @@
         + `<button type="button" class="gk-v26-btn" id="disclosureJournal" ${ready && state.journalStatus !== "loading" ? "" : "disabled"}>${state.journalStatus === "loading" ? "Yevmiye hazırlanıyor…" : "Dönem yevmiyesini oluştur"}</button>`;
       if (state.journalStatus === "error") {
         const code = state.journalError?.code || state.journalError?.details?.code;
+        const [base, detail, field] = String(code || "").split(":");
+        const prefixed = { JOURNAL_ACCOUNT_MAPPING_MISSING: `Hesap eşlemesinde "${detail}" amacı tanımlı değil. Yönetim → Hesap eşlemesi ekranında eşlemeyi yeniden onaylayın (yeni amaçlar eklenmiş olabilir).`,
+          JOURNAL_SLB_SOURCE_REFRESH_REQUIRED: `${detail} için satış ve geri kiralama kaynağı eski. Bu dönem için "Güvenilir kaynağı oluştur" ile kaynağı yenileyin.`,
+          JOURNAL_SOURCE_NOT_CALCULABLE: `${detail} sözleşmesinde "${field}" tutarı hesaplanamadı (dipnotta "Kaynak gerekli").`,
+          JOURNAL_SOURCE_UNBALANCED: `${detail} sözleşmesinin fişi dengelenemedi.` }[base];
+        if (prefixed) return head + `<p role="alert" style="color:#991b1b">${escapeHtml(prefixed)}</p></section>`;
         const months = state.journalError?.details?.missingMonths;
         return head + `<p role="alert" style="color:#991b1b">${escapeHtml((JOURNAL_ERRORS[code] || `Yevmiye üretilemedi (${code || "bilinmeyen hata"})`) + (months?.length ? `: ${months.join(", ")}` : ""))}</p></section>`;
       }

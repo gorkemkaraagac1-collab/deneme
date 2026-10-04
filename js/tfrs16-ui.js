@@ -8750,6 +8750,12 @@ window.fetch = (input, init = {}) => {
 
 ${renderAccountingCenterHeader()}
 
+        <div role="note" style="margin:12px 0;padding:12px 14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;font-size:12px;color:#14532d;line-height:1.55">
+          <strong>TFRS 16 dönem yevmiyesi:</strong> İlk muhasebeleştirme, faiz, ödeme, amortisman, modifikasyon, kur farkı (TMS 21) ve enflasyon düzeltmesi (TMS 29)
+          kayıtları Dipnotlar sayfasında, dipnotla aynı güvenilir kaynaktan "Dönem yevmiyesini oluştur" ile üretilir. Aşağıdaki eski fiş önizlemesi yalnızca
+          değişikliksiz TRY sözleşmeleri destekler.
+        </div>
+
 ${renderAccountingCenterFilters(contract)}
 
 ${renderAccountingCenterPreviewContainer()}

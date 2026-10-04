@@ -236,7 +236,7 @@
     if (r.error || r.row?.status !== "SUPPORTED") {
       const code = r.error?.code || r.row?.reason;
       return `<div class="lq-cv-card lq-cv-pad lq-cv-empty"><h3>Bu sözleşme için doğrulanmış hesaplama tablosu yok</h3><p>${esc(reasonText(code))}</p>
-        <p class="lq-cv-muted">Ödeme planı da aynı doğrulanmış sunucu kaynağını bekler. İlk muhasebeleştirme fişi ayrı bir yetkili kaynakla sunulur.</p>
+        <p class="lq-cv-muted">Ödeme planı da aynı doğrulanmış sunucu kaynağını bekler. İlk muhasebeleştirme kaydı, başlangıç ayının dönem yevmiyesinde (Dipnotlar) yer alır.</p>
         <button type="button" class="lq-cv-btn" data-lq-cv-go="schedule">Ödeme planını aç</button></div>`;
     }
     const sch = scheduleModel(r.row.scheduleRows, r.period);
