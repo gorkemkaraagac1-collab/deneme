@@ -144,6 +144,18 @@
       contractIds: availability.contractIds, calculationIds: availability.calculationIds }, options);
   }
 
+  async function getApprovedAccountMapping(companyId, options) {
+    if (typeof companyId !== "string" || !companyId) throw new TypeError("companyId is required");
+    const config = options || {};
+    const headers = { Accept: "application/json" };
+    const token = config.reportingBearer || getBearerToken();
+    if (token) headers.Authorization = "Bearer " + token;
+    const response = await global.fetch(getApiBase() + "/api/journals/mapping?companyId=" + encodeURIComponent(companyId), { credentials: "include", headers });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || body?.success !== true) throw createRequestError(response.status, body);
+    return body.data;
+  }
+
   async function getLeaseDisclosure(availability, options) {
     const fields = ["companyId", "reportingPeriodStart", "reportingPeriodEnd", "reportingDate", "populationId"];
     if (!availability || availability.sourceTrustStatus !== "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED"
@@ -477,6 +489,7 @@
     getPeriodLockStatus,
     getLeaseDisclosure,
     getPeriodJournal,
+    getApprovedAccountMapping,
     apiBase: getApiBase,
     timeoutMs: DEFAULT_TIMEOUT_MS
   });
