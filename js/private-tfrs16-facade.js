@@ -104,6 +104,12 @@
     return value.getLeaseDisclosure(availability, options);
   }
 
+  async function loadPeriodJournal(availability, options) {
+    const value = adapter();
+    if (typeof value.getPeriodJournal !== "function") throw new Error("Period journal adapter is unavailable");
+    return value.getPeriodJournal(availability, options);
+  }
+
   async function createTrustedDisclosureSnapshots(contractIds, period, options) {
     const value = adapter();
     if (!Array.isArray(contractIds) || !contractIds.length || contractIds.length > 500
@@ -241,6 +247,7 @@
     loadLeaseDisclosureAvailability,
     loadJournalAuthorityPackage,
     loadLeaseDisclosure,
+    loadPeriodJournal,
     createTrustedDisclosureSnapshots,
     loadCloseControls,
     loadEarlyPayment,

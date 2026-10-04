@@ -444,6 +444,7 @@
       const key = `${state.companyId}|${state.periodStart}|${state.reportingDate}`;
       if (state.key === key) return;
       state.key = key;
+      state.journal = null; state.journalStatus = null; state.journalError = null;
       state.pkg = null;
       state.availability = null;
       state.error = null;
@@ -534,6 +535,9 @@
         + (state.error?.code === "DISCLOSURE_PERIOD_INVALID" ? `<p id="disclosure-period-error" role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.error))}</p>` : `<span id="disclosure-period-error" class="sr-only"></span>`)
         + `</div><div style="margin:15px 0">${tabs.map(([key, title]) => `<button type="button" data-disclosure-tab="${key}" class="gk-v26-btn ${key === state.tab ? "" : "gk-v26-btn-secondary"}">${title}</button>`).join(" ")}</div>`
         + body + source + `</div></div>`;
+      container.insertAdjacentHTML("beforeend", journalHtml());
+      container.querySelector("#disclosureJournal")?.addEventListener("click", loadJournal);
+      container.querySelector("#disclosureJournalCsv")?.addEventListener("click", exportJournal);
       container.querySelector("#disclosureCompany")?.addEventListener("change", event => {
         state.companyId = event.target.value; state.productionSummary = null; state.sequence++; draw();
       });
@@ -558,6 +562,63 @@
           onSaved: () => { state.key = null; state.sequence++; draw(); } });
       });
     };
+    // TFRS 16 period journal from the same trusted population as the note:
+    // its lines are the note movements, so the two agree by construction.
+    const JOURNAL_ERRORS = { JOURNAL_REQUIRES_CONFIGURATION: "Bu dönem için onaylı hesap eşlemesi yok. Yönetim → Hesap eşlemesi ekranından onaylayın.",
+      JOURNAL_TMS29_INDEX_REQUIRED: "TMS 29 için doğrulanmış TÜFE eksik", JOURNAL_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili gerekli." };
+    const money2 = v => Number(v || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const MOVEMENTS = { INITIAL_RECOGNITION: "İlk muhasebeleştirme", INTEREST: "Faiz", CONTRACTUAL_PAYMENT: "Sözleşmesel ödeme",
+      DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon / yeniden ölçüm", FX_DIFFERENCE: "Kur farkı (TMS 21)",
+      TMS29_RESTATEMENT: "Enflasyon düzeltmesi (TMS 29)", SUBLEASE_DERECOGNITION: "Alt kiralama devri", SUBLEASE_INCOME: "Alt kiralama geliri",
+      EXEMPT_LEASE_EXPENSE: "İstisna kira gideri" };
+    function journalHtml() {
+      const ready = state.status === "ready" && state.availability;
+      const j = state.journal;
+      const head = `<section class="gk-v26-card lq-dn-journal" style="margin-top:16px"><h3 style="margin:0 0 6px">Dönem yevmiyesi (TFRS 16)</h3>`
+        + `<p style="margin:0 0 10px;color:#64748b;font-size:12px">Fiş satırları bu dipnotun güvenilir kaynaklarından üretilir (sunum para birimi${state.pkg?.tms29?.applied ? ", TMS 29 düzeltilmiş" : ""}). Ödemeler sözleşmesel plandır; deftere gönderilmez.</p>`
+        + `<button type="button" class="gk-v26-btn" id="disclosureJournal" ${ready && state.journalStatus !== "loading" ? "" : "disabled"}>${state.journalStatus === "loading" ? "Yevmiye hazırlanıyor…" : "Dönem yevmiyesini oluştur"}</button>`;
+      if (state.journalStatus === "error") {
+        const code = state.journalError?.code || state.journalError?.details?.code;
+        const months = state.journalError?.details?.missingMonths;
+        return head + `<p role="alert" style="color:#991b1b">${escapeHtml((JOURNAL_ERRORS[code] || `Yevmiye üretilemedi (${code || "bilinmeyen hata"})`) + (months?.length ? `: ${months.join(", ")}` : ""))}</p></section>`;
+      }
+      if (!j) return head + `</section>`;
+      const rows = j.summary.map(r => `<tr><td class="lq-dn-mono">${escapeHtml(r.accountCode)}</td><td>${escapeHtml(r.accountName)}</td><td style="text-align:right">${money2(r.debit)}</td><td style="text-align:right">${money2(r.credit)}</td></tr>`).join("");
+      const vouchers = j.vouchers.map(v => `<details><summary>${escapeHtml(v.contractId)} · borç ${money2(v.totalDebit)} · ${v.reconciled ? "dipnotla mutabık ✓" : "mutabakat farkı"}</summary>`
+        + `<table style="width:100%;font-size:12px"><tbody>${v.lines.map(l => `<tr><td>${escapeHtml(MOVEMENTS[l.movement] || l.movement)}</td><td class="lq-dn-mono">${escapeHtml(l.accountCode)} ${escapeHtml(l.accountName)}</td><td style="text-align:right">${l.debit ? money2(l.debit) : ""}</td><td style="text-align:right">${l.credit ? money2(l.credit) : ""}</td></tr>`).join("")}</tbody></table></details>`).join("");
+      return head + `<p role="status" style="margin:10px 0">${escapeHtml(j.voucherCount)} fiş · borç ${money2(j.totalDebit)} = alacak ${money2(j.totalCredit)} ${escapeHtml(j.currency)} · ${j.reconciled ? "tüm fişler dipnot hareketiyle mutabık" : "mutabakat farkı olan fiş var"}</p>`
+        + `<table style="width:100%;font-size:12.5px"><thead><tr><th>Hesap</th><th>Hesap adı</th><th style="text-align:right">Borç</th><th style="text-align:right">Alacak</th></tr></thead><tbody>${rows}</tbody></table>`
+        + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureJournalCsv" style="margin-top:10px">↓ Yevmiyeyi CSV olarak indir</button>`
+        + `<div style="margin-top:10px">${vouchers}</div></section>`;
+    }
+    async function loadJournal() {
+      if (state.status !== "ready" || !state.availability || typeof facade?.loadPeriodJournal !== "function") return;
+      const key = state.key;
+      state.journalStatus = "loading"; state.journalError = null; draw();
+      try {
+        const journal = await facade.loadPeriodJournal(state.availability);
+        if (key !== state.key) return;
+        state.journal = journal; state.journalStatus = "ready";
+      } catch (error) {
+        if (key !== state.key) return;
+        state.journalError = error; state.journalStatus = "error";
+      }
+      draw();
+    }
+    function exportJournal() {
+      const j = state.journal;
+      if (!j) return;
+      const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const lines = [["Sözleşme", "Fiş tarihi", "Hareket", "Hesap kodu", "Hesap adı", "Borç", "Alacak", "Para birimi"].map(cell).join(";")]
+        .concat(j.vouchers.flatMap(v => v.lines.map(l => [v.contractId, v.postingDate, MOVEMENTS[l.movement] || l.movement, l.accountCode, l.accountName,
+          String(l.debit).replace(".", ","), String(l.credit).replace(".", ","), v.currency].map(cell).join(";"))));
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const link = global.document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `tfrs16-yevmiye-${state.companyId}-${state.reportingDate}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
     bridge.setActiveScreenRefreshCallback?.(() => { state.key = null; state.sequence++; draw(); });
     draw();
   }

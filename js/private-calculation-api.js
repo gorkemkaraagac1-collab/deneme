@@ -132,6 +132,18 @@
     return Object.freeze({ companyId: data.companyId, periodKey: data.periodKey, status: data.status, lockedAt: data.lockedAt });
   }
 
+  // TFRS 16 period journal from the same trusted note population.
+  async function getPeriodJournal(availability, options) {
+    if (!availability || availability.sourceTrustStatus !== "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED"
+      || !Array.isArray(availability.contractIds) || !availability.contractIds.length
+      || availability.contractIds.length !== availability.calculationIds?.length) {
+      throw new TypeError("Trusted disclosure identifiers are required");
+    }
+    return requestDisclosure("/api/journals/period", "POST", { companyId: availability.companyId,
+      reportingPeriodStart: availability.reportingPeriodStart, reportingPeriodEnd: availability.reportingPeriodEnd,
+      contractIds: availability.contractIds, calculationIds: availability.calculationIds }, options);
+  }
+
   async function getLeaseDisclosure(availability, options) {
     const fields = ["companyId", "reportingPeriodStart", "reportingPeriodEnd", "reportingDate", "populationId"];
     if (!availability || availability.sourceTrustStatus !== "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED"
@@ -464,6 +476,7 @@
     getReportingCompanies,
     getPeriodLockStatus,
     getLeaseDisclosure,
+    getPeriodJournal,
     apiBase: getApiBase,
     timeoutMs: DEFAULT_TIMEOUT_MS
   });
