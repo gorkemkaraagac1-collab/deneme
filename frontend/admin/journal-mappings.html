@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hesap Eşlemesi - LeaseQant</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .jm-page { display: grid; gap: 20px; }
+        .jm-intro h1 { margin: 0 0 4px; font: 600 24px var(--display); }
+        .jm-intro p { max-width: 860px; margin: 0; color: var(--text-light); font-size: 12.5px; line-height: 1.6; }
+        .jm-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+        .jm-row .form-group { margin: 0; min-width: 220px; }
+        .jm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .jm-table th, .jm-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+        .jm-table input { width: 100%; box-sizing: border-box; }
+        .jm-table td.code input { font-family: var(--mono); max-width: 140px; }
+        .jm-status { font-size: 12.5px; margin-top: 10px; }
+        .jm-status.is-err { color: var(--danger); }
+        .jm-status.is-ok { color: #0F766E; }
+        .jm-scroll { overflow-x: auto; }
+    </style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main-content">
+<header class="top-header">
+    <div class="page-title">Hesap Eşlemesi</div>
+    <div class="user-info">
+        <span class="username" id="adminUsername">Loading...</span>
+        <span class="role-badge">ADMIN</span>
+        <button class="btn-logout" onclick="logout()">Çıkış</button>
+    </div>
+</header>
+<div class="content-area jm-page">
+    <section class="jm-intro">
+        <h1>TFRS 16 yevmiye hesap eşlemesi</h1>
+        <p>Yevmiye fişlerinde her muhasebe amacının hangi hesap koduna yazılacağını şirket bazında onaylayın. Önerilen kodlar Tek Düzen Hesap Planı'na göredir;
+           şirketinizin hesap planına göre değiştirin. Yeni bir eşleme onaylandığında önceki eşleme yürürlük tarihinden bir gün önce kapanır. Onaylı eşleme olmadan yevmiye fişi üretilmez.</p>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">1 · Şirket</div>
+        <div class="jm-row">
+            <div class="form-group"><label for="jmCompany">Şirket</label><select id="jmCompany"></select></div>
+        </div>
+        <div class="jm-status" id="jmCurrent" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">2 · Hesap kodları</div>
+        <div class="jm-scroll"><table class="jm-table" aria-label="Hesap eşlemesi">
+            <thead><tr><th scope="col">Amaç</th><th scope="col">Hesap kodu</th><th scope="col">Hesap adı</th></tr></thead>
+            <tbody id="jmRows"><tr><td colspan="3">Yükleniyor…</td></tr></tbody>
+        </table></div>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">3 · Onay</div>
+        <div class="jm-row">
+            <div class="form-group"><label for="jmFrom">Yürürlük başlangıcı</label><input id="jmFrom" type="date"></div>
+            <div class="form-group"><label for="jmRef">Onay referansı (karar / e-posta / iş emri)</label><input id="jmRef" type="text" maxlength="150" placeholder="ör. MUH-2026-014"></div>
+            <button class="btn btn-primary" type="button" id="jmSave">Eşlemeyi onayla</button>
+        </div>
+        <div class="jm-status" id="jmStatus" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="lq-box">
+        <div class="lq-kick">Geçmiş</div>
+        <div class="jm-scroll"><table class="jm-table" id="jmHistory"></table></div>
+    </section>
+</div>
+</main>
+
+<script src="../js/admin.js"></script>
+<script>
+const ERRORS = { JOURNAL_MAPPING_DATE_INVALID: "Yürürlük tarihi geçersiz.", JOURNAL_MAPPING_APPROVAL_REFERENCE_REQUIRED: "Onay referansı zorunlu.",
+    JOURNAL_MAPPING_COMPANY_NOT_FOUND: "Şirket bulunamadı.", JOURNAL_MAPPING_SAVE_FAILED: "Eşleme kaydedilemedi." };
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let purposes = [];
+function status(id, text, kind) { const el = document.getElementById(id); el.textContent = text || ""; el.className = `jm-status${kind ? ` is-${kind}` : ""}`; }
+function errorText(code) {
+    if (String(code || "").startsWith("JOURNAL_MAPPING_ACCOUNT_INVALID:")) {
+        const key = code.split(":")[1], p = purposes.find(x => x.key === key);
+        return `"${p ? p.label : key}" için geçerli bir hesap kodu (rakamla başlamalı) ve hesap adı girin.`;
+    }
+    return ERRORS[code] || `İşlem tamamlanamadı (${code || "bilinmeyen hata"}).`;
+}
+async function load() {
+    const companyId = document.getElementById("jmCompany").value;
+    if (!companyId) return;
+    const response = await fetch(`${AdminAPI.baseURL}/journal-mappings?companyId=${encodeURIComponent(companyId)}`, { headers: AdminAPI.getHeaders() });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.success) { status("jmCurrent", errorText(body.code), "err"); return; }
+    purposes = body.data.purposes;
+    const mappings = body.data.mappings || [];
+    const today = new Date().toISOString().slice(0, 10);
+    const current = mappings.find(m => m.status === "APPROVED" && m.effectiveFrom <= today && (!m.effectiveThrough || m.effectiveThrough >= today))
+        || mappings.find(m => m.status === "APPROVED");
+    status("jmCurrent", current
+        ? `Onaylı eşleme: ${current.effectiveFrom} – ${current.effectiveThrough || "açık"} · onaylayan ${current.approvedBy} · referans ${current.approvalReference}`
+        : "Bu şirket için onaylı eşleme yok. Yevmiye fişi üretmek için aşağıdaki kodları kontrol edip onaylayın.", current ? "ok" : "err");
+    document.getElementById("jmRows").innerHTML = purposes.map(p => {
+        const a = current?.accounts?.[p.key] || { code: p.code, name: p.name };
+        return `<tr><td>${esc(p.label)}</td><td class="code"><input data-code="${esc(p.key)}" value="${esc(a.code)}" aria-label="${esc(p.label)} hesap kodu"></td>
+            <td><input data-name="${esc(p.key)}" value="${esc(a.name)}" aria-label="${esc(p.label)} hesap adı"></td></tr>`;
+    }).join("");
+    document.getElementById("jmFrom").value = document.getElementById("jmFrom").value || (current ? today : `${today.slice(0, 4)}-01-01`);
+    document.getElementById("jmHistory").innerHTML = mappings.length
+        ? `<thead><tr><th>Yürürlük</th><th>Durum</th><th>Onaylayan</th><th>Referans</th></tr></thead><tbody>${mappings.map(m =>
+            `<tr><td>${esc(m.effectiveFrom)} – ${esc(m.effectiveThrough || "açık")}</td><td>${m.status === "APPROVED" ? "Onaylı" : m.status === "REVOKED" ? "Geri alındı" : esc(m.status)}</td><td>${esc(m.approvedBy)}</td><td>${esc(m.approvalReference)}</td></tr>`).join("")}</tbody>`
+        : "<tbody><tr><td>Kayıt yok.</td></tr></tbody>";
+}
+document.getElementById("jmSave").addEventListener("click", async () => {
+    const companyId = document.getElementById("jmCompany").value;
+    const accounts = Object.fromEntries(purposes.map(p => [p.key, {
+        code: document.querySelector(`[data-code="${p.key}"]`).value, name: document.querySelector(`[data-name="${p.key}"]`).value }]));
+    status("jmStatus", "Kaydediliyor…");
+    const response = await fetch(`${AdminAPI.baseURL}/journal-mappings`, { method: "POST", headers: AdminAPI.getHeaders(),
+        body: JSON.stringify({ companyId, effectiveFrom: document.getElementById("jmFrom").value,
+            approvalReference: document.getElementById("jmRef").value, accounts }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.success) { status("jmStatus", errorText(body.code), "err"); return; }
+    status("jmStatus", `Eşleme onaylandı (${body.data.version}).`, "ok");
+    document.getElementById("jmRef").value = "";
+    load();
+});
+(async function init() {
+    const select = document.getElementById("jmCompany");
+    try {
+        const result = await AdminAPI.getCompanies({ limit: 500 });
+        (result && Array.isArray(result.data) ? result.data : []).forEach(c => {
+            const o = document.createElement("option"); o.value = String(c.id); o.textContent = `${c.name}${c.code ? ` · ${c.code}` : ""}`; select.appendChild(o);
+        });
+    } catch (_) { status("jmCurrent", "Şirketler yüklenemedi.", "err"); }
+    select.addEventListener("change", load);
+    load();
+})();
+</script>
+</body>
+</html>
