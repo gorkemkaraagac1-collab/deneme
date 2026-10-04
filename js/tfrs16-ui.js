@@ -2922,19 +2922,19 @@ window.fetch = (input, init = {}) => {
     const currentEnd = parseDate(contract.endDate);
 
     if (!reassessmentDate) {
-      errors.push("Reassessment Date geçersiz.");
+      errors.push("Yeniden değerlendirme tarihi geçersiz.");
     }
 
     if (!effectiveDate) {
-      errors.push("Effective Date geçersiz.");
+      errors.push("Yürürlük tarihi geçersiz.");
     }
 
     if (reassessmentDate && effectiveDate && effectiveDate < reassessmentDate) {
-      errors.push("Effective Date, Reassessment Date'ten önce olamaz.");
+      errors.push("Yürürlük tarihi, yeniden değerlendirme tarihinden önce olamaz.");
     }
 
     if (effectiveDate && startDate && effectiveDate < startDate) {
-      errors.push("Effective Date lease başlangıcından önce olamaz.");
+      errors.push("Yürürlük tarihi kira başlangıcından önce olamaz.");
     }
 
     const type = String(input?.type || "OTHER");
@@ -2950,7 +2950,7 @@ window.fetch = (input, init = {}) => {
     ];
 
     if (!allowedTypes.includes(type)) {
-      errors.push("Geçersiz reassessment type.");
+      errors.push("Geçersiz yeniden değerlendirme tipi.");
     }
 
     const newEndDate = parseDate(input?.newLeaseEndDate);
@@ -2967,9 +2967,9 @@ window.fetch = (input, init = {}) => {
 
     if (termTypes.includes(type)) {
       if (!newEndDate) {
-        errors.push("New lease end date geçersiz.");
+        errors.push("Yeni kira bitiş tarihi geçersiz.");
       } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("New lease end date Effective Date'ten sonra olmalıdır.");
+        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
       }
     }
 
@@ -2981,7 +2981,7 @@ window.fetch = (input, init = {}) => {
 
     if (paymentTypes.includes(type)) {
       if (!Number.isFinite(newPayment) || newPayment < 0) {
-        errors.push("New payment geçerli ve negatif olmayan bir tutar olmalıdır.");
+        errors.push("Yeni ödeme geçerli ve negatif olmayan bir tutar olmalıdır.");
       }
     }
 
@@ -2989,7 +2989,7 @@ window.fetch = (input, init = {}) => {
         input?.newDiscountRate !== null &&
         input?.newDiscountRate !== "") {
       if (!Number.isFinite(newRate) || newRate < 0) {
-        errors.push("New discount rate geçersiz.");
+        errors.push("Yeni iskonto oranı geçersiz.");
       }
     }
 
@@ -3542,23 +3542,23 @@ window.fetch = (input, init = {}) => {
       parseDate(historicalTerms?.leaseEndDate || contract.endDate);
 
     if (!modificationDate) {
-      errors.push("Modification Date geçersiz.");
+      errors.push("Modifikasyon tarihi geçersiz.");
     }
 
     if (!effectiveDate) {
-      errors.push("Effective Date geçersiz.");
+      errors.push("Yürürlük tarihi geçersiz.");
     }
 
     if (effectiveDate && startDate && effectiveDate < startDate) {
-      errors.push("Effective Date lease başlangıç tarihinden önce olamaz.");
+      errors.push("Yürürlük tarihi kira başlangıç tarihinden önce olamaz.");
     }
 
     if (effectiveDate && modificationDate && effectiveDate < modificationDate) {
-      errors.push("Effective Date, Modification Date'ten önce olamaz.");
+      errors.push("Yürürlük tarihi, modifikasyon (anlaşma) tarihinden önce olamaz. TFRS 16 Ek A uyarınca modifikasyonun yürürlük tarihi tarafların anlaştığı tarihtir; geçmiş tarihli bir değişiklik için anlaşma tarihini de o tarihe göre girin.");
     }
 
     if (currentEndDate && effectiveDate && effectiveDate > currentEndDate) {
-      errors.push("Modification lease bitişinden sonra uygulanamaz.");
+      errors.push("Modifikasyon kira bitişinden sonra uygulanamaz.");
     }
 
     const type =
@@ -3576,7 +3576,7 @@ window.fetch = (input, init = {}) => {
     ];
 
     if (!allowedTypes.includes(type)) {
-      errors.push("Geçersiz modification type.");
+      errors.push("Geçersiz modifikasyon tipi.");
     }
 
     const newPayment =
@@ -3597,7 +3597,7 @@ window.fetch = (input, init = {}) => {
 
     if (paymentTypes.includes(type)) {
       if (!Number.isFinite(newPayment) || newPayment < 0) {
-        errors.push("New payment geçerli ve negatif olmayan bir tutar olmalıdır.");
+        errors.push("Yeni ödeme geçerli ve negatif olmayan bir tutar olmalıdır.");
       }
     }
 
@@ -3609,13 +3609,13 @@ window.fetch = (input, init = {}) => {
     if (type === "PAYMENT_INCREASE" &&
         Number.isFinite(newPayment) &&
         newPayment <= currentPayment) {
-      errors.push("Payment increase için new payment mevcut ödemeden büyük olmalıdır.");
+      errors.push("Ödeme artışında yeni ödeme mevcut ödemeden büyük olmalıdır.");
     }
 
     if (type === "PAYMENT_DECREASE" &&
         Number.isFinite(newPayment) &&
         newPayment >= currentPayment) {
-      errors.push("Payment decrease için new payment mevcut ödemeden küçük olmalıdır.");
+      errors.push("Ödeme azalışında yeni ödeme mevcut ödemeden küçük olmalıdır.");
     }
 
     const termTypes = [
@@ -3626,9 +3626,9 @@ window.fetch = (input, init = {}) => {
 
     if (termTypes.includes(type)) {
       if (!newEndDate) {
-        errors.push("New lease end date geçersiz.");
+        errors.push("Yeni kira bitiş tarihi geçersiz.");
       } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("New lease end date Effective Date'ten sonra olmalıdır.");
+        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
       }
     }
 
@@ -3643,9 +3643,9 @@ window.fetch = (input, init = {}) => {
     if (type === "OTHER" && input?.newLeaseEndDate !== undefined &&
         input?.newLeaseEndDate !== null && input?.newLeaseEndDate !== "") {
       if (!newEndDate) {
-        errors.push("New lease end date geçersiz.");
+        errors.push("Yeni kira bitiş tarihi geçersiz.");
       } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("New lease end date Effective Date'ten sonra olmalıdır.");
+        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
       }
     }
 
@@ -3653,7 +3653,7 @@ window.fetch = (input, init = {}) => {
         input?.newDiscountRate !== null &&
         input?.newDiscountRate !== "") {
       if (!Number.isFinite(newDiscountRate) || newDiscountRate < 0) {
-        errors.push("New discount rate geçersiz.");
+        errors.push("Yeni iskonto oranı geçersiz.");
       }
     }
 
