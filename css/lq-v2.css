@@ -255,7 +255,7 @@ html[data-lq-ui="2"] .shell-logout {
   border: 1px solid var(--lq-rail-line) !important; background: transparent !important;
   color: var(--lq-rail-text) !important; font-size: 12px !important; cursor: pointer;
 }
-html[data-lq-ui="2"] .shell-logout:hover { color: #FFFFFF !important; border-color: #33445F !important; }
+html[data-lq-ui="2"] .shell-logout:hover, html[data-lq-ui="2"] .shell-logout:focus-visible { color: #FFFFFF !important; border-color: #33445F !important; background: rgba(255, 255, 255, .08) !important; }
 html[data-lq-ui="2"] .lq-mobile-nav-toggle { display: none !important; }
 
 /* ---------- Bağlam çubuğu (lq-ui-v2.js ekler) ---------- */
@@ -960,6 +960,14 @@ html[data-lq-ui="2"] .lq-cv-side { display: none; }
 html[data-lq-ui="2"] .lq-cv-shell[data-tab="calc"] .lq-cv-side, html[data-lq-ui="2"] .lq-cv-shell[data-tab="summary"] .lq-cv-side { display: block; }
 html[data-lq-ui="2"] .lq-cv-shell[data-tab="calc"] .lq-cv-engine { display: none; }
 html[data-lq-ui="2"] .lq-cv-shell:not([data-tab="calc"]) .lq-cv-calc { display: none; }
+html[data-lq-ui="2"] .lq-cv-shell:not([data-tab="schedule"]) .lq-cv-plan { display: none; }
+html[data-lq-ui="2"] .lq-cv-shell[data-tab="schedule"] .lq-cv-engine { display: none; }
+html[data-lq-ui="2"] .lq-cv-plan-card h3 { margin: 0 0 4px; font-size: 15px; color: var(--lq-ink); }
+html[data-lq-ui="2"] .lq-cv-plan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+html[data-lq-ui="2"] .lq-cv-plan-table th { text-align: left; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--lq-ink-3, #64748b); padding: 8px 10px; border-bottom: 1px solid var(--lq-line); }
+html[data-lq-ui="2"] .lq-cv-plan-table td { padding: 7px 10px; border-bottom: 1px solid var(--lq-line); color: var(--lq-ink); }
+html[data-lq-ui="2"] .lq-cv-plan-table .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--lq-mono, monospace); }
+html[data-lq-ui="2"] .lq-cv-plan-table tr.is-past td { color: var(--lq-ink-3, #64748b); }
 html[data-lq-ui="2"] .lq-cv-engine .gk-detail-tab { background: #fff; border: 1px solid var(--lq-line); border-radius: 12px; padding: 18px 20px; }
 html[data-lq-ui="2"] .lq-cv-engine .gk-detail-tab:not(.gk-detail-tab-active) { display: none !important; }
 html[data-lq-ui="2"] .lq-cv-card { background: #fff; border: 1px solid var(--lq-line); border-radius: 12px; }
@@ -1644,3 +1652,17 @@ html[data-lq-ui="2"] .lq-v2-metric-state {
 html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="blocked"] { color: var(--lq-warn) !important; }
 html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="error"],
 html[data-lq-ui="2"] .lq-v2-metric-state[data-lq-ui-state="unauthorized"] { color: var(--lq-danger) !important; }
+
+/* ---------- Okunabilirlik düzeltmeleri (eski koyu tema kurallarını ezer) ---------- */
+html[data-lq-ui="2"] #v26PageHost .lq-pg-note,
+html[data-lq-ui="2"] .lq-pg-note { background: #EEF3FB !important; background-image: none !important; color: #0F3E86 !important; border: 1px solid #C9D9F3 !important; box-shadow: none !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-pg-note strong, html[data-lq-ui="2"] #v26PageHost .lq-pg-note span { color: #0F3E86 !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-pg-note.is-warn { background: #FFF7E8 !important; color: #8A4B08 !important; border-color: #F3D9A8 !important; }
+/* Modifikasyon / yeniden değerlendirme yönetimi: açık zemin, koyu yazı */
+html[data-lq-ui="2"] #v26PageHost .lq-op-event-block,
+html[data-lq-ui="2"] #v26PageHost .lq-op-event-block > div:not(.lq-op-change-form) { background: #FFFFFF !important; background-image: none !important; box-shadow: none !important; color: var(--lq-ink) !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-op-event-block h3 { color: var(--lq-ink) !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-op-event-block p { color: var(--lq-ink-2) !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-op-event-block th, html[data-lq-ui="2"] #v26PageHost .lq-op-event-block [style*="font-weight:800"] { color: var(--lq-ink-2) !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-op-stepper { background: var(--lq-surface-2, #F6F8FB) !important; background-image: none !important; border: 1px solid var(--lq-line) !important; border-radius: 10px; padding: 10px 12px !important; }
+html[data-lq-ui="2"] #v26PageHost .lq-op-stepper li { color: var(--lq-ink-2) !important; }

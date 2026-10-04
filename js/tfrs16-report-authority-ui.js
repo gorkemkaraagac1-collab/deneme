@@ -127,7 +127,7 @@
    ${emptyMetricPopulation?'<p class="lq-authority-empty">Bu dönemde aktif sözleşme yok; finansal tutar gösterilmiyor.</p>':visibleRows.length?`<div class="lq-authority-table"><table><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${visibleRows.map(r=>`<tr>${keys.map(k=>`<td>${esc(shownCell(r[k],k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:
     '<p class="lq-authority-empty">Bu dönem için gösterilecek satır bulunmuyor.</p>'}
    ${p.population.count>0?`<p>Hesaplama kontrolleri: ${esc(statusLabel(p.controls.status))}. Kapanış veya canlı kayıt onayı değildir.</p>`:''}
-   <details><summary>Teknik kaynak ayrıntıları</summary><pre>${esc(JSON.stringify({rows,unsupported:p.unsupported,controls:p.controls},null,2))}</pre></details>`;}
+`;}
  function styles(container) {
   container.classList?.add('lq-report-authority');if(global.document.getElementById('lq-report-authority-style'))return;
   const style=global.document.createElement('style');style.id='lq-report-authority-style';style.textContent=`

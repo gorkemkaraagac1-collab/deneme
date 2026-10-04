@@ -230,6 +230,33 @@
       `<button type="button" data-lq-cv-sub="${id}" aria-pressed="${state.sub === id}">${label}</button>`).join("")}</div>`;
   }
 
+  // Payment plan tab: the contractual cash schedule only (date, payment,
+  // paid to date, remaining). Interest and depreciation live in "Hesaplama".
+  function planHtml() {
+    const r = state.report;
+    if (!r) return `<div class="lq-cv-card lq-cv-pad"><div class="lq-cv-sk is-lg"></div><div class="lq-cv-sk"></div></div>`;
+    if (r.error || r.row?.status !== "SUPPORTED") {
+      return `<div class="lq-cv-card lq-cv-pad lq-cv-empty"><h3>Bu sözleşme için doğrulanmış ödeme planı yok</h3><p>${esc(reasonText(r.error?.code || r.row?.reason))}</p></div>`;
+    }
+    const cur = esc(r.row.sourceCurrency || r.row.currency || "");
+    const reportDate = r.period?.reportingDate || "";
+    const rows = (r.row.scheduleRows || []).filter(row => isNum(row.payment) && Math.abs(row.payment) > 0.004);
+    const total = rows.reduce((t, row) => t + Math.abs(row.payment), 0);
+    let paid = 0;
+    const body = rows.map((row, i) => {
+      paid += Math.abs(row.payment);
+      const past = String(row.date).slice(0, 10) <= reportDate;
+      return `<tr class="${past ? "is-past" : ""}"><td>${i + 1}</td><td>${esc(trDate(row.date))}</td><td class="num">${money(Math.abs(row.payment))}</td><td class="num">${money(paid)}</td><td class="num">${money(total - paid)}</td><td>${past ? "Vadesi geçti" : "Gelecek"}</td></tr>`;
+    }).join("");
+    const done = rows.filter(row => String(row.date).slice(0, 10) <= reportDate).length;
+    return `<section class="lq-cv-card lq-cv-pad lq-cv-plan-card">
+      <div class="lq-cv-plan-head"><div><h3>Sözleşmesel ödeme planı</h3>
+        <p class="lq-cv-muted">${rows.length} ödeme · toplam ${money(total)} ${cur} · ${esc(trDate(reportDate))} itibarıyla ${done} ödemenin vadesi geldi</p></div></div>
+      <div class="lq-cv-tscroll"><table class="lq-cv-plan-table" aria-label="Sözleşmesel ödeme planı"><thead><tr><th scope="col">#</th><th scope="col">Vade tarihi</th><th scope="col" class="num">Ödeme</th><th scope="col" class="num">Kümülatif ödenen</th><th scope="col" class="num">Kalan</th><th scope="col">Durum</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+      <p class="lq-cv-muted lq-cv-foot">Sözleşmesel plandır; gerçekleşen banka ödemesi değildir. Faiz, anapara ve amortisman ayrımı "Hesaplama" sekmesindedir. İlk muhasebeleştirme kaydı başlangıç ayının dönem yevmiyesinde (Dipnotlar) yer alır.</p></section>`;
+  }
+
   function calcHtml() {
     const r = state.report;
     if (!r) return `<div class="lq-cv-card lq-cv-pad"><div class="lq-cv-sk is-lg"></div><div class="lq-cv-sk"></div><div class="lq-cv-sk"></div></div>`;
@@ -324,7 +351,7 @@
     const shell = doc.createElement("div");
     shell.className = "lq-cv-shell";
     shell.innerHTML = `<header class="lq-cv-head"></header><div class="lq-cv-kpiwrap"></div><div class="lq-cv-notices"></div><div class="lq-cv-tabwrap"></div>
-      <div class="lq-cv-body" id="lqCvPanel" role="tabpanel" tabindex="0" aria-labelledby="lqCvTab-calc"><div class="lq-cv-main"><div class="lq-cv-calc"></div><div class="lq-cv-engine"></div></div><div class="lq-cv-side"></div></div>`;
+      <div class="lq-cv-body" id="lqCvPanel" role="tabpanel" tabindex="0" aria-labelledby="lqCvTab-calc"><div class="lq-cv-main"><div class="lq-cv-calc"></div><div class="lq-cv-plan"></div><div class="lq-cv-engine"></div></div><div class="lq-cv-side"></div></div>`;
     // UI v2 replaces currency-inferred standards with source evidence.
     const std = content.querySelector(":scope > .gk-v26-auto-detect");
     const notices = [];
@@ -352,6 +379,8 @@
     shell.querySelector(".lq-cv-kpiwrap").innerHTML = kpiHtml(c);
     shell.querySelector(".lq-cv-tabwrap").innerHTML = tabsHtml();
     shell.querySelector(".lq-cv-calc").innerHTML = calcHtml();
+    const plan = shell.querySelector(".lq-cv-plan");
+    if (plan) plan.innerHTML = planHtml();
     shell.querySelector(".lq-cv-side").innerHTML = asideHtml(c);
     renderStandards(shell);
     renderSchedule(shell);
@@ -427,7 +456,7 @@
       subs.hidden = state.tab !== "events";
       subs.querySelectorAll("[data-lq-cv-sub]").forEach(b => b.setAttribute("aria-pressed", String(b.getAttribute("data-lq-cv-sub") === state.sub)));
     }
-    if (state.tab === "calc") return;
+    if (state.tab === "calc" || state.tab === "schedule") return;
     engineTab(state.tab === "events" ? state.sub : state.tab);
   }
 
