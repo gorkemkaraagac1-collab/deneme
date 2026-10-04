@@ -10012,7 +10012,7 @@ ${renderAccountingCenterBulkPromo()}
             Kira Modifikasyonu
           </h3>
           <p style="margin:5px 0 0;color:#64748b;font-size:11px;">
-            Original contract history korunur. Accounting impact yalnızca APPLIED modification için oluşur.
+            Orijinal sözleşme geçmişi korunur. Muhasebe etkisi yalnızca uygulanan (APPLIED) modifikasyonlar için oluşur.
           </p>
           <p style="margin:7px 0 0;color:#475569;font-size:11px;">
             <strong>Ne zaman kullanılır?</strong> Kiraya verenle yeni şartlarda anlaşıldığında; kapsam, kira bedeli veya sözleşme süresi taraflarca değiştirilir.
@@ -10306,9 +10306,9 @@ ${renderAccountingCenterBulkPromo()}
     return `
       <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
         <div>
-          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">REASSESSMENT YÖNETİMİ</div>
-          <h3 style="margin:5px 0 0;font-size:18px;">Kira Reassessment İşlemi</h3>
-          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Reassessment, V16.5 modification eventlerinden ayrı tutulur. Accounting impact yalnızca APPLIED reassessment için oluşur.</p>
+          <div style="font-size:10px;color:#64748b;font-weight:800;letter-spacing:1px;">YENİDEN DEĞERLENDİRME YÖNETİMİ</div>
+          <h3 style="margin:5px 0 0;font-size:18px;">Kira Yeniden Değerlendirmesi</h3>
+          <p style="margin:5px 0 0;color:#64748b;font-size:11px;">Yeniden değerlendirmeler modifikasyonlardan ayrı izlenir. Muhasebe etkisi yalnızca uygulanan (APPLIED) yeniden değerlendirmeler için oluşur.</p>
           <p style="margin:7px 0 0;color:#475569;font-size:11px;">
             <strong>Ne zaman kullanılır?</strong> Yeni sözleşme imzalanmadan, mevcut hüküm veya endeks/opsiyon değişikliği kira ödemelerini yeniden ölçmeyi gerektirdiğinde kullanılır.
           </p>
