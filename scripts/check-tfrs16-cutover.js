@@ -81,7 +81,7 @@ const checks = [
   ["Reporting UI module is loaded after the UI runtime", html.indexOf("tfrs16-ui.js") < html.indexOf("tfrs16-reporting-ui.js") && html.includes('src="js/tfrs16-reporting-ui.js')],
   ["Reporting page shells live outside the public UI runtime", reportingUi.includes("renderFinancialReporting") && reportingUi.includes("renderRiskControls") && !engine.includes("Portföy genelinde bilanço/gelir tablosu KPI'ları")],
   ["Reporting UI uses the private-result bridge", /renderFinancialReportingBody/.test(reportingUi) && /renderFinancialReportingBody:/.test(engine) && /renderRiskControlsBody:/.test(engine)],
-  ["Consolidation page entry lives in the reporting UI module", /renderConsolidation/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderConsolidation/.test(engine)],
+  ["Browser-only consolidation page is removed (no server consolidation source yet)", !/renderConsolidationReportPage|renderGroupManagementPage|renderEliminationManagementPage/.test(engine) && !/data-open="(groups|eliminations|consolidation)"/.test(html)],
   ["Audit trail page entry lives in the reporting UI module", /renderAuditTrail/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderAuditTrail/.test(engine)],
   ["Audit trail page body lives in the reporting UI module", /function renderAuditTrailBody\(/.test(reportingUi) && /getAuditEvents/.test(reportingUi) && !/function v26RenderAuditTrailBody\([\s\S]{0,1200}getAuditEvents/.test(engine)],
   ["Contract audit tab markup lives outside the public UI runtime", /function renderContractAuditTab\(/.test(reportingUi) && /LeaseQantTfrs16ReportingUi\?\.renderContractAuditTab/.test(engine) && !/id="exportContractAuditTrailButton"/.test(engine) && !/class="gk-audit-table"/.test(engine)],

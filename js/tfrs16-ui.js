@@ -6289,7 +6289,6 @@ window.fetch = (input, init = {}) => {
   function calculateVariancePercent() { return reportingAuthorityUnavailable(); }
   function calculateDriverModel() { return reportingAuthorityUnavailable(); }
   function calculateScenario() { return reportingAuthorityUnavailable(); }
-  function calculateCurrentLiabilityAsOf() { return reportingAuthorityUnavailable(); }
   function calculateNonCurrentLiabilityAsOf() { return reportingAuthorityUnavailable(); }
   function getErpReadyContractData(date) { const ui=reportAuthorityUi();return ui.rawRows(ui.read(date),"contracts"); }
   function reportingAuthorityUnavailable() {
@@ -6307,9 +6306,6 @@ window.fetch = (input, init = {}) => {
     ["contractCount","leaseLiability","rouAssets","currentLiability","next12Months","monthlyInterest","monthlyDepreciation"].forEach(id=>setText(id,"Yükleniyor…"));
   }
   function renderCloseDashboardPage(container) { return reportAuthorityUi().page(container,"Ay Sonu — Backend Hesaplama Kontrolleri","controls"); }
-  function renderConsolidationReportPage(container) {
-    if (container) container.innerHTML = '<p role="status">Konsolidasyon raporu için doğrulanmış şirketler arası kaynak verisi gerekli.</p><details><summary>Teknik ayrıntı</summary><code>SOURCE_BOUND_CONSOLIDATION_REQUIRED</code></details>';
-  }
   function renderAuditTrailPage(container) { return reportAuthorityUi().page(container,"Sunucuda Saklanan Olaylar","audit"); }
   function openReportingAuthority(title,section="metrics") {
     const host=document.getElementById("v26PageHost");
@@ -6358,8 +6354,6 @@ window.fetch = (input, init = {}) => {
   function v191OpenIntegration() { return openReportingAuthority("Backend Raporlama Verisi","metrics"); }
   function v191OpenReconciliation() { return openReportingAuthority("Backend Kontrolleri","controls"); }
   function v191OpenContractTools() { return openReportingAuthority("Backend Sözleşme Raporu","metrics"); }
-  function cfoGetContractMetricsInternal() { return reportingAuthorityUnavailable(); }
-  function cfoPeriodMetrics() { return reportingAuthorityUnavailable(); }
   function exportBudget() { return reportingAuthorityUnavailable(); }
   function exportConsolidation() { return reportingAuthorityUnavailable(); }
   function exportEliminations() { return reportingAuthorityUnavailable(); }
@@ -9782,13 +9776,6 @@ window.fetch = (input, init = {}) => {
 
 
 
-  function rptGetContractCfo(contract, reportingDate) {
-    try {
-      if (typeof cfoGetContractMetricsInternal === "function") return cfoGetContractMetricsInternal(contract, reportingDate);
-      if (typeof getCfoContractMetrics === "function") return getCfoContractMetrics(contract.id, reportingDate);
-    } catch (error) {}
-    return null;
-  }
 
 
 
@@ -10371,190 +10358,31 @@ window.fetch = (input, init = {}) => {
     dataQualityPenalty: Object.freeze({ CRITICAL: 30, HIGH: 20, MEDIUM: 10, LOW: 5 })
   });
 
-  /** @deprecated-name Kalıcı: v18Number — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
-  function v18Number(value, fallback = 0) {
-    return coreNumber(value, fallback);
-  }
-
-  /** @deprecated-name Kalıcı: v18Round — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreRound. */
-  function v18Round(value, digits = 2) {
-    return coreRound(value, digits);
-  }
-
-
-  /** @deprecated-name Kalıcı: v18Date — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. try/catch orijinal davranışı korumak için eklendi. */
-  function v18Date(value) {
-    try { return coreDate(value); } catch (error) { return null; }
-  }
-
-
-  function v18ResolveDate(value) {
-    try {
-      if (typeof cfoResolveReportingDate === "function") return cfoResolveReportingDate(value);
-      if (typeof rptResolveDate === "function") return rptResolveDate(value);
-    } catch (error) {}
-    return v18Date(value) || new Date();
-  }
-
-
-
-
-  function v18SafeContracts() {
-    return Array.isArray(contracts) ? contracts : [];
-  }
-
-  function v18Currency(contract) {
-    return String(contract?.currency || "UNSPECIFIED").toUpperCase();
-  }
-
-  function v18Company(contract) {
-    return String(contract?.company || "UNSPECIFIED");
-  }
-
-  function v18Active(contract, reportingDate) {
-    try {
-      return typeof cfoIsActive === "function" ? cfoIsActive(contract, reportingDate) : String(contract?.status || "ACTIVE").toUpperCase() === "ACTIVE";
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function v18ContractMetric(contract, reportingDate) {
-    try {
-      if (typeof getCfoContractMetrics === "function") return getCfoContractMetrics(contract?.id, reportingDate) || null;
-      if (typeof cfoGetContractMetricsInternal === "function") return cfoGetContractMetricsInternal(contract, reportingDate);
-    } catch (error) {
-      return { contractId: contract?.id || null, calculationValid: false, calculationError: error?.message || String(error) };
-    }
-    return null;
-  }
-
-  function v18ContractRows(reportingDate) {
-    const d = v18ResolveDate(reportingDate);
-    return v18SafeContracts().map(contract => {
-      try {
-        const metric = v18ContractMetric(contract, d);
-        return {
-          contract,
-          metric: metric || {
-            contractId: contract?.id || null,
-            company: v18Company(contract),
-            currency: v18Currency(contract),
-            active: v18Active(contract, d),
-            leaseLiability: 0,
-            currentLiability: 0,
-            nonCurrentLiability: 0,
-            rouAsset: 0,
-            monthlyInterest: 0,
-            monthlyDepreciation: 0,
-            monthlyLeaseExpense: 0,
-            next12MonthPayments: 0,
-            next12MonthPrincipal: 0,
-            next12MonthInterest: 0,
-            controlStatus: "RED",
-            openExceptions: 0,
-            criticalExceptions: 0,
-            calculationValid: false,
-            calculationError: "CFO contract metric unavailable"
-          },
-          error: null
-        };
-      } catch (error) {
-        return {
-          contract,
-          metric: {
-            contractId: contract?.id || null,
-            company: v18Company(contract),
-            currency: v18Currency(contract),
-            active: false,
-            leaseLiability: 0,
-            currentLiability: 0,
-            nonCurrentLiability: 0,
-            rouAsset: 0,
-            monthlyInterest: 0,
-            monthlyDepreciation: 0,
-            monthlyLeaseExpense: 0,
-            next12MonthPayments: 0,
-            next12MonthPrincipal: 0,
-            next12MonthInterest: 0,
-            controlStatus: "RED",
-            openExceptions: 0,
-            criticalExceptions: 0,
-            calculationValid: false,
-            calculationError: error?.message || String(error)
-          },
-          error: error?.message || String(error)
-        };
-      }
-    });
-  }
-
-  function v18AggregateMetrics(rows) {
-    const keys = [
-      "leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset",
-      "monthlyInterest", "monthlyDepreciation", "monthlyLeaseExpense",
-      "next12MonthPayments", "next12MonthPrincipal", "next12MonthInterest"
-    ];
-    const out = {};
-    keys.forEach(key => { out[key] = v18Round((rows || []).reduce((sum, row) => sum + v18Number(row?.metric?.[key]), 0)); });
-    return out;
-  }
 
 
 
 
 
-  function v18GroupMetricRowsByCurrency(rows) {
-    const groups = {};
-    (rows || []).forEach(row => {
-      const currency = v18Currency(row.contract);
-      if (!groups[currency]) groups[currency] = { currency, leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, monthlyInterest: 0, monthlyDepreciation: 0, monthlyLeaseExpense: 0, next12MonthPayments: 0, next12MonthPrincipal: 0, next12MonthInterest: 0, contractCount: 0 };
-      const g = groups[currency];
-      g.contractCount += 1;
-      ["leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "monthlyInterest", "monthlyDepreciation", "monthlyLeaseExpense", "next12MonthPayments", "next12MonthPrincipal", "next12MonthInterest"].forEach(key => { g[key] += v18Number(row.metric?.[key]); });
-    });
-    Object.values(groups).forEach(g => Object.keys(g).forEach(key => { if (typeof g[key] === "number") g[key] = v18Round(g[key]); }));
-    return groups;
-  }
 
 
 
 
 
-  function v18CompanyExposure(reportingDate) {
-    const d = v18ResolveDate(reportingDate);
-    const companies = [...new Set(v18SafeContracts().map(v18Company))].filter(Boolean);
-    return companies.map(company => {
-      const rows = v18ContractRows(d).filter(r => v18Company(r.contract) === company);
-      const active = rows.filter(r => r.metric?.active);
-      const totals = v18AggregateMetrics(active);
-      const byCurrency = v18GroupMetricRowsByCurrency(active);
-      const currencyList = Object.values(byCurrency);
-      const singleCurrency = currencyList.length === 1;
-      const riskCount = rows.reduce((sum, row) => sum + v18Number(row.metric?.openExceptions), 0);
-      const close = typeof getCompanyMonthEndCloseStatus === "function" ? getCompanyMonthEndCloseStatus(company, d) : null;
-      return {
-        company,
-        contractCount: rows.length,
-        activeContracts: active.length,
-        currencyCount: currencyList.length,
-        byCurrency,
-        leaseLiability: singleCurrency ? currencyList[0].leaseLiability : null,
-        currentLiability: singleCurrency ? currencyList[0].currentLiability : null,
-        nonCurrentLiability: singleCurrency ? currencyList[0].nonCurrentLiability : null,
-        rouAssets: singleCurrency ? currencyList[0].rouAsset : null,
-        interest: singleCurrency ? currencyList[0].monthlyInterest : null,
-        depreciation: singleCurrency ? currencyList[0].monthlyDepreciation : null,
-        next12MPayments: singleCurrency ? currencyList[0].next12MonthPayments : null,
-        riskCount,
-        riskStatus: rows.some(r => r.metric?.controlStatus === "RED") ? "RED" : (rows.some(r => r.metric?.controlStatus === "YELLOW") ? "YELLOW" : "GREEN"),
-        closeStatus: close?.status || "UNKNOWN",
-        closeScore: close?.score ?? null,
-        exceptions: close?.exceptionCount ?? riskCount,
-        source: "V16.9_CFO_DATA_LAYER + V17_MONTH_END_CLOSE"
-      };
-    });
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -12433,102 +12261,9 @@ window.fetch = (input, init = {}) => {
     return Array.from(map.values());
   }
 
-  function normalizeScheduleData(schedule, contractId) {
-    return v20SafeArray(schedule).map((row, index) => v20VersionedEntity({
-      id: String(row?.id || `SCH-${contractId || "LEASE"}-${index + 1}`),
-      contractId: contractId || row?.contractId || null,
-      period: row?.period ?? index + 1,
-      date: v20NormalizeDate(row?.date),
-      openingLiability: v20Amount(row?.openingLiability),
-      payment: v20Amount(row?.payment),
-      interest: v20Amount(row?.interest),
-      principal: v20Amount(row?.principal),
-      closingLiability: v20Amount(row?.closingLiability),
-      depreciation: v20Amount(row?.depreciation),
-      openingROU: v20Amount(row?.openingROU ?? row?.rouOpening),
-      closingROU: v20Amount(row?.closingROU ?? row?.rouClosing),
-      rouOpening: v20Amount(row?.rouOpening ?? row?.openingROU),
-      rouClosing: v20Amount(row?.rouClosing ?? row?.closingROU),
-      currency: v20NormalizeCurrency(row?.currency, "TRY")
-    }, "LeaseSchedule"));
-  }
 
-  function normalizeModificationData(modification, contractId) {
-    if (!modification || typeof modification !== "object") return null;
-    const oldTerms = v20SafeObject(modification.oldTerms);
-    const newTerms = v20SafeObject(modification.newTerms);
-    return v20VersionedEntity({
-      id: String(modification.id || v20Id("MOD")),
-      contractId: contractId || modification.contractId || null,
-      modificationDate: v20NormalizeDate(modification.modificationDate),
-      effectiveDate: v20NormalizeDate(modification.effectiveDate),
-      reason: modification.reason || "",
-      oldPayment: v20Amount(modification.oldPayment ?? oldTerms.payment),
-      newPayment: v20Amount(modification.newPayment ?? newTerms.payment),
-      oldTerm: modification.oldTerm ?? oldTerms.leaseEndDate ?? "",
-      newTerm: modification.newTerm ?? newTerms.leaseEndDate ?? "",
-      oldDiscountRate: v20Amount(modification.oldDiscountRate ?? oldTerms.discountRate),
-      newDiscountRate: v20Amount(modification.newDiscountRate ?? newTerms.discountRate),
-      revisedLiability: v20Amount(modification.revisedLeaseLiability),
-      rouAdjustment: v20Amount(modification.rouAdjustment),
-      gainLoss: v20Amount(modification.gainLoss),
-      status: modification.status || "DRAFT",
-      createdAt: modification.createdAt || null,
-      updatedAt: modification.updatedAt || null
-    }, "Modification");
-  }
 
-  function normalizeReassessmentData(reassessment, contractId) {
-    if (!reassessment || typeof reassessment !== "object") return null;
-    return v20VersionedEntity({
-      id: String(reassessment.id || v20Id("REASS")),
-      contractId: contractId || reassessment.contractId || null,
-      date: v20NormalizeDate(reassessment.reassessmentDate || reassessment.date),
-      reassessmentDate: v20NormalizeDate(reassessment.reassessmentDate),
-      effectiveDate: v20NormalizeDate(reassessment.effectiveDate),
-      reason: reassessment.reason || "",
-      oldLiability: v20Amount(reassessment.oldLeaseLiability),
-      revisedLiability: v20Amount(reassessment.revisedLeaseLiability),
-      liabilityAdjustment: v20Amount(reassessment.liabilityAdjustment),
-      rouAdjustment: v20Amount(reassessment.rouAdjustment),
-      status: reassessment.status || "DRAFT",
-      createdAt: reassessment.createdAt || null,
-      updatedAt: reassessment.updatedAt || null
-    }, "Reassessment");
-  }
 
-  function normalizeJournalData(journal, contractId, companyId) {
-    if (!journal || typeof journal !== "object") return null;
-
-    const header = v20VersionedEntity({
-      id: String(journal.id || v20Id("JNL")),
-      voucherNo: journal.voucherNo || journal.id || "",
-      voucherDate: v20NormalizeDate(journal.voucherDate || journal.date),
-      companyId: companyId || journal.companyId || null,
-      contractId: contractId || journal.contractId || null,
-      reportingPeriod: journal.reportingPeriod || null,
-      description: journal.description || "",
-      currency: v20NormalizeCurrency(journal.currency, "TRY"),
-      source: journal.source || "TFRS16",
-      controlStatus: journal.controlStatus || "VALID",
-      createdAt: journal.createdAt || null
-    }, "Journal");
-
-    const rawLines = v20SafeArray(journal.lines || journal.entries || journal.items);
-    const lines = rawLines.map((line, index) => v20VersionedEntity({
-      id: String(line?.id || `${header.id}-LINE-${index + 1}`),
-      journalId: header.id,
-      account: line?.account || "",
-      costCenter: line?.costCenter || null,
-      profitCenter: line?.profitCenter || null,
-      debit: v20Amount(line?.debit),
-      credit: v20Amount(line?.credit),
-      currency: v20NormalizeCurrency(line?.currency || header.currency, header.currency),
-      description: line?.description || ""
-    }, "JournalLine"));
-
-    return { header, lines };
-  }
 
   function normalizeAuditEventData(event) {
     if (!event || typeof event !== "object") return null;
@@ -12552,85 +12287,10 @@ window.fetch = (input, init = {}) => {
     }, "AuditEvent");
   }
 
-  function normalizeControlData(control, companyId, contractId) {
-    if (!control || typeof control !== "object") return null;
-    return v20VersionedEntity({
-      id: String(control.id || v20Id("CTRL")),
-      companyId: companyId || control.companyId || null,
-      contractId: contractId || control.contractId || null,
-      controlType: control.controlType || control.type || "DATA_QUALITY",
-      status: control.status || "OPEN",
-      severity: control.severity || control.priority || "MEDIUM",
-      message: control.message || control.description || "",
-      resolved: control.resolved === true,
-      createdAt: control.createdAt || null,
-      resolvedAt: control.resolvedAt || null
-    }, "Control");
-  }
 
-  function normalizeClosePeriodData(item) {
-    if (!item || typeof item !== "object") return null;
-    return v20VersionedEntity({
-      id: String(item.id || v20Id("CLOSE")),
-      companyId: item.companyId || null,
-      period: item.period || item.reportingPeriod || null,
-      status: item.status || "OPEN",
-      score: v20Amount(item.score),
-      blockingIssues: v20SafeArray(item.blockingIssues),
-      warnings: v20SafeArray(item.warnings),
-      certified: item.certified === true,
-      certifiedBy: item.certifiedBy || null,
-      certifiedAt: item.certifiedAt || null
-    }, "ClosePeriod");
-  }
 
-  function normalizeReconciliationData(item) {
-    if (!item || typeof item !== "object") return null;
-    return v20VersionedEntity({
-      id: String(item.id || item.reconciliationId || v20Id("REC")),
-      reconciliationId: item.reconciliationId || item.id || null,
-      companyId: item.companyId || null,
-      source: item.source || "UNKNOWN",
-      reportingDate: v20NormalizeDate(item.reportingDate),
-      externalTotal: v20Amount(item.externalTotal),
-      internalTotal: v20Amount(item.internalTotal),
-      variance: v20Amount(item.variance),
-      status: item.status || "UNKNOWN",
-      exceptions: v20SafeArray(item.exceptions),
-      createdAt: item.createdAt || null
-    }, "Reconciliation");
-  }
 
-  function normalizeImportJobData(item) {
-    if (!item || typeof item !== "object") return null;
-    return v20VersionedEntity({
-      id: String(item.id || item.jobId || v20Id("IMP")),
-      source: item.source || item.sourceType || "EXCEL",
-      fileName: item.fileName || "",
-      schemaVersion: item.schemaVersion || DATA_SCHEMA_VERSION,
-      status: item.status || "UNKNOWN",
-      totalRows: v20Amount(item.totalRows),
-      importedRows: v20Amount(item.importedRows),
-      rejectedRows: v20Amount(item.rejectedRows),
-      warningRows: v20Amount(item.warningRows),
-      startedAt: item.startedAt || null,
-      completedAt: item.completedAt || null,
-      createdBy: item.createdBy || item.actor || "system"
-    }, "ImportJob");
-  }
 
-  function normalizeExportJobData(item) {
-    if (!item || typeof item !== "object") return null;
-    return v20VersionedEntity({
-      id: String(item.id || item.jobId || v20Id("EXP")),
-      exportType: item.exportType || item.type || "UNKNOWN",
-      source: item.source || "GK_TFRS16",
-      recordCount: v20Amount(item.recordCount),
-      status: item.status || "UNKNOWN",
-      createdAt: item.createdAt || v20Now(),
-      createdBy: item.createdBy || item.actor || "system"
-    }, "ExportJob");
-  }
 
   function v20LocalStorageAdapter(storageKey) {
     const key = String(storageKey || "");
@@ -12814,308 +12474,24 @@ window.fetch = (input, init = {}) => {
   }
 
 
-  function exportCompaniesForDatabase() {
-    return v20GetDatabaseModel().companies;
-  }
-
-  function exportContractsForDatabase() {
-    return v20GetDatabaseModel().contracts;
-  }
 
 
 
 
-  function exportJournalsForDatabase() {
-    return v20GetDatabaseModel().journals;
-  }
-
-  function exportJournalLinesForDatabase() {
-    return v20GetDatabaseModel().journalLines;
-  }
-
-  function exportAuditEventsForDatabase() {
-    return v20GetDatabaseModel().auditEvents;
-  }
 
 
-  function v20CreateSnapshot() {
-    const keys = [];
-    const knownKeys = [
-      typeof STORAGE_KEY !== "undefined" ? STORAGE_KEY : null,
-      typeof AUDIT_TRAIL_STORAGE_KEY !== "undefined" ? AUDIT_TRAIL_STORAGE_KEY : null,
-      typeof CONTROL_SNAPSHOT_STORAGE_KEY !== "undefined" ? CONTROL_SNAPSHOT_STORAGE_KEY : null,
-      typeof CLOSE_STORAGE_KEY !== "undefined" ? CLOSE_STORAGE_KEY : null,
-      typeof INTEGRATION_STORAGE_KEY !== "undefined" ? INTEGRATION_STORAGE_KEY : null
-    ].filter(Boolean);
-
-    knownKeys.forEach(key => {
-      if (!keys.includes(key)) keys.push(key);
-    });
-
-    const storage = {};
-    keys.forEach(key => {
-      try {
-        storage[key] = localStorage.getItem(key);
-      } catch (error) {
-        storage[key] = null;
-      }
-    });
-
-    return {
-      schemaVersion: DATA_SCHEMA_VERSION,
-      createdAt: v20Now(),
-      storage
-    };
-  }
-
-  function createDataSnapshot() {
-    return v20CreateSnapshot();
-  }
-
-  function v20ValidateSnapshot(snapshot) {
-    const errors = [];
-    if (!snapshot || typeof snapshot !== "object") errors.push("Snapshot object is required.");
-    if (snapshot && typeof snapshot.storage !== "object") errors.push("Snapshot storage payload is invalid.");
-
-    if (snapshot?.storage && typeof snapshot.storage === "object") {
-      Object.keys(snapshot.storage).forEach(key => {
-        const raw = snapshot.storage[key];
-        if (raw === null || raw === "") return;
-        try {
-          JSON.parse(raw);
-        } catch (error) {
-          errors.push(`Invalid JSON in snapshot key: ${key}`);
-        }
-      });
-    }
-
-    return { valid: errors.length === 0, errors };
-  }
-
-  function validateDataSnapshot(snapshot) {
-    return v20ValidateSnapshot(snapshot);
-  }
-
-  function restoreDataSnapshot(snapshot, options = {}) {
-    const validation = v20ValidateSnapshot(snapshot);
-    if (!validation.valid) return { success: false, validation };
-
-    if (options.confirm !== true) {
-      return {
-        success: false,
-        validation,
-        requiresConfirmation: true,
-        message: "Snapshot validation passed. Explicit confirmation is required before restore."
-      };
-    }
-
-    try {
-      Object.entries(snapshot.storage || {}).forEach(([key, value]) => {
-        if (value === null || value === undefined) localStorage.removeItem(key);
-        else localStorage.setItem(key, value);
-      });
-
-      return { success: true, validation };
-    } catch (error) {
-      console.error("V20 snapshot restore error:", error);
-      return {
-        success: false,
-        validation,
-        error: {
-          code: "SNAPSHOT_RESTORE_FAILED",
-          message: error?.message || String(error),
-          details: null,
-          field: null
-        }
-      };
-    }
-  }
 
 
-  function getDataHealth() {
-    const model = v20GetDatabaseModel();
-    const errors = [];
-    const warnings = [];
 
-    const duplicateIds = {};
-    const checkDuplicates = (name, rows) => {
-      const seen = new Set();
-      const duplicates = [];
-      v20SafeArray(rows).forEach(row => {
-        const id = row?.id;
-        if (!id) return;
-        const key = String(id);
-        if (seen.has(key)) duplicates.push(key);
-        seen.add(key);
-      });
-      if (duplicates.length) duplicateIds[name] = Array.from(new Set(duplicates));
-    };
 
-    checkDuplicates("Company", model.companies);
-    checkDuplicates("Contract", model.contracts);
-    checkDuplicates("LeaseSchedule", model.schedules);
-    checkDuplicates("Modification", model.modifications);
-    checkDuplicates("Reassessment", model.reassessments);
-    checkDuplicates("Journal", model.journals);
-    checkDuplicates("JournalLine", model.journalLines);
-    checkDuplicates("AuditEvent", model.auditEvents);
 
-    const companyIds = new Set(model.companies.map(item => String(item.id)));
-    const contractIds = new Set(model.contracts.map(item => String(item.id)));
-    const journalIds = new Set(model.journals.map(item => String(item.id)));
 
-    const orphanRecords = [];
 
-    model.contracts.forEach(contract => {
-      if (contract.companyId && !companyIds.has(String(contract.companyId))) {
-        orphanRecords.push({
-          entityType: "Contract",
-          entityId: contract.id,
-          relation: "companyId"
-        });
-      }
-    });
 
-    model.schedules.forEach(row => {
-      if (!row.contractId || !contractIds.has(String(row.contractId))) {
-        orphanRecords.push({
-          entityType: "LeaseSchedule",
-          entityId: row.id,
-          relation: "contractId"
-        });
-      }
-    });
 
-    model.modifications.forEach(row => {
-      if (!row.contractId || !contractIds.has(String(row.contractId))) {
-        orphanRecords.push({
-          entityType: "Modification",
-          entityId: row.id,
-          relation: "contractId"
-        });
-      }
-    });
 
-    model.reassessments.forEach(row => {
-      if (!row.contractId || !contractIds.has(String(row.contractId))) {
-        orphanRecords.push({
-          entityType: "Reassessment",
-          entityId: row.id,
-          relation: "contractId"
-        });
-      }
-    });
 
-    model.journals.forEach(row => {
-      if (row.contractId && !contractIds.has(String(row.contractId))) {
-        orphanRecords.push({
-          entityType: "Journal",
-          entityId: row.id,
-          relation: "contractId"
-        });
-      }
-      if (row.companyId && !companyIds.has(String(row.companyId))) {
-        orphanRecords.push({
-          entityType: "Journal",
-          entityId: row.id,
-          relation: "companyId"
-        });
-      }
-    });
 
-    model.journalLines.forEach(row => {
-      if (!row.journalId || !journalIds.has(String(row.journalId))) {
-        orphanRecords.push({
-          entityType: "JournalLine",
-          entityId: row.id,
-          relation: "journalId"
-        });
-      }
-    });
-
-    model.auditEvents.forEach(row => {
-      if (row.contractId && !contractIds.has(String(row.contractId))) {
-        orphanRecords.push({
-          entityType: "AuditEvent",
-          entityId: row.id,
-          relation: "contractId"
-        });
-      }
-    });
-
-    const invalidDates = [];
-    const invalidCurrencies = [];
-    const invalidAmounts = [];
-
-    model.contracts.forEach(row => {
-      ["startDate", "endDate", "renewalDate"].forEach(field => {
-        if (row[field] !== null && !v20NormalizeDate(row[field])) {
-          invalidDates.push({ entityType: "Contract", id: row.id, field });
-        }
-      });
-      if (!/^[A-Z]{3}$/.test(String(row.currency || ""))) {
-        invalidCurrencies.push({ entityType: "Contract", id: row.id, field: "currency" });
-      }
-      ["monthlyPayment", "discountRate"].forEach(field => {
-        if (!Number.isFinite(Number(row[field]))) {
-          invalidAmounts.push({ entityType: "Contract", id: row.id, field });
-        }
-      });
-    });
-
-    const health = {
-      healthy:
-        Object.keys(duplicateIds).length === 0 &&
-        orphanRecords.length === 0 &&
-        invalidDates.length === 0 &&
-        invalidCurrencies.length === 0 &&
-        invalidAmounts.length === 0,
-      schemaVersion: DATA_SCHEMA_VERSION,
-      checkedAt: v20Now(),
-      counts: {
-        companies: model.companies.length,
-        contracts: model.contracts.length,
-        schedules: model.schedules.length,
-        modifications: model.modifications.length,
-        reassessments: model.reassessments.length,
-        journals: model.journals.length,
-        journalLines: model.journalLines.length,
-        auditEvents: model.auditEvents.length
-      },
-      duplicateIds,
-      orphanRecords,
-      brokenReferences: orphanRecords,
-      invalidDates,
-      invalidCurrencies,
-      invalidAmounts,
-      warnings,
-      errors
-    };
-
-    return health;
-  }
-
-  function v20FindOrphanRecords() {
-    return getDataHealth().orphanRecords;
-  }
-
-  function v20FindDuplicateIds() {
-    return getDataHealth().duplicateIds;
-  }
-
-  function getV20Repository(name) {
-    const key = String(name || "").toLowerCase();
-
-    if (key === "contract" || key === "contracts") {
-      return V20Repositories.contracts();
-    }
-
-    if (key === "audit" || key === "auditevent" || key === "auditevents") {
-      return V20Repositories.auditEvents();
-    }
-
-    throw new Error(`Unsupported V20 repository: ${name}`);
-  }
 
   function v20BuildApiRequestContract(method, path, options = {}) {
     return {
@@ -13207,217 +12583,15 @@ window.fetch = (input, init = {}) => {
     }
   };
 
-  function v20ApiSuccess(data, metadata = {}) {
-    return { success: true, data, error: null, metadata };
-  }
 
 
-  function v20Paginate(rows, options = {}) {
-    const list = v20SafeArray(rows);
-    const pageSize = Math.max(1, Number(options.pageSize) || 50);
-    const page = Math.max(1, Number(options.page) || 1);
-    const total = list.length;
-    const start = (page - 1) * pageSize;
-    return {
-      data: list.slice(start, start + pageSize),
-      metadata: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / pageSize))
-      }
-    };
-  }
 
-  function v20FilterContracts(options = {}) {
-    let rows = v20GetContracts();
 
-    if (options.company && options.company !== "all") {
-      const target = String(options.company).toLowerCase();
-      rows = rows.filter(row =>
-        String(row.company || "").toLowerCase() === target ||
-        String(row.companyId || "").toLowerCase() === target
-      );
-    }
 
-    if (options.status && options.status !== "all") {
-      rows = rows.filter(row => String(row.status || "").toLowerCase() === String(options.status).toLowerCase());
-    }
 
-    if (options.currency && options.currency !== "all") {
-      rows = rows.filter(row => String(row.currency || "").toUpperCase() === String(options.currency).toUpperCase());
-    }
 
-    if (options.supplier) {
-      const target = String(options.supplier).toLowerCase();
-      rows = rows.filter(row => String(row.supplier || "").toLowerCase().includes(target));
-    }
 
-    if (options.query) {
-      const target = String(options.query).toLowerCase();
-      rows = rows.filter(row =>
-        String(row.id || "").toLowerCase().includes(target) ||
-        String(row.company || "").toLowerCase().includes(target) ||
-        String(row.supplier || "").toLowerCase().includes(target)
-      );
-    }
 
-    if (options.date) {
-      rows = rows.filter(row => row.startDate <= options.date && row.endDate >= options.date);
-    }
-
-    if (options.sortBy) {
-      const direction = String(options.sortDirection || "asc").toLowerCase() === "desc" ? -1 : 1;
-      rows.sort((a, b) =>
-        String(a?.[options.sortBy] ?? "").localeCompare(String(b?.[options.sortBy] ?? ""), "tr") * direction
-      );
-    }
-
-    return rows;
-  }
-
-  function v20GetContractsApiModel(options = {}) {
-    const page = v20Paginate(v20FilterContracts(options), options);
-    return v20ApiSuccess(page.data, page.metadata);
-  }
-
-  function exportLocalStorageData() {
-    return {
-      schemaVersion: DATA_SCHEMA_VERSION,
-      exportedAt: v20Now(),
-      snapshot: createDataSnapshot(),
-      databaseReady: exportDatabaseReadyData()
-    };
-  }
-
-  function v20MigrationReport() {
-    const before = v20SafeArray(contracts);
-    const after = before.map(migrateContractData).filter(Boolean);
-
-    return {
-      schemaVersion: DATA_SCHEMA_VERSION,
-      migratedAt: v20Now(),
-      sourceRecordCount: before.length,
-      normalizedRecordCount: after.length,
-      companyCount: v20CollectCompanies(after).length,
-      scheduleCount: v20GetDatabaseModel().schedules.length,
-      journalCount: v20GetDatabaseModel().journals.length,
-      auditCount: v20GetDatabaseModel().auditEvents.length,
-      valid: before.length === after.length && after.every(item => item.schemaVersion === DATA_SCHEMA_VERSION)
-    };
-  }
-
-  function v20MigrateAllData() {
-    const report = v20MigrationReport();
-    return {
-      ...report,
-      databaseReady: exportDatabaseReadyData()
-    };
-  }
-
-  function v20FutureTransaction(operation, context = {}) {
-    return {
-      transactionReady: true,
-      executedLocally: true,
-      operation: String(operation || ""),
-      context: v20Clone(context),
-      atomicScope: [
-        "Contract creation",
-        "Lease schedule generation",
-        "Initial journal generation"
-      ],
-      note: "V20 defines the transaction boundary without opening a real database transaction."
-    };
-  }
-
-  function v20DataAccessTests() {
-    const results = [];
-
-    const pass = (name, ok, details = null) => {
-      results.push({
-        test: name,
-        passed: ok === true,
-        details
-      });
-    };
-
-    try {
-      const contractAdapter = V20StorageAdapters.contracts();
-      const loaded = contractAdapter.list();
-      pass("Existing localStorage load", Array.isArray(loaded));
-      pass("Repository read", !!V20Repositories.contracts().read(loaded[0]?.id) || loaded.length === 0);
-
-      const health = getDataHealth();
-      pass("Data health", !!health && typeof health.healthy === "boolean");
-      pass("Orphan detection", Array.isArray(health.orphanRecords));
-      pass("Duplicate detection", health.duplicateIds && typeof health.duplicateIds === "object");
-
-      const migration = v20MigrationReport();
-      pass("Schema migration", migration.valid === true);
-      pass("Old contract compatibility", migration.sourceRecordCount === migration.normalizedRecordCount);
-
-      const snapshot = createDataSnapshot();
-      const snapshotValidation = validateDataSnapshot(snapshot);
-      pass("Snapshot", !!snapshot && snapshotValidation.valid === true);
-      pass("Restore validation", snapshotValidation.valid === true);
-
-      const databaseReady = exportDatabaseReadyData();
-      pass("Database-ready export", !!databaseReady && databaseReady.schemaVersion === DATA_SCHEMA_VERSION);
-
-      const api = V20_API_CONTRACT;
-      pass("API contract generation", !!api && api.version === V20_API_CONTRACT_VERSION);
-
-      const pagination = v20Paginate(contracts, { page: 1, pageSize: 2 });
-      pass("Pagination model", pagination.metadata.pageSize === 2);
-
-      const filtered = v20FilterContracts({ status: "all" });
-      pass("Filtering model", Array.isArray(filtered));
-
-      const multiCompany = v20CollectCompanies(contracts);
-      pass("Multi-company foundation", Array.isArray(multiCompany));
-
-      const currenciesValid = databaseReady.Contract
-        ? databaseReady.Contract.every(item => /^[A-Z]{3}$/.test(item.currency))
-        : true;
-      pass("Multi-currency foundation", currenciesValid);
-
-      pass("Reporting date foundation", databaseReady.Contract
-        ? databaseReady.Contract.every(item => item.reportingDate === undefined || v20NormalizeDate(item.reportingDate))
-        : true);
-
-      pass("Contract relationship", databaseReady.LeaseSchedule
-        ? databaseReady.LeaseSchedule.every(item => !item.contractId || databaseReady.Contract.some(c => c.id === item.contractId))
-        : true);
-
-      pass("Schedule relationship", databaseReady.LeaseSchedule
-        ? databaseReady.LeaseSchedule.every(item => !item.contractId || databaseReady.Contract.some(c => c.id === item.contractId))
-        : true);
-
-      pass("Journal relationship", databaseReady.Journal
-        ? databaseReady.Journal.every(item => !item.contractId || databaseReady.Contract.some(c => c.id === item.contractId))
-        : true);
-
-      pass("Audit relationship", databaseReady.AuditEvent
-        ? databaseReady.AuditEvent.every(item => !item.contractId || databaseReady.Contract.some(c => c.id === item.contractId))
-        : true);
-
-      pass("Company relationship", databaseReady.Contract
-        ? databaseReady.Contract.every(item => !item.companyId || databaseReady.Company.some(c => c.id === item.companyId))
-        : true);
-
-      pass("Repository create/update/delete contract", true, "Non-destructive capability test; no production record mutated.");
-
-      pass("Existing V19.1 functionality", typeof refresh === "function" && typeof calculateLeaseEngine === "function");
-    } catch (error) {
-      pass("V20 data architecture tests", false, error?.message || String(error));
-    }
-
-    return {
-      version: DATA_SCHEMA_VERSION,
-      passed: results.every(item => item.passed),
-      results
-    };
-  }
 
   /* ==========================================================
      V21 USER / ROLE / COMPANY SECURITY ARCHITECTURE
@@ -13558,10 +12732,6 @@ window.fetch = (input, init = {}) => {
     ]
   });
 
-  /** @deprecated-name Kalıcı: v21Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
-  function v21Clone(value) {
-    return coreClone(value);
-  }
 
   function v21Now() { return new Date().toISOString(); }
 
@@ -13626,51 +12796,15 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  function saveV21Users(users) {
-    try {
-      localStorage.setItem(V21_USER_STORAGE_KEY, JSON.stringify(v20SafeArray(users).map(normalizeUserData)));
-      return true;
-    } catch (error) {
-      console.error("V21 user storage save failed:", error);
-      return false;
-    }
-  }
 
-  function getV21Users() { return loadV21Users().map(v21Clone); }
 
   function getV21User(userId) {
     const id = String(userId || "").trim();
     return loadV21Users().find(user => String(user.id) === id || String(user.username) === id) || null;
   }
 
-  function createV21User(input = {}) {
-    const user = normalizeUserData(input);
-    const users = loadV21Users();
-    if (users.some(item => String(item.id) === user.id || String(item.username).toLowerCase() === user.username.toLowerCase())) {
-      throw new Error(`User already exists: ${user.username || user.id}`);
-    }
-    users.push(user);
-    if (!saveV21Users(users)) throw new Error("Unable to persist user.");
-    v21SecurityAudit("CREATE", "USER", user.id, { userId: user.id, username: user.username });
-    return v21Clone(user);
-  }
 
-  function updateV21User(userId, patch = {}) {
-    const users = loadV21Users();
-    const index = users.findIndex(item => String(item.id) === String(userId));
-    if (index < 0) return null;
-    const before = v21Clone(users[index]);
-    const next = normalizeUserData({ ...before, ...v20SafeObject(patch), id: before.id, createdAt: before.createdAt, updatedAt: v21Now() });
-    users[index] = next;
-    if (!saveV21Users(users)) throw new Error("Unable to persist user.");
-    if (before.roleIds.join(",") !== next.roleIds.join(",")) v21SecurityAudit("ROLE_CHANGE", "USER", next.id, { oldValue: before.roleIds, newValue: next.roleIds });
-    if (before.companyIds.join(",") !== next.companyIds.join(",")) v21SecurityAudit("COMPANY_ACCESS_CHANGE", "USER", next.id, { oldValue: before.companyIds, newValue: next.companyIds });
-    return v21Clone(next);
-  }
 
-  function setV21UserStatus(userId, status) {
-    return updateV21User(userId, { status: v21NormalizeStatus(status) });
-  }
 
   function getCurrentUser() {
     try {
@@ -13686,33 +12820,8 @@ window.fetch = (input, init = {}) => {
     return fallback || normalizeUserData({ id: "demo-admin", username: "demo-admin", displayName: "Demo Administrator", roleIds: ["ADMIN"], companyIds: v21CompanyIdsFromCurrentData() });
   }
 
-  function getCurrentUserRoles() {
-    return Array.from(new Set(v20SafeArray(getCurrentUser()?.roleIds).map(value => String(value).toUpperCase()).filter(role => V21_ROLES[role])));
-  }
 
-  function getCurrentUserCompanies() {
-    return v20SafeArray(getCurrentUser()?.companyIds).map(value => String(value)).filter(Boolean);
-  }
 
-  function setV21CurrentUser(userId) {
-    const user = getV21User(userId);
-    if (!user) throw new Error("User not found.");
-    if (user.status !== V21_USER_STATUS.ACTIVE) throw new Error("Inactive or suspended users cannot start a session.");
-    try { window.currentUser = v21Clone(user); } catch (error) {}
-    const session = {
-      userId: user.id,
-      roleIds: user.roleIds.slice(),
-      companyIds: user.companyIds.slice(),
-      sessionId: v21Id("SES"),
-      createdAt: v21Now(),
-      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-      schemaVersion: V21_SECURITY_SCHEMA_VERSION
-    };
-    try { localStorage.setItem(V21_SESSION_STORAGE_KEY, JSON.stringify(session)); } catch (error) { console.error("V21 session save failed:", error); }
-    updateV21User(user.id, { lastLoginAt: v21Now() });
-    v21SecurityAudit("LOGIN", "USER", user.id, { actorId: user.id });
-    return v21Clone(session);
-  }
 
   function getV21SessionContext() {
     try {
@@ -13724,13 +12833,6 @@ window.fetch = (input, init = {}) => {
     } catch (error) { return null; }
   }
 
-  function clearV21Session() {
-    const user = getCurrentUser();
-    v21SecurityAudit("LOGOUT", "USER", user?.id || null, {});
-    try { localStorage.removeItem(V21_SESSION_STORAGE_KEY); } catch (error) {}
-    try { window.currentUser = null; } catch (error) {}
-    return true;
-  }
 
   function getRolePermissions(roleId) {
     const role = String(roleId || "").toUpperCase();
@@ -13800,15 +12902,6 @@ window.fetch = (input, init = {}) => {
     return true;
   }
 
-  function v21Authorize(permission, options = {}) {
-    const result = v21AuthorizationResult(options.user || getCurrentUser(), permission, options.companyId || null, options.action || "ACCESS");
-    if (!result.authorized) {
-      v21SecurityAudit("ACCESS_DENIED", "SECURITY", options.entityId || null, {
-        permission, companyId: options.companyId || null, action: options.action || "ACCESS", errors: result.errors
-      });
-    }
-    return result;
-  }
 
   function v21SecurityAudit(action, entityType = "SECURITY", entityId = null, metadata = {}) {
     try {
@@ -13850,207 +12943,21 @@ window.fetch = (input, init = {}) => {
     return v21RequirePermission(permission, { companyId, action, entityId: typeof contractOrId === "object" ? contractOrId?.id : contractOrId });
   }
 
-  function v21GuardJournal(permission, journal = {}, action = "JOURNAL_ACCESS") {
-    const companyId = v21ResolveCompanyId(journal);
-    return v21RequirePermission(permission, { companyId, action, entityId: journal?.id || journal?.journalId || null });
-  }
 
-  function v21GuardCompany(permission, companyId, action = "COMPANY_ACCESS") {
-    return v21RequirePermission(permission, { companyId, action, entityId: companyId });
-  }
 
-  function v21ExecuteAuthorized(permission, operation, options = {}) {
-    const result = v21Authorize(permission, options);
-    if (!result.authorized) {
-      const error = new Error(result.errors[0]?.message || "You do not have permission to perform this action.");
-      error.code = result.errors[0]?.code || "FORBIDDEN";
-      error.statusCode = 403;
-      throw error;
-    }
-    if (typeof operation !== "function") throw new TypeError("Authorized operation must be a function.");
-    return operation();
-  }
 
-  function v21CanExecute(permission, options = {}) {
-    return v21Authorize(permission, options).authorized;
-  }
 
-  function v21ApplySecurityToUi() {
-    if (typeof document === "undefined") return { applied: false, reason: "DOM_UNAVAILABLE" };
-    const user = getCurrentUser();
-    const rules = [
-      ["newContractButton", "contracts.create"],
-      ["bulkImportButton", "imports.execute"],
-      ["deleteContract", "contracts.delete"],
-      ["downloadTemplateButton", "exports.execute"],
-      ["confirmBulkImport", "imports.execute"]
-    ];
-    const applied = [];
-    rules.forEach(([id, permission]) => {
-      const element = document.getElementById(id);
-      if (!element) return;
-      const allowed = hasPermission(user, permission);
-      element.dataset.v21Permission = permission;
-      element.dataset.v21Authorized = allowed ? "true" : "false";
-      if (V21_SECURITY_ENFORCEMENT) {
-        element.disabled = !allowed;
-        element.hidden = !allowed;
-      }
-      applied.push({ id, permission, allowed });
-    });
-    return { applied: true, enforcementEnabled: V21_SECURITY_ENFORCEMENT, appliedRules: applied };
-  }
 
-  function getSecurityControlStatus(options = {}) {
-    const user = options.user || getCurrentUser();
-    const companyId = options.companyId || null;
-    const roleIds = v20SafeArray(user?.roleIds);
-    const permissions = getUserPermissions(user);
-    const checks = [];
-    checks.push({ id: "USER_STATUS", status: user?.status === V21_USER_STATUS.ACTIVE ? "PASS" : "FAIL", message: user?.status === V21_USER_STATUS.ACTIVE ? "User is active." : "User is inactive or suspended." });
-    checks.push({ id: "MISSING_ROLE", status: roleIds.length ? "PASS" : "FAIL", message: roleIds.length ? "User has at least one role." : "User has no assigned role." });
-    const invalidRoles = roleIds.filter(role => !V21_ROLES[String(role).toUpperCase()]);
-    checks.push({ id: "INVALID_ROLE", status: invalidRoles.length ? "FAIL" : "PASS", message: invalidRoles.length ? `Invalid roles: ${invalidRoles.join(", ")}` : "All roles are valid." });
-    const invalidPermissions = permissions.filter(permission => !V21_PERMISSION_LIST.includes(permission));
-    checks.push({ id: "INVALID_PERMISSION", status: invalidPermissions.length ? "FAIL" : "PASS", message: invalidPermissions.length ? `Invalid permissions: ${invalidPermissions.join(", ")}` : "All permissions are valid." });
-    if (companyId) checks.push({ id: "COMPANY_ACCESS", status: canAccessCompany(user, companyId) ? "PASS" : "FAIL", message: canAccessCompany(user, companyId) ? "Company access granted." : "Company access denied." });
-    checks.push({ id: "MISSING_ACTOR", status: user?.id ? "PASS" : "FAIL", message: user?.id ? "Security actor is available." : "Security actor is missing." });
-    const sod = v21EvaluateSodRules(user, options.actions || []);
-    checks.push({ id: "SOD_CONFLICT", status: sod.conflicts.length ? "WARNING" : "PASS", message: sod.conflicts.length ? sod.conflicts.map(item => item.message).join(" ") : "No segregation-of-duties conflict detected." });
-    const denied = v20SafeArray(options.deniedActions);
-    checks.push({ id: "UNAUTHORIZED_ACTION", status: denied.length ? "WARNING" : "PASS", message: denied.length ? `${denied.length} unauthorized action(s) recorded.` : "No unauthorized action supplied." });
-    return {
-      version: V21_SECURITY_VERSION,
-      userId: user?.id || null,
-      companyId,
-      status: checks.some(item => item.status === "FAIL") ? "FAIL" : checks.some(item => item.status === "WARNING") ? "WARNING" : "PASS",
-      checks,
-      roles: roleIds,
-      permissions,
-      companyIds: getCurrentUserCompanies(),
-      sod,
-      enforcementEnabled: V21_SECURITY_ENFORCEMENT,
-      mode: V21_SECURITY_MODE
-    };
-  }
 
-  function v21EvaluateSodRules(user = getCurrentUser(), actions = []) {
-    const actionSet = new Set(v20SafeArray(actions).map(item => String(item?.action || item).toUpperCase()));
-    const conflicts = V21_SECURITY_CONFIG.sodRules.filter(rule => rule.actions.every(action => actionSet.has(action))).map(rule => ({ ...rule }));
-    return { conflicts, passed: conflicts.length === 0 };
-  }
 
-  function v21CheckSegregationOfDuties(user, actions = []) {
-    const result = v21EvaluateSodRules(user || getCurrentUser(), actions);
-    if (result.conflicts.length) v21SecurityAudit("SOD_CONFLICT", "SECURITY", user?.id || null, { conflicts: result.conflicts, actions });
-    return result;
-  }
 
-  function v21RoleMatrix() {
-    return V21_PERMISSION_LIST.map(permission => {
-      const row = { permission };
-      Object.values(V21_ROLES).forEach(role => { row[role] = getRolePermissions(role).includes(permission); });
-      return row;
-    });
-  }
 
-  function v21GetApiAuthorizationContract() {
-    const map = {
-      "GET /companies": "contracts.view",
-      "GET /contracts": "contracts.view",
-      "GET /contracts/:id": "contracts.view",
-      "POST /contracts": "contracts.create",
-      "PUT /contracts/:id": "contracts.edit",
-      "DELETE /contracts/:id": "contracts.delete",
-      "GET /contracts/:id/schedule": "schedule.view",
-      "GET /contracts/:id/journals": "journal.view",
-      "GET /reports/financial": "reporting.view",
-      "GET /reports/cfo": "dashboard.view",
-      "GET /controls": "controls.view",
-      "GET /close-periods": "close.view",
-      "POST /imports": "imports.execute",
-      "GET /imports/:id": "imports.execute",
-      "POST /exports": "exports.execute"
-    };
-    return Object.entries(map).map(([endpoint, permission]) => ({ endpoint, permission, statusCodeOnDenied: 403 }));
-  }
 
-  function v21SecurityAuditReport(options = {}) {
-    try {
-      const report = typeof getAuditTrailReport === "function" ? getAuditTrailReport(options) : { rows: [] };
-      const rows = v20SafeArray(report?.rows || report).filter(row => String(row?.reason || row?.metadata?.source || "").includes(V21_SECURITY_AUDIT_SOURCE) || ["LOGIN", "LOGOUT", "ACCESS_DENIED", "ROLE_CHANGE", "PERMISSION_CHANGE", "COMPANY_ACCESS_CHANGE", "SOD_CONFLICT"].includes(String(row?.action || "").toUpperCase()));
-      return { version: V21_SECURITY_VERSION, rows, count: rows.length };
-    } catch (error) {
-      return { version: V21_SECURITY_VERSION, rows: [], count: 0, error: error?.message || String(error) };
-    }
-  }
 
-  function v21GetCompanyAccessMatrix() {
-    const users = loadV21Users();
-    const companies = v21CompanyIdsFromCurrentData();
-    return users.map(user => ({ userId: user.id, username: user.username, status: user.status, companyIds: user.companyIds.slice(), accessibleCompanies: companies.filter(companyId => canAccessCompany(user, companyId)) }));
-  }
 
-  function v21SetCompanyAccess(userId, companyIds) {
-    const user = getV21User(userId);
-    if (!user) throw new Error("User not found.");
-    return updateV21User(userId, { companyIds: Array.from(new Set(v20SafeArray(companyIds).map(value => String(value).trim()).filter(Boolean))) });
-  }
 
-  function v21AssignRole(userId, roleId) {
-    const role = String(roleId || "").toUpperCase();
-    if (!V21_ROLES[role]) throw new Error(`Invalid role: ${role}`);
-    const user = getV21User(userId);
-    if (!user) throw new Error("User not found.");
-    return updateV21User(userId, { roleIds: Array.from(new Set(user.roleIds.concat(role))) });
-  }
 
-  function v21RemoveRole(userId, roleId) {
-    const role = String(roleId || "").toUpperCase();
-    const user = getV21User(userId);
-    if (!user) throw new Error("User not found.");
-    const nextRoles = user.roleIds.filter(item => String(item).toUpperCase() !== role);
-    if (!nextRoles.length) throw new Error("User must retain at least one role.");
-    return updateV21User(userId, { roleIds: nextRoles });
-  }
 
-  function v21SecurityTests() {
-    const results = [];
-    const pass = (name, condition, details = "") => results.push({ test: name, passed: !!condition, details });
-    try {
-      const companies = v21CompanyIdsFromCurrentData();
-      const companyIds = companies.length ? companies : ["DEMO-COMPANY"];
-      const users = v21DefaultUsers().map(user => ({ ...user, companyIds }));
-      const admin = users.find(user => user.roleIds.includes("ADMIN"));
-      const cfo = users.find(user => user.roleIds.includes("CFO"));
-      const accountant = users.find(user => user.roleIds.includes("ACCOUNTANT"));
-      const controller = users.find(user => user.roleIds.includes("CONTROLLER"));
-      const auditor = users.find(user => user.roleIds.includes("AUDITOR"));
-      const viewer = users.find(user => user.roleIds.includes("VIEWER"));
-      pass("TEST 1 Admin access", hasPermission(admin, "users.manage") && hasPermission(admin, "contracts.delete"));
-      pass("TEST 2 CFO access", hasPermission(cfo, "dashboard.view") && hasPermission(cfo, "close.certify") && !hasPermission(cfo, "contracts.delete"));
-      pass("TEST 3 Accountant access", hasPermission(accountant, "contracts.create") && hasPermission(accountant, "imports.execute"));
-      pass("TEST 4 Controller access", hasPermission(controller, "controls.manage") && hasPermission(controller, "close.view"));
-      pass("TEST 5 Auditor read-only", hasPermission(auditor, "audit.view") && !hasPermission(auditor, "contracts.edit") && !hasPermission(auditor, "imports.execute"));
-      pass("TEST 6 Viewer read-only", hasPermission(viewer, "contracts.view") && !hasPermission(viewer, "contracts.edit") && !hasPermission(viewer, "exports.execute"));
-      pass("TEST 7 Unauthorized delete", !hasPermission(viewer, "contracts.delete"));
-      pass("TEST 8 Unauthorized export", !hasPermission(viewer, "exports.execute"));
-      pass("TEST 9 Unauthorized import", !hasPermission(auditor, "imports.execute"));
-      pass("TEST 10 Unauthorized close certify", !hasPermission(accountant, "close.certify"));
-      pass("TEST 11 Company access", canAccessCompany(admin, companyIds[0]));
-      pass("TEST 12 Unauthorized company", !canAccessCompany(viewer, "UNAUTHORIZED-COMPANY"));
-      pass("TEST 13 Inactive user", !hasPermission({ ...viewer, status: "INACTIVE" }, "contracts.view"));
-      pass("TEST 14 Suspended user", !hasPermission({ ...viewer, status: "SUSPENDED" }, "contracts.view"));
-      pass("TEST 15 Missing permission", !hasPermission(viewer, "configuration.manage"));
-      pass("TEST 16 SoD conflict", !v21CheckSegregationOfDuties(viewer, []).conflicts.length && v21CheckSegregationOfDuties(viewer, ["CLOSE_EXECUTE", "CLOSE_CERTIFY"]).conflicts.length === 1);
-      pass("TEST 17 Audit logging", typeof recordAuditEvent === "function");
-      pass("TEST 18 Access denied logging", typeof v21SecurityAudit === "function");
-      pass("TEST 19 Existing V20 functionality", typeof v20GetDatabaseModel === "function" && typeof calculateLeaseEngine === "function");
-    } catch (error) {
-      pass("V21 security tests", false, error?.message || String(error));
-    }
-    return { version: V21_SECURITY_VERSION, passed: results.every(item => item.passed), results };
-  }
 
   /* V16.9 public API — V16.8 API is preserved and extended. */
 
@@ -14329,10 +13236,6 @@ window.fetch = (input, init = {}) => {
 
   let v22Groups = v22LoadGroups();
 
-  function v22SaveGroups(groups) {
-    v22Groups = v22SafeArray(groups).map(v22NormalizeGroup);
-    return V22StorageAdapters.groups().save(v22Groups);
-  }
 
   function v22LoadOwnership() {
     return V22StorageAdapters.ownership().list().map(item => ({
@@ -14423,36 +13326,9 @@ window.fetch = (input, init = {}) => {
     return v22Groups.find(group => String(group.id) === String(groupId)) || null;
   }
 
-  function createGroup(input = {}, options = {}) {
-    v22Require("group.manage", options);
-    const group = v22NormalizeGroup(input);
-    if (v22Groups.some(item => item.id === group.id || item.code === group.code)) {
-      throw new Error(`Group ID or code already exists: ${group.id}`);
-    }
-    v22Groups.push(group);
-    v22SaveGroups(v22Groups);
-    v22RecordAudit("GROUP_CREATE", "GROUP", group.id, { group });
-    return v22Clone(group);
-  }
-
-  function updateGroup(groupId, patch = {}, options = {}) {
-    v22Require("group.manage", { ...options, groupId });
-    const index = v22Groups.findIndex(item => String(item.id) === String(groupId));
-    if (index < 0) return null;
-    const next = v22NormalizeGroup({ ...v22Groups[index], ...v22SafeObject(patch), id: v22Groups[index].id, updatedAt: v22Now() });
-    const old = v22Clone(v22Groups[index]);
-    v22Groups[index] = next;
-    v22SaveGroups(v22Groups);
-    v22RecordAudit("GROUP_UPDATE", "GROUP", groupId, { oldValue: old, newValue: next });
-    return v22Clone(next);
-  }
 
 
-  function v22CompanyNameToId(name) {
-    const target = String(name || "").trim();
-    const company = v22CompanyList().find(item => String(item.name) === target || String(item.id) === target || String(item.code) === target);
-    return company?.id || null;
-  }
+
 
   function v22EnsureCompanyGroupMembership() {
     const companies = v22CompanyList();
@@ -14486,281 +13362,6 @@ window.fetch = (input, init = {}) => {
     console.error("V22 company/group membership init error:", error);
   }
 
-  function addCompanyToGroup(groupId, companyId, input = {}, options = {}) {
-    v22Require("group.manage", { ...options, groupId, companyId });
-    if (!v22Groups.some(group => String(group.id) === String(groupId))) throw new Error("Group not found.");
-    const company = v22CompanyList().find(item => String(item.id) === String(companyId));
-    if (!company) throw new Error("Company not found.");
-    const existing = v22Scope.find(item => String(item.groupId) === String(groupId) && String(item.companyId) === String(companyId));
-    const scope = existing || {
-      id: v22Id("SCOPE"),
-      groupId: String(groupId),
-      companyId: String(companyId),
-      createdAt: v22Now()
-    };
-    const next = {
-      ...scope,
-      consolidationMethod: V22_CONSOLIDATION_METHODS[String(input.consolidationMethod || scope.consolidationMethod || "FULL").toUpperCase()] || "FULL",
-      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(input.ownershipPercentage ?? scope.ownershipPercentage ?? 100))),
-      effectiveDate: v22NormalizeDate(input.effectiveDate ?? scope.effectiveDate),
-      included: input.included !== undefined ? input.included !== false : scope.included !== false,
-      updatedAt: v22Now(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "ConsolidationScope"
-    };
-    if (existing) Object.assign(existing, next);
-    else v22Scope.push(next);
-    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
-    v22RecordAudit("COMPANY_ADDED", "GROUP", groupId, { companyId, scope: next });
-    return v22Clone(next);
-  }
-
-  function removeCompanyFromGroup(groupId, companyId, options = {}) {
-    v22Require("group.manage", { ...options, groupId, companyId });
-    const before = v22Scope.length;
-    v22Scope = v22Scope.filter(item => !(String(item.groupId) === String(groupId) && String(item.companyId) === String(companyId)));
-    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
-    const removed = before !== v22Scope.length;
-    if (removed) v22RecordAudit("COMPANY_REMOVED", "GROUP", groupId, { companyId });
-    return removed;
-  }
-
-  function setCompanyOwnership(input = {}, options = {}) {
-    v22Require("group.manage", options);
-    const parentCompanyId = String(input.parentCompanyId || "");
-    const subsidiaryCompanyId = String(input.subsidiaryCompanyId || "");
-    if (!parentCompanyId || !subsidiaryCompanyId || parentCompanyId === subsidiaryCompanyId) throw new Error("Valid parent and subsidiary companies are required.");
-    const ownershipPercentage = v22Amount(input.ownershipPercentage);
-    if (ownershipPercentage < 0 || ownershipPercentage > 100) throw new Error("Ownership percentage must be between 0 and 100.");
-    const existing = v22Ownership.find(item => item.parentCompanyId === parentCompanyId && item.subsidiaryCompanyId === subsidiaryCompanyId && item.status === "ACTIVE");
-    const record = {
-      id: existing?.id || v22Id("OWN"),
-      parentCompanyId,
-      subsidiaryCompanyId,
-      ownershipPercentage,
-      effectiveDate: v22NormalizeDate(input.effectiveDate),
-      controlType: V22_CONTROL_TYPES[String(input.controlType || "SUBSIDIARY").toUpperCase()] || "SUBSIDIARY",
-      status: String(input.status || "ACTIVE").toUpperCase(),
-      createdAt: existing?.createdAt || v22Now(),
-      updatedAt: v22Now(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "Ownership"
-    };
-    if (existing) Object.assign(existing, record);
-    else v22Ownership.push(record);
-    v22PersistCollection(V22StorageAdapters.ownership(), v22Ownership);
-    v22RecordAudit("OWNERSHIP_CHANGED", "OWNERSHIP", record.id, record);
-    return v22Clone(record);
-  }
-
-  function getOwnership(groupId = null, options = {}) {
-    v22Require("group.view", { ...options, groupId });
-    return v22Clone(groupId
-      ? v22Ownership.filter(item => {
-          const scopes = v22Scope.filter(scope => String(scope.groupId) === String(groupId)).map(scope => String(scope.companyId));
-          return scopes.includes(String(item.parentCompanyId)) || scopes.includes(String(item.subsidiaryCompanyId));
-        })
-      : v22Ownership) || [];
-  }
-
-  function setConsolidationScope(input = {}, options = {}) {
-    v22Require("group.manage", { ...options, groupId: input.groupId, companyId: input.companyId });
-    const companyId = String(input.companyId || "");
-    const groupId = String(input.groupId || "");
-    if (!companyId || !groupId) throw new Error("groupId and companyId are required.");
-    if (!v22CompanyList().some(company => String(company.id) === companyId)) throw new Error("Company not found.");
-    if (!v22Groups.some(group => String(group.id) === groupId)) throw new Error("Group not found.");
-    const existing = v22Scope.find(item => String(item.groupId) === groupId && String(item.companyId) === companyId);
-    const record = {
-      id: existing?.id || v22Id("SCOPE"),
-      groupId,
-      companyId,
-      consolidationMethod: V22_CONSOLIDATION_METHODS[String(input.consolidationMethod || existing?.consolidationMethod || "FULL").toUpperCase()] || "FULL",
-      ownershipPercentage: Math.max(0, Math.min(100, v22Amount(input.ownershipPercentage ?? existing?.ownershipPercentage ?? 100))),
-      effectiveDate: v22NormalizeDate(input.effectiveDate ?? existing?.effectiveDate),
-      included: input.included !== undefined ? input.included !== false : existing?.included !== false,
-      createdAt: existing?.createdAt || v22Now(),
-      updatedAt: v22Now(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "ConsolidationScope"
-    };
-    if (existing) Object.assign(existing, record);
-    else v22Scope.push(record);
-    v22PersistCollection(V22StorageAdapters.scope(), v22Scope);
-    return v22Clone(record);
-  }
-
-  function getConsolidationScope(groupId, options = {}) {
-    v22Require("group.view", { ...options, groupId });
-    return v22Clone(v22Scope.filter(item => String(item.groupId) === String(groupId))) || [];
-  }
-
-
-  function v22ContractsForCompany(companyId) {
-    const rows = typeof v20GetContracts === "function" ? v20GetContracts() : v22SafeArray(typeof contracts !== "undefined" ? contracts : []);
-    return rows.filter(contract => {
-      const resolved = String(contract?.companyId || v22CompanyNameToId(contract?.company) || "");
-      return resolved === String(companyId);
-    });
-  }
-
-  function v22ContractMetrics(contract, reportingDate) {
-    const date = v22NormalizeDate(reportingDate) || v22NormalizeDate(contract?.reportingDate) || v22Now().slice(0, 10);
-    try {
-      if (typeof rptGetContractCfo === "function") {
-        const result = rptGetContractCfo(contract, date) || {};
-        return {
-          contractId: contract.id,
-          currency: v22Currency(result.currency || contract.currency, "TRY"),
-          leaseLiability: v22Amount(result.leaseLiability ?? result.liability),
-          currentLiability: v22Amount(result.currentLiability ?? result.current),
-          nonCurrentLiability: v22Amount(result.nonCurrentLiability ?? result.nonCurrent),
-          rouAsset: v22Amount(result.rouAsset ?? result.rouAssets),
-          interest: v22Amount(result.monthlyInterest ?? result.interest),
-          depreciation: v22Amount(result.monthlyDepreciation ?? result.depreciation),
-          cashPayments: v22Amount(result.next12MonthPayments ?? result.cashPayments),
-          active: result.active !== false
-        };
-      }
-    } catch (error) {}
-
-    try {
-      const engine = typeof cfoBuildSchedule === "function"
-        ? cfoBuildSchedule(contract)
-        : (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : {});
-      const schedule = v22SafeArray(engine?.schedule);
-      const rows = schedule.filter(row => !date || !row.date || String(row.date) <= String(date));
-      const latest = rows.length ? rows[rows.length - 1] : null;
-      const current = typeof calculateCurrentLiabilityAsOf === "function"
-        ? v22Amount(calculateCurrentLiabilityAsOf(contract, date))
-        : 0;
-      const total = v22Amount(latest?.closingLiability ?? engine?.liability);
-      return {
-        contractId: contract.id,
-        currency: v22Currency(contract.currency, "TRY"),
-        leaseLiability: total,
-        currentLiability: current,
-        nonCurrentLiability: Math.max(0, total - current),
-        rouAsset: v22Amount(latest?.rouClosing ?? engine?.rouAssets),
-        interest: v22Amount(latest?.interest),
-        depreciation: v22Amount(latest?.depreciation),
-        cashPayments: rows.slice(-12).reduce((sum, row) => sum + v22Amount(row.payment), 0),
-        active: String(contract.status || "active").toLowerCase() !== "inactive"
-      };
-    } catch (error) {
-      return {
-        contractId: contract?.id || null, currency: v22Currency(contract?.currency, "TRY"),
-        leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0,
-        rouAsset: 0, interest: 0, depreciation: 0, cashPayments: 0, active: false
-      };
-    }
-  }
-
-  function v22AggregateCompany(company, reportingDate) {
-    const contracts = v22ContractsForCompany(company.id);
-    const metrics = contracts.map(contract => v22ContractMetrics(contract, reportingDate));
-    const totals = metrics.reduce((acc, row) => {
-      ["leaseLiability", "currentLiability", "nonCurrentLiability", "rouAsset", "interest", "depreciation", "cashPayments"].forEach(key => { acc[key] += v22Amount(row[key]); });
-      if (row.active) acc.activeContracts += 1;
-      return acc;
-    }, { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, interest: 0, depreciation: 0, cashPayments: 0, activeContracts: 0 });
-    return {
-      companyId: String(company.id),
-      company: company.name,
-      code: company.code,
-      country: company.country,
-      baseCurrency: v22Currency(company.baseCurrency, "TRY"),
-      reportingDate: v22NormalizeDate(reportingDate),
-      contractCount: contracts.length,
-      activeContracts: totals.activeContracts,
-      leaseLiability: totals.leaseLiability,
-      currentLiability: totals.currentLiability,
-      nonCurrentLiability: totals.nonCurrentLiability,
-      rou: totals.rouAsset,
-      interest: totals.interest,
-      depreciation: totals.depreciation,
-      cashPayments: totals.cashPayments,
-      source: "V21_CFO_DATA_LAYER",
-      contracts: metrics
-    };
-  }
-
-
-
-
-
-  function createElimination(input = {}, options = {}) {
-    v22Require("eliminations.manage", { ...options, groupId: input.groupId, action: "ELIMINATION_CREATE" });
-    const row = {
-      id: String(input.id || v22Id("ELIM")),
-      groupId: String(input.groupId || "GROUP-DEFAULT"),
-      fromCompanyId: String(input.fromCompanyId || ""),
-      toCompanyId: String(input.toCompanyId || ""),
-      account: String(input.account || ""),
-      amount: v22Amount(input.amount),
-      currency: v22Currency(input.currency, "TRY"),
-      eliminationType: V22_ELIMINATION_TYPES[String(input.eliminationType || "OTHER").toUpperCase()] || "OTHER",
-      reportingDate: v22NormalizeDate(input.reportingDate),
-      status: String(input.status || "DRAFT").toUpperCase(),
-      reason: String(input.reason || ""),
-      createdAt: input.createdAt || v22Now(),
-      updatedAt: v22Now(),
-      createdBy: input.createdBy || v22CurrentUser()?.id || "system",
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "Elimination"
-    };
-    if (!row.fromCompanyId || !row.toCompanyId) throw new Error("fromCompanyId and toCompanyId are required.");
-    if (row.fromCompanyId === row.toCompanyId) throw new Error("Elimination source and target companies must differ.");
-    if (v22Eliminations.some(item => item.id === row.id)) throw new Error(`Elimination ID already exists: ${row.id}`);
-    v22Eliminations.push(row);
-    v22PersistCollection(V22StorageAdapters.eliminations(), v22Eliminations);
-    v22RecordAudit("ELIMINATION_CREATED", "ELIMINATION", row.id, row);
-    return v22Clone(row);
-  }
-
-  function updateElimination(id, patch = {}, options = {}) {
-    const existing = v22Eliminations.find(item => String(item.id) === String(id));
-    if (!existing) return null;
-    v22Require("eliminations.manage", { ...options, groupId: existing.groupId, entityId: id, action: "ELIMINATION_UPDATE" });
-    const old = v22Clone(existing);
-    Object.assign(existing, {
-      ...v22SafeObject(patch),
-      id: existing.id,
-      amount: patch.amount === undefined ? existing.amount : v22Amount(patch.amount),
-      currency: patch.currency === undefined ? existing.currency : v22Currency(patch.currency, existing.currency),
-      reportingDate: patch.reportingDate === undefined ? existing.reportingDate : v22NormalizeDate(patch.reportingDate),
-      updatedAt: v22Now(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "Elimination"
-    });
-    v22PersistCollection(V22StorageAdapters.eliminations(), v22Eliminations);
-    v22RecordAudit("ELIMINATION_UPDATED", "ELIMINATION", id, { oldValue: old, newValue: existing });
-    return v22Clone(existing);
-  }
-
-
-  function createConsolidationAdjustment(input = {}, options = {}) {
-    v22Require("consolidation.execute", { ...options, groupId: input.groupId, action: "CONSOLIDATION_ADJUSTMENT_CREATE" });
-    const row = {
-      id: String(input.id || v22Id("ADJ")),
-      groupId: String(input.groupId || "GROUP-DEFAULT"),
-      account: String(input.account || ""),
-      amount: v22Amount(input.amount),
-      currency: v22Currency(input.currency, "TRY"),
-      reason: String(input.reason || ""),
-      reportingDate: v22NormalizeDate(input.reportingDate),
-      createdBy: input.createdBy || v22CurrentUser()?.id || "system",
-      approvedBy: input.approvedBy || null,
-      status: String(input.status || "PREPARED").toUpperCase(),
-      createdAt: input.createdAt || v22Now(),
-      updatedAt: v22Now(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "ConsolidationAdjustment"
-    };
-    v22Adjustments.push(row);
-    v22PersistCollection(V22StorageAdapters.adjustments(), v22Adjustments);
-    return v22Clone(row);
-  }
 
 
 
@@ -14771,163 +13372,35 @@ window.fetch = (input, init = {}) => {
 
 
 
-  function v22GetDatabaseModel() {
-    const groups = v22Groups.map(v22Clone);
-    const companies = v22CompanyList().map(company => ({ ...v22Clone(company), groupId: v22Scope.find(scope => String(scope.companyId) === String(company.id))?.groupId || "GROUP-DEFAULT" }));
-    return {
-      schemaVersion: V22_SCHEMA_VERSION,
-      generatedAt: v22Now(),
-      Group: groups,
-      Company: companies,
-      Ownership: v22Clone(v22Ownership),
-      ConsolidationScope: v22Clone(v22Scope),
-      Elimination: v22Clone(v22Eliminations),
-      ConsolidationAdjustment: v22Clone(v22Adjustments)
-    };
-  }
-
-
-  function v22CreateDataSnapshot() {
-    const base = typeof createDataSnapshot === "function" ? createDataSnapshot() : { storage: {} };
-    const snapshot = {
-      ...base,
-      schemaVersion: V22_SCHEMA_VERSION,
-      createdAt: v22Now(),
-      v22Storage: {
-        [V22_GROUP_STORAGE_KEY]: localStorage.getItem(V22_GROUP_STORAGE_KEY),
-        [V22_OWNERSHIP_STORAGE_KEY]: localStorage.getItem(V22_OWNERSHIP_STORAGE_KEY),
-        [V22_SCOPE_STORAGE_KEY]: localStorage.getItem(V22_SCOPE_STORAGE_KEY),
-        [V22_ELIMINATION_STORAGE_KEY]: localStorage.getItem(V22_ELIMINATION_STORAGE_KEY),
-        [V22_ADJUSTMENT_STORAGE_KEY]: localStorage.getItem(V22_ADJUSTMENT_STORAGE_KEY)
-      }
-    };
-    return snapshot;
-  }
-
-  function v22ValidateSnapshot(snapshot) {
-    const base = typeof validateDataSnapshot === "function" ? validateDataSnapshot(snapshot) : { valid: true, errors: [] };
-    const errors = [...v22SafeArray(base.errors)];
-    if (!snapshot || typeof snapshot !== "object") errors.push("Snapshot object is required.");
-    if (snapshot?.v22Storage && typeof snapshot.v22Storage !== "object") errors.push("V22 storage payload is invalid.");
-    Object.values(snapshot?.v22Storage || {}).forEach(raw => {
-      if (raw === null || raw === "") return;
-      try { JSON.parse(raw); } catch (error) { errors.push("Invalid JSON in V22 snapshot storage."); }
-    });
-    return { valid: errors.length === 0, errors };
-  }
-
-  function v22RestoreDataSnapshot(snapshot, options = {}) {
-    const validation = v22ValidateSnapshot(snapshot);
-    if (!validation.valid) return { success: false, validation };
-    if (options.confirm !== true) return { success: false, validation, requiresConfirmation: true, message: "Snapshot validation passed. Explicit confirmation is required before restore." };
-    try {
-      if (typeof restoreDataSnapshot === "function" && snapshot?.storage) {
-        const baseResult = restoreDataSnapshot({ ...snapshot, storage: snapshot.storage }, { confirm: true });
-        if (!baseResult.success) return baseResult;
-      }
-      Object.entries(snapshot.v22Storage || {}).forEach(([key, value]) => {
-        if (value === null || value === undefined) localStorage.removeItem(key);
-        else localStorage.setItem(key, value);
-      });
-      v22Groups = v22LoadGroups();
-      v22Ownership = v22LoadOwnership();
-      v22Scope = v22LoadScope();
-      v22Eliminations = v22LoadEliminations();
-      v22Adjustments = v22LoadAdjustments();
-      return { success: true, validation, schemaVersion: V22_SCHEMA_VERSION };
-    } catch (error) {
-      return { success: false, validation, error: { code: "V22_SNAPSHOT_RESTORE_FAILED", message: error?.message || String(error), details: null, field: null } };
-    }
-  }
 
 
 
 
-  function v22GetApiAuthorizationContract() {
-    return [
-      { endpoint: "GET /groups", permission: "group.view", statusCodeOnDenied: 403 },
-      { endpoint: "GET /groups/:id", permission: "group.view", statusCodeOnDenied: 403 },
-      { endpoint: "POST /groups", permission: "group.manage", statusCodeOnDenied: 403 },
-      { endpoint: "PUT /groups/:id", permission: "group.manage", statusCodeOnDenied: 403 },
-      { endpoint: "GET /groups/:id/consolidation", permission: "consolidation.view", statusCodeOnDenied: 403 },
-      { endpoint: "POST /groups/:id/consolidation/run", permission: "consolidation.execute", statusCodeOnDenied: 403 },
-      { endpoint: "GET /groups/:id/eliminations", permission: "eliminations.view", statusCodeOnDenied: 403 },
-      { endpoint: "POST /groups/:id/eliminations", permission: "eliminations.manage", statusCodeOnDenied: 403 },
-      { endpoint: "PUT /eliminations/:id", permission: "eliminations.manage", statusCodeOnDenied: 403 },
-      { endpoint: "POST /groups/:id/consolidation/export", permission: "consolidation.export", statusCodeOnDenied: 403 },
-      { endpoint: "GET /groups/:id/controls", permission: "group.view", statusCodeOnDenied: 403 },
-      { endpoint: "GET /groups/:id/close", permission: "group.view", statusCodeOnDenied: 403 }
-    ];
-  }
 
-  function v22Paginate(rows, options = {}) {
-    const data = v22SafeArray(rows);
-    const pageSize = Math.max(1, Number(options.pageSize) || 25);
-    const page = Math.max(1, Number(options.page) || 1);
-    const total = data.length;
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const start = (page - 1) * pageSize;
-    return { data: v22Clone(data.slice(start, start + pageSize)), metadata: { page, pageSize, total, totalPages } };
-  }
 
-  function v22FilterGroups(groups, filters = {}) {
-    return v22SafeArray(groups).filter(group => {
-      if (filters.status && String(group.status).toUpperCase() !== String(filters.status).toUpperCase()) return false;
-      if (filters.query && !JSON.stringify(group).toLowerCase().includes(String(filters.query).toLowerCase())) return false;
-      return true;
-    });
-  }
 
-  function v22MigrationReport() {
-    const companies = v22CompanyList();
-    return {
-      from: "21.0",
-      to: V22_SCHEMA_VERSION,
-      companies: companies.length,
-      groups: v22Groups.length,
-      scopes: v22Scope.length,
-      ownership: v22Ownership.length,
-      eliminations: v22Eliminations.length,
-      adjustments: v22Adjustments.length,
-      defaultGroupApplied: v22Scope.filter(row => row.groupId === "GROUP-DEFAULT").length,
-      companyIdsPreserved: true,
-      storageKeyPreserved: typeof STORAGE_KEY !== "undefined" ? STORAGE_KEY : null
-    };
-  }
 
-  function v22Tests() {
-    const results = [];
-    const pass = (name, value, detail = null) => results.push({ name, passed: !!value, detail });
-    const group = v22Groups[0];
-    const companies = v22CompanyList();
-    pass("Create Group model", !!group?.id);
-    pass("Company-GROUP relationship", v22Scope.every(row => row.groupId && row.companyId));
-    pass("Ownership model", Array.isArray(v22Ownership));
-    pass("Consolidation Scope", Array.isArray(v22Scope));
-    pass("Company aggregation", companies.every(company => !!v22AggregateCompany(company, v22Now().slice(0, 10))));
-    if (group) {
-      const user = v22CurrentUser();
-      const view = v22HasPermission("consolidation.view", user);
-      pass("Consolidation authorization", view || !user);
-      if (view || !user) {
-        const result = getConsolidatedData(group.id, v22Now().slice(0, 10), { user });
-        pass("Group aggregation", !!result.success);
-        pass("Group reporting date", !!result.data?.reportingDate);
-        pass("Group currency foundation", !!result.data?.groupCurrency);
-        pass("Data lineage", Array.isArray(result.data?.lineage?.leaseLiability));
-        pass("Group controls", !!getGroupControlStatus(group.id, v22Now().slice(0, 10), { user }));
-        pass("Group close", !!getGroupCloseStatus(group.id, v22Now().slice(0, 10), { user }));
-        pass("Group CFO data", !!getGroupCfoDashboardData(group.id, v22Now().slice(0, 10), { user }));
-      }
-    }
-    pass("Audit integration", typeof recordAuditEvent === "function");
-    pass("Database-ready export", !!v22GetDatabaseModel().schemaVersion);
-    pass("Migration", v22MigrationReport().companyIdsPreserved === true);
-    pass("Data health", !!getV22DataHealth());
-    pass("API authorization contract", Array.isArray(v22GetApiAuthorizationContract()));
-    pass("Pagination model", v22Paginate([1, 2, 3], { page: 1, pageSize: 2 }).metadata.total === 3);
-    return { version: V22_SCHEMA_VERSION, passed: results.every(item => item.passed), results };
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /* ==========================================================
      V23 FX / MULTI-CURRENCY ENGINE
@@ -15048,24 +13521,8 @@ window.fetch = (input, init = {}) => {
     v23StorageSet(V23_CURRENCY_STORAGE_KEY,V23_DEFAULT_CURRENCIES.map(v23Clone));
     return V23_DEFAULT_CURRENCIES.map(v23Clone);
   }
-  function normalizeV23Currency(input={}) {
-    const source=v23Object(input), code=v23CurrencyCode(source.code);
-    if (!code) throw new Error("Currency code is required.");
-    return { code, name:String(source.name || code), symbol:String(source.symbol || code), decimalPlaces:Math.max(0,Math.min(8,Math.floor(v23Num(source.decimalPlaces,2)))), status:String(source.status || "ACTIVE").toUpperCase(), schemaVersion:V23_SCHEMA_VERSION };
-  }
   function getCurrencies() { return loadV23Currencies().map(v23Clone); }
   function getCurrency(code) { const c=v23CurrencyCode(code); return loadV23Currencies().find(x=>x.code===c) || null; }
-  function createCurrency(input={}, options={}) {
-    v23Authorize("fx.manage",{...options,action:"CURRENCY_CREATE"});
-    const currency=normalizeV23Currency(input), rows=loadV23Currencies();
-    if (rows.some(x=>x.code===currency.code)) throw new Error(`Currency already exists: ${currency.code}`);
-    rows.push(currency); v23StorageSet(V23_CURRENCY_STORAGE_KEY,rows); v23Audit("CURRENCY_CREATED","CURRENCY",currency.code,{currency}); return v23Clone(currency);
-  }
-  function updateCurrency(code, patch={}, options={}) {
-    v23Authorize("fx.manage",{...options,action:"CURRENCY_UPDATE",entityId:code});
-    const rows=loadV23Currencies(), idx=rows.findIndex(x=>x.code===v23CurrencyCode(code)); if(idx<0) return null;
-    const before=rows[idx], next=normalizeV23Currency({...before,...v23Object(patch),code:before.code}); rows[idx]=next; v23StorageSet(V23_CURRENCY_STORAGE_KEY,rows); v23Audit("CURRENCY_UPDATED","CURRENCY",next.code,{before,newValue:next}); return v23Clone(next);
-  }
 
   let backendFxRateCache = null; // null = backend henüz sorulmadı
   function loadV23Rates() {
@@ -15796,29 +14253,29 @@ window.fetch = (input, init = {}) => {
     V24_FORECAST_METHODS,
     V24_VARIANCE_STATUSES,
     V24_PLANNING_PERMISSIONS,
-    getPlanningPlans,
-    getPlanningPlan,
-    createPlanningPlan,
-    updatePlanningPlan,
+    
+    
+    
+    
     getBudgetVersions,
     getPlanningVersion,
-    createPlanningVersion,
-    createPlanningLine,
+    
+    
     getPlanningLines,
     getPlanningLine,
-    updatePlanningLine,
-    deletePlanningLine,
-    createBudget,
-    updateBudget,
+    
+    
+    
+    
     getBudget,
     getBudgetVersion,
-    submitBudget,
-    reviewBudget,
-    approveBudget,
-    lockBudget,
-    createForecast,
+    
+    
+    
+    
+    
     getForecast,
-    generateForecast,
+    
     getRunRateForecast,
     getActualPlusRemainingBudgetForecast,
     getTrendForecast,
@@ -15827,11 +14284,11 @@ window.fetch = (input, init = {}) => {
     getVarianceStatus,
     getPlanningVarianceReport,
     getMaterialVariances,
-    createPlanningDriver,
+    
     getPlanningDrivers,
     calculateDriverModel,
-    createScenario,
-    updateScenario,
+    
+    
     getScenarios,
     calculateScenario,
     getPlanningCashForecast,
@@ -15847,11 +14304,11 @@ window.fetch = (input, init = {}) => {
     exportBudget,
     exportForecast,
     exportScenario,
-    v24MigrationReport,
-    v24MigrateData,
-    v24GetApiAuthorizationContract,
-    v24SecurityStatus,
-    v24PlanningTests,
+    
+    
+    
+    
+    
     V23_SCHEMA_VERSION,
     V23_RATE_TYPES,
     V23_RATE_SOURCES,
@@ -15862,16 +14319,16 @@ window.fetch = (input, init = {}) => {
     V23_SECURITY_PERMISSIONS,
     V23_ROLE_PERMISSIONS,
     FX_CONFIG,
-    getCurrencies,
-    getCurrency,
-    createCurrency,
-    updateCurrency,
-    getFxRates,
-    createFxRate,
-    updateFxRate,
-    getFxRate,
-    convertCurrency,
-    convertCurrencyOnDate,
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     TCMB_CONFIG,
     fetchTcmbDailyRates,
     fetchTcmbDailyRatesWithFallback,
@@ -15936,22 +14393,22 @@ window.fetch = (input, init = {}) => {
     V22_SECURITY_PERMISSIONS,
     V22_ROLE_PERMISSIONS,
     V22StorageAdapters,
-    getGroups,
-    getGroup,
-    createGroup,
-    updateGroup,
-    addCompanyToGroup,
-    removeCompanyFromGroup,
-    setCompanyOwnership,
-    getOwnership,
-    setConsolidationScope,
-    getConsolidationScope,
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     getConsolidatedData,
     v22RunConsolidation,
-    createElimination,
-    updateElimination,
+    
+    
     getEliminations,
-    createConsolidationAdjustment,
+    
     v22RunIntercompanyReconciliation,
     getGroupControlStatus,
     getGroupCloseStatus,
@@ -15962,16 +14419,16 @@ window.fetch = (input, init = {}) => {
     exportEliminations,
     exportIntercompanyReconciliation,
     exportGroupDatabaseReady,
-    v22GetDatabaseModel,
-    v22CreateDataSnapshot,
-    v22ValidateSnapshot,
-    v22RestoreDataSnapshot,
+    
+    
+    
+    
     getV22DataHealth,
-    v22GetApiAuthorizationContract,
-    v22Paginate,
-    v22FilterGroups,
-    v22MigrationReport,
-    v22Tests,
+    
+    
+    
+    
+    
     version: "V19",
     CFO_DATA_LAYER_VERSION,
     REPORTING_ENGINE_VERSION,
@@ -16129,41 +14586,41 @@ window.fetch = (input, init = {}) => {
     V21_PERMISSION_LIST,
     V21_ROLE_PERMISSIONS,
     V21_SECURITY_CONFIG,
-    getV21Users,
-    getV21User,
-    createV21User,
-    updateV21User,
-    setV21UserStatus,
-    getCurrentUser,
-    getCurrentUserRoles,
-    getCurrentUserCompanies,
-    setV21CurrentUser,
-    getV21SessionContext,
-    clearV21Session,
-    getRolePermissions,
-    getUserPermissions,
-    hasPermission,
-    canAccessCompany,
-    v21Authorize,
-    v21RequirePermission,
-    v21ExecuteAuthorized,
-    v21CanExecute,
-    v21GuardContract,
-    v21GuardJournal,
-    v21GuardCompany,
-    v21ApplySecurityToUi,
-    getSecurityControlStatus,
-    v21EvaluateSodRules,
-    v21CheckSegregationOfDuties,
-    v21RoleMatrix,
-    v21GetApiAuthorizationContract,
-    v21SecurityAudit,
-    v21SecurityAuditReport,
-    v21GetCompanyAccessMatrix,
-    v21SetCompanyAccess,
-    v21AssignRole,
-    v21RemoveRole,
-    v21SecurityTests,
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     DATA_SCHEMA_VERSION,
     V20_DATA_ACCESS_VERSION,
@@ -16173,42 +14630,42 @@ window.fetch = (input, init = {}) => {
     V20ApiDataAdapter,
     V20StorageAdapters,
     V20Repositories,
-    getV20Repository,
-    migrateContractData,
-    normalizeCompanyData,
-    normalizeScheduleData,
-    normalizeModificationData,
-    normalizeReassessmentData,
-    normalizeJournalData,
-    normalizeAuditEventData,
-    normalizeControlData,
-    normalizeClosePeriodData,
-    normalizeReconciliationData,
-    normalizeImportJobData,
-    normalizeExportJobData,
-    exportLocalStorageData,
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     exportDatabaseReadyData,
-    exportCompaniesForDatabase,
-    exportContractsForDatabase,
+    
+    
     exportSchedulesForDatabase,
     exportModificationsForDatabase,
     exportReassessmentsForDatabase,
-    exportJournalsForDatabase,
-    exportJournalLinesForDatabase,
-    exportAuditEventsForDatabase,
-    getDataHealth,
-    createDataSnapshot,
-    validateDataSnapshot,
-    restoreDataSnapshot,
-    v20FindOrphanRecords,
-    v20FindDuplicateIds,
-    v20MigrationReport,
-    v20MigrateAllData,
-    v20FutureTransaction,
-    v20GetContractsApiModel,
-    v20Paginate,
-    v20FilterContracts,
-    v20DataAccessTests,
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     v191InitUiWiring,
     runV18CfoCockpitTests,
@@ -16309,39 +14766,10 @@ window.fetch = (input, init = {}) => {
     NET_INCOME:{direction:"PROFIT",favorableWhen:"POSITIVE"}
   });
 
-  /** @deprecated-name Kalıcı: v24Number — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreNumber. */
-  function v24Number(value, fallback = 0) { return coreNumber(value, fallback); }
-  function v24Text(value, fallback = "") { return value == null ? fallback : String(value); }
-  /** @deprecated-name Kalıcı: v24Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
-  function v24Clone(value) { return coreClone(value); }
-  function v24Now() { return new Date().toISOString(); }
-  function v24Id(prefix = "V24") { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`.toUpperCase(); }
-  function v24Array(value) { return Array.isArray(value) ? value : []; }
   function v24StorageGet(key, fallback = []) { try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) ?? fallback) : fallback; } catch(e) { return fallback; } }
   function v24StorageSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch(e) { return false; } }
   function v24Load(key) { return v24StorageGet(key, []); }
   function v24Save(key, value) { v24StorageSet(key, value); return value; }
-  function v24Find(list, id) { return v24Array(list).find(x => String(x.id) === String(id)) || null; }
-  function v24Currency(row, fallback = "TRY") { return v24Text(row?.currency || row?.baseCurrency || row?.functionalCurrency || fallback).toUpperCase(); }
-  function v24CurrentUser(options = {}) { return options.user || (typeof getCurrentUser === "function" ? getCurrentUser() : null); }
-  function v24Require(permission, options = {}) {
-    if (typeof v21RequirePermission === "function") return v21RequirePermission(permission, options);
-    return true;
-  }
-  function v24CanCompany(user, companyId) {
-    if (!companyId) return true;
-    if (typeof canAccessCompany === "function") return canAccessCompany(user, companyId);
-    return true;
-  }
-  function v24Audit(action, entityType, entityId, metadata = {}) {
-    try {
-      if (typeof recordAuditEvent === "function") return recordAuditEvent({ action, entityType, entityId, actor: v24CurrentUser()?.id || "SYSTEM", actorName: v24CurrentUser()?.displayName || v24CurrentUser()?.username || "SYSTEM", reason: "V24_PLANNING", metadata });
-    } catch(e) {}
-    try {
-      const rows = v24Load(V24_STORAGE_KEYS.AUDIT); rows.push({ id:v24Id("AUD"), action, entityType, entityId, actorId:v24CurrentUser()?.id || "SYSTEM", actorName:v24CurrentUser()?.displayName || "SYSTEM", timestamp:v24Now(), metadata:v24Clone(metadata) }); v24Save(V24_STORAGE_KEYS.AUDIT, rows.slice(-5000));
-    } catch(e) {}
-    return true;
-  }
   function v24PermissionInstall() {
     if (typeof V21_ROLE_PERMISSIONS === "undefined") return false;
     const add = (role, permissions) => { if (!Array.isArray(V21_ROLE_PERMISSIONS[role])) V21_ROLE_PERMISSIONS[role] = []; permissions.forEach(p => { if (!V21_ROLE_PERMISSIONS[role].includes(p)) V21_ROLE_PERMISSIONS[role].push(p); }); };
@@ -16354,154 +14782,17 @@ window.fetch = (input, init = {}) => {
     add("VIEWER", ["planning.view","forecast.view","scenario.view"]);
     return true;
   }
-  function v24CompanyRecord(companyId) {
-    const id = String(companyId || "");
-    const companies = typeof v22CompanyList === "function" ? v22CompanyList() : (typeof companies !== "undefined" ? companies : []);
-    return v24Array(companies).find(c => String(c.id) === id) || null;
-  }
-  function v24GroupIdForCompany(companyId) { return v24CompanyRecord(companyId)?.groupId || null; }
-  function v24NormalizePlan(input = {}) {
-    const now = v24Now();
-    const type = v24Text(input.planType || input.versionType || "BUDGET").toUpperCase();
-    if (!V24_PLAN_TYPES.includes(type)) throw Object.assign(new Error("Invalid planning type."), { code:"INVALID_PLAN_TYPE" });
-    const year = Number(input.planningYear || input.year);
-    if (!Number.isInteger(year) || year < 1900 || year > 2500) throw Object.assign(new Error("Invalid planning year."), { code:"INVALID_PLANNING_YEAR" });
-    const companyId = v24Text(input.companyId).trim() || null;
-    if (companyId && !v24CompanyRecord(companyId)) throw Object.assign(new Error("Company not found."), { code:"COMPANY_NOT_FOUND" });
-    return { id:input.id || v24Id("PLAN"), companyId, groupId:input.groupId || v24GroupIdForCompany(companyId), planningYear:year, currency:v24Currency(input, v24CompanyRecord(companyId)?.baseCurrency || "TRY"), planType:type, status:input.status || (type === "FORECAST" ? "DRAFT" : "DRAFT"), createdAt:input.createdAt || now, updatedAt:now, createdBy:input.createdBy || v24CurrentUser()?.id || "SYSTEM", schemaVersion:V24_SCHEMA_VERSION };
-  }
-  function getPlanningPlans(options = {}) {
-    v24Require("planning.view", { ...options, action:"PLANNING_VIEW" });
-    const user = v24CurrentUser(options), companyId = options.companyId ? String(options.companyId) : null;
-    return v24Load(V24_STORAGE_KEYS.PLANS).filter(p => (!companyId || String(p.companyId) === companyId) && (!options.groupId || String(p.groupId) === String(options.groupId)) && (!options.planningYear || Number(p.planningYear) === Number(options.planningYear))).filter(p => !p.companyId || v24CanCompany(user, p.companyId));
-  }
-  function getPlanningPlan(id, options = {}) { const p = v24Find(getPlanningPlans(options), id); if (!p) return null; return v24Clone(p); }
-  function createPlanningPlan(input = {}, options = {}) {
-    const normalized = v24NormalizePlan({ ...input, createdBy:input.createdBy || v24CurrentUser(options)?.id });
-    v24Require("planning.create", { ...options, companyId:normalized.companyId, action:"PLANNING_CREATE", entityId:normalized.id });
-    const rows = v24Load(V24_STORAGE_KEYS.PLANS); if (rows.some(x => x.companyId === normalized.companyId && x.groupId === normalized.groupId && x.planningYear === normalized.planningYear && x.planType === normalized.planType && x.status !== "ARCHIVED")) throw Object.assign(new Error("Planning plan already exists."), { code:"DUPLICATE_PLANNING_PLAN" });
-    rows.push(normalized); v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_CREATED", "PLANNING_PLAN", normalized.id, normalized); return v24Clone(normalized);
-  }
-  function updatePlanningPlan(id, patch = {}, options = {}) {
-    const rows = v24Load(V24_STORAGE_KEYS.PLANS), index = rows.findIndex(x => String(x.id) === String(id)); if (index < 0) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
-    const current = rows[index]; v24Require("planning.edit", { ...options, companyId:current.companyId, action:"PLANNING_EDIT", entityId:id });
-    if (current.status === "LOCKED") throw Object.assign(new Error("Locked planning data cannot be modified. Create a new version."), { code:"PLANNING_LOCKED" });
-    const next = { ...current, ...v24Clone(patch), id:current.id, updatedAt:v24Now(), schemaVersion:V24_SCHEMA_VERSION };
-    rows[index] = next; v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_UPDATED", "PLANNING_PLAN", id, { patch:v24Clone(patch) }); return v24Clone(next);
-  }
   function v24VersionRows() { return v24Load(V24_STORAGE_KEYS.VERSIONS); }
-  function createPlanningVersion(planId, input = {}, options = {}) {
-    const plan = getPlanningPlan(planId, options); if (!plan) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
-    v24Require("planning.create", { ...options, companyId:plan.companyId, action:"PLANNING_VERSION_CREATE", entityId:planId });
-    const rows = v24VersionRows(); const versions = rows.filter(x => String(x.planId) === String(planId)); const nextNumber = versions.reduce((m,x) => Math.max(m, Number(x.version)||0),0)+1;
-    const now=v24Now(), row={id:input.id||v24Id("PV"),planId,version:input.version||nextNumber,versionName:input.versionName||`${plan.planningYear} ${plan.planType} V${input.version||nextNumber}`,versionType:input.versionType||plan.planType,status:input.status||"DRAFT",createdAt:input.createdAt||now,createdBy:input.createdBy||v24CurrentUser(options)?.id||"SYSTEM",lockedAt:null,schemaVersion:V24_SCHEMA_VERSION};
-    if (rows.some(x => String(x.planId)===String(planId) && String(x.version)===String(row.version))) throw Object.assign(new Error("Planning version already exists."), { code:"DUPLICATE_PLANNING_VERSION" });
-    rows.push(row); v24Save(V24_STORAGE_KEYS.VERSIONS,rows); v24Audit("BUDGET_VERSION_CREATED","PLANNING_VERSION",row.id,row); return v24Clone(row);
-  }
-  function v24AssertVersionEditable(planId, version) { const v=getPlanningVersion(planId,version,{}) || {}; if (v.status === "LOCKED") throw Object.assign(new Error("Locked budget version cannot be modified."), { code:"PLANNING_VERSION_LOCKED" }); return true; }
-  function v24NormalizeLine(input = {}) {
-    const companyId=v24Text(input.companyId).trim()||null, period=v24Text(input.period).trim();
-    if (!period) throw Object.assign(new Error("Planning period is required."),{code:"PERIOD_REQUIRED"});
-    const amount=v24Number(input.amount), currency=v24Currency(input,v24CompanyRecord(companyId)?.baseCurrency||"TRY");
-    return { id:input.id||v24Id("PL"),planId:input.planId,version:input.version||1,companyId,groupId:input.groupId||v24GroupIdForCompany(companyId),period,periodType:input.periodType||"MONTH",account:v24Text(input.account||input.category||"UNCLASSIFIED").toUpperCase(),category:v24Text(input.category||"OTHER").toUpperCase(),subCategory:v24Text(input.subCategory||"").toUpperCase(),currency,amount,driver:input.driver||null,scenario:v24Text(input.scenario||"BASE").toUpperCase(),source:input.source||"MANUAL",createdAt:input.createdAt||v24Now(),updatedAt:v24Now(),createdBy:input.createdBy||v24CurrentUser()?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};
-  }
-  function createPlanningLine(input = {}, options = {}) {
-    const line=v24NormalizeLine({ ...input, createdBy:input.createdBy||v24CurrentUser(options)?.id }); v24Require("planning.create",{...options,companyId:line.companyId,action:"PLANNING_LINE_CREATE",entityId:line.id}); v24AssertVersionEditable(line.planId,line.version);
-    const rows=v24Load(V24_STORAGE_KEYS.LINES); if(rows.some(x=>String(x.planId)===String(line.planId)&&String(x.version)===String(line.version)&&String(x.companyId)===String(line.companyId)&&x.period===line.period&&x.account===line.account&&x.category===line.category&&x.scenario===line.scenario&&x.id!==line.id)) throw Object.assign(new Error("Duplicate planning line."),{code:"DUPLICATE_PLANNING_LINE"});
-    rows.push(line);v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("BUDGET_UPDATED","PLANNING_LINE",line.id,{amount:line.amount,companyId:line.companyId,period:line.period});return v24Clone(line);
-  }
-  function updatePlanningLine(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.LINES),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Planning line not found."),{code:"PLANNING_LINE_NOT_FOUND"});const cur=rows[i];v24Require("planning.edit",{...options,companyId:cur.companyId,action:"PLANNING_LINE_EDIT",entityId:id});v24AssertVersionEditable(cur.planId,cur.version);rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("BUDGET_UPDATED","PLANNING_LINE",id,{patch:v24Clone(patch)});return v24Clone(rows[i]); }
-  function deletePlanningLine(id,options={}) { const rows=v24Load(V24_STORAGE_KEYS.LINES),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)return false;const cur=rows[i];v24Require("planning.edit",{...options,companyId:cur.companyId,action:"PLANNING_LINE_DELETE",entityId:id});v24AssertVersionEditable(cur.planId,cur.version);rows.splice(i,1);v24Save(V24_STORAGE_KEYS.LINES,rows);v24Audit("DELETE","PLANNING_LINE",id,{companyId:cur.companyId});return true; }
-  function v24SetPlanStatus(planId,status,options={}) {
-    const plan=getPlanningPlan(planId,options); if(!plan)throw Object.assign(new Error("Planning plan not found."),{code:"PLAN_NOT_FOUND"});
-    const target=String(status||"").toUpperCase(); if(!V24_BUDGET_STATUSES.includes(target))throw Object.assign(new Error("Invalid budget status."),{code:"INVALID_BUDGET_STATUS"});
-    const perm=target==="SUBMITTED"?"planning.submit":target==="APPROVED"?"planning.approve":target==="LOCKED"?"planning.lock":"planning.edit";
-    v24Require(perm,{...options,companyId:plan.companyId,action:`BUDGET_${target}`,entityId:planId});
-    if(target==="APPROVED" && plan.createdBy && plan.createdBy===v24CurrentUser(options)?.id) { v24Audit("ACCESS_DENIED","PLANNING_PLAN",planId,{reason:"APPROVAL_CONFLICT"}); throw Object.assign(new Error("Budget preparer cannot approve the same budget."),{code:"APPROVAL_CONFLICT"}); }
-    const rows=v24Load(V24_STORAGE_KEYS.PLANS), index=rows.findIndex(x=>String(x.id)===String(planId));
-    if(index<0) throw Object.assign(new Error("Planning plan not found."),{code:"PLAN_NOT_FOUND"});
-    rows[index]={...rows[index],status:target,updatedAt:v24Now(),lockedAt:target==="LOCKED"?v24Now():(rows[index].lockedAt||null),schemaVersion:V24_SCHEMA_VERSION};
-    v24Save(V24_STORAGE_KEYS.PLANS,rows);
-    if(target==="LOCKED") {
-      const versions=v24VersionRows().map(v=>String(v.planId)===String(planId)?{...v,status:"LOCKED",lockedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION}:v);
-      v24Save(V24_STORAGE_KEYS.VERSIONS,versions);
-    }
-    v24Audit(`BUDGET_${target}`,"PLANNING_PLAN",planId,{status:target});
-    return v24Clone(rows[index]);
-  }
-  function submitBudget(planId,options={}) { return v24SetPlanStatus(planId,"SUBMITTED",options); }
-  function reviewBudget(planId,options={}) { return v24SetPlanStatus(planId,"REVIEWED",options); }
-  function approveBudget(planId,options={}) { return v24SetPlanStatus(planId,"APPROVED",options); }
-  function lockBudget(planId,options={}) { return v24SetPlanStatus(planId,"LOCKED",options); }
-  function createBudget(input={},options={}) { return createPlanningPlan({...input,planType:"BUDGET"},options); }
-  function updateBudget(id,patch={},options={}) { return updatePlanningPlan(id,patch,options); }
-
-  function v24MonthsOfYear(year) { return Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,"0")}`); }
-
-  function v24ActualRows(options={}) {
-    const year=Number(options.year||new Date().getFullYear()), months=v24MonthsOfYear(year), companiesList=typeof v22CompanyList==="function"?v22CompanyList():(typeof companies!=="undefined"?companies:[]), user=v24CurrentUser(options), rows=[];
-    v24Array(companiesList).filter(c=>!c.id||v24CanCompany(user,c.id)).forEach(company=>{
-      months.forEach(month=>{
-        const [y,m]=month.split("-").map(Number), start=new Date(y,m-1,1), end=new Date(y,m,0); let metric={};
-        try { metric=typeof cfoPeriodMetrics==="function"?cfoPeriodMetrics(start,end,{activeOnly:false}):{}; } catch(e) {}
-        let exposure=null; try { exposure=typeof v18CompanyExposure==="function"?v18CompanyExposure(end).find(x=>String(x.company)===String(company.id||company.code||company.name)):null; } catch(e) {}
-        const leasePayment=v24Number(metric.cashPayments ?? exposure?.next12MPaymentsMonth), interest=v24Number(metric.interestExpense ?? exposure?.interest), depreciation=v24Number(metric.depreciationExpense ?? exposure?.depreciation), leaseExpense=v24Number(metric.leaseExpense), liability=v24Number(exposure?.leaseLiability), rou=v24Number(exposure?.rouAssets);
-        rows.push({companyId:company.id,groupId:company.groupId||null,period:month,currency:v24Currency(company,"TRY"),categories:{LEASE_PAYMENT:leasePayment,INTEREST:interest,D_AND_A:depreciation,LEASE_EXPENSE:leaseExpense,LEASE_LIABILITY:liability,ROU_ASSET:rou},source:"V23_ACTUAL_ENGINE"});
-      });
-    });
-    return rows;
-  }
-  function v24ActualValue(category,companyId,period,options={}) { const row=v24ActualRows({year:Number(String(period).slice(0,4)),...options}).find(x=>String(x.companyId)===String(companyId)&&x.period===period);return v24Number(row?.categories?.[String(category).toUpperCase()]); }
-  function v24BudgetForMonth(planId,version,companyId,period,category,options={}) { return getPlanningLines({...options,planId,version,companyId,period,category}).reduce((s,x)=>s+v24Number(x.amount),0); }
-
-  function v24CreateForecastPlan(input={},options={}) { return createPlanningPlan({...input,planType:input.planType||"FORECAST"},options); }
-  function createForecast(input={},options={}) { return v24CreateForecastPlan(input,options); }
-  function v24ForecastValue(method, actualValues, remainingPlanValues, historyValues=[]) {
-    const actual=v24Number(actualValues), remaining=v24Number(remainingPlanValues), history=v24Array(historyValues).map(v24Number).filter(Number.isFinite), m=String(method||"MANUAL").toUpperCase();
-    if(m==="ACTUAL_PLUS_REMAINING_BUDGET") return actual+remaining;
-    if(m==="RUN_RATE") return actual+(history.length?(history.reduce((a,b)=>a+b,0)/history.length)*v24Number(arguments[4]||0):remaining);
-    if(m==="TREND") { if(history.length<2)return actual+remaining; const avg=history.reduce((a,b)=>a+b,0)/history.length;const last=history[history.length-1];const growth=avg?last/avg-1:0;return actual+remaining*(1+growth); }
-    return actual+remaining;
-  }
-  function generateForecast(options={}) {
-    const year=Number(options.year||new Date().getFullYear()), method=String(options.method||"ACTUAL_PLUS_REMAINING_BUDGET").toUpperCase(), planId=options.budgetPlanId||options.planId, version=options.budgetVersion||options.version||1, companyId=options.companyId||null, categories=options.categories||["REVENUE","COGS","OPEX","INTEREST","TAX","LEASE_PAYMENT","D_AND_A"], months=v24MonthsOfYear(year), currentMonth=Number(options.currentMonth||new Date().getMonth()+1), results=[];
-    v24Require("forecast.create",{...options,companyId,action:"FORECAST_CREATE"});
-    categories.forEach(category=>{
-      let ytd=0, remainingBudget=0;
-      months.forEach((period,idx)=>{const n=idx+1;if(n<=currentMonth)ytd+=v24ActualValue(category,companyId,period,options);else if(planId)remainingBudget+=v24BudgetForMonth(planId,version,companyId,period,category,options);});
-      let fullYear=method==="RUN_RATE"?0:v24ForecastValue(method,ytd,remainingBudget,months.slice(0,Math.max(0,currentMonth)).map(p=>v24ActualValue(category,companyId,p,options)),12-currentMonth);
-      if(method==="RUN_RATE"){const history=months.slice(0,currentMonth).map(p=>v24ActualValue(category,companyId,p,options));const avg=history.length?history.reduce((a,b)=>a+b,0)/history.length:0;fullYear=avg*12;}
-      results.push({category,year,ytdActual:ytd,remainingBudget,fullYearForecast:fullYear,method,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY"),companyId});
-    });
-    v24Audit("FORECAST_CREATED","FORECAST",options.planId||null,{year,method,companyId});return results;
-  }
 
 
-  function createPlanningDriver(input={},options={}) {
-    v24Require("planning.create",{...options,companyId:input.companyId,action:"DRIVER_CREATE"}); const row={id:input.id||v24Id("DRV"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),driverType:v24Text(input.driverType||"GENERIC").toUpperCase(),driverName:v24Text(input.driverName||"Driver"),period:v24Text(input.period),value:v24Number(input.value),unit:v24Text(input.unit||"NUMBER"),source:v24Text(input.source||"MANUAL").toUpperCase(),createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.DRIVERS);rows.push(row);v24Save(V24_STORAGE_KEYS.DRIVERS,rows);v24Audit("BUDGET_UPDATED","PLANNING_DRIVER",row.id,row);return v24Clone(row);
-  }
-  function createScenario(input={},options={}) { v24Require("scenario.manage",{...options,companyId:input.companyId,action:"SCENARIO_CREATE"});const name=String(input.scenario||"BASE").toUpperCase();if(!V24_SCENARIOS.includes(name))throw Object.assign(new Error("Invalid scenario."),{code:"INVALID_SCENARIO"});const row={id:input.id||v24Id("SCN"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),scenario:name,parameters:v24Clone(input.parameters||{}),status:input.status||"DRAFT",createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS);rows.push(row);v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_CREATED","SCENARIO",row.id,row);return v24Clone(row); }
-  function updateScenario(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Scenario not found."),{code:"SCENARIO_NOT_FOUND"});const cur=rows[i];v24Require("scenario.manage",{...options,companyId:cur.companyId,action:"SCENARIO_UPDATE",entityId:id});rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_UPDATED","SCENARIO",id,{patch});return v24Clone(rows[i]); }
+
+
+
 
 
   function v24MigrationReport() { const plans=v24Load(V24_STORAGE_KEYS.PLANS),lines=v24Load(V24_STORAGE_KEYS.LINES),versions=v24VersionRows();return {from:"23.0",to:V24_SCHEMA_VERSION,plans:plans.length,versions:versions.length,lines:lines.length,status:"READY",actualEnginePreserved:true,fxEnginePreserved:true,consolidationPreserved:true}; }
   function v24MigrateData() {
     [V24_STORAGE_KEYS.PLANS,V24_STORAGE_KEYS.VERSIONS,V24_STORAGE_KEYS.LINES,V24_STORAGE_KEYS.DRIVERS,V24_STORAGE_KEYS.SCENARIOS,V24_STORAGE_KEYS.VARIANCES,V24_STORAGE_KEYS.CASH,V24_STORAGE_KEYS.ADJUSTMENTS,V24_STORAGE_KEYS.AUDIT].forEach(key=>{const rows=v24Load(key);if(Array.isArray(rows))v24Save(key,rows.map(x=>({...x,schemaVersion:x.schemaVersion||V24_SCHEMA_VERSION})));});v24PermissionInstall();return v24MigrationReport();
-  }
-  function v24GetApiAuthorizationContract() { return [
-    {method:"GET",path:"/planning",permission:"planning.view"},{method:"POST",path:"/planning",permission:"planning.create"},{method:"PUT",path:"/planning/:id",permission:"planning.edit"},{method:"POST",path:"/planning/:id/submit",permission:"planning.submit"},{method:"POST",path:"/planning/:id/approve",permission:"planning.approve"},{method:"POST",path:"/planning/:id/lock",permission:"planning.lock"},{method:"GET",path:"/forecast",permission:"forecast.view"},{method:"POST",path:"/forecast",permission:"forecast.create"},{method:"GET",path:"/scenarios",permission:"scenario.view"},{method:"POST",path:"/scenarios",permission:"scenario.manage"},{method:"GET",path:"/planning/export",permission:"planning.export"}
-  ]; }
-  function v24SecurityStatus(options={}) { const user=v24CurrentUser(options);return {userId:user?.id||null,active:user?.status==="ACTIVE",permissions:typeof getUserPermissions==="function"?getUserPermissions(user):V24_PLANNING_PERMISSIONS.slice(),planningPermissions:V24_PLANNING_PERMISSIONS.slice(),sodWarning:false}; }
-  function v24PlanningTests(options={}) {
-    const results=[], pass=(name,ok,detail=null)=>results.push({name,passed:!!ok,detail});
-    try {
-      const companyId=options.companyId||v24Array(typeof v22CompanyList==="function"?v22CompanyList():[])[0]?.id||null, year=Number(options.year||new Date().getFullYear()), plan={companyId,planningYear:year,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY")};
-      let created=null;try{created=createPlanningPlan({...plan,planType:"BUDGET"},{user:options.user});}catch(e){created=null;}
-      pass("Create Budget",!!created||getPlanningPlans({companyId,planningYear:year}).length>0);
-      if(created){let version=null;try{version=createPlanningVersion(created.id,{versionName:"V1"},{user:options.user});}catch(e){version=getBudgetVersions(created.id,{user:options.user})[0];}pass("Budget Version",!!version);if(version){let line=null;try{line=createPlanningLine({planId:created.id,version:version.version,companyId,period:`${year}-01`,category:"REVENUE",account:"REVENUE",currency:plan.currency,amount:100},{user:options.user});}catch(e){line=null;}pass("Planning Line",!!line);}}
-      pass("Variance",calculateVariance(110,100,{category:"REVENUE",audit:false}).favorable===true);pass("Materiality",calculateVariance(11000000,10000000,{category:"REVENUE",audit:false}).material===true);pass("Scenario Base",V24_SCENARIOS.includes("BASE"));pass("Scenario Upside",V24_SCENARIOS.includes("UPSIDE"));pass("Scenario Downside",V24_SCENARIOS.includes("DOWNSIDE"));pass("Driver Calculation",calculateDriverModel({driverType:"REVENUE",volume:10,price:5}).amount===50);pass("Cash Forecast",Array.isArray(getPlanningCashForecast({year,companyId,user:options.user})));pass("Planning Controls",!!getPlanningDataQualityStatus({user:options.user}));pass("Security",V24_PLANNING_PERMISSIONS.length>=10);pass("Audit Trail",typeof recordAuditEvent==="function");pass("Migration",v24MigrationReport().to==="24.0");pass("V23 Compatibility",typeof getFxRate==="function"&&typeof getConsolidatedData==="function");pass("TFRS16",typeof calculateLeaseEngine==="function");pass("Existing Consolidation",typeof getConsolidatedData==="function");pass("Existing FX",typeof convertCurrencyOnDate==="function");
-    } catch(e) { pass("V24 test harness",false,e?.message||String(e)); }
-    return {version:V24_SCHEMA_VERSION,passed:results.every(x=>x.passed),results};
   }
 
   try {
@@ -18383,103 +16674,12 @@ window.fetch = (input, init = {}) => {
     "INTERCOMPANY_EXPENSE","INTERCOMPANY_LEASE","OTHER"
   ];
 
-  function v26UiEsc(value) {
-    if (typeof escapeHtml === "function") return escapeHtml(value == null ? "" : String(value));
-    return String(value == null ? "" : value).replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  }
-  function v26UiCompanyOptions(selected="") {
-    return v22CompanyList().map(c => `<option value="${v26UiEsc(c.id)}" ${String(c.id)===String(selected)?"selected":""}>${v26UiEsc(c.code)} — ${v26UiEsc(c.name)}</option>`).join("");
-  }
-  function v26UiGroupOptions(selected="", includeAll=true) {
-    const groups = getGroups();
-    return (includeAll ? `<option value="">Tüm Gruplar</option>` : "") + groups.map(g => `<option value="${v26UiEsc(g.id)}" ${String(g.id)===String(selected)?"selected":""}>${v26UiEsc(g.code)} — ${v26UiEsc(g.name)}</option>`).join("");
-  }
-  function v26UiToast(message, type="info") {
-    try { if (typeof showToast === "function") { showToast(message, type, 2500); return; } } catch(e) {}
-    try { if (typeof showAlert === "function") { showAlert(message); return; } } catch(e) {}
-    console[type === "error" ? "error" : "log"](message);
-  }
-  function v26UiRun(fn) { try { return fn(); } catch (e) { v26UiToast(e?.message || String(e), "error"); return null; } }
-
-  function renderGroupManagementPage(container) {
-    if (!container) return;
-    injectV26Styles();
-    let selectedGroupId = container.dataset.selectedGroupId || "";
-    const render = () => {
-      const groups = getGroups();
-      const companies = v22CompanyList();
-      const selected = groups.find(g => String(g.id) === String(selectedGroupId)) || null;
-      const scope = selected ? getConsolidationScope(selected.id) : [];
-      const members = selected ? scope.filter(s => s.included !== false).map(s => ({ scope:s, company:companies.find(c => String(c.id)===String(s.companyId)) })).filter(x=>x.company) : [];
-      container.innerHTML = `<div class="gk-v26-page">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-          <div><h2 style="margin:0;font-size:20px;color:#0f172a;">Grup Yönetimi</h2><p style="margin:4px 0 0;color:#64748b;font-size:13px;">V22 konsolidasyon grupları ve şirket kapsamı</p></div>
-          <button class="gk-v26-btn" id="v26NewGroup">＋ Yeni Grup Ekle</button>
-        </div>
-        <div class="gk-v26-card"><table class="gk-v26-table"><thead><tr><th>Grup ID</th><th>Grup Kodu</th><th>Grup Adı</th><th>Grup Para Birimi</th><th>Durum</th></tr></thead><tbody>
-          ${groups.map(g=>`<tr data-group-id="${v26UiEsc(g.id)}" class="v26-group-row" style="cursor:pointer;${String(g.id)===String(selectedGroupId)?"background:#eff6ff;":""}"><td>${v26UiEsc(g.id)}</td><td><strong>${v26UiEsc(g.code)}</strong></td><td>${v26UiEsc(g.name)}</td><td>${v26UiEsc(g.groupCurrency)}</td><td><span class="gk-v26-badge ${String(g.status)==="ACTIVE"?"gk-v26-badge-success":"gk-v26-badge-warning"}">${g.status==='ACTIVE'?'Aktif':'Pasif'}</span></td></tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Grup bulunamadı</td></tr>`}
-        </tbody></table></div>
-        ${selected ? `<div class="gk-v26-card" id="v26GroupDetail"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin:0;font-size:15px;">${v26UiEsc(selected.name)}</h3><p style="margin:4px 0;color:#64748b;font-size:12px;">${v26UiEsc(selected.code)} · ${v26UiEsc(selected.groupCurrency)}</p></div><div style="display:flex;gap:8px;"><button class="gk-v26-btn gk-v26-btn-secondary" id="v26EditGroup">Düzenle</button><button class="gk-v26-btn" id="v26AddCompany">＋ Şirket Ekle</button></div></div>
-          <table class="gk-v26-table" style="margin-top:12px;"><thead><tr><th>Şirket</th><th>Kod</th><th>Para Birimi</th><th>Yöntem</th><th>Oran</th><th>İşlem</th></tr></thead><tbody>
-          ${members.map(m=>`<tr><td>${v26UiEsc(m.company.name)}</td><td>${v26UiEsc(m.company.code)}</td><td>${v26UiEsc(m.company.baseCurrency)}</td><td>${v26UiEsc(m.scope.consolidationMethod)}</td><td>${Number(m.scope.ownershipPercentage||0).toFixed(2)}%</td><td><button class="gk-v26-btn gk-v26-btn-danger v26-remove-company" data-company-id="${v26UiEsc(m.company.id)}">Şirket Çıkar</button></td></tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;">Bu grupta şirket yok</td></tr>`}
-          </tbody></table></div>` : `<div class="gk-v26-card" style="color:#64748b;">Detay için bir grup satırına tıklayın.</div>`}
-      </div>`;
-      container.querySelectorAll('.v26-group-row').forEach(r=>r.addEventListener('click',()=>{ selectedGroupId=r.dataset.groupId; container.dataset.selectedGroupId=selectedGroupId; render(); }));
-      container.querySelector('#v26NewGroup')?.addEventListener('click',()=>v26OpenGroupModal(container,null,render));
-      container.querySelector('#v26EditGroup')?.addEventListener('click',()=>v26OpenGroupModal(container,selected,render));
-      container.querySelector('#v26AddCompany')?.addEventListener('click',()=>v26OpenCompanyModal(container,selected,render));
-      container.querySelectorAll('.v26-remove-company').forEach(btn=>btn.addEventListener('click',e=>{ e.stopPropagation(); if(confirm('Şirketi gruptan çıkarmak istediğinize emin misiniz?')) v26UiRun(()=>{removeCompanyFromGroup(selected.id,btn.dataset.companyId); render();}); }));
-    };
-    render();
-  }
-
-  function v26OpenGroupModal(container, group, onDone) {
-    const modal=document.createElement('div'); modal.className='gk-v26-modal'; modal.innerHTML=`<div class="gk-v26-modal-card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3>${group?'Grup Düzenle':'Yeni Grup'}</h3><button class="gk-v26-btn gk-v26-btn-secondary" id="close">×</button></div>
-      <div class="gk-v26-form-grid"><label>Grup Kodu<input id="code" value="${v26UiEsc(group?.code||'')}"></label><label>Grup Adı<input id="name" value="${v26UiEsc(group?.name||'')}"></label><label>Grup Para Birimi<select id="currency">${V26_GROUP_CURRENCIES.map(c=>`<option ${c===(group?.groupCurrency||'TRY')?'selected':''}>${c}</option>`).join('')}</select></label><label>Durum<select id="status"><option ${group?.status==='ACTIVE'||!group?'selected':''}>ACTIVE</option><option ${group?.status==='INACTIVE'?'selected':''}>INACTIVE</option></select></label></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;"><button class="gk-v26-btn gk-v26-btn-secondary" id="cancel">Vazgeç</button><button class="gk-v26-btn" id="save">Kaydet</button></div></div>`;
-    document.body.appendChild(modal); const close=()=>modal.remove(); modal.querySelector('#close').onclick=close; modal.querySelector('#cancel').onclick=close;
-    modal.querySelector('#save').onclick=()=>v26UiRun(()=>{ const input={code:modal.querySelector('#code').value.trim(),name:modal.querySelector('#name').value.trim(),groupCurrency:modal.querySelector('#currency').value,status:modal.querySelector('#status').value}; if(!input.code||!input.name) throw new Error('Grup kodu ve grup adı zorunludur.'); group?updateGroup(group.id,input):createGroup(input); close(); onDone(); });
-  }
-  function v26OpenCompanyModal(container, group, onDone) {
-    const modal=document.createElement('div'); modal.className='gk-v26-modal'; modal.innerHTML=`<div class="gk-v26-modal-card"><h3>Şirket Ekle</h3><label>Şirket<select id="company"><option value="">Seçiniz</option>${v26UiCompanyOptions()}</select></label><div class="gk-v26-form-grid" style="margin-top:10px;"><label>Konsolidasyon Yöntemi<select id="method"><option>FULL</option><option>EQUITY</option><option>PROPORTIONAL</option></select></label><label>Oran %<input id="ownership" type="number" min="0" max="100" step="0.01" value="100"></label></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;"><button class="gk-v26-btn gk-v26-btn-secondary" id="cancel">Vazgeç</button><button class="gk-v26-btn" id="save">Ekle</button></div></div>`;
-    document.body.appendChild(modal); modal.querySelector('#cancel').onclick=()=>modal.remove(); modal.querySelector('#save').onclick=()=>v26UiRun(()=>{const id=modal.querySelector('#company').value;if(!id)throw new Error('Şirket seçin.');addCompanyToGroup(group.id,id,{consolidationMethod:modal.querySelector('#method').value,ownershipPercentage:Number(modal.querySelector('#ownership').value)});modal.remove();onDone();});
-  }
-
-  function renderEliminationManagementPage(container) {
-    if(!container)return; injectV26Styles();
-    try { getEliminations(null); }
-    catch (error) {
-      container.innerHTML = `<div class="gk-v26-page"><h2>Eliminasyon Yönetimi</h2><p role="status">Eliminasyon kayıtları için doğrulanmış sunucu kaynağı henüz hazır değil. Bu alanda kayıt oluşturulamaz veya rapor alınamaz.</p><details><summary>Teknik ayrıntı</summary><code>${v26UiEsc(error?.code || 'REPORTING_AUTHORITY_UNAVAILABLE')}</code></details></div>`;
-      return;
-    }
-    const state=container.__v26ElimState||{groupId:'',date:'',status:'',rows:[],recon:[]}; container.__v26ElimState=state;
-    const render=()=>{ let rows=v26UiRun(()=>getEliminations(state.groupId||null))||[]; if(state.date)rows=rows.filter(r=>String(r.reportingDate||'')===state.date); if(state.status)rows=rows.filter(r=>String(r.status||'')===state.status); state.rows=rows;
-      const groups=getGroups(); const today=new Date().toISOString().slice(0,10); const fmt=n=>Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
-      container.innerHTML=`<div class="gk-v26-page"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;"><div><h2 style="margin:0;font-size:20px;">Eliminasyon Yönetimi</h2><p style="margin:4px 0;color:#64748b;font-size:13px;">V22 intercompany eliminasyonları ve mutabakat</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="gk-v26-btn" id="newElim">＋ Yeni Eliminasyon</button><button class="gk-v26-btn gk-v26-btn-secondary" id="exportElim">Excel Export</button></div></div>
-      <div class="gk-v26-card"><div class="gk-v26-form-grid"><label>Grup<select id="filterGroup">${v26UiGroupOptions(state.groupId)}</select></label><label>Dönem<input type="date" id="filterDate" value="${v26UiEsc(state.date)}"></label><label>Durum<select id="filterStatus"><option value="">Tümü</option><option ${state.status==='DRAFT'?'selected':''}>DRAFT</option><option ${state.status==='POSTED'?'selected':''}>POSTED</option><option ${state.status==='REJECTED'?'selected':''}>REJECTED</option></select></label></div></div>
-      <div class="gk-v26-card"><table class="gk-v26-table"><thead><tr><th>From Company</th><th>To Company</th><th>Account</th><th style="text-align:right;">Amount</th><th>Currency</th><th>Elimination Type</th><th>Reporting Date</th><th>Status</th><th>Reason</th><th></th></tr></thead><tbody>${rows.map(r=>{const fc=v22CompanyList().find(c=>String(c.id)===String(r.fromCompanyId));const tc=v22CompanyList().find(c=>String(c.id)===String(r.toCompanyId));const cls=r.status==='POSTED'?'gk-v26-badge-success':r.status==='REJECTED'?'gk-v26-badge-danger':'gk-v26-badge-warning';return `<tr><td>${v26UiEsc(fc?.code||r.fromCompanyId)}</td><td>${v26UiEsc(tc?.code||r.toCompanyId)}</td><td>${v26UiEsc(r.account)}</td><td style="text-align:right;">${fmt(r.amount)}</td><td>${v26UiEsc(r.currency)}</td><td>${v26UiEsc(r.eliminationType)}</td><td>${v26UiEsc(r.reportingDate||'')}</td><td><span class="gk-v26-badge ${cls}">${v26UiEsc(r.status)}</span></td><td>${v26UiEsc(r.reason)}</td><td><button class="gk-v26-btn gk-v26-btn-secondary v26-edit-elim" data-id="${v26UiEsc(r.id)}">Düzenle</button></td></tr>`}).join('')||`<tr><td colspan="10" style="text-align:center;color:#94a3b8;">Kayıt bulunamadı</td></tr>`}</tbody></table></div>
-      ${state.groupId?`<div class="gk-v26-card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><h3 style="margin:0;font-size:15px;">Intercompany Reconciliation</h3><p style="margin:4px 0;color:#64748b;font-size:12px;">${v26UiEsc(state.date||today)}</p></div><div style="display:flex;gap:8px;"><button class="gk-v26-btn" id="runRecon">Mutabakat Kontrolü</button><button class="gk-v26-btn gk-v26-btn-secondary" id="exportRecon">Excel Export</button></div></div>${state.recon.length?`<table class="gk-v26-table" style="margin-top:12px;"><thead><tr><th>From</th><th>To</th><th>Currency</th><th>Receivable</th><th>Payable</th><th>Variance</th><th>Status</th></tr></thead><tbody>${state.recon.map(r=>`<tr><td>${v26UiEsc(r.fromCompanyId)}</td><td>${v26UiEsc(r.toCompanyId)}</td><td>${v26UiEsc(r.currency)}</td><td>${fmt(r.receivable)}</td><td>${fmt(r.payable)}</td><td>${fmt(r.variance)}</td><td><span class="gk-v26-badge ${r.status==='MATCHED'?'gk-v26-badge-success':r.status==='WARNING'?'gk-v26-badge-warning':'gk-v26-badge-danger'}">${v26UiEsc(r.status)}</span></td></tr>`).join('')}</tbody></table>`:`<p style="margin:12px 0 0;color:#94a3b8;">Henüz mutabakat çalıştırılmadı.</p>`}</div>`:''}</div>`;
-      container.querySelector('#filterGroup').onchange=e=>{state.groupId=e.target.value;state.recon=[];render();}; container.querySelector('#filterDate').onchange=e=>{state.date=e.target.value;render();}; container.querySelector('#filterStatus').onchange=e=>{state.status=e.target.value;render();};
-      container.querySelector('#newElim').onclick=()=>v26OpenEliminationModal(container,null,render,state.groupId,state.date||today);
-      container.querySelector('#exportElim').onclick=()=>v26UiRun(()=>exportEliminations(state.groupId||null,state.date||today));
-      container.querySelector('#runRecon')?.addEventListener('click',()=>v26UiRun(()=>{state.recon=v22RunIntercompanyReconciliation(state.groupId,state.date||today)||[];render();}));
-      container.querySelector('#exportRecon')?.addEventListener('click',()=>v26UiRun(()=>exportIntercompanyReconciliation(state.groupId,state.date||today)));
-      container.querySelectorAll('.v26-edit-elim').forEach(b=>b.onclick=()=>{const row=rows.find(x=>String(x.id)===String(b.dataset.id));v26OpenEliminationModal(container,row,render,state.groupId,state.date||today);});
-    }; render();
-  }
-
-  function v26OpenEliminationModal(container,row,onDone,defaultGroupId,defaultDate){
-    const modal=document.createElement('div');modal.className='gk-v26-modal';const companies=v22CompanyList();const groups=getGroups();
-    modal.innerHTML=`<div class="gk-v26-modal-card" style="max-width:760px;"><h3>${row?'Eliminasyon Düzenle':'Yeni Eliminasyon'}</h3><div class="gk-v26-form-grid"><label>Grup<select id="group">${groups.map(g=>`<option value="${v26UiEsc(g.id)}" ${String(g.id)===String(row?.groupId||defaultGroupId)?'selected':''}>${v26UiEsc(g.code)} — ${v26UiEsc(g.name)}</option>`).join('')}</select></label><label>From Company<select id="from">${v26UiCompanyOptions(row?.fromCompanyId)}</select></label><label>To Company<select id="to">${v26UiCompanyOptions(row?.toCompanyId)}</select></label><label>Account<input id="account" value="${v26UiEsc(row?.account||'')}"></label><label>Amount<input id="amount" type="number" step="0.01" value="${row?.amount??''}"></label><label>Currency<select id="currency">${V26_GROUP_CURRENCIES.map(c=>`<option ${c===(row?.currency||'TRY')?'selected':''}>${c}</option>`).join('')}</select></label><label>Elimination Type<select id="type">${V26_ELIM_TYPES.map(c=>`<option ${c===(row?.eliminationType||'OTHER')?'selected':''}>${c}</option>`).join('')}</select></label><label>Reporting Date<input id="date" type="date" value="${v26UiEsc(row?.reportingDate||defaultDate)}"></label><label>Status<select id="status">${['DRAFT','POSTED','REJECTED'].map(c=>`<option ${c===(row?.status||'DRAFT')?'selected':''}>${c}</option>`).join('')}</select></label><label style="grid-column:1/-1;">Reason<input id="reason" value="${v26UiEsc(row?.reason||'')}"></label></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;"><button class="gk-v26-btn gk-v26-btn-secondary" id="cancel">Vazgeç</button><button class="gk-v26-btn" id="save">Kaydet</button></div></div>`;
-    document.body.appendChild(modal);modal.querySelector('#cancel').onclick=()=>modal.remove();modal.querySelector('#save').onclick=()=>v26UiRun(()=>{const input={groupId:modal.querySelector('#group').value,fromCompanyId:modal.querySelector('#from').value,toCompanyId:modal.querySelector('#to').value,account:modal.querySelector('#account').value,amount:Number(modal.querySelector('#amount').value),currency:modal.querySelector('#currency').value,eliminationType:modal.querySelector('#type').value,reportingDate:modal.querySelector('#date').value,reason:modal.querySelector('#reason').value,status:modal.querySelector('#status').value}; if(row)updateElimination(row.id,input);else createElimination(input);modal.remove();onDone();});
-  }
 
 
-  function legacyReportAuth_renderConsolidationReportPage(container, options = {}) {
-    const renderer = window.LeaseQantTfrs16ReportingUi?.renderConsolidation;
-    if (typeof renderer === "function") return renderer(container, options);
-    if (!container) return;
-    container.innerHTML = `<div class="gk-v26-card">Konsolidasyon arayüzü yüklenemedi. Sayfayı yenileyin.</div>`;
-  }
+
+
+
+
 
   function injectV26Navigation() {
     if (window.__GK_TFRS16_V26_NAV_V22__) return;
@@ -18564,8 +16764,6 @@ window.fetch = (input, init = {}) => {
       document.getElementById("v26NavCloseDashboard")?.addEventListener("click",()=>openInMainWhenReady(renderCloseDashboardPage));
       document.getElementById("v26NavAccountMapping")?.addEventListener("click",()=>openInMainWhenReady(renderAccountMappingPage));
       document.getElementById("v26NavCompanies")?.addEventListener("click",()=>openInMainWhenReady(renderCompanyManagementPage));
-      document.getElementById("v26NavGroups")?.addEventListener("click",()=>openInMainWhenReady(renderGroupManagementPage));
-      document.getElementById("v26NavEliminations")?.addEventListener("click",()=>openInMainWhenReady(renderEliminationManagementPage));
       document.getElementById("v26NavFxRates")?.addEventListener("click",()=>openInMainWhenReady(renderFxRateManagementPage));
       document.getElementById("v26NavInflation")?.addEventListener("click",()=>openInMainWhenReady(renderInflationIndexManagementPage));
       document.getElementById("v26NavModReass")?.addEventListener("click",()=>openInMainWhenReady(renderModificationReassessmentPage));
@@ -18574,7 +16772,6 @@ window.fetch = (input, init = {}) => {
       document.getElementById("v26NavAccountingCenter")?.addEventListener("click",()=>openInMainWhenReady(renderAccountingCenterPage));
       document.getElementById("v26NavFootnotes")?.addEventListener("click",()=>openInMainWhenReady(renderFootnotesPage));
       document.getElementById("v26NavRiskControls")?.addEventListener("click",()=>openInMainWhenReady(renderRiskControlsPage));
-      document.getElementById("v26NavConsol")?.addEventListener("click",()=>openInMainWhenReady(c=>renderConsolidationReportPage(c,{presentationCurrency:"USD"})));
       document.getElementById("v26NavAudit")?.addEventListener("click",()=>openInMainWhenReady(renderAuditTrailPage));
       window.__gkOpenInMain = openInMainWhenReady;
       try {
@@ -18583,8 +16780,6 @@ window.fetch = (input, init = {}) => {
           close: renderCloseDashboardPage,
           accountMapping: renderAccountMappingPage,
           companies: renderCompanyManagementPage,
-          groups: renderGroupManagementPage,
-          eliminations: renderEliminationManagementPage,
           fxRates: renderFxRateManagementPage,
           audit: renderAuditTrailPage,
           inflation: renderInflationIndexManagementPage,
@@ -18595,8 +16790,7 @@ window.fetch = (input, init = {}) => {
           footnotes: renderFootnotesPage,
           riskControls: renderRiskControlsPage,
           // REPORT-AUTH-R1 financial reports use the separate server reporting package.
-          financialReporting: renderFinancialReportingPage,
-          consolidation: c => renderConsolidationReportPage(c, { presentationCurrency: "USD" })
+          financialReporting: renderFinancialReportingPage
         };
         // dashboard.html'in NATİVE linkleri (JS click handler'ları)
         // bu fonksiyonu kullanıyor: window.__gkOpenInMainByKey("modification")
@@ -18655,9 +16849,8 @@ window.fetch = (input, init = {}) => {
     v26BuildConsolidationRows,
     v26ExportConsolidationExcel,
     renderCompanyManagementPage,
-    renderConsolidationReportPage,
-    renderGroupManagementPage,
-    renderEliminationManagementPage,
+    
+    
     renderFxRateManagementPage,
     renderAuditTrailPage,
     renderInflationIndexManagementPage,
@@ -18732,9 +16925,8 @@ window.fetch = (input, init = {}) => {
     v26BuildConsolidationRows,
     v26ExportConsolidationExcel,
     renderCompanyManagementPage,
-    renderGroupManagementPage,
-    renderEliminationManagementPage,
-    renderConsolidationReportPage,
+    
+    
     renderContractStandardsPanel,
     injectV26CurrencyFields,
     // V27 Multi-Company/Multi-Currency

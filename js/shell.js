@@ -65,9 +65,6 @@ window.fetch = (input, init = {}) => {
     fxRates: { title: "Döviz Kurları", subtitle: "TMS 21 kur yönetimi" },
     inflation: { title: "Enflasyon Endeksleri", subtitle: "TMS 29 — salt okunur" },
     companies: { title: "Şirket Yönetimi", subtitle: "Holding yapısı" },
-    groups: { title: "Gruplar", subtitle: "Konsolidasyon grupları" },
-    eliminations: { title: "Eliminasyonlar", subtitle: "Grup içi eliminasyon" },
-    consolidation: { title: "Konsolidasyon", subtitle: "Grup raporlama" },
     audit: { title: "Denetim İzi", subtitle: "Olay kaydı" }
   };
 
