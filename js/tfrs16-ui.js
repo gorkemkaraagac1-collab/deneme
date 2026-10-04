@@ -814,6 +814,8 @@ window.fetch = (input, init = {}) => {
   let backendContractsHydrated = false;
   let backendContractsHydrationError = null;
 
+  let backendContractsSignature = null;
+
   async function hydrateContractsFromApi() {
     try {
       await loadSessionCompanies();
@@ -834,6 +836,7 @@ window.fetch = (input, init = {}) => {
           )
         );
       contracts = mapped;
+      backendContractsSignature = JSON.stringify(rows);
       backendContractsHydrated = true;
       backendContractsHydrationError = null;
       // Audit evidence is ancillary to the accounting hydration path. A
@@ -971,6 +974,30 @@ window.fetch = (input, init = {}) => {
   // null kalıyor, loadInflationIndexTable() hep localStorage'a
   // düşüyordu. Artık admin panelinden VERIFIED yapılan kayıtlar bu
   // çağrıyla TFRS16 hesaplamasına gerçekten ulaşıyor.
+  // Another tab (or user) may change a contract while this one stays open.
+  // When the tab is shown again, reload contracts and private results if the
+  // server copy differs, so the contract details never lag the calculation.
+  // An open dialog or a field being edited is left alone.
+  let staleCheckRunning = false;
+  async function refreshIfContractsChanged() {
+    if (staleCheckRunning || !backendContractsHydrated || document.visibilityState !== "visible") return;
+    if (document.querySelector(".modal-overlay:not(.hidden)")) return;
+    if (document.activeElement?.matches?.("input, textarea, select")) return;
+    staleCheckRunning = true;
+    try {
+      const rows = await tfrs16ApiFetch("/api/contracts");
+      if (Array.isArray(rows) && JSON.stringify(rows) !== backendContractsSignature) {
+        await hydrateTfrs16BackendData();
+      }
+    } catch (_) {
+      /* The next visit retries; the page keeps its current data. */
+    } finally {
+      staleCheckRunning = false;
+    }
+  }
+  document.addEventListener("visibilitychange", () => { void refreshIfContractsChanged(); });
+  window.addEventListener("focus", () => { void refreshIfContractsChanged(); });
+
   async function hydrateTfrs16BackendData() {
     await hydrateContractsFromApi();
     await refreshInflationIndexCacheFromBackend(getRequiredInflationIndexMonths());
