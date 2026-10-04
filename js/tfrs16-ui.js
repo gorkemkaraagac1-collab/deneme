@@ -15558,9 +15558,9 @@ window.fetch = (input, init = {}) => {
       const actions = {
         n: ["newContractButton", "Yeni Sözleşme", () => document.getElementById("newContractButton")?.click()],
         e: ["bulkImportButton", "Excel Import", () => document.getElementById("bulkImportButton")?.click()],
-        f: ["searchInput", "Arama", () => { const input = document.getElementById("searchInput"); if (input) { input.focus(); input.select(); } }],
-        d: ["deleteContract", "Sil", () => document.getElementById("deleteContract")?.click()],
-        r: ["refresh", "Yenile", () => refresh()]
+        f: ["searchInput", "Arama", () => { const input = document.getElementById("searchInput"); if (input) { input.focus(); input.select(); } }]
+        // Ctrl/Cmd+R stays the browser reload (it loads new app versions) and
+        // Ctrl/Cmd+D stays the browser bookmark; neither triggers app actions.
       };
       const action = actions[key.toLowerCase()];
       if (!action) return;

@@ -89,7 +89,7 @@
  function statusLabel(status){return ({SUPPORTED:'Hazır',ZERO_CONFIRMED:'Doğrulanmış sıfır',NOT_READY:'Veri henüz hazır değil',
   PASS:'Geçti',FAIL:'Kontrol başarısız',WARNING:'İnceleme gerekli',
   NOT_SUPPORTED:'Bu kapsam henüz desteklenmiyor',NOT_APPLICABLE:'Uygulanmıyor',REQUIRES_LEDGER_DATA:'Defter verisi gerekli',
-  REQUIRES_CONFIGURATION:'Yapılandırma gerekli',REQUIRES_ENTITY_INPUT:'Şirket verisi gerekli',
+  REQUIRES_CONFIGURATION:'Yapılandırma gerekli',REQUIRES_ENTITY_INPUT:'Şirket verisi gerekli',PROVIDED_BY_DISCLOSURE_PACKAGE:'Dipnot paketinde',
   COMPLETE_POPULATION:'Tam kapsam',UNAVAILABLE:'Kapsam hazır değil',SUPPORTED_CALCULATION_DIAGNOSTICS:'Hesaplama kontrolleri mevcut'}[status]
   ||'Kaynak doğrulaması gerekli');}
  function reasonLabel(reason){if(reason==='REPORTING_SALE_LEASEBACK_EVIDENCE_REQUIRED')return 'Satış ve geri kiralama için onaylı satış değerlendirmesi ve bugünkü değer kanıtı gerekli';
@@ -103,6 +103,7 @@
   if(reason==='REPORTING_INTENT_INVALID'||reason==='REPORTING_PERIOD_NOT_SUPPORTED')return 'Dönem tarihlerini kontrol edin';
   if(reason==='REPORTING_ROUTE_NOT_SUPPORTED')return 'Bu sözleşme türü için rapor rotası desteklenmiyor';
   if(reason==='ACTUAL_LEDGER_CASH_REQUIRED'||String(reason).includes('LEDGER'))return 'Doğrulanmış defter verisi gerekli';
+  if(reason==='LESSEE_DISCLOSURE_MATURITY_ANALYSIS')return 'Vade analizi dipnot paketinde (şirket vade dilimleriyle)';
   if(String(reason).includes('MATURITY'))return 'Onaylı vade kaynağı gerekli';
   if(String(reason).includes('WEIGHTING'))return 'Onaylı ağırlıklandırma kaynağı gerekli';
   if(String(reason).includes('SOURCE')||String(reason).includes('EVIDENCE'))return 'Doğrulanmış kaynak verisi gerekli';
@@ -126,6 +127,7 @@
    ${p.population.exclusions.map(r=>`<p>${esc(r.contractId)}: ${esc(reasonLabel(r.reason))}</p>`).join('')}
    ${emptyMetricPopulation?'<p class="lq-authority-empty">Bu dönemde aktif sözleşme yok; finansal tutar gösterilmiyor.</p>':visibleRows.length?`<div class="lq-authority-table"><table><thead><tr>${keys.map(k=>`<th>${esc(labels[k]||k)}</th>`).join('')}</tr></thead><tbody>${visibleRows.map(r=>`<tr>${keys.map(k=>`<td>${esc(shownCell(r[k],k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:
     '<p class="lq-authority-empty">Bu dönem için gösterilecek satır bulunmuyor.</p>'}
+   ${section==='metrics'&&p.weightedAverageDiscountRate?.status==='SUPPORTED'?`<p>Ağırlıklı ortalama iskonto oranı: <b>%${esc(new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(p.weightedAverageDiscountRate.value))}</b> (dönem sonu kira yükümlülüğü ağırlıklı, ${esc(p.weightedAverageDiscountRate.contractCount)} sözleşme)</p>`:''}
    ${p.population.count>0?`<p>Hesaplama kontrolleri: ${esc(statusLabel(p.controls.status))}. Kapanış veya canlı kayıt onayı değildir.</p>`:''}
 `;}
  function styles(container) {
@@ -135,7 +137,7 @@
    .lq-report-authority h2,.lq-report-authority h3 {color:#172033!important;}.lq-report-authority label{display:inline-block;margin:6px 12px 8px 0;color:#334155;}
    .lq-report-authority input,.lq-report-authority select{padding:7px;border:1px solid #cbd5e1;border-radius:6px;max-width:100%;background:#fff;color:#172033;}
    .lq-report-authority button{padding:7px 12px;margin:4px;border:1px solid #cbd5e1;border-radius:6px;background:#f1f5f9;color:#172033;cursor:pointer;}
-   .lq-report-authority .lq-authority-table{max-width:100%;overflow:auto;}.lq-report-authority table{border-collapse:collapse;width:100%;}
+   .lq-rc-ids{display:block;margin-top:2px;color:#64748b;font-size:12px;overflow-wrap:anywhere;}.lq-report-authority .lq-authority-table{max-width:100%;overflow:auto;}.lq-report-authority table{border-collapse:collapse;width:100%;}
    .lq-report-authority td,.lq-report-authority th{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap;}
    .lq-report-authority details{margin-top:12px;}.lq-report-authority details pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;}
    .lq-report-authority [role=alert]{color:#9f1239;}.lq-report-authority .lq-authority-empty{padding:18px;border-radius:10px;background:#f1f5f9;}
@@ -183,7 +185,8 @@
   const checks=Array.isArray(p.controls?.checks)?p.controls.checks:[];
   const coverageOk=p.population.coverage==='COMPLETE_POPULATION'&&p.population.excludedCount===0;
   const controlsReady=p.controls.status==='SUPPORTED_CALCULATION_DIAGNOSTICS';
-  const attention=checks.filter(row=>row.status&&row.status!=='PASS');
+  const attention=checks.filter(row=>row.status&&row.status!=='PASS'&&row.status!=='NOT_APPLICABLE');
+  const failures=Array.isArray(p.controls?.failures)?p.controls.failures:[];
   const steps=[
    ['Sözleşme kapsamı',coverageOk?'done':'warn',coverageOk?'Tam kapsam doğrulandı':statusLabel(p.population.coverage)],
    ['Hesaplama kontrolleri',!controlsReady?'unknown':attention.length?'warn':'done',!controlsReady?statusLabel(p.controls.status):attention.length?`${attention.length} kontrol inceleme istiyor`:`${checks.length} kontrol geçti`],
@@ -192,7 +195,9 @@
   const verified=steps.filter(row=>row[1]==='done').length;
   const stepHtml=steps.map(([label,state,note],i)=>`${i?'<i class="lq-pg-rail is-todo"></i>':''}<span class="lq-pg-step is-${state}"><b aria-hidden="true">${state==='done'?'✓':state==='warn'?'!':''}</b><span>${esc(label)}<small>${esc(note)}</small></span></span>`).join('');
   const coverage=p.population.coverage==='COMPLETE_POPULATION'&&p.population.excludedCount===0?'Tam kapsam':`${statusLabel(p.population.coverage)} · ${p.population.excludedCount} sözleşme için kaynak gerekli`;
-  const actionHtml=attention.length?attention.map(row=>`<div class="lq-rc-action"><i class="is-warn" aria-hidden="true"></i><span>${esc(row.description||'Hesaplama kontrolü')}</span><b>${esc(statusLabel(row.status))}</b></div>`).join(''):
+  const actionHtml=attention.length?attention.map(row=>{const ids=Array.isArray(row.affectedContracts)?row.affectedContracts:[];
+    const causes=ids.map(id=>{const f=failures.find(x=>x.contractId===id);return `${id}${f?` — ${f.message||f.code}`:''}`;});
+    return `<div class="lq-rc-action"><i class="is-warn" aria-hidden="true"></i><span>${esc(row.description||'Hesaplama kontrolü')}${causes.length?`<small class="lq-rc-ids" style="display:block;margin-top:2px;color:#64748b;font-size:12px;overflow-wrap:anywhere">Sözleşme: ${causes.map(esc).join(' · ')}</small>`:''}</span><b>${esc(statusLabel(row.status))}</b></div>`;}).join(''):
    controlsReady?`<p class="lq-pg-empty is-ok">Sunucu hesaplama kontrollerinde inceleme gerektiren sonuç yok.</p>`:`<p class="lq-pg-empty">Hesaplama kontrol sonucu için kaynak gerekli.</p>`;
   return `<section class="lq-rc-summary" aria-labelledby="lqRcSummaryTitle">
    <div class="lq-pg-card lq-pg-runway" aria-label="Kapanış durumu"><div class="lq-pg-runway-t"><span class="lq-pg-kick">${esc(trMonth(p.period.reportingDate).toLocaleUpperCase('tr-TR'))} KAPANIŞI</span><strong>${verified} / ${steps.length} kaynaklı adım</strong></div><div class="lq-pg-steps">${stepHtml}</div></div>

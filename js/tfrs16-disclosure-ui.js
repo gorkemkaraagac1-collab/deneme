@@ -704,7 +704,9 @@
       const sourceHtml = state.producing ? `<p role="status">Sunucu sözleşmeleri doğrulayıp güvenilir kaynak oluşturuyor…</p>`
         : state.sourceStatus === "loading" ? `<p role="status">Güvenilir kaynaklar kontrol ediliyor…</p>`
         : state.sourceStatus === "empty" ? `<p>Yetkili şirket bulunamadı.</p>`
-        : sourceRequired ? `<p role="status">Bu dönem için güvenilir kaynak eksik veya eski (${contractIds().length} sözleşme).</p><button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="journalPageProduce">Güvenilir kaynağı oluştur</button>`
+        : sourceRequired ? `<p role="status">${Array.isArray(state.sourceError?.details?.staleContractIds) && state.sourceError.details.staleContractIds.length
+            ? escapeHtml(errorLabel(state.sourceError))
+            : `Bu dönem için güvenilir kaynak eksik (${contractIds().length} sözleşme).`}</p><button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="journalPageProduce">Güvenilir kaynağı oluştur</button>`
         : state.sourceStatus === "error" ? `<p role="alert" style="color:#991b1b">${escapeHtml(errorLabel(state.sourceError))}</p>`
         : state.availability ? `<p role="status">${escapeHtml(state.availability.contractIds.length)} sözleşmenin güvenilir kaynağı hazır.</p>` : "";
       container.innerHTML = `<div class="gk-v26-page"><h2>Yevmiye</h2><p style="color:#64748b">TFRS 16 dönem yevmiyesi: ilk muhasebeleştirme, faiz, ödeme, amortisman, modifikasyon, kur farkı (TMS 21), enflasyon düzeltmesi (TMS 29), alt kiralama ve satış ve geri kiralama kayıtları. Dönem üst çubuktaki raporlama döneminden alınır.</p>`
