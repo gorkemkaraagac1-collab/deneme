@@ -66,3 +66,20 @@ test('TMS 29 setting is sent when toggled', async () => {
   await tick(); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(saved[0].changes)), { tms29Applies: false });
 });
+
+test('a value set back to the stored one disables Kaydet again', async () => {
+  const { w } = setup(inputs(true));
+  w.LeaseQantDisclosureInputsUi.open({ companyId: 'CO', period });
+  await tick();
+  const doc = w.document;
+  const change = value => { const s = doc.querySelector('[data-class="L-1"]'); s.value = value; s.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  change('VEHICLES');
+  assert.equal(doc.querySelector('[data-di="save"]').disabled, false);
+  change('PROPERTY');
+  assert.equal(doc.querySelector('[data-di="save"]').disabled, true);
+  const text = doc.querySelector('[data-text="leasingActivity"]');
+  text.value = 'Yeni'; text.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal(doc.querySelector('[data-di="save"]').disabled, false);
+  text.value = 'Sistem metni'; text.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal(doc.querySelector('[data-di="save"]').disabled, true);
+});

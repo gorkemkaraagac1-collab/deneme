@@ -60,7 +60,7 @@
         <div class="jm-row">
             <div class="form-group"><label for="jmFrom">Yürürlük başlangıcı</label><input id="jmFrom" type="date"></div>
             <div class="form-group"><label for="jmRef">Onay referansı (karar / e-posta / iş emri)</label><input id="jmRef" type="text" maxlength="150" placeholder="ör. MUH-2026-014"></div>
-            <button class="btn btn-primary" type="button" id="jmSave">Eşlemeyi onayla</button>
+            <button class="btn btn-primary" type="button" id="jmSave" disabled>Eşlemeyi onayla</button>
         </div>
         <div class="jm-status" id="jmStatus" role="status" aria-live="polite"></div>
     </section>
@@ -78,6 +78,11 @@ const ERRORS = { JOURNAL_MAPPING_DATE_INVALID: "Yürürlük tarihi geçersiz.", 
     JOURNAL_MAPPING_COMPANY_NOT_FOUND: "Şirket bulunamadı.", JOURNAL_MAPPING_SAVE_FAILED: "Eşleme kaydedilemedi." };
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let purposes = [];
+let baseline = "", saving = false;
+const formState = () => JSON.stringify({ from: document.getElementById("jmFrom").value, ref: document.getElementById("jmRef").value.trim(),
+    accounts: purposes.map(p => [document.querySelector(`[data-code="${p.key}"]`)?.value.trim(), document.querySelector(`[data-name="${p.key}"]`)?.value.trim()]) });
+// Approve is available only for a changed form and never while a request is in flight.
+function syncSave() { document.getElementById("jmSave").disabled = saving || !purposes.length || formState() === baseline; }
 function status(id, text, kind) { const el = document.getElementById(id); el.textContent = text || ""; el.className = `jm-status${kind ? ` is-${kind}` : ""}`; }
 function errorText(code) {
     if (String(code || "").startsWith("JOURNAL_MAPPING_ACCOUNT_INVALID:")) {
@@ -110,22 +115,36 @@ async function load() {
         ? `<thead><tr><th>Yürürlük</th><th>Durum</th><th>Onaylayan</th><th>Referans</th></tr></thead><tbody>${mappings.map(m =>
             `<tr><td>${esc(m.effectiveFrom)} – ${esc(m.effectiveThrough || "açık")}</td><td>${m.status === "APPROVED" ? "Onaylı" : m.status === "REVOKED" ? "Geri alındı" : esc(m.status)}</td><td>${esc(m.approvedBy)}</td><td>${esc(m.approvalReference)}</td></tr>`).join("")}</tbody>`
         : "<tbody><tr><td>Kayıt yok.</td></tr></tbody>";
+    baseline = formState();
+    syncSave();
 }
+document.addEventListener("input", syncSave);
+document.addEventListener("change", syncSave);
 document.getElementById("jmSave").addEventListener("click", async () => {
+    if (saving) return;
     const companyId = document.getElementById("jmCompany").value;
     const accounts = Object.fromEntries(purposes.map(p => [p.key, {
         code: document.querySelector(`[data-code="${p.key}"]`).value, name: document.querySelector(`[data-name="${p.key}"]`).value }]));
     status("jmStatus", "Kaydediliyor…");
-    const response = await fetch(`${AdminAPI.baseURL}/journal-mappings`, { method: "POST", headers: AdminAPI.getHeaders(),
-        body: JSON.stringify({ companyId, effectiveFrom: document.getElementById("jmFrom").value,
-            approvalReference: document.getElementById("jmRef").value, accounts }) });
-    const body = await response.json().catch(() => ({}));
+    saving = true; syncSave();
+    let response, body = {};
+    try {
+        response = await fetch(`${AdminAPI.baseURL}/journal-mappings`, { method: "POST", headers: AdminAPI.getHeaders(),
+            body: JSON.stringify({ companyId, effectiveFrom: document.getElementById("jmFrom").value,
+                approvalReference: document.getElementById("jmRef").value, accounts }) });
+        body = await response.json().catch(() => ({}));
+    } catch (_) {
+        response = { ok: false };
+    } finally {
+        saving = false; syncSave();
+    }
     if (!response.ok || !body.success) { status("jmStatus", errorText(body.code), "err"); return; }
     status("jmStatus", `Eşleme onaylandı (${body.data.version}).`, "ok");
     document.getElementById("jmRef").value = "";
-    load();
+    await load();
 });
 (async function init() {
+    if (await checkAdminAuth() === false) return;
     const select = document.getElementById("jmCompany");
     try {
         const result = await AdminAPI.getCompanies({ limit: 500 });

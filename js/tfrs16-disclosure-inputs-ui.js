@@ -120,6 +120,15 @@
       refreshSave();
     }
 
+    function setDisclosure(key, next) {
+      const stored = data.disclosures[key] || {};
+      const same = next.status === "NOT_APPLICABLE"
+        ? stored.status === "NOT_APPLICABLE" && (stored.reason || "") === next.reason
+        : stored.status !== "NOT_APPLICABLE" && (stored.value || "") === next.value;
+      if (same) delete changes.disclosures[key];
+      else changes.disclosures[key] = next;
+    }
+
     function readBands() {
       const base = changes.maturityBands || (changes.maturityBands === null ? data.maturity.defaultBands : data.maturity.bands);
       return base.map((band, i) => {
@@ -131,20 +140,31 @@
 
     body.addEventListener("change", event => {
       const t = event.target;
-      if (t.dataset.class) { changes.assetClassByContract[t.dataset.class] = t.value; render(); return; }
-      if (t.dataset.tms29 !== undefined) { changes.tms29Applies = t.checked; render(); return; }
-      if (t.dataset.na) {
-        const key = t.dataset.na, text = body.querySelector(`[data-text="${key}"]`)?.value || "";
-        changes.disclosures[key] = t.checked ? { status: "NOT_APPLICABLE", reason: text } : { value: text };
+      // A value set back to what is stored is no longer a change.
+      if (t.dataset.class) {
+        const stored = data.contracts.find(c => c.id === t.dataset.class)?.assetClass;
+        if (t.value === stored) delete changes.assetClassByContract[t.dataset.class];
+        else changes.assetClassByContract[t.dataset.class] = t.value;
         render(); return;
       }
-      if (t.dataset.bandLabel !== undefined || t.dataset.bandThrough !== undefined) { changes.maturityBands = readBands(); refreshSave(); }
+      if (t.dataset.tms29 !== undefined) { changes.tms29Applies = t.checked === data.tms29.applies ? undefined : t.checked; render(); return; }
+      if (t.dataset.na) {
+        const key = t.dataset.na, text = body.querySelector(`[data-text="${key}"]`)?.value || "";
+        setDisclosure(key, t.checked ? { status: "NOT_APPLICABLE", reason: text } : { value: text });
+        render(); return;
+      }
+      if (t.dataset.bandLabel !== undefined || t.dataset.bandThrough !== undefined) {
+        const bands = readBands();
+        const same = JSON.stringify(bands) === JSON.stringify(data.maturity.bands.map(b => ({ label: b.label, throughDaysInclusive: b.throughDaysInclusive })));
+        changes.maturityBands = same ? undefined : bands;
+        refreshSave();
+      }
     });
     body.addEventListener("input", event => {
       const t = event.target;
       if (!t.dataset.text) return;
       const key = t.dataset.text, na = body.querySelector(`[data-na="${key}"]`)?.checked;
-      changes.disclosures[key] = na ? { status: "NOT_APPLICABLE", reason: t.value } : { value: t.value };
+      setDisclosure(key, na ? { status: "NOT_APPLICABLE", reason: t.value } : { value: t.value });
       refreshSave();
     });
     body.addEventListener("click", event => {
