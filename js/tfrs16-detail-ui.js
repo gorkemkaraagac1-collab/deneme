@@ -38,7 +38,7 @@
 
     const scheduleHtml = `${call("renderPaymentScheduleSection", contract)}${calculationError ? `
             <div style="margin-top:22px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:14px 16px;color:#9a3412;font-size:12px;">
-              Ödeme planı ve ilk muhasebeleştirme fişi private hesaplama sonucu hazır olduğunda görüntülenecek.
+              Ödeme planı sunucudaki hesaplama sonucu hazır olduğunda görüntülenecek.
             </div>
           ` : engine.exempt ? `
             <div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:14px;">
@@ -50,7 +50,7 @@
                 bir "ilk muhasebeleştirme fişi" üretilmez.
               </p>
             </div>
-          ` : '<div data-authoritative-initial-journal><p>Güvenilir ilk muhasebeleştirme fişi yükleniyor...</p></div>'}`;
+          ` : '<p class="lq-cv-muted" data-initial-journal-note style="margin-top:16px;font-size:12px">İlk muhasebeleştirme kaydı (KHV / kira yükümlülüğü), başlangıç ayının dönem yevmiyesinde yer alır: Dipnotlar → ilgili ay → "Dönem yevmiyesini oluştur". Dönem yevmiyesi dipnotla aynı güvenilir kaynaktan üretilir (TMS 21 ve TMS 29 dahil).</p>'}`;
 
     const detailPanelsHtml = reporting.renderContractDetailPanels?.({
       summaryHtml: reporting.renderContractSummaryTab?.(contract, engine, { calculationError }) || "",
