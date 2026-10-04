@@ -933,7 +933,8 @@ ${footer}
     `).join("");
     return `
       <div style="margin-top:12px;">
-        <div style="font-size:10px;color:#64748b;font-weight:700;">BAŞLANGIÇ FİŞİ</div>
+        <div style="font-size:10px;color:#64748b;font-weight:700;">ÖRNEK BAŞLANGIÇ KAYDI</div>
+        <div style="font-size:10px;color:#94a3b8;margin-top:2px;">Hesap kodları açıklama amaçlıdır. Dönem yevmiyesi (Dipnotlar) şirketin onaylı hesap eşlemesini kullanır.</div>
         <table style="width:100%;border-collapse:collapse;margin-top:6px;">
           <thead><tr style="background:#f1f5f9;"><th style="padding:6px;text-align:left;font-size:10px;">Hesap</th><th style="padding:6px;text-align:right;font-size:10px;">Borç</th><th style="padding:6px;text-align:right;font-size:10px;">Alacak</th></tr></thead>
           <tbody>${rows}</tbody>
