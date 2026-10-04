@@ -1255,10 +1255,6 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  function getCachedCalculation(contract) {
-    const key = getCalculationCacheKey(contract);
-    return CALCULATION_CACHE.has(key) ? CALCULATION_CACHE.get(key) : null;
-  }
 
   function setCachedCalculation(contract, result) {
     const key = getCalculationCacheKey(contract);
@@ -2046,74 +2042,7 @@ window.fetch = (input, init = {}) => {
     });
   }
 
-  function getContractAuditSummary(contractId) {
-    const events = getAuditTrail(contractId);
-    const ids = key => new Set(events.map(event => event[key]).filter(Boolean)).size;
-    const created = events.find(event => event.action === "CREATE");
-    const last = events.length ? events[events.length - 1] : null;
-    return {
-      contractId,
-      totalEvents: events.length,
-      lastAction: last?.action || null,
-      lastUpdated: last?.timestamp || null,
-      lastActor: last?.actor || null,
-      createdDate: created?.timestamp || null,
-      modificationCount: ids("modificationId"),
-      reassessmentCount: ids("reassessmentId"),
-      journalCount: ids("journalId")
-    };
-  }
 
-  async function legacyReportAuth_exportAuditTrail(contractId, presentationCurrency) {
-    const events = getAuditTrail(contractId);
-    if (!events.length) return false;
-    const contract = contracts.find(c => String(c.id) === String(contractId));
-    presentationCurrency = String(presentationCurrency || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
-    const sourceCurrency = String(contract?.currency || "TRY").toUpperCase();
-    const convertAuditValue = async (value, asOfDate) => v26ConvertJsonMoneyToPresentation(value, sourceCurrency, presentationCurrency, asOfDate);
-    const rows = [];
-    for (const event of events) {
-      const oldValue = await convertAuditValue(event.oldValue ?? null, event.timestamp);
-      const newValue = await convertAuditValue(event.newValue ?? null, event.timestamp);
-      rows.push({
-      Timestamp: event.timestamp,
-      Actor: event.actor,
-      Action: event.action,
-      "Entity Type": event.entityType,
-      "Entity ID": event.entityId || "",
-      "Contract ID": event.contractId || "",
-      "Modification ID": event.modificationId || "",
-      "Reassessment ID": event.reassessmentId || "",
-      "Journal ID": event.journalId || "",
-      Reason: event.reason || "",
-      "Old Value": JSON.stringify(oldValue.value),
-      "New Value": JSON.stringify(newValue.value),
-      "Para Birimi": presentationCurrency,
-      "Kur (TMS21)": oldValue.rate ?? newValue.rate ?? 1,
-      Metadata: JSON.stringify(event.metadata || {})
-      });
-    }
-    if (typeof XLSX !== "undefined") {
-      try {
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Audit Trail");
-        XLSX.writeFile(workbook, `TFRS16_Audit_Trail_${contractId || "ALL"}_${presentationCurrency}_${Date.now()}.xlsx`);
-        recordAuditEvent({ action: "EXPORT", entityType: "AUDIT_TRAIL", entityId: contractId || "ALL", contractId: contractId || null, reason: "Audit trail export", metadata: { recordCount: rows.length, format: "xlsx" } });
-        return true;
-      } catch (error) { return false; }
-    }
-    const headers = Object.keys(rows[0]);
-    const csv = [headers.join(";"), ...rows.map(row => headers.map(h => String(row[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `TFRS16_Audit_Trail_${contractId || "ALL"}_${presentationCurrency}_${Date.now()}.csv`;
-    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-    recordAuditEvent({ action: "EXPORT", entityType: "AUDIT_TRAIL", entityId: contractId || "ALL", contractId: contractId || null, reason: "Audit trail export", metadata: { recordCount: rows.length, format: "csv" } });
-    return true;
-  }
 
   migrateLegacyAuditTrail();
 
@@ -2665,27 +2594,7 @@ window.fetch = (input, init = {}) => {
      backend JWT'sine geçirilmesi ayrı bir iş kalemidir — bu
      değişikliğin kapsamı DIŞINDADIR.
      ========================================================== */
-  let backendInflationIndexCache = null; // null = backend henüz sorulmadı
-
-  function getInflationIndexAuthToken() {
-    // Bu fonksiyon önceden tfrs16GetToken() ile "aynı sırayı kullanıyor"
-    // sanılıyordu ama kendi bağımsız (ve eksik) listesini tutuyordu:
-    // sessionStorage.gk_session_token'ı hiç kontrol etmiyordu. Bu, "cross-site
-    // cookie kullanılamadığında" (bkz. tfrs16GetToken üzerindeki yorum) token
-    // sadece sessionStorage'da tutulan oturumlarda refreshFxRateCacheFromBackend()
-    // ve refreshInflationIndexCacheFromBackend()'in fetch'i HİÇ DENEMEDEN false
-    // dönmesine yol açıyordu — backendFxRateCache/backendInflationIndexCache hiç
-    // dolmuyor, KPI kartları ve dipnot akışları "kur/endeks bulunamadı" hatası
-    // veriyordu. private-calculation-api.js zaten aynı sorunu tfrs16GetToken()'a
-    // yönlenerek çözmüştü (bkz. PR #284); burada da tek doğruluk kaynağına
-    // (tfrs16GetToken) yönlendiriyoruz ki iki liste bir daha birbirinden sapmasın.
-    try {
-      return tfrs16GetToken();
-    } catch (error) {
-      return null;
-    }
-  }
-
+  let backendInflationIndexCache = null; 
   function getRequiredInflationIndexMonths() {
     const starts = (Array.isArray(contracts) ? contracts : [])
       .map(contract => rptDate(contract?.startDate))
@@ -2798,82 +2707,9 @@ window.fetch = (input, init = {}) => {
     return rows.length ? rows[rows.length - 1] : null;
   }
 
-  function saveInflationIndexTable(entries) {
-    try {
-      localStorage.setItem(INFLATION_INDEX_STORAGE_KEY, JSON.stringify(entries));
-      return true;
-    } catch (error) {
-      console.error("Enflasyon endeks tablosu kaydedilemedi:", error);
-      return false;
-    }
-  }
 
-  function addOrUpdateInflationIndexEntry(month, index) {
-    const m = String(month || "").trim();
-    if (!/^\d{4}-\d{2}$/.test(m)) {
-      return { valid: false, errors: ["Ay formatı YYYY-MM olmalı."] };
-    }
-    const idx = Number(index);
-    if (!Number.isFinite(idx) || idx <= 0) {
-      return { valid: false, errors: ["Endeks değeri pozitif sayısal olmalı."] };
-    }
-    const entries = loadInflationIndexTable();
-    const existingIdx = entries.findIndex(e => e.month === m);
-    const oldValue = existingIdx >= 0 ? entries[existingIdx].index : null;
-    if (existingIdx >= 0) entries[existingIdx].index = idx;
-    else entries.push({ month: m, index: idx });
-    entries.sort((a, b) => a.month.localeCompare(b.month));
-    saveInflationIndexTable(entries);
-    recordAuditEvent({
-      action: "INFLATION_INDEX_UPDATED",
-      entityType: "INFLATION_INDEX",
-      entityId: m,
-      reason: "Enflasyon endeks kaydı eklendi/güncellendi",
-      oldValue: { month: m, index: oldValue },
-      newValue: { month: m, index: idx }
-    });
-    return { valid: true, errors: [] };
-  }
 
-  /**
-   * Çoklu satır yapıştırma (bulk paste) desteği. Beklenen format:
-   * her satırda "YYYY-MM<tab veya boşluk veya virgül>endeks".
-   * Geçersiz satırlar atlanır, sonuçta {added, skipped} döner.
-   */
-  function addInflationIndexBulk(text) {
-    const lines = String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    let added = 0, skipped = 0;
-    lines.forEach(line => {
-      const parts = line.split(/[\t,;\s]+/).filter(Boolean);
-      if (parts.length < 2) { skipped++; return; }
-      const result = addOrUpdateInflationIndexEntry(parts[0], parts[1]);
-      if (result.valid) added++; else skipped++;
-    });
-    return { added, skipped };
-  }
 
-  function deleteInflationIndexEntry(month) {
-    const entries = loadInflationIndexTable();
-    const filtered = entries.filter(e => e.month !== month);
-    saveInflationIndexTable(filtered);
-    // entries === backendInflationIndexCache (aynı referans, bkz.
-    // loadInflationIndexTable) olabileceği için, filter() sonucu YENİ bir
-    // dizi olduğundan referansı in-place güncelliyoruz — aksi halde silme
-    // işlemi backendInflationIndexCache'e hiç yansımaz (push/sort ile
-    // AYNI referans paylaşımına dayanan addOrUpdateInflationIndexEntry'nin
-    // aksine, filter burada "sessiz" bir tutarsızlık yaratıyordu).
-    if (Array.isArray(backendInflationIndexCache)) {
-      backendInflationIndexCache.length = 0;
-      backendInflationIndexCache.push(...filtered);
-    }
-    recordAuditEvent({
-      action: "INFLATION_INDEX_DELETED",
-      entityType: "INFLATION_INDEX",
-      entityId: month,
-      reason: "Enflasyon endeks kaydı silindi"
-    });
-    return filtered.length !== entries.length;
-  }
 
   /**
    * Verilen aya ait endeks değerini döndürür. Bulunamazsa ANLAMLI
@@ -2907,99 +2743,6 @@ window.fetch = (input, init = {}) => {
     return toIndex / fromIndex;
   }
 
-  function validateReassessment(contract, input) {
-    const errors = [];
-
-    ensureReassessmentState(contract);
-
-    if (!contract) {
-      return { valid: false, errors: ["Sözleşme bulunamadı."] };
-    }
-
-    const reassessmentDate = parseDate(input?.reassessmentDate);
-    const effectiveDate = parseDate(input?.effectiveDate);
-    const startDate = parseDate(contract.startDate);
-    const currentEnd = parseDate(contract.endDate);
-
-    if (!reassessmentDate) {
-      errors.push("Yeniden değerlendirme tarihi geçersiz.");
-    }
-
-    if (!effectiveDate) {
-      errors.push("Yürürlük tarihi geçersiz.");
-    }
-
-    if (reassessmentDate && effectiveDate && effectiveDate < reassessmentDate) {
-      errors.push("Yürürlük tarihi, yeniden değerlendirme tarihinden önce olamaz.");
-    }
-
-    if (effectiveDate && startDate && effectiveDate < startDate) {
-      errors.push("Yürürlük tarihi kira başlangıcından önce olamaz.");
-    }
-
-    const type = String(input?.type || "OTHER");
-    const allowedTypes = [
-      "LEASE_TERM_CHANGE",
-      "RENEWAL_OPTION_CHANGE",
-      "TERMINATION_OPTION_CHANGE",
-      "PURCHASE_OPTION_CHANGE",
-      "INDEX_RATE_CHANGE",
-      "FIXED_PAYMENT_CHANGE",
-      "COMBINED_REASSESSMENT",
-      "OTHER"
-    ];
-
-    if (!allowedTypes.includes(type)) {
-      errors.push("Geçersiz yeniden değerlendirme tipi.");
-    }
-
-    const newEndDate = parseDate(input?.newLeaseEndDate);
-    const newPayment = Number(input?.newPayment);
-    const newRate = Number(input?.newDiscountRate);
-
-    const termTypes = [
-      "LEASE_TERM_CHANGE",
-      "RENEWAL_OPTION_CHANGE",
-      "TERMINATION_OPTION_CHANGE",
-      "PURCHASE_OPTION_CHANGE",
-      "COMBINED_REASSESSMENT"
-    ];
-
-    if (termTypes.includes(type)) {
-      if (!newEndDate) {
-        errors.push("Yeni kira bitiş tarihi geçersiz.");
-      } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
-      }
-    }
-
-    const paymentTypes = [
-      "INDEX_RATE_CHANGE",
-      "FIXED_PAYMENT_CHANGE",
-      "COMBINED_REASSESSMENT"
-    ];
-
-    if (paymentTypes.includes(type)) {
-      if (!Number.isFinite(newPayment) || newPayment < 0) {
-        errors.push("Yeni ödeme geçerli ve negatif olmayan bir tutar olmalıdır.");
-      }
-    }
-
-    if (input?.newDiscountRate !== undefined &&
-        input?.newDiscountRate !== null &&
-        input?.newDiscountRate !== "") {
-      if (!Number.isFinite(newRate) || newRate < 0) {
-        errors.push("Yeni iskonto oranı geçersiz.");
-      }
-    }
-
-    if (currentEnd && effectiveDate && effectiveDate > currentEnd &&
-        (!newEndDate || newEndDate <= currentEnd)) {
-      errors.push("Lease bitişinden sonra reassessment uygulanamaz.");
-    }
-
-    return { valid: errors.length === 0, errors };
-  }
 
   function reassessmentStableStringify(value) {
     if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -3485,9 +3228,6 @@ window.fetch = (input, init = {}) => {
     return terms;
   }
 
-  function getModificationEffectiveDate(modification) {
-    return parseDate(modification?.effectiveDate);
-  }
 
   function recordModificationAuditEvent(
     contract,
@@ -3516,169 +3256,6 @@ window.fetch = (input, init = {}) => {
     });
   }
 
-  function validateModification(
-    contract,
-    input
-  ) {
-
-    const errors = [];
-
-    if (!contract) {
-      errors.push("Sözleşme bulunamadı.");
-      return { valid: false, errors };
-    }
-
-    const effectiveDate =
-      parseDate(input?.effectiveDate);
-
-    const modificationDate =
-      parseDate(input?.modificationDate);
-
-    const startDate =
-      parseDate(contract.startDate);
-
-    const historicalTerms =
-      effectiveDate ? getModificationCurrentTerms(contract, input?.effectiveDate) : null;
-    const currentEndDate =
-      parseDate(historicalTerms?.leaseEndDate || contract.endDate);
-
-    if (!modificationDate) {
-      errors.push("Modifikasyon tarihi geçersiz.");
-    }
-
-    if (!effectiveDate) {
-      errors.push("Yürürlük tarihi geçersiz.");
-    }
-
-    if (effectiveDate && startDate && effectiveDate < startDate) {
-      errors.push("Yürürlük tarihi kira başlangıç tarihinden önce olamaz.");
-    }
-
-    if (effectiveDate && modificationDate && effectiveDate < modificationDate) {
-      errors.push("Yürürlük tarihi, modifikasyon (anlaşma) tarihinden önce olamaz. TFRS 16 Ek A uyarınca modifikasyonun yürürlük tarihi tarafların anlaştığı tarihtir; geçmiş tarihli bir değişiklik için anlaşma tarihini de o tarihe göre girin.");
-    }
-
-    if (currentEndDate && effectiveDate && effectiveDate > currentEndDate) {
-      errors.push("Modifikasyon kira bitişinden sonra uygulanamaz.");
-    }
-
-    const type =
-      String(input?.modificationType || "OTHER");
-
-    const allowedTypes = [
-      "PAYMENT_INCREASE",
-      "PAYMENT_DECREASE",
-      "LEASE_TERM_EXTENSION",
-      "LEASE_TERM_REDUCTION",
-      "SCOPE_INCREASE",
-      "SCOPE_DECREASE",
-      "COMBINED_MODIFICATION",
-      "OTHER"
-    ];
-
-    if (!allowedTypes.includes(type)) {
-      errors.push("Geçersiz modifikasyon tipi.");
-    }
-
-    const newPayment =
-      Number(input?.newPayment);
-
-    const newEndDate =
-      parseDate(input?.newLeaseEndDate);
-
-    const newDiscountRate =
-      Number(input?.newDiscountRate);
-
-    const paymentTypes = [
-      "PAYMENT_INCREASE",
-      "PAYMENT_DECREASE",
-      "COMBINED_MODIFICATION",
-      "OTHER"
-    ];
-
-    if (paymentTypes.includes(type)) {
-      if (!Number.isFinite(newPayment) || newPayment < 0) {
-        errors.push("Yeni ödeme geçerli ve negatif olmayan bir tutar olmalıdır.");
-      }
-    }
-
-    // Validate increases/decreases against the terms effective at this
-    // event date, rather than the mutable headline payment (which may
-    // represent a later modification).
-    const currentPayment = Number(historicalTerms?.payment ?? contract.monthlyPayment) || 0;
-
-    if (type === "PAYMENT_INCREASE" &&
-        Number.isFinite(newPayment) &&
-        newPayment <= currentPayment) {
-      errors.push("Ödeme artışında yeni ödeme mevcut ödemeden büyük olmalıdır.");
-    }
-
-    if (type === "PAYMENT_DECREASE" &&
-        Number.isFinite(newPayment) &&
-        newPayment >= currentPayment) {
-      errors.push("Ödeme azalışında yeni ödeme mevcut ödemeden küçük olmalıdır.");
-    }
-
-    const termTypes = [
-      "LEASE_TERM_EXTENSION",
-      "LEASE_TERM_REDUCTION",
-      "COMBINED_MODIFICATION"
-    ];
-
-    if (termTypes.includes(type)) {
-      if (!newEndDate) {
-        errors.push("Yeni kira bitiş tarihi geçersiz.");
-      } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
-      }
-    }
-
-    // GC-2026-09-2 düzeltmesi: "OTHER" tipi, ödeme (paymentTypes) ve
-    // vade (termTypes) alanlarını AYNI ANDA zorunlu kılıyordu — bu,
-    // salt discountRate değişikliği yapmak isteyen bir modification'ı
-    // (ör. reassessment'lı bir sözleşmeye faiz güncellemesi) geçersiz
-    // bir newLeaseEndDate göndermeye zorluyordu. OTHER için vade
-    // alanı artık YALNIZCA girdi olarak sağlanmışsa doğrulanır;
-    // sağlanmamışsa (salt ödeme/faiz değişikliği senaryosu) zorunlu
-    // değildir.
-    if (type === "OTHER" && input?.newLeaseEndDate !== undefined &&
-        input?.newLeaseEndDate !== null && input?.newLeaseEndDate !== "") {
-      if (!newEndDate) {
-        errors.push("Yeni kira bitiş tarihi geçersiz.");
-      } else if (effectiveDate && newEndDate <= effectiveDate) {
-        errors.push("Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalıdır.");
-      }
-    }
-
-    if (input?.newDiscountRate !== undefined &&
-        input?.newDiscountRate !== null &&
-        input?.newDiscountRate !== "") {
-      if (!Number.isFinite(newDiscountRate) || newDiscountRate < 0) {
-        errors.push("Yeni iskonto oranı geçersiz.");
-      }
-    }
-
-    if (type === "SCOPE_DECREASE") {
-      const pct = Number(input?.scopeReductionPercent);
-      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
-        errors.push("Scope reduction yüzde değeri 0 ile 100 arasında olmalıdır.");
-      }
-    }
-
-    if (type === "SCOPE_INCREASE") {
-      const pct = Number(input?.scopeIncreasePercent);
-      const amount = Number(input?.scopeIncreaseAmount);
-      if ((!Number.isFinite(pct) || pct <= 0) &&
-          (!Number.isFinite(amount) || amount <= 0)) {
-        errors.push("Scope increase için yüzde veya tutar girilmelidir.");
-      }
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors
-    };
-  }
 
   function modificationEconomicKey(modification) {
     if (!modification) return "";
@@ -3717,12 +3294,6 @@ window.fetch = (input, init = {}) => {
     return reassessment;
   }
 
-  function rptRollForwardStatus(difference, otherAdjustment) {
-    return Math.abs(Number(difference) || 0) <= REPORTING_TOLERANCE &&
-      Math.abs(Number(otherAdjustment) || 0) <= REPORTING_TOLERANCE
-      ? "READY"
-      : "WARNING";
-  }
 
   function generateModificationJournal(
     contract,
@@ -4201,42 +3772,8 @@ window.fetch = (input, init = {}) => {
     return formatPresentationCurrency(item?.[field], currency);
   }
 
-  /* ==========================================================
-     DRY YARDIMCI FONKSİYONLAR (Code Quality Pass)
-     ----------------------------------------------------------
-     Kod tekrarını azaltmak için eklenen genel amaçlı guard/kontrol
-     fonksiyonları. Mevcut hiçbir fonksiyon değiştirilmedi; bu blok
-     tamamen eklemeli (additive-only) niteliktedir.
-     ========================================================== */
 
-  /**
-   * Bir değerin boş olup olmadığını kontrol eder (null/undefined/"").
-   * @param {*} value - Kontrol edilecek değer
-   * @returns {boolean}
-   */
-  function isEmpty(value) {
-    return value === null || value === undefined || value === "";
-  }
 
-  /**
-   * Bir değerin pozitif ve sonlu bir sayı olup olmadığını kontrol eder.
-   * @param {*} value - Kontrol edilecek değer
-   * @returns {boolean}
-   */
-  function isPositiveNumber(value) {
-    return Number.isFinite(value) && value > 0;
-  }
-
-  /**
-   * Bir değerin geçerli bir tarihe dönüştürülüp dönüştürülemeyeceğini kontrol eder.
-   * Mevcut parseDate() fonksiyonunu kullanır.
-   * @param {*} value - Kontrol edilecek değer
-   * @returns {boolean}
-   */
-  function isDate(value) {
-    const d = parseDate(value);
-    return d !== null && !isNaN(d.getTime());
-  }
 
   /**
    * Bir değeri güvenli şekilde diziye çevirir; dizi değilse fallback döner.
@@ -4258,17 +3795,6 @@ window.fetch = (input, init = {}) => {
     return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
   }
 
-  /**
-   * Bir değeri koşula göre döndürür, aksi halde varsayılan değeri döndürür.
-   * @param {*} value - Kontrol edilecek değer
-   * @param {*} defaultValue - Koşul sağlanmazsa dönecek değer
-   * @param {function(*):boolean} [predicate] - Değeri test eden fonksiyon (verilmezse her zaman geçerli sayılır)
-   * @returns {*}
-   */
-  function getOrDefault(value, defaultValue, predicate) {
-    const check = typeof predicate === "function" ? predicate(value) : true;
-    return check ? value : defaultValue;
-  }
 
   /* ==========================================================
      KULLANICI GERİ BİLDİRİMİ (Toast Bildirimleri)
@@ -4763,53 +4289,8 @@ window.fetch = (input, init = {}) => {
     }
   }
 
-  function saveCpiIndexTable(entries) {
-    try {
-      localStorage.setItem(CPI_INDEX_STORAGE_KEY, JSON.stringify(entries));
-      return true;
-    } catch (error) {
-      console.error("CPI endeks tablosu kaydedilemedi:", error);
-      return false;
-    }
-  }
 
-  function addOrUpdateCpiIndexEntry(month, index) {
-    const m = String(month || "").trim();
-    if (!/^\d{4}-\d{2}$/.test(m)) {
-      return { valid: false, errors: ["Ay formatı YYYY-MM olmalı."] };
-    }
-    const idx = Number(index);
-    if (!Number.isFinite(idx)) {
-      return { valid: false, errors: ["Endeks değeri sayısal olmalı."] };
-    }
-    const entries = loadCpiIndexTable();
-    const existingIdx = entries.findIndex(e => e.month === m);
-    if (existingIdx >= 0) entries[existingIdx].index = idx;
-    else entries.push({ month: m, index: idx });
-    entries.sort((a, b) => a.month.localeCompare(b.month));
-    saveCpiIndexTable(entries);
-    recordAuditEvent({
-      action: "CPI_INDEX_ENTRY_SAVED",
-      entityType: "CPI_INDEX",
-      entityId: m,
-      reason: "CPI endeks kaydı eklendi/güncellendi",
-      newValue: { month: m, index: idx }
-    });
-    return { valid: true, errors: [] };
-  }
 
-  function deleteCpiIndexEntry(month) {
-    const entries = loadCpiIndexTable();
-    const filtered = entries.filter(e => e.month !== month);
-    saveCpiIndexTable(filtered);
-    recordAuditEvent({
-      action: "CPI_INDEX_ENTRY_DELETED",
-      entityType: "CPI_INDEX",
-      entityId: month,
-      reason: "CPI endeks kaydı silindi"
-    });
-    return filtered.length !== entries.length;
-  }
 
   function getCpiIndexForMonth(month) {
     const entries = loadCpiIndexTable();
@@ -5939,54 +5420,8 @@ window.fetch = (input, init = {}) => {
     };
   }
 
-  function legacyReportAuth_calculateCurrentLiabilityAsOf(
-    contract,
-    reportingDate
-  ) {
 
-    return calculateLiabilitySplitAsOf(
-      contract,
-      reportingDate
-    ).current;
-  }
 
-  function legacyReportAuth_calculateNonCurrentLiabilityAsOf(
-    contract,
-    reportingDate
-  ) {
-
-    return calculateLiabilitySplitAsOf(
-      contract,
-      reportingDate
-    ).nonCurrent;
-  }
-
-  function legacyReportAuth_calculateNext12Months(
-    contract,
-    reportingDate
-  ) {
-
-    /*
-      V16.5 FIX: this used to always take the first 12 schedule
-      periods from contract INCEPTION (engine.schedule.slice(0,12)),
-      regardless of how long the contract had already been running.
-      For any contract not exactly at its commencement date, that is
-      not "next 12 months" — it is "first 12 months", which silently
-      misstates the dashboard KPI. Now defaults to today and reuses
-      the reporting-date-aware split (same logic as the AsOf current/
-      non-current classification) so it reflects the 12 months
-      actually following the reporting date.
-    */
-    const resolvedDate =
-      reportingDate
-        ? parseDate(reportingDate)
-        : new Date();
-
-    return calculateLiabilitySplitAsOf(
-      contract,
-      resolvedDate
-    ).next12Payments;
-  }
 
   /* ==========================================================
      RENEWAL
@@ -6031,27 +5466,6 @@ window.fetch = (input, init = {}) => {
     );
   }
 
-  /* ==========================================================
-     KPI
-  ========================================================== */
-
-  // KPI kartları güncel kur bulunmayan bir günde de portföyü gösterebilmelidir.
-  // Bu geri dönüş yalnızca gösterge amaçlıdır; seçili raporlama tarihleri ve
-  // muhasebe hesaplamaları her zaman kendi tarih kurunu kullanmaya devam eder.
-  function resolveKpiFxDate(fromCurrency, toCurrency, asOfDate) {
-    const from = String(fromCurrency || "").trim().toUpperCase();
-    const to = String(toCurrency || "").trim().toUpperCase();
-    if (!from || from === to) return { date: asOfDate, usedFallback: false };
-    const requested = v23DateKey(asOfDate);
-    const available = typeof getFxRates === "function"
-      ? getFxRates({ fromCurrency: from, toCurrency: to, rateType: V23_RATE_TYPES.CLOSING })
-          .filter(row => row.rateDate <= requested)
-          .sort((a, b) => b.rateDate.localeCompare(a.rateDate))
-      : [];
-    if (!available.length) return { date: asOfDate, usedFallback: false };
-    const latest = available[0].rateDate;
-    return { date: latest, usedFallback: latest !== requested };
-  }
 
   // Portfolio KPIs are a month-end control view. Keep their cut-off aligned
   // with Month-End Close instead of using the browser's intra-month date.
@@ -6097,232 +5511,7 @@ window.fetch = (input, init = {}) => {
     return { date: latest, usedFallback: latest !== requestedKey };
   }
 
-  function legacyReportAuth_updateKPIs() {
 
-    // updateKPIs() is also called directly by backend hydration and legacy
-    // UI bridges, so the refresh() guard alone is not sufficient. Keep every
-    // direct entry point quiet until private results are ready.
-    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
-        Array.isArray(contracts) &&
-        contracts.length > 0 &&
-        window.__GK_TFRS16_PRIVATE_HYDRATION_SETTLED__ !== true &&
-        (PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
-      setKpiPendingState();
-      return;
-    }
-
-    const active =
-      contracts.filter(
-        c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE"
-      );
-
-    // The dashboard KPI uses reporting-date balances, which are a separate
-    // private endpoint/cache from the ordinary lease projection. Never turn
-    // a missing reporting-date result into a misleading zero while the cache
-    // is still warming; the hydration pass will repaint the cards once the
-    // authoritative split is available.
-    const requestedKpiDate = getDashboardReportingDate(new Date());
-    const kpiFallbackDates = new Set();
-
-    const totals = new Map();
-    let totalsError = "";
-    const fallbackDates = new Set();
-
-    active.forEach(
-      contract => {
-        const currency = String(contract.currency || "").trim().toUpperCase();
-        // Portföy KPI'ları şirketin fonksiyonel/sunum para biriminde
-        // raporlanır. Sözleşmede taşınan presentationCurrency alanı,
-        // şirket para birimini ezmemelidir; aksi halde USD sözleşme
-        // bakiyesi TRY sözleşmelerle yanlış toplanabilir.
-        const presentationCurrency = String(
-          resolveContractFunctionalCurrency(contract) ||
-          contract.presentationCurrency ||
-          contract.reportingCurrency ||
-          getReportingCurrency() ||
-          "TRY"
-        ).trim().toUpperCase();
-        if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{3}$/.test(presentationCurrency)) {
-          totalsError = "Para birimi eksik/geçersiz";
-          return;
-        }
-        try {
-        // KPI kartları ilk tanıma bedelini değil raporlama günündeki
-        // güncel kapanış bakiyesini göstermelidir. CFO katmanı; değişiklik
-        // zincirini, ödeme planını ve rapor tarihindeki son satırı birlikte
-        // çözer. Böylece modifikasyon/reassessment sonrası kalan ROU ve
-        // yükümlülük kullanılır.
-        const reporting = resolveKpiReportingDate(contract, requestedKpiDate);
-        if (reporting.usedFallback) kpiFallbackDates.add(v23DateKey(reporting.date));
-        // Use the same private reporting-date envelope consumed by the close
-        // dashboard. This keeps the main KPI cards in sync after a
-        // reassessment instead of retaining a stale local schedule snapshot.
-        const privateReporting = getPrivateReportingDateResult(contract, reporting.date);
-        const privateCalculation = getPrivateCachedCalculationResult(contract);
-        const reportDate = reporting.date instanceof Date ? reporting.date : new Date(reporting.date);
-        const reportPeriodKey = !Number.isNaN(reportDate.getTime())
-          ? `${reportDate.getUTCFullYear()}-${String(reportDate.getUTCMonth() + 1).padStart(2, "0")}`
-          : null;
-        const privatePeriodRows = reportPeriodKey && Array.isArray(privateCalculation?.periodEffects)
-          ? privateCalculation.periodEffects.filter(row => String(row?.periodKey || "") === reportPeriodKey)
-          : [];
-        const metrics = privateReporting
-          ? {
-              leaseLiability: Number(privateReporting.totalLeaseLiability ?? privateReporting.totalLiability ?? privateReporting.outstandingLiability) || 0,
-              rouAsset: Number(privateReporting.outstandingROU) || 0,
-              currentLiability: Number(privateReporting.currentLiability) || 0,
-              nonCurrentLiability: Number(privateReporting.nonCurrentLiability) || 0,
-              // Cash KPI is the next-twelve-month payment total. Principal
-              // remains a separate balance-sheet classification and must not
-              // replace the payment amount here.
-              next12MonthPayments: Number(privateReporting.next12MonthPayments) || 0,
-              monthlyInterest: privatePeriodRows.reduce((sum, row) => sum + (Number(row?.interest) || 0), 0),
-              monthlyDepreciation: privatePeriodRows.reduce((sum, row) => sum + (Number(row?.depreciation) || 0), 0),
-              calculationValid: true
-            }
-          : (typeof cfoGetContractMetricsInternal === "function"
-            ? cfoGetContractMetricsInternal(contract, reporting.date)
-            : null);
-        if (!metrics || metrics.calculationValid === false) throw new Error("KPI_CURRENT_BALANCE_UNAVAILABLE");
-        const fxDate = resolveKpiFxDate(currency, presentationCurrency, reporting.date);
-        if (fxDate.usedFallback) fallbackDates.add(fxDate.date);
-        const next12MonthPayments = Number.isFinite(Number(metrics.next12MonthPayments))
-          ? Number(metrics.next12MonthPayments)
-          : calculateNext12Months(contract);
-        const values = [
-          metrics.leaseLiability,
-          metrics.rouAsset,
-          next12MonthPayments,
-          metrics.currentLiability,
-          metrics.nonCurrentLiability,
-          metrics.monthlyInterest,
-          metrics.monthlyDepreciation
-        ].map(value => {
-          const converted = convertAmountToReportingCurrency(value, currency, fxDate.date, presentationCurrency);
-          if (converted.error) throw new Error("FX_RATE_NOT_FOUND");
-          return converted.value;
-        });
-        if (!values.every(Number.isFinite)) throw new Error("Invalid portfolio amount");
-        const group = totals.get(presentationCurrency) || [0, 0, 0, 0, 0, 0, 0];
-        values.forEach((value, index) => { group[index] += value; });
-        totals.set(presentationCurrency, group);
-        } catch (error) {
-          totalsError = "Hesaplama hatası — toplam gösterilemiyor";
-          console.error("Portfolio KPI calculation error:", contract.id, error);
-        }
-      }
-    );
-
-    // Transaction currencies remain separate; no exchange rate is assumed.
-    const totalText = index => totalsError || (totals.size
-      ? Array.from(totals).map(([currency, values]) => formatPortfolioAmount(values[index], currency)).join(" · ")
-      : formatCurrency(0));
-
-    const renewals =
-      active.filter(
-        isRenewalWithin90Days
-      ).length;
-
-    const modifications =
-      active.filter(
-        c => c.modification === true
-      ).length;
-
-    setText(
-      "contractCount",
-      active.length
-    );
-
-    setText(
-      "leaseLiability",
-      totalText(0)
-    );
-
-    setText(
-      "rouAssets",
-      totalText(1)
-    );
-
-    setText(
-      "currentLiability",
-      totalText(3)
-    );
-
-    // Keep the 12-month cash KPI separate from the current-liability KPI.
-    // The legacy compatibility bridge previously wrote this value into
-    // kpiCurrent, which made the dashboard present cash payments as current
-    // principal for quarterly leases.
-    setText(
-      "next12Months",
-      totalText(2)
-    );
-
-    setText("monthlyInterest", totalText(5));
-    setText("monthlyDepreciation", totalText(6));
-
-    const dashboardCurrencyGroups = Array.from(totals).map(([currency, values]) => ({
-      currency,
-      liability: values[0],
-      rou: values[1],
-      next12Payments: values[2],
-      current: values[3],
-      nonCurrent: values[4],
-      monthlyInterest: values[5],
-      monthlyDepreciation: values[6]
-    }));
-    const dashboardDate = Array.from(kpiFallbackDates)[0] || v23DateKey(requestedKpiDate);
-    let closeScore = null;
-    try {
-      const closeKey = `${typeof closeDateOnly === "function" ? closeDateOnly(dashboardDate) : dashboardDate}|ALL`;
-      const privateClose = PRIVATE_CLOSE_CONTROLS_CACHE.get(closeKey);
-      const close = typeof getCloseReadiness === "function" ? getCloseReadiness(dashboardDate) : null;
-      closeScore = Number(privateClose?.score ?? close?.score ?? close?.closeScore);
-      if (!Number.isFinite(closeScore)) closeScore = null;
-    } catch (_) {}
-    window.__GK_TFRS16_DASHBOARD_METRICS__ = {
-      reportingDate: dashboardDate,
-      groups: dashboardCurrencyGroups,
-      liabilityText: totalText(0),
-      rouText: totalText(1),
-      currentText: totalText(3),
-      nonCurrentText: totalText(4),
-      next12PaymentsText: totalText(2),
-      monthlyInterestText: totalText(5),
-      monthlyDepreciationText: totalText(6),
-      closeScore,
-      source: "PRIVATE_REPORTING_DATE_ENGINE"
-    };
-
-    setText(
-      "renewals90Days",
-      renewals
-    );
-
-    setText(
-      "modifications",
-      modifications
-    );
-
-    const asOfParts = [];
-    if (kpiFallbackDates.size) asOfParts.push(`Gösterge tarihi: ${Array.from(kpiFallbackDates).sort().join(", ")} (son doğrulanmış dönem)`);
-    if (fallbackDates.size) asOfParts.push(`Gösterge kurları: ${Array.from(fallbackDates).sort().join(", ")} (son geçerli veri)`);
-    const asOfText = asOfParts.join(" · ");
-    setText("kpiDataAsOf", asOfText);
-  }
-
-  // Private results are hydrated in a batch after the contract list arrives.
-  // During that short window, showing the final KPI cards as a calculation
-  // error is misleading: there is no calculation failure, only data that is
-  // still being fetched. Keep the count visible and give the amount cards an
-  // explicit loading state until the authoritative private results are ready.
-  function legacyReportAuth_setKpiPendingState() {
-    const activeCount = Array.isArray(contracts)
-      ? contracts.filter(c => String(c?.status || "ACTIVE").toUpperCase() === "ACTIVE").length
-      : 0;
-    setText("contractCount", activeCount);
-    ["leaseLiability", "rouAssets", "currentLiability", "next12Months", "monthlyInterest", "monthlyDepreciation"].forEach(id => setText(id, "Yükleniyor…"));
-    setText("kpiDataAsOf", "Private hesaplamalar yükleniyor…");
-  }
 
   /* ==========================================================
      COMPANY FILTER
@@ -6389,18 +5578,6 @@ window.fetch = (input, init = {}) => {
   let tableCurrentPage = 1;
   const TABLE_PAGE_SIZE = 50;
 
-  function legacyReportAuth_formatPortfolioAmount(value, currency, presentationCurrency) {
-    const code = String(currency || "").trim().toUpperCase();
-    const target = String(presentationCurrency || getReportingCurrency() || "TRY").trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(code) || !/^[A-Z]{3}$/.test(target)) return "Para birimi eksik/geçersiz";
-    if (value === null || value === "" || !Number.isFinite(Number(value))) return "Tutar eksik/geçersiz";
-    const converted = convertAmountToReportingCurrency(Number(value), code, new Date(), target);
-    if (converted.error) return "Kur bulunamadı — tutar gösterilemiyor";
-    return new Intl.NumberFormat("tr-TR", {
-      style: "currency", currency: target,
-      minimumFractionDigits: 0, maximumFractionDigits: 2
-    }).format(Number(converted.value));
-  }
 
   function v26ContractMatchesActiveCompany(contract) {
     const select = document.getElementById("v26ActiveCompanySelect");
@@ -8096,18 +7273,6 @@ window.fetch = (input, init = {}) => {
       : entries;
   }
 
-  function generateInitialEntryForFunctionalCurrency(contract) {
-    const entries = generateInitialEntry(contract);
-    if (!contractNeedsFxTranslation(contract)) return entries;
-    return buildFunctionalCurrencyJournalEntries(
-      contract,
-      entries,
-      [],
-      parseDate(contract.startDate),
-      parseDate(contract.startDate),
-      []
-    );
-  }
 
   /* ==========================================================
      JOURNAL RENDER
@@ -8885,7 +8050,6 @@ ${renderAccountingCenterBulkPromo()}
   function getFutureLeasesKPI() { return {value:null,status:"NOT_READY",reason:"SOURCE_BOUND_COMMITMENT_REPORT_REQUIRED"}; }
   function updateFutureLeaseKPI() { setText("futureLeasesKPI","Kaynak verisi gerekli"); }
   function v26ConvertScheduleToPresentation() { return reportingAuthorityUnavailable(); }
-  function v26ConvertToPresentation() { return reportingAuthorityUnavailable(); }
   function v26RenderConsolidationReportBody() { return reportingAuthorityUnavailable(); }
   function v26RenderAuditTrailBody() { return reportingAuthorityUnavailable(); }
   function convertAmountToReportingCurrency() { return reportingAuthorityUnavailable(); }
@@ -8895,16 +8059,12 @@ ${renderAccountingCenterBulkPromo()}
     if(presentationCurrency&&String(presentationCurrency).toUpperCase()!==code)return "Onaylı döviz kuru kaynağı gerekli";
     return new Intl.NumberFormat("tr-TR",{style:"currency",currency:code,maximumFractionDigits:2}).format(Number(value));
   }
-  function buildReportHtml() { return reportingAuthorityUnavailable(); }
   function v191ComputePrivatePortfolioTms29() { return reportingAuthorityUnavailable(); }
   function v191PrepareFinancialReportingData() { return reportingAuthorityUnavailable(); }
-  function v191GroupRollForwardByCurrency() { return reportingAuthorityUnavailable(); }
   function v191GroupRollForwardByAssetClass() { return reportingAuthorityUnavailable(); }
-  function v191GroupRollForwardByDimension() { return reportingAuthorityUnavailable(); }
   function v191RenderAssetNoteHtml() { return reportingAuthorityUnavailable(); }
   function v191RenderLiabilityNoteHtml() { return reportingAuthorityUnavailable(); }
   function v191RenderLiquidityNoteHtml() { return reportingAuthorityUnavailable(); }
-  function v23ExportRows() { return reportingAuthorityUnavailable(); }
   function calculateFxGainLoss() { return reportingAuthorityUnavailable(); }
   function calculateVariance() { return reportingAuthorityUnavailable(); }
   function calculateVariancePercent() { return reportingAuthorityUnavailable(); }
@@ -9006,7 +8166,6 @@ ${renderAccountingCenterBulkPromo()}
   function exportSchedulesForDatabase() { return reportingAuthorityUnavailable(); }
   function exportTms29InflationNote() { return reportingAuthorityUnavailable(); }
   function getActiveContractCount() { return reportingAuthorityUnavailable(); }
-  function getActualPlanningData() { return reportingAuthorityUnavailable(); }
   function getActualPlusRemainingBudgetForecast() { return reportingAuthorityUnavailable(); }
   function getAnnualLeaseReport() { return reportingAuthorityUnavailable(); }
   function getAuditTrailReport() { return reportingAuthorityUnavailable(); }
@@ -9023,7 +8182,6 @@ ${renderAccountingCenterBulkPromo()}
   function getCfoContractMetrics() { return reportingAuthorityUnavailable(); }
   function getCfoContractView(date) { return reportAuthorityUi().read(date); }
   function getCfoCurrencyExposure() { return reportingAuthorityUnavailable(); }
-  function getCfoCurrencyMetrics() { return reportingAuthorityUnavailable(); }
   function getCfoDashboardData(date) { return reportAuthorityUi().read(date); }
   function getCfoDecisionFacts() { return reportingAuthorityUnavailable(); }
   function getCfoExecutiveSnapshot(date) { return reportAuthorityUi().read(date); }
@@ -9049,7 +8207,6 @@ ${renderAccountingCenterBulkPromo()}
   function getContractsExpiringWithin12Months() { return reportingAuthorityUnavailable(); }
   function getContractsRequiringAttention() { return reportingAuthorityUnavailable(); }
   function getControlExceptionReport() { return reportingAuthorityUnavailable(); }
-  function getControlRiskRows() { return reportingAuthorityUnavailable(); }
   function getControlSummary() { return reportingAuthorityUnavailable(); }
   function getControlSummaryReport() { return reportingAuthorityUnavailable(); }
   function getCriticalControls() { return reportingAuthorityUnavailable(); }
@@ -9092,7 +8249,6 @@ ${renderAccountingCenterBulkPromo()}
   function getLeaseBalanceSheetImpact(date) { return reportAuthorityUi().read(date); }
   function getLeaseCashFlowMetrics() { return reportingAuthorityUnavailable(); }
   function getLeaseCashFlowReport() { return reportingAuthorityUnavailable(); }
-  function getLeaseContractExpiryReport() { return reportingAuthorityUnavailable(); }
   function getLeaseContractRegister(date) { return reportAuthorityUi().read(date); }
   function getLeaseControlMetrics() { return reportingAuthorityUnavailable(); }
   function getLeaseLiabilityMetrics() { return reportingAuthorityUnavailable(); }
@@ -9119,7 +8275,6 @@ ${renderAccountingCenterBulkPromo()}
   function getMonthlyLeaseReport() { return reportingAuthorityUnavailable(); }
   function getNonCurrentLeaseLiability() { return reportingAuthorityUnavailable(); }
   function getOpenExceptionsCfo() { return reportingAuthorityUnavailable(); }
-  function getPeriodicLeaseReport() { return reportingAuthorityUnavailable(); }
   function getPlanningCashForecast() { return reportingAuthorityUnavailable(); }
   function getPlanningCfoDashboardData() { return reportingAuthorityUnavailable(); }
   function getPlanningControlStatus() { return reportingAuthorityUnavailable(); }
@@ -9153,13 +8308,9 @@ ${renderAccountingCenterBulkPromo()}
   function getVarianceStatus() { return reportingAuthorityUnavailable(); }
   function getWeightedAverageDiscountRate(date) { return reportAuthorityUi().read(date).unsupported.weightedAverageDiscountRate; }
   function runContractControls() { return reportingAuthorityUnavailable(); }
-  function v191RenderCfo() { return reportingAuthorityUnavailable(); }
-  function v191RenderClose() { return reportingAuthorityUnavailable(); }
   function v191RenderContractTools() { return reportingAuthorityUnavailable(); }
   function v191RenderFinancialReporting() { return reportingAuthorityUnavailable(); }
   function v191RenderFinancialReportingPrivate() { return reportingAuthorityUnavailable(); }
-  function v191RenderIntegration() { return reportingAuthorityUnavailable(); }
-  function v191RenderReconciliation() { return reportingAuthorityUnavailable(); }
   function v191RenderRiskControls() { return reportingAuthorityUnavailable(); }
   function v22RunConsolidation() { return reportingAuthorityUnavailable(); }
   function v22RunIntercompanyReconciliation() { return reportingAuthorityUnavailable(); }
@@ -13536,104 +12687,6 @@ ${renderAccountingCenterBulkPromo()}
     `;
   }
 
-  /**
-   * renderBulkJournalResults — toplu fiş sonuçlarını (özet + önizleme
-   * tablosu) DOM'a yazar. PUBLIC API imzası HİÇ DEĞİŞMEDİ. İçi 3 alt
-   * fonksiyona bölündü (Faz 3 — SRP) — bkz. PROJECT_CONTEXT.md bölüm 36.
-   */
-  function legacyRenderBulkJournalResults() {
-
-    const summary =
-      document.getElementById(
-        "bulkJournalSummary"
-      );
-
-    const preview =
-      document.getElementById(
-        "bulkJournalPreview"
-      );
-
-    const exportButton =
-      document.getElementById(
-        "exportBulkJournals"
-      );
-
-    if (
-      !summary ||
-      !preview
-    ) {
-      return;
-    }
-
-    if (
-      !bulkJournalData.length
-    ) {
-
-      summary.innerHTML = `
-
-        <div
-          style="
-            padding:15px;
-            background:#fff7ed;
-            color:#9a3412;
-            border:1px solid #fed7aa;
-            border-radius:10px;
-          "
-        >
-          Seçilen dönemde aktif sözleşme kaydı bulunamadı.
-        </div>
-
-      `;
-
-      preview.innerHTML =
-        "";
-
-      if (exportButton) {
-
-        exportButton.disabled =
-          true;
-
-        exportButton.style.opacity =
-          ".5";
-      }
-
-      return;
-    }
-
-    const stats = computeBulkJournalSummary(bulkJournalData);
-    const { balanced, unbalanced, totalDebit, totalCredit } = stats;
-
-    summary.innerHTML = renderBulkJournalSummaryCards(bulkJournalData, stats);
-
-    if (bulkJournalData.length > BULK_JOURNAL_VIRTUAL_SCROLL_THRESHOLD) {
-      // FAZ 4.4 — büyük listede sanal kaydırma. Mevcut sabit tablo yolu
-      // (aşağıdaki else) DEĞİŞMEDEN kalıyor; bu dal yalnızca eşik
-      // aşıldığında devreye giriyor.
-      preview.innerHTML = buildBulkJournalVirtualShell(bulkJournalData.length);
-      const rowsContainer = preview.querySelector("#bulkJournalVirtualRows");
-      renderVirtualTable(rowsContainer, bulkJournalData, {
-        rowHeight: 44,
-        containerHeight: 420,
-        renderRow: renderBulkJournalRowContent
-      });
-    } else {
-      preview.innerHTML = renderBulkJournalPreviewTable(bulkJournalData);
-    }
-
-    if (exportButton) {
-
-      const allowed =
-        unbalanced.length === 0;
-
-      exportButton.disabled =
-        !allowed;
-
-      exportButton.style.opacity =
-        allowed
-          ? "1"
-          : ".5";
-    }
-  }
 
   function setBulkPreview(
     html
@@ -13674,267 +12727,7 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  /* ==========================================================
-     EXCEL EXPORT
-  ========================================================== */
 
-  function legacyExportBulkJournals(format) {
-    // format: "xlsx" | "csv" | "txt" | "logo" | "mikro"  (default xlsx)
-    format = String(format || "xlsx").toLowerCase();
-
-    if (!bulkJournalData.length) {
-      if (typeof showAlert === "function") showAlert("Dışa aktarılacak fiş yok.");
-      return false;
-    }
-
-    const invalid = bulkJournalData.some(item => !item.balanced);
-    if (invalid) {
-      if (typeof showAlert === "function") {
-        showAlert("Dengesiz fiş bulunduğu için aktarım yapılamaz.");
-      }
-      return false;
-    }
-
-    // Ortak satır üretimi (mapping zaten generate sırasında uygulanmış olmalı)
-    // V27 — raporlama PB seçiliyse (ve fiş PB'sinden farklıysa) her satıra
-    // ek/opsiyonel bir "raporlama tutarı" bilgisi eklenir (additive, TMS21
-    // kur farkı satırlarına dokunmaz — appendFxToBulkJournal ayrı bir katman).
-    const reportingCcy = typeof getReportingCurrency === "function" ? getReportingCurrency() : "TRY";
-    const rows = [];
-    bulkJournalData.forEach(item => {
-      const rowCurrency = item.currency || "TRY";
-      const needsFx = reportingCcy && reportingCcy !== rowCurrency;
-      (item.entries || []).forEach(entry => {
-        const currency = rowCurrency || entry.currency || "TRY";
-        const debit = Number(entry.debit || 0);
-        const credit = Number(entry.credit || 0);
-        let debitReporting = null, creditReporting = null, fxRateApplied = null;
-        if (needsFx && typeof convertAmountToReportingCurrency === "function") {
-          try {
-            const dR = convertAmountToReportingCurrency(debit, currency, item.voucherDate, reportingCcy);
-            const cR = convertAmountToReportingCurrency(credit, currency, item.voucherDate, reportingCcy);
-            if (dR.applied || cR.applied) {
-              debitReporting = dR.value;
-              creditReporting = cR.value;
-              fxRateApplied = dR.rate || cR.rate || null;
-            }
-          } catch (error) {}
-        }
-        rows.push({
-          voucherNo: item.voucherNo || "",
-          voucherDate: item.voucherDate || "",
-          contractId: item.contractId || "",
-          company: item.company || "",
-          companyId: item.companyId || "",
-          supplier: item.supplier || "",
-          year: item.year || "",
-          period: item.period || "",
-          month: item.month || "",
-          description: item.description || "",
-          accountCode: entry.accountCode || entry.account || "",
-          accountName: entry.accountName || entry.accountKey || entry.account || "",
-          accountKey: entry.accountKey || "",
-          debit,
-          credit,
-          currency,
-          control: item.balanced ? "OK" : "UNBALANCED",
-          reportingCurrency: debitReporting !== null ? reportingCcy : "",
-          debitReporting,
-          creditReporting,
-          fxRateApplied,
-          transactionCurrency: entry.transactionCurrency || "",
-          transactionDebit: entry.transactionDebit ?? "",
-          transactionCredit: entry.transactionCredit ?? "",
-          transactionFxRate: entry.fxRate ?? "",
-          transactionFxRateDate: entry.fxRateDate || ""
-        });
-      });
-    });
-
-    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const baseName = `TFRS16_Yevmiye_${stamp}_${Date.now()}`;
-
-    // ---------- EXCEL ----------
-    if (format === "xlsx" || format === "excel") {
-      if (typeof XLSX === "undefined") {
-        if (typeof showAlert === "function") showAlert("Excel motoru (XLSX) yüklenemedi.");
-        return false;
-      }
-      try {
-        const excelRows = rows.map(r => ({
-          "Fiş No": r.voucherNo,
-          "Fiş Tarihi": r.voucherDate,
-          "Sözleşme ID": r.contractId,
-          "Şirket": r.company,
-          "Şirket ID": r.companyId,
-          "Tedarikçi": r.supplier,
-          "Raporlama Yılı": r.year,
-          "Periyot": r.period,
-          "Dönem": r.month,
-          "Açıklama": r.description,
-          "Hesap Kodu": r.accountCode,
-          "Hesap Adı": r.accountName,
-          "Borç": r.debit,
-          "Alacak": r.credit,
-          "Para Birimi": r.currency,
-          "Kontrol": r.control,
-          "Raporlama PB": r.reportingCurrency,
-          "Borç (Raporlama)": r.debitReporting !== null && r.debitReporting !== undefined ? r.debitReporting : "",
-          "Alacak (Raporlama)": r.creditReporting !== null && r.creditReporting !== undefined ? r.creditReporting : "",
-          "Kur (Uygulanan)": r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : "",
-          "İşlem Para Birimi": r.transactionCurrency,
-          "İşlem Borç": r.transactionDebit,
-          "İşlem Alacak": r.transactionCredit,
-          "İşlem Kuru": r.transactionFxRate,
-          "Kur Tarihi": r.transactionFxRateDate
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(excelRows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "TFRS16 Fisleri");
-        XLSX.writeFile(workbook, `${baseName}.xlsx`);
-        if (typeof recordAuditEvent === "function") {
-          recordAuditEvent({
-            action: "JOURNAL_EXPORTED",
-            entityType: "JOURNAL_EXPORT",
-            reason: "Bulk journal Excel export",
-            metadata: { recordCount: rows.length, format: "xlsx" }
-          });
-        }
-        if (typeof showToast === "function") showToast("Excel indirildi", "success", 2000);
-        return true;
-      } catch (error) {
-        console.error("Excel export error:", error);
-        if (typeof showAlert === "function") showAlert("Excel aktarımı başarısız: " + (error.message || error));
-        return false;
-      }
-    }
-
-    // ---------- CSV / TXT / LOGO / MIKRO ----------
-    // Ortak kolon setleri
-    let headers, lineSep, colSep, fileExt, bom;
-
-    if (format === "logo") {
-      // Logo tarzı: FişNo;Tarih;HesapKodu;Borc;Alacak;Aciklama;BelgeNo
-      headers = ["FişNo", "Tarih", "HesapKodu", "Borc", "Alacak", "Aciklama", "BelgeNo"];
-      colSep = ";";
-      lineSep = "\r\n";
-      fileExt = "csv";
-      bom = "\uFEFF";
-    } else if (format === "mikro") {
-      // Mikro tarzı benzer
-      headers = ["FisNo", "Tarih", "HesapKodu", "HesapAdi", "Borc", "Alacak", "Aciklama", "SozlesmeNo"];
-      colSep = ";";
-      lineSep = "\r\n";
-      fileExt = "csv";
-      bom = "\uFEFF";
-    } else if (format === "txt") {
-      headers = ["FisNo", "Tarih", "HesapKodu", "Borc", "Alacak", "Aciklama"];
-      colSep = "\t";
-      lineSep = "\r\n";
-      fileExt = "txt";
-      bom = "";
-    } else {
-      // genel CSV
-      // V27: Raporlama PB seçiliyse (ve fişte uygulandıysa) raporlama
-      // tutar kolonları eklenir — logo/mikro/txt formatlarına kasıtlı
-      // olarak dokunulmadı (ERP import şablonlarını bozmamak için).
-      headers = ["FisNo", "Tarih", "SozlesmeID", "Sirket", "HesapKodu", "HesapAdi", "Borc", "Alacak", "Aciklama", "ParaBirimi", "Kontrol", "RaporlamaPB", "Borc(Raporlama)", "Alacak(Raporlama)", "Kur"];
-      colSep = ";";
-      lineSep = "\r\n";
-      fileExt = "csv";
-      bom = "\uFEFF";
-    }
-
-    const mapRow = (r) => {
-      if (format === "logo") {
-        return [r.voucherNo, r.voucherDate, r.accountCode, r.debit, r.credit, r.description, r.contractId];
-      }
-      if (format === "mikro") {
-        return [r.voucherNo, r.voucherDate, r.accountCode, r.accountName, r.debit, r.credit, r.description, r.contractId];
-      }
-      if (format === "txt") {
-        return [r.voucherNo, r.voucherDate, r.accountCode, r.debit, r.credit, r.description];
-      }
-      return [
-        r.voucherNo, r.voucherDate, r.contractId, r.company, r.accountCode, r.accountName,
-        r.debit, r.credit, r.description, r.currency, r.control,
-        r.reportingCurrency || "",
-        r.debitReporting !== null && r.debitReporting !== undefined ? r.debitReporting : "",
-        r.creditReporting !== null && r.creditReporting !== undefined ? r.creditReporting : "",
-        r.fxRateApplied !== null && r.fxRateApplied !== undefined ? r.fxRateApplied : ""
-      ];
-    };
-
-    const escapeCell = (val) => {
-      const s = String(val ?? "");
-      if (s.includes(colSep) || s.includes('"') || s.includes("\n")) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    };
-
-    const lines = [headers.join(colSep)];
-    rows.forEach(r => {
-      lines.push(mapRow(r).map(escapeCell).join(colSep));
-    });
-
-    const blob = new Blob([bom + lines.join(lineSep)], {
-      type: fileExt === "txt" ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${baseName}.${fileExt}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-
-    if (typeof recordAuditEvent === "function") {
-      recordAuditEvent({
-        action: "JOURNAL_EXPORTED",
-        entityType: "JOURNAL_EXPORT",
-        reason: `Bulk journal ${format} export`,
-        metadata: { recordCount: rows.length, format }
-      });
-    }
-    if (typeof showToast === "function") showToast(`${format.toUpperCase()} indirildi`, "success", 2000);
-    return true;
-  }
-
-  /**
-   * Tek bir fiş setini (entries dizisi) profesyonel formatta dışa aktarır.
-   * @param {Array} entries - yevmiye satırları
-   * @param {Object} meta - { voucherNo, voucherDate, contractId, company, description, companyId }
-   * @param {string} format - xlsx | csv | txt | logo | mikro
-   */
-  function legacyExportJournalEntries(entries, meta = {}, format = "xlsx") {
-    if (!Array.isArray(entries) || !entries.length) {
-      if (typeof showAlert === "function") showAlert("Dışa aktarılacak satır yok.");
-      return false;
-    }
-
-    // Geçici olarak bulkJournalData formatına çevir
-    const snapshot = bulkJournalData;
-    bulkJournalData = [{
-      voucherNo: meta.voucherNo || "FIS-001",
-      voucherDate: meta.voucherDate || new Date().toISOString().slice(0, 10),
-      contractId: meta.contractId || "",
-      company: meta.company || "",
-      companyId: meta.companyId || "",
-      supplier: meta.supplier || "",
-      year: meta.year || "",
-      period: meta.period || "",
-      month: meta.month || "",
-      description: meta.description || "TFRS 16 Yevmiye",
-      currency: meta.currency || "TRY",
-      balanced: true,
-      entries: entries
-    }];
-    const ok = exportBulkJournals(format);
-    bulkJournalData = snapshot;
-    return ok;
-  }
 
   function normalizeHeader(
     value
@@ -13971,165 +12764,7 @@ ${renderAccountingCenterBulkPromo()}
       );
   }
 
-  function findImportValue(
-    row,
-    aliases
-  ) {
 
-    const keys =
-      Object.keys(
-        row
-      );
-
-    for (
-      const key of keys
-    ) {
-
-      const normalized =
-        normalizeHeader(
-          key
-        );
-
-      if (
-        aliases.includes(
-          normalized
-        )
-      ) {
-
-        return row[key];
-      }
-    }
-
-    return "";
-  }
-
-  function mapImportedContract(
-    row
-  ) {
-
-    return {
-
-      id:
-        String(
-          findImportValue(
-            row,
-            [
-              "sozlesme id",
-              "sozlesme",
-              "contract id",
-              "contract",
-              "id"
-            ]
-          ) || ""
-        ).trim(),
-
-      company:
-        String(
-          findImportValue(
-            row,
-            [
-              "sirket",
-              "company"
-            ]
-          ) || ""
-        ).trim(),
-
-      supplier:
-        String(
-          findImportValue(
-            row,
-            [
-              "tedarikci",
-              "supplier"
-            ]
-          ) || ""
-        ).trim(),
-
-      monthlyPayment:
-        Number(
-          String(
-            findImportValue(
-              row,
-              [
-                "aylik kira",
-                "monthly payment",
-                "monthly rent"
-              ]
-            ) || 0
-          )
-            .replace(
-              /\./g,
-              ""
-            )
-            .replace(
-              ",",
-              "."
-            )
-        ) || 0,
-
-      startDate:
-        normalizeDate(
-          findImportValue(
-            row,
-            [
-              "baslangic",
-              "baslangic tarihi",
-              "start date"
-            ]
-          )
-        ),
-
-      endDate:
-        normalizeDate(
-          findImportValue(
-            row,
-            [
-              "bitis",
-              "bitis tarihi",
-              "end date"
-            ]
-          )
-        ),
-
-      discountRate:
-        Number(
-          String(
-            findImportValue(
-              row,
-              [
-                "iskonto orani",
-                "discount rate",
-                "discount"
-              ]
-            ) || 0
-          ).replace(
-            ",",
-            "."
-          )
-        ) || 0,
-
-      renewalDate:
-        normalizeDate(
-          findImportValue(
-            row,
-            [
-              "yenileme",
-              "yenileme tarihi",
-              "renewal date"
-            ]
-          )
-        ),
-
-      status:
-        "active",
-
-      modification:
-        false,
-
-      reassessments:
-        []
-    };
-  }
 
   function validateImportedContract(
     contract
@@ -14726,9 +13361,6 @@ ${renderAccountingCenterBulkPromo()}
     return coreNumber(value, fallback);
   }
 
-  function isFiniteNumber(value) {
-    return typeof value === "number" && Number.isFinite(value);
-  }
 
   /** @deprecated-name Kalıcı: controlDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreDate. */
   function controlDate(value) {
@@ -14776,9 +13408,6 @@ ${renderAccountingCenterBulkPromo()}
     return `CTRL-RUN-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  function exceptionId() {
-    return `EXC-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  }
 
   /** @deprecated-name Kalıcı: controlJson — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function controlJson(value) {
@@ -14804,72 +13433,10 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function controlOverallStatus(results) {
-    if (results.some(item => item.status === CONTROL_STATUS.RED)) return CONTROL_STATUS.RED;
-    if (results.some(item => item.status === CONTROL_STATUS.YELLOW)) return CONTROL_STATUS.YELLOW;
-    return CONTROL_STATUS.GREEN;
-  }
 
-  function buildControlException(contract, result, existingExceptions = []) {
-    if (!result || result.status === CONTROL_STATUS.GREEN) return null;
-    const existing = existingExceptions.find(item =>
-      item.contractId === contract.id &&
-      item.controlId === result.controlId &&
-      item.status !== CONTROL_EXCEPTION_STATUS.RESOLVED &&
-      item.status !== CONTROL_EXCEPTION_STATUS.WAIVED
-    );
-    if (existing) {
-      return {
-        ...controlJson(existing),
-        controlName: getControlConfig(result.controlId)?.name || existing.controlName || null,
-        severity: result.status,
-        priority: result.priority,
-        message: result.message,
-        recommendation: result.recommendation,
-        lastTestedAt: result.testedAt
-      };
-    }
-    return {
-      id: exceptionId(),
-      contractId: contract.id,
-      controlId: result.controlId,
-      controlName: getControlConfig(result.controlId)?.name || result.controlName || null,
-      severity: result.status,
-      priority: result.priority,
-      status: CONTROL_EXCEPTION_STATUS.OPEN,
-      message: result.message,
-      recommendation: result.recommendation,
-      createdAt: result.testedAt,
-      resolvedAt: null,
-      resolvedBy: null,
-      lastTestedAt: result.testedAt
-    };
-  }
 
-  function getControlConfig(controlIdValue) {
-    return CONTROL_CONFIG.find(item => item.id === controlIdValue) || null;
-  }
 
-  function getJournalEntriesForControl(contract) {
-    const entries = [];
-    const modifications = Array.isArray(contract?.modifications) ? contract.modifications : [];
-    const reassessments = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
 
-    modifications.filter(item => item?.status === "APPLIED").forEach(item => {
-      if (Array.isArray(item.journal)) entries.push(...item.journal.map(row => ({ ...row, _sourceId: item.id })));
-    });
-
-    reassessments.filter(item => item?.status === "APPLIED").forEach(item => {
-      if (Array.isArray(item.journal)) entries.push(...item.journal.map(row => ({ ...row, _sourceId: item.id })));
-    });
-
-    return entries;
-  }
-
-  function controlHasAuditEvent(contractIdValue, actions = []) {
-    const events = getAuditTrail(contractIdValue);
-    return actions.some(action => events.some(event => event.action === action && event.contractId === contractIdValue));
-  }
 
   function controlSchedule(contract) {
     try {
@@ -14880,41 +13447,7 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function controlDataCompleteness(contract, config) {
-    const required = ["id", "company", "supplier", "startDate", "endDate", "monthlyPayment", "paymentFrequency", "paymentTiming", "discountRate", "currency"];
-    const missing = required.filter(field => {
-      const value = contract?.[field];
-      return value === undefined || value === null || String(value).trim() === "";
-    });
-    if (missing.includes("id") || missing.includes("startDate") || missing.includes("endDate") || missing.includes("monthlyPayment") || missing.includes("discountRate")) {
-      return controlResult(config, contract, CONTROL_STATUS.RED, false, `Critical contract fields are missing: ${missing.join(", ")}.`, required, missing, "Complete the critical contract fields before accounting calculation.");
-    }
-    if (missing.length) {
-      return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, `Non-critical contract fields are missing: ${missing.join(", ")}.`, required, missing, "Complete the missing contract master data where applicable.");
-    }
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Critical contract data is complete.", required, [], "No action required.");
-  }
 
-  function controlDateValidity(contract, config) {
-    const start = controlDate(contract?.startDate);
-    const end = controlDate(contract?.endDate);
-    if (!start || !end) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Start date or end date is invalid or missing.", "Valid start and end dates", { startDate: contract?.startDate, endDate: contract?.endDate }, "Correct the contract dates before calculation.");
-    if (end.getTime() <= start.getTime()) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Lease end date must be after lease start date.", "endDate > startDate", { startDate: contract.startDate, endDate: contract.endDate }, "Correct the lease term dates.");
-
-    const modifications = Array.isArray(contract?.modifications) ? contract.modifications : [];
-    const reassessments = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
-    const invalidModification = modifications.find(item => {
-      const effective = controlDate(item?.effectiveDate);
-      return effective && effective.getTime() < start.getTime();
-    });
-    if (invalidModification) return controlResult(config, contract, CONTROL_STATUS.RED, false, "A modification effective date is before lease commencement.", "effectiveDate >= startDate", invalidModification.effectiveDate, "Correct the modification effective date.");
-    const invalidReassessment = reassessments.find(item => {
-      const effective = controlDate(item?.effectiveDate);
-      return effective && effective.getTime() < start.getTime();
-    });
-    if (invalidReassessment) return controlResult(config, contract, CONTROL_STATUS.RED, false, "A reassessment effective date is before lease commencement.", "effectiveDate >= startDate", invalidReassessment.effectiveDate, "Correct the reassessment effective date.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Contract and event dates are valid.", "Valid chronological dates", { startDate: contract.startDate, endDate: contract.endDate }, "No action required.");
-  }
 
   function controlPayment(contract, config) {
     const payment = Number(contract?.monthlyPayment);
@@ -14925,142 +13458,11 @@ ${renderAccountingCenterBulkPromo()}
     return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Payment assumptions are valid.", "Positive payment and supported payment convention", { payment, frequency: contract.paymentFrequency, timing: contract.paymentTiming }, "No action required.");
   }
 
-  function controlDiscountRate(contract, config) {
-    const raw = contract?.discountRate;
-    const rate = Number(raw);
-    if (raw === "" || raw === null || raw === undefined || !Number.isFinite(rate) || rate < 0) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Discount rate is missing or invalid.", ">= 0 and numeric", raw, "Enter a valid discount rate.");
-    if (rate > 50) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Discount rate is unusually high and requires review.", "Reasonable market-consistent rate", rate, "Review the discount rate against the lease economics and approved assumptions.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Discount rate is valid.", ">= 0 and finite", rate, "No action required.");
-  }
 
-  function controlLeaseTerm(contract, config) {
-    const schedule = controlSchedule(contract);
-    if (!schedule.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "No payment schedule is available for the contract.", "Non-empty schedule", 0, "Run the existing calculation/schedule engine and resolve any calculation errors.");
-    const dates = schedule.map(item => controlDate(item?.date)).filter(Boolean);
-    if (!dates.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Payment schedule contains no valid dates.", "Valid schedule dates", 0, "Regenerate the payment schedule.");
-    const end = controlDate(contract?.endDate);
-    const last = dates[dates.length - 1];
-    const dayDifference = end && last ? Math.abs(controlDaysBetween(last, end)) : null;
-    // DÜZELTME (2026-09-17, Burhan'ın 30 kontratlık regresyon setinden
-    // bulundu): tolerans sabit 62 gündü — bu SADECE aylık ödemeli
-    // kontratlar için anlamlı bir eşik. Üç aylık (91 gün/dönem) veya
-    // yıllık (365 gün/dönem) kontratlarda, son planlı ödeme tarihi ile
-    // sözleşme bitiş tarihi arasında TEK BİR DÖNEM kadar doğal bir fark
-    // olması normaldir (dönem sözleşme bitişine tam bölünmüyorsa) — bu
-    // bir hata değildir. Sabit 62 gün eşiği, üç aylık/yıllık kontratların
-    // çoğunu YANLIŞ POZİTİF olarak işaretliyordu (regresyon matrisindeki
-    // 004,012,013,019,020,030 — hepsi üç aylık/yıllık). Tolerans artık
-    // ödeme frekansına göre ölçekleniyor: bir dönemin gün karşılığı +
-    // sabit bir tampon (yuvarlama/ay-sonu kaymaları için).
-    const stepMonths = typeof resolveFrequencyStepMonths === "function"
-      ? resolveFrequencyStepMonths(contract?.paymentFrequency)
-      : 1;
-    const toleranceDays = Math.round(stepMonths * 30.44) + 32; // bir dönem + ~1 aylık tampon
-    if (dayDifference !== null && dayDifference > toleranceDays) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Payment schedule end date is materially different from contract end date.", "Schedule end aligned with lease end", { scheduleEnd: last.toISOString(), contractEnd: end.toISOString(), differenceDays: dayDifference, toleranceDays, paymentFrequency: contract?.paymentFrequency || "monthly" }, "Review lease term, payment frequency and any applied modification/reassessment.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Lease term and schedule are consistent within tolerance.", "Schedule aligned with contract term", { periods: schedule.length, scheduleEnd: last.toISOString(), contractEnd: end ? end.toISOString() : null, toleranceDays }, "No action required.");
-  }
 
-  function controlEscalation(contract, config) {
-    const type = String(contract?.leaseIncreaseType || "none");
-    if (type === "none" || type === "index") {
-      if (type === "index") {
-        const reassessments = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
-        const appliedIndexEvidence = reassessments.some(item => {
-          const kind = String(item?.type || "").toUpperCase();
-          const terms = item?.newTerms || item?.appliedToTerms || {};
-          return String(item?.status || "").toUpperCase() === "APPLIED" &&
-            kind.includes("INDEX") &&
-            Number.isFinite(Number(item?.liabilityAdjustment)) &&
-            Object.keys(terms).length > 0;
-        });
-        if (appliedIndexEvidence || contract?.indexSource || contract?.indexTableVerified === true) {
-          return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Index-linked escalation is supported by verified index evidence and an applied reassessment.", "Verified index evidence and applied reassessment", { leaseIncreaseType: type, appliedIndexEvidence, indexSource: contract?.indexSource || null }, "No action required.");
-        }
-        return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Index-linked escalation is enabled but no index calculation source is present in the current engine.", "Supported index calculation evidence", { leaseIncreaseType: type }, "Review index-linked payment assumptions and reassessment evidence.");
-      }
-      return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "No fixed escalation control is required.", "none or supported escalation", { leaseIncreaseType: type }, "No action required.");
-    }
-    if (type === "fixedRate") {
-      const rate = Number(contract?.leaseIncreaseRate);
-      if (!Number.isFinite(rate) || rate < 0) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Fixed-rate escalation contains an invalid rate.", ">= 0 and numeric", contract?.leaseIncreaseRate, "Correct the fixed-rate escalation assumption.");
-    } else if (type === "fixedAmount") {
-      const amount = Number(contract?.fixedIncrease);
-      if (!Number.isFinite(amount) || amount < 0) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Fixed-amount escalation contains an invalid increase amount.", ">= 0 and numeric", contract?.fixedIncrease, "Correct the fixed-amount escalation assumption.");
-    } else {
-      return controlResult(config, contract, CONTROL_STATUS.RED, false, "Unsupported escalation type was detected.", "none, fixedRate, fixedAmount or index", type, "Correct the escalation type or migrate the contract to a supported assumption.");
-    }
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Escalation assumptions are valid.", "Supported escalation configuration", { type, rate: contract?.leaseIncreaseRate, fixedIncrease: contract?.fixedIncrease }, "No action required.");
-  }
 
-  function controlCalculation(contract, config) {
-    try {
-      const engine = getPrivateCalculationForConsumer(contract);
-      const schedule = Array.isArray(engine?.schedule) ? engine.schedule : [];
-      if (!engine || engine.error) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Professional calculation engine returned an error.", "Valid calculation result", engine?.error || null, "Review contract assumptions and calculation inputs.");
-      if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Recognition exemption is active; liability control is not applicable in the normal recognition model.", "Exemption-aware calculation", { shortTermLease: contract.shortTermLease, lowValueAsset: contract.lowValueAsset }, "No action required.");
-      if (!schedule.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Calculation returned an empty payment schedule.", "Non-empty schedule", 0, "Correct lease dates/payment assumptions and regenerate the calculation.");
-      const invalid = schedule.find(row => !isFiniteNumber(Number(row?.openingLiability)) || !isFiniteNumber(Number(row?.interest)) || !isFiniteNumber(Number(row?.payment)) || !isFiniteNumber(Number(row?.principal)) || !isFiniteNumber(Number(row?.closingLiability)) || Number(row.closingLiability) < -CONTROL_TOLERANCE);
-      if (invalid) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Lease liability schedule contains an invalid or negative balance.", "Finite non-negative liability balances", invalid, "Review the calculation inputs and schedule generation.");
-      // The private engine records an advance payment made at commencement as
-      // a separate first schedule row. That cash payment is settled before the
-      // liability starts accruing, so the row intentionally keeps opening and
-      // closing liability equal with zero principal. It must not be judged by
-      // the normal opening + interest - payment reconciliation formula.
-      const reconciliationRows = schedule.filter((row, index) => {
-        const commencementAdvance = index === 0 &&
-          isAdvancePaymentTiming(contract?.paymentTiming) &&
-          safeNumber(row?.payment) > CONTROL_TOLERANCE &&
-          Math.abs(safeNumber(row?.principal)) <= CONTROL_TOLERANCE &&
-          Math.abs(safeNumber(row?.closingLiability) - safeNumber(row?.openingLiability)) <= CONTROL_TOLERANCE;
-        return !commencementAdvance;
-      });
-      const broken = reconciliationRows.find(row => Math.abs((safeNumber(row.openingLiability) + safeNumber(row.interest) - safeNumber(row.payment)) - safeNumber(row.closingLiability)) > CONTROL_TOLERANCE);
-      if (broken) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Opening liability + interest - payment does not reconcile to closing liability.", "Opening + Interest - Payment = Closing", broken, "Review the liability amortisation calculation.");
-      return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Lease liability calculation and schedule arithmetic reconcile.", "All schedule rows reconcile", { periods: schedule.length, liability: safeNumber(engine.liability) }, "No action required.");
-    } catch (error) {
-      return controlResult(config, contract, CONTROL_STATUS.RED, false, "Lease calculation control failed unexpectedly.", "Successful calculation", error?.message || String(error), "Review the contract and calculation engine inputs.");
-    }
-  }
 
-  function controlROU(contract, config) {
-    try {
-      const engine = getPrivateCalculationForConsumer(contract);
-      if (!engine) return controlResult(config, contract, CONTROL_STATUS.RED, false, "ROU calculation result is unavailable.", "Valid ROU result", null, "Run the calculation engine and review the contract assumptions.");
-      const schedule = Array.isArray(engine.schedule) ? engine.schedule : [];
-      const negative = schedule.find(row => Number(row?.rouClosing) < -CONTROL_TOLERANCE || Number(row?.rouOpening) < -CONTROL_TOLERANCE);
-      if (negative) return controlResult(config, contract, CONTROL_STATUS.RED, false, "ROU schedule contains a negative balance.", "ROU >= 0", negative, "Review depreciation and modification/reassessment adjustments.");
-      // The private calculation API exposes the opening ROU as `rouAssets`
-      // (the same field used by KPI/reporting consumers). Keep `rou` as a
-      // compatibility fallback for any older event-aware response, but do
-      // not treat a valid private `rouAssets` value as missing.
-      const rou = Number(engine.rouAssets ?? engine.rou);
-      if (!Number.isFinite(rou) || rou < -CONTROL_TOLERANCE) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Calculated ROU asset is invalid or negative.", ">= 0 and finite", rou, "Review ROU calculation and lease adjustments.");
-      return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "ROU calculation is valid and non-negative.", ">= 0 and finite", rou, "No action required.");
-    } catch (error) {
-      return controlResult(config, contract, CONTROL_STATUS.RED, false, "ROU control could not complete.", "Valid ROU result", error?.message || String(error), "Review the ROU calculation inputs.");
-    }
-  }
 
-  function controlJournal(contract, config) {
-    const rows = getJournalEntriesForControl(contract);
-    const appliedChanges = [
-      ...(Array.isArray(contract?.modifications) ? contract.modifications : []),
-      ...(Array.isArray(contract?.reassessments) ? contract.reassessments : [])
-    ].filter(item => item?.status === "APPLIED");
-    const missingAppliedJournal = appliedChanges.find(item => !Array.isArray(item.journal) || !item.journal.length);
-    if (missingAppliedJournal) return controlResult(config, contract, CONTROL_STATUS.RED, false, "An applied modification or reassessment has no journal.", "Applied event must have a journal", { id: missingAppliedJournal.id, status: missingAppliedJournal.status }, "Generate and validate the corresponding accounting journal.");
-    if (rows.length) {
-      const debit = rows.reduce((sum, item) => sum + safeNumber(item?.debit), 0);
-      const credit = rows.reduce((sum, item) => sum + safeNumber(item?.credit), 0);
-      const invalid = rows.find(item => !Number.isFinite(Number(item?.debit)) || !Number.isFinite(Number(item?.credit)) || Number(item.debit) < 0 || Number(item.credit) < 0);
-      if (invalid) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Journal contains invalid debit or credit values.", "Finite non-negative debit/credit", invalid, "Review the generated journal entries.");
-      if (Math.abs(debit - credit) > CONTROL_TOLERANCE) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Journal is not balanced.", "Total debit = total credit", { debit, credit }, "Review journal generation and ensure total debit equals total credit.");
-      const missingCore = rows.find(item => !item?.account || !item?.source);
-      if (missingCore) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Journal contains entries with missing account or source metadata.", "Account and source present", missingCore, "Complete journal metadata before export.");
-    }
-    if (!rows.length && appliedChanges.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied accounting events exist but no journal entries were found.", "Journal for applied events", 0, "Generate the missing journal entries.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Available modification/reassessment journals are balanced and valid.", "Balanced journal", { entries: rows.length }, "No action required.");
-  }
 
   function controlClassification(contract, config) {
     const reportingDate = contract?.reportingDate || new Date().toISOString();
@@ -15080,187 +13482,12 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function controlModification(contract, config) {
-    const items = Array.isArray(contract?.modifications) ? contract.modifications : [];
-    const resolved = resolveContractScheduleSource(contract);
-    const privateScheduleReady = Array.isArray(resolved?.schedule) &&
-      resolved.schedule.length > 0 &&
-      (resolved.source === "MODIFIED_SCHEDULE" || resolved.source === "REASSESSED_SCHEDULE");
-    for (const item of items) {
-      if (!item?.id) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing its ID.", "Modification ID", item, "Repair the modification record.");
-      if (typeof getModificationEffectiveDate === "function" && !getModificationEffectiveDate(item)) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Modification is missing a valid effective date.", "Modification effective date", item.id, "Set a valid effective date on the modification record.");
-      if (item.status === "APPLIED") {
-        const hasSchedule = privateScheduleReady;
-        if (!hasSchedule) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied modification has no revised schedule.", "Applied modification with revised schedule", item.id, "Regenerate the modified schedule and review the effective date.");
-        if (!Array.isArray(item.journal) || !item.journal.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied modification has no journal.", "Applied modification with journal", item.id, "Generate the modification journal.");
-      }
-    }
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Modification records are internally consistent.", "Applied modifications have schedule and journal evidence", { count: items.length }, "No action required.");
-  }
 
-  function controlReassessment(contract, config) {
-    const items = Array.isArray(contract?.reassessments) ? contract.reassessments : [];
-    const resolved = resolveContractScheduleSource(contract);
-    const privateScheduleReady = Array.isArray(resolved?.schedule) &&
-      resolved.schedule.length > 0 &&
-      resolved.source === "REASSESSED_SCHEDULE";
-    for (const item of items) {
-      if (!item?.id) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Reassessment is missing its ID.", "Reassessment ID", item, "Repair the reassessment record.");
-      if (item.status === "APPLIED") {
-        const hasSchedule = privateScheduleReady;
-        if (!hasSchedule) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied reassessment has no revised schedule.", "Applied reassessment with revised schedule", item.id, "Regenerate the reassessed schedule and review the effective date.");
-        if (!Array.isArray(item.journal) || !item.journal.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Applied reassessment has no journal.", "Applied reassessment with journal", item.id, "Generate the reassessment journal.");
-      }
-    }
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Reassessment records are internally consistent.", "Applied reassessments have schedule and journal evidence", { count: items.length }, "No action required.");
-  }
 
-  function controlAudit(contract, config) {
-    const events = getAuditTrail(contract?.id);
-    if (!events.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, "No audit evidence exists for the contract.", "At least one audit event", 0, "Create the contract through the application flow or migrate its legacy audit evidence.");
-    const criticalMissing = [];
-    if (!(typeof controlHasAuditEvent === "function" ? controlHasAuditEvent(contract?.id, ["CREATE"]) : events.some(e => e.action === "CREATE"))) criticalMissing.push("CREATE");
-    const appliedModifications = (contract?.modifications || []).filter(e => e?.status === "APPLIED");
-    const appliedReassessments = (contract?.reassessments || []).filter(e => e?.status === "APPLIED");
-    if (appliedModifications.some(item => !events.some(e => e.modificationId === item.id && e.action === "MODIFICATION_APPLIED"))) criticalMissing.push("MODIFICATION_APPLIED");
-    if (appliedReassessments.some(item => !events.some(e => e.reassessmentId === item.id && e.action === "REASSESSMENT_APPLIED"))) criticalMissing.push("REASSESSMENT_APPLIED");
-    if (criticalMissing.length) return controlResult(config, contract, CONTROL_STATUS.RED, false, `Critical audit evidence is missing: ${criticalMissing.join(", ")}.`, "Complete critical audit chain", criticalMissing, "Restore or generate the missing audit evidence before relying on the control record.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Critical audit evidence is available.", "Critical lifecycle evidence", { events: events.length }, "No action required.");
-  }
 
-  function controlLifecycle(contract, config) {
-    const status = String(contract?.status || "").toUpperCase();
-    const today = new Date();
-    const end = controlDate(contract?.endDate);
-    const liability = (() => {
-      try {
-        const split = calculateReassessmentClassification(contract, today.toISOString());
-        return safeNumber(split?.totalLeaseLiability ?? split?.total ?? split?.outstandingLiability);
-      } catch (error) {
-        return 0;
-      }
-    })();
-    if (status === "TERMINATED" && liability > CONTROL_TOLERANCE) return controlResult(config, contract, CONTROL_STATUS.RED, false, "Terminated contract still carries a lease liability.", "Lease liability = 0 after termination", liability, "Review termination accounting and settlement of the remaining lease liability.");
-    if (status === "ACTIVE" && end && end.getTime() < today.getTime()) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Active contract has passed its contractual end date.", "Active contract end date in the future", { status, endDate: contract.endDate }, "Review contract status and any renewal/termination reassessment.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Contract lifecycle status is consistent with the available dates and liability.", "Status aligned with lifecycle", { status, endDate: contract.endDate, liability }, "No action required.");
-  }
 
-  function controlExpiryRenewal(contract, config) {
-    const today = new Date();
-    const end = controlDate(contract?.endDate);
-    const renewal = controlDate(contract?.renewalDate);
-    const dates = [];
-    if (end) dates.push({ type: "EXPIRY", date: end });
-    if (renewal) dates.push({ type: "RENEWAL", date: renewal });
-    const upcoming = dates
-      .map(item => ({
-        ...item,
-        days: Math.ceil((item.date.getTime() - today.getTime()) / 86400000),
-        months: typeof controlMonthsBetween === "function" ? controlMonthsBetween(today, item.date) : null
-      }))
-      .filter(item => item.days >= 0 && item.days <= 180);
-    const within90 = upcoming.find(item => item.days <= 90);
-    if (within90) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, `${within90.type} is approaching within 90 days.`, "No unreviewed near-term expiry/renewal", { type: within90.type, days: within90.days, months: within90.months, date: within90.date.toISOString() }, "Review renewal/termination assumptions and determine whether reassessment is required.");
-    if (upcoming.length) return controlResult(config, contract, CONTROL_STATUS.YELLOW, false, "Contract expiry or renewal is within 180 days.", "No unreviewed near-term event", upcoming.map(item => ({ type: item.type, days: item.days, months: item.months, date: item.date.toISOString() })), "Review upcoming lease term decisions and prepare evidence for any reassessment.");
-    return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "No expiry or renewal event is within the next 180 days.", "> 180 days or no configured event", dates.map(item => ({ type: item.type, date: item.date.toISOString() })), "No action required.");
-  }
 
-  function evaluateControl(config, contract) {
-    switch (config.id) {
-      case "CTRL-DATA-001": return controlDataCompleteness(contract, config);
-      case "CTRL-DATA-002": return controlDateValidity(contract, config);
-      case "CTRL-PAY-001": return controlPayment(contract, config);
-      case "CTRL-RATE-001": return controlDiscountRate(contract, config);
-      case "CTRL-TERM-001": return controlLeaseTerm(contract, config);
-      case "CTRL-ESC-001": return controlEscalation(contract, config);
-      case "CTRL-CALC-001": return controlCalculation(contract, config);
-      case "CTRL-ROU-001": return controlROU(contract, config);
-      case "CTRL-JRN-001": return controlJournal(contract, config);
-      case "CTRL-CLS-001": return controlClassification(contract, config);
-      case "CTRL-MOD-001": return controlModification(contract, config);
-      case "CTRL-REA-001": return controlReassessment(contract, config);
-      case "CTRL-AUD-001": return controlAudit(contract, config);
-      case "CTRL-LIFE-001": return controlLifecycle(contract, config);
-      case "CTRL-LIFE-002": return controlExpiryRenewal(contract, config);
-      default:
-        return controlResult(config, contract, CONTROL_STATUS.GREEN, true, "Control is not implemented.", null, null, "No action required.");
-    }
-  }
 
-  function legacyReportAuth_runContractControls(contract, options = {}) {
-    if (!contract || !contract.id) {
-      return {
-        controlRunId: controlId(),
-        contractId: null,
-        overallStatus: CONTROL_STATUS.RED,
-        controls: [],
-        exceptions: [],
-        summary: { critical: 1, high: 0, medium: 0, low: 0 },
-        testedAt: new Date().toISOString(),
-        valid: false,
-        error: "Contract is missing a valid ID."
-      };
-    }
-
-    const testedAt = new Date().toISOString();
-    const configs = CONTROL_CONFIG.filter(item => item.enabled !== false);
-    const controls = configs.map(config => {
-      try {
-        return evaluateControl(config, contract);
-      } catch (error) {
-        return controlResult(config, contract, CONTROL_STATUS.RED, false, `Control ${config.id} failed unexpectedly.`, "Successful control evaluation", error?.message || String(error), "Review the control and underlying contract data.");
-      }
-    });
-
-    const previousSnapshots = loadControlSnapshots();
-    const previous = previousSnapshots[contract.id];
-    const existingExceptions = Array.isArray(previous?.exceptions) ? previous.exceptions : [];
-    const exceptions = controls.map(result => buildControlException(contract, result, existingExceptions)).filter(Boolean);
-    const overallStatus = controlOverallStatus(controls);
-    const summary = {
-      critical: controls.filter(item => item.priority === CONTROL_PRIORITY.CRITICAL && item.status !== CONTROL_STATUS.GREEN).length,
-      high: controls.filter(item => item.priority === CONTROL_PRIORITY.HIGH && item.status !== CONTROL_STATUS.GREEN).length,
-      medium: controls.filter(item => item.priority === CONTROL_PRIORITY.MEDIUM && item.status !== CONTROL_STATUS.GREEN).length,
-      low: controls.filter(item => item.priority === CONTROL_PRIORITY.LOW && item.status !== CONTROL_STATUS.GREEN).length
-    };
-
-    const snapshot = {
-      controlRunId: controlId(),
-      contractId: contract.id,
-      overallStatus,
-      riskStatus: overallStatus,
-      controls,
-      exceptions,
-      summary,
-      testedAt,
-      version: "V16.8"
-    };
-
-    if (options.persist !== false) {
-      previousSnapshots[contract.id] = controlJson(snapshot);
-      saveControlSnapshots(previousSnapshots);
-    }
-
-    if (options.audit !== false) {
-      recordAuditEvent({
-        action: "CONTROL_RUN",
-        entityType: "CONTROL_SNAPSHOT",
-        entityId: snapshot.controlRunId,
-        contractId: contract.id,
-        reason: "V16.8 risk and control evaluation",
-        metadata: {
-          overallStatus,
-          exceptionCount: exceptions.length,
-          critical: summary.critical,
-          high: summary.high,
-          medium: summary.medium,
-          low: summary.low
-        }
-      });
-    }
-
-    return snapshot;
-  }
 
   function getStoredControlSnapshot(contractIdValue) {
     if (!contractIdValue) return null;
@@ -15273,11 +13500,6 @@ ${renderAccountingCenterBulkPromo()}
     return snapshot?.overallStatus || CONTROL_STATUS.GREEN;
   }
 
-  function legacyReportAuth_getContractControlResults(contractIdValue, options = {}) {
-    const contract = contracts.find(item => item.id === contractIdValue);
-    if (options.run === true && contract) return runContractControls(contract, options);
-    return getStoredControlSnapshot(contractIdValue) || (contract ? runContractControls(contract, { ...options, persist: false }) : null);
-  }
 
   function getOpenExceptions(contractIdValue) {
     const snapshots = loadControlSnapshots();
@@ -15289,39 +13511,7 @@ ${renderAccountingCenterBulkPromo()}
     );
   }
 
-  function legacyReportAuth_getControlSummary(options = {}) {
-    const targetContracts = Array.isArray(options.contracts)
-      ? options.contracts
-      : contracts;
-    const snapshots = targetContracts.map(contract => runContractControls(contract, { persist: options.persist !== false, audit: options.audit === true }));
-    return {
-      testedAt: new Date().toISOString(),
-      totalContracts: snapshots.length,
-      green: snapshots.filter(item => item.overallStatus === CONTROL_STATUS.GREEN).length,
-      yellow: snapshots.filter(item => item.overallStatus === CONTROL_STATUS.YELLOW).length,
-      red: snapshots.filter(item => item.overallStatus === CONTROL_STATUS.RED).length,
-      criticalExceptions: snapshots.reduce((sum, item) => sum + safeNumber(item.summary?.critical), 0),
-      highExceptions: snapshots.reduce((sum, item) => sum + safeNumber(item.summary?.high), 0),
-      mediumExceptions: snapshots.reduce((sum, item) => sum + safeNumber(item.summary?.medium), 0),
-      lowExceptions: snapshots.reduce((sum, item) => sum + safeNumber(item.summary?.low), 0),
-      snapshots
-    };
-  }
 
-  function legacyReportAuth_getRiskSummary(options = {}) {
-    const summary = getControlSummary(options);
-    return {
-      testedAt: summary.testedAt,
-      totalContracts: summary.totalContracts,
-      GREEN: summary.green,
-      YELLOW: summary.yellow,
-      RED: summary.red,
-      criticalExceptions: summary.criticalExceptions,
-      highExceptions: summary.highExceptions,
-      mediumExceptions: summary.mediumExceptions,
-      lowExceptions: summary.lowExceptions
-    };
-  }
 
   function getCriticalExceptions(contractIdValue) {
     return getOpenExceptions(contractIdValue).filter(item => item.priority === CONTROL_PRIORITY.CRITICAL);
@@ -15382,101 +13572,7 @@ ${renderAccountingCenterBulkPromo()}
     return true;
   }
 
-  async function legacyReportAuth_exportControlResults(contractIdValue, presentationCurrency) {
-    const target = contractIdValue
-      ? [getContractControlResults(contractIdValue, { run: true, persist: true, audit: false })].filter(Boolean)
-      : contracts.map(contract => runContractControls(contract, { persist: true, audit: false }));
-    if (!target.length) return false;
-    const contract = contractIdValue ? contracts.find(c => String(c.id) === String(contractIdValue)) : null;
-    presentationCurrency = String(presentationCurrency || contract?.presentationCurrency || contract?.reportingCurrency || contract?.currency || "TRY").toUpperCase();
-    const sourceCurrency = String(contract?.currency || "TRY").toUpperCase();
-    const rows = [];
-    for (const snapshot of target) {
-      for (const item of snapshot.controls) {
-        const expected = await v26ConvertJsonMoneyToPresentation(item.expected ?? null, sourceCurrency, presentationCurrency, item.testedAt);
-        const actual = await v26ConvertJsonMoneyToPresentation(item.actual ?? null, sourceCurrency, presentationCurrency, item.testedAt);
-        rows.push({
-        ControlRunID: snapshot.controlRunId,
-        TestedAt: item.testedAt,
-        ContractID: item.contractId,
-        OverallStatus: snapshot.overallStatus,
-        ControlID: item.controlId,
-        ControlName: item.controlName,
-        Category: item.category,
-        Priority: item.priority,
-        Status: item.status,
-        Result: item.result,
-        Message: item.message,
-        Expected: JSON.stringify(expected.value),
-        Actual: JSON.stringify(actual.value),
-        "Para Birimi": presentationCurrency,
-        "Kur (TMS21)": expected.rate ?? actual.rate ?? 1,
-        Recommendation: item.recommendation || ""
-        });
-      }
-    }
-    if (typeof XLSX !== "undefined") {
-      try {
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Control Results");
-        XLSX.writeFile(workbook, `TFRS16_Control_Results_${presentationCurrency}_${Date.now()}.xlsx`);
-        recordAuditEvent({ action: "EXPORT", entityType: "CONTROL_RESULTS", entityId: contractIdValue || "ALL", contractId: contractIdValue || null, reason: "Control results export", metadata: { recordCount: rows.length, format: "xlsx" } });
-        return true;
-      } catch (error) {
-        return false;
-      }
-    }
-    const headers = Object.keys(rows[0]);
-    const csv = [headers.join(";"), ...rows.map(row => headers.map(header => String(row[header] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `TFRS16_Control_Results_${presentationCurrency}_${Date.now()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    recordAuditEvent({ action: "EXPORT", entityType: "CONTROL_RESULTS", entityId: contractIdValue || "ALL", contractId: contractIdValue || null, reason: "Control results export", metadata: { recordCount: rows.length, format: "csv" } });
-    return true;
-  }
 
-  function legacyReportAuth_exportRiskSummary() {
-    const summary = getRiskSummary({ persist: true });
-    const rows = [{
-      TestedAt: summary.testedAt,
-      TotalContracts: summary.totalContracts,
-      GREEN: summary.GREEN,
-      YELLOW: summary.YELLOW,
-      RED: summary.RED,
-      CriticalExceptions: summary.criticalExceptions,
-      HighExceptions: summary.highExceptions,
-      MediumExceptions: summary.mediumExceptions,
-      LowExceptions: summary.lowExceptions
-    }];
-    if (typeof XLSX !== "undefined") {
-      try {
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Risk Summary");
-        XLSX.writeFile(workbook, `TFRS16_Risk_Summary_${Date.now()}.xlsx`);
-        recordAuditEvent({ action: "EXPORT", entityType: "RISK_SUMMARY", entityId: "ALL", reason: "Risk summary export", metadata: { format: "xlsx" } });
-        return true;
-      } catch (error) {
-        return false;
-      }
-    }
-    const headers = Object.keys(rows[0]);
-    const csv = [headers.join(";"), headers.map(h => String(rows[0][h] ?? "").replace(/;/g, ",")).join(";")].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `TFRS16_Risk_Summary_${Date.now()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    recordAuditEvent({ action: "EXPORT", entityType: "RISK_SUMMARY", entityId: "ALL", reason: "Risk summary export", metadata: { format: "csv" } });
-    return true;
-  }
 
   function runV168ControlTests() {
     const testContract = {
@@ -15767,9 +13863,6 @@ ${renderAccountingCenterBulkPromo()}
     return status === "ACTIVE" || status === "DRAFT" || status === "ACTIVE_LEASE";
   }
 
-  function cfoGetContracts() {
-    return Array.isArray(contracts) ? contracts : [];
-  }
 
   function cfoResolveReportingDate(reportingDate) {
     const parsed = cfoDate(reportingDate);
@@ -15784,416 +13877,36 @@ ${renderAccountingCenterBulkPromo()}
     return resolveContractScheduleSource(contract);
   }
 
-  function cfoScheduleAtDate(schedule, reportingDate) {
-    const report = cfoDate(reportingDate);
-    if (!Array.isArray(schedule) || !schedule.length || !report) return null;
-    let latest = null;
-    schedule.forEach(row => {
-      const d = cfoDate(row?.date);
-      if (d && d.getTime() <= report.getTime() && (!latest || d.getTime() > cfoDate(latest.date).getTime())) latest = row;
-    });
-    return latest;
-  }
 
-  function cfoGetLiabilitySplit(contract, reportingDate, schedule) {
-    try {
-      if (typeof calculateLiabilitySplitAsOf === "function") {
-        const built = cfoBuildSchedule(contract);
-        const customSchedule = built.source !== "LEASE_SCHEDULE" && Array.isArray(schedule) && schedule.length
-          ? schedule
-          : undefined;
-        const result = calculateLiabilitySplitAsOf(contract, reportingDate, customSchedule);
-        if (result && result.valid !== false) return result;
-      }
-    } catch (error) {}
-    return { valid: false, totalLeaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, next12MonthPrincipal: 0, next12MonthInterest: 0, next12MonthPayments: 0 };
-  }
 
-  function legacyReportAuth_cfoGetContractMetricsInternal(contract, reportingDate) {
-    const report = cfoResolveReportingDate(reportingDate);
-    const built = cfoBuildSchedule(contract);
-    const schedule = built.schedule || [];
-    const split = cfoGetLiabilitySplit(contract, report, schedule);
-    const active = cfoIsActive(contract, report);
-    const rowAtDate = cfoScheduleAtDate(schedule, report);
-    const current = cfoNumber(split.currentLiability ?? split.current);
-    const nonCurrent = cfoNumber(split.nonCurrentLiability ?? split.nonCurrent);
-    const total = cfoNumber(split.totalLeaseLiability ?? split.total ?? split.outstandingLiability);
 
-    let rouAsset = Math.max(0, cfoNumber(split.outstandingROU));
-    if (!rouAsset && rowAtDate && rowAtDate.rouClosing !== undefined) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouClosing));
-    else if (rowAtDate && rowAtDate.rouOpening !== undefined && cfoDate(rowAtDate.date)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(rowAtDate.rouOpening));
-    else if (!schedule.length && built.engine) rouAsset = Math.max(0, cfoNumber(built.engine.rouAssets));
-    else if (schedule.length && !rowAtDate && cfoDate(contract.startDate)?.getTime() > report.getTime()) rouAsset = Math.max(0, cfoNumber(built.engine?.rouAssets));
 
-    const monthRows = schedule.filter(row => {
-      const d = cfoDate(row?.date);
-      return d && d.getFullYear() === report.getFullYear() && d.getMonth() === report.getMonth();
-    });
-    const future12End = cfoAddMonths(report, 12);
-    const future12Rows = schedule.filter(row => {
-      const d = cfoDate(row?.date);
-      return d && d.getTime() > report.getTime() && future12End && d.getTime() <= future12End.getTime();
-    });
-    let next12Payment = future12Rows.reduce((s, r) => s + cfoNumber(r?.payment), 0);
-    let next12Principal = future12Rows.reduce((s, r) => s + cfoNumber(r?.principal), 0);
-    let next12Interest = future12Rows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    let monthInterest = monthRows.reduce((s, r) => s + cfoNumber(r?.interest), 0);
-    let monthDepreciation = monthRows.reduce((s, r) => s + cfoNumber(r?.depreciation), 0);
-    const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
-    if (accrualContext) {
-      const monthEnd = new Date(report.getFullYear(), report.getMonth() + 1, 0);
-      const monthStartExclusive = new Date(report.getFullYear(), report.getMonth(), 0);
-      const currentSummary = buildAccrualJournalSummary(accrualContext, schedule, monthStartExclusive, monthEnd);
-      if (currentSummary) {
-        monthInterest = cfoNumber(currentSummary.interest);
-        monthDepreciation = cfoNumber(currentSummary.depreciation);
-      }
-      next12Payment = next12Principal = next12Interest = 0;
-      for (let i = 1; i <= 12; i++) {
-        const periodEnd = new Date(report.getFullYear(), report.getMonth() + i + 1, 0);
-        if (periodEnd.getTime() > future12End.getTime()) break;
-        const periodStartExclusive = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 0);
-        const summary = buildAccrualJournalSummary(accrualContext, schedule, periodStartExclusive, periodEnd);
-        if (summary) {
-          next12Payment += cfoNumber(summary.payment);
-          next12Principal += cfoNumber(summary.recurringCashSettlement);
-          next12Interest += cfoNumber(summary.interest);
-        }
-      }
-    }
-    const monthlyLeaseExpense = monthRows.some(r => r?.straightLineExpense !== undefined)
-      ? monthRows.reduce((s, r) => s + cfoNumber(r?.straightLineExpense), 0)
-      : monthInterest + monthDepreciation;
 
-    let control = null;
-    try {
-      control = typeof getContractControlResults === "function" ? getContractControlResults(contract.id, { run: false, persist: false, audit: false }) : null;
-    } catch (error) { control = null; }
-    const exceptions = Array.isArray(control?.exceptions) ? control.exceptions : [];
-    const openExceptions = exceptions.filter(item => item.status !== CONTROL_EXCEPTION_STATUS.RESOLVED && item.status !== CONTROL_EXCEPTION_STATUS.WAIVED);
-    const renewalDate = contract?.renewalDate || contract?.renewalOptionDate || contract?.renewalAssessmentDate || null;
-    const expiryDays = cfoDaysBetween(report, contract?.endDate);
-    const renewalDays = cfoDaysBetween(report, renewalDate);
-    const appliedMods = Array.isArray(contract?.modifications) ? contract.modifications.filter(x => String(x?.status || "").toUpperCase() === "APPLIED") : [];
-    const pendingMods = Array.isArray(contract?.modifications) ? contract.modifications.filter(x => !["APPLIED", "CANCELLED"].includes(String(x?.status || "").toUpperCase())) : [];
-    const appliedReassessments = Array.isArray(contract?.reassessments) ? contract.reassessments.filter(x => String(x?.status || "").toUpperCase() === "APPLIED") : [];
-    const pendingReassessments = Array.isArray(contract?.reassessments) ? contract.reassessments.filter(x => !["APPLIED", "CANCELLED"].includes(String(x?.status || "").toUpperCase())) : [];
 
-    return {
-      contractId: contract?.id || null,
-      company: contract?.company || "",
-      supplier: contract?.supplier || "",
-      status: String(contract?.status || "ACTIVE").toUpperCase(),
-      currency: String(contract?.currency || "TRY").toUpperCase(),
-      active,
-      leaseLiability: Math.max(0, total),
-      currentLiability: Math.max(0, current),
-      nonCurrentLiability: Math.max(0, nonCurrent),
-      rouAsset: Math.max(0, rouAsset),
-      monthlyInterest: monthInterest,
-      monthlyDepreciation: monthDepreciation,
-      monthlyLeaseExpense,
-      next12MonthPayments: next12Payment,
-      next12MonthPrincipal: next12Principal,
-      next12MonthInterest: next12Interest,
-      renewalDate: cfoIsoDate(renewalDate),
-      renewalDays,
-      renewalRisk: renewalDays !== null && renewalDays >= 0 && renewalDays <= 180,
-      expiryDate: cfoIsoDate(contract?.endDate),
-      expiryDays,
-      expiryRisk: expiryDays !== null && expiryDays >= 0 && expiryDays <= 365,
-      modificationStatus: pendingMods.length ? "PENDING" : (appliedMods.length ? "APPLIED" : "NONE"),
-      reassessmentStatus: pendingReassessments.length ? "PENDING" : (appliedReassessments.length ? "APPLIED" : "NONE"),
-      pendingModifications: pendingMods.length,
-      appliedModifications: appliedMods.length,
-      pendingReassessments: pendingReassessments.length,
-      appliedReassessments: appliedReassessments.length,
-      controlStatus: control?.overallStatus || (typeof getContractRiskStatus === "function" ? getContractRiskStatus(contract.id) : "GREEN"),
-      openExceptions: openExceptions.length,
-      criticalExceptions: openExceptions.filter(x => x.priority === CONTROL_PRIORITY.CRITICAL).length,
-      highExceptions: openExceptions.filter(x => x.priority === CONTROL_PRIORITY.HIGH).length,
-      mediumExceptions: openExceptions.filter(x => x.priority === CONTROL_PRIORITY.MEDIUM).length,
-      lowExceptions: openExceptions.filter(x => x.priority === CONTROL_PRIORITY.LOW).length,
-      scheduleSource: built.source,
-      scheduleRows: schedule.length,
-      calculationValid: Boolean(schedule.length || built.engine?.exempt),
-      calculationError: built.error || null,
-      reportingDate: cfoIsoDate(report)
-    };
-  }
 
-  function legacyReportAuth_getCfoContractMetrics(contractIdValue, reportingDate) {
-    const contract = cfoGetContracts().find(item => item.id === contractIdValue);
-    if (!contract) return null;
-    try { return cfoGetContractMetricsInternal(contract, reportingDate); }
-    catch (error) {
-      return { contractId: contractIdValue, reportingDate: cfoIsoDate(cfoResolveReportingDate(reportingDate)), calculationValid: false, calculationError: error?.message || String(error) };
-    }
-  }
 
-  function legacyReportAuth_cfoAggregateRows(rows) {
-    const totals = { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAsset: 0, monthlyInterest: 0, monthlyDepreciation: 0, monthlyLeaseExpense: 0, next12MonthPayments: 0, next12MonthPrincipal: 0, next12MonthInterest: 0 };
-    rows.forEach(r => Object.keys(totals).forEach(k => { totals[k] += cfoNumber(r?.[k]); }));
-    Object.keys(totals).forEach(k => totals[k] = cfoRound(totals[k]));
-    return totals;
-  }
 
-  /**
-   * getCfoAggregateMetrics — tüm aktif kontratların toplam kira
-   * yükümlülüğü/ROU varlığı rakamlarını TEK GEÇİŞTE hesaplar ve
-   * `reportingDate` bazında önbelleğe alır.
-   *
-   * FAZ 4.1 (Performans, plan önerisi): `getTotalLeaseLiability`,
-   * `getCurrentLeaseLiability`, `getNonCurrentLeaseLiability`,
-   * `getTotalRuoAssets` her biri AYNI ayrı
-   * `cfoGetContracts().filter(...).map(cfoGetContractMetricsInternal)`
-   * zincirini KENDİ BAŞINA çalıştırıyordu — bir CFO Dashboard'da
-   * hepsi art arda çağrılırsa (tipik kullanım), reassessment/
-   * modification'lı kontratlarda pahalı olan bu zincir (control
-   * sonuçları, next-12-ay filtreleme, `buildReassessedSchedule` vb.
-   * dahil — yalnızca `calculateLeaseEngine` DEĞİL) 4 KEZ tekrarlanıyordu.
-   * `calculateLeaseEngine`'in KENDİ önbelleği (CALCULATION_CACHE) bu
-   * tekrarı KISMEN gizliyordu (LEASE_SCHEDULE dalı için), ama
-   * REASSESSED_SCHEDULE/MODIFIED_SCHEDULE dallarının hiç önbelleği yok
-   * — bu fonksiyonlar 4 kez tam olarak yeniden çalışıyordu.
-   *
-   * Önbellek geçersiz kılma: `clearCalculationCache()` bu önbelleği de
-   * temizler (kontrat mutasyonu olan HER yerde tek bakım noktası).
-   */
-  function legacyReportAuth_getCfoAggregateMetrics(reportingDate) {
-    const resolvedDate = cfoResolveReportingDate(reportingDate);
-    const cacheKey = cfoIsoDate(resolvedDate) || String(reportingDate);
 
-    if (CFO_AGGREGATE_CACHE.has(cacheKey)) {
-      return CFO_AGGREGATE_CACHE.get(cacheKey);
-    }
 
-    const rows = cfoGetContracts()
-      .filter(c => cfoIsActive(c, resolvedDate))
-      .map(c => cfoGetContractMetricsInternal(c, reportingDate));
 
-    const totals = cfoAggregateRows(rows);
-    CFO_AGGREGATE_CACHE.set(cacheKey, totals);
-    return totals;
-  }
 
-  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function legacyReportAuth_getTotalLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).leaseLiability; }
-  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function legacyReportAuth_getCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).currentLiability; }
-  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function legacyReportAuth_getNonCurrentLeaseLiability(reportingDate) { return getCfoAggregateMetrics(reportingDate).nonCurrentLiability; }
-  /** @deprecated-name Kalıcı: dış çağrılarla (window.GK_TFRS16) uyumluluk için korunuyor. Bkz. getCfoAggregateMetrics. */
-  function legacyReportAuth_getTotalRuoAssets(reportingDate) { return getCfoAggregateMetrics(reportingDate).rouAsset; }
 
-  function legacyReportAuth_cfoPeriodMetrics(startDate, endDate, options = {}) {
-    const start = cfoDate(startDate), end = cfoDate(endDate);
-    if (!start || !end || end < start) return { interestExpense: 0, depreciationExpense: 0, leaseExpense: 0, cashPayments: 0, principal: 0, paymentInterest: 0 };
-    const rows = [];
-    cfoGetContracts().forEach(contract => {
-      try {
-        const built = cfoBuildSchedule(contract);
-        (built.schedule || []).forEach(row => {
-          const d = cfoDate(row?.date);
-          if (d && d >= start && d <= end && (!options.activeOnly || cfoIsActive(contract, start))) rows.push(row);
-        });
-      } catch (error) {}
-    });
-    const interestExpense = rows.reduce((s,r) => s+cfoNumber(r?.interest),0);
-    const depreciationExpense = rows.reduce((s,r) => s+cfoNumber(r?.depreciation),0);
-    const cashPayments = rows.reduce((s,r) => s+cfoNumber(r?.payment),0);
-    const principal = rows.reduce((s,r) => s+cfoNumber(r?.principal),0);
-    return { interestExpense:cfoRound(interestExpense), depreciationExpense:cfoRound(depreciationExpense), leaseExpense:cfoRound(interestExpense+depreciationExpense), cashPayments:cfoRound(cashPayments), principal:cfoRound(principal), paymentInterest:cfoRound(interestExpense), rowCount:rows.length };
-  }
 
-  function legacyReportAuth_getInterestExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).interestExpense; }
-  function legacyReportAuth_getDepreciationExpense(startDate, endDate) { return cfoPeriodMetrics(startDate, endDate).depreciationExpense; }
-  function legacyReportAuth_getMonthlyLeaseExpense(reportingDate) {
-    const d = cfoResolveReportingDate(reportingDate);
-    return cfoPeriodMetrics(new Date(d.getFullYear(), d.getMonth(), 1), new Date(d.getFullYear(), d.getMonth()+1, 0)).leaseExpense;
-  }
-  function legacyReportAuth_getLeaseLiabilityMetrics(reportingDate) {
-    const d = cfoResolveReportingDate(reportingDate);
-    return { reportingDate:cfoIsoDate(d), total:getTotalLeaseLiability(d), current:getCurrentLeaseLiability(d), nonCurrent:getNonCurrentLeaseLiability(d) };
-  }
 
-  // TFRS 16.53(i): "the weighted average incremental borrowing rate
-  // applied to lease liabilities recognized in the statement of
-  // financial position" — this disclosure did not exist anywhere in
-  // the module. Weighted by each contract's outstanding lease
-  // liability as of the reporting date (exempt/zero-liability
-  // contracts naturally get zero weight, so they don't distort the
-  // rate even though they were entered with a discount rate field).
-  function legacyReportAuth_getWeightedAverageDiscountRate(reportingDate) {
-    const d = cfoResolveReportingDate(reportingDate);
-    let weightedSum = 0;
-    let totalWeight = 0;
-    cfoGetContracts().forEach(contract => {
-      if (!cfoIsActive(contract, d)) return;
-      let metrics;
-      try { metrics = cfoGetContractMetricsInternal(contract, d); }
-      catch (error) { return; }
-      const weight = cfoNumber(metrics?.leaseLiability);
-      const rate = cfoNumber(contract.discountRate);
-      if (weight <= 0) return;
-      weightedSum += weight * rate;
-      totalWeight += weight;
-    });
-    return {
-      reportingDate: cfoIsoDate(d),
-      weightedAverageDiscountRate: totalWeight > 0 ? cfoRound(weightedSum / totalWeight) : 0,
-      totalWeightedLiability: cfoRound(totalWeight),
-      basis: "Contract discount rates weighted by outstanding lease liability as of the reporting date (TFRS 16.53(i))."
-    };
-  }
-  function legacyReportAuth_getLeaseCashFlowMetrics(reportingDate) {
-    const d = cfoResolveReportingDate(reportingDate);
-    const end = cfoAddMonths(d,12);
-    const p = cfoPeriodMetrics(new Date(d.getTime()+86400000), end, { activeOnly:true });
-    return { reportingDate:cfoIsoDate(d), periodEnd:cfoIsoDate(end), next12MonthsPayments:p.cashPayments, next12MonthsPrincipal:p.principal, next12MonthsInterest:p.interestExpense, reconciliationDifference:cfoRound(p.cashPayments-(p.principal+p.interestExpense)) };
-  }
 
-  function legacyReportAuth_getTotalContractCount() { return cfoGetContracts().length; }
-  function legacyReportAuth_getActiveContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>cfoIsActive(c,d)).length; }
-  function legacyReportAuth_getExpiredContractCount(reportingDate) { const d=cfoResolveReportingDate(reportingDate); return cfoGetContracts().filter(c=>{ const e=cfoDate(c.endDate); return e && e<d && String(c.status||"ACTIVE").toUpperCase() !== "TERMINATED"; }).length; }
-  function legacyReportAuth_getTerminatedContractCount() { return cfoGetContracts().filter(c=>String(c.status||"").toUpperCase()==="TERMINATED").length; }
 
-  function legacyReportAuth_getContractsExpiringWithin(days, reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), horizon=cfoAddMonths(d,0); horizon.setDate(horizon.getDate()+Math.max(0,Number(days)||0));
-    return cfoGetContracts().filter(c=>cfoIsActive(c,d)).filter(c=>{const e=cfoDate(c.endDate);return e&&e>=d&&e<=horizon;});
-  }
-  function legacyReportAuth_getContractsExpiringWithin12Months(reportingDate) { return getContractsExpiringWithin(365, reportingDate); }
 
-  function legacyReportAuth_getLeaseRenewalMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate);
-    const within=(days)=>cfoGetContracts().filter(c=>cfoIsActive(c,d)).filter(c=>{const r=cfoDate(c.renewalDate||c.renewalOptionDate||c.renewalAssessmentDate); const n=cfoDaysBetween(d,r); return n!==null&&n>=0&&n<=days;});
-    const r90=within(90), r180=within(180);
-    return { within90Days:r90.length, within180Days:r180.length, contractsWithin90Days:r90.map(c=>c.id), contractsWithin180Days:r180.map(c=>c.id) };
-  }
 
-  function legacyReportAuth_getLeaseModificationMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), cutoff=cfoAddMonths(d,-12), all=[];
-    cfoGetContracts().forEach(c=>(Array.isArray(c.modifications)?c.modifications:[]).forEach(m=>all.push({...m,contractId:c.id})));
-    const pending=all.filter(m=>!["APPLIED","CANCELLED"].includes(String(m.status||"").toUpperCase()));
-    const applied=all.filter(m=>String(m.status||"").toUpperCase()==="APPLIED");
-    const last12=applied.filter(m=>{const x=cfoDate(m.effectiveDate||m.updatedAt||m.createdAt);return x&&cutoff&&x>=cutoff&&x<=d;});
-    return { pending:pending.length, applied:applied.length, last12Months:last12.length, pendingIds:pending.map(x=>x.id).filter(Boolean), appliedLast12Ids:last12.map(x=>x.id).filter(Boolean), liabilityImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.liabilityAdjustment),0)), rouImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.rouAdjustment),0)) };
-  }
 
-  function legacyReportAuth_getLeaseReassessmentMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), cutoff=cfoAddMonths(d,-12), all=[];
-    cfoGetContracts().forEach(c=>(Array.isArray(c.reassessments)?c.reassessments:[]).forEach(r=>all.push({...r,contractId:c.id})));
-    const pending=all.filter(r=>!["APPLIED","CANCELLED"].includes(String(r.status||"").toUpperCase()));
-    const applied=all.filter(r=>String(r.status||"").toUpperCase()==="APPLIED");
-    const last12=applied.filter(r=>{const x=cfoDate(r.effectiveDate||r.updatedAt||r.createdAt);return x&&cutoff&&x>=cutoff&&x<=d;});
-    return { pending:pending.length, applied:applied.length, last12Months:last12.length, pendingIds:pending.map(x=>x.id).filter(Boolean), appliedLast12Ids:last12.map(x=>x.id).filter(Boolean), liabilityImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.liabilityAdjustment),0)), rouImpact:cfoRound(applied.reduce((s,x)=>s+cfoNumber(x.rouAdjustment),0)) };
-  }
 
-  function legacyReportAuth_getLeaseRiskMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), rows=[];
-    cfoGetContracts().forEach(c=>{ try { rows.push(cfoGetContractMetricsInternal(c,d)); } catch(error) {} });
-    const open=rows.reduce((s,r)=>s+cfoNumber(r.openExceptions),0);
-    const critical=rows.reduce((s,r)=>s+cfoNumber(r.criticalExceptions),0);
-    return { green:rows.filter(r=>r.controlStatus==="GREEN").length, yellow:rows.filter(r=>r.controlStatus==="YELLOW").length, red:rows.filter(r=>r.controlStatus==="RED").length, openExceptions:open, criticalExceptions:critical, highExceptions:rows.reduce((s,r)=>s+cfoNumber(r.highExceptions),0), mediumExceptions:rows.reduce((s,r)=>s+cfoNumber(r.mediumExceptions),0), lowExceptions:rows.reduce((s,r)=>s+cfoNumber(r.lowExceptions),0), distribution:{GREEN:rows.filter(r=>r.controlStatus==="GREEN").length,YELLOW:rows.filter(r=>r.controlStatus==="YELLOW").length,RED:rows.filter(r=>r.controlStatus==="RED").length} };
-  }
 
-  function legacyReportAuth_getLeaseControlMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), rows=[];
-    cfoGetContracts().forEach(c=>{ try { const m=cfoGetContractMetricsInternal(c,d); rows.push(m); } catch(error) {} });
-    return { contractsWithMissingCriticalData:rows.filter(r=>r.controlStatus==="RED").filter(r=>String(r.calculationError||"").length===0).length, contractsWithCalculationErrors:rows.filter(r=>!r.calculationValid).length, contractsWithJournalIssues:rows.filter(r=>r.criticalExceptions>0).length, contractsWithClassificationIssues:rows.filter(r=>r.controlStatus==="RED").length, contractsWithAuditIssues:rows.filter(r=>r.openExceptions>0).length };
-  }
 
-  function legacyReportAuth_getControlRiskRows(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate);
-    return cfoGetContracts().map(c=>{try{return cfoGetContractMetricsInternal(c,d);}catch(error){return {contractId:c.id,calculationValid:false,calculationError:error?.message||String(error),controlStatus:"RED"};}});
-  }
 
-  function legacyReportAuth_getCfoCompanyMetrics(company, reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), target=String(company||"");
-    const rows=cfoGetContracts().filter(c=>String(c.company||"")===target).map(c=>cfoGetContractMetricsInternal(c,d));
-    const totals=cfoAggregateRows(rows);
-    return { company:target, reportingDate:cfoIsoDate(d), contractCount:rows.length, activeContracts:rows.filter(r=>r.active).length, ...totals, risk:{green:rows.filter(r=>r.controlStatus==="GREEN").length,yellow:rows.filter(r=>r.controlStatus==="YELLOW").length,red:rows.filter(r=>r.controlStatus==="RED").length,openExceptions:rows.reduce((s,r)=>s+r.openExceptions,0)}, contracts:rows };
-  }
 
-  function legacyReportAuth_getCfoMetricsByCompany(reportingDate) {
-    const companies=[...new Set(cfoGetContracts().map(c=>String(c.company||"")).filter(Boolean))];
-    return companies.map(company=>getCfoCompanyMetrics(company,reportingDate));
-  }
 
-  function legacyReportAuth_getCfoCurrencyMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), groups={};
-    cfoGetContracts().forEach(c=>{try{const r=cfoGetContractMetricsInternal(c,d);const cur=r.currency||"UNSPECIFIED";if(!groups[cur])groups[cur]={currency:cur,contractCount:0,activeContracts:0,leaseLiability:0,currentLiability:0,nonCurrentLiability:0,rouAsset:0,monthlyInterest:0,monthlyDepreciation:0,monthlyLeaseExpense:0,next12MonthPayments:0,next12MonthPrincipal:0,next12MonthInterest:0};const g=groups[cur];g.contractCount++;if(r.active)g.activeContracts++;["leaseLiability","currentLiability","nonCurrentLiability","rouAsset","monthlyInterest","monthlyDepreciation","monthlyLeaseExpense","next12MonthPayments","next12MonthPrincipal","next12MonthInterest"].forEach(k=>g[k]+=cfoNumber(r[k]));}catch(error){}});
-    Object.values(groups).forEach(g=>Object.keys(g).forEach(k=>{if(typeof g[k]==="number")g[k]=cfoRound(g[k]);}));
-    return groups;
-  }
 
-  function legacyReportAuth_getLeaseLiabilityRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
-    const report=getLeaseLiabilityRollForwardReport(start,d), t=report.totals||{};
-    return {reportingDate:cfoIsoDate(d),openingLiability:cfoRound(t.openingLiability),interest:cfoRound(t.interest),payments:cfoRound(t.payments),closingLiability:cfoRound(t.closingLiability),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL",monthlyLeaseExpense:cfoRound(getMonthlyLeaseExpense(d))};
-  }
 
-  function legacyReportAuth_getLeaseRouRollForward(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), start=new Date(d.getFullYear(),d.getMonth(),1);
-    const report=getRuoAssetRollForwardReport(start,d), t=report.totals||{};
-    const adjustments=cfoRound(cfoNumber(t.modificationAdjustment)+cfoNumber(t.reassessmentAdjustment));
-    return {reportingDate:cfoIsoDate(d),openingROU:cfoRound(t.openingRuo),depreciation:cfoRound(t.depreciation),modificationReassessmentAdjustments:adjustments,closingROU:cfoRound(t.closingRuo),reconciliationDifference:cfoRound(report.reconciliation?.difference),source:"REPORTING_DATE_ACCRUAL"};
-  }
 
-  function legacyReportAuth_getCfoJournalMetrics() {
-    const events=typeof getAuditEvents==="function"?getAuditEvents({}):[];
-    const generated=events.filter(e=>String(e.action||"").includes("JOURNAL_GENERATED"));
-    const rows=[];
-    cfoGetContracts().forEach(c=>{
-      [...(Array.isArray(c.modifications)?c.modifications:[]),...(Array.isArray(c.reassessments)?c.reassessments:[])].forEach(x=>{if(Array.isArray(x.journal))rows.push(...x.journal.map(j=>({...j,contractId:c.id})));});
-    });
-    const debit=rows.reduce((s,r)=>s+cfoNumber(r.debit),0), credit=rows.reduce((s,r)=>s+cfoNumber(r.credit),0);
-    return { totalGeneratedJournals:generated.length, generatedJournalEvents:generated.length, balancedJournals:rows.length?Math.abs(debit-credit)<=CFO_TOLERANCE:0, unbalancedJournals:rows.length&&Math.abs(debit-credit)>CFO_TOLERANCE?1:0, journalEntries:rows.length, totalDebit:cfoRound(debit), totalCredit:cfoRound(credit), bySource:rows.reduce((a,r)=>{const k=r.source||"UNKNOWN";a[k]=(a[k]||0)+1;return a;},{}) };
-  }
-
-  function legacyReportAuth_getCfoAuditMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), events=typeof getAuditEvents==="function"?getAuditEvents({}):[], cutoff30=cfoAddMonths(d,0), cutoff90=cfoAddMonths(d,0); cutoff30.setDate(cutoff30.getDate()-30); cutoff90.setDate(cutoff90.getDate()-90);
-    const last30=events.filter(e=>{const x=cfoDate(e.timestamp);return x&&x>=cutoff30&&x<=d;}).length;
-    const last90=events.filter(e=>{const x=cfoDate(e.timestamp);return x&&x>=cutoff90&&x<=d;}).length;
-    const noRecent=cfoGetContracts().filter(c=>!events.some(e=>e.contractId===c.id&&cfoDate(e.timestamp)&&cfoDate(e.timestamp)>=cutoff90)).map(c=>c.id);
-    return { totalAuditEvents:events.length, eventsLast30Days:last30, eventsLast90Days:last90, contractsWithoutRecentAuditActivity:noRecent.length, contractIdsWithoutRecentAuditActivity:noRecent };
-  }
-
-  function legacyReportAuth_getTfrs16CfoMetrics(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), rows=getControlRiskRows(d), activeRows=rows.filter(r=>r.active);
-    const totals=cfoAggregateRows(activeRows), risk=getLeaseRiskMetrics(d), renewals=getLeaseRenewalMetrics(d), modifications=getLeaseModificationMetrics(d), reassessments=getLeaseReassessmentMetrics(d), cash=getLeaseCashFlowMetrics(d);
-    const contracts={total:cfoGetContracts().length,active:activeRows.length,expired:getExpiredContractCount(d),terminated:getTerminatedContractCount()};
-    const liabilityReconciliation=cfoRound(totals.leaseLiability-(totals.currentLiability+totals.nonCurrentLiability));
-    const cashReconciliation=cfoRound(cash.next12MonthsPayments-(cash.next12MonthsPrincipal+cash.next12MonthsInterest));
-    const dataErrors=rows.filter(r=>r.calculationValid===false||r.calculationError).length;
-    return { reportingDate:cfoIsoDate(d), contracts, liabilities:{total:totals.leaseLiability,current:totals.currentLiability,nonCurrent:totals.nonCurrentLiability}, rouAssets:{total:totals.rouAsset}, pnl:{interestExpense:totals.monthlyInterest,depreciationExpense:totals.monthlyDepreciation,leaseExpense:totals.monthlyLeaseExpense}, cashFlow:{next12MonthsPayments:cash.next12MonthsPayments,next12MonthsPrincipal:cash.next12MonthsPrincipal,next12MonthsInterest:cash.next12MonthsInterest,reconciliationDifference:cashReconciliation}, renewals, expiry:{within12Months:getContractsExpiringWithin12Months(d).length}, modifications, reassessments, risk, controls:getLeaseControlMetrics(d), companies:getCfoMetricsByCompany(d), currencies:getCfoCurrencyMetrics(d), journal:getCfoJournalMetrics(), audit:getCfoAuditMetrics(d), liabilityRollForward:getLeaseLiabilityRollForward(d), rouRollForward:getLeaseRouRollForward(d), disclosures:{weightedAverageDiscountRate:getWeightedAverageDiscountRate(d)}, reconciliation:{liability:{difference:liabilityReconciliation,passed:Math.abs(liabilityReconciliation)<=CFO_TOLERANCE},cashFlow:{difference:cashReconciliation,passed:Math.abs(cashReconciliation)<=CFO_TOLERANCE}}, dataQuality:{status:dataErrors?"ERROR":(risk.openExceptions?"WARNING":"COMPLETE"),errors:dataErrors,warnings:risk.openExceptions}, sourceMetadata:{liabilities:"REPORTING_DATE_ENGINE",rouAssets:"LEASE_SCHEDULE",pnl:"LEASE_SCHEDULE",cashFlow:"LEASE_SCHEDULE",risk:"CONTROL_ENGINE",audit:"AUDIT_TRAIL_ENGINE"} };
-  }
-
-  function legacyReportAuth_getTfrs16CfoSnapshot(reportingDate) {
-    const d=cfoResolveReportingDate(reportingDate), metrics=getTfrs16CfoMetrics(d);
-    return { version:CFO_DATA_LAYER_VERSION, reportingDate:metrics.reportingDate, generatedAt:new Date().toISOString(), status:metrics.dataQuality.status==="ERROR"?"ERROR":(metrics.dataQuality.status==="WARNING"?"WARNING":"READY"), headline:{totalLeaseLiability:metrics.liabilities.total,currentLeaseLiability:metrics.liabilities.current,nonCurrentLeaseLiability:metrics.liabilities.nonCurrent,rouAssets:metrics.rouAssets.total,next12MonthCashPayments:metrics.cashFlow.next12MonthsPayments,redContracts:metrics.risk.red,criticalExceptions:metrics.risk.criticalExceptions}, ...metrics };
-  }
-
-  function legacyReportAuth_getMonthlyLeaseMetrics(year) {
-    const y=Number(year), rows=[];
-    if(!Number.isInteger(y)) return rows;
-    for(let month=0;month<12;month++){
-      const start=new Date(y,month,1), end=new Date(y,month+1,0), p=cfoPeriodMetrics(start,end,{activeOnly:false});
-      const liability=getTotalLeaseLiability(end);
-      rows.push({month:`${y}-${String(month+1).padStart(2,"0")}`,liability,interest:p.interestExpense,depreciation:p.depreciationExpense,leaseExpense:p.leaseExpense,cashPayment:p.cashPayments,principal:p.principal});
-    }
-    return rows;
-  }
-
-  function legacyReportAuth_getOpenExceptionsCfo() { return typeof getOpenExceptions === "function" ? getOpenExceptions() : []; }
-
-  function legacyReportAuth_getCriticalExceptionsCfo() { return typeof getCriticalExceptions === "function" ? getCriticalExceptions() : []; }
-
-  function legacyReportAuth_exportControlResultsAsCfoData(reportingDate) {
-    const snapshot=getTfrs16CfoSnapshot(reportingDate);
-    return cfoClone(snapshot);
-  }
 
   function runV169DataLayerTests() {
     const results=[];
@@ -16260,35 +13973,13 @@ ${renderAccountingCenterBulkPromo()}
     try { return coreDate(value); } catch (error) { return null; }
   }
 
-  // Compare reporting dates by calendar day.  A Date supplied by a browser
-  // date input may carry a UTC offset, so direct timestamp comparisons can
-  // move an ISO date to the previous local day (and misclassify commencement
-  // as an opening balance).
-  function rptCalendarDateKey(value) {
-    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) return value.trim().slice(0, 10);
-    const d = rptDate(value);
-    if (!d) return null;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
 
-  function rptCalendarDateBetween(value, start, end) {
-    const valueKey = rptCalendarDateKey(value), startKey = rptCalendarDateKey(start), endKey = rptCalendarDateKey(end);
-    return Boolean(valueKey && startKey && endKey && valueKey >= startKey && valueKey <= endKey);
-  }
 
   /** @deprecated-name Kalıcı: rptIsoDate — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreIsoDate. */
   function rptIsoDate(value) {
     return coreIsoDate(rptDate(value));
   }
 
-  function rptLocalIsoDate(value) {
-    const date = rptDate(value);
-    if (!date) return null;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
 
   /** @deprecated-name Kalıcı: rptAddDays — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreAddDays. */
   function rptAddDays(value, days) {
@@ -16315,141 +14006,23 @@ ${renderAccountingCenterBulkPromo()}
     return coreClone(value);
   }
 
-  function rptEmptyReport(reportName, reportingDate, source = "V16.9_DATA_LAYER") {
-    return {
-      reportName,
-      reportingDate: rptIsoDate(reportingDate),
-      generatedAt: new Date().toISOString(),
-      dataSource: source,
-      status: "READY",
-      rows: [],
-      totals: {},
-      reconciliation: {},
-      warnings: [],
-      errors: []
-    };
-  }
 
-  function rptFinalize(report, options = {}) {
-    const warnings = Array.isArray(report.warnings) ? report.warnings : [];
-    const errors = Array.isArray(report.errors) ? report.errors : [];
-    report.warnings = warnings;
-    report.errors = errors;
-    if (errors.length) report.status = "ERROR";
-    else if (warnings.length) report.status = "WARNING";
-    else report.status = options.status || "READY";
-    return report;
-  }
 
   function rptSafeContracts() {
     return Array.isArray(contracts) ? contracts : [];
   }
 
-  function rptBuildSchedule(contract) {
-    try {
-      if (typeof cfoBuildSchedule === "function") return cfoBuildSchedule(contract);
-      const engine = typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null;
-      return { schedule: Array.isArray(engine?.schedule) ? engine.schedule : [], engine, source: "LEASE_SCHEDULE" };
-    } catch (error) {
-      return { schedule: [], engine: null, source: "ERROR", error: error?.message || String(error) };
-    }
-  }
 
-  function rptScheduleRows(contract) {
-    const built = rptBuildSchedule(contract);
-    return { schedule: Array.isArray(built.schedule) ? built.schedule : [], source: built.source, error: built.error || null, engine: built.engine || null };
-  }
 
-  function rptScheduleAtOrBefore(schedule, date) {
-    const target = rptDate(date);
-    if (!target || !Array.isArray(schedule)) return null;
-    let result = null;
-    schedule.forEach(row => {
-      const d = rptDate(row?.date);
-      if (d && d <= target && (!result || d > rptDate(result.date))) result = row;
-    });
-    return result;
-  }
 
-  function rptScheduleAtOrAfter(schedule, date) {
-    const target = rptDate(date);
-    if (!target || !Array.isArray(schedule)) return null;
-    let result = null;
-    schedule.forEach(row => {
-      const d = rptDate(row?.date);
-      if (d && d >= target && (!result || d < rptDate(result.date))) result = row;
-    });
-    return result;
-  }
 
-  function rptRowsBetween(schedule, startDate, endDate) {
-    const start = rptDate(startDate), end = rptDate(endDate);
-    if (!start || !end || !Array.isArray(schedule)) return [];
-    return schedule.filter(row => {
-      const d = rptDate(row?.date);
-      return d && d >= start && d <= end;
-    });
-  }
 
-  function rptGetRowRuo(row) {
-    if (!row) return 0;
-    if (row.rouClosing !== undefined) return Math.max(0, rptNumber(row.rouClosing));
-    if (row.rouClosingBalance !== undefined) return Math.max(0, rptNumber(row.rouClosingBalance));
-    if (row.rouAssets !== undefined) return Math.max(0, rptNumber(row.rouAssets));
-    return 0;
-  }
 
-  function rptGetRowLiability(row) {
-    if (!row) return 0;
-    if (row.closingLiability !== undefined) return Math.max(0, rptNumber(row.closingLiability));
-    if (row.liabilityClosing !== undefined) return Math.max(0, rptNumber(row.liabilityClosing));
-    return 0;
-  }
 
-  function rptAggregateRows(rows, keys) {
-    const out = {};
-    (keys || []).forEach(key => { out[key] = 0; });
-    (rows || []).forEach(row => (keys || []).forEach(key => { out[key] += rptNumber(row?.[key]); }));
-    Object.keys(out).forEach(key => { out[key] = rptRound(out[key]); });
-    return out;
-  }
 
-  function rptErrorRow(contract, error) {
-    return { contractId: contract?.id || null, company: contract?.company || "", status: "ERROR", error: error?.message || String(error || "Calculation error") };
-  }
 
-  function rptBucketForMonths(months) {
-    const m = Math.max(0, rptNumber(months));
-    if (m < 1) return REPORTING_BUCKETS[0];
-    if (m < 3) return REPORTING_BUCKETS[1];
-    if (m < 6) return REPORTING_BUCKETS[2];
-    // Upper bounds are inclusive: the ordinary "3–12 months" bucket
-    // includes an amount due exactly twelve months after reporting date.
-    if (m <= 12) return REPORTING_BUCKETS[3];
-    if (m <= 24) return REPORTING_BUCKETS[4];
-    if (m <= 36) return REPORTING_BUCKETS[5];
-    if (m <= 60) return REPORTING_BUCKETS[6];
-    return REPORTING_BUCKETS[7];
-  }
 
-  function rptRemapToDisclosureBuckets(granularBuckets) {
-    const list = Array.isArray(granularBuckets) ? granularBuckets : [];
-    return DISCLOSURE_RISK_BUCKETS.map(db => {
-      const cashOutflow = db.sources.reduce((sum, sourceId) => {
-        const match = list.find(b => b.bucket === sourceId);
-        return sum + (match ? rptNumber(match.cashPayment) : 0);
-      }, 0);
-      return { bucket: db.id, bucketName: db.name, cashOutflow: rptRound(cashOutflow) };
-    });
-  }
 
-  function rptRiskForDays(days) {
-    if (days === null || days === undefined || days < 0) return "GREEN";
-    if (days <= 90) return "RED";
-    if (days <= 180) return "YELLOW";
-    if (days <= 365) return "YELLOW";
-    return "GREEN";
-  }
 
   function rptGetContractCfo(contract, reportingDate) {
     try {
@@ -16459,985 +14032,32 @@ ${renderAccountingCenterBulkPromo()}
     return null;
   }
 
-  function legacyReportAuth_getLeaseLiabilityRollForwardReport(startDate, endDate) {
-    const start = rptDate(startDate), end = rptDate(endDate);
-    const report = rptEmptyReport("Lease Liability Roll-forward", end, "LEASE_SCHEDULE");
-    if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
-    const rows = [];
-    rptSafeContracts().forEach(contract => {
-      // TFRS 16.5-6 kapsamındaki kısa dönem ve düşük değer istisnaları
-      // bilançoda kira yükümlülüğü oluşturmaz. Bu sözleşmelerin gider
-      // ödemelerini liability roll-forward'a almak, sıfır kapanışı yapay bir
-      // "Diğer Düzeltme" ile denkleştiriyordu.
-      if (contract.shortTermLease === true || contract.lowValueAsset === true) return;
-      // DÜZELTME (kullanıcı talebi — kritik tutarlılık sorunu): önceden
-      // dönem sonundan (end) SONRA başlayacak bir sözleşme için de satır
-      // üretiliyordu — sadece tüm alanları 0 olarak (henüz hiçbir
-      // schedule satırı yoktu). Bu satır yine de "contractCount"a
-      // giriyordu, yani örn. 1.01.2025-31.12.2025 raporunda 2026'da
-      // başlayan sözleşmeler de "30 sözleşme" sayısına dahil oluyordu
-      // (0 tutarla). TMS29-restated dipnotlar private API zarfındaki kapsam
-      // bilgisiyle bu sözleşmeleri zaten kapsam dışı sayıyordu —
-      // ama NOMİNAL (bu fonksiyon) hareket tabloları saymıyordu, bu da
-      // aynı raporun farklı dipnotlarında FARKLI sözleşme adedi göstermesi
-      // sonucunu doğuruyordu. Artık dönem sonundan sonra başlayan bir
-      // sözleşme için satır HİÇ ÜRETİLMİYOR — diğer tüm dipnotlarla
-      // (TMS29 dahil) tutarlı.
-      const contractStart = parseDate(contract.startDate);
-      if (contractStart && !rptCalendarDateBetween(contract.startDate, start, end) && rptCalendarDateKey(contract.startDate) > rptCalendarDateKey(end)) return;
-      const initialRecognitionInPeriod = contractStart && rptCalendarDateBetween(contract.startDate, start, end);
-      try {
-        const built = rptScheduleRows(contract);
-        if (built.error) throw new Error(built.error);
-        const schedule = built.schedule;
-        const accrualContext = built.source === "LEASE_SCHEDULE" ? resolveLeaseAccrualContext(contract) : null;
-        if (accrualContext) {
-          const openingDate = rptAddDays(start, -1);
-          const openingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, openingDate, { preferMonthlyScheduleClosing: true });
-          const closingSnapshot = buildReportingDateAccrual(accrualContext.core, accrualContext.measurement, schedule, end, { preferMonthlyScheduleClosing: true });
-          const eventRows = rptRowsBetween(schedule, start, end);
-          const payments = eventRows.reduce((sum, row, index) => {
-            const isCommencementAdvance = accrualContext.core.advance && row === schedule[0];
-            return sum + (isCommencementAdvance ? 0 : rptNumber(row.payment));
-          }, 0);
-          // On commencement-date reports the pre-period snapshot can be zero
-          // because the first accrual event is dated exactly at commencement.
-          // Use the first schedule opening balance as the recognition entry in
-          // that case; otherwise the initial balance incorrectly remains in
-          // Opening (or disappears from the roll-forward entirely).
-          const firstScheduleRow = schedule[0] || {};
-          const openingLiabilitySnapshot = rptNumber(openingSnapshot?.liability);
-          const firstScheduleLiability = firstScheduleRow.openingLiability !== undefined
-            ? rptNumber(firstScheduleRow.openingLiability)
-            : openingLiabilitySnapshot;
-          const openingLiabilityBeforeEntry = initialRecognitionInPeriod
-            ? firstScheduleLiability
-            : openingLiabilitySnapshot;
-          const openingLiability = initialRecognitionInPeriod ? 0 : openingLiabilityBeforeEntry;
-          const entriesLiability = initialRecognitionInPeriod ? openingLiabilityBeforeEntry : 0;
-          const closingLiability = rptNumber(closingSnapshot?.liability);
-          const interest = closingLiability - openingLiabilityBeforeEntry + payments;
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingLiability:rptRound(openingLiability),entriesLiability:rptRound(entriesLiability),interest:rptRound(interest),payments:rptRound(payments),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingLiability:rptRound(closingLiability),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
-          return;
-        }
-        const openingRow = rptScheduleAtOrBefore(schedule, rptAddDays(start, -1));
-        const closingRow = rptScheduleAtOrBefore(schedule, end);
-        const periodRows = rptRowsBetween(schedule, start, end);
-        let openingLiability = openingRow ? rptGetRowLiability(openingRow) : (periodRows[0] ? rptNumber(periodRows[0].openingLiability) : 0);
-        const openingLiabilityBeforeEntry = openingLiability;
-        const entriesLiability = initialRecognitionInPeriod ? openingLiabilityBeforeEntry : 0;
-        if (initialRecognitionInPeriod) openingLiability = 0;
-        let closingLiability = closingRow ? rptGetRowLiability(closingRow) : (periodRows.length ? rptGetRowLiability(periodRows[periodRows.length - 1]) : openingLiability);
-        // A change effective on the last pre-period schedule row belongs to
-        // the opening balance, although that row itself is the historical
-        // (pre-change) side of the spliced schedule.  Without this boundary
-        // correction a 31 December reassessment appears as unexplained
-        // "Other" in the following year's roll-forward.
-        const openingRowDate = openingRow ? rptDate(openingRow.date) : null;
-        const openingChanges = dedupeAppliedModifications(contract.modifications)
-          .concat((Array.isArray(contract.reassessments) ? contract.reassessments : [])
-            .filter(x => x?.status === "APPLIED")
-            .filter((x, index, items) => items.findIndex(y => reassessmentEconomicKey(y) === reassessmentEconomicKey(x)) === index))
-          .filter(x => {
-            const d = rptDate(x.effectiveDate || x.modificationDate || x.reassessmentDate);
-            return d && d < start && (!openingRowDate || d.getTime() >= openingRowDate.getTime());
-          })
-          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
-        if (openingChanges.length) {
-          const latestOpeningChange = openingChanges[openingChanges.length - 1];
-          if (Number.isFinite(Number(latestOpeningChange.revisedLeaseLiability))) {
-            openingLiability = Math.max(0, Number(latestOpeningChange.revisedLeaseLiability));
-          }
-        }
-        const appliedModifications = dedupeAppliedModifications(contract.modifications)
-          .map(x => resolveAppliedModificationMeasurement(contract, x))
-          .filter(x => { const d = rptDate(x.effectiveDate || x.modificationDate); return d && d >= start && d <= end; });
-        const appliedReassessmentKeys = new Set();
-        const appliedReassessments = (Array.isArray(contract.reassessments) ? contract.reassessments : [])
-          .filter(x => x.status === "APPLIED")
-          .filter(x => { const d = rptDate(x.effectiveDate || x.reassessmentDate); return d && d >= start && d <= end; })
-          .filter(x => {
-            // Eski kayıtlarda aynı otomatik reassessment birden fazla kez
-            // APPLIED olarak bulunabilir. Aynı ekonomik olayı raporda yalnızca
-            // bir kez göster; ham kaydı sessizce silme/değiştirme.
-            const key = [
-              reassessmentEconomicKey(x)
-            ].join("|");
-            if (appliedReassessmentKeys.has(key)) return false;
-            appliedReassessmentKeys.add(key);
-            return true;
-          })
-          .map(x => resolveAppliedReassessmentMeasurement(contract, x));
-        // The monthly schedule only starts reflecting a modification/reassessment
-        // from its next dated row onward. If the reporting cutoff falls on/after
-        // an applied change's effective date but the picked closing row still
-        // predates it, the raw schedule closing value understates the true
-        // liability as of the cutoff. Pull the revised liability directly from
-        // the latest such change so the roll-forward reconciles correctly.
-        const closingRowDate = closingRow ? parseDate(closingRow.date) : null;
-        const pendingChanges = appliedModifications.concat(appliedReassessments)
-          // The row dated exactly on the effective date still belongs to the
-          // pre-change (historical) side of the spliced schedule. Treat an
-          // equal-dated change as pending as well, otherwise the adjustment is
-          // recognised while closing remains at the old balance and the same
-          // amount leaks into "Other".
-          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDate || d.getTime() >= closingRowDate.getTime()); })
-          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
-        if (pendingChanges.length) {
-          const latestPending = pendingChanges[pendingChanges.length - 1];
-          if (Number.isFinite(Number(latestPending.revisedLeaseLiability))) {
-            closingLiability = Math.max(0, Number(latestPending.revisedLeaseLiability));
-          }
-        }
-        const interest = periodRows.reduce((s, r) => s + rptNumber(r.interest), 0);
-        const payments = periodRows.reduce((s, r) => s + rptNumber(r.payment), 0);
-        const expected = openingLiability + entriesLiability + interest - payments;
-        const modificationAdjustment = appliedModifications.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
-        const reassessmentAdjustment = appliedReassessments.reduce((s,x) => s + rptNumber(x.liabilityAdjustment), 0);
-        const unexplainedAdjustment = 0;
-        const adjustments = modificationAdjustment + reassessmentAdjustment;
-        // The generated schedule may still expose the pre-change closing
-        // snapshot for a historical report.  The classified roll-forward is
-        // authoritative, so derive closing from its movements.
-        const hasResolvedClosing = appliedModifications.concat(appliedReassessments)
-          .some(change => Number.isFinite(Number(change.revisedLeaseLiability)));
-        if (hasResolvedClosing) closingLiability = expected + adjustments;
-        const difference = expected + adjustments - closingLiability;
-        rows.push({ contractId: contract.id, company: contract.company || "", supplier: contract.supplier || "", currency: contract.currency || "UNSPECIFIED", assetClass: getContractAssetClass(contract), openingLiability:rptRound(openingLiability), entriesLiability:rptRound(entriesLiability), interest:rptRound(interest), payments:rptRound(payments), modificationAdjustment:rptRound(modificationAdjustment), reassessmentAdjustment:rptRound(reassessmentAdjustment), otherAdjustment:rptRound(unexplainedAdjustment), closingLiability:rptRound(closingLiability), reconciliationDifference:rptRound(difference), status:rptRollForwardStatus(difference, unexplainedAdjustment), controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null, source:built.source });
-      } catch (error) { rows.push(rptErrorRow(contract, error)); }
-    });
-    report.rows = rows;
-    report.totals = rptAggregateRows(rows.filter(r=>r.status!=="ERROR"), ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    const diff = rptRound(report.totals.openingLiability + report.totals.entriesLiability + report.totals.interest - report.totals.payments + report.totals.modificationAdjustment + report.totals.reassessmentAdjustment + report.totals.otherAdjustment - report.totals.closingLiability);
-    report.reconciliation = { formula:"Opening + Interest - Payments +/- Adjustments = Closing", difference:diff, passed:Math.abs(diff)<=REPORTING_TOLERANCE };
-    if (!report.reconciliation.passed) report.warnings.push("Portfolio liability roll-forward reconciliation mismatch.");
-    const unexplainedLiabilityRows = rows.filter(r => r.status !== "ERROR" && Math.abs(rptNumber(r.otherAdjustment)) > REPORTING_TOLERANCE);
-    if (unexplainedLiabilityRows.length) report.warnings.push("Açıklanamayan 'Diğer' yükümlülük hareketi: " + unexplainedLiabilityRows.map(r => r.contractId).join(", "));
-    if (rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getRuoAssetRollForwardReport(startDate, endDate) {
-    const start = rptDate(startDate), end = rptDate(endDate);
-    const report = rptEmptyReport("ROU Asset Roll-forward", end, "LEASE_SCHEDULE");
-    if (!start || !end || end < start) { report.errors.push("Invalid reporting period."); return rptFinalize(report); }
-    const rows=[];
-    rptSafeContracts().forEach(contract=>{
-      // TFRS 16.5-6 recognition exemptions do not create a ROU asset.
-      if (contract.shortTermLease === true || contract.lowValueAsset === true) return;
-      // DÜZELTME — bkz. getLeaseLiabilityRollForwardReport'taki aynı not:
-      // dönem sonundan (end) sonra başlayacak sözleşmeler bu dönem için
-      // kapsam dışıdır, satır bile üretilmemeli (tutarlılık: TMS29
-      // dipnotlarıyla aynı sözleşme adedi).
-      const contractStart = parseDate(contract.startDate);
-      if (contractStart && !rptCalendarDateBetween(contract.startDate, start, end) && rptCalendarDateKey(contract.startDate) > rptCalendarDateKey(end)) return;
-      const initialRecognitionInPeriod = contractStart && rptCalendarDateBetween(contract.startDate, start, end);
-      try{
-        const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
-        const schedule=built.schedule;
-        const accrualContext=built.source==="LEASE_SCHEDULE"?resolveLeaseAccrualContext(contract):null;
-        if(accrualContext){
-          const openingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,rptAddDays(start,-1), { preferMonthlyScheduleClosing: true });
-          const closingSnapshot=buildReportingDateAccrual(accrualContext.core,accrualContext.measurement,schedule,end, { preferMonthlyScheduleClosing: true });
-          const firstScheduleRow = schedule[0] || {};
-          const openingRuoSnapshot = rptNumber(openingSnapshot?.rouAsset);
-          const firstScheduleRuo = firstScheduleRow.rouOpening !== undefined
-            ? rptNumber(firstScheduleRow.rouOpening)
-            : openingRuoSnapshot;
-          const openingRuoBeforeEntry = initialRecognitionInPeriod ? firstScheduleRuo : openingRuoSnapshot;
-          const closingRuo=rptNumber(closingSnapshot?.rouAsset);
-          const openingRuo=initialRecognitionInPeriod ? 0 : openingRuoBeforeEntry;
-          const entriesRuo=initialRecognitionInPeriod ? openingRuoBeforeEntry : 0;
-          const depreciation=Math.max(0,openingRuoBeforeEntry-closingRuo);
-          rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),entriesRuo:rptRound(entriesRuo),depreciation:rptRound(depreciation),modificationAdjustment:0,reassessmentAdjustment:0,otherAdjustment:0,closingRuo:rptRound(closingRuo),reconciliationDifference:0,status:"OK",controlCode:null,source:"CALENDAR_ACCRUAL"});
-          return;
-        }
-        const openingRow=rptScheduleAtOrBefore(schedule,rptAddDays(start,-1)), closingRow=rptScheduleAtOrBefore(schedule,end), periodRows=rptRowsBetween(schedule,start,end);
-        let openingRuo=openingRow?rptGetRowRuo(openingRow):(periodRows[0]?rptNumber(periodRows[0].rouOpening):0);
-        const openingRuoBeforeEntry=openingRuo;
-        const entriesRuo=initialRecognitionInPeriod ? openingRuoBeforeEntry : 0;
-        if (initialRecognitionInPeriod) openingRuo=0;
-        let closingRuo=closingRow?rptGetRowRuo(closingRow):(periodRows.length?rptGetRowRuo(periodRows[periodRows.length-1]):openingRuo);
-        const openingRowDateRuo=openingRow?rptDate(openingRow.date):null;
-        const openingChangesRuo=dedupeAppliedModifications(contract.modifications)
-          .concat((Array.isArray(contract.reassessments)?contract.reassessments:[])
-            .filter(x=>x?.status==="APPLIED")
-            .filter((x,index,items)=>items.findIndex(y=>reassessmentEconomicKey(y)===reassessmentEconomicKey(x))===index))
-          .filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate||x.reassessmentDate);return d&&d<start&&(!openingRowDateRuo||d.getTime()>=openingRowDateRuo.getTime());})
-          .sort((a,b)=>String(a.effectiveDate||"").localeCompare(String(b.effectiveDate||"")));
-        if(openingChangesRuo.length){
-          const latestOpeningChangeRuo=openingChangesRuo[openingChangesRuo.length-1];
-          const revisedRuo=Number(latestOpeningChangeRuo.revisedROU);
-          const oldRuo=Number(latestOpeningChangeRuo.oldROU);
-          const rouAdjustment=Number(latestOpeningChangeRuo.rouAdjustment);
-          if(Number.isFinite(revisedRuo)) openingRuo=Math.max(0,revisedRuo);
-          else if(Number.isFinite(oldRuo)&&Number.isFinite(rouAdjustment)) openingRuo=Math.max(0,oldRuo+rouAdjustment);
-        }
-        const appliedModifications=dedupeAppliedModifications(contract.modifications).map(x=>resolveAppliedModificationMeasurement(contract,x)).filter(x=>{const d=rptDate(x.effectiveDate||x.modificationDate);return d&&d>=start&&d<=end;});
-        const appliedReassessmentKeys = new Set();
-        const appliedReassessments=(Array.isArray(contract.reassessments)?contract.reassessments:[])
-          .filter(x=>x.status==="APPLIED")
-          .filter(x=>{const d=rptDate(x.effectiveDate||x.reassessmentDate);return d&&d>=start&&d<=end;})
-          .filter(x=>{
-            const key=[
-              reassessmentEconomicKey(x)
-            ].join("|");
-            if(appliedReassessmentKeys.has(key)) return false;
-            appliedReassessmentKeys.add(key);
-            return true;
-          })
-          .map(x=>resolveAppliedReassessmentMeasurement(contract,x));
-        // Same timing gap as the liability roll-forward: pull the post-change ROU
-        // directly from the latest pending modification/reassessment when the
-        // schedule hasn't yet caught up to the reporting cutoff.
-        const closingRowDateRuo = closingRow ? parseDate(closingRow.date) : null;
-        const pendingChangesRuo = appliedModifications.concat(appliedReassessments)
-          .filter(x => { const d = rptDate(x.effectiveDate); return d && (!closingRowDateRuo || d.getTime() > closingRowDateRuo.getTime()); })
-          .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
-        if (pendingChangesRuo.length) {
-          const latestPendingRuo = pendingChangesRuo[pendingChangesRuo.length - 1];
-          const oldRou = Number(latestPendingRuo.oldROU);
-          const rouAdj = Number(latestPendingRuo.rouAdjustment);
-          if (Number.isFinite(oldRou) && Number.isFinite(rouAdj)) {
-            closingRuo = Math.max(0, oldRou + rouAdj);
-          }
-        }
-        const depreciation=periodRows.reduce((s,r)=>s+rptNumber(r.depreciation),0);
-        const modificationAdjustment=appliedModifications.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
-        const reassessmentAdjustment=appliedReassessments.reduce((s,x)=>s+rptNumber(x.rouAdjustment),0);
-        const unexplainedAdjustment=0;
-        const adjustments=modificationAdjustment+reassessmentAdjustment;
-        // Historical changes must be reflected in the same period's closing
-        // balance; do not carry a stale schedule snapshot into the note.
-        const hasResolvedRouClosing = appliedModifications.concat(appliedReassessments)
-          .some(change => Number.isFinite(Number(change.revisedROU)) ||
-            Number.isFinite(Number(change.rouAdjustment)));
-        if (hasResolvedRouClosing) closingRuo=openingRuo+entriesRuo-depreciation+adjustments;
-        const diff=openingRuo+entriesRuo-depreciation+adjustments-closingRuo;
-        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",assetClass:getContractAssetClass(contract),openingRuo:rptRound(openingRuo),entriesRuo:rptRound(entriesRuo),depreciation:rptRound(depreciation),modificationAdjustment:rptRound(modificationAdjustment),reassessmentAdjustment:rptRound(reassessmentAdjustment),otherAdjustment:rptRound(unexplainedAdjustment),closingRuo:rptRound(closingRuo),reconciliationDifference:rptRound(diff),status:rptRollForwardStatus(diff, unexplainedAdjustment),controlCode:Math.abs(unexplainedAdjustment)>REPORTING_TOLERANCE?"UNEXPLAINED_OTHER":null,source:built.source});
-      }catch(error){rows.push(rptErrorRow(contract,error));}
-    });
-    report.rows=rows;
-    report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const diff=rptRound(report.totals.openingRuo+report.totals.entriesRuo-report.totals.depreciation+report.totals.modificationAdjustment+report.totals.reassessmentAdjustment+report.totals.otherAdjustment-report.totals.closingRuo);
-    report.reconciliation={formula:"Opening ROU + Entries - Depreciation +/- Adjustments = Closing ROU",difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
-    if(!report.reconciliation.passed) report.warnings.push("Portfolio ROU roll-forward reconciliation mismatch.");
-    const unexplainedRouRows=rows.filter(r=>r.status!=="ERROR"&&Math.abs(rptNumber(r.otherAdjustment))>REPORTING_TOLERANCE);
-    if(unexplainedRouRows.length) report.warnings.push("Açıklanamayan 'Diğer' ROU hareketi: "+unexplainedRouRows.map(r=>r.contractId).join(", "));
-    if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getRuoAssetRollForward(reportingDate, endDate) {
-    if (endDate !== undefined) return getRuoAssetRollForwardReport(reportingDate,endDate);
-    const end=rptResolveDate(reportingDate), start=new Date(end.getFullYear(),end.getMonth(),1);
-    return getRuoAssetRollForwardReport(start,end);
-  }
 
-  /* ==========================================================
-     TFRS 16 DIPNOT (FINANCIAL STATEMENT NOTE) EXPORTS
-     ----------------------------------------------------------
-     Additive export helpers for the two mandatory TFRS 16 notes:
-     - Right-of-use asset movement note (kullanım hakkı varlığı
-       hareket tablosu)
-     - Lease liability movement note (kira yükümlülüğü hareket
-       tablosu)
-     Reuses the existing getRuoAssetRollForwardReport /
-     getLeaseLiabilityRollForwardReport engines as the single
-     source of truth; no new calculation logic is introduced here.
-  ========================================================== */
 
-  async function legacyReportAuth_exportRouAssetMovementNote(startDate, endDate) {
-    const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
-    try { await v191LoadPrivatePortfolioTms21(end); }
-    catch (error) { showAlert(`ROU hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
-    let tms29;
-    try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
-    catch (error) { showAlert(`ROU hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
-    const prepared = v191PrepareFinancialReportingData(start, end, { tms29 });
-    const report = prepared.rouReport;
-    const dataRows = prepared.rouRows || [];
-    if (!dataRows.length) return false;
-    const totals = prepared.rouTotalsRow?.[0] || {};
-    const rows = dataRows.map(r => ({
-      "Sözleşme": r.contractId,
-      "Şirket": r.company,
-      "Tedarikçi": r.supplier,
-      "Para Birimi": r.currency,
-      "Varlık Sınıfı": r.assetClass,
-      "Açılış Bakiyesi": r.openingRuo,
-      "Girişler": r.entriesRuo,
-      "Amortisman (-)": -Math.abs(r.depreciation),
-      "Modifikasyon Etkisi": r.modificationAdjustment,
-      "Reassessment Etkisi": r.reassessmentAdjustment,
-      "Diğer Düzeltme": r.otherAdjustment,
-      "Kapanış Bakiyesi": r.closingRuo,
-      "Durum": r.status
-    }));
-    rows.push({
-      "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "", "Varlık Sınıfı": "",
-      "Açılış Bakiyesi": totals.openingRuo, "Girişler": totals.entriesRuo, "Amortisman (-)": -Math.abs(totals.depreciation || 0),
-      "Modifikasyon Etkisi": totals.modificationAdjustment, "Reassessment Etkisi": totals.reassessmentAdjustment,
-      "Diğer Düzeltme": totals.otherAdjustment, "Kapanış Bakiyesi": totals.closingRuo,
-      "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
-    });
-    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
-      "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingRuo, "Girişler": g.entriesRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
-      "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
-    }));
-    const assetClassSummary = v191GroupRollForwardByAssetClass(dataRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]).map(g => ({
-      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingRuo, "Girişler": g.entriesRuo, "Amortisman (-)": -Math.abs(g.depreciation), "Modifikasyon Etkisi": g.modificationAdjustment,
-      "Reassessment Etkisi": g.reassessmentAdjustment, "Diğer Düzeltme": g.otherAdjustment, "Kapanış Bakiyesi": g.closingRuo
-    }));
-    return v191ExportSheetsToFile([
-      { rows, sheetName: "ROU Hareket" },
-      { rows: assetClassSummary, sheetName: "Varlık Sınıfı Özeti" },
-      { rows: currencySummary, sheetName: "Para Birimi Özeti" }
-    ], "Kullanim_Hakki_Varligi_Hareket_Tablosu");
-  }
 
-  async function legacyReportAuth_exportTms29InflationNote(startDate, endDate) {
-    const start = rptDate(startDate), end = rptDate(endDate);
-    if (!start || !end || end < start) return false;
-    const rouReport = getRuoAssetRollForwardReport(start, end) || {};
-    // ✅ FIX: Raporlama döneminden SONRA başlayan kontratları filtrele
-    // (2026'da başlayan kontrat 2025 hareket tablosunda yer almaz)
-    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
-    const rouRows = Array.isArray(rouReport.rows) 
-      ? rouReport.rows
-        .filter(r => r.status !== "ERROR")
-        .filter(r => {
-          // Kontrat başlangıç tarihi ≤ Raporlama dönemi ayı
-          if (!r.contractStartDate && !r.startDate) return true; // Tarih yoksa dahil et
-          const contractStartDate = r.contractStartDate || r.startDate;
-          const contractMonth = `${new Date(contractStartDate).getFullYear()}-${String(new Date(contractStartDate).getMonth() + 1).padStart(2, "0")}`;
-          return contractMonth <= rpMonth;
-        })
-      : [];
-    if (!rouRows.length) return false;
 
-    const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
-    // Export da ekrandaki dipnot önizlemesiyle aynı private batch sonucunu
-    // kullanır. Public motorun TMS29 hesaplaması burada çağrılmaz.
-    if (!isPrivateCalculationApiReady()) {
-      showAlert("TMS 29 dipnotu dışa aktarılamadı: Private API hazır değil veya oturum açılmamış.");
-      return false;
-    }
-    const eligibleContracts = rouRows
-      .map(row => rptSafeContracts().find(contract => String(contract?.id) === String(row?.contractId)))
-      .filter(Boolean);
-    let tms29;
-    try {
-      const facade = window.LeaseQantPrivateTfrs16Facade;
-      if (typeof facade?.loadTms29Many !== "function") {
-        throw new Error("Private TMS29 toplu API kullanılamıyor");
-      }
-      const apiResults = await facade.loadTms29Many(eligibleContracts, rpMonth, periodStartMonth);
-      tms29 = v191ComputePrivatePortfolioTms29(eligibleContracts, apiResults, periodStartMonth, rpMonth);
-    } catch (error) {
-      showAlert(`TMS 29 dipnotu dışa aktarılamadı: ${error?.message || error}`);
-      return false;
-    }
-    if (tms29.computedCount === 0 && tms29.missingCount > 0) {
-      showAlert("TMS 29 dipnotu dışa aktarılamadı: seçilen dönem için doğrulanmış enflasyon endeksi eksik. Nominal tablolar etkilenmedi.");
-      return false;
-    }
-    const t = tms29.totals;
 
-    const rouDetailRows = rouRows.map(row => {
-      const r = tms29.results.get(row.contractId);
-      const rrf = r?.rouRollForward;
-      return {
-        "Sözleşme": row.contractId, "Şirket": row.company, "Varlık Sınıfı": row.assetClass, "Para Birimi": row.currency,
-        "Açılış (Restated)": rrf ? rptRound(rrf.rouOpeningRestated) : null,
-        "Girişler (Restated)": rrf ? rptRound(rrf.rouEntriesRestated) : null,
-        "Modifikasyon (Restated)": rrf ? rptRound(rrf.rouModificationRestated || 0) : null,
-        "Reassessment (Restated)": rrf ? rptRound(rrf.rouReassessmentRestated || 0) : null,
-        "Amortisman (Restated) (-)": rrf ? -Math.abs(rptRound(rrf.rouDepreciationRestated)) : null,
-        "Kapanış (Restated)": rrf ? rptRound(rrf.rouClosingRestatedPeriod) : null,
-        "Kapanış (Nominal)": rrf ? rptRound(rrf.rouClosingNominalPeriod) : null,
-        "Durum": r?.ok ? "OK" : "Hesaplanamadı",
-        "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
-      };
-    });
-    rouDetailRows.push({
-      "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
-      "Açılış (Restated)": rptRound(t.rouOpeningRestated), "Girişler (Restated)": rptRound(t.rouEntriesRestated),
-      "Modifikasyon (Restated)": rptRound(t.rouModificationRestated || 0),
-      "Reassessment (Restated)": rptRound(t.rouReassessmentRestated || 0),
-      "Amortisman (Restated) (-)": -Math.abs(rptRound(t.rouDepreciationRestated)),
-      "Kapanış (Restated)": rptRound(t.rouClosingRestatedPeriod), "Kapanış (Nominal)": rptRound(t.rouClosingNominalPeriod),
-      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
-    });
 
-    const liabDetailRows = rouRows.map(row => {
-      const r = tms29.results.get(row.contractId);
-      const lrf = r?.liabilityRollForward;
-      return {
-        "Sözleşme": row.contractId, "Şirket": row.company, "Varlık Sınıfı": row.assetClass, "Para Birimi": row.currency,
-        "Açılış (Restated)": lrf ? rptRound(lrf.liabilityOpeningRestated) : null,
-        "Girişler (Restated)": lrf ? rptRound(lrf.liabilityEntriesRestated) : null,
-        "Faiz (Restated)": lrf ? rptRound(lrf.liabilityInterestRestated) : null,
-        "Ödemeler (Restated) (-)": lrf ? -Math.abs(rptRound(lrf.liabilityPaymentsRestated)) : null,
-        "TMS 21 Çevrim Farkı (Restated)": lrf ? rptRound(lrf.liabilityFxTranslationRestated || 0) : null,
-        "Parasal Kazanç/(Kayıp), net": lrf ? rptRound(lrf.liabilityMonetaryGainLoss) : null,
-        "Kapanış (=Nominal)": lrf ? rptRound(lrf.liabilityClosingNominal ?? (
-          lrf.liabilityOpeningNominal + lrf.liabilityEntriesNominal + lrf.liabilityInterestNominal
-          - lrf.liabilityPaymentsNominal + (lrf.liabilityFxTranslationNominal || 0)
-        )) : null,
-        "Durum": r?.ok ? "OK" : "Hesaplanamadı",
-        "Hata Detayı": r?.ok ? "" : (r?.error || "Bilinmeyen hesaplama hatası")
-      };
-    });
-    liabDetailRows.push({
-      "Sözleşme": "TOPLAM", "Şirket": "", "Varlık Sınıfı": "", "Para Birimi": "",
-      "Açılış (Restated)": rptRound(t.liabilityOpeningRestated), "Girişler (Restated)": rptRound(t.liabilityEntriesRestated),
-      "Faiz (Restated)": rptRound(t.liabilityInterestRestated), "Ödemeler (Restated) (-)": -Math.abs(rptRound(t.liabilityPaymentsRestated)),
-      "TMS 21 Çevrim Farkı (Restated)": rptRound(t.liabilityFxTranslationRestated || 0),
-      "Parasal Kazanç/(Kayıp), net": rptRound(t.liabilityMonetaryGainLoss),
-      "Kapanış (=Nominal)": rptRound(t.liabilityOpeningNominal + t.liabilityEntriesNominal + t.liabilityInterestNominal - t.liabilityPaymentsNominal + (t.liabilityFxTranslationNominal || 0)),
-      "Durum": `${tms29.computedCount}/${tms29.totalCount} hesaplandı`, "Hata Detayı": ""
-    });
 
-    const rouAssetClassSummary = tms29.byAssetClass.map(g => ({
-      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
-      "Açılış (Restated)": g.rouOpeningRestated, "Girişler (Restated)": g.rouEntriesRestated,
-      "Modifikasyon (Restated)": g.rouModificationRestated || 0,
-      "Reassessment (Restated)": g.rouReassessmentRestated || 0,
-      "Amortisman (Restated) (-)": -Math.abs(g.rouDepreciationRestated),
-      "Kapanış (Restated)": g.rouClosingRestatedPeriod, "Kapanış (Nominal)": g.rouClosingNominalPeriod
-    }));
-    const liabAssetClassSummary = tms29.byAssetClass.map(g => ({
-      "Varlık Sınıfı": g.assetClass, "Sözleşme Sayısı": g.contractCount,
-      "Açılış (Restated)": g.liabilityOpeningRestated, "Girişler (Restated)": g.liabilityEntriesRestated,
-      "Faiz (Restated)": g.liabilityInterestRestated, "Ödemeler (Restated) (-)": -Math.abs(g.liabilityPaymentsRestated),
-      "TMS 21 Çevrim Farkı (Restated)": g.liabilityFxTranslationRestated || 0,
-      "Parasal Kazanç/(Kayıp), net": g.liabilityMonetaryGainLoss,
-      "Kapanış (=Nominal)": g.liabilityOpeningNominal + g.liabilityEntriesNominal + g.liabilityInterestNominal - g.liabilityPaymentsNominal + (g.liabilityFxTranslationNominal || 0)
-    }));
 
-    return v191ExportSheetsToFile([
-      { rows: rouDetailRows, sheetName: "TMS29 ROU Detay" },
-      { rows: rouAssetClassSummary, sheetName: "TMS29 ROU Varlık Sınıfı" },
-      { rows: liabDetailRows, sheetName: "TMS29 Yükümlülük Detay" },
-      { rows: liabAssetClassSummary, sheetName: "TMS29 Yük. Varlık Sınıfı" }
-    ], "TMS29_Enflasyon_Duzeltmeli_Hareket_Tablosu");
-  }
 
-  async function legacyReportAuth_exportLeaseLiabilityMovementNote(startDate, endDate) {
-    const start = rptResolveDate(startDate), end = rptResolveDate(endDate);
-    try { await v191LoadPrivatePortfolioTms21(end); }
-    catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu TMS 21 sonucu alınamadı: ${error?.message || String(error)}`); return false; }
-    let tms29;
-    try { tms29 = await v191LoadPrivatePortfolioTms29(start, end); }
-    catch (error) { showAlert(`Kira yükümlülüğü hareket tablosu dışa aktarılamadı: ${error?.message || String(error)}`); return false; }
-    const prepared = v191PrepareFinancialReportingData(start, end, { tms29 });
-    const report = prepared.liabReport;
-    const dataRows = prepared.liabRows || [];
-    if (!dataRows.length) return false;
-    const totals = prepared.liabTotalsRow?.[0] || {};
-    const rows = dataRows.map(r => ({
-      "Sözleşme": r.contractId,
-      "Şirket": r.company,
-      "Tedarikçi": r.supplier,
-      "Para Birimi": r.currency,
-      "Açılış Bakiyesi": r.openingLiability,
-      "Girişler": r.entriesLiability,
-      "Faiz Gideri (+)": r.interest,
-      "Ödemeler (-)": -Math.abs(r.payments),
-      "Modifikasyon Etkisi": r.modificationAdjustment,
-      "Reassessment Etkisi": r.reassessmentAdjustment,
-      "Diğer Düzeltme": r.otherAdjustment,
-      "TMS 21 Çevrim Farkı": r.fxTranslationAdjustment,
-      "Kapanış Bakiyesi": r.closingLiability,
-      "Durum": r.status
-    }));
-    rows.push({
-      "Sözleşme": "TOPLAM", "Şirket": "", "Tedarikçi": "", "Para Birimi": "",
-      "Açılış Bakiyesi": totals.openingLiability, "Girişler": totals.entriesLiability, "Faiz Gideri (+)": totals.interest,
-      "Ödemeler (-)": -Math.abs(totals.payments || 0), "Modifikasyon Etkisi": totals.modificationAdjustment,
-      "Reassessment Etkisi": totals.reassessmentAdjustment, "Diğer Düzeltme": totals.otherAdjustment,
-      "TMS 21 Çevrim Farkı": totals.fxTranslationAdjustment,
-      "Kapanış Bakiyesi": totals.closingLiability,
-      "Durum": report.reconciliation?.passed ? "MUTABIK" : "FARK VAR"
-    });
-    const currencySummary = v191GroupRollForwardByCurrency(dataRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"]).map(g => ({
-      "Para Birimi": g.currency, "Sözleşme Sayısı": g.contractCount,
-      "Açılış Bakiyesi": g.openingLiability, "Girişler": g.entriesLiability, "Faiz Gideri (+)": g.interest, "Ödemeler (-)": -Math.abs(g.payments),
-      "Modifikasyon Etkisi": g.modificationAdjustment, "Reassessment Etkisi": g.reassessmentAdjustment,
-      "Diğer Düzeltme": g.otherAdjustment, "TMS 21 Çevrim Farkı": g.fxTranslationAdjustment,
-      "Kapanış Bakiyesi": g.closingLiability
-    }));
-    return v191ExportSheetsToFile([
-      { rows, sheetName: "Yükümlülük Hareket" },
-      { rows: currencySummary, sheetName: "Para Birimi Özeti" }
-    ], "Kira_Yukumlulugu_Hareket_Tablosu");
-  }
 
-  function legacyReportAuth_exportLeaseLiquidityRiskNote(reportingDate) {
-    const report = v191BuildPresentationLiquidityDisclosure(reportingDate, getReportingCurrency());
-    const row = Array.isArray(report.rows) ? report.rows[0] : null;
-    if (!row) return false;
-    const bucketCol = id => rptRound(row.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
-    const mainRow = {
-      "Sözleşme uyarınca vadeler": row.label,
-      "Defter Değeri": row.carryingValue,
-      "Sözleşme uyarınca nakit çıkışlar toplamı": row.contractualCashOutflowsTotal,
-      "3 aydan kısa": bucketCol("UNDER_3_MONTHS"),
-      "3-12 ay arası": bucketCol("3_TO_12_MONTHS"),
-      "1-5 yıl arası": bucketCol("1_TO_5_YEARS"),
-      "5 yıldan uzun": bucketCol("OVER_5_YEARS")
-    };
-    const companyRows = (Array.isArray(report.byCompanyRows) ? report.byCompanyRows : []).map(r => {
-      const cBucket = id => rptRound(r.buckets.find(b => b.bucket === id)?.cashOutflow || 0);
-      return {
-        "Şirket": r.company,
-        "Defter Değeri": r.carryingValue,
-        "Sözleşme uyarınca nakit çıkışlar toplamı": r.contractualCashOutflowsTotal,
-        "3 aydan kısa": cBucket("UNDER_3_MONTHS"),
-        "3-12 ay arası": cBucket("3_TO_12_MONTHS"),
-        "1-5 yıl arası": cBucket("1_TO_5_YEARS"),
-        "5 yıldan uzun": cBucket("OVER_5_YEARS")
-      };
-    });
-    return v191ExportSheetsToFile([
-      { rows: [mainRow], sheetName: "Likidite Riski (Kiralama)" },
-      { rows: companyRows, sheetName: "Şirket Bazında" }
-    ], "Kiralama_Yukumlulukleri_Likidite_Riski_Dipnotu");
-  }
 
-  /**
-   * TFRS 7.39 vade analizini şirketin sunum para biriminde üretir.
-   * Yabancı para yükümlülüklerinin defter değeri ve gelecekteki sözleşmesel
-   * nakit akışları raporlama tarihindeki kapanış kuruyla çevrilir. Böylece
-   * dipnot başlığı ile tutarlar aynı ölçüm biriminde kalır.
-   */
-  function v191BuildPresentationLiquidityDisclosure(reportingDate, targetCurrency) {
-    const d = rptResolveDate(reportingDate);
-    const presentationCurrency = String(targetCurrency || getReportingCurrency() || "TRY").toUpperCase();
-    const maturity = getLeasePaymentMaturityAnalysis(d, { byContract: true });
-    const carrying = getCurrentNonCurrentReport(d);
-    const carryingByContract = new Map((carrying.rows || [])
-      .filter(row => row.status !== "ERROR")
-      .map(row => [String(row.contractId), row]));
-    const errors = [];
-    const contractRows = [];
 
-    (maturity.rows || []).forEach(row => {
-      const contract = rptSafeContracts().find(item => String(item.id) === String(row.contractId));
-      const sourceCurrency = String(contract?.currency || row.currency || presentationCurrency).toUpperCase();
-      let conversionFailed = false;
-      const granular = (row.buckets || []).map(bucket => {
-        const converted = convertAmountToReportingCurrency(
-          rptNumber(bucket.cashPayment), sourceCurrency, d, presentationCurrency
-        );
-        if (converted?.error) {
-          errors.push(`${row.contractId}: ${converted.error}`);
-          conversionFailed = true;
-        }
-        return {
-          bucket: bucket.bucket,
-          cashPayment: converted?.error ? 0 : rptRound(converted.value)
-        };
-      });
-      const carryingRow = carryingByContract.get(String(row.contractId));
-      const carryingConverted = convertAmountToReportingCurrency(
-        rptNumber(carryingRow?.totalLiability), sourceCurrency, d, presentationCurrency
-      );
-      if (carryingConverted?.error) errors.push(`${row.contractId}: ${carryingConverted.error}`);
-      if (carryingConverted?.error || conversionFailed) return;
-      const buckets = rptRemapToDisclosureBuckets(granular);
-      contractRows.push({
-        contractId: row.contractId,
-        company: row.company || contract?.company || "",
-        label: "Kiralama yükümlülükleri",
-        currency: presentationCurrency,
-        carryingValue: rptRound(carryingConverted.value),
-        contractualCashOutflowsTotal: rptRound(buckets.reduce((sum, bucket) => sum + bucket.cashOutflow, 0)),
-        buckets
-      });
-    });
 
-    const aggregateRows = rows => {
-      const buckets = DISCLOSURE_RISK_BUCKETS.map(bucket => ({
-        bucket: bucket.id,
-        bucketName: bucket.name,
-        cashOutflow: rptRound(rows.reduce((sum, row) =>
-          sum + rptNumber((row.buckets || []).find(item => item.bucket === bucket.id)?.cashOutflow), 0))
-      }));
-      return {
-        label: "Kiralama yükümlülükleri",
-        currency: presentationCurrency,
-        carryingValue: rptRound(rows.reduce((sum, row) => sum + rptNumber(row.carryingValue), 0)),
-        contractualCashOutflowsTotal: rptRound(buckets.reduce((sum, bucket) => sum + bucket.cashOutflow, 0)),
-        buckets
-      };
-    };
-    const portfolioRow = aggregateRows(contractRows);
-    const byCompanyRows = Array.from(new Set(contractRows.map(row => row.company))).map(company => ({
-      company,
-      ...aggregateRows(contractRows.filter(row => row.company === company))
-    }));
-    const difference = rptRound(portfolioRow.contractualCashOutflowsTotal - portfolioRow.carryingValue);
-    const report = {
-      name: "Lease Liability Liquidity Risk Disclosure (TFRS 7.39)",
-      reportingDate: rptIsoDate(d),
-      presentationCurrency,
-      rows: [portfolioRow],
-      byCompanyRows,
-      contractRows,
-      totals: {
-        carryingValue: portfolioRow.carryingValue,
-        contractualCashOutflowsTotal: portfolioRow.contractualCashOutflowsTotal
-      },
-      reconciliation: {
-        undiscountedInterestComponent: difference,
-        passed: portfolioRow.contractualCashOutflowsTotal >= portfolioRow.carryingValue - REPORTING_TOLERANCE
-      },
-      warnings: [],
-      errors: Array.from(new Set([...(maturity.errors || []), ...(carrying.errors || []), ...errors]))
-    };
-    if (!report.reconciliation.passed) report.warnings.push("Sözleşme uyarınca nakit çıkışları toplamı, defter değerinin altında kaldı; veri tutarlılığını kontrol edin.");
-    return report;
-  }
 
-  function v191ExportRowsToFile(rows, fileBaseName, sheetName) {
-    if (!rows.length) return false;
-    return v191ExportSheetsToFile([{ rows, sheetName }], fileBaseName);
-  }
 
-  function v191ExportSheetsToFile(sheets, fileBaseName) {
-    const validSheets = (sheets || []).filter(s => Array.isArray(s.rows) && s.rows.length);
-    if (!validSheets.length) return false;
-    try {
-      if (typeof XLSX !== "undefined") {
-        const workbook = XLSX.utils.book_new();
-        validSheets.forEach(s => {
-          const worksheet = XLSX.utils.json_to_sheet(s.rows);
-          XLSX.utils.book_append_sheet(workbook, worksheet, (s.sheetName || "Rapor").slice(0, 31));
-        });
-        XLSX.writeFile(workbook, `TFRS16_${fileBaseName}_${Date.now()}.xlsx`);
-        return true;
-      }
-      // CSV fallback does not support multiple sheets — export the first (primary detail) sheet only.
-      const rows = validSheets[0].rows;
-      const headers = Object.keys(rows[0]);
-      const csv = [headers.join(";"), ...rows.map(row => headers.map(h => String(row[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `TFRS16_${fileBaseName}_${Date.now()}.csv`;
-      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-      return true;
-    } catch (error) {
-      console.error("Dipnot export error:", error);
-      return false;
-    }
-  }
 
-  function legacyReportAuth_v191GroupRollForwardByCurrency(rows, sumKeys) {
-    return v191GroupRollForwardByDimension(rows, "currency", "currency", "UNSPECIFIED", sumKeys);
-  }
 
-  function legacyReportAuth_v191GroupRollForwardByAssetClass(rows, sumKeys) {
-    return v191GroupRollForwardByDimension(rows, "assetClass", "assetClass", ASSET_CLASS_UNCLASSIFIED, sumKeys);
-  }
 
-  function legacyReportAuth_v191GroupRollForwardByDimension(rows, sourceKey, outKey, fallbackValue, sumKeys) {
-    const groups = {};
-    (rows || []).forEach(row => {
-      const dimValue = row[sourceKey] || fallbackValue;
-      if (!groups[dimValue]) {
-        groups[dimValue] = { [outKey]: dimValue };
-        sumKeys.forEach(key => { groups[dimValue][key] = 0; });
-        groups[dimValue].contractCount = 0;
-      }
-      sumKeys.forEach(key => { groups[dimValue][key] += rptNumber(row[key]); });
-      groups[dimValue].contractCount += 1;
-    });
-    return Object.values(groups).map(g => {
-      const out = { ...g };
-      sumKeys.forEach(key => { out[key] = rptRound(out[key]); });
-      return out;
-    });
-  }
 
-  function rptPeriodRows(startDate,endDate,dimension="month") {
-    const start=rptDate(startDate), end=rptDate(endDate), rows=[];
-    if(!start||!end||end<start) return rows;
-    rptSafeContracts().forEach(contract=>{
-      try{
-        const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
-        rptRowsBetween(built.schedule,start,end).forEach(row=>{
-          const d=rptDate(row.date); if(!d) return;
-          let period;
-          if(dimension==="quarter") period=`${d.getFullYear()}-Q${Math.ceil((d.getMonth()+1)/3)}`;
-          else if(dimension==="year") period=String(d.getFullYear());
-          else period=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-          rows.push({period,contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",interestExpense:rptRound(rptNumber(row.interest)),depreciationExpense:rptRound(rptNumber(row.depreciation)),cashPayment:rptRound(rptNumber(row.payment)),principal:rptRound(rptNumber(row.principal)),source:built.source});
-        });
-      }catch(error){rows.push({period:null,contractId:contract.id,company:contract.company||"",currency:contract.currency||"UNSPECIFIED",status:"ERROR",error:error?.message||String(error)});}
-    });
-    return rows;
-  }
 
-  function legacyReportAuth_getInterestExpenseReport(startDate,endDate,filters={}) {
-    const report=rptEmptyReport("Interest Expense Report",endDate,"LEASE_SCHEDULE");
-    const rows=rptPeriodRows(startDate,endDate,filters.dimension||"month").filter(r=>!filters.company||r.company===filters.company).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||r.currency===filters.currency);
-    report.rows=rows;
-    report.totals={interestExpense:rptRound(rows.reduce((s,r)=>s+rptNumber(r.interestExpense),0))};
-    if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getDepreciationReport(startDate,endDate,filters={}) {
-    const report=rptEmptyReport("Depreciation Report",endDate,"LEASE_SCHEDULE");
-    const rows=rptPeriodRows(startDate,endDate,filters.dimension||"month").filter(r=>!filters.company||r.company===filters.company).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||r.currency===filters.currency);
-    report.rows=rows;
-    report.totals={depreciationExpense:rptRound(rows.reduce((s,r)=>s+rptNumber(r.depreciationExpense),0))};
-    if(rows.some(r=>r.status==="ERROR")) report.errors.push("One or more contracts could not be calculated.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getLeasePaymentMaturityAnalysis(reportingDate, options={}) {
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Lease Payment Maturity Analysis",d,"LEASE_SCHEDULE");
-    const base=()=>REPORTING_BUCKETS.map(b=>({bucket:b.id,bucketName:b.name,cashPayment:0,principal:0,interest:0}));
-    const totals=base(), rows=[];
-    rptSafeContracts().forEach(contract=>{
-      try{
-        // A lease that has not commenced is not yet a recognised lease
-        // liability. Keep it out of both the maturity buckets and the
-        // contractual-outflow total until the reporting date reaches the
-        // contractual start date. The reporting-date liability path already
-        // returns zero for this case; the maturity path must use the same
-        // scope so the liquidity note does not show future commitments as if
-        // they were current lease-liability exposure.
-        const commencementKey = rptCalendarDateKey(contract?.startDate || contract?.commencementDate);
-        const reportingKey = rptCalendarDateKey(d);
-        if (commencementKey && reportingKey && commencementKey > reportingKey) return;
-        const built=rptScheduleRows(contract); if(built.error) throw new Error(built.error);
-        const buckets=base();
-        (built.schedule||[]).forEach(item=>{
-          const date=rptDate(item.date); if(!date||date<=d) return;
-          const months=rptMonthsBetween(d,date), bucket=rptBucketForMonths(months), target=buckets.find(x=>x.bucket===bucket.id);
-          if(!target)return;
-          target.cashPayment+=rptNumber(item.payment); target.principal+=rptNumber(item.principal); target.interest+=rptNumber(item.interest);
-        });
-        buckets.forEach(b=>{b.cashPayment=rptRound(b.cashPayment);b.principal=rptRound(b.principal);b.interest=rptRound(b.interest);});
-        if(options.byContract) rows.push({contractId:contract.id,company:contract.company||"",currency:contract.currency||"UNSPECIFIED",buckets});
-        buckets.forEach((b,i)=>{totals[i].cashPayment+=b.cashPayment;totals[i].principal+=b.principal;totals[i].interest+=b.interest;});
-      }catch(error){report.errors.push(`${contract.id||"UNKNOWN"}: ${error?.message||String(error)}`);}
-    });
-    totals.forEach(b=>{b.cashPayment=rptRound(b.cashPayment);b.principal=rptRound(b.principal);b.interest=rptRound(b.interest);});
-    report.rows=options.byContract?rows:totals;
-    report.totals={cashPayment:rptRound(totals.reduce((s,r)=>s+r.cashPayment,0)),principal:rptRound(totals.reduce((s,r)=>s+r.principal,0)),interest:rptRound(totals.reduce((s,r)=>s+r.interest,0))};
-    report.reconciliation={difference:rptRound(report.totals.cashPayment-(report.totals.principal+report.totals.interest)),passed:Math.abs(report.totals.cashPayment-(report.totals.principal+report.totals.interest))<=REPORTING_TOLERANCE};
-    if(!report.reconciliation.passed) report.warnings.push("Maturity cash payment does not reconcile to principal plus interest.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getContractMaturityAnalysis(contractId,reportingDate){
-    const contract=rptSafeContracts().find(c=>c.id===contractId), d=rptResolveDate(reportingDate);
-    if(!contract)return null;
-    return getLeasePaymentMaturityAnalysis(d,{byContract:true}).rows.find(r=>r.contractId===contractId)||{contractId,company:contract.company||"",currency:contract.currency||"UNSPECIFIED",buckets:[]};
-  }
 
-  function legacyReportAuth_getCompanyMaturityAnalysis(company,reportingDate){
-    const all=getLeasePaymentMaturityAnalysis(reportingDate,{byContract:true}), rows=all.rows.filter(r=>String(r.company||"")===String(company||"")), buckets=REPORTING_BUCKETS.map(b=>({bucket:b.id,bucketName:b.name,cashPayment:0,principal:0,interest:0}));
-    rows.forEach(r=>r.buckets.forEach((b,i)=>{buckets[i].cashPayment+=rptNumber(b.cashPayment);buckets[i].principal+=rptNumber(b.principal);buckets[i].interest+=rptNumber(b.interest);}));
-    buckets.forEach(b=>{b.cashPayment=rptRound(b.cashPayment);b.principal=rptRound(b.principal);b.interest=rptRound(b.interest);});
-    return {company:String(company||""),reportingDate:rptIsoDate(reportingDate),buckets,totals:{cashPayment:rptRound(buckets.reduce((s,b)=>s+b.cashPayment,0)),principal:rptRound(buckets.reduce((s,b)=>s+b.principal,0)),interest:rptRound(buckets.reduce((s,b)=>s+b.interest,0))}};
-  }
-
-  /**
-   * TFRS 7.39 uyarınca kiralama yükümlülükleri için likidite riski dipnotu
-   * ("Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notunda
-   * yer alan "Kiralama yükümlülükleri" satırını üretir).
-   *
-   * Çıktı, denetim raporlarında görülen dipnot formatına birebir uyar:
-   *   Defter Değeri | Sözleşme uyarınca nakit çıkışlar toplamı |
-   *   3 aydan kısa | 3-12 ay arası | 1-5 yıl arası | 5 yıldan uzun
-   *
-   * @param {Date|string} reportingDate
-   * @param {object} [options]
-   * @param {boolean} [options.byCompany] - true ise şirket bazında satırlar döner.
-   * @returns {object} report - rptEmptyReport şablonunda, options.byCompany=false
-   *   iken report.rows tek elemanlı ["Kiralama yükümlülükleri"] dizisidir.
-   */
-  function legacyReportAuth_getLeaseLiquidityRiskDisclosure(reportingDate, options = {}) {
-    const d = rptResolveDate(reportingDate);
-    const report = rptEmptyReport("Lease Liability Liquidity Risk Disclosure (TFRS 7.39)", d, "LEASE_SCHEDULE + REPORTING_DATE_ENGINE");
-    const currentNonCurrent = getCurrentNonCurrentReport(d);
-    const carryingValueRows = Array.isArray(currentNonCurrent.rows) ? currentNonCurrent.rows.filter(r => r.status !== "ERROR") : [];
-
-    if (options.byCompany) {
-      const maturityByContract = getLeasePaymentMaturityAnalysis(d, { byContract: true });
-      const companies = Array.from(new Set(rptSafeContracts().map(c => String(c.company || ""))));
-      const rows = companies.map(company => {
-        const contractBucketRows = maturityByContract.rows.filter(r => String(r.company || "") === company);
-        const granular = REPORTING_BUCKETS.map(b => ({ bucket: b.id, cashPayment: 0 }));
-        contractBucketRows.forEach(r => (r.buckets || []).forEach((b, i) => { granular[i].cashPayment += rptNumber(b.cashPayment); }));
-        const buckets = rptRemapToDisclosureBuckets(granular);
-        const carryingValue = rptRound(carryingValueRows.filter(r => String(r.company || "") === company).reduce((s, r) => s + rptNumber(r.totalLiability), 0));
-        const contractualCashOutflowsTotal = rptRound(buckets.reduce((s, b) => s + b.cashOutflow, 0));
-        return { company, label: "Kiralama yükümlülükleri", carryingValue, contractualCashOutflowsTotal, buckets };
-      });
-      report.rows = rows;
-      report.totals = {
-        carryingValue: rptRound(rows.reduce((s, r) => s + r.carryingValue, 0)),
-        contractualCashOutflowsTotal: rptRound(rows.reduce((s, r) => s + r.contractualCashOutflowsTotal, 0))
-      };
-      if (Array.isArray(maturityByContract.errors) && maturityByContract.errors.length) report.errors.push(...maturityByContract.errors);
-    } else {
-      const maturity = getLeasePaymentMaturityAnalysis(d);
-      const buckets = rptRemapToDisclosureBuckets(maturity.rows);
-      // The per-contract classification rows are authoritative. Keep a
-      // narrow aggregate fallback for older/private envelopes that expose
-      // `leaseLiability` or the CFO headline but omit the legacy
-      // `totalLiability` alias; displaying zero against live cash outflows
-      // is materially misleading (LEASE-007/009/011/013).
-      let carryingValue = rptRound(rptNumber(currentNonCurrent.totals.totalLiability));
-      if (carryingValue <= REPORTING_TOLERANCE) {
-        const rowSum = (currentNonCurrent.rows || [])
-          .filter(row => row.status !== "ERROR")
-          .reduce((sum, row) => sum + rptNumber(row.totalLiability), 0);
-        carryingValue = rptRound(rowSum);
-      }
-      if (carryingValue <= REPORTING_TOLERANCE) {
-        try {
-          const cfo = typeof getTfrs16CfoSnapshot === "function" ? getTfrs16CfoSnapshot(d) : null;
-          carryingValue = rptRound(rptNumber(cfo?.headline?.totalLeaseLiability ?? cfo?.liabilities?.total));
-        } catch (_) {
-          carryingValue = 0;
-        }
-      }
-      const contractualCashOutflowsTotal = rptRound(buckets.reduce((s, b) => s + b.cashOutflow, 0));
-      report.rows = [{ label: "Kiralama yükümlülükleri", carryingValue, contractualCashOutflowsTotal, buckets }];
-      report.totals = { carryingValue, contractualCashOutflowsTotal };
-      if (Array.isArray(maturity.errors) && maturity.errors.length) report.errors.push(...maturity.errors);
-    }
-
-    report.reconciliation = {
-      // Sözleşme uyarınca nakit çıkışları toplamı, iskonto edilmemiş
-      // tutarlardır; bu nedenle defter değerinden büyük olması beklenir.
-      // Fark, gelecekteki faiz (finansman gideri) bileşenini temsil eder.
-      undiscountedInterestComponent: rptRound(report.totals.contractualCashOutflowsTotal - report.totals.carryingValue),
-      passed: report.totals.contractualCashOutflowsTotal >= report.totals.carryingValue - REPORTING_TOLERANCE
-    };
-    if (!report.reconciliation.passed) report.warnings.push("Sözleşme uyarınca nakit çıkışları toplamı, defter değerinin altında kaldı; veri tutarlılığını kontrol edin.");
-    if (Array.isArray(currentNonCurrent.errors) && currentNonCurrent.errors.length) report.errors.push(...currentNonCurrent.errors);
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getCurrentNonCurrentReport(reportingDate,filters={}) {
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Current / Non-current Analysis",d,"REPORTING_DATE_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>{
-      if(filters.company&&String(contract.company||"")!==String(filters.company))return;
-      if(filters.contractId&&contract.id!==filters.contractId)return;
-      if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
-      try{
-        const m=rptGetContractCfo(contract,d); if(!m)throw new Error("CFO contract metrics unavailable");
-        const total=rptNumber(m.leaseLiability), current=rptNumber(m.currentLiability), nonCurrent=rptNumber(m.nonCurrentLiability), diff=rptRound(total-(current+nonCurrent));
-        rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",totalLiability:rptRound(total),currentLiability:rptRound(current),nonCurrentLiability:rptRound(nonCurrent),reconciliationDifference:diff,status:Math.abs(diff)<=REPORTING_TOLERANCE?"READY":"WARNING"});
-      }catch(error){rows.push(rptErrorRow(contract,error));}
-    });
-    report.rows=rows;
-    report.totals=rptAggregateRows(rows.filter(r=>r.status!=="ERROR"),["totalLiability","currentLiability","nonCurrentLiability"]);
-    const diff=rptRound(report.totals.totalLiability-(report.totals.currentLiability+report.totals.nonCurrentLiability));
-    report.reconciliation={difference:diff,passed:Math.abs(diff)<=REPORTING_TOLERANCE};
-    if(!report.reconciliation.passed)report.warnings.push("Current / non-current reconciliation mismatch.");
-    if(rows.some(r=>r.status==="ERROR"))report.errors.push("One or more contracts could not be classified.");
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getLeaseContractExpiryReport(reportingDate,filters={}){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Contract Expiry Report",d,"CONTRACT_MASTER + RISK_ENGINE");
-    report.rows=rptSafeContracts().filter(c=>!filters.company||String(c.company||"")===String(filters.company)).filter(c=>!filters.currency||String(c.currency||"UNSPECIFIED")===String(filters.currency)).map(contract=>{
-      const end=rptDate(contract.endDate), days=end?Math.round((end-d)/86400000):null, risk=typeof getContractRiskStatus==="function"?getContractRiskStatus(contract.id):rptRiskForDays(days);
-      return {contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",startDate:rptIsoDate(contract.startDate),endDate:rptIsoDate(contract.endDate),remainingTermMonths:rptMonthsBetween(d,end),status:contract.status||"ACTIVE",renewalOption:contract.renewalOption===true||!!contract.renewalDate,renewalDate:rptIsoDate(contract.renewalDate),daysToExpiry:days,expiryRisk:risk};
-    }).filter(r=>filters.withinDays===undefined||r.daysToExpiry===null||(r.daysToExpiry>=0&&r.daysToExpiry<=Number(filters.withinDays)));
-    report.totals={contracts:report.rows.length,within12Months:report.rows.filter(r=>r.daysToExpiry!==null&&r.daysToExpiry>=0&&r.daysToExpiry<=365).length};
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getContractExpiryReport(reportingDate,filters={}){ return getLeaseContractExpiryReport(reportingDate,filters); }
-
-  function legacyReportAuth_getRenewalRiskReport(reportingDate,filters={}){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Renewal Risk Report",d,"CONTRACT_MASTER + RISK_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>{
-      if(!contract.renewalDate)return;
-      const renewal=rptDate(contract.renewalDate); if(!renewal)return;
-      const days=Math.round((renewal-d)/86400000);
-      if(days<0)return;
-      if(filters.bucket&&!(filters.bucket==="0_90"&&days<=90)&&!(filters.bucket==="91_180"&&days>90&&days<=180)&&!(filters.bucket==="181_365"&&days>180&&days<=365)&&!(filters.bucket==="OVER_365"&&days>365))return;
-      try{const m=rptGetContractCfo(contract,d)||{}; rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",renewalDate:rptIsoDate(renewal),daysToRenewal:days,renewalOption:contract.renewalOption===true||!!contract.renewalDate,contractValue:rptRound(rptNumber(contract.monthlyPayment)*Math.max(0,rptMonthsBetween(d,rptDate(contract.endDate))||0)),leaseLiability:rptRound(m.leaseLiability),riskStatus:typeof getContractRiskStatus==="function"?getContractRiskStatus(contract.id):rptRiskForDays(days),controlStatus:m.controlStatus||null,bucket:days<=90?"0_90":days<=180?"91_180":days<=365?"181_365":"OVER_365"});}catch(error){rows.push(rptErrorRow(contract,error));}
-    });
-    report.rows=rows; report.totals={within90Days:rows.filter(r=>r.daysToRenewal<=90).length,within180Days:rows.filter(r=>r.daysToRenewal<=180).length,within365Days:rows.filter(r=>r.daysToRenewal<=365).length};
-    if(rows.some(r=>r.status==="ERROR"))report.errors.push("One or more renewal records could not be evaluated.");
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getModificationReport(reportingDate,filters={}){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Modification Report",d,"MODIFICATION_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>(Array.isArray(contract.modifications)?contract.modifications:[]).forEach(storedItem=>{
-      let item = storedItem;
-      if (storedItem?.status === "APPLIED") {
-        try {
-          item = resolveAppliedModificationMeasurement(contract, storedItem);
-        } catch (error) {
-          // Historical APPLIED events can exist before their private base
-          // result has been hydrated. Keep the report and management page
-          // usable from the persisted event values; never fall back to the
-          // The private result path is intentionally fail-closed.
-          if (error?.code === "PRIVATE_CALCULATION_NOT_READY") {
-            report.warnings.push(`Private hesaplama sonucu bekleniyor: ${contract.id}`);
-          } else {
-            report.warnings.push(`Modifikasyon ölçümü kullanılamadı: ${contract.id}`);
-          }
-        }
-      }
-      if(filters.company&&String(contract.company||"")!==String(filters.company))return;
-      if(filters.contractId&&contract.id!==filters.contractId)return;
-      if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
-      if(filters.status&&String(item.status||"").toUpperCase()!==String(filters.status).toUpperCase())return;
-      const effective=rptDate(item.effectiveDate||item.modificationDate), oldTerms=item.oldTerms||{}, newTerms=item.newTerms||{};
-      rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",modificationId:item.id||null,modificationDate:rptIsoDate(item.modificationDate||item.createdAt),effectiveDate:rptIsoDate(effective),reason:item.reason||"",oldPayment:rptNumber(oldTerms.payment??item.oldPayment),newPayment:rptNumber(newTerms.payment??item.newPayment),oldLeaseTerm:oldTerms.leaseTerm||item.oldLeaseTerm||null,newLeaseTerm:newTerms.leaseTerm||item.newLeaseTerm||null,oldDiscountRate:rptNumber(oldTerms.discountRate??item.oldDiscountRate),newDiscountRate:rptNumber(newTerms.discountRate??item.newDiscountRate),revisedLiability:rptNumber(item.revisedLeaseLiability),liabilityAdjustment:rptNumber(item.liabilityAdjustment),rouAdjustment:rptNumber(item.rouAdjustment),gainLoss:rptNumber(item.gainLoss),scopeReduction:rptNumber(item.scopeReduction),status:item.status||"DRAFT",source:"MODIFICATION_ENGINE"});
-    }));
-    report.rows=rows;
-    report.totals={count:rows.length,liabilityAdjustment:rptRound(rows.reduce((s,r)=>s+r.liabilityAdjustment,0)),rouAdjustment:rptRound(rows.reduce((s,r)=>s+r.rouAdjustment,0)),gainLoss:rptRound(rows.reduce((s,r)=>s+r.gainLoss,0)),scopeReductions:rptRound(rows.reduce((s,r)=>s+r.scopeReduction,0)),paymentIncreases:rptRound(rows.reduce((s,r)=>s+Math.max(0,r.newPayment-r.oldPayment),0)),paymentDecreases:rptRound(rows.reduce((s,r)=>s+Math.max(0,r.oldPayment-r.newPayment),0)),pending:rows.filter(r=>r.status!=="APPLIED"&&r.status!=="CANCELLED").length,applied:rows.filter(r=>r.status==="APPLIED").length,last12Months:rows.filter(r=>{const x=rptDate(r.effectiveDate),from=rptAddMonths(d,-12);return x&&from&&x>=from&&x<=d;}).length};
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getReassessmentReport(reportingDate,filters={}){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Reassessment Report",d,"REASSESSMENT_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>(Array.isArray(contract.reassessments)?contract.reassessments:[]).forEach(item=>{
-      if(filters.company&&String(contract.company||"")!==String(filters.company))return;
-      if(filters.contractId&&contract.id!==filters.contractId)return;
-      if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
-      if(filters.status&&String(item.status||"").toUpperCase()!==String(filters.status).toUpperCase())return;
-      const oldTerms=item.oldTerms||{}, newTerms=item.newTerms||{};
-      rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",currency:contract.currency||"UNSPECIFIED",reassessmentId:item.id||null,reassessmentDate:rptIsoDate(item.reassessmentDate||item.createdAt),effectiveDate:rptIsoDate(item.effectiveDate),reason:item.reason||"",oldTerm:oldTerms.leaseTerm||null,newTerm:newTerms.leaseTerm||null,oldPayment:rptNumber(oldTerms.payment),newPayment:rptNumber(newTerms.payment),oldRate:rptNumber(oldTerms.discountRate),newRate:rptNumber(newTerms.discountRate),revisedLiability:rptNumber(item.revisedLeaseLiability),liabilityImpact:rptNumber(item.liabilityAdjustment),rouAdjustment:rptNumber(item.rouAdjustment),paymentImpact:rptNumber(newTerms.payment)-rptNumber(oldTerms.payment),termImpactMonths:(rptMonthsBetween(oldTerms.leaseTerm,newTerms.leaseTerm)||0),status:item.status||"DRAFT",source:"REASSESSMENT_ENGINE"});
-    }));
-    report.rows=rows;
-    report.totals={count:rows.length,liabilityImpact:rptRound(rows.reduce((s,r)=>s+r.liabilityImpact,0)),rouImpact:rptRound(rows.reduce((s,r)=>s+r.rouAdjustment,0)),paymentImpact:rptRound(rows.reduce((s,r)=>s+r.paymentImpact,0)),termImpactMonths:rptRound(rows.reduce((s,r)=>s+r.termImpactMonths,0)),pending:rows.filter(r=>r.status!=="APPLIED"&&r.status!=="CANCELLED").length,applied:rows.filter(r=>r.status==="APPLIED").length,last12Months:rows.filter(r=>{const x=rptDate(r.effectiveDate),from=rptAddMonths(d,-12);return x&&from&&x>=from&&x<=d;}).length};
-    return rptFinalize(report);
-  }
-
-  function legacyReportAuth_getLeaseContractRegister(reportingDate,filters={}){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Lease Contract Register",d,"CONTRACT_MASTER + CFO_DATA_LAYER"), rows=[];
-    rptSafeContracts().forEach(contract=>{
-      if(filters.company&&String(contract.company||"")!==String(filters.company))return;
-      if(filters.status&&String(contract.status||"").toUpperCase()!==String(filters.status).toUpperCase())return;
-      if(filters.currency&&String(contract.currency||"UNSPECIFIED")!==String(filters.currency))return;
-      try{const m=rptGetContractCfo(contract,d)||{}; rows.push({contractId:contract.id,company:contract.company||"",supplier:contract.supplier||"",startDate:rptIsoDate(contract.startDate),endDate:rptIsoDate(contract.endDate),status:contract.status||"ACTIVE",paymentFrequency:contract.paymentFrequency||"monthly",paymentTiming:contract.paymentTiming||"arrears",monthlyPayment:rptNumber(contract.monthlyPayment),currency:contract.currency||"UNSPECIFIED",escalation:contract.leaseIncreaseType||contract.escalationType||"none",discountRate:rptNumber(contract.discountRate),leaseLiability:rptRound(m.leaseLiability),currentLiability:rptRound(m.currentLiability),nonCurrentLiability:rptRound(m.nonCurrentLiability),rouAsset:rptRound(m.rouAsset),renewalDate:rptIsoDate(contract.renewalDate),modificationStatus:m.modificationStatus||"NONE",reassessmentStatus:m.reassessmentStatus||"NONE",riskStatus:m.controlStatus||null,controlStatus:m.controlStatus||null});}catch(error){rows.push(rptErrorRow(contract,error));}
-    });
-    report.rows=rows; report.totals={contractCount:rows.length,activeContracts:rows.filter(r=>String(r.status).toUpperCase()==="ACTIVE").length};
-    if(rows.some(r=>r.status==="ERROR"))report.errors.push("One or more contracts could not be read.");
-    return rptFinalize(report);
-  }
 
   function rptJournalRows(){
     const rows=[];
@@ -17458,136 +14078,19 @@ ${renderAccountingCenterBulkPromo()}
     return rows;
   }
 
-  function legacyReportAuth_getJournalSummaryReport(filters={}){
-    const report=rptEmptyReport("Journal Summary Report",filters.endDate||new Date(),"JOURNAL_ENGINE + AUDIT_TRAIL_ENGINE"), all=rptJournalRows();
-    report.rows=all.filter(r=>!filters.company||String(r.company||"")===String(filters.company)).filter(r=>!filters.contractId||r.contractId===filters.contractId).filter(r=>!filters.currency||String(r.currency||"")===String(filters.currency)).filter(r=>!filters.source||r.source===filters.source);
-    const groups=new Map();
-    report.rows.forEach(r=>{const key=r.voucherNo||`${r.contractId||""}-${r.voucherDate||""}-${r.source||""}`;if(!groups.has(key))groups.set(key,{voucherNo:r.voucherNo,voucherDate:r.voucherDate,contractId:r.contractId,company:r.company,period:r.period,source:r.source,currency:r.currency,totalDebit:0,totalCredit:0});const g=groups.get(key);g.totalDebit+=r.debit;g.totalCredit+=r.credit;});
-    const journals=[...groups.values()].map(g=>({...g,totalDebit:rptRound(g.totalDebit),totalCredit:rptRound(g.totalCredit),balanced:Math.abs(g.totalDebit-g.totalCredit)<=REPORTING_TOLERANCE,controlStatus:Math.abs(g.totalDebit-g.totalCredit)<=REPORTING_TOLERANCE?"VALID":"UNBALANCED"}));
-    report.rows=journals; report.totals={journalCount:journals.length,totalDebits:rptRound(journals.reduce((s,r)=>s+r.totalDebit,0)),totalCredits:rptRound(journals.reduce((s,r)=>s+r.totalCredit,0)),balancedJournals:journals.filter(r=>r.balanced).length,unbalancedJournals:journals.filter(r=>!r.balanced).length};
-    report.reconciliation={difference:rptRound(report.totals.totalDebits-report.totals.totalCredits),passed:Math.abs(report.totals.totalDebits-report.totals.totalCredits)<=REPORTING_TOLERANCE};
-    if(!report.reconciliation.passed)report.warnings.push("Journal debit / credit totals do not reconcile.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getControlExceptionReport(filters={}){
-    const report=rptEmptyReport("Control Exception Report",new Date(),"CONTROL_ENGINE"), rows=[];
-    rptSafeContracts().forEach(contract=>{
-      try{
-        const snapshot=getStoredControlSnapshot(contract.id)||runContractControls(contract,{persist:false,audit:false});
-        (snapshot?.exceptions||[]).forEach(ex=>{
-          if(filters.status&&ex.status!==filters.status)return;
-          if(filters.severity&&ex.priority!==filters.severity)return;
-          rows.push({contractId:contract.id,company:contract.company||"",controlId:ex.controlId||null,controlName:ex.controlName||ex.name||null,severity:ex.priority||null,status:ex.status||null,description:ex.message||ex.description||"",detectedAt:ex.detectedAt||snapshot.testedAt||null,riskLevel:snapshot.overallStatus||null});
-        });
-      }catch(error){report.errors.push(`${contract.id||"UNKNOWN"}: ${error?.message||String(error)}`);}
-    });
-    report.rows=rows; report.totals={totalExceptions:rows.length,openExceptions:rows.filter(r=>r.status!==CONTROL_EXCEPTION_STATUS.RESOLVED&&r.status!==CONTROL_EXCEPTION_STATUS.WAIVED).length,critical:rows.filter(r=>r.severity===CONTROL_PRIORITY.CRITICAL).length,high:rows.filter(r=>r.severity===CONTROL_PRIORITY.HIGH).length,medium:rows.filter(r=>r.severity===CONTROL_PRIORITY.MEDIUM).length,low:rows.filter(r=>r.severity===CONTROL_PRIORITY.LOW).length};
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getControlSummaryReport(){
-    const summary=typeof getControlSummary==="function"?getControlSummary({persist:false,audit:false}):{};
-    const report=rptEmptyReport("Control Summary",new Date(),"CONTROL_ENGINE");
-    const snapshots=Array.isArray(summary.snapshots)?summary.snapshots:[];
-    const exceptionRows=snapshots.flatMap(s=>Array.isArray(s.exceptions)?s.exceptions:[]);
-    const closedExceptions=exceptionRows.filter(e=>e.status===CONTROL_EXCEPTION_STATUS.RESOLVED||e.status===CONTROL_EXCEPTION_STATUS.WAIVED).length;
-    const openExceptions=exceptionRows.filter(e=>e.status!==CONTROL_EXCEPTION_STATUS.RESOLVED&&e.status!==CONTROL_EXCEPTION_STATUS.WAIVED).length;
-    report.rows=snapshots.map(s=>({contractId:s.contractId||null,overallStatus:s.overallStatus||null,summary:s.summary||{},exceptionCount:Array.isArray(s.exceptions)?s.exceptions.length:0}));
-    report.totals={
-      totalControls:snapshots.length*(Array.isArray(CONTROL_CONFIG)?CONTROL_CONFIG.filter(c=>c.enabled!==false).length:0),
-      passed:summary.green||0,
-      warnings:summary.yellow||0,
-      failed:summary.red||0,
-      critical:summary.criticalExceptions||0,
-      high:summary.highExceptions||0,
-      medium:summary.mediumExceptions||0,
-      low:summary.lowExceptions||0,
-      openExceptions,
-      closedExceptions
-    };
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getAuditTrailReport(filters={}){
-    const report=rptEmptyReport("Audit Trail Report",filters.dateTo||new Date(),"AUDIT_TRAIL_ENGINE"), events=typeof getAuditEvents==="function"?getAuditEvents(filters):[];
-    report.rows=events.filter(e=>!filters.company||String(rptSafeContracts().find(c=>c.id===e.contractId)?.company||"")===String(filters.company)).map(e=>({timestamp:e.timestamp||null,actor:e.actor||"system",action:e.action||"",contractId:e.contractId||null,company:rptSafeContracts().find(c=>c.id===e.contractId)?.company||"",oldValue:rptClone(e.oldValue),newValue:rptClone(e.newValue),entityType:e.entityType||null,entityId:e.entityId||null,reason:e.reason||null,journalId:e.journalId||null,modificationId:e.modificationId||null,reassessmentId:e.reassessmentId||null}));
-    report.totals={totalEvents:report.rows.length};
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getCompanyExposureReport(reportingDate){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Company Exposure Report",d,"CFO_DATA_LAYER"), rows=typeof getCfoMetricsByCompany==="function"?getCfoMetricsByCompany(d):[];
-    report.rows=rows.map(r=>({company:r.company,reportingDate:r.reportingDate,contractCount:r.contractCount,activeContracts:r.activeContracts,totalLiability:rptRound(r.leaseLiability),currentLiability:rptRound(r.currentLiability),nonCurrentLiability:rptRound(r.nonCurrentLiability),rou:rptRound(r.rouAsset),interest:rptRound(r.monthlyInterest),depreciation:rptRound(r.monthlyDepreciation),next12MonthCashPayments:rptRound(r.next12MonthPayments),riskCount:rptNumber(r.risk?.red)+rptNumber(r.risk?.yellow),red:rptNumber(r.risk?.red),yellow:rptNumber(r.risk?.yellow),green:rptNumber(r.risk?.green),openExceptions:rptNumber(r.risk?.openExceptions)}));
-    report.totals={companies:report.rows.length};
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getCurrencyExposureReport(reportingDate){
-    const d=rptResolveDate(reportingDate), report=rptEmptyReport("Currency Exposure Report",d,"CFO_DATA_LAYER");
-    const groups=typeof getCfoCurrencyMetrics==="function"?getCfoCurrencyMetrics(d):{};
-    report.rows=Object.values(groups).map(g=>({currency:g.currency,contractCount:g.contractCount,activeContracts:g.activeContracts,totalLiability:rptRound(g.leaseLiability),currentLiability:rptRound(g.currentLiability),nonCurrentLiability:rptRound(g.nonCurrentLiability),rou:rptRound(g.rouAsset),interest:rptRound(g.monthlyInterest),depreciation:rptRound(g.monthlyDepreciation),cashPayments:rptRound(g.next12MonthPayments),principal:rptRound(g.next12MonthPrincipal)}));
-    report.totals={currencyCount:report.rows.length};
-    report.reconciliation={note:"Currencies remain separated; no FX conversion is performed."};
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getLeaseBalanceSheetImpact(reportingDate){
-    const d=rptResolveDate(reportingDate);
-    return {reportName:"Lease Balance Sheet Impact",reportingDate:rptIsoDate(d),rouAssets:rptRound(getTotalRuoAssets(d)),leaseLiability:rptRound(getTotalLeaseLiability(d)),currentLiability:rptRound(getCurrentLeaseLiability(d)),nonCurrentLiability:rptRound(getNonCurrentLeaseLiability(d)),source:"CFO_DATA_LAYER"};
-  }
 
-  function legacyReportAuth_getLeaseProfitLossImpact(startDate,endDate){
-    const interest=typeof getInterestExpense==="function"?getInterestExpense(startDate,endDate):0, depreciation=typeof getDepreciationExpense==="function"?getDepreciationExpense(startDate,endDate):0, modifications=getModificationReport(endDate||new Date()).rows.filter(r=>{const d=rptDate(r.effectiveDate),s=rptDate(startDate),e=rptDate(endDate);return d&&(!s||d>=s)&&(!e||d<=e);}).reduce((s,r)=>s+rptNumber(r.gainLoss),0);
-    return {reportName:"Lease Profit & Loss Impact",startDate:rptIsoDate(startDate),endDate:rptIsoDate(endDate),interestExpense:rptRound(interest),depreciationExpense:rptRound(depreciation),modificationGainLoss:rptRound(modifications),totalLeasePnlImpact:rptRound(interest+depreciation+modifications),source:"LEASE_SCHEDULE + MODIFICATION_ENGINE"};
-  }
 
-  function legacyReportAuth_getLeaseCashFlowReport(startDate,endDate){
-    const rows=rptPeriodRows(startDate,endDate,"month"), totalPayments=rows.reduce((s,r)=>s+rptNumber(r.cashPayment),0), principal=rows.reduce((s,r)=>s+rptNumber(r.principal),0), interest=rows.reduce((s,r)=>s+rptNumber(r.interestExpense),0);
-    return {reportName:"Lease Cash Flow Report",startDate:rptIsoDate(startDate),endDate:rptIsoDate(endDate),totalPayments:rptRound(totalPayments),principal:rptRound(principal),interest:rptRound(interest),reconciliation:{difference:rptRound(totalPayments-principal-interest),passed:Math.abs(totalPayments-principal-interest)<=REPORTING_TOLERANCE},source:"LEASE_SCHEDULE"};
-  }
 
-  function rptPeriodRanges(year,dimension){
-    const y=Number(year); if(!Number.isInteger(y))return [];
-    if(dimension==="quarter")return [0,1,2,3].map(q=>({period:`${y}-Q${q+1}`,start:new Date(y,q*3,1),end:new Date(y,q*3+3,0)}));
-    if(dimension==="year")return [{period:String(y),start:new Date(y,0,1),end:new Date(y,11,31)}];
-    return Array.from({length:12},(_,m)=>({period:`${y}-${String(m+1).padStart(2,"0")}`,start:new Date(y,m,1),end:new Date(y,m+1,0)}));
-  }
 
-  function legacyReportAuth_getPeriodicLeaseReport(year,dimension="month"){
-    const ranges=rptPeriodRanges(year,dimension), report=rptEmptyReport(`${dimension[0].toUpperCase()+dimension.slice(1)} Lease Report`,new Date(Number(year),11,31),"LEASE_SCHEDULE"), rows=[];
-    ranges.forEach(range=>{
-      const liabilityStart=rptAddDays(range.start,-1), opening=getTotalLeaseLiability(liabilityStart), closing=getTotalLeaseLiability(range.end), period=rptPeriodRows(range.start,range.end,dimension), interest=period.reduce((s,r)=>s+rptNumber(r.interestExpense),0), payments=period.reduce((s,r)=>s+rptNumber(r.cashPayment),0), depreciation=period.reduce((s,r)=>s+rptNumber(r.depreciationExpense),0), rouOpening=getTotalRuoAssets(liabilityStart), rouClosing=getTotalRuoAssets(range.end), liabAdjustment=closing-(opening+interest-payments), rouAdjustment=rouClosing-(rouOpening-depreciation);
-      rows.push({period:range.period,openingLiability:rptRound(opening),interest:rptRound(interest),payments:rptRound(payments),closingLiability:rptRound(closing),depreciation:rptRound(depreciation),openingRuo:rptRound(rouOpening),closingRuo:rptRound(rouClosing),liabilityAdjustment:rptRound(liabAdjustment),rouAdjustment:rptRound(rouAdjustment)});
-    });
-    report.rows=rows; report.totals={openingLiability:rows.length?rows[0].openingLiability:0,interest:rptRound(rows.reduce((s,r)=>s+r.interest,0)),payments:rptRound(rows.reduce((s,r)=>s+r.payments,0)),closingLiability:rows.length?rows[rows.length-1].closingLiability:0,depreciation:rptRound(rows.reduce((s,r)=>s+r.depreciation,0)),openingRuo:rows.length?rows[0].openingRuo:0,closingRuo:rows.length?rows[rows.length-1].closingRuo:0};
-    report.reconciliation={liabilityDifference:rptRound(rows.reduce((s,r)=>s+r.openingLiability,0)+report.totals.interest-report.totals.payments+rows.reduce((s,r)=>s+r.liabilityAdjustment,0)-report.totals.closingLiability),rouDifference:rptRound(report.totals.openingRuo-report.totals.depreciation+rows.reduce((s,r)=>s+r.rouAdjustment,0)-report.totals.closingRuo)};
-    report.reconciliation.passed=Math.abs(report.reconciliation.liabilityDifference)<=REPORTING_TOLERANCE&&Math.abs(report.reconciliation.rouDifference)<=REPORTING_TOLERANCE;
-    if(!report.reconciliation.passed)report.warnings.push("Periodic lease roll-forward reconciliation mismatch.");
-    return rptFinalize(report);
-  }
 
-  function legacyReportAuth_getMonthlyLeaseReport(year){return getPeriodicLeaseReport(year,"month");}
-  function legacyReportAuth_getQuarterlyLeaseReport(year){return getPeriodicLeaseReport(year,"quarter");}
-  function legacyReportAuth_getAnnualLeaseReport(year){return getPeriodicLeaseReport(year,"year");}
 
-  function legacyReportAuth_getTfrs16ReportingReconciliation(reportingDate){
-    const d=rptResolveDate(reportingDate), liability=getCurrentNonCurrentReport(d), maturity=getLeasePaymentMaturityAnalysis(d), journal=getJournalSummaryReport(), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), liabRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d);
-    const portfolioLiability=rptNumber(liability.totals.totalLiability), current=rptNumber(liability.totals.currentLiability), nonCurrent=rptNumber(liability.totals.nonCurrentLiability);
-    return {reportingDate:rptIsoDate(d),liability:{total:portfolioLiability,current,nonCurrent,difference:rptRound(portfolioLiability-current-nonCurrent),passed:Math.abs(portfolioLiability-current-nonCurrent)<=REPORTING_TOLERANCE},cashFlow:{difference:rptNumber(maturity.reconciliation?.difference),passed:Boolean(maturity.reconciliation?.passed)},liabilityRollForward:{difference:rptNumber(liabRoll.reconciliation?.difference),passed:Boolean(liabRoll.reconciliation?.passed)},rouRollForward:{difference:rptNumber(rouRoll.reconciliation?.difference),passed:Boolean(rouRoll.reconciliation?.passed)},journal:{difference:rptNumber(journal.reconciliation?.difference),passed:Boolean(journal.reconciliation?.passed)},companyTotals:{companyCount:company.rows.length,portfolioLiability:portfolioLiability,companyLiability:rptRound(company.rows.reduce((s,r)=>s+rptNumber(r.totalLiability),0)),difference:rptRound(company.rows.reduce((s,r)=>s+rptNumber(r.totalLiability),0)-portfolioLiability)},currencyExposure:{currencyCount:currency.rows.length,note:"FX conversion not applied; currencies remain separated."}};
-  }
 
-  function legacyReportAuth_getTfrs16FinancialReportingSnapshot(reportingDate){
-    const d=rptResolveDate(reportingDate), cfo=typeof getTfrs16CfoSnapshot==="function"?getTfrs16CfoSnapshot(d):{}, bs=getLeaseBalanceSheetImpact(d), periodStart=new Date(d.getFullYear(),d.getMonth(),1), pl=getLeaseProfitLossImpact(periodStart,d), cf=getLeaseCashFlowReport(periodStart,d), liabilityRoll=getLeaseLiabilityRollForwardReport(new Date(d.getFullYear(),d.getMonth(),1),d), rouRoll=getRuoAssetRollForward(d), maturity=getLeasePaymentMaturityAnalysis(d), liquidityRiskDisclosure=getLeaseLiquidityRiskDisclosure(d), expiry=getLeaseContractExpiryReport(d), renewal=getRenewalRiskReport(d), modification=getModificationReport(d), reassessment=getReassessmentReport(d), journal=getJournalSummaryReport(), control=getControlExceptionReport(), controlSummary=getControlSummaryReport(), audit=getAuditTrailReport({dateTo:rptIsoDate(d)}), company=getCompanyExposureReport(d), currency=getCurrencyExposureReport(d), reconciliation=getTfrs16ReportingReconciliation(d);
-    const errors=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.errors)?r.errors:[]);
-    const warnings=[liabilityRoll,rouRoll,maturity,liquidityRiskDisclosure,expiry,renewal,modification,reassessment,journal,control,audit,company,currency].flatMap(r=>Array.isArray(r.warnings)?r.warnings:[]);
-    if(cfo?.status==="WARNING") warnings.push("CFO data layer reports open control exceptions.");
-    if(cfo?.status==="ERROR") errors.push("CFO data layer reported calculation errors.");
-    const reconciliationWarning=[reconciliation.liability,reconciliation.cashFlow,reconciliation.liabilityRollForward,reconciliation.rouRollForward,reconciliation.journal,reconciliation.companyTotals].some(x=>x&&x.passed===false);
-    if(reconciliationWarning) warnings.push("One or more reporting reconciliation checks failed.");
-    const status=errors.length?"ERROR":(warnings.length?"WARNING":"READY");
-    return {version:REPORTING_ENGINE_VERSION,reportingDate:rptIsoDate(d),generatedAt:new Date().toISOString(),status,balanceSheet:bs,profitLoss:pl,cashFlow:cf,liabilityRollForward:liabilityRoll,rouRollForward:rouRoll,maturityAnalysis:maturity,liquidityRiskDisclosure,expiryReport:expiry,renewalReport:renewal,modificationReport:modification,reassessmentReport:reassessment,contractRegister:getLeaseContractRegister(d),journalSummary:journal,controlSummary,auditSummary:audit,controlExceptionReport:control,companyExposure:company,currencyExposure:currency,cfoSnapshot:cfo,reconciliation,dataQuality:{status,errors:errors.length,warnings:warnings.length,errorList:errors,warningsList:warnings},traceability:{contract:"CONTRACT_MASTER",schedule:"LEASE_SCHEDULE",calculation:"PROFESSIONAL_CALCULATION_ENGINE",modification:"MODIFICATION_ENGINE",reassessment:"REASSESSMENT_ENGINE",journal:"JOURNAL_ENGINE",audit:"AUDIT_TRAIL_ENGINE",riskControl:"CONTROL_ENGINE"}};
-  }
 
   function runV1610ReportingTests(){
     const results=[];
@@ -17687,10 +14190,6 @@ ${renderAccountingCenterBulkPromo()}
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   }
 
-  function closeMonthStart(value) {
-    const d = closeResolveDate(value);
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  }
 
   function closeMonthEnd(value) {
     const d = closeResolveDate(value);
@@ -17705,16 +14204,6 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function closeIsActive(contract, reportingDate) {
-    const status = String(contract?.status || "ACTIVE").toUpperCase();
-    if (["TERMINATED", "EXPIRED", "CANCELLED"].includes(status)) return false;
-    const start = typeof rptDate === "function" ? rptDate(contract?.startDate) : new Date(contract?.startDate);
-    const end = typeof rptDate === "function" ? rptDate(contract?.endDate) : new Date(contract?.endDate);
-    const d = closeResolveDate(reportingDate);
-    if (start && !Number.isNaN(start.getTime()) && start > d) return false;
-    if (end && !Number.isNaN(end.getTime()) && end < d && status !== "ACTIVE") return false;
-    return status === "ACTIVE" || !contract?.status;
-  }
 
   function closeLoadState() {
     try {
@@ -17749,497 +14238,29 @@ ${renderAccountingCenterBulkPromo()}
     return next;
   }
 
-  function closeSeverityWeight(severity) {
-    return Number(CLOSE_SCORE_WEIGHTS[String(severity || "MEDIUM").toUpperCase()] || 0);
-  }
 
-  function closeBuildCheck(config, status, description, affectedContracts = [], extra = {}) {
-    return {
-      controlId: config.id,
-      controlName: config.name,
-      category: config.category,
-      severity: config.severity,
-      blocking: Boolean(config.blocking),
-      status,
-      description: description || "",
-      affectedContracts: Array.from(new Set((affectedContracts || []).filter(Boolean))),
-      resolved: status === CLOSE_CHECK_STATUS.PASS || status === CLOSE_CHECK_STATUS.NOT_APPLICABLE,
-      completedAt: new Date().toISOString(),
-      ...extra
-    };
-  }
 
-  function closeControlResultMap(contract, reportingDate, cache) {
-    const id = contract?.id;
-    if (!id) return null;
-    if (cache.has(id)) return cache.get(id);
-    let snapshot = null;
-    try {
-      snapshot = getStoredControlSnapshot(id);
-      if (!snapshot) snapshot = runContractControls(contract, { persist: false, audit: false });
-    } catch (error) {
-      snapshot = { overallStatus: CONTROL_STATUS.RED, controls: [], exceptions: [], error: error?.message || String(error) };
-    }
-    cache.set(id, snapshot);
-    return snapshot;
-  }
 
-  function closeControlById(snapshot, controlId) {
-    return Array.isArray(snapshot?.controls) ? snapshot.controls.find(x => x?.controlId === controlId) : null;
-  }
 
-  function closeMapControlStatus(result) {
-    if (!result) return CLOSE_CHECK_STATUS.FAIL;
-    const status = String(result.status || "").toUpperCase();
-    if (status === String(CONTROL_STATUS.GREEN)) return CLOSE_CHECK_STATUS.PASS;
-    if (status === String(CONTROL_STATUS.YELLOW)) return CLOSE_CHECK_STATUS.WARNING;
-    if (status === String(CONTROL_STATUS.RED)) return CLOSE_CHECK_STATUS.FAIL;
-    return CLOSE_CHECK_STATUS.WARNING;
-  }
 
-  function closeAggregateExistingControl(checkId, engineControlId, activeContracts, reportingDate, cache) {
-    const affected = [], warnings = [], failures = [], passed = [];
-    activeContracts.forEach(contract => {
-      const snapshot = closeControlResultMap(contract, reportingDate, cache);
-      const result = closeControlById(snapshot, engineControlId);
-      const status = closeMapControlStatus(result);
-      if (status === CLOSE_CHECK_STATUS.FAIL) failures.push(contract.id);
-      else if (status === CLOSE_CHECK_STATUS.WARNING) warnings.push(contract.id);
-      else if (status === CLOSE_CHECK_STATUS.PASS) passed.push(contract.id);
-      if (status !== CLOSE_CHECK_STATUS.PASS) affected.push(contract.id);
-    });
-    const config = CLOSE_CONTROLS.find(x => x.id === checkId);
-    if (!activeContracts.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.NOT_APPLICABLE, "No active contracts require this control for the reporting period.", []);
-    if (failures.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${failures.length} active contract(s) failed the underlying V16.8 control.`, failures, { passedContracts: passed.length, warningContracts: warnings.length });
-    if (warnings.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, `${warnings.length} active contract(s) require review under the underlying V16.8 control.`, warnings, { passedContracts: passed.length, failedContracts: failures.length });
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, `All ${activeContracts.length} active contract(s) passed the underlying control.`, [], { passedContracts: passed.length });
-  }
 
-  function closeScheduleCheck(activeContracts, reportingDate) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-SCHEDULE-COMPLETENESS");
-    const failures = [], warnings = [];
-    activeContracts.forEach(contract => {
-      try {
-        const built = typeof rptScheduleRows === "function" ? rptScheduleRows(contract) : { schedule: [] };
-        const schedule = Array.isArray(built?.schedule) ? built.schedule : [];
-        if (built?.error || !schedule.length) {
-          failures.push(contract.id);
-          return;
-        }
-        const validDates = schedule.every(row => {
-          const d = typeof rptDate === "function" ? rptDate(row?.date) : new Date(row?.date);
-          return d && !Number.isNaN(d.getTime());
-        });
-        const relevant = schedule.filter(row => {
-          const d = typeof rptDate === "function" ? rptDate(row?.date) : new Date(row?.date);
-          return d && !Number.isNaN(d.getTime()) && d <= closeResolveDate(reportingDate);
-        });
-        if (!validDates) failures.push(contract.id);
-        else {
-          // Annual/quarterly contracts can have their first payment after the
-          // selected close date. A valid schedule with no row at or before the
-          // close date is reviewable, but it is not missing or invalid data.
-          const invalidCore = relevant.some(row => row?.closingLiability === undefined && row?.liabilityClosing === undefined && row?.payment === undefined);
-          if (invalidCore || !relevant.length) warnings.push(contract.id);
-        }
-      } catch (error) {
-        failures.push(contract.id);
-      }
-    });
-    if (!activeContracts.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.NOT_APPLICABLE, "No active contracts require schedule validation.", []);
-    if (failures.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${failures.length} contract(s) have missing or invalid payment schedule data.`, failures, { warningContracts: warnings });
-    if (warnings.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, `${warnings.length} contract(s) have schedule rows requiring review.`, warnings);
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, `Payment schedules are available for all ${activeContracts.length} active contract(s).`, []);
-  }
 
-  function closeJournalRowsForPeriod(reportingDate) {
-    try {
-      const start = closeMonthStart(reportingDate), end = closeMonthEnd(reportingDate);
-      const report = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({}) : { rows: [] };
-      return (report.rows || []).filter(row => {
-        const date = row?.voucherDate || row?.period;
-        if (!date) return false;
-        const d = typeof rptDate === "function" ? rptDate(date) : new Date(date);
-        return d && !Number.isNaN(d.getTime()) && d >= start && d <= end;
-      });
-    } catch (error) {
-      return [];
-    }
-  }
 
-  function closeJournalCompletenessCheck(activeContracts, reportingDate) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-JOURNAL-COMPLETENESS");
-    if (!activeContracts.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.NOT_APPLICABLE, "No active contracts require journal completeness validation.", []);
-    const rows = closeJournalRowsForPeriod(reportingDate);
-    const journalContractIds = new Set(rows.map(row => row.contractId).filter(Boolean));
-    const missing = activeContracts.filter(contract => !journalContractIds.has(contract.id)).map(contract => contract.id);
-    const state = closeGetState(closePeriod(reportingDate));
-    if (!rows.length && !state?.journalOverride) {
-      return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, "No generated journal evidence was found for the reporting period.", activeContracts.map(c => c.id), { journalCount: 0, expectedMode: "GENERATED_JOURNAL_EVIDENCE" });
-    }
-    if (missing.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, `${missing.length} active contract(s) have no journal evidence in the reporting period.`, missing, { journalCount: rows.length });
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, `Journal evidence exists for all ${activeContracts.length} active contract(s).`, [], { journalCount: rows.length });
-  }
 
-  function closeJournalBalanceCheck(reportingDate) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-JOURNAL-BALANCE");
-    const report = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({}) : null;
-    const rows = closeJournalRowsForPeriod(reportingDate);
-    const unbalanced = rows.filter(row => row?.balanced === false || Math.abs(safeNumber(row?.totalDebit) - safeNumber(row?.totalCredit)) > CLOSE_TOLERANCE);
-    const periodDebit = rows.reduce((sum, row) => sum + safeNumber(row?.totalDebit), 0);
-    const periodCredit = rows.reduce((sum, row) => sum + safeNumber(row?.totalCredit), 0);
-    const difference = periodDebit - periodCredit;
-    if (!rows.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, "No journal rows were available for period-level balance validation.", [], { journalCount: 0, difference: 0 });
-    if (unbalanced.length || Math.abs(difference) > CLOSE_TOLERANCE) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${unbalanced.length || 1} journal(s) are unbalanced for the reporting period.`, unbalanced.map(r => r.contractId), { journalCount: rows.length, unbalancedJournals: unbalanced.length, difference: Number(difference.toFixed(2)), reportStatus: report?.status || null });
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, `All ${rows.length} journal(s) in the reporting period are balanced.`, [], { journalCount: rows.length, difference: Number(difference.toFixed(2)) });
-  }
 
-  function closeReconciliationChecks(reportingDate) {
-    const reconciliation = typeof getTfrs16ReportingReconciliation === "function" ? getTfrs16ReportingReconciliation(reportingDate) : {};
-    const liability = reconciliation?.liability || {};
-    const liabilityRoll = reconciliation?.liabilityRollForward || {};
-    const rouRoll = reconciliation?.rouRollForward || {};
-    const cash = reconciliation?.cashFlow || {};
-    const configLiab = CLOSE_CONTROLS.find(x => x.id === "CLOSE-LIABILITY-RECON");
-    const configRou = CLOSE_CONTROLS.find(x => x.id === "CLOSE-ROU-RECON");
-    const configCash = CLOSE_CONTROLS.find(x => x.id === "CLOSE-CASH-RECON");
-    const liabCheck = closeBuildCheck(configLiab, liability.passed === true && liabilityRoll.passed !== false ? CLOSE_CHECK_STATUS.PASS : CLOSE_CHECK_STATUS.FAIL, liability.passed === true ? "Current plus non-current liability reconciles to total liability." : "Lease liability reconciliation failed.", [], { difference: liability.difference, rollForwardPassed: liabilityRoll.passed });
-    if (liabilityRoll.passed === false) {
-      liabCheck.status = CLOSE_CHECK_STATUS.FAIL;
-      liabCheck.description = "Lease liability roll-forward reconciliation failed.";
-      liabCheck.difference = liabilityRoll.difference;
-    }
-    const rouCheck = closeBuildCheck(configRou, rouRoll.passed === true ? CLOSE_CHECK_STATUS.PASS : CLOSE_CHECK_STATUS.FAIL, rouRoll.passed === true ? "ROU roll-forward reconciles." : "ROU roll-forward reconciliation failed.", [], { difference: rouRoll.difference });
-    const cashCheck = closeBuildCheck(configCash, cash.passed === true ? CLOSE_CHECK_STATUS.PASS : (cash.passed === false ? CLOSE_CHECK_STATUS.WARNING : CLOSE_CHECK_STATUS.NOT_APPLICABLE), cash.passed === true ? "Cash payment reconciliation passes." : "Cash payment reconciliation is unavailable or requires review.", [], { difference: cash.difference, basis: "EXPECTED_SCHEDULED_CASH" });
-    return { reconciliation, liabCheck, rouCheck, cashCheck };
-  }
 
-  function closeReportingCompletenessCheck(reportingDate, reportingSnapshot) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-REPORTING-COMPLETENESS");
-    if (!reportingSnapshot) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, "Financial reporting snapshot could not be generated.", []);
-    if (reportingSnapshot.status === "ERROR") return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, "Financial reporting engine returned an ERROR status.", [], { sourceStatus: reportingSnapshot.status });
-    if (reportingSnapshot.status === "WARNING") return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, "Financial reporting engine returned WARNING status.", [], { sourceStatus: reportingSnapshot.status });
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, "Financial reporting snapshot is complete and ready.", [], { sourceStatus: reportingSnapshot.status, reportingDate: closeIsoDate(reportingDate) });
-  }
 
-  function closeAuditCheck(activeContracts, reportingDate) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-AUDIT-TRAIL");
-    const affected = [];
-    activeContracts.forEach(contract => {
-      try {
-        const events = typeof getAuditTrail === "function" ? getAuditTrail(contract.id) : [];
-        if (!events.length) affected.push(contract.id);
-      } catch (error) {
-        affected.push(contract.id);
-      }
-    });
-    if (!activeContracts.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.NOT_APPLICABLE, "No active contracts require audit completeness validation.", []);
-    if (affected.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${affected.length} active contract(s) have no audit evidence.`, affected);
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, `Audit evidence exists for all ${activeContracts.length} active contract(s).`, []);
-  }
 
-  function closeControlExceptionCheck(activeContracts, reportingDate, cache) {
-    const config = CLOSE_CONTROLS.find(x => x.id === "CLOSE-CONTROL-EXCEPTIONS");
-    const open = [], critical = [], high = [];
-    activeContracts.forEach(contract => {
-      const snapshot = closeControlResultMap(contract, reportingDate, cache);
-      (snapshot?.exceptions || []).forEach(exception => {
-        const status = String(exception?.status || "OPEN").toUpperCase();
-        if (["RESOLVED", "WAIVED"].includes(status)) return;
-        open.push({ contractId: contract.id, controlId: exception.controlId || null, severity: exception.priority || null, description: exception.message || exception.description || "", status });
-        if (String(exception?.priority || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL) critical.push(contract.id);
-        if (String(exception?.priority || "").toUpperCase() === CONTROL_PRIORITY.HIGH) high.push(contract.id);
-      });
-    });
-    if (critical.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${open.length} open control exception(s), including critical exceptions, remain unresolved.`, Array.from(new Set(critical)), { openExceptions: open, criticalExceptions: critical.length, highExceptions: high.length });
-    if (high.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.FAIL, `${open.length} open control exception(s), including high-priority exceptions, remain unresolved.`, Array.from(new Set(high)), { openExceptions: open, criticalExceptions: 0, highExceptions: high.length });
-    if (open.length) return closeBuildCheck(config, CLOSE_CHECK_STATUS.WARNING, `${open.length} non-blocking control exception(s) remain open.`, Array.from(new Set(open.map(x => x.contractId))), { openExceptions: open, criticalExceptions: 0, highExceptions: 0 });
-    return closeBuildCheck(config, CLOSE_CHECK_STATUS.PASS, "No unresolved control exceptions remain for active contracts.", [], { openExceptions: [] });
-  }
 
-  function legacyReportAuth_getMonthEndCloseChecklist(reportingDate) {
-    const d = closeResolveDate(reportingDate), period = closePeriod(d), start = closeMonthStart(d), end = closeMonthEnd(d);
-    const activeContracts = closeSafeContracts().filter(c => closeIsActive(c, d));
-    const cache = new Map();
-    const checks = [];
-    const push = check => checks.push(check);
-    const reportingSnapshot = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : null;
 
-    push(closeAggregateExistingControl("CLOSE-CONTRACT-COMPLETENESS", "CTRL-DATA-001", activeContracts, d, cache));
-    push(closeAggregateExistingControl("CLOSE-CONTRACT-VALIDITY", "CTRL-DATA-002", activeContracts, d, cache));
-    push(closeScheduleCheck(activeContracts, d));
-    push(closeAggregateExistingControl("CLOSE-CALCULATION-COMPLETENESS", "CTRL-CALC-001", activeContracts, d, cache));
-    push(closeAggregateExistingControl("CLOSE-ESCALATION-VALIDATION", "CTRL-ESC-001", activeContracts, d, cache));
-    push(closeAggregateExistingControl("CLOSE-MODIFICATION-REVIEW", "CTRL-MOD-001", activeContracts, d, cache));
-    push(closeAggregateExistingControl("CLOSE-REASSESSMENT-REVIEW", "CTRL-REA-001", activeContracts, d, cache));
-    push(closeJournalCompletenessCheck(activeContracts, d));
-    push(closeJournalBalanceCheck(d));
-    push(closeAggregateExistingControl("CLOSE-CLASSIFICATION", "CTRL-CLS-001", activeContracts, d, cache));
-    const reconciliations = closeReconciliationChecks(d);
-    push(reconciliations.liabCheck);
-    push(reconciliations.rouCheck);
-    push(reconciliations.cashCheck);
-    push(closeControlExceptionCheck(activeContracts, d, cache));
-    push(closeAuditCheck(activeContracts, d));
-    push(closeReportingCompletenessCheck(d, reportingSnapshot));
 
-    const state = closeGetState(period);
-    const checklist = {
-      engineVersion: CLOSE_ENGINE_VERSION,
-      period,
-      reportingDate: closeIsoDate(d),
-      periodStart: closeIsoDate(start),
-      periodEnd: closeIsoDate(end),
-      generatedAt: new Date().toISOString(),
-      checks,
-      activeContractCount: activeContracts.length,
-      contractCount: closeSafeContracts().length,
-      state: state || { period, status: CLOSE_STATUS.NOT_STARTED, locked: false, certified: false },
-      summary: {
-        total: checks.length,
-        passed: checks.filter(x => x.status === CLOSE_CHECK_STATUS.PASS).length,
-        warnings: checks.filter(x => x.status === CLOSE_CHECK_STATUS.WARNING).length,
-        failed: checks.filter(x => x.status === CLOSE_CHECK_STATUS.FAIL).length,
-        notApplicable: checks.filter(x => x.status === CLOSE_CHECK_STATUS.NOT_APPLICABLE).length
-      }
-    };
-    checklist.dataQuality = {
-      status: checklist.summary.failed ? "ERROR" : (checklist.summary.warnings ? "WARNING" : "READY"),
-      errors: checklist.summary.failed,
-      warnings: checklist.summary.warnings
-    };
-    return checklist;
-  }
 
-  function closeCalculateScore(checks) {
-    const applicable = (checks || []).filter(c => c.status !== CLOSE_CHECK_STATUS.NOT_APPLICABLE);
-    if (!applicable.length) return 100;
-    let totalWeight = 0, earned = 0;
-    applicable.forEach(check => {
-      const weight = closeSeverityWeight(check.severity);
-      totalWeight += weight;
-      if (check.status === CLOSE_CHECK_STATUS.PASS) earned += weight;
-      else if (check.status === CLOSE_CHECK_STATUS.WARNING) earned += weight * 0.75;
-    });
-    return totalWeight ? Math.max(0, Math.min(100, Number(((earned / totalWeight) * 100).toFixed(2)))) : 100;
-  }
 
-  function closeEvaluateStatus(checklist, score, state) {
-    if (state?.locked && state?.certified) return CLOSE_STATUS.CLOSED;
-    if (state?.status === CLOSE_STATUS.REOPENED) {
-      if (checklist.summary.failed) return CLOSE_STATUS.BLOCKED;
-      if (checklist.summary.warnings) return CLOSE_STATUS.WARNING;
-      return CLOSE_STATUS.REOPENED;
-    }
-    if (checklist.summary.failed) return CLOSE_STATUS.BLOCKED;
-    if (score >= 100 && checklist.summary.warnings === 0) return CLOSE_STATUS.READY;
-    if (checklist.summary.warnings) return CLOSE_STATUS.WARNING;
-    return CLOSE_STATUS.IN_PROGRESS;
-  }
 
-  function legacyReportAuth_getCloseReadiness(reportingDate) {
-    const d = closeResolveDate(reportingDate), period = closePeriod(d);
-    const checklist = getMonthEndCloseChecklist(d);
-    const score = closeCalculateScore(checklist.checks);
-    const state = closeGetState(period);
-    const blockers = checklist.checks.filter(c => c.status === CLOSE_CHECK_STATUS.FAIL && c.blocking);
-    const warnings = checklist.checks.filter(c => c.status === CLOSE_CHECK_STATUS.WARNING);
-    const passed = checklist.checks.filter(c => c.status === CLOSE_CHECK_STATUS.PASS);
-    const status = closeEvaluateStatus(checklist, score, state);
-    return {
-      engineVersion: CLOSE_ENGINE_VERSION,
-      period,
-      reportingDate: closeIsoDate(d),
-      ready: status === CLOSE_STATUS.READY || status === CLOSE_STATUS.CLOSED,
-      score,
-      status,
-      blockingIssues: blockers,
-      warnings,
-      passedControls: passed.length,
-      totalControls: checklist.checks.length,
-      checklist,
-      state: state || { period, status: CLOSE_STATUS.NOT_STARTED, locked: false, certified: false }
-    };
-  }
 
-  function legacyReportAuth_getMonthEndCloseStatus(reportingDate) {
-    return getCloseReadiness(reportingDate);
-  }
 
-  function legacyReportAuth_getMonthEndCloseSummary(reportingDate) {
-    const d = closeResolveDate(reportingDate), readiness = getCloseReadiness(d);
-    const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
-    const journal = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({}) : { rows: [], totals: {} };
-    const cfo = typeof getTfrs16CfoSnapshot === "function" ? getTfrs16CfoSnapshot(d) : {};
-    const checklist = readiness.checklist;
-    const controlCheck = checklist.checks.find(x => x.controlId === "CLOSE-CONTROL-EXCEPTIONS");
-    const exceptionRows = controlCheck?.openExceptions || [];
-    return {
-      engineVersion: CLOSE_ENGINE_VERSION,
-      period: readiness.period,
-      reportingDate: readiness.reportingDate,
-      status: readiness.status,
-      closeScore: readiness.score,
-      contractCount: closeSafeContracts().length,
-      activeContractCount: checklist.activeContractCount,
-      calculationStatus: checklist.checks.find(x => x.controlId === "CLOSE-CALCULATION-COMPLETENESS")?.status || "UNKNOWN",
-      scheduleStatus: checklist.checks.find(x => x.controlId === "CLOSE-SCHEDULE-COMPLETENESS")?.status || "UNKNOWN",
-      journalStatus: checklist.checks.find(x => x.controlId === "CLOSE-JOURNAL-COMPLETENESS")?.status || "UNKNOWN",
-      journalBalanceStatus: checklist.checks.find(x => x.controlId === "CLOSE-JOURNAL-BALANCE")?.status || "UNKNOWN",
-      reconciliationStatus: ["CLOSE-LIABILITY-RECON", "CLOSE-ROU-RECON", "CLOSE-CASH-RECON"].every(id => [CLOSE_CHECK_STATUS.PASS, CLOSE_CHECK_STATUS.NOT_APPLICABLE].includes(checklist.checks.find(x => x.controlId === id)?.status)) ? "READY" : "WARNING",
-      controlStatus: checklist.checks.find(x => x.controlId === "CLOSE-CONTROL-EXCEPTIONS")?.status || "UNKNOWN",
-      exceptionCount: exceptionRows.length,
-      criticalExceptionCount: exceptionRows.filter(x => String(x.severity || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL).length,
-      warningCount: checklist.summary.warnings,
-      blockingIssueCount: readiness.blockingIssues.length,
-      balancedJournalCount: journal.totals?.balancedJournals || 0,
-      journalCount: journal.totals?.journalCount || 0,
-      totalLiability: financial?.balanceSheet?.leaseLiability ?? cfo?.liabilities?.total ?? 0,
-      currentLiability: financial?.balanceSheet?.currentLiability ?? cfo?.liabilities?.current ?? 0,
-      nonCurrentLiability: financial?.balanceSheet?.nonCurrentLiability ?? cfo?.liabilities?.nonCurrent ?? 0,
-      rouAssets: financial?.balanceSheet?.rouAssets ?? cfo?.rouAssets?.total ?? 0,
-      blockers: readiness.blockingIssues,
-      warnings: readiness.warnings,
-      certification: readiness.state?.certificationStatus || (readiness.state?.certified ? "CERTIFIED" : "NOT_CERTIFIED")
-    };
-  }
 
-  function legacyReportAuth_getCompanyMonthEndCloseStatus(company, reportingDate) {
-    const d = closeResolveDate(reportingDate), name = String(company || "");
-    const companyContracts = closeSafeContracts().filter(c => String(c?.company || "") === name);
-    const active = companyContracts.filter(c => closeIsActive(c, d));
-    const cache = new Map();
-    const localChecks = [];
-    const subset = ids => active.filter(c => ids.includes(c.id));
-    [
-      ["CLOSE-CONTRACT-COMPLETENESS", "CTRL-DATA-001"],
-      ["CLOSE-CONTRACT-VALIDITY", "CTRL-DATA-002"],
-      ["CLOSE-CALCULATION-COMPLETENESS", "CTRL-CALC-001"],
-      ["CLOSE-ESCALATION-VALIDATION", "CTRL-ESC-001"],
-      ["CLOSE-MODIFICATION-REVIEW", "CTRL-MOD-001"],
-      ["CLOSE-REASSESSMENT-REVIEW", "CTRL-REA-001"],
-      ["CLOSE-CLASSIFICATION", "CTRL-CLS-001"]
-    ].forEach(pair => localChecks.push(closeAggregateExistingControl(pair[0], pair[1], active, d, cache)));
-    localChecks.push(closeScheduleCheck(active, d));
-    const recon = typeof getCurrentNonCurrentReport === "function" ? getCurrentNonCurrentReport(d, { company: name }) : null;
-    const journal = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({ company: name }) : { rows: [], totals: {} };
-    const openExceptions = active.flatMap(c => {
-      const snap = closeControlResultMap(c, d, cache);
-      return (snap?.exceptions || []).filter(e => !["RESOLVED", "WAIVED"].includes(String(e?.status || "OPEN").toUpperCase())).map(e => ({ ...e, contractId: c.id }));
-    });
-    const failed = localChecks.filter(c => c.status === CLOSE_CHECK_STATUS.FAIL);
-    const warnings = localChecks.filter(c => c.status === CLOSE_CHECK_STATUS.WARNING);
-    const score = closeCalculateScore(localChecks);
-    const status = failed.length ? CLOSE_STATUS.BLOCKED : (warnings.length || openExceptions.length ? CLOSE_STATUS.WARNING : CLOSE_STATUS.READY);
-    const liability = recon?.totals || {};
-    return {
-      company: name,
-      reportingDate: closeIsoDate(d),
-      period: closePeriod(d),
-      status,
-      score,
-      contractCount: companyContracts.length,
-      activeContractCount: active.length,
-      totalLiability: safeNumber(liability.totalLiability),
-      currentLiability: safeNumber(liability.currentLiability),
-      nonCurrentLiability: safeNumber(liability.nonCurrentLiability),
-      journalStatus: journal?.totals?.unbalancedJournals ? "WARNING" : (journal?.totals?.journalCount ? "READY" : "WARNING"),
-      reconciliationStatus: recon ? (Math.abs(safeNumber(liability.totalLiability) - safeNumber(liability.currentLiability) - safeNumber(liability.nonCurrentLiability)) <= CLOSE_TOLERANCE ? "READY" : "ERROR") : "WARNING",
-      exceptions: openExceptions,
-      exceptionCount: openExceptions.length,
-      criticalExceptionCount: openExceptions.filter(e => String(e?.priority || e?.severity || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL).length,
-      checks: localChecks,
-      blockers: failed,
-      warnings
-    };
-  }
 
-  function legacyReportAuth_getCurrencyMonthEndCloseStatus(currency, reportingDate) {
-    const d = closeResolveDate(reportingDate), curr = String(currency || "UNSPECIFIED");
-    const contractsForCurrency = closeSafeContracts().filter(c => String(c?.currency || "UNSPECIFIED") === curr);
-    const companies = Array.from(new Set(contractsForCurrency.map(c => c.company).filter(Boolean)));
-    const companyStatus = companies.map(company => getCompanyMonthEndCloseStatus(company, d));
-    const failed = companyStatus.filter(x => x.status === CLOSE_STATUS.BLOCKED);
-    const warnings = companyStatus.filter(x => x.status === CLOSE_STATUS.WARNING);
-    const exposure = typeof getCurrencyExposureReport === "function" ? getCurrencyExposureReport(d, { currency: curr }) : { rows: [] };
-    const row = (exposure?.rows || []).find(x => String(x.currency || "UNSPECIFIED") === curr) || {};
-    return {
-      currency: curr,
-      reportingDate: closeIsoDate(d),
-      period: closePeriod(d),
-      status: failed.length ? CLOSE_STATUS.BLOCKED : (warnings.length ? CLOSE_STATUS.WARNING : CLOSE_STATUS.READY),
-      companyCount: companies.length,
-      contractCount: contractsForCurrency.length,
-      score: companyStatus.length ? Number((companyStatus.reduce((s, x) => s + safeNumber(x.score), 0) / companyStatus.length).toFixed(2)) : 100,
-      totalLiability: safeNumber(row.totalLiability),
-      currentLiability: safeNumber(row.currentLiability),
-      nonCurrentLiability: safeNumber(row.nonCurrentLiability),
-      rouAssets: safeNumber(row.rouAssets || row.rouAsset),
-      companies: companyStatus,
-      fxConversionApplied: false
-    };
-  }
-
-  function legacyReportAuth_getCloseApprovalReadiness(reportingDate) {
-    const readiness = getCloseReadiness(reportingDate);
-    const state = readiness.state || {};
-    return {
-      period: readiness.period,
-      reportingDate: readiness.reportingDate,
-      ready: readiness.ready,
-      score: readiness.score,
-      status: readiness.status,
-      approvalStatus: readiness.ready ? "READY_FOR_CERTIFICATION" : "NOT_READY",
-      blockingIssues: readiness.blockingIssues,
-      warnings: readiness.warnings,
-      openControls: readiness.checklist.checks.filter(c => c.status !== CLOSE_CHECK_STATUS.PASS && c.status !== CLOSE_CHECK_STATUS.NOT_APPLICABLE),
-      reconciliationStatus: readiness.checklist.checks.filter(c => c.category === "RECONCILIATION").map(c => ({ controlId: c.controlId, status: c.status, description: c.description })),
-      journalStatus: readiness.checklist.checks.filter(c => c.category === "JOURNAL").map(c => ({ controlId: c.controlId, status: c.status, description: c.description })),
-      certification: {
-        certified: Boolean(state.certified),
-        certifiedAt: state.certifiedAt || null,
-        certifiedBy: state.certifiedBy || null,
-        certificationStatus: state.certificationStatus || (state.certified ? "CERTIFIED" : "NOT_CERTIFIED"),
-        comments: state.comments || ""
-      }
-    };
-  }
-
-  function legacyReportAuth_getMonthEndCloseDashboardData(reportingDate) {
-    const d = closeResolveDate(reportingDate), readiness = getCloseReadiness(d), summary = getMonthEndCloseSummary(d);
-    const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
-    const companies = Array.from(new Set(closeSafeContracts().map(c => c.company).filter(Boolean))).map(company => getCompanyMonthEndCloseStatus(company, d));
-    const currencies = Array.from(new Set(closeSafeContracts().map(c => c.currency || "UNSPECIFIED"))).map(currency => getCurrencyMonthEndCloseStatus(currency, d));
-    const cfo = typeof getTfrs16CfoSnapshot === "function" ? getTfrs16CfoSnapshot(d) : {};
-    return {
-      engineVersion: CLOSE_ENGINE_VERSION,
-      period: closePeriod(d),
-      status: readiness.status,
-      score: readiness.score,
-      totalContracts: summary.contractCount,
-      activeContracts: summary.activeContractCount,
-      totalLiability: financial?.balanceSheet?.leaseLiability ?? cfo?.liabilities?.total ?? 0,
-      currentLiability: financial?.balanceSheet?.currentLiability ?? cfo?.liabilities?.current ?? 0,
-      nonCurrentLiability: financial?.balanceSheet?.nonCurrentLiability ?? cfo?.liabilities?.nonCurrent ?? 0,
-      rouAssets: financial?.balanceSheet?.rouAssets ?? cfo?.rouAssets?.total ?? 0,
-      interestExpense: financial?.profitLoss?.interestExpense ?? cfo?.pnl?.interestExpense ?? 0,
-      depreciationExpense: financial?.profitLoss?.depreciationExpense ?? cfo?.pnl?.depreciationExpense ?? 0,
-      journalCount: summary.journalCount,
-      balancedJournalCount: summary.balancedJournalCount,
-      reconciliationStatus: summary.reconciliationStatus,
-      exceptionCount: summary.exceptionCount,
-      criticalExceptionCount: summary.criticalExceptionCount,
-      renewals90Days: cfo?.renewals?.within90Days ?? 0,
-      modificationsPending: cfo?.modifications?.pending ?? 0,
-      reassessmentsPending: cfo?.reassessments?.pending ?? 0,
-      companyStatus: companies,
-      currencyStatus: currencies,
-      controls: readiness.checklist.checks,
-      blockers: readiness.blockingIssues,
-      warnings: readiness.warnings,
-      certification: readiness.state
-    };
-  }
 
   function getMonthEndCloseHistory() {
     const state = closeLoadState();
@@ -18429,72 +14450,7 @@ ${renderAccountingCenterBulkPromo()}
     ].join("-");
   }
 
-  function closeJournalPeriodStart(reportingDate) {
-    const end = coreDate(closeDateOnly(reportingDate));
-    if (!end) return null;
-    const first = new Date(end.getFullYear(), end.getMonth(), 1);
-    first.setDate(first.getDate() - 1);
-    return closeDateOnly(first);
-  }
 
-  async function ensurePrivateCloseJournalSummary(contractsForPeriod, reportingDate) {
-    // Close is a read-only dashboard surface. A stalled journal request must
-    // fail closed and leave an actionable error card; it must never keep the
-    // renderer (or the browser tab) waiting indefinitely.
-    const JOURNAL_REQUEST_TIMEOUT_MS = 10000;
-    // A close period is a calendar date, not an instant. Converting a local
-    // midnight through toISOString() shifts Istanbul dates to the previous
-    // UTC day (for example 2026-09-28 -> 2026-09-27). The cache was therefore
-    // written under one day and read under another, restarting journal
-    // hydration/rendering forever until the browser tab crashed.
-    const end = closeDateOnly(reportingDate);
-    const start = closeJournalPeriodStart(end);
-    if (!end || !start) throw new Error("Geçersiz kapanış raporlama tarihi.");
-    const key = end;
-    if (PRIVATE_CLOSE_JOURNAL_CACHE.has(key)) return PRIVATE_CLOSE_JOURNAL_CACHE.get(key);
-    if (PRIVATE_CLOSE_JOURNAL_INFLIGHT.has(key)) return PRIVATE_CLOSE_JOURNAL_INFLIGHT.get(key);
-    const facade = window.LeaseQantPrivateTfrs16Facade;
-    if (typeof facade?.loadJournal !== "function") {
-      throw new Error("Private period journal calculation is unavailable");
-    }
-    const loadJournalWithDeadline = contract => {
-      let timer = null;
-      const request = Promise.resolve().then(() => facade.loadJournal(
-        contract,
-        start,
-        end,
-        { timeoutMs: JOURNAL_REQUEST_TIMEOUT_MS }
-      ));
-      const deadline = new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          const error = new Error("Private dönem fişi zaman aşımına uğradı");
-          error.code = "PRIVATE_JOURNAL_TIMEOUT";
-          reject(error);
-        }, JOURNAL_REQUEST_TIMEOUT_MS + 250);
-      });
-      return Promise.race([request, deadline]).finally(() => {
-        if (timer) clearTimeout(timer);
-      });
-    };
-    const promise = Promise.all((Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
-      .filter(contract => cfoIsActive(contract, end))
-      .map(loadJournalWithDeadline))
-      .then(results => {
-        const summary = {
-          interestExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.interest) || 0), 0),
-          depreciationExpense: results.reduce((sum, result) => sum + (Number(result?.summary?.depreciation) || 0), 0),
-          payment: results.reduce((sum, result) => sum + (Number(result?.summary?.payment) || 0), 0),
-          journalCount: results.length,
-          balancedJournalCount: results.filter(result => result?.summary?.balanced !== false).length,
-          source: "PRIVATE_ENGINE_JOURNAL"
-        };
-        PRIVATE_CLOSE_JOURNAL_CACHE.set(key, summary);
-        return summary;
-      })
-      .finally(() => PRIVATE_CLOSE_JOURNAL_INFLIGHT.delete(key));
-    PRIVATE_CLOSE_JOURNAL_INFLIGHT.set(key, promise);
-    return promise;
-  }
 
   async function ensurePrivateCloseControls(contractsForPeriod, reportingDate, companyId) {
     const end = closeDateOnly(reportingDate);
@@ -18563,635 +14519,7 @@ ${renderAccountingCenterBulkPromo()}
     return promise;
   }
 
-  // API-primary kapanış özeti yalnızca zaten alınmış private reporting-date
-  // zarflarını toplar. Bu ekranın legacy close/reporting zincirine düşmesi
-  // hem proprietary browser hesaplamasını yeniden çalıştırır hem de büyük
-  // portföylerde sekmeyi kilitleyebilir. Burada yeni muhasebe hesabı yok;
-  // backend'in verdiği sözleşme bazlı sonuçlar yalnızca toplulaştırılır.
-  function buildPrivateCloseDashboardSnapshot(contractsForPeriod, reportingDate, companyId, privateControls) {
-    const list = (Array.isArray(contractsForPeriod) ? contractsForPeriod : [])
-      .filter(contract => cfoIsActive(contract, reportingDate))
-      .filter(contract => !companyId || companyId === "ALL" || String(contract.companyId || contract.company || "") === String(companyId));
-    const rows = list.map(contract => ({
-      contract,
-      result: getPrivateReportingDateResult(contract, reportingDate)
-    })).filter(item => item.result && typeof item.result === "object");
-    const sum = key => rows.reduce((total, item) => total + (Number(item.result?.[key]) || 0), 0);
-    const journal = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate)) || {};
-    const controls = Array.isArray(privateControls?.controls) ? privateControls.controls : [];
-    const warnings = Array.isArray(privateControls?.warnings) ? privateControls.warnings : [];
-    const blockers = Array.isArray(privateControls?.blockers) ? privateControls.blockers : [];
-    const state = closeGetState(closePeriod(reportingDate));
-    const data = {
-      engineVersion: "PRIVATE_ENGINE_CLOSE_READONLY",
-      period: closePeriod(reportingDate),
-      status: privateControls?.status || "WARNING",
-      score: Number(privateControls?.score) || 0,
-      totalContracts: list.length,
-      activeContracts: rows.length,
-      totalLiability: sum("totalLiability") || sum("outstandingLiability") || sum("currentLiability") + sum("nonCurrentLiability"),
-      currentLiability: sum("currentLiability"),
-      nonCurrentLiability: sum("nonCurrentLiability"),
-      rouAssets: sum("outstandingROU"),
-      interestExpense: Number(journal.interestExpense) || 0,
-      depreciationExpense: Number(journal.depreciationExpense) || 0,
-      journalCount: Number(journal.journalCount) || 0,
-      balancedJournalCount: Number(journal.balancedJournalCount) || 0,
-      reconciliationStatus: "PRIVATE_ENGINE",
-      companyStatus: [],
-      currencyStatus: [],
-      controls,
-      blockers,
-      warnings,
-      certification: state || privateControls?.certification || { period: closePeriod(reportingDate), status: "NOT_CERTIFIED", locked: false, certified: false }
-    };
-    return {
-      data,
-      readiness: {
-        ready: privateControls?.ready === true,
-        score: data.score,
-        status: data.status,
-        blockingIssues: blockers,
-        warnings,
-        checklist: { checks: controls },
-        state: data.certification
-      }
-    };
-  }
 
-  function legacyReportAuth_renderCloseDashboardPage(container, options = {}) {
-    if (!container) return;
-    if (typeof injectV26Styles === "function") injectV26Styles();
-
-    const today = new Date();
-    const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-    let period = options.period || container.dataset.period || defaultPeriod;
-    // V27 — Şirket filtresi. "ALL" = mevcut (tek-şirketli) davranış, regresyon yok.
-    const defaultCompanyId = options.companyId || container.dataset.companyId ||
-      (typeof getActiveCompanyId === "function" ? getActiveCompanyId() : "ALL");
-    let companyId = defaultCompanyId || "ALL";
-    container.dataset.companyId = companyId;
-    // V27 — Raporlama para birimi. Varsayılan TRY iken davranış aynı kalır
-    // (çevrim uygulanmaz, mevcut kullanıcılar için regresyon yok).
-    let reportingCurrency = options.reportingCurrency || container.dataset.reportingCurrency ||
-      (typeof getReportingCurrency === "function" ? getReportingCurrency() : "TRY");
-    container.dataset.reportingCurrency = reportingCurrency;
-    const reportingCurrencyList = (typeof V26_FX_UI_CURRENCIES !== "undefined" && V26_FX_UI_CURRENCIES.length)
-      ? V26_FX_UI_CURRENCIES : ["TRY", "EUR", "USD", "GBP", "CHF", "JPY", "AED", "SAR"];
-
-    const statusColor = (status) => {
-      const s = String(status || "").toUpperCase();
-      if (s === "CLOSED" || s === "READY" || s === "PASS") return "#166534";
-      if (s === "WARNING" || s === "IN_PROGRESS" || s === "REOPENED") return "#854d0e";
-      if (s === "BLOCKED" || s === "FAIL") return "#b91c1c";
-      return "#64748b";
-    };
-
-    const statusBadge = (status) => {
-      const s = String(status || "UNKNOWN");
-      const color = statusColor(s);
-      const bg = color === "#166534" ? "#dcfce7" : color === "#854d0e" ? "#fef9c3" : color === "#b91c1c" ? "#fee2e2" : "#f1f5f9";
-      return `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:${bg};color:${color};">${escapeHtml(s)}</span>`;
-    };
-
-    const fmt = (n) => {
-      if (typeof formatCurrency === "function") return formatCurrency(n);
-      const num = Number(n);
-      if (!Number.isFinite(num)) return "—";
-      return num.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    };
-
-    const companyOptions = typeof getUnifiedCompanyOptions === "function" ? getUnifiedCompanyOptions() : [];
-
-    // Kapanış sonuçları yalnızca backend sözleşme verisi doğrulandıktan sonra
-    // gösterilir. LocalStorage, eski bir sonucu güncel kapanış bakiyesi gibi
-    // göstermemesi için bu ekranın veri kaynağı olamaz.
-    if (!backendContractsHydrated) {
-      const failed = backendContractsHydrationError;
-      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${failed
-        ? "Backend sözleşme verisi alınamadı. Kapanış sonuçları gösterilmiyor; Yenile ile tekrar deneyin."
-        : "Backend sözleşme verisi yükleniyor… Kapanış sonuçları doğrulama tamamlanınca gösterilecek."}</div></div>`;
-      return;
-    }
-
-    // DÜZELTME (2026-09-17, Burhan'ın 30 kontratlık toplu içe aktarımından
-    // sonra bulundu): CLOSE-CALCULATION-COMPLETENESS/CLASSIFICATION gibi
-    // kontroller getPrivateCalculationForConsumer() çağırıyor — bu fonksiyon
-    // private sonuç henüz cache'te yoksa THROW EDER (bkz. controlCalculation,
-    // controlClassification). Portföydeki TÜM sözleşmelerin private sonucu
-    // henüz ısınmamışken bu sayfa açılırsa (ör. toplu import sonrası hemen
-    // Close Dashboard'a geçilirse), HER sözleşme CTRL-CALC-001/CTRL-CLS-001'i
-    // "unexpected error" ile RED döndürür — bu bir hesaplama hatası DEĞİL,
-    // bir hydration zamanlama boşluğu. updateKPIs()'in zaten kullandığı AYNI
-    // bekleme deseni burada da uygulanıyor; ensurePrivateCalculationCache
-    // tamamlanınca v26RefreshActivePage bu sayfayı otomatik yeniden çizer
-    // (host.__v26LastRenderer zaten bu fonksiyona işaret ediyor).
-    const closeCalculationHydration = container.__closeCalculationHydration || {};
-    if (window.LEASEQANT_CALCULATION_API_PRIMARY === true &&
-        Array.isArray(contracts) && contracts.length > 0 &&
-        (closeCalculationHydration.failed || PRIVATE_CALCULATION_CACHE.size === 0 || privateCacheHydrationInFlight())) {
-      // A failed warm-up must settle into one visible error state. Starting
-      // the same request again from every refresh creates an endless
-      // refresh/request loop and can take down the browser tab.
-      const state = closeCalculationHydration;
-      if (!state.promise && !state.completed && !state.failed) {
-        state.promise = ensurePrivateCalculationCache(contracts)
-          .then(result => {
-            state.failed = Number(result?.failed || 0) > 0;
-            state.completed = !state.failed;
-          })
-          .catch(() => {
-            state.failed = true;
-          })
-          .finally(() => {
-            state.promise = null;
-            if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-          });
-        container.__closeCalculationHydration = state;
-      }
-      const message = state.failed
-        ? "Private hesaplama sonuçları alınamadı. Kapanış sonuçları gösterilmiyor; Yenile ile tekrar deneyin."
-        : "Private hesaplama sonuçları yükleniyor… Kapanış kontrolleri (CTRL-CALC-001, CTRL-CLS-001 vb.), portföydeki TÜM sözleşmelerin özel API sonucu hazır olunca gösterilecek.";
-      const color = state.failed ? "#b91c1c" : "#475569";
-      container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:${color};">${message}</div></div>`;
-      return;
-    }
-
-    const render = () => {
-      const [reportingYear, reportingMonth] = period.split("-").map(Number);
-      const reportingDate = coreIsoDate(new Date(Date.UTC(reportingYear, reportingMonth, 0)));
-      const privateCloseOnly = window.LEASEQANT_CALCULATION_API_PRIMARY === true;
-
-      // API-primary reporting is date keyed. The initial page hydration warms
-      // today's date, while Close Dashboard can be opened for any month. Do
-      // not let a missing date envelope fall through to the legacy close
-      // helpers (which would render zero liability/interest/depreciation).
-      if (isPrivateCalculationApiReady() && Array.isArray(contracts) && contracts.length > 0) {
-        const missing = contracts.filter(contract => !getPrivateReportingDateResult(contract, reportingDate));
-        if (missing.length > 0) {
-          const state = container.__closeReportingHydration || {};
-          if (state.reportingDate !== reportingDate || (!state.promise && !state.failed)) {
-            state.reportingDate = reportingDate;
-            state.failed = false;
-            state.promise = ensurePrivateReportingDateCache(contracts, reportingDate)
-              .then(result => {
-                state.failed = Number(result?.failed || 0) > 0;
-                clearCalculationCache(undefined, { preservePrivate: true });
-              })
-              .catch(() => {
-                state.failed = true;
-              })
-              .finally(() => {
-                state.promise = null;
-                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-              });
-            container.__closeReportingHydration = state;
-          }
-          if (state.failed) {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private reporting-date sonucu alınamadı (${escapeHtml(reportingDate)}). Kapanış tutarları gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
-          } else {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${escapeHtml(reportingDate)} kapanış sonuçları private API'den yükleniyor…</div></div>`;
-          }
-          return;
-        }
-
-      }
-
-      // Journal hydration must not depend on the calculation-cache readiness
-      // flag. That flag can be false during a clean page load even though the
-      // authenticated private facade is already available. Skipping this
-      // request would fall through to the legacy zero P&L values.
-      const privateJournalFacade = window.LeaseQantPrivateTfrs16Facade;
-      if (typeof privateJournalFacade?.loadJournal === "function" && Array.isArray(contracts) && contracts.length > 0) {
-        const journalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate));
-        if (!journalSummary) {
-          const state = container.__closeJournalHydration || {};
-          if (state.reportingDate !== reportingDate || (!state.promise && !state.failed)) {
-            state.reportingDate = reportingDate;
-            state.failed = false;
-            state.promise = ensurePrivateCloseJournalSummary(contracts, reportingDate)
-              .then(() => { state.failed = false; })
-              .catch(() => { state.failed = true; })
-              .finally(() => {
-                state.promise = null;
-                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-              });
-            container.__closeJournalHydration = state;
-          }
-          if (state.failed) {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private dönem fişi alınamadı (${escapeHtml(reportingDate)}). Faiz ve amortisman özeti gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
-          } else {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">${escapeHtml(reportingDate)} dönem faizi ve amortismanı private API'den yükleniyor…</div></div>`;
-          }
-          return;
-        }
-      }
-
-      // Close controls are also private-engine output. Keep the dashboard
-      // fail-closed until the scoped control envelope is available instead of
-      // reviving the legacy browser control engine.
-      if (privateCloseOnly && typeof privateJournalFacade?.loadCloseControls === "function" && Array.isArray(contracts) && contracts.length > 0) {
-        const controlKey = `${closeDateOnly(reportingDate)}|${String(companyId || "ALL")}`;
-        const privateControls = PRIVATE_CLOSE_CONTROLS_CACHE.get(controlKey);
-        if (!privateControls) {
-          const state = container.__closeControlsHydration || {};
-          if (state.key !== controlKey || (!state.promise && !state.failed)) {
-            state.key = controlKey;
-            state.failed = false;
-            state.promise = ensurePrivateCloseControls(contracts, reportingDate, companyId)
-              .then(() => { state.failed = false; })
-              .catch(() => { state.failed = true; })
-              .finally(() => {
-                state.promise = null;
-                if (typeof v26RefreshActivePage === "function") v26RefreshActivePage();
-              });
-            container.__closeControlsHydration = state;
-          }
-          if (state.failed) {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#b91c1c;">Private kapanış kontrol sonucu alınamadı. Kapanış kontrolleri gösterilmiyor; Yenile ile tekrar deneyin.</div></div>`;
-          } else {
-            container.innerHTML = `<div class="gk-v26-page"><div class="gk-v26-card" style="color:#475569;">Kapanış kontrolleri private API'den yükleniyor…</div></div>`;
-          }
-          return;
-        }
-      }
-
-      // API-primary is a hard boundary: do not invoke the legacy close,
-      // reporting, liquidity or control engines after private hydration.
-      // Those synchronous chains can duplicate proprietary work and can make
-      // the browser renderer unresponsive. The private snapshot above keeps
-      // the financial values visible while certification remains fail-closed.
-      let data = {};
-      let readiness = {};
-      if (privateCloseOnly) {
-        const controlKey = `${closeDateOnly(reportingDate)}|${String(companyId || "ALL")}`;
-        const snapshot = buildPrivateCloseDashboardSnapshot(
-          contracts,
-          reportingDate,
-          companyId,
-          PRIVATE_CLOSE_CONTROLS_CACHE.get(controlKey)
-        );
-        data = snapshot.data;
-        readiness = snapshot.readiness;
-      } else {
-        try {
-          data = typeof getMonthEndCloseDashboardData === "function"
-            ? getMonthEndCloseDashboardData(reportingDate)
-            : {};
-          const privateJournalSummary = PRIVATE_CLOSE_JOURNAL_CACHE.get(closeDateOnly(reportingDate));
-          if (privateJournalSummary) {
-            data.interestExpense = privateJournalSummary.interestExpense;
-            data.depreciationExpense = privateJournalSummary.depreciationExpense;
-          }
-          readiness = typeof getCloseReadiness === "function"
-            ? getCloseReadiness(reportingDate)
-            : {};
-        } catch (error) {
-          console.error("Close dashboard data error:", error);
-        }
-      }
-
-      let score = Number(data.score ?? readiness.score ?? 0);
-      let status = data.status || readiness.status || "NOT_STARTED";
-      let blockers = data.blockers || readiness.blockingIssues || [];
-      let warnings = data.warnings || readiness.warnings || [];
-      let controls = data.controls || readiness.checklist?.checks || [];
-      let companies = data.companyStatus || [];
-      const certified = Boolean(data.certification?.certified || readiness.state?.certified);
-      const locked = Boolean(data.certification?.locked || readiness.state?.locked);
-
-      // V27 — Şirket filtresi (Kalan İşler madde 2b). "ALL" seçiliyse
-      // davranış tamamen aynı kalır (regresyon yok). Belirli bir şirket
-      // seçilmişse KPI/finansal özet/checklist o şirkete özgü
-      // getCompanyMonthEndCloseStatus() sonucundan türetilir.
-      let scopedCompanyMeta = null;
-      if (companyId && companyId !== "ALL" && !privateCloseOnly) {
-        scopedCompanyMeta = companyOptions.find(c => c.id === companyId) || null;
-        const companyName = scopedCompanyMeta ? scopedCompanyMeta.name : companyId;
-        try {
-          const scoped = typeof getCompanyMonthEndCloseStatus === "function"
-            ? getCompanyMonthEndCloseStatus(companyName, reportingDate)
-            : null;
-          if (scoped) {
-            score = Number(scoped.score ?? 0);
-            status = scoped.status || status;
-            blockers = scoped.blockers || [];
-            warnings = scoped.warnings || [];
-            controls = scoped.checks || [];
-            data = {
-              ...data,
-              activeContracts: scoped.activeContractCount,
-              totalContracts: scoped.contractCount,
-              totalLiability: scoped.totalLiability,
-              currentLiability: scoped.currentLiability,
-              nonCurrentLiability: scoped.nonCurrentLiability,
-              rouAssets: 0,
-              interestExpense: 0,
-              depreciationExpense: 0,
-              journalCount: 0,
-              balancedJournalCount: 0,
-              reconciliationStatus: scoped.reconciliationStatus
-            };
-            companies = companies.filter(co => co.company === companyName);
-          }
-        } catch (error) {
-          console.error("Şirket bazlı close durumu alınamadı:", error);
-        }
-      }
-
-      const scoreColor = score >= 90 ? "#166534" : score >= 70 ? "#854d0e" : "#b91c1c";
-
-      // V27 — basit raporlama PB çevrimi (gösterge amaçlı, additive).
-      // Kaynak PB: seçili şirketin functionalCurrency'si (varsayılan TRY).
-      const fxSourceCurrency = (scopedCompanyMeta && scopedCompanyMeta.functionalCurrency) || "TRY";
-      const fxShouldConvert = Boolean(reportingCurrency) && reportingCurrency !== fxSourceCurrency;
-      let fxNote = "";
-      const fxConv = (val) => {
-        if (!fxShouldConvert || typeof convertAmountToReportingCurrency !== "function") return Number(val) || 0;
-        const r = convertAmountToReportingCurrency(val, fxSourceCurrency, reportingDate, reportingCurrency);
-        if (r.applied && !fxNote) {
-          fxNote = `1 ${fxSourceCurrency} ≈ ${r.rate} ${reportingCurrency} (${escapeHtml(reportingDate)} itibarıyla, basit çevrim)`;
-        } else if (!r.applied && r.error && !fxNote) {
-          fxNote = `⚠ ${fxSourceCurrency} → ${reportingCurrency} kuru bulunamadı, tutarlar ${fxSourceCurrency} olarak gösteriliyor.`;
-        }
-        return r.value;
-      };
-      const fmtTotalLiability = fxShouldConvert ? fxConv(data.totalLiability) : data.totalLiability;
-      const fmtCurrentLiability = fxShouldConvert ? fxConv(data.currentLiability) : data.currentLiability;
-      const fmtNonCurrentLiability = fxShouldConvert ? fxConv(data.nonCurrentLiability) : data.nonCurrentLiability;
-      const fmtRouAssets = fxShouldConvert ? fxConv(data.rouAssets) : data.rouAssets;
-      const fmtInterestExpense = fxShouldConvert ? fxConv(data.interestExpense) : data.interestExpense;
-      const fmtDepreciationExpense = fxShouldConvert ? fxConv(data.depreciationExpense) : data.depreciationExpense;
-
-      container.innerHTML = `
-        <div class="gk-v26-page">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-            <div>
-              <h2 style="margin:0;font-size:20px;color:#0f172a;">Month-End Close Dashboard</h2>
-              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-                V17 Close Engine · CFO / Auditor görünümü · Dönem: <strong>${escapeHtml(period)}</strong>
-                ${scopedCompanyMeta ? ` · Şirket: <strong>${escapeHtml(scopedCompanyMeta.name)}</strong>` : ""}
-              </p>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              ${companyOptions.length ? `
-              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
-                Şirket
-                <select id="closeCompanyInput" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;max-width:200px;">
-                  <option value="ALL" ${companyId === "ALL" ? "selected" : ""}>Tüm Şirketler</option>
-                  ${companyOptions.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === companyId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
-                </select>
-              </label>` : ""}
-              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
-                Dönem
-                <input type="month" id="closePeriodInput" value="${escapeHtml(period)}"
-                  style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" />
-              </label>
-              <label style="font-size:12px;color:#64748b;font-weight:600;display:flex;align-items:center;gap:6px;">
-                Raporlama PB
-                <select id="closeReportingCurrencyInput" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
-                  ${reportingCurrencyList.map(c => `<option value="${escapeHtml(c)}" ${c === reportingCurrency ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
-                </select>
-              </label>
-              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeRefreshBtn">Yenile</button>
-              <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeExportBtn">⬇ Checklist Dışa Aktar</button>
-            </div>
-          </div>
-
-          <!-- KPI Cards -->
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
-            <div class="gk-v26-card" style="margin:0;text-align:center;">
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Close Score</div>
-              <div style="font-size:32px;font-weight:800;color:${scoreColor};margin:4px 0;">${Math.round(score)}</div>
-              <div style="font-size:12px;color:#94a3b8;">/ 100</div>
-            </div>
-            <div class="gk-v26-card" style="margin:0;text-align:center;">
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Durum</div>
-              <div style="margin-top:10px;">${statusBadge(status)}</div>
-              <div style="font-size:12px;color:#94a3b8;margin-top:8px;">${certified ? "Onaylı" : "Onaysız"} · ${locked ? "Kilitli" : "Açık"}</div>
-            </div>
-            <div class="gk-v26-card" style="margin:0;text-align:center;">
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Blocking</div>
-              <div style="font-size:28px;font-weight:800;color:${blockers.length ? "#b91c1c" : "#166534"};margin:4px 0;">${blockers.length}</div>
-              <div style="font-size:12px;color:#94a3b8;">kritik engel</div>
-            </div>
-            <div class="gk-v26-card" style="margin:0;text-align:center;">
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Uyarı</div>
-              <div style="font-size:28px;font-weight:800;color:${warnings.length ? "#854d0e" : "#166534"};margin:4px 0;">${warnings.length}</div>
-              <div style="font-size:12px;color:#94a3b8;">warning</div>
-            </div>
-            <div class="gk-v26-card" style="margin:0;text-align:center;">
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Aktif Sözleşme</div>
-              <div style="font-size:28px;font-weight:800;color:#0f172a;margin:4px 0;">${data.activeContracts ?? "—"}</div>
-              <div style="font-size:12px;color:#94a3b8;">/ ${data.totalContracts ?? "—"} toplam</div>
-            </div>
-          </div>
-
-          <!-- Financial Snapshot -->
-          <div class="gk-v26-card">
-            <h3 style="margin:0 0 12px;font-size:15px;">
-              Finansal Özet
-              ${fxShouldConvert ? `<span style="font-weight:600;font-size:11px;color:#0369a1;background:#e0f2fe;border-radius:999px;padding:2px 8px;margin-left:8px;">${escapeHtml(reportingCurrency)} olarak gösteriliyor</span>` : ""}
-            </h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
-              <div><div style="font-size:11px;color:#64748b;">Kira Yükümlülüğü</div><strong>${fmt(fmtTotalLiability)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Kısa Vade</div><strong>${fmt(fmtCurrentLiability)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Uzun Vade</div><strong>${fmt(fmtNonCurrentLiability)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">ROU Varlık</div><strong>${fmt(fmtRouAssets)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Faiz Gideri</div><strong>${fmt(fmtInterestExpense)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Amortisman</div><strong>${fmt(fmtDepreciationExpense)}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Yevmiye</div><strong>${data.balancedJournalCount ?? 0} / ${data.journalCount ?? 0}</strong></div>
-              <div><div style="font-size:11px;color:#64748b;">Mutabakat</div><strong>${escapeHtml(data.reconciliationStatus || "—")}</strong></div>
-            </div>
-            ${fxNote ? `<div style="margin-top:10px;font-size:11px;color:#64748b;">${fxNote}</div>` : ""}
-          </div>
-
-          <!-- Actions -->
-          <div class="gk-v26-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <button type="button" class="gk-v26-btn" id="closeCertifyBtn" ${(!readiness.ready || certified || scopedCompanyMeta) ? "disabled style='opacity:.5;'" : ""} ${scopedCompanyMeta ? `title="Onay tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : ""}>
-              ${certified ? "✓ Onaylandı" : "Close'u Onayla"}
-            </button>
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="closeReopenBtn" ${privateCloseOnly || ((!certified && !locked) || scopedCompanyMeta) ? "disabled style='opacity:.5;'" : ""} ${privateCloseOnly ? `title="Private kapanış kontrol endpoint'i hazır olana kadar salt-okunur."` : (scopedCompanyMeta ? `title="Dönem yeniden açma tüm şirketler için dönem bazlı çalışır. Lütfen 'Tüm Şirketler' seçin."` : "")}>
-              Dönemi Yeniden Aç
-            </button>
-            <span id="closeActionStatus" style="font-size:12px;color:#64748b;"></span>
-          </div>
-
-          <!-- Blockers -->
-          ${blockers.length ? `
-          <div class="gk-v26-card" style="border-color:#fecaca;background:#fef2f2;">
-            <h3 style="margin:0 0 10px;font-size:15px;color:#b91c1c;">🚫 Blocking Issues (${blockers.length})</h3>
-            <table class="gk-v26-table">
-              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Açıklama</th><th>Etkilenen</th></tr></thead>
-              <tbody>
-                ${blockers.map(b => `
-                  <tr>
-                    <td><code style="font-size:11px;">${escapeHtml(b.controlId || b.id || "")}</code></td>
-                    <td>${escapeHtml(b.category || "")}</td>
-                    <td>${escapeHtml(b.description || b.name || "")}</td>
-                    <td style="font-size:12px;">${(b.affectedContracts || []).slice(0, 5).join(", ") || "—"}</td>
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>` : ""}
-
-          <!-- Warnings -->
-          ${warnings.length ? `
-          <div class="gk-v26-card" style="border-color:#fde68a;background:#fffbeb;">
-            <h3 style="margin:0 0 10px;font-size:15px;color:#854d0e;">⚠ Warnings (${warnings.length})</h3>
-            <table class="gk-v26-table">
-              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Açıklama</th></tr></thead>
-              <tbody>
-                ${warnings.map(w => `
-                  <tr>
-                    <td><code style="font-size:11px;">${escapeHtml(w.controlId || w.id || "")}</code></td>
-                    <td>${escapeHtml(w.category || "")}</td>
-                    <td>${escapeHtml(w.description || w.name || "")}</td>
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>` : ""}
-
-          <!-- Full Checklist -->
-          <div class="gk-v26-card">
-            <h3 style="margin:0 0 10px;font-size:15px;">Close Checklist (${controls.length} kontrol)</h3>
-            <table class="gk-v26-table">
-              <thead><tr><th>Kontrol</th><th>Kategori</th><th>Severity</th><th>Durum</th><th>Açıklama</th></tr></thead>
-              <tbody>
-                ${controls.map(c => `
-                  <tr>
-                    <td><code style="font-size:11px;">${escapeHtml(c.controlId || c.id || "")}</code></td>
-                    <td>${escapeHtml(c.category || "")}</td>
-                    <td style="font-size:12px;">${escapeHtml(c.severity || "")}</td>
-                    <td>${statusBadge(c.status)}</td>
-                    <td style="font-size:12px;">${escapeHtml(c.description || c.name || "")}</td>
-                  </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Kontrol verisi yok</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Company breakdown -->
-          ${companies.length ? `
-          <div class="gk-v26-card">
-            <h3 style="margin:0 0 10px;font-size:15px;">Şirket Bazlı Close Durumu</h3>
-            <table class="gk-v26-table">
-              <thead><tr><th>Şirket</th><th>Durum</th><th>Score</th><th>Aktif Sözleşme</th><th>Blocking</th></tr></thead>
-              <tbody>
-                ${companies.map(co => `
-                  <tr>
-                    <td><strong>${escapeHtml(co.company || "")}</strong></td>
-                    <td>${statusBadge(co.status)}</td>
-                    <td>${Math.round(Number(co.score) || 0)}</td>
-                    <td>${co.activeContractCount ?? co.activeContracts ?? "—"}</td>
-                    <td>${(co.blockers || co.blockingIssues || []).length}</td>
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>` : ""}
-
-          <!-- Locked Periods (V19 Kısa Vade Madde 1) -->
-          ${(() => {
-            const lockedPeriods = typeof getLockedPeriods === "function" ? getLockedPeriods() : [];
-            if (!lockedPeriods.length) return "";
-            return `
-          <div class="gk-v26-card">
-            <h3 style="margin:0 0 10px;font-size:15px;">🔒 Kilitli Dönemler (${lockedPeriods.length})</h3>
-            <table class="gk-v26-table">
-              <thead><tr><th>Dönem</th><th>Kilitlenme Tarihi</th><th>Kilitleyen</th><th>Sebep</th></tr></thead>
-              <tbody>
-                ${lockedPeriods.map(s => `
-                  <tr ${String(s.period) === String(period) ? 'style="background:#fef2f2;"' : ""}>
-                    <td><strong>${escapeHtml(s.period)}</strong></td>
-                    <td style="font-size:12px;">${escapeHtml((s.lockedAt || "").slice(0, 10))}</td>
-                    <td style="font-size:12px;">${escapeHtml(s.lockedBy || "—")}</td>
-                    <td style="font-size:12px;">${escapeHtml(s.lockReason || "—")}</td>
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>`;
-          })()}
-        </div>`;
-
-      container.querySelector("#closeExportBtn")?.addEventListener("click", () => {
-        try {
-          const rows = [["Tip", "Kontrol", "Kategori", "Severity/Durum", "Açıklama", "Etkilenen"]];
-          blockers.forEach(b => rows.push(["BLOCKER", b.controlId || b.id || "", b.category || "", "", b.description || b.name || "", (b.affectedContracts || []).join("; ")]));
-          warnings.forEach(w => rows.push(["WARNING", w.controlId || w.id || "", w.category || "", "", w.description || w.name || "", ""]));
-          controls.forEach(c => rows.push(["CHECKLIST", c.controlId || c.id || "", c.category || "", `${c.severity || ""}/${c.status || ""}`, c.description || c.name || "", ""]));
-          const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-          const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `close-checklist-${period}${scopedCompanyMeta ? "-" + scopedCompanyMeta.code : ""}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
-          if (typeof showToast === "function") showToast("Checklist dışa aktarıldı", "success", 2000);
-        } catch (error) {
-          if (typeof showAlert === "function") showAlert("Dışa aktarma hatası: " + (error?.message || String(error)));
-        }
-      });
-
-      container.querySelector("#closePeriodInput")?.addEventListener("change", (e) => {
-        period = e.target.value || defaultPeriod;
-        container.dataset.period = period;
-        render();
-      });
-      container.querySelector("#closeCompanyInput")?.addEventListener("change", (e) => {
-        companyId = e.target.value || "ALL";
-        container.dataset.companyId = companyId;
-        render();
-      });
-      container.querySelector("#closeReportingCurrencyInput")?.addEventListener("change", (e) => {
-        reportingCurrency = e.target.value || "TRY";
-        container.dataset.reportingCurrency = reportingCurrency;
-        if (typeof setReportingCurrency === "function") setReportingCurrency(reportingCurrency);
-        render();
-      });
-      container.querySelector("#closeRefreshBtn")?.addEventListener("click", render);
-
-      container.querySelector("#closeCertifyBtn")?.addEventListener("click", async () => {
-        const statusEl = container.querySelector("#closeActionStatus");
-        try {
-          const result = typeof saveMonthEndCloseCertification === "function"
-            ? saveMonthEndCloseCertification(reportingDate, { locked: true, comments: "Dashboard üzerinden onaylandı" })
-            : { success: false, error: "saveMonthEndCloseCertification bulunamadı" };
-          if (result?.success === false) {
-            if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(result.error || "Onay başarısız")}</span>`;
-            if (typeof showAlert === "function") showAlert(result.error || "Close onaylanamadı (henüz READY değil).");
-            return;
-          }
-          if (statusEl) statusEl.innerHTML = `<span style="color:#166534;">✓ Dönem onaylandı ve kilitlendi.</span>`;
-          if (typeof showToast === "function") showToast("Close onaylandı", "success", 2500);
-          render();
-        } catch (error) {
-          if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || String(error))}</span>`;
-        }
-      });
-
-      container.querySelector("#closeReopenBtn")?.addEventListener("click", async () => {
-        const ok = typeof showConfirm === "function"
-          ? await showConfirm("Bu dönemi yeniden açmak istediğinize emin misiniz? Kilit kaldırılacak.", { danger: true, title: "Dönemi Aç" })
-          : window.confirm("Dönem yeniden açılsın mı?");
-        if (!ok) return;
-        const statusEl = container.querySelector("#closeActionStatus");
-        try {
-          if (typeof reopenMonthEndClose === "function") {
-            reopenMonthEndClose(reportingDate, { reason: "Dashboard üzerinden reopen" });
-          }
-          if (statusEl) statusEl.innerHTML = `<span style="color:#854d0e;">Dönem yeniden açıldı.</span>`;
-          if (typeof showToast === "function") showToast("Dönem reopen edildi", "warning", 2500);
-          render();
-        } catch (error) {
-          if (statusEl) statusEl.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(error.message || String(error))}</span>`;
-        }
-      });
-    };
-
-    render();
-  }
 
   function requestMonthEndClose(reportingDate, input = {}) {
     v21RequirePermission("close.execute", { action: "CLOSE_EXECUTE" });
@@ -19452,43 +14780,9 @@ ${renderAccountingCenterBulkPromo()}
     return out;
   }
 
-  function v18Kpi(value, unit, currency, period, status = "INFO", sourceFunction = null, calculationStatus = "READY", trend = null) {
-    const numericValue = value === null || value === undefined ? null : v18Round(value);
-    return {
-      value: numericValue,
-      unit: unit || "currency",
-      currency: currency || null,
-      period: period || null,
-      status,
-      trend: trend || { current: numericValue, previous: null, change: null, changePercent: null, available: false },
-      source: "V18_CFO_COCKPIT",
-      sourceFunction: sourceFunction || null,
-      reportingDate: period || null,
-      calculationStatus
-    };
-  }
 
-  function v18Trend(current, previous) {
-    const c = v18Number(current), p = Number(previous);
-    if (!Number.isFinite(p)) return { current: v18Round(c), previous: null, change: null, changePercent: null, available: false };
-    const change = v18Round(c - p);
-    const changePercent = Math.abs(p) > 0.0000001 ? v18Round((change / Math.abs(p)) * 100) : null;
-    return { current: v18Round(c), previous: v18Round(p), change, changePercent, available: true };
-  }
 
-  function v18PreviousSnapshot(reportingDate) {
-    try {
-      const d = v18ResolveDate(reportingDate), previous = new Date(d.getFullYear(), d.getMonth() - 1, d.getDate());
-      if (typeof getTfrs16CfoMetrics === "function") return getTfrs16CfoMetrics(previous);
-    } catch (error) {}
-    return null;
-  }
 
-  function v18CurrencyScalarOrNull(groups, key) {
-    const list = Object.values(groups || {});
-    if (list.length !== 1) return null;
-    return v18Round(list[0]?.[key]);
-  }
 
   function v18GroupMetricRowsByCurrency(rows) {
     const groups = {};
@@ -19503,116 +14797,9 @@ ${renderAccountingCenterBulkPromo()}
     return groups;
   }
 
-  function v18FinancialPosition(reportingDate, rows) {
-    const activeRows = (rows || []).filter(r => r.metric?.active);
-    const byCurrency = v18GroupMetricRowsByCurrency(activeRows);
-    const previous = v18PreviousSnapshot(reportingDate);
-    const currencies = Object.values(byCurrency);
-    const singleCurrency = currencies.length === 1;
-    const totalLiability = singleCurrency ? currencies[0].leaseLiability : null;
-    const currentLiability = singleCurrency ? currencies[0].currentLiability : null;
-    const nonCurrentLiability = singleCurrency ? currencies[0].nonCurrentLiability : null;
-    const rouAssets = singleCurrency ? currencies[0].rouAsset : null;
-    const difference = singleCurrency ? v18Round(totalLiability - currentLiability - nonCurrentLiability) : null;
-    return {
-      totalRuoAssets: rouAssets,
-      totalLeaseLiability: totalLiability,
-      currentLeaseLiability: currentLiability,
-      nonCurrentLeaseLiability: nonCurrentLiability,
-      byCurrency,
-      currencyCount: currencies.length,
-      reconciliation: {
-        difference,
-        passed: singleCurrency ? Math.abs(difference) <= 0.05 : null,
-        status: singleCurrency ? (Math.abs(difference) <= 0.05 ? "READY" : "ERROR") : "SEPARATE_CURRENCIES"
-      },
-      trend: {
-        leaseLiability: singleCurrency ? v18Trend(totalLiability, previous?.liabilities?.total) : { current: null, previous: null, change: null, changePercent: null, available: false },
-        rouAssets: singleCurrency ? v18Trend(rouAssets, previous?.rouAssets?.total) : { current: null, previous: null, change: null, changePercent: null, available: false }
-      },
-      source: "V16.10_FINANCIAL_REPORTING + V16.9_CFO_DATA_LAYER",
-      currencyIsolation: true
-    };
-  }
 
-  function v18ProfitLoss(reportingDate, rows) {
-    const d = v18ResolveDate(reportingDate), activeRows = (rows || []).filter(r => r.metric?.active), byCurrency = v18GroupMetricRowsByCurrency(activeRows), currencies = Object.values(byCurrency);
-    const modificationReport = typeof getModificationReport === "function" ? getModificationReport(d) : { rows: [] };
-    const reassessmentReport = typeof getReassessmentReport === "function" ? getReassessmentReport(d) : { rows: [] };
-    const modificationByCurrency = {};
-    const reassessmentByCurrency = {};
-    (modificationReport.rows || []).forEach(row => { const currency = String(row.currency || "UNSPECIFIED").toUpperCase(); if (!modificationByCurrency[currency]) modificationByCurrency[currency] = 0; modificationByCurrency[currency] += v18Number(row.gainLoss); });
-    (reassessmentReport.rows || []).forEach(row => { const currency = String(row.currency || "UNSPECIFIED").toUpperCase(); if (!reassessmentByCurrency[currency]) reassessmentByCurrency[currency] = 0; reassessmentByCurrency[currency] += v18Number(row.gainLoss); });
-    const byCurrencyResult = currencies.map(g => ({ currency: g.currency, interestExpense: g.monthlyInterest, depreciationExpense: g.monthlyDepreciation, modificationGainLoss: v18Round(modificationByCurrency[g.currency] || 0), reassessmentImpact: v18Round(reassessmentByCurrency[g.currency] || 0), totalLeasePnlImpact: v18Round(g.monthlyInterest + g.monthlyDepreciation + v18Number(modificationByCurrency[g.currency]) + v18Number(reassessmentByCurrency[g.currency])) }));
-    const single = byCurrencyResult.length === 1 ? byCurrencyResult[0] : null;
-    const previous = v18PreviousSnapshot(d);
-    return {
-      interestExpense: single ? single.interestExpense : null,
-      depreciationExpense: single ? single.depreciationExpense : null,
-      modificationGainLoss: single ? single.modificationGainLoss : null,
-      reassessmentImpact: single ? single.reassessmentImpact : null,
-      totalLeasePnlImpact: single ? single.totalLeasePnlImpact : null,
-      byCurrency: byCurrencyResult,
-      currencyCount: byCurrencyResult.length,
-      trend: {
-        interestExpense: single ? v18Trend(single.interestExpense, previous?.pnl?.interestExpense) : { current: null, previous: null, change: null, changePercent: null, available: false },
-        depreciationExpense: single ? v18Trend(single.depreciationExpense, previous?.pnl?.depreciationExpense) : { current: null, previous: null, change: null, changePercent: null, available: false }
-      },
-      source: "V16.10_FINANCIAL_REPORTING",
-      currencyIsolation: true
-    };
-  }
 
-  function v18LiquidityView(reportingDate) {
-    const d = v18ResolveDate(reportingDate), groups = {};
-    const makeRows = () => [
-      { id: "NEXT_30D", name: "Next 30 Days", payments: 0, principal: 0, interest: 0 },
-      { id: "NEXT_90D", name: "Next 90 Days", payments: 0, principal: 0, interest: 0 },
-      { id: "NEXT_12M", name: "Next 12 Months", payments: 0, principal: 0, interest: 0 },
-      { id: "YEAR_1_3", name: "1–3 Years", payments: 0, principal: 0, interest: 0 },
-      { id: "YEAR_3_PLUS", name: "3+ Years", payments: 0, principal: 0, interest: 0 }
-    ];
-    v18SafeContracts().forEach(contract => {
-      const currency = v18Currency(contract);
-      if (!groups[currency]) groups[currency] = makeRows();
-      try {
-        const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : { schedule: [] };
-        (built.schedule || []).forEach(item => {
-          const date = v18Date(item?.date);
-          if (!date || date <= d) return;
-          const payment = v18Number(item?.payment), principal = v18Number(item?.principal), interest = v18Number(item?.interest), days = v18DaysBetween(d, date);
-          if (days === null) return;
-          if (days <= 30) { groups[currency][0].payments += payment; groups[currency][0].principal += principal; groups[currency][0].interest += interest; }
-          if (days <= 90) { groups[currency][1].payments += payment; groups[currency][1].principal += principal; groups[currency][1].interest += interest; }
-          if (days <= 365) { groups[currency][2].payments += payment; groups[currency][2].principal += principal; groups[currency][2].interest += interest; }
-          if (date > v18AddMonths(d, 12) && date <= v18AddMonths(d, 36)) { groups[currency][3].payments += payment; groups[currency][3].principal += principal; groups[currency][3].interest += interest; }
-          if (date > v18AddMonths(d, 36)) { groups[currency][4].payments += payment; groups[currency][4].principal += principal; groups[currency][4].interest += interest; }
-        });
-      } catch (error) {}
-    });
-    Object.values(groups).forEach(rows => rows.forEach(row => { row.payments = v18Round(row.payments); row.principal = v18Round(row.principal); row.interest = v18Round(row.interest); }));
-    const currencies = Object.entries(groups).map(([currency, rows]) => ({ currency, rows, next30Days: rows[0], next90Days: rows[1], next12Months: rows[2], years1To3: rows[3], years3Plus: rows[4] }));
-    return { reportingDate: v18IsoDate(d), expected: true, actualDataAvailable: false, currencyIsolation: true, currencies, currencyCount: currencies.length, source: "LEASE_SCHEDULE" };
-  }
 
-  function v18MaturityView(reportingDate) {
-    const d = v18ResolveDate(reportingDate);
-    const source = typeof getLeasePaymentMaturityAnalysis === "function" ? getLeasePaymentMaturityAnalysis(d) : { rows: [], totals: {} };
-    const map = {
-      "0_3_MONTHS": { name: "0–3 months", rows: ["WITHIN_1_MONTH", "1_3_MONTHS"] },
-      "3_6_MONTHS": { name: "3–6 months", rows: ["3_6_MONTHS"] },
-      "6_12_MONTHS": { name: "6–12 months", rows: ["6_12_MONTHS"] },
-      "1_2_YEARS": { name: "1–2 years", rows: ["1_2_YEARS"] },
-      "2_3_YEARS": { name: "2–3 years", rows: ["2_3_YEARS"] },
-      "3_5_YEARS": { name: "3–5 years", rows: ["3_5_YEARS"] },
-      "5_PLUS_YEARS": { name: "5+ years", rows: ["MORE_THAN_5_YEARS"] }
-    };
-    const out = Object.entries(map).map(([id, config]) => {
-      const sourceRows = (source?.rows || []).filter(row => config.rows.includes(row?.bucket));
-      return { id, name: config.name, payments: v18Round(sourceRows.reduce((sum, row) => sum + v18Number(row?.cashPayment), 0)), principal: v18Round(sourceRows.reduce((sum, row) => sum + v18Number(row?.principal), 0)), interest: v18Round(sourceRows.reduce((sum, row) => sum + v18Number(row?.interest), 0)) };
-    });
-    return { reportingDate: v18IsoDate(d), buckets: out, totals: { payments: v18Round(out.reduce((s, r) => s + r.payments, 0)), principal: v18Round(out.reduce((s, r) => s + r.principal, 0)), interest: v18Round(out.reduce((s, r) => s + r.interest, 0)) }, source: "V16.10_MATURITY_ANALYSIS" };
-  }
 
   function v18CompanyExposure(reportingDate) {
     const d = v18ResolveDate(reportingDate);
@@ -19649,376 +14836,36 @@ ${renderAccountingCenterBulkPromo()}
     });
   }
 
-  function v18CurrencyExposure(reportingDate) {
-    const d = v18ResolveDate(reportingDate), groups = {};
-    v18ContractRows(d).forEach(row => {
-      const currency = v18Currency(row.contract);
-      if (!groups[currency]) groups[currency] = { currency, contractCount: 0, activeContracts: 0, leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAssets: 0, interest: 0, depreciation: 0, next12MPayments: 0 };
-      const g = groups[currency];
-      g.contractCount += 1;
-      if (row.metric?.active) g.activeContracts += 1;
-      g.leaseLiability += v18Number(row.metric?.leaseLiability);
-      g.currentLiability += v18Number(row.metric?.currentLiability);
-      g.nonCurrentLiability += v18Number(row.metric?.nonCurrentLiability);
-      g.rouAssets += v18Number(row.metric?.rouAsset);
-      g.interest += v18Number(row.metric?.monthlyInterest);
-      g.depreciation += v18Number(row.metric?.monthlyDepreciation);
-      g.next12MPayments += v18Number(row.metric?.next12MonthPayments);
-    });
-    Object.values(groups).forEach(g => Object.keys(g).forEach(key => { if (typeof g[key] === "number") g[key] = v18Round(g[key]); }));
-    return Object.values(groups).map(g => ({ ...g, fxConversionApplied: false, source: "V16.9_CFO_DATA_LAYER" }));
-  }
 
-  function v18Renewals(reportingDate) {
-    const d = v18ResolveDate(reportingDate);
-    const rows = [];
-    v18SafeContracts().forEach(contract => {
-      const renewal = v18Date(contract?.renewalDate || contract?.renewalOptionDate || contract?.renewalAssessmentDate);
-      if (!renewal) return;
-      const days = v18DaysBetween(d, renewal);
-      if (days === null || days < 0 || days > CFO_COCKPIT_CONFIG.renewal365DaysThreshold) return;
-      const metric = v18ContractMetric(contract, d) || {};
-      const severity = days <= 90 ? "HIGH" : (days <= 180 ? "MEDIUM" : "LOW");
-      rows.push({ contractId: contract.id, company: v18Company(contract), currency: v18Currency(contract), renewalDate: v18IsoDate(renewal), daysRemaining: days, leaseLiability: v18Round(metric.leaseLiability), payment: v18Round(v18Number(contract.monthlyPayment)), risk: metric.controlStatus || "INFO", severity, status: days <= 90 ? "REVIEW_REQUIRED" : "MONITOR", source: "CONTRACT_MASTER + CFO_DATA_LAYER" });
-    });
-    rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
-    return { within90Days: rows.filter(r => r.daysRemaining <= 90), within180Days: rows.filter(r => r.daysRemaining <= 180), within365Days: rows, count90: rows.filter(r => r.daysRemaining <= 90).length, count180: rows.filter(r => r.daysRemaining <= 180).length, count365: rows.length };
-  }
 
-  function v18Expiries(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = [];
-    v18SafeContracts().forEach(contract => {
-      const end = v18Date(contract?.endDate);
-      if (!end) return;
-      const days = v18DaysBetween(d, end);
-      if (days === null || days < 0 || days > CFO_COCKPIT_CONFIG.expiry365DaysThreshold) return;
-      const metric = v18ContractMetric(contract, d) || {};
-      const severity = days <= 90 ? "HIGH" : (days <= 180 ? "MEDIUM" : "LOW");
-      rows.push({ contractId: contract.id, company: v18Company(contract), currency: v18Currency(contract), expiryDate: v18IsoDate(end), daysRemaining: days, leaseLiability: v18Round(metric.leaseLiability), payment: v18Round(v18Number(contract.monthlyPayment)), risk: metric.controlStatus || "INFO", severity, status: days <= 90 ? "REVIEW_REQUIRED" : "MONITOR", source: "CONTRACT_MASTER + CFO_DATA_LAYER" });
-    });
-    rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
-    return { within90Days: rows.filter(r => r.daysRemaining <= 90), within180Days: rows.filter(r => r.daysRemaining <= 180), within365Days: rows, count90: rows.filter(r => r.daysRemaining <= 90).length, count180: rows.filter(r => r.daysRemaining <= 180).length, count365: rows.length };
-  }
 
-  function v18ModificationImpact(reportingDate) {
-    const d = v18ResolveDate(reportingDate), report = typeof getModificationReport === "function" ? getModificationReport(d) : { rows: [], totals: {} }, rows = report.rows || [];
-    return {
-      count: rows.length,
-      pending: rows.filter(r => !["APPLIED", "CANCELLED"].includes(String(r.status || "").toUpperCase())).length,
-      applied: rows.filter(r => String(r.status || "").toUpperCase() === "APPLIED").length,
-      liabilityIncrease: v18Round(rows.reduce((s, r) => s + Math.max(0, v18Number(r.liabilityAdjustment)), 0)),
-      liabilityDecrease: v18Round(rows.reduce((s, r) => s + Math.max(0, -v18Number(r.liabilityAdjustment)), 0)),
-      liabilityImpact: v18Round(rows.reduce((s, r) => s + v18Number(r.liabilityAdjustment), 0)),
-      rouAdjustment: v18Round(rows.reduce((s, r) => s + v18Number(r.rouAdjustment), 0)),
-      gainLoss: v18Round(rows.reduce((s, r) => s + v18Number(r.gainLoss), 0)),
-      scopeReduction: v18Round(rows.reduce((s, r) => s + v18Number(r.scopeReduction), 0)),
-      last12Months: v18Number(report.totals?.last12Months),
-      source: "V16.10_MODIFICATION_REPORT"
-    };
-  }
 
-  function v18ReassessmentImpact(reportingDate) {
-    const d = v18ResolveDate(reportingDate), report = typeof getReassessmentReport === "function" ? getReassessmentReport(d) : { rows: [], totals: {} }, rows = report.rows || [];
-    return {
-      count: rows.length,
-      pending: rows.filter(r => !["APPLIED", "CANCELLED"].includes(String(r.status || "").toUpperCase())).length,
-      applied: rows.filter(r => String(r.status || "").toUpperCase() === "APPLIED").length,
-      liabilityImpact: v18Round(rows.reduce((s, r) => s + v18Number(r.liabilityImpact), 0)),
-      rouImpact: v18Round(rows.reduce((s, r) => s + v18Number(r.rouAdjustment), 0)),
-      paymentImpact: v18Round(rows.reduce((s, r) => s + v18Number(r.paymentImpact), 0)),
-      termImpactMonths: v18Round(rows.reduce((s, r) => s + v18Number(r.termImpactMonths), 0)),
-      last12Months: v18Number(report.totals?.last12Months),
-      source: "V16.10_REASSESSMENT_REPORT"
-    };
-  }
 
-  function v18ControlStatus(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d);
-    let totalControls = 0, passed = 0, warnings = 0, failed = 0, critical = 0, high = 0, openExceptions = [];
-    rows.forEach(row => {
-      try {
-        const result = typeof getContractControlResults === "function" ? getContractControlResults(row.contract.id, { run: false, persist: false, audit: false }) : null;
-        const controls = Array.isArray(result?.controls) ? result.controls : [];
-        totalControls += controls.length;
-        passed += controls.filter(c => c.status === CONTROL_STATUS.GREEN).length;
-        warnings += controls.filter(c => c.status === CONTROL_STATUS.YELLOW).length;
-        failed += controls.filter(c => c.status === CONTROL_STATUS.RED).length;
-        critical += controls.filter(c => c.status === CONTROL_STATUS.RED && c.priority === CONTROL_PRIORITY.CRITICAL).length;
-        high += controls.filter(c => c.status === CONTROL_STATUS.RED && c.priority === CONTROL_PRIORITY.HIGH).length;
-        openExceptions = openExceptions.concat((result?.exceptions || []).filter(e => !["RESOLVED", "WAIVED"].includes(String(e?.status || "OPEN").toUpperCase())).map(e => ({ ...e, contractId: row.contract.id, company: v18Company(row.contract) })));
-      } catch (error) {
-        failed += 1;
-        critical += 1;
-      }
-    });
-    return { totalControls, passed, warnings, failed, critical, high, openExceptions, openExceptionCount: openExceptions.length, criticalExceptionCount: openExceptions.filter(e => String(e?.priority || e?.severity || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL).length, status: critical > 0 || failed > 0 ? "RED" : (warnings > 0 || openExceptions.length ? "YELLOW" : "GREEN"), source: "V16.8_RISK_CONTROL_ENGINE" };
-  }
 
-  function v18CloseStatus(reportingDate) {
-    try {
-      if (typeof getMonthEndCloseStatus !== "function") return { status: "UNKNOWN", score: null, blockingIssues: [], warnings: [] };
-      const status = getMonthEndCloseStatus(reportingDate);
-      return { status: status?.status || "UNKNOWN", score: status?.score ?? status?.overallScore ?? null, ready: Boolean(status?.ready), blockingIssues: status?.blockingIssues || [], warnings: status?.warnings || [], passedControls: status?.passedControls ?? 0, totalControls: status?.totalControls ?? 0, state: status?.state || null, checklist: status?.checklist || null, source: "V17_MONTH_END_CLOSE_ENGINE" };
-    } catch (error) {
-      return { status: "BLOCKED", score: 0, ready: false, blockingIssues: [{ severity: "CRITICAL", description: error?.message || String(error) }], warnings: [], passedControls: 0, totalControls: 0, source: "V17_MONTH_END_CLOSE_ENGINE" };
-    }
-  }
 
-  function v18JournalStatus(reportingDate) {
-    try {
-      const report = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({}) : null;
-      const totals = report?.totals || {};
-      return { journalCount: v18Number(totals.journalCount), balancedJournalCount: v18Number(totals.balancedJournals), unbalancedJournalCount: v18Number(totals.unbalancedJournals), status: v18Number(totals.unbalancedJournals) > 0 ? "RED" : (v18Number(totals.journalCount) ? "READY" : "WARNING"), source: "V16.10_JOURNAL_REPORT" };
-    } catch (error) {
-      return { journalCount: 0, balancedJournalCount: 0, unbalancedJournalCount: 1, status: "RED", source: "V16.10_JOURNAL_REPORT", error: error?.message || String(error) };
-    }
-  }
 
-  function v18ReconciliationStatus(reportingDate) {
-    try {
-      const rec = typeof getTfrs16ReportingReconciliation === "function" ? getTfrs16ReportingReconciliation(reportingDate) : {};
-      const checks = [rec.liability, rec.cashFlow, rec.liabilityRollForward, rec.rouRollForward, rec.journal, rec.companyTotals];
-      const failed = checks.filter(x => x && x.passed === false);
-      return { status: failed.length ? "RED" : "READY", checks: { liability: rec.liability || null, cashFlow: rec.cashFlow || null, liabilityRollForward: rec.liabilityRollForward || null, rouRollForward: rec.rouRollForward || null, journal: rec.journal || null, companyTotals: rec.companyTotals || null }, failedCount: failed.length, source: "V16.10_REPORTING_RECONCILIATION" };
-    } catch (error) {
-      return { status: "RED", checks: {}, failedCount: 1, error: error?.message || String(error), source: "V16.10_REPORTING_RECONCILIATION" };
-    }
-  }
 
-  function v18DataQuality(reportingDate, rows, controls, close, reconciliation) {
-    const calculationErrors = (rows || []).filter(r => r.metric?.calculationValid === false || r.metric?.calculationError).length;
-    const missingCritical = (rows || []).filter(r => !r.contract?.id || !r.contract?.company || !r.contract?.startDate || !r.contract?.endDate || !Number.isFinite(Number(r.contract?.monthlyPayment)) || !r.contract?.currency).length;
-    const errors = calculationErrors + missingCritical + v18Number(controls?.criticalExceptionCount) + (reconciliation?.status === "RED" ? 1 : 0);
-    const warnings = v18Number(controls?.openExceptionCount) + (close?.warnings?.length || 0);
-    const status = errors > 0 ? "ERROR" : (warnings > 0 ? "WARNING" : "READY");
-    const score = Math.max(0, Math.min(100, 100 - calculationErrors * 30 - missingCritical * 20 - v18Number(controls?.criticalExceptionCount) * 30 - Math.max(0, v18Number(controls?.openExceptionCount) - v18Number(controls?.criticalExceptionCount)) * 5));
-    return { status, score: v18Round(score), calculationErrors, missingCriticalData: missingCritical, warnings, errors, source: "V18_DETERMINISTIC_DATA_QUALITY" };
-  }
 
-  function v18Alert(type, severity, title, message, options = {}) {
-    return { type, severity, title, message, contractId: options.contractId || null, company: options.company || null, currency: options.currency || null, financialImpact: options.financialImpact ?? null, actionRequired: options.actionRequired || null, sourceFunction: options.sourceFunction || null };
-  }
 
-  function legacyReportAuth_getCfoAlerts(reportingDate) {
-    const d = v18ResolveDate(reportingDate), alerts = [], close = v18CloseStatus(d), controls = v18ControlStatus(d), rec = v18ReconciliationStatus(d), journals = v18JournalStatus(d), dataQuality = v18DataQuality(d, v18ContractRows(d), controls, close, rec), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), liquidity = v18LiquidityView(d);
-    if (close.status === "BLOCKED") alerts.push(v18Alert(CFO_ALERT_TYPES.CLOSE, CFO_ALERT_SEVERITY.CRITICAL, "Month-end close is blocked", `${close.blockingIssues.length} blocking issue(s) prevent close readiness.`, { actionRequired: "Resolve all blocking close issues before certification.", sourceFunction: "getMonthEndCloseStatus" }));
-    else if (close.status === "WARNING") alerts.push(v18Alert(CFO_ALERT_TYPES.CLOSE, CFO_ALERT_SEVERITY.MEDIUM, "Month-end close has warnings", `${close.warnings.length} close warning(s) remain open.`, { actionRequired: "Review close warnings and complete remaining controls.", sourceFunction: "getMonthEndCloseStatus" }));
-    if (rec.status === "RED") alerts.push(v18Alert(CFO_ALERT_TYPES.RECONCILIATION, CFO_ALERT_SEVERITY.CRITICAL, "Reporting reconciliation failed", `${rec.failedCount} reconciliation check(s) failed.`, { actionRequired: "Resolve reconciliation mismatches before relying on CFO reporting.", sourceFunction: "getTfrs16ReportingReconciliation" }));
-    if (journals.unbalancedJournalCount > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.JOURNAL, CFO_ALERT_SEVERITY.CRITICAL, "Unbalanced journals detected", `${journals.unbalancedJournalCount} journal(s) are unbalanced.`, { actionRequired: "Resolve unbalanced journals before close certification.", sourceFunction: "getJournalSummaryReport" }));
-    if (controls.criticalExceptionCount > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.CONTROL, CFO_ALERT_SEVERITY.CRITICAL, "Critical control exceptions are open", `${controls.criticalExceptionCount} critical control exception(s) are unresolved.`, { actionRequired: "Resolve or formally address critical control exceptions.", sourceFunction: "getContractControlResults" }));
-    if (renewals.count90 > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.RENEWAL, CFO_ALERT_SEVERITY.HIGH, "Renewals within 90 days", `${renewals.count90} lease renewal(s) require near-term management review.`, { actionRequired: "Review renewal decision and assess reassessment implications.", sourceFunction: "getCfoAlerts" }));
-    if (expiries.count90 > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.EXPIRY, CFO_ALERT_SEVERITY.HIGH, "Expiries within 90 days", `${expiries.count90} contract expiry event(s) are within 90 days.`, { actionRequired: "Review expiry, termination or renewal assumptions.", sourceFunction: "getCfoAlerts" }));
-    if (modifications.pending > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.MODIFICATION, CFO_ALERT_SEVERITY.MEDIUM, "Pending modifications", `${modifications.pending} modification record(s) are not yet applied or cancelled.`, { actionRequired: "Review pending modification evidence and effective dates.", sourceFunction: "getModificationReport" }));
-    if (reassessments.pending > 0) alerts.push(v18Alert(CFO_ALERT_TYPES.REASSESSMENT, CFO_ALERT_SEVERITY.MEDIUM, "Pending reassessments", `${reassessments.pending} reassessment record(s) are not yet applied or cancelled.`, { actionRequired: "Review pending reassessment evidence and accounting impact.", sourceFunction: "getReassessmentReport" }));
-    if (dataQuality.status === "ERROR") alerts.push(v18Alert(CFO_ALERT_TYPES.DATA_QUALITY, CFO_ALERT_SEVERITY.HIGH, "Data quality requires attention", `${dataQuality.errors} critical data quality issue(s) were identified.`, { actionRequired: "Correct source contract data or calculation errors.", sourceFunction: "v18DataQuality" }));
-    if (liquidity.next90Days?.payments > 0 && CFO_COCKPIT_CONFIG.liquidity90DaysThreshold !== null && liquidity.next90Days.payments >= CFO_COCKPIT_CONFIG.liquidity90DaysThreshold) alerts.push(v18Alert(CFO_ALERT_TYPES.LIQUIDITY, CFO_ALERT_SEVERITY.MEDIUM, "90-day lease cash exposure", `Expected lease cash payments within 90 days are ${v18Round(liquidity.next90Days.payments)}.`, { actionRequired: "Review near-term lease cash commitments.", financialImpact: liquidity.next90Days.payments, sourceFunction: "v18LiquidityView" }));
-    return alerts.sort((a, b) => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 }[a.severity] ?? 9) - ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 }[b.severity] ?? 9));
-  }
 
-  function legacyReportAuth_getCfoTopRisks(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), risks = [];
-    rows.forEach(row => {
-      const m = row.metric || {}, severity = m.controlStatus === "RED" ? "CRITICAL" : (m.controlStatus === "YELLOW" ? "HIGH" : null);
-      if (severity) risks.push({ severity, financialImpact: m.leaseLiability != null ? v18Round(m.leaseLiability) : null, potentialLiabilityImpact: null, potentialCashImpact: null, potentialPnlImpact: null, contractId: row.contract?.id || null, company: v18Company(row.contract), currency: v18Currency(row.contract), description: m.calculationError || `${m.openExceptions || 0} open control exception(s).`, action: severity === "CRITICAL" ? "Resolve critical control or calculation issues." : "Review open control warnings." });
-      if (m.renewalRisk) risks.push({ severity: m.renewalDays <= 90 ? "HIGH" : "MEDIUM", financialImpact: v18Round(m.leaseLiability), potentialLiabilityImpact: null, potentialCashImpact: null, potentialPnlImpact: null, contractId: row.contract?.id || null, company: v18Company(row.contract), currency: v18Currency(row.contract), description: `Renewal event in ${m.renewalDays} day(s).`, action: "Review renewal decision." });
-      if (m.expiryRisk) risks.push({ severity: m.expiryDays <= 90 ? "HIGH" : "MEDIUM", financialImpact: v18Round(m.leaseLiability), potentialLiabilityImpact: null, potentialCashImpact: null, potentialPnlImpact: null, contractId: row.contract?.id || null, company: v18Company(row.contract), currency: v18Currency(row.contract), description: `Expiry event in ${m.expiryDays} day(s).`, action: "Review expiry or renewal decision." });
-      if (!m.calculationValid) risks.push({ severity: "CRITICAL", financialImpact: null, potentialLiabilityImpact: null, potentialCashImpact: null, potentialPnlImpact: null, contractId: row.contract?.id || null, company: v18Company(row.contract), currency: v18Currency(row.contract), description: m.calculationError || "Calculation output is unavailable.", action: "Resolve contract calculation error." });
-    });
-    return risks.sort((a, b) => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }[a.severity] ?? 9) - ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }[b.severity] ?? 9) || v18Number(b.financialImpact) - v18Number(a.financialImpact)).slice(0, 20);
-  }
 
-  function v18ExecutiveStatus(close, controls, reconciliation, dataQuality) {
-    if (close?.status === "BLOCKED" || reconciliation?.status === "RED" || controls?.criticalExceptionCount > 0 || dataQuality?.status === "ERROR") return CFO_COCKPIT_STATUS.RED;
-    if (close?.status === "WARNING" || controls?.status === "YELLOW" || dataQuality?.status === "WARNING") return CFO_COCKPIT_STATUS.YELLOW;
-    return CFO_COCKPIT_STATUS.GREEN;
-  }
 
-  function legacyReportAuth_getCfoExecutiveSnapshot(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), activeRows = rows.filter(r => r.metric?.active), financialPosition = v18FinancialPosition(d, rows), profitLoss = v18ProfitLoss(d, rows), cashFlow = v18LiquidityView(d), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), close = v18CloseStatus(d), controls = v18ControlStatus(d), reconciliation = v18ReconciliationStatus(d), dataQuality = v18DataQuality(d, rows, controls, close, reconciliation), alerts = getCfoAlerts(d), risks = getCfoTopRisks(d), companies = v18CompanyExposure(d), currencies = v18CurrencyExposure(d);
-    return {
-      version: CFO_COCKPIT_VERSION,
-      reportingDate: v18IsoDate(d),
-      generatedAt: new Date().toISOString(),
-      executiveStatus: v18ExecutiveStatus(close, controls, reconciliation, dataQuality),
-      financialPosition,
-      profitLoss,
-      cashFlow,
-      leaseExposure: { totalLeaseLiability: financialPosition.totalLeaseLiability, currentLeaseLiability: financialPosition.currentLeaseLiability, nonCurrentLeaseLiability: financialPosition.nonCurrentLeaseLiability, rouAssets: financialPosition.totalRuoAssets, byCurrency: financialPosition.byCurrency, currencyCount: financialPosition.currencyCount, totalContracts: rows.length, activeContracts: activeRows.length, expiringContracts12M: expiries.count365, currencyIsolation: true },
-      maturity: v18MaturityView(d),
-      contractRisk: { green: rows.filter(r => r.metric?.controlStatus === "GREEN").length, yellow: rows.filter(r => r.metric?.controlStatus === "YELLOW").length, red: rows.filter(r => r.metric?.controlStatus === "RED").length },
-      renewalRisk: renewals,
-      expiryRisk: expiries,
-      modificationImpact: modifications,
-      reassessmentImpact: reassessments,
-      closeStatus: close,
-      controlStatus: controls,
-      companyExposure: companies,
-      currencyExposure: currencies,
-      keyAlerts: alerts.slice(0, 10),
-      topRisks: risks,
-      dataQuality,
-      reconciliation,
-      metadata: { source: "V18_CFO_COCKPIT", reportingDate: v18IsoDate(d), calculationStatus: rows.every(r => r.metric?.calculationValid !== false) ? "READY" : "ERROR", currencyIsolation: true, actualCashDataAvailable: false }
-    };
-  }
 
-  function legacyReportAuth_getCfoKpis(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d), active = rows.filter(r => r.metric?.active), totals = v18AggregateMetrics(active), previous = v18PreviousSnapshot(d), renewals = v18Renewals(d), expiries = v18Expiries(d), modifications = v18ModificationImpact(d), reassessments = v18ReassessmentImpact(d), close = v18CloseStatus(d), controls = v18ControlStatus(d);
-    const next12 = active.length === 0 ? 0 : (new Set(active.map(r => v18Currency(r.contract))).size === 1 ? totals.next12MonthPayments : null);
-    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1), monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const interest = typeof getInterestExpense === "function" ? getInterestExpense(monthStart, monthEnd) : totals.monthlyInterest;
-    const depreciation = typeof getDepreciationExpense === "function" ? getDepreciationExpense(monthStart, monthEnd) : totals.monthlyDepreciation;
-    const kpis = {
-      TOTAL_LEASE_LIABILITY: v18Kpi(totals.leaseLiability, "currency", null, v18IsoDate(d), "INFO", "getTotalLeaseLiability", "READY", v18Trend(totals.leaseLiability, previous?.liabilities?.total)),
-      CURRENT_LEASE_LIABILITY: v18Kpi(totals.currentLiability, "currency", null, v18IsoDate(d), "INFO", "getCurrentLeaseLiability", "READY", v18Trend(totals.currentLiability, previous?.liabilities?.current)),
-      NON_CURRENT_LEASE_LIABILITY: v18Kpi(totals.nonCurrentLiability, "currency", null, v18IsoDate(d), "INFO", "getNonCurrentLeaseLiability", "READY", v18Trend(totals.nonCurrentLiability, previous?.liabilities?.nonCurrent)),
-      ROU_ASSETS: v18Kpi(totals.rouAsset, "currency", null, v18IsoDate(d), "INFO", "getTotalRuoAssets", "READY", v18Trend(totals.rouAsset, previous?.rouAssets?.total)),
-      INTEREST_EXPENSE: v18Kpi(interest, "currency", null, v18IsoDate(d), "INFO", "getInterestExpense", "READY", v18Trend(interest, previous?.pnl?.interestExpense)),
-      DEPRECIATION_EXPENSE: v18Kpi(depreciation, "currency", null, v18IsoDate(d), "INFO", "getDepreciationExpense", "READY", v18Trend(depreciation, previous?.pnl?.depreciationExpense)),
-      NEXT12M_CASH_PAYMENTS: v18Kpi(next12, "currency", null, v18IsoDate(d), "INFO", "getLeaseCashFlowMetrics", "EXPECTED", v18Trend(next12, previous?.cashFlow?.next12MonthsPayments)),
-      NEXT12M_PRINCIPAL: v18Kpi(totals.next12MonthPrincipal, "currency", null, v18IsoDate(d), "INFO", "getLeaseCashFlowMetrics", "EXPECTED"),
-      NEXT12M_INTEREST: v18Kpi(totals.next12MonthInterest, "currency", null, v18IsoDate(d), "INFO", "getLeaseCashFlowMetrics", "EXPECTED"),
-      CONTRACT_COUNT: v18Kpi(rows.length, "count", null, v18IsoDate(d), "INFO", "getTotalContractCount", "READY"),
-      ACTIVE_CONTRACT_COUNT: v18Kpi(active.length, "count", null, v18IsoDate(d), "INFO", "getActiveContractCount", "READY"),
-      RENEWALS_90D: v18Kpi(renewals.count90, "count", null, v18IsoDate(d), renewals.count90 ? "HIGH" : "INFO", "getCfoAlerts", "READY"),
-      RENEWALS_180D: v18Kpi(renewals.count180, "count", null, v18IsoDate(d), renewals.count180 ? "MEDIUM" : "INFO", "getCfoAlerts", "READY"),
-      EXPIRIES_12M: v18Kpi(expiries.count365, "count", null, v18IsoDate(d), expiries.count90 ? "HIGH" : "INFO", "getCfoAlerts", "READY"),
-      PENDING_MODIFICATIONS: v18Kpi(modifications.pending, "count", null, v18IsoDate(d), modifications.pending ? "MEDIUM" : "INFO", "getModificationReport", "READY"),
-      PENDING_REASSESSMENTS: v18Kpi(reassessments.pending, "count", null, v18IsoDate(d), reassessments.pending ? "MEDIUM" : "INFO", "getReassessmentReport", "READY"),
-      CLOSE_SCORE: v18Kpi(v18Number(close.score), "score", null, v18IsoDate(d), close.status === "BLOCKED" ? "CRITICAL" : (close.status === "WARNING" ? "MEDIUM" : "INFO"), "getCloseReadiness", "READY"),
-      OPEN_EXCEPTIONS: v18Kpi(controls.openExceptionCount, "count", null, v18IsoDate(d), controls.criticalExceptionCount ? "CRITICAL" : (controls.openExceptionCount ? "MEDIUM" : "INFO"), "getOpenExceptions", "READY")
-    };
-    return kpis;
-  }
 
-  function legacyReportAuth_getCfoCompanyDashboard(company, reportingDate) {
-    const d = v18ResolveDate(reportingDate), target = String(company || ""), exposure = v18CompanyExposure(d).find(x => x.company === target) || null, close = typeof getCompanyMonthEndCloseStatus === "function" ? getCompanyMonthEndCloseStatus(target, d) : null;
-    const rows = v18ContractRows(d).filter(r => v18Company(r.contract) === target), risks = getCfoTopRisks(d).filter(r => r.company === target), renewals = v18Renewals(d), expiries = v18Expiries(d);
-    return { version: CFO_COCKPIT_VERSION, company: target, reportingDate: v18IsoDate(d), financialPosition: exposure ? { leaseLiability: exposure.leaseLiability, currentLiability: exposure.currentLiability, nonCurrentLiability: exposure.nonCurrentLiability, rouAssets: exposure.rouAssets } : {}, profitLoss: exposure ? { interest: exposure.interest, depreciation: exposure.depreciation } : {}, cashFlow: exposure ? { next12MPayments: exposure.next12MPayments, expected: true } : {}, leaseExposure: exposure, risk: { topRisks: risks, renewalCount90D: renewals.within90Days.filter(r => r.company === target).length, expiryCount90D: expiries.within90Days.filter(r => r.company === target).length }, controls: rows.map(r => ({ contractId: r.contract.id, status: r.metric?.controlStatus, openExceptions: r.metric?.openExceptions || 0 })), close, contracts: rows.map(r => getCfoContractView(r.contract.id, d)).filter(Boolean) };
-  }
 
-  function legacyReportAuth_getCfoContractView(contractId, reportingDate) {
-    const d = v18ResolveDate(reportingDate), contract = v18SafeContracts().find(c => c.id === contractId);
-    if (!contract) return null;
-    const metric = v18ContractMetric(contract, d) || {}, close = v18CompanyExposure(d).find(x => x.company === v18Company(contract)) || null;
-    let journal = null;
-    try { journal = typeof getJournalSummaryReport === "function" ? getJournalSummaryReport({ contractId }) : null; } catch (error) { journal = null; }
-    return { version: CFO_COCKPIT_VERSION, contractId, company: v18Company(contract), supplier: contract.supplier || "", currency: v18Currency(contract), reportingDate: v18IsoDate(d), financialPosition: { leaseLiability: v18Round(metric.leaseLiability), currentLiability: v18Round(metric.currentLiability), nonCurrentLiability: v18Round(metric.nonCurrentLiability), rouAssets: v18Round(metric.rouAsset) }, periodImpact: { interest: v18Round(metric.monthlyInterest), depreciation: v18Round(metric.monthlyDepreciation), leaseExpense: v18Round(metric.monthlyLeaseExpense), expectedNext12MPayments: v18Round(metric.next12MonthPayments) }, renewal: { date: metric.renewalDate || v18IsoDate(contract.renewalDate), daysRemaining: metric.renewalDays ?? null }, expiry: { date: metric.expiryDate || v18IsoDate(contract.endDate), daysRemaining: metric.expiryDays ?? null }, modification: { status: metric.modificationStatus, pending: metric.pendingModifications, applied: metric.appliedModifications }, reassessment: { status: metric.reassessmentStatus, pending: metric.pendingReassessments, applied: metric.appliedReassessments }, risk: { status: metric.controlStatus, openExceptions: metric.openExceptions, criticalExceptions: metric.criticalExceptions, highExceptions: metric.highExceptions }, calculation: { valid: metric.calculationValid !== false, error: metric.calculationError || null, scheduleSource: metric.scheduleSource || null }, journal: journal ? { journalCount: journal.totals?.journalCount || 0, balanced: !(journal.totals?.unbalancedJournals > 0), rows: journal.rows || [] } : null, audit: typeof getContractAuditSummary === "function" ? getContractAuditSummary(contractId) : null, companyCloseContext: close, source: "V16.10 + V17 + V18" };
-  }
 
-  function legacyReportAuth_getCfoCurrencyExposure(currency, reportingDate) {
-    const curr = String(currency || "UNSPECIFIED").toUpperCase();
-    return v18CurrencyExposure(reportingDate).find(row => row.currency === curr) || { currency: curr, contractCount: 0, activeContracts: 0, leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rouAssets: 0, interest: 0, depreciation: 0, next12MPayments: 0, fxConversionApplied: false, source: "V18_CFO_COCKPIT" };
-  }
 
-  function legacyReportAuth_getCfoPeriodSummary(reportingDate) {
-    const d = v18ResolveDate(reportingDate), start = new Date(d.getFullYear(), d.getMonth(), 1), end = new Date(d.getFullYear(), d.getMonth() + 1, 0), quarter = Math.floor(d.getMonth() / 3) + 1, year = d.getFullYear(), close = v18CloseStatus(d), snapshot = getCfoExecutiveSnapshot(d);
-    return { version: CFO_COCKPIT_VERSION, reportingDate: v18IsoDate(d), month: `${year}-${String(d.getMonth() + 1).padStart(2, "0")}`, quarter: `${year}-Q${quarter}`, year: String(year), periodStart: v18IsoDate(start), periodEnd: v18IsoDate(end), closeStatus: close, financialPosition: snapshot.financialPosition, profitLoss: snapshot.profitLoss, cashFlow: snapshot.cashFlow, risk: snapshot.contractRisk, controls: snapshot.controlStatus, source: "V18_CFO_COCKPIT" };
-  }
 
-  function legacyReportAuth_getCfoDecisionFacts(reportingDate) {
-    const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), facts = [];
-    facts.push({ metric: "TOTAL_LEASE_LIABILITY", currentValue: snapshot.financialPosition.totalLeaseLiability, previousValue: snapshot.financialPosition.trend.leaseLiability.previous, variance: snapshot.financialPosition.trend.leaseLiability.change, driver: "Reporting-date liability", severity: snapshot.executiveStatus });
-    facts.push({ metric: "ROU_ASSETS", currentValue: snapshot.financialPosition.totalRuoAssets, previousValue: snapshot.financialPosition.trend.rouAssets.previous, variance: snapshot.financialPosition.trend.rouAssets.change, driver: "ROU closing balance", severity: snapshot.executiveStatus });
-    facts.push({ metric: "NEXT_12M_CASH_PAYMENTS", currentValue: snapshot.cashFlow.next12Months?.payments || 0, previousValue: null, variance: null, driver: "Expected lease schedule payments", severity: "INFO" });
-    facts.push({ metric: "CLOSE_SCORE", currentValue: v18Number(snapshot.closeStatus.score), previousValue: null, variance: null, driver: "V17 close engine", severity: snapshot.closeStatus.status });
-    return facts;
-  }
 
-  function legacyReportAuth_getContractsRequiringAttention(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = v18ContractRows(d);
-    return rows.filter(r => {
-      const m = r.metric || {};
-      return m.controlStatus === "RED" || m.controlStatus === "YELLOW" || m.renewalRisk || m.expiryRisk || m.pendingModifications > 0 || m.pendingReassessments > 0 || m.calculationValid === false;
-    }).map(r => getCfoContractView(r.contract.id, d)).filter(Boolean);
-  }
 
-  function legacyReportAuth_getHighExposureContracts(reportingDate) {
-    const d = v18ResolveDate(reportingDate);
-    return v18ContractRows(d).filter(r => r.metric?.active).sort((a, b) => v18Number(b.metric?.leaseLiability) - v18Number(a.metric?.leaseLiability)).slice(0, 20).map(r => getCfoContractView(r.contract.id, d)).filter(Boolean);
-  }
 
-  function legacyReportAuth_getUpcomingRenewals(reportingDate, days = 90) {
-    const d = v18ResolveDate(reportingDate), horizon = Math.max(0, Number(days) || 0);
-    return v18Renewals(d).within365Days.filter(row => row.daysRemaining <= horizon);
-  }
 
-  function legacyReportAuth_getCriticalControls(reportingDate) {
-    return v18ControlStatus(reportingDate).openExceptions.filter(e => String(e?.priority || e?.severity || "").toUpperCase() === CONTROL_PRIORITY.CRITICAL);
-  }
 
-  function legacyReportAuth_getCloseBlockers(reportingDate) {
-    return v18CloseStatus(reportingDate).blockingIssues || [];
-  }
 
-  function legacyReportAuth_getLiquidityPressureContracts(reportingDate) {
-    const d = v18ResolveDate(reportingDate), rows = [];
-    v18SafeContracts().forEach(contract => {
-      try {
-        const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : { schedule: [] };
-        const payments90 = (built.schedule || []).filter(item => { const date = v18Date(item?.date); return date && date > d && v18DaysBetween(d, date) <= 90; }).reduce((sum, item) => sum + v18Number(item?.payment), 0);
-        if (payments90 > 0) rows.push({ contractId: contract.id, company: v18Company(contract), currency: v18Currency(contract), next90DaysPayments: v18Round(payments90), leaseLiability: v18Round(v18ContractMetric(contract, d)?.leaseLiability) });
-      } catch (error) {}
-    });
-    return rows.sort((a, b) => b.next90DaysPayments - a.next90DaysPayments).slice(0, 20);
-  }
 
-  function legacyReportAuth_getCfoScorecard(reportingDate) {
-    const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), close = snapshot.closeStatus, controls = snapshot.controlStatus, data = snapshot.dataQuality, rec = snapshot.reconciliation;
-    const financialScore = rec.status === "READY" ? 100 : 50;
-    const liquidityScore = snapshot.cashFlow.currencyCount === 1 || snapshot.cashFlow.currencyCount === 0 ? 100 : 100;
-    const riskScore = Math.max(0, 100 - snapshot.contractRisk.red * 20 - snapshot.contractRisk.yellow * 5);
-    const controlScore = controls.totalControls ? v18Round((controls.passed / controls.totalControls) * 100) : 100;
-    const closeScore = v18Number(close.score);
-    const dataQualityScore = data.score;
-    const category = (score, issues = []) => ({ score: v18Round(Math.max(0, Math.min(100, score))), status: score >= 90 ? "GREEN" : (score >= 75 ? "YELLOW" : "RED"), issues });
-    return { financial: category(financialScore, rec.status === "RED" ? ["Reporting reconciliation failure"] : []), liquidity: category(liquidityScore), risk: category(riskScore, snapshot.topRisks.slice(0, 5)), controls: category(controlScore, controls.openExceptions.slice(0, 5)), close: category(closeScore, close.blockingIssues.concat(close.warnings).slice(0, 5)), dataQuality: category(dataQualityScore, data.errors ? ["Data quality errors detected"] : []) };
-  }
 
-  function legacyReportAuth_getManagementSummary(reportingDate) {
-    const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d);
-    return { version: CFO_COCKPIT_VERSION, reportingDate: v18IsoDate(d), executiveStatus: snapshot.executiveStatus, financialPosition: snapshot.financialPosition, pnlImpact: snapshot.profitLoss, cashFlow: snapshot.cashFlow, risk: snapshot.contractRisk, controls: snapshot.controlStatus, close: snapshot.closeStatus, keyAlerts: snapshot.keyAlerts, actions: snapshot.keyAlerts.filter(a => a.actionRequired).map(a => ({ severity: a.severity, type: a.type, actionRequired: a.actionRequired, contractId: a.contractId, company: a.company })) };
-  }
 
-  function legacyReportAuth_getCfoDashboardData(reportingDate) {
-    const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), kpis = getCfoKpis(d), scorecard = getCfoScorecard(d), management = getManagementSummary(d), previous = v18PreviousSnapshot(d);
-    const start = new Date(d.getFullYear(), d.getMonth(), 1), end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const financial = typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(d) : {};
-    return {
-      version: CFO_COCKPIT_VERSION,
-      metadata: { reportingDate: v18IsoDate(d), period: typeof closePeriodOf === "function" ? closePeriodOf(d) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, generatedAt: new Date().toISOString(), source: "V18_CFO_COCKPIT", actualCashDataAvailable: false, currencyIsolation: true },
-      executiveSummary: management,
-      kpis,
-      financialPosition: snapshot.financialPosition,
-      profitLoss: snapshot.profitLoss,
-      cashFlow: snapshot.cashFlow,
-      leaseExposure: snapshot.leaseExposure,
-      maturity: snapshot.maturity,
-      companyExposure: snapshot.companyExposure,
-      currencyExposure: snapshot.currencyExposure,
-      renewals: snapshot.renewalRisk,
-      expiries: snapshot.expiryRisk,
-      modifications: snapshot.modificationImpact,
-      reassessments: snapshot.reassessmentImpact,
-      risks: { contractRisk: snapshot.contractRisk, topRisks: snapshot.topRisks },
-      controls: snapshot.controlStatus,
-      close: snapshot.closeStatus,
-      alerts: snapshot.keyAlerts,
-      actions: management.actions,
-      scorecard,
-      trends: { previousAvailable: Boolean(previous), financial: snapshot.financialPosition.trend, pnl: snapshot.profitLoss.trend },
-      dataQuality: snapshot.dataQuality,
-      reconciliation: snapshot.reconciliation,
-      reportingSnapshot: financial,
-      period: { start: v18IsoDate(start), end: v18IsoDate(end) },
-      drillDown: { companies: snapshot.companyExposure.map(x => x.company), currencies: snapshot.currencyExposure.map(x => x.currency), contractQuery: "getCfoContractView(contractId, reportingDate)" }
-    };
-  }
 
-  function legacyReportAuth_getCfoApprovalReadiness(reportingDate) {
-    const d = v18ResolveDate(reportingDate), snapshot = getCfoExecutiveSnapshot(d), approval = typeof getCloseApprovalReadiness === "function" ? getCloseApprovalReadiness(d) : null;
-    return { reportingDate: v18IsoDate(d), ready: snapshot.executiveStatus === "GREEN" && Boolean(snapshot.closeStatus.ready), executiveStatus: snapshot.executiveStatus, score: snapshot.closeStatus.score, blockingIssues: snapshot.closeStatus.blockingIssues, warnings: snapshot.closeStatus.warnings, openControls: snapshot.controlStatus.openExceptions, reconciliationStatus: snapshot.reconciliation, journalStatus: v18JournalStatus(d), certification: approval?.certification || null };
-  }
 
   function runV18CfoCockpitTests() {
     const results = [];
@@ -20992,52 +15839,7 @@ ${renderAccountingCenterBulkPromo()}
     return list.filter(contract => !options.company || contract.company === options.company).filter(contract => !options.currency || normalizeIntegrationCurrency(contract.currency || contract.integrationMetadata?.currency) === normalizeIntegrationCurrency(options.currency));
   }
 
-  function legacyReportAuth_getErpReadyContractData(reportingDate, options = {}) {
-    const d = reportingDate ? new Date(reportingDate) : new Date();
-    const list = getIntegrationContractData(options);
-    return list.map(contract => {
-      let metric = null;
-      try { metric = typeof getCfoContractMetrics === "function" ? getCfoContractMetrics(contract, d) : null; } catch (error) { metric = null; }
-      return {
-        schemaVersion: INTEGRATION_SCHEMA_VERSION,
-        contractId: contract.id,
-        companyCode: contract.company || null,
-        supplier: contract.supplier || null,
-        startDate: contract.startDate || null,
-        endDate: contract.endDate || null,
-        payment: Number(contract.monthlyPayment) || 0,
-        currency: normalizeIntegrationCurrency(contract.currency || contract.integrationMetadata?.currency) || null,
-        discountRate: Number(contract.discountRate) || 0,
-        leaseLiability: metric?.leaseLiability ?? null,
-        currentLiability: metric?.currentLiability ?? null,
-        nonCurrentLiability: metric?.nonCurrentLiability ?? null,
-        rouAsset: metric?.rouAsset ?? null,
-        status: contract.status || null,
-        source: "GK_FINANCE_INTELLIGENCE",
-        contractIdSource: contract.integrationMetadata?.externalRecordId || contract.id
-      };
-    });
-  }
 
-  function legacyReportAuth_getErpReadyPaymentData(reportingDate, options = {}) {
-    const d = reportingDate ? new Date(reportingDate) : new Date();
-    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const end = new Date(start); end.setFullYear(end.getFullYear() + 1);
-    const rows = [];
-    getIntegrationContractData(options).forEach(contract => {
-      try {
-        const built = typeof cfoBuildSchedule === "function" ? cfoBuildSchedule(contract) : (typeof calculateLeaseEngine === "function" ? getPrivateCalculationForConsumer(contract) : null);
-        const schedule = Array.isArray(built?.schedule) ? built.schedule : [];
-        (Array.isArray(schedule) ? schedule : []).forEach(item => {
-          const date = item.date || item.paymentDate || item.periodDate;
-          const dt = date ? new Date(date) : null;
-          if (!dt || Number.isNaN(dt.getTime()) || dt < start || dt > end) return;
-          rows.push({ schemaVersion: INTEGRATION_SCHEMA_VERSION, contractId: contract.id, date: date, payment: Number(item.payment ?? item.totalPayment ?? item.paymentAmount) || 0, principal: Number(item.principal) || 0, interest: Number(item.interest) || 0, currency: normalizeIntegrationCurrency(contract.currency || contract.integrationMetadata?.currency) || null, source: "GK_FINANCE_INTELLIGENCE" });
-        });
-      } catch (error) {}
-    });
-    return rows;
-  }
 
   function getErpReadyJournalData(reportingDate, options = {}) {
     const ui = window.LeaseQantTfrs16JournalUi;
@@ -21079,16 +15881,6 @@ ${renderAccountingCenterBulkPromo()}
     return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
   }
 
-  function legacyReportAuth_getIntegrationExportData(exportType, reportingDate, options = {}) {
-    const type = String(exportType || "").toUpperCase();
-    if (type === "CONTRACT" || type === "LEASE_REGISTER") return getErpReadyContractData(reportingDate, options);
-    if (type === "PAYMENT" || type === "LEASE_PAYMENT") return getErpReadyPaymentData(reportingDate, options);
-    if (type === "JOURNAL" || type === "ERP_JOURNAL") return getErpReadyJournalData(reportingDate, options);
-    if (type === "FINANCIAL_REPORTING") return typeof getTfrs16FinancialReportingSnapshot === "function" ? getTfrs16FinancialReportingSnapshot(reportingDate || new Date()) : null;
-    if (type === "MONTH_END_CLOSE") return typeof getMonthEndCloseDashboardData === "function" ? getMonthEndCloseDashboardData(reportingDate || new Date()) : null;
-    if (type === "CFO_DASHBOARD") return typeof getCfoDashboardData === "function" ? getCfoDashboardData(reportingDate || new Date()) : null;
-    return [];
-  }
 
   function createExportHistory(exportType, recordCount, options = {}) {
     const state = getIntegrationStorage();
@@ -21482,9 +16274,6 @@ ${renderAccountingCenterBulkPromo()}
     return `<div class="table-wrapper"><table><thead><tr>${columns.map(c => `<th>${v191Escape(c.label)}</th>`).join("")}</tr></thead><tbody>${safeRows.map(row => `<tr>${columns.map(c => `<td>${c.render ? c.render(row) : v191Value(row?.[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   }
 
-  function v191Kpis(items) {
-    return `<section class="kpi-grid">${items.map(item => `<div class="kpi-card"><div class="kpi-label">${v191Escape(item.label)}</div><div class="kpi-value">${item.value}</div><div class="kpi-description">${v191Escape(item.description || "")}</div></div>`).join("")}</section>`;
-  }
 
   // "YYYY-MM-DD" biçiminde <input type="date"> value'su üretir.
   function v191DateInputValue(d) {
@@ -21502,23 +16291,6 @@ ${renderAccountingCenterBulkPromo()}
     return `<a href="#" onclick="window.GK_TFRS16.v191FilterDetail('${kind}', '${jsArg}'); return false;" style="color:#1d4ed8;text-decoration:underline;">${safeLabel}</a>`;
   }
 
-  function v191PeriodPickerHtml(effectiveStart, effectiveEnd) {
-    const overridden = Boolean(v191PeriodStartOverride || v191PeriodEndOverride);
-    return `
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-      <div>
-        <label style="display:block;font-size:11px;color:#475569;margin-bottom:4px;">Dönem Başlangıcı</label>
-        <input type="date" id="v191PeriodStartInput" value="${v191DateInputValue(effectiveStart)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
-      </div>
-      <div>
-        <label style="display:block;font-size:11px;color:#475569;margin-bottom:4px;">Dönem Sonu</label>
-        <input type="date" id="v191PeriodEndInput" value="${v191DateInputValue(effectiveEnd)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
-      </div>
-      <button type="button" class="primary-button" onclick="window.GK_TFRS16.v191ApplyPeriod(); return false;">Uygula</button>
-      ${overridden ? `<button type="button" class="secondary-button" onclick="window.GK_TFRS16.v191ResetPeriod(); return false;">Varsayılana Dön (YTD)</button>` : ""}
-      ${overridden ? `<span style="font-size:11px;color:#0f766e;">Özel dönem seçili</span>` : `<span style="font-size:11px;color:#64748b;">Varsayılan: yıl başından bugüne (YTD)</span>`}
-    </div>`;
-  }
 
   // Sözleşme bazında detay bloğunu üretir. expanded=false iken büyük
   // tablo HTML'i HİÇ üretilmez (yüzlerce sözleşmede performans için) —
@@ -21555,18 +16327,6 @@ ${renderAccountingCenterBulkPromo()}
     return html;
   }
 
-  // ---- TMS 29 (enflasyon) düzeltmesi — Finansal Raporlama hareket
-  // tablolarına entegrasyon ----
-  //
-  // TMS 29 hareketleri private API'den gelen envelope üzerinden
-  // oluşturulur. Public tarafta yalnızca bu zarfın gruplanması ve
-  // görüntülenmesi yapılır; yerel restatement hesabı yapılmaz.
-  function v191PeriodBounds(periodStartMonth, rpMonth) {
-    return {
-      start: new Date(Number(periodStartMonth.slice(0, 4)), Number(periodStartMonth.slice(5, 7)) - 1, 1),
-      end: new Date(Number(rpMonth.slice(0, 4)), Number(rpMonth.slice(5, 7)), 0)
-    };
-  }
 
   function v191AppliedChanges(contract, start, end) {
     const modifications = dedupeAppliedModifications(contract?.modifications)
@@ -21597,230 +16357,8 @@ ${renderAccountingCenterBulkPromo()}
     return Number(quote.rate);
   }
 
-  function v191MonthKey(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  }
 
-  // Foreign-currency ROU assets are non-monetary historical-cost layers.
-  // The original asset keeps the commencement rate; each positive
-  // modification/reassessment creates a new layer at its effective-date
-  // rate. Depreciation consumes the layers proportionally, preserving their
-  // weighted historical rate. Negative adjustments derecognise the existing
-  // carrying amount at that same weighted rate.
-  function v191BuildFxRouRollForward(contract, rawRow, periodStartMonth, rpMonth, presentationCurrency) {
-    const { start, end } = v191PeriodBounds(periodStartMonth, rpMonth);
-    const sourceCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
-    const built = rptScheduleRows(contract);
-    if (built.error) throw new Error(built.error);
-    const schedule = (built.schedule || []).slice().sort((a, b) => rptDate(a.date) - rptDate(b.date));
-    const first = schedule[0] || {};
-    const commencement = rptDate(contract.startDate);
-    const initialTx = rptNumber(first.rouOpening || getPrivateCalculationForConsumer(contract).rouAssets || 0);
-    const additions = [{ date: commencement, tx: initialTx, fn: initialTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement), kind: "initial" }];
-    const changes = v191AppliedChanges(contract, null, end);
-    const depreciationEvents = [];
-    // Keep ROU vintages so each depreciation portion uses its own layer's
-    // acquisition/addition month for TMS 29 restatement.
-    const rouLayers = [{ date: commencement, tx: initialTx, fn: additions[0].fn }];
-    let txCarrying = initialTx;
-    let fnCarrying = additions[0].fn;
-    let changeIndex = 0;
 
-    const applyChangesThrough = (date, inclusive) => {
-      while (changeIndex < changes.length) {
-        const change = changes[changeIndex];
-        const due = inclusive ? change.__effective <= date : change.__effective < date;
-        if (!due) break;
-        const tx = rptNumber(change.rouAdjustment);
-        const weightedRate = txCarrying ? fnCarrying / txCarrying : v191FxRateAt(sourceCurrency, presentationCurrency, change.__effective);
-        const rate = tx >= 0 ? v191FxRateAt(sourceCurrency, presentationCurrency, change.__effective) : weightedRate;
-        const fn = tx * rate;
-        additions.push({ date: change.__effective, tx, fn, kind: change.__changeKind });
-        if (tx >= 0) {
-          rouLayers.push({ date: change.__effective, tx, fn });
-        } else {
-          let remaining = Math.abs(tx);
-          rouLayers.forEach(layer => {
-            const take = Math.min(layer.tx, remaining);
-            if (take > 0) {
-              const layerRate = layer.tx ? layer.fn / layer.tx : 0;
-              layer.tx -= take;
-              layer.fn -= take * layerRate;
-              remaining -= take;
-            }
-          });
-        }
-        txCarrying = Math.max(0, txCarrying + tx);
-        fnCarrying = Math.max(0, fnCarrying + fn);
-        changeIndex++;
-      }
-    };
-
-    schedule.forEach(item => {
-      const date = rptDate(item.date);
-      if (!date || date > end) return;
-      applyChangesThrough(date, false);
-      const depTx = Math.min(Math.max(0, rptNumber(item.depreciation)), txCarrying);
-      let remaining = depTx;
-      const parts = [];
-      rouLayers.forEach(layer => {
-        const take = Math.min(layer.tx, remaining);
-        if (take > 0) {
-          const layerRate = layer.tx ? layer.fn / layer.tx : 0;
-          parts.push({ date, tx: take, fn: take * layerRate, vintageDate: layer.date });
-          layer.tx -= take;
-          layer.fn -= take * layerRate;
-          remaining -= take;
-        }
-      });
-      const depFn = parts.reduce((sum, part) => sum + part.fn, 0);
-      depreciationEvents.push({ date, tx: depTx, fn: depFn, parts });
-      txCarrying = Math.max(0, txCarrying - depTx);
-      fnCarrying = Math.max(0, fnCarrying - depFn);
-      applyChangesThrough(date, true);
-    });
-    applyChangesThrough(end, true);
-
-    const beforeStart = event => event.date < start;
-    const inPeriod = event => event.date >= start && event.date <= end;
-    const restate = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
-    // Amortisman bir dönem gideridir ve TMS 29 kapsamında kayda alındığı ayın
-    // endeksinden raporlama ayına taşınır. ROU katmanının edinim tarihi burada
-    // kullanılırsa dönemin tüm gideri Ocak endeksiyle büyütülür.
-    const restateDepreciation = event => event.fn * getInflationRatio(v191MonthKey(event.date), rpMonth);
-    const openingNominal = additions.filter(beforeStart).reduce((s, x) => s + x.fn, 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + x.fn, 0);
-    const openingRestated = additions.filter(beforeStart).reduce((s, x) => s + restate(x), 0) - depreciationEvents.filter(beforeStart).reduce((s, x) => s + restateDepreciation(x), 0);
-    const periodAdditions = additions.filter(inPeriod);
-    const periodDepreciation = depreciationEvents.filter(inPeriod);
-    const entries = periodAdditions.filter(x => x.kind === "initial");
-    const changesInPeriod = periodAdditions.filter(x => x.kind !== "initial");
-    const entriesNominal = entries.reduce((s, x) => s + x.fn, 0);
-    const entriesRestated = entries.reduce((s, x) => s + restate(x), 0);
-    const modificationNominal = changesInPeriod.filter(x => x.kind === "modification").reduce((s, x) => s + x.fn, 0);
-    const modificationRestated = changesInPeriod.filter(x => x.kind === "modification").reduce((s, x) => s + restate(x), 0);
-    const reassessmentNominal = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + x.fn, 0);
-    const reassessmentRestated = changesInPeriod.filter(x => x.kind === "reassessment").reduce((s, x) => s + restate(x), 0);
-    const depreciationNominal = periodDepreciation.reduce((s, x) => s + x.fn, 0);
-    const depreciationRestated = periodDepreciation.reduce((s, x) => s + restateDepreciation(x), 0);
-    const allEntriesNominal = entriesNominal + modificationNominal + reassessmentNominal;
-    const allEntriesRestated = entriesRestated + modificationRestated + reassessmentRestated;
-    return {
-      periodStart: periodStartMonth,
-      rouOpeningNominal: openingNominal,
-      rouOpeningRestated: openingRestated,
-      // Initial recognition, modification and reassessment are distinct
-      // movements in the TMS 29 note. Keeping them separate prevents a
-      // change in terms from being mislabeled as a new lease addition.
-      rouEntriesNominal: entriesNominal,
-      rouEntriesRestated: entriesRestated,
-      rouInitialEntriesNominal: entriesNominal,
-      rouInitialEntriesRestated: entriesRestated,
-      rouModificationNominal: modificationNominal,
-      rouModificationRestated: modificationRestated,
-      rouReassessmentNominal: reassessmentNominal,
-      rouReassessmentRestated: reassessmentRestated,
-      rouDepreciationNominal: depreciationNominal,
-      rouDepreciationRestated: depreciationRestated,
-      rouClosingNominalPeriod: openingNominal + allEntriesNominal - depreciationNominal,
-      rouClosingRestatedPeriod: openingRestated + allEntriesRestated - depreciationRestated
-    };
-  }
-
-  function v191BuildFxLiabilityRollForward(contract, rawRow, periodStartMonth, rpMonth, presentationCurrency) {
-    const { start, end } = v191PeriodBounds(periodStartMonth, rpMonth);
-    const sourceCurrency = v23CurrencyCode(contract.currency || DEFAULT_FUNCTIONAL_CURRENCY);
-    const built = rptScheduleRows(contract);
-    if (built.error) throw new Error(built.error);
-    const schedule = (built.schedule || []).filter(item => {
-      const d = rptDate(item.date);
-      return d && d >= start && d <= end;
-    });
-    const changes = v191AppliedChanges(contract, start, end);
-    const commencement = rptDate(contract.startDate);
-    const initialInPeriod = commencement && commencement >= start && commencement <= end;
-    const openingDate = rptAddDays(start, -1);
-    const openingNominal = initialInPeriod ? 0 : rptNumber(rawRow.openingLiability) * v191FxRateAt(sourceCurrency, presentationCurrency, openingDate);
-    const openingRestated = initialInPeriod
-      ? 0
-      : openingNominal * getInflationRatio(v191MonthKey(openingDate), rpMonth);
-    const entriesTx = rptNumber(rawRow.entriesLiability);
-    const entriesNominal = entriesTx * v191FxRateAt(sourceCurrency, presentationCurrency, commencement || start);
-    const entriesRestated = entriesNominal * getInflationRatio(v191MonthKey(commencement || start), rpMonth);
-    const flow = item => {
-      const date = rptDate(item.date);
-      const rate = v191FxRateAt(sourceCurrency, presentationCurrency, date);
-      const ratio = getInflationRatio(v191MonthKey(date), rpMonth);
-      return { nominal: rptNumber(item.amount) * rate, restated: rptNumber(item.amount) * rate * ratio };
-    };
-    const interestEvents = schedule.map(item => ({ date: item.date, amount: item.interest }));
-    const paymentEvents = schedule.map(item => ({ date: item.date, amount: (contract.paymentTiming === "advance" && item === built.schedule[0]) ? 0 : item.payment }));
-    const sumFlow = events => events.reduce((acc, item) => { const x = flow(item); acc.nominal += x.nominal; acc.restated += x.restated; return acc; }, { nominal: 0, restated: 0 });
-    const interest = sumFlow(interestEvents);
-    const payments = sumFlow(paymentEvents);
-    const modification = sumFlow(changes.filter(x => x.__changeKind === "modification").map(x => ({ date: x.__effective, amount: x.liabilityAdjustment })));
-    const reassessment = sumFlow(changes.filter(x => x.__changeKind === "reassessment").map(x => ({ date: x.__effective, amount: x.liabilityAdjustment })));
-    const closingNominal = rptNumber(rawRow.closingLiability) * v191FxRateAt(sourceCurrency, presentationCurrency, end);
-    const fxNominal = closingNominal - (openingNominal + entriesNominal + interest.nominal - payments.nominal + modification.nominal + reassessment.nominal);
-
-    // Attribute the exchange movement to the month in which it arose. This
-    // keeps TMS 21 exchange differences separate from the TMS 29 monetary
-    // gain/loss and restates each flow with its own month's CPI.
-    let fxRestated = 0;
-    let fxNominalByMonth = 0;
-    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    let txOpening = initialInPeriod ? 0 : rptNumber(rawRow.openingLiability);
-    while (cursor <= end) {
-      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-      const boundedEnd = monthEnd > end ? end : monthEnd;
-      const inMonth = event => {
-        const d = rptDate(event.date);
-        return d && d >= cursor && d <= boundedEnd;
-      };
-      const monthInterest = interestEvents.filter(inMonth).reduce((s, x) => s + rptNumber(x.amount), 0);
-      const monthPayments = paymentEvents.filter(inMonth).reduce((s, x) => s + rptNumber(x.amount), 0);
-      const monthChanges = changes.filter(x => inMonth({ date: x.__effective }));
-      const monthAdjustment = monthChanges.reduce((s, x) => s + rptNumber(x.liabilityAdjustment), 0);
-      const monthEntry = initialInPeriod && commencement >= cursor && commencement <= boundedEnd ? entriesTx : 0;
-      const txClosing = txOpening + monthEntry + monthInterest - monthPayments + monthAdjustment;
-      const openingRateDate = rptAddDays(cursor, -1);
-      const openingFn = txOpening * v191FxRateAt(sourceCurrency, presentationCurrency, openingRateDate);
-      const interestFn = interestEvents.filter(inMonth).reduce((s, x) => s + flow(x).nominal, 0);
-      const paymentsFn = paymentEvents.filter(inMonth).reduce((s, x) => s + flow(x).nominal, 0);
-      const changesFn = monthChanges.reduce((s, x) => s + flow({ date: x.__effective, amount: x.liabilityAdjustment }).nominal, 0);
-      const entryFn = monthEntry * v191FxRateAt(sourceCurrency, presentationCurrency, commencement || cursor);
-      const closingFn = txClosing * v191FxRateAt(sourceCurrency, presentationCurrency, boundedEnd);
-      const monthFx = closingFn - (openingFn + entryFn + interestFn - paymentsFn + changesFn);
-      fxNominalByMonth += monthFx;
-      fxRestated += monthFx * getInflationRatio(v191MonthKey(boundedEnd), rpMonth);
-      txOpening = txClosing;
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-    }
-    // Schedule rounding or a boundary event can create a small difference
-    // between the reconstructed monthly FX and the authoritative closing
-    // residual. Keep nominal exact and carry the small correction at rp.
-    fxRestated += fxNominal - fxNominalByMonth;
-    const restatedSum = openingRestated + entriesRestated + interest.restated - payments.restated + modification.restated + reassessment.restated + fxRestated;
-    return {
-      periodStart: periodStartMonth,
-      liabilityOpeningNominal: openingNominal,
-      liabilityOpeningRestated: openingRestated,
-      liabilityEntriesNominal: entriesNominal,
-      liabilityEntriesRestated: entriesRestated,
-      liabilityInterestNominal: interest.nominal,
-      liabilityInterestRestated: interest.restated,
-      liabilityPaymentsNominal: payments.nominal,
-      liabilityPaymentsRestated: payments.restated,
-      liabilityFxTranslationNominal: fxNominal,
-      liabilityFxTranslationRestated: fxRestated,
-      liabilityModificationNominal: modification.nominal,
-      liabilityModificationRestated: modification.restated,
-      liabilityReassessmentNominal: reassessment.nominal,
-      liabilityReassessmentRestated: reassessment.restated,
-      liabilityClosingNominal: closingNominal,
-      restatedSum,
-      liabilityMonetaryGainLoss: closingNominal - restatedSum
-    };
-  }
 
   // Private API counterpart for the portfolio TMS29 path. The browser only
   // assembles the already-computed private envelopes.
@@ -21921,58 +16459,8 @@ ${renderAccountingCenterBulkPromo()}
   // rebuilding weighted transaction-date rates in the browser.
   const v191PrivateTms21PeriodCache = new Map();
 
-  function v191PrivateTms21CacheKey(contract, periodEnd) {
-    const id = String(contract?.id || "").trim();
-    const end = v23DateKey(periodEnd);
-    return id && end ? `${id}|${end}` : null;
-  }
 
-  async function v191LoadPrivatePortfolioTms21(periodEnd) {
-    const end = rptResolveDate(periodEnd);
-    if (!end) throw new Error("Geçersiz TMS 21 raporlama tarihi.");
-    if (!isPrivateCalculationApiReady()) throw new Error("Private TMS 21 API hazır değil; yerel hesaplama kapalı.");
-    const facade = window.LeaseQantPrivateTfrs16Facade;
-    if (typeof facade?.loadTms21 !== "function") throw new Error("Private TMS 21 API kullanılamıyor.");
-    const fxContracts = (Array.isArray(contracts) ? contracts : [])
-      .filter(contract => contractNeedsFxTranslation(contract));
-    const results = await Promise.all(fxContracts.map(async contract => ({
-      contract,
-      result: await facade.loadTms21(contract, v23DateKey(end))
-    })));
-    results.forEach(({ contract, result }) => {
-      const key = v191PrivateTms21CacheKey(contract, end);
-      if (key) v191PrivateTms21PeriodCache.set(key, result);
-    });
-    return results;
-  }
 
-  async function v191LoadPrivatePortfolioTms29(periodStart, periodEnd) {
-    const start = rptResolveDate(periodStart);
-    const end = rptResolveDate(periodEnd);
-    if (!start || !end || end < start) throw new Error("Geçersiz TMS 29 raporlama dönemi.");
-    if (!isPrivateCalculationApiReady()) throw new Error("Private TMS 29 API hazır değil; yerel hesaplama kapalı.");
-    const periodStartMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
-    const rpMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
-    const cacheKey = `${periodStartMonth}|${rpMonth}`;
-    const cached = v191PrivateTms29PortfolioCache.get(cacheKey);
-    if (cached) return cached;
-    const eligibleContracts = (Array.isArray(contracts) ? contracts : []).filter(contract => {
-      if (contract?.shortTermLease === true || contract?.lowValueAsset === true) return false;
-      const date = parseDate(contract?.startDate);
-      if (!date) return true;
-      const acquisitionMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      return acquisitionMonth <= rpMonth;
-    });
-    const facade = window.LeaseQantPrivateTfrs16Facade;
-    if (typeof facade?.loadTms29Many !== "function") throw new Error("Private TMS29 toplu API kullanılamıyor.");
-    const promise = facade.loadTms29Many(eligibleContracts, rpMonth, periodStartMonth)
-      .then(results => v191ComputePrivatePortfolioTms29(eligibleContracts, results, periodStartMonth, rpMonth));
-    v191PrivateTms29PortfolioCache.set(cacheKey, promise);
-    try { return await promise; } catch (error) {
-      v191PrivateTms29PortfolioCache.delete(cacheKey);
-      throw error;
-    }
-  }
 
   // ARTIK ÇAĞRILMIYOR (bkz. aşağıdaki v191Tms29RouSummaryHtml/
   // v191Tms29LiabilitySummaryHtml — bölünmüş hali). Bilinçli olarak
@@ -22146,438 +16634,10 @@ ${renderAccountingCenterBulkPromo()}
     </div>`;
   }
 
-  /**
-   * Financial Reporting / Dipnotlar için PAYLAŞILAN veri hazırlama.
-   * v191RenderFinancialReporting'in ÖNCEDEN kendi içinde yaptığı
-   * hesaplamaların BİREBİR AYNISI (extract, davranış değişmedi) —
-   * hem o fonksiyon hem yeni "Dipnotlar" sayfası (renderFootnotesPage)
-   * bunu kullanıyor.
-   */
-  function legacyReportAuth_v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options = {}) {
-    const data = getTfrs16FinancialReportingSnapshot(effectivePeriodEnd) || {};
-    const bs = data.balanceSheet || {};
-    const pnl = data.profitLoss || {};
-    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
-    const liquidityDisclosure = v191BuildPresentationLiquidityDisclosure(effectivePeriodEnd, presentationCurrency);
-    const liquidityDisclosureRow = (liquidityDisclosure.rows || [])[0] || null;
-    const v191LiquidityBucketValue = (row, id) => rptRound((row?.buckets || []).find(b => b.bucket === id)?.cashOutflow || 0);
-    const liquidityRows = liquidityDisclosureRow ? [{
-      label: liquidityDisclosureRow.label,
-      carryingValue: liquidityDisclosureRow.carryingValue,
-      contractualCashOutflowsTotal: liquidityDisclosureRow.contractualCashOutflowsTotal,
-      under3: v191LiquidityBucketValue(liquidityDisclosureRow, "UNDER_3_MONTHS"),
-      b3to12: v191LiquidityBucketValue(liquidityDisclosureRow, "3_TO_12_MONTHS"),
-      b1to5y: v191LiquidityBucketValue(liquidityDisclosureRow, "1_TO_5_YEARS"),
-      over5y: v191LiquidityBucketValue(liquidityDisclosureRow, "OVER_5_YEARS")
-    }] : [];
 
-    const periodStart = effectivePeriodStart;
-    const periodEnd = effectivePeriodEnd;
-    const rouReport = getRuoAssetRollForwardReport(periodStart, periodEnd) || {};
-    const liabReport = getLeaseLiabilityRollForwardReport(periodStart, periodEnd) || {};
-    const periodLabel = `${periodStart.toLocaleDateString("tr-TR")} - ${periodEnd.toLocaleDateString("tr-TR")}`;
 
-    const rawRouRows = (Array.isArray(rouReport.rows) ? rouReport.rows.filter(r => r.status !== "ERROR") : []);
-    const rawLiabRows = (Array.isArray(liabReport.rows) ? liabReport.rows.filter(r => r.status !== "ERROR") : []);
 
-    const periodStartMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
-    const rpMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
-    const tms29 = options && options.tms29
-      ? options.tms29
-      : (() => { throw new Error("Private TMS 29 sonucu hazır değil; yerel hesaplama kapalı."); })();
-    // Nominal roll-forward engines retain transaction-currency amounts for
-    // FX leases. Financial statement notes, however, must be presented in
-    // the company's presentation currency. TMS 21 requires balance-sheet
-    // balances to use their balance date and income/cash movements to use
-    // their transaction or accrual dates. TMS 29 continues to use raw rows.
-    const translateNominalRows = (rows, keys) => (rows || []).map(row => {
-      const sourceCurrency = String(row.currency || presentationCurrency).toUpperCase();
-      if (sourceCurrency === presentationCurrency) return { ...row, currency: presentationCurrency };
-      const translated = { ...row, currency: presentationCurrency };
-      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
-      const schedule = contract ? (rptScheduleRows(contract).schedule || []) : [];
-      const privateTms21 = contract
-        ? v191PrivateTms21PeriodCache.get(v191PrivateTms21CacheKey(contract, periodEnd))
-        : null;
-      const convertAtFinancialDate = (amount, date) => {
-        try {
-          const quote = getFxRate(
-            sourceCurrency,
-            presentationCurrency,
-            date,
-            V23_RATE_TYPES.CLOSING,
-            { allowLastAvailable: true }
-          );
-          if (!quote?.error && Number(quote?.rate) > 0) {
-            return rptRound(Number(amount) * Number(quote.rate));
-          }
-        } catch (_) {}
-        return null;
-      };
-      const eventConverted = field => {
-        if (!schedule.length) return null;
-        let total = 0, found = false;
-        schedule.forEach(item => {
-          const d = rptDate(item.date);
-          const amount = Number(item[field]);
-          if (!d || d < periodStart || d > periodEnd || !Number.isFinite(amount) || amount === 0) return;
-          const converted = convertAtFinancialDate(amount, d);
-          if (converted !== null) { total += converted; found = true; }
-        });
-        return found ? total : null;
-      };
-      const privateEventConverted = field => {
-        const privateCurrency = String(privateTms21?.functionalCurrency || "").toUpperCase();
-        if (!privateTms21 || privateCurrency !== presentationCurrency || !Array.isArray(privateTms21.schedule)) return null;
-        const rowsInPeriod = privateTms21.schedule.filter(item => {
-          const d = rptDate(item?.date);
-          return d && d >= periodStart && d <= periodEnd;
-        });
-        const paymentRows = field === "paymentFx"
-          ? rowsInPeriod.filter(item => !item?.isAdvanceCommencement)
-          : rowsInPeriod;
-        if (!paymentRows.length) return null;
-        const values = paymentRows.map(item => Number(item?.[field]));
-        if (!values.some(Number.isFinite)) return null;
-        return rptRound(values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0));
-      };
-      const changeConverted = kind => {
-        if (!contract) return null;
-        const changes = v191AppliedChanges(contract, periodStart, periodEnd)
-          .filter(item => item.__changeKind === kind);
-        if (!changes.length) return null;
-        return changes.reduce((sum, item) => {
-          const field = keys.includes("openingRuo") ? "rouAdjustment" : "liabilityAdjustment";
-          const converted = convertAtFinancialDate(rptNumber(item[field]), item.__effective);
-          return sum + (converted === null ? 0 : converted);
-        }, 0);
-      };
-      keys.forEach(key => {
-        const amount = Number(row[key]);
-        if (!Number.isFinite(amount)) return;
-        if (key === "modificationAdjustment" || key === "reassessmentAdjustment") {
-          const convertedChange = changeConverted(key === "modificationAdjustment" ? "modification" : "reassessment");
-          if (convertedChange !== null) { translated[key] = rptRound(convertedChange); return; }
-        }
-        const eventField = key === "payments" ? "payment" : key === "interest" ? "interest" : key === "depreciation" ? "depreciation" : null;
-        const privateEventField = key === "payments" ? "paymentFx" : key === "interest" ? "interestFx" : key === "depreciation" ? "depreciationFx" : null;
-        const privateEventValue = privateEventField ? privateEventConverted(privateEventField) : null;
-        if (privateEventValue !== null) { translated[key] = rptRound(privateEventValue); return; }
-        const eventValue = eventField ? eventConverted(eventField) : null;
-        if (eventValue !== null) { translated[key] = rptRound(eventValue); return; }
-        const rateDate = key === "openingRuo" || key === "openingLiability" ? rptAddDays(periodStart, -1)
-          : key === "entriesRuo" || key === "entriesLiability" ? (contract?.startDate || periodStart)
-          : periodEnd;
-        const converted = convertAtFinancialDate(amount, rateDate);
-        if (converted !== null) translated[key] = converted;
-      });
-      return translated;
-    });
-    const rouRows = translateNominalRows(rawRouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const liabRows = translateNominalRows(rawLiabRows, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingLiability"]);
-    // ROU maliyet modeli altında gayrimoneter bir kalemdir: başlangıçta
-    // tanınan maliyet ve o maliyete ait amortisman kapanış kuruyla tekrar
-    // çevrilmez. Dönem sonuna kadar uygulanmış ayrı bir ROU katmanı
-    // (modifikasyon/reassessment) yoksa bütün nominal hareketleri
-    // başlangıç tarihindeki tarihi kurla çevir.
-    rouRows.forEach(row => {
-      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
-      if (!contract) return;
-      const sourceCurrency = String(contract.currency || row.currency || presentationCurrency).toUpperCase();
-      if (sourceCurrency === presentationCurrency) return;
-      const appliedRouLayerBeforePeriodEnd = []
-        .concat(Array.isArray(contract.modifications) ? contract.modifications : [])
-        .concat(Array.isArray(contract.reassessments) ? contract.reassessments : [])
-        .some(change => change?.status === "APPLIED" && (!rptDate(change.effectiveDate) || rptDate(change.effectiveDate) <= periodEnd));
-      if (appliedRouLayerBeforePeriodEnd) {
-        const raw = rawRouRows.find(item => String(item.contractId) === String(row.contractId));
-        if (!raw) return;
-        try {
-          const layer = v191BuildFxRouRollForward(contract, raw, periodStartMonth, rpMonth, presentationCurrency);
-          row.openingRuo = rptRound(layer.rouOpeningNominal);
-          row.entriesRuo = rptRound(layer.rouInitialEntriesNominal);
-          row.depreciation = rptRound(layer.rouDepreciationNominal);
-          row.modificationAdjustment = rptRound(layer.rouModificationNominal);
-          row.reassessmentAdjustment = rptRound(layer.rouReassessmentNominal);
-          row.otherAdjustment = 0;
-          row.closingRuo = rptRound(layer.rouClosingNominalPeriod);
-          row.reconciliationDifference = rptRound(
-            row.openingRuo + row.entriesRuo - row.depreciation +
-            row.modificationAdjustment + row.reassessmentAdjustment - row.closingRuo
-          );
-        } catch (_) {}
-        return;
-      }
-      // Commencement can fall on a weekend/public holiday (for example
-      // 01.01.2025).  The ROU historical-cost rate must then use the latest
-      // published rate on or before commencement.  The generic presentation
-      // converter is deliberately exact-date/fail-closed, so use the FX
-      // resolver explicitly here instead of silently retaining mixed rates.
-      let historicalRate = null;
-      try {
-        const quote = getFxRate(
-          sourceCurrency,
-          presentationCurrency,
-          contract.startDate,
-          V23_RATE_TYPES.CLOSING,
-          { allowLastAvailable: true }
-        );
-        if (!quote?.error && Number(quote?.rate) > 0) historicalRate = Number(quote.rate);
-      } catch (_) {}
-      if (!historicalRate) return;
-      const raw = rawRouRows.find(item => String(item.contractId) === String(row.contractId));
-      if (!raw) return;
-      ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"].forEach(key => {
-        if (Number.isFinite(Number(raw[key]))) row[key] = rptRound(Number(raw[key]) * historicalRate);
-      });
-    });
-    liabRows.forEach(row => {
-      // TMS 21 translation is only applicable when the contract's
-      // transaction currency differs from the presentation currency.  The
-      // previous residual-based calculation treated every roll-forward
-      // mismatch as an FX difference, which made TRY→TRY leases show a
-      // spurious "TMS 21 Çevrim Farkı" amount.  Keep genuine reconciliation
-      // differences visible through the report warning, but never classify
-      // them as foreign-exchange movement for a same-currency contract.
-      const contract = rptSafeContracts().find(c => String(c.id) === String(row.contractId));
-      const sourceCurrency = String(contract?.currency || row.currency || presentationCurrency).toUpperCase();
-      if (sourceCurrency === presentationCurrency) {
-        row.fxTranslationAdjustment = 0;
-        return;
-      }
-      row.fxTranslationAdjustment = rptRound(
-        rptNumber(row.closingLiability) - (
-          rptNumber(row.openingLiability) + rptNumber(row.entriesLiability) + rptNumber(row.interest)
-          - rptNumber(row.payments) + rptNumber(row.modificationAdjustment)
-          + rptNumber(row.reassessmentAdjustment) + rptNumber(row.otherAdjustment)
-        )
-      );
-    });
-    rouRows.forEach(row => {
-      const r = tms29.results.get(row.contractId);
-      row.inflationNetAdjustment = r?.ok ? r.netAdjustment : null;
-      row.inflationStatus = r?.ok ? "OK" : "Endeks Eksik";
-    });
-    liabRows.forEach(row => {
-      const r = tms29.results.get(row.contractId);
-      row.monetaryGainLoss = r?.ok ? r.monetaryGainLoss : null;
-      row.inflationStatus = r?.ok ? "OK" : "Endeks Eksik";
-    });
 
-    const rouSumKeys = ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"];
-    const translatedRouTotals = rptAggregateRows(rouRows, rouSumKeys);
-    const rouTotalsRow = rouRows.length ? [{ ...translatedRouTotals, contractId: "TOPLAM", company: "", status: "MUTABIK", inflationNetAdjustment: tms29.totalNetAdjustment }] : [];
-    const rouByCurrency = v191GroupRollForwardByCurrency(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-    const rouByAssetClass = v191GroupRollForwardByAssetClass(rouRows, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"]);
-
-    const liabSumKeys = ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"];
-    const translatedLiabTotals = rptAggregateRows(liabRows, liabSumKeys);
-    const liabPresentationDifference = rptRound(
-      translatedLiabTotals.openingLiability + translatedLiabTotals.entriesLiability + translatedLiabTotals.interest
-      - translatedLiabTotals.payments + translatedLiabTotals.modificationAdjustment
-      + translatedLiabTotals.reassessmentAdjustment + translatedLiabTotals.otherAdjustment
-      + translatedLiabTotals.fxTranslationAdjustment - translatedLiabTotals.closingLiability
-    );
-    liabReport.reconciliation = {
-      formula: "Opening liability + Entries + Interest - Payments +/- Modifications +/- Reassessments +/- Other + TMS 21 FX = Closing liability",
-      difference: liabPresentationDifference,
-      passed: Math.abs(liabPresentationDifference) <= REPORTING_TOLERANCE
-    };
-    const liabTotalsRow = liabRows.length ? [{ ...translatedLiabTotals, contractId: "TOPLAM", company: "", status: liabReport.reconciliation.passed ? "MUTABIK" : "FARK VAR", monetaryGainLoss: tms29.totalMonetaryGainLoss }] : [];
-    const liabByCurrency = v191GroupRollForwardByCurrency(liabRows, liabSumKeys);
-    const liabByAssetClass = v191GroupRollForwardByAssetClass(liabRows, liabSumKeys);
-
-    const rouDetailColumns = [
-      { key: "contractId", label: "Sözleşme" },
-      { key: "company", label: "Şirket" },
-      { key: "openingRuo", label: "Açılış" },
-      { key: "entriesRuo", label: "Girişler" },
-      { key: "depreciation", label: "Amortisman" },
-      { key: "modificationAdjustment", label: "Modifikasyon" },
-      { key: "reassessmentAdjustment", label: "Reassessment" },
-      { key: "otherAdjustment", label: "Diğer" },
-      { key: "closingRuo", label: "Kapanış" },
-      { key: "inflationNetAdjustment", label: "TMS 29 Düzeltmesi (Net)", render: row => row.inflationNetAdjustment === null ? `<span style="color:#94a3b8;">Endeks Eksik</span>` : v191Value(row.inflationNetAdjustment) },
-      { key: "status", label: "Durum" }
-    ];
-    const liabDetailColumns = [
-      { key: "contractId", label: "Sözleşme" },
-      { key: "company", label: "Şirket" },
-      { key: "openingLiability", label: "Açılış" },
-      { key: "entriesLiability", label: "Girişler" },
-      { key: "interest", label: "Faiz" },
-      { key: "payments", label: "Ödemeler" },
-      { key: "modificationAdjustment", label: "Modifikasyon" },
-      { key: "reassessmentAdjustment", label: "Reassessment" },
-      { key: "otherAdjustment", label: "Diğer" },
-      { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
-      { key: "closingLiability", label: "Kapanış" },
-      { key: "monetaryGainLoss", label: "Parasal Kazanç/(Kayıp), Net", render: row => row.monetaryGainLoss === null ? `<span style="color:#94a3b8;">Endeks Eksik</span>` : v191Value(row.monetaryGainLoss) },
-      { key: "status", label: "Durum" }
-    ];
-
-    return {
-      data, bs, pnl, liquidityDisclosure, liquidityRows,
-      periodStart, periodEnd, periodLabel,
-      rouReport, liabReport, rouRows, liabRows, tms29,
-      rouTotalsRow, rouByCurrency, rouByAssetClass,
-      liabTotalsRow, liabByCurrency, liabByAssetClass,
-      rouDetailColumns, liabDetailColumns
-    };
-  }
-
-  function legacyReportAuth_v191RenderFinancialReporting(date, options = {}) {
-    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
-    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
-
-    const {
-      data, bs, pnl, liquidityDisclosure, liquidityRows,
-      periodStart, periodEnd, periodLabel,
-      rouReport, liabReport, rouRows, liabRows, tms29,
-      rouTotalsRow, rouByCurrency, rouByAssetClass,
-      liabTotalsRow, liabByCurrency, liabByAssetClass,
-      rouDetailColumns, liabDetailColumns
-    } = v191PrepareFinancialReportingData(effectivePeriodStart, effectivePeriodEnd, options);
-
-    return v191PeriodPickerHtml(effectivePeriodStart, effectivePeriodEnd) + v191Kpis([
-      { label: "Lease Liability", value: v191Value(bs.leaseLiability), description: "Financial reporting balance sheet" },
-      { label: "Current Liability", value: v191Value(bs.currentLiability), description: "Reporting-date classification" },
-      { label: "Non-current Liability", value: v191Value(bs.nonCurrentLiability), description: "Reporting-date classification" },
-      { label: "ROU Assets", value: v191Value(bs.rouAssets), description: "Right-of-use assets" },
-      { label: "Interest", value: v191Value(pnl.interestExpense), description: "Lease-related P&L" },
-      { label: "Depreciation", value: v191Value(pnl.depreciationExpense), description: "Lease-related P&L" }
-    ])
-    + `
-    ${v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 })}
-    ${v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 })}
-    ${v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd })}`;
-  }
-
-  /**
-   * DİPNOTLAR — AYRIŞTIRILMIŞ RENDER FONKSİYONLARI (onaylı plan,
-   * bkz. PROJECT_CONTEXT.md bölüm 32 Faz 1)
-   * ------------------------------------------------------------
-   * Bu üç fonksiyon, önceden v191RenderFinancialReporting'in TEK BİR
-   * return string'inin İÇİNE gömülü olan HTML üretimini BİREBİR AYNI
-   * (davranış değişmeden) buraya taşır. v191RenderFinancialReporting
-   * hâlâ bunları çağırarak AYNI çıktıyı üretir — Financial Reporting
-   * ekranı DEĞİŞMEDİ. Yeni "Dipnotlar" sayfası (renderFootnotesPage)
-   * da AYNI üç fonksiyonu, kendi veri hazırlama akışıyla, tab
-   * mantığıyla kullanıyor — kod TEKRARI sadece veri hazırlama
-   * kısmında var (rouReport/liabReport/tms29/liquidityDisclosure
-   * hesaplama çağrıları), HTML üretimi PAYLAŞILIYOR.
-   */
-  function legacyReportAuth_v191RenderAssetNoteHtml({ rouRows, rouTotalsRow, rouByAssetClass, rouByCurrency, rouDetailColumns, rouReport, periodStart, periodEnd, periodLabel, tms29 }) {
-    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
-    return `
-    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div>
-          <h3 style="margin:0;">Dipnot: Kullanım Hakkı Varlığı Hareket Tablosu</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.53(a) — Tüm tutarlar sunum para birimi ${v191Escape(presentationCurrency)} cinsindendir.</p>
-        </div>
-        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportRouAssetMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
-      </div>
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet <span style="font-weight:400;color:#94a3b8;">(bir satıra tıklayarak detaya inebilirsiniz)</span></h4>
-      ${v191Table(rouByAssetClass, [
-        { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("rou", row.assetClass) },
-        { key: "contractCount", label: "Sözleşme Sayısı" },
-        { key: "openingRuo", label: "Açılış" },
-        { key: "entriesRuo", label: "Girişler" },
-        { key: "depreciation", label: "Amortisman" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "closingRuo", label: "Kapanış" }
-      ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet (${v191Escape(presentationCurrency)})</h4>
-      ${v191Table(rouByCurrency, [
-        { key: "currency", label: "Para Birimi" },
-        { key: "contractCount", label: "Sözleşme Sayısı" },
-        { key: "openingRuo", label: "Açılış" },
-        { key: "entriesRuo", label: "Girişler" },
-        { key: "depreciation", label: "Amortisman" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "closingRuo", label: "Kapanış" }
-      ])}
-      ${v191ContractDetailBlock("rou", rouRows, rouTotalsRow, rouDetailColumns, v191RouDetailExpanded, v191RouDetailAssetClassFilter, rouByAssetClass, ["openingRuo","entriesRuo","depreciation","modificationAdjustment","reassessmentAdjustment","otherAdjustment","closingRuo"])}
-      ${rouReport.reconciliation && !rouReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(rouReport.reconciliation.difference)}</p>` : ""}
-      ${tms29 ? v191Tms29RouSummaryHtml(tms29, periodLabel, periodStart, periodEnd) : ""}
-    </div>`;
-  }
-
-  function legacyReportAuth_v191RenderLiabilityNoteHtml({ liabRows, liabTotalsRow, liabByAssetClass, liabByCurrency, liabDetailColumns, liabReport, periodStart, periodEnd, periodLabel, tms29 }) {
-    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
-    const weightedRate = getWeightedAverageDiscountRate(periodEnd);
-    return `
-    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div>
-          <h3 style="margin:0;">Dipnot: Kira Yükümlülüğü Hareket Tablosu</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Dönem: ${v191Escape(periodLabel)} · TFRS 16.58 — Tüm tutarlar sunum para birimi ${v191Escape(presentationCurrency)} cinsindendir.</p>
-        </div>
-        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiabilityMovementNote(new Date(${periodStart.getFullYear()},${periodStart.getMonth()},${periodStart.getDate()}), new Date(${periodEnd.getFullYear()},${periodEnd.getMonth()},${periodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
-      </div>
-      <p style="margin:10px 0 0;color:#475569;font-size:11px;"><strong>Ağırlıklı ortalama iskonto oranı:</strong> ${Number(weightedRate.weightedAverageDiscountRate || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}% · kapanış kira yükümlülüğü ile ağırlıklandırılmıştır.</p>
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Varlık Sınıfına Göre Özet <span style="font-weight:400;color:#94a3b8;">(bir satıra tıklayarak detaya inebilirsiniz)</span></h4>
-      ${v191Table(liabByAssetClass, [
-        { key: "assetClass", label: "Varlık Sınıfı", render: row => v191AssetClassDrillLink("liab", row.assetClass) },
-        { key: "contractCount", label: "Sözleşme Sayısı" },
-        { key: "openingLiability", label: "Açılış" },
-        { key: "entriesLiability", label: "Girişler" },
-        { key: "interest", label: "Faiz" },
-        { key: "payments", label: "Ödemeler" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
-        { key: "closingLiability", label: "Kapanış" }
-      ])}
-      <h4 style="margin:16px 0 6px;font-size:12px;color:#475569;">Para Birimine Göre Özet (${v191Escape(presentationCurrency)})</h4>
-      ${v191Table(liabByCurrency, [
-        { key: "currency", label: "Para Birimi" },
-        { key: "contractCount", label: "Sözleşme Sayısı" },
-        { key: "openingLiability", label: "Açılış" },
-        { key: "entriesLiability", label: "Girişler" },
-        { key: "interest", label: "Faiz" },
-        { key: "payments", label: "Ödemeler" },
-        { key: "modificationAdjustment", label: "Modifikasyon" },
-        { key: "reassessmentAdjustment", label: "Reassessment" },
-        { key: "otherAdjustment", label: "Diğer" },
-        { key: "fxTranslationAdjustment", label: "TMS 21 Çevrim Farkı" },
-        { key: "closingLiability", label: "Kapanış" }
-      ])}
-      ${v191ContractDetailBlock("liab", liabRows, liabTotalsRow, liabDetailColumns, v191LiabDetailExpanded, v191LiabDetailAssetClassFilter, liabByAssetClass, ["openingLiability","entriesLiability","interest","payments","modificationAdjustment","reassessmentAdjustment","otherAdjustment","fxTranslationAdjustment","closingLiability"])}
-      ${liabReport.reconciliation && !liabReport.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ Mutabakat farkı: ${v191Value(liabReport.reconciliation.difference)}</p>` : ""}
-      ${v191Tms29LiabilitySummaryHtml(tms29, periodLabel, periodStart, periodEnd)}
-    </div>`;
-  }
-
-  function legacyReportAuth_v191RenderLiquidityNoteHtml({ liquidityRows, liquidityDisclosure, effectivePeriodEnd }) {
-    const presentationCurrency = String(getReportingCurrency() || "TRY").toUpperCase();
-    return `
-    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div>
-          <h3 style="margin:0;">Dipnot: Kiralama Yükümlülükleri — Likidite Riski (TFRS 7.39)</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:11px;">Raporlama tarihi: ${v191Escape(rptLocalIsoDate(effectivePeriodEnd))} · Tüm tutarlar ${v191Escape(presentationCurrency)} cinsindendir. "Finansal araçlardan kaynaklanan risklerin niteliği ve düzeyi" notundaki "Kiralama yükümlülükleri" satırı — iskonto edilmemiş sözleşme nakit çıkışları vade dilimlerine göre.</p>
-        </div>
-        <button type="button" class="secondary-button" onclick="window.GK_TFRS16.exportLeaseLiquidityRiskNote(new Date(${effectivePeriodEnd.getFullYear()},${effectivePeriodEnd.getMonth()},${effectivePeriodEnd.getDate()})); return false;">↓ Dipnotu Dışa Aktar</button>
-      </div>
-      ${v191Table(liquidityRows, [
-        { key: "label", label: "Sözleşme uyarınca vadeler" },
-        { key: "carryingValue", label: "Defter Değeri" },
-        { key: "contractualCashOutflowsTotal", label: "Sözleşme uyarınca nakit çıkışlar toplamı" },
-        { key: "under3", label: "3 aydan kısa" },
-        { key: "b3to12", label: "3-12 ay arası" },
-        { key: "b1to5y", label: "1-5 yıl arası" },
-        { key: "over5y", label: "5 yıldan uzun" }
-      ])}
-      ${liquidityDisclosure.reconciliation && !liquidityDisclosure.reconciliation.passed ? `<p style="color:#b91c1c;font-size:11px;margin-top:6px;">⚠ ${v191Escape((liquidityDisclosure.warnings || [])[0] || "Mutabakat farkı var.")}</p>` : `<p style="margin:8px 0 0;font-size:10px;color:#94a3b8;">Sözleşme uyarınca nakit çıkışları toplamı ile defter değeri arasındaki fark (${v191Value(liquidityDisclosure.reconciliation?.undiscountedInterestComponent || 0)}), gelecekteki iskonto edilmemiş faizi temsil eder.</p>`}
-    </div>`;
-  }
 
   // ---- Dönem seçici ve detay toggle/drill-down handler'ları ----
 
@@ -22638,136 +16698,11 @@ ${renderAccountingCenterBulkPromo()}
     v191TriggerActiveScreenRefresh();
   }
 
-  function legacyReportAuth_v191RenderRiskControls(date) {
-    const summary = typeof getControlSummary === "function" ? getControlSummary(date) : null;
-    const risks = typeof getRiskSummary === "function" ? getRiskSummary(date) : null;
-    const snapshots = Array.isArray(summary?.snapshots) ? summary.snapshots : [];
-    // Bu ekran seçili raporlama tarihindeki mevcut portföyü gösterir. Global
-    // exception deposu silinmiş/eski sözleşmelerin snapshot'larını da içerir.
-    const exceptions = snapshots.flatMap(snapshot => {
-      const contractId = snapshot?.contractId || snapshot?.contract?.contractId || snapshot?.contract?.id || "";
-      const company = snapshot?.company || snapshot?.contract?.company || "";
-      return (Array.isArray(snapshot?.exceptions) ? snapshot.exceptions : [])
-        .filter(exception => !["RESOLVED", "WAIVED", "CLOSED"].includes(String(exception?.status || "").toUpperCase()))
-        .map(exception => ({ contractId, company, ...exception }));
-    });
-    const measuredControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.length : 0), 0);
-    const passedControls = snapshots.reduce((total, snapshot) => total + (Array.isArray(snapshot?.controls) ? snapshot.controls.filter(control => control.status === CONTROL_STATUS.GREEN).length : 0), 0);
-    return v191Kpis([
-      { label: "Controls", value: v191Value(summary?.totalControls ?? summary?.total ?? measuredControls), description: "Existing control engine" },
-      { label: "Passed", value: v191Value(summary?.passed ?? passedControls), description: "Existing control results" },
-      { label: "Open Exceptions", value: v191Value(Array.isArray(exceptions) ? exceptions.length : summary?.openExceptions ?? 0), description: "Open control exceptions" },
-      { label: "Critical", value: v191Value(risks?.critical ?? risks?.criticalExceptions ?? 0), description: "Existing risk classification" }
-    ]) + `<h3>Open Control Exceptions</h3>${v191Table(Array.isArray(exceptions) ? exceptions : [], [
-      { key: "contractId", label: "Contract" },
-      { key: "company", label: "Company" },
-      { key: "priority", label: "Priority" },
-      { key: "status", label: "Status" },
-      { key: "message", label: "Issue" }
-    ])}`;
-  }
 
-  function legacyReportAuth_v191RenderClose(date) {
-    const data = getMonthEndCloseDashboardData(date) || {};
-    const readiness = data.readiness || getCloseReadiness(date) || {};
-    const summary = data.summary || getMonthEndCloseSummary(date) || {};
-    return v191Kpis([
-      { label: "Close Status", value: v191Value(readiness.status || data.status || "UNKNOWN"), description: "V17 Month-End Close Engine" },
-      { label: "Close Score", value: v191Value(readiness.score ?? data.closeScore), description: "Weighted close readiness" },
-      { label: "Blocking Issues", value: v191Value((readiness.blockingIssues || data.blockingIssues || []).length), description: "Close blockers" },
-      { label: "Warnings", value: v191Value((readiness.warnings || data.warnings || []).length), description: "Close warnings" }
-    ]) + `<h3>Close Checks</h3>${v191Table(readiness.checklist?.checks || data.checks || [], [
-      { key: "controlId", label: "Control" },
-      { key: "category", label: "Category" },
-      { key: "status", label: "Status" },
-      { key: "description", label: "Description" }
-    ])}<h3>Summary</h3>${v191Table([summary], [
-      { key: "period", label: "Period" },
-      { key: "journalCount", label: "Journal Count" },
-      { key: "reconciliationStatus", label: "Reconciliation" },
-      { key: "certificationStatus", label: "Certification" }
-    ])}`;
-  }
 
-  function legacyReportAuth_v191RenderCfo(date) {
-    const data = getCfoDashboardData(date) || {};
-    const k = data.kpis || {};
-    const liab = data.financialPosition?.leaseLiability || {};
-    return v191Kpis([
-      { label: "Lease Liability", value: v191Value(liab.total ?? k.TOTAL_LEASE_LIABILITY?.value), description: "CFO Dashboard" },
-      { label: "ROU Assets", value: v191Value(data.financialPosition?.rouAssets?.total ?? k.ROU_ASSETS?.value), description: "CFO Dashboard" },
-      { label: "Next 12M Payments", value: v191Value(data.cashFlow?.next12MonthPayments ?? k.NEXT_12M_CASH_PAYMENTS?.value), description: "Expected cash — actual cash not asserted" },
-      { label: "Close Score", value: v191Value(data.close?.score ?? k.CLOSE_SCORE?.value), description: "Existing close engine" },
-      { label: "Open Exceptions", value: v191Value(data.controls?.openExceptions?.length ?? k.OPEN_EXCEPTIONS?.value), description: "Existing controls" },
-      { label: "Executive Status", value: v191Value(data.executiveSummary?.executiveStatus || data.status || "UNKNOWN"), description: "Deterministic CFO status" }
-    ]) + `<h3>Top Risks</h3>${v191Table(data.risks?.topRisks || [], [
-      { key: "severity", label: "Severity" },
-      { key: "contractId", label: "Contract" },
-      { key: "company", label: "Company" },
-      { key: "description", label: "Description" },
-      { key: "action", label: "Action" }
-    ])}`;
-  }
 
-  function legacyReportAuth_v191RenderIntegration(date) {
-    const data = getIntegrationDashboardData() || {};
-    const freshness = getIntegrationDataFreshness() || {};
-    const history = getImportHistory() || [];
-    return v191Kpis([
-      { label: "Imports", value: v191Value(data.totalImports), description: "Integration jobs" },
-      { label: "Imported Rows", value: v191Value(data.importedRows), description: "Committed rows" },
-      { label: "Open Exceptions", value: v191Value(data.openExceptions), description: "Integration exceptions" },
-      { label: "Reconciliation", value: v191Value(data.reconciliationStatus), description: "Integration reconciliation" },
-      { label: "Freshness", value: v191Value(freshness.freshnessStatus), description: "Live ERP connection is not claimed" },
-      { label: "ERP Ready", value: v191Value(data.erpReady === true), description: "Ready architecture" }
-    ]) + `<h3>Import History</h3>${v191Table(history.slice(0, 20), [
-      { key: "jobId", label: "Job" },
-      { key: "sourceType", label: "Source" },
-      { key: "fileName", label: "File" },
-      { key: "status", label: "Status" },
-      { key: "totalRows", label: "Rows" },
-      { key: "rejectedRows", label: "Rejected" }
-    ])}`;
-  }
 
-  function legacyReportAuth_v191RenderReconciliation(date) {
-    const rows = typeof getIntegrationReconciliations === "function" ? getIntegrationReconciliations() : [];
-    return v191Table(rows.slice(0, 50), [
-      { key: "reconciliationId", label: "ID" },
-      { key: "source", label: "Source" },
-      { key: "reportingDate", label: "Reporting Date" },
-      { key: "status", label: "Status" },
-      { key: "externalTotal", label: "External" },
-      { key: "internalTotal", label: "Internal" },
-      { key: "variance", label: "Variance" }
-    ]);
-  }
 
-  function legacyReportAuth_v191RenderContractTools() {
-    if (!selectedContractId) return `<div class="empty-state"><h3>Sözleşme seçilmedi</h3><p>Payment Schedule, Journal ve Audit Trail için önce bir sözleşme detayını açın.</p></div>`;
-    const contract = contracts.find(c => c.id === selectedContractId);
-    if (!contract) return `<div class="empty-state"><h3>Sözleşme bulunamadı</h3><p>Seçili sözleşme artık portföyde mevcut değil.</p></div>`;
-    const privateResult = typeof getPrivateCachedCalculationResult === "function"
-      ? getPrivateCachedCalculationResult(contract)
-      : null;
-    const schedule = Array.isArray(privateResult?.schedule) && privateResult.schedule.length
-      ? privateResult.schedule
-      : typeof cfoBuildSchedule === "function"
-        ? (cfoBuildSchedule(contract)?.schedule || [])
-        : (typeof calculateLeaseEngine === "function" ? (getPrivateCalculationForConsumer(contract)?.schedule || []) : []);
-    const journals = typeof getJournalSummaryReport === "function" ? (getJournalSummaryReport({ contractId: contract.id })?.rows || []) : [];
-    const auditReport = typeof getAuditTrailReport === "function" ? getAuditTrailReport({ contractId: contract.id }) : null;
-    const audit = Array.isArray(auditReport)
-      ? auditReport
-      : (Array.isArray(auditReport?.rows) ? auditReport.rows : []);
-    return `<h3>${v191Escape(contract.id)} — Payment Schedule</h3>${v191Table(schedule.slice(0, 24), [
-      { key: "period", label: "Period" }, { key: "date", label: "Date" }, { key: "openingLiability", label: "Opening" }, { key: "payment", label: "Payment" }, { key: "interest", label: "Interest" }, { key: "principal", label: "Principal" }, { key: "closingLiability", label: "Closing" }
-    ])}<h3>Journal</h3>${v191Table(journals.slice(0, 50), [
-      { key: "voucherNo", label: "Voucher" }, { key: "voucherDate", label: "Date" }, { key: "account", label: "Account" }, { key: "debit", label: "Debit" }, { key: "credit", label: "Credit" }, { key: "currency", label: "Currency" }
-    ])}<h3>Audit Trail</h3>${v191Table(audit.slice(0, 50), [
-      { key: "timestamp", label: "Timestamp" }, { key: "actor", label: "Actor" }, { key: "action", label: "Action" }, { key: "contractId", label: "Contract" }
-    ])}`;
-  }
 
   window.GK_TFRS16 = window.GK_TFRS16 || {};
   Object.assign(window.GK_TFRS16, {
@@ -22780,26 +16715,6 @@ ${renderAccountingCenterBulkPromo()}
     v191ClearLiabFilter
   });
 
-  async function legacyReportAuth_v191RenderFinancialReportingPrivate(date) {
-    const effectivePeriodStart = v191PeriodStartOverride ? parseDate(v191PeriodStartOverride) : new Date(date.getFullYear(), 0, 1);
-    const effectivePeriodEnd = v191PeriodEndOverride ? parseDate(v191PeriodEndOverride) : date;
-    const reportingHydration = await ensurePrivateReportingDateCache(contracts, effectivePeriodEnd);
-    if (reportingHydration.failed > 0) {
-      const error = new Error("Private reporting-date sonuçları eksik; finansal rapor üretilemedi");
-      error.code = "PRIVATE_REPORTING_DATE_NOT_READY";
-      throw error;
-    }
-    await v191LoadPrivatePortfolioTms21(effectivePeriodEnd);
-    const tms29 = await v191LoadPrivatePortfolioTms29(effectivePeriodStart, effectivePeriodEnd);
-    return v191RenderFinancialReporting(date, { tms29 });
-  }
-  function legacyReportAuth_v191OpenFinancialReporting() { v191OpenView = () => v191Show("Finansal Raporlama", "Existing V16.10 Financial Reporting Engine", v191RenderFinancialReportingPrivate); v191OpenView(); }
-  function legacyReportAuth_v191OpenRiskControls() { v191OpenView = () => v191Show("Risk & Kontroller", "Existing V16.8 Risk & Control Engine", v191RenderRiskControls); v191OpenView(); }
-  function legacyReportAuth_v191OpenMonthEndClose() { v191OpenView = () => v191Show("Ay Sonu Kapanış", "Existing V17 Month-End Close Engine", v191RenderClose); v191OpenView(); }
-  function legacyReportAuth_v191OpenCfoDashboard() { v191OpenView = () => v191Show("CFO Dashboard", "Existing V18 CFO Data Layer", v191RenderCfo); v191OpenView(); }
-  function legacyReportAuth_v191OpenIntegration() { v191OpenView = () => v191Show("Integration", "Existing V19 Integration Data Exchange Engine", v191RenderIntegration); v191OpenView(); }
-  function legacyReportAuth_v191OpenReconciliation() { v191OpenView = () => v191Show("Reconciliation", "Existing V19 Integration Reconciliation Engine", v191RenderReconciliation); v191OpenView(); }
-  function legacyReportAuth_v191OpenContractTools() { v191OpenView = () => v191Show("Contract Financial Tools", "Selected contract: Payment Schedule / Journal / Audit Trail", v191RenderContractTools); v191OpenView(); }
 
   function v191WireNavigation() {
     document.querySelectorAll(".nav-item").forEach(link => {
@@ -23615,17 +17530,8 @@ ${renderAccountingCenterBulkPromo()}
     return v20GetDatabaseModel().contracts;
   }
 
-  function legacyReportAuth_exportSchedulesForDatabase() {
-    return v20GetDatabaseModel().schedules;
-  }
 
-  function legacyReportAuth_exportModificationsForDatabase() {
-    return v20GetDatabaseModel().modifications;
-  }
 
-  function legacyReportAuth_exportReassessmentsForDatabase() {
-    return v20GetDatabaseModel().reassessments;
-  }
 
   function exportJournalsForDatabase() {
     return v20GetDatabaseModel().journals;
@@ -23639,38 +17545,6 @@ ${renderAccountingCenterBulkPromo()}
     return v20GetDatabaseModel().auditEvents;
   }
 
-  function legacyReportAuth_exportDatabaseReadyData(options = {}) {
-    const model = v20GetDatabaseModel();
-    const requested = Array.isArray(options.entities) && options.entities.length
-      ? options.entities
-      : V20_ENTITY_NAMES;
-
-    const result = { schemaVersion: DATA_SCHEMA_VERSION, generatedAt: model.generatedAt };
-
-    const entityMap = {
-      Company: model.companies,
-      Contract: model.contracts,
-      LeaseSchedule: model.schedules,
-      Modification: model.modifications,
-      Reassessment: model.reassessments,
-      Journal: model.journals,
-      JournalLine: model.journalLines,
-      AuditEvent: model.auditEvents,
-      Control: model.controls,
-      ClosePeriod: model.closePeriods,
-      Reconciliation: model.reconciliations,
-      ImportJob: model.importJobs,
-      ExportJob: model.exportJobs
-    };
-
-    requested.forEach(name => {
-      if (Object.prototype.hasOwnProperty.call(entityMap, name)) {
-        result[name] = v20Clone(entityMap[name]);
-      }
-    });
-
-    return result;
-  }
 
   function v20CreateSnapshot() {
     const keys = [];
@@ -23765,13 +17639,6 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function v20GetAllStoredAuditEvents() {
-    try {
-      return typeof loadAuditEvents === "function" ? v20SafeArray(loadAuditEvents()) : [];
-    } catch (error) {
-      return [];
-    }
-  }
 
   function getDataHealth() {
     const model = v20GetDatabaseModel();
@@ -24052,14 +17919,6 @@ ${renderAccountingCenterBulkPromo()}
     return { success: true, data, error: null, metadata };
   }
 
-  function v20ApiError(code, message, details = null, field = null, metadata = {}) {
-    return {
-      success: false,
-      data: null,
-      error: { code: String(code || "UNKNOWN_ERROR"), message: String(message || ""), details, field },
-      metadata
-    };
-  }
 
   function v20Paginate(rows, options = {}) {
     const list = v20SafeArray(rows);
@@ -25161,30 +19020,6 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function v22NormalizeCompany(company, fallbackIndex = 0) {
-    const source = v22SafeObject(company);
-    const normalized = typeof normalizeCompanyData === "function"
-      ? normalizeCompanyData(company, fallbackIndex)
-      : {
-          id: String(source.id || `COMP-${fallbackIndex + 1}`),
-          code: String(source.code || source.name || `COMP-${fallbackIndex + 1}`),
-          name: String(source.name || source.company || `Company ${fallbackIndex + 1}`),
-          country: source.country || "TR",
-          baseCurrency: v22Currency(source.baseCurrency, "TRY"),
-          status: source.status || "ACTIVE"
-        };
-    return {
-      ...normalized,
-      groupId: source.groupId || normalized.groupId || null,
-      id: String(normalized.id),
-      code: String(normalized.code || normalized.id),
-      name: String(normalized.name || normalized.code || normalized.id),
-      baseCurrency: v22Currency(normalized.baseCurrency, "TRY"),
-      status: String(normalized.status || "ACTIVE").toUpperCase(),
-      schemaVersion: V22_SCHEMA_VERSION,
-      entityType: "Company"
-    };
-  }
 
   function v22LoadGroups() {
     const adapter = V22StorageAdapters.groups();
@@ -25320,15 +19155,6 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(next);
   }
 
-  function v22AccessibleCompanyIds(user = v22CurrentUser()) {
-    const all = v22CompanyList().map(company => String(company.id));
-    if (!user) return [];
-    try {
-      if (v22HasPermission("company_access.manage", user)) return all;
-    } catch (error) {}
-    const allowed = new Set(v22SafeArray(user.companyIds).map(id => String(id)));
-    return all.filter(id => allowed.has(id));
-  }
 
   function v22CompanyNameToId(name) {
     const target = String(name || "").trim();
@@ -25477,16 +19303,6 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(v22Scope.filter(item => String(item.groupId) === String(groupId))) || [];
   }
 
-  function v22ScopeCompanies(groupId, reportingDate, user) {
-    const accessible = new Set(v22AccessibleCompanyIds(user));
-    const date = v22NormalizeDate(reportingDate);
-    return v22Scope.filter(scope => {
-      if (String(scope.groupId) !== String(groupId) || scope.included === false) return false;
-      if (!accessible.has(String(scope.companyId))) return false;
-      if (scope.effectiveDate && date && scope.effectiveDate > date) return false;
-      return true;
-    });
-  }
 
   function v22ContractsForCompany(companyId) {
     const rows = typeof v20GetContracts === "function" ? v20GetContracts() : v22SafeArray(typeof contracts !== "undefined" ? contracts : []);
@@ -25577,131 +19393,9 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function v22GetGroupEliminations(groupId, reportingDate) {
-    const date = v22NormalizeDate(reportingDate);
-    return v22Eliminations.filter(item => {
-      if (String(item.groupId) !== String(groupId)) return false;
-      if (item.reportingDate && date && item.reportingDate !== date) return false;
-      return item.status !== "REJECTED";
-    });
-  }
 
-  function v22AggregateEliminations(rows) {
-    return rows.reduce((acc, row) => {
-      const amount = v22Amount(row.amount);
-      acc.total += amount;
-      acc.byType[row.eliminationType] = (acc.byType[row.eliminationType] || 0) + amount;
-      return acc;
-    }, { total: 0, byType: {} });
-  }
 
-  function v22VisibleGroupCompanies(groupId, reportingDate, user) {
-    const companies = v22CompanyList();
-    const scopes = v22ScopeCompanies(groupId, reportingDate, user);
-    return scopes.map(scope => {
-      const company = companies.find(item => String(item.id) === String(scope.companyId));
-      return company ? { ...company, scope: v22Clone(scope) } : null;
-    }).filter(Boolean);
-  }
 
-  function legacyReportAuth_getConsolidatedData(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.view", { ...options, groupId, action: "CONSOLIDATION_VIEW" });
-    const group = v22Groups.find(item => String(item.id) === String(groupId));
-    if (!group) return { success: false, error: { code: "GROUP_NOT_FOUND", message: "Group not found." }, data: null, metadata: {} };
-    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
-    const user = options.user || v22CurrentUser();
-    const visibleCompanies = v22VisibleGroupCompanies(groupId, date, user);
-    const companyContributions = visibleCompanies.map(company => {
-      const contribution = v22AggregateCompany(company, date);
-      const method = company.scope?.consolidationMethod || "FULL";
-      const ownership = company.scope?.ownershipPercentage ?? 100;
-      const multiplier = method === "EQUITY" || method === "PROPORTIONAL" ? ownership / 100 : 1;
-      return {
-        ...contribution,
-        consolidationMethod: method,
-        ownershipPercentage: ownership,
-        appliedMultiplier: multiplier,
-        leaseLiability: contribution.leaseLiability * multiplier,
-        currentLiability: contribution.currentLiability * multiplier,
-        nonCurrentLiability: contribution.nonCurrentLiability * multiplier,
-        rou: contribution.rou * multiplier,
-        interest: contribution.interest * multiplier,
-        depreciation: contribution.depreciation * multiplier,
-        cashPayments: contribution.cashPayments * multiplier,
-        lineage: {
-          companyId: company.id,
-          contractIds: contribution.contracts.map(item => item.contractId)
-        }
-      };
-    });
-
-    const gross = companyContributions.reduce((acc, row) => {
-      ["leaseLiability", "currentLiability", "nonCurrentLiability", "rou", "interest", "depreciation", "cashPayments"].forEach(key => { acc[key] += v22Amount(row[key]); });
-      acc.contracts += row.contractCount;
-      acc.activeContracts += row.activeContracts;
-      return acc;
-    }, { leaseLiability: 0, currentLiability: 0, nonCurrentLiability: 0, rou: 0, interest: 0, depreciation: 0, cashPayments: 0, contracts: 0, activeContracts: 0 });
-
-    const eliminations = v22GetGroupEliminations(groupId, date);
-    const eliminationTotal = v22AggregateEliminations(eliminations).total;
-    const adjustments = v22Adjustments.filter(item => String(item.groupId) === String(groupId) && item.reportingDate === date && item.status !== "REJECTED");
-    const adjustmentTotal = adjustments.reduce((sum, item) => sum + v22Amount(item.amount), 0);
-
-    const consolidated = {
-      leaseLiability: Math.max(0, gross.leaseLiability - eliminationTotal + adjustmentTotal),
-      currentLiability: gross.currentLiability,
-      nonCurrentLiability: Math.max(0, gross.nonCurrentLiability - Math.max(0, eliminationTotal - gross.currentLiability)),
-      rou: Math.max(0, gross.rou),
-      interest: gross.interest,
-      depreciation: gross.depreciation,
-      cashPayments: gross.cashPayments,
-      contracts: gross.contracts,
-      activeContracts: gross.activeContracts
-    };
-
-    const missingScopeCompanies = v22CompanyList().filter(company => {
-      const scope = v22Scope.find(item => String(item.groupId) === String(groupId) && String(item.companyId) === String(company.id));
-      return scope?.included === true && !visibleCompanies.some(item => String(item.id) === String(company.id));
-    }).map(company => company.id);
-
-    const status = missingScopeCompanies.length ? "YELLOW" : "GREEN";
-    const result = {
-      success: true,
-      data: {
-        group: v22Clone(group),
-        reportingDate: date,
-        groupCurrency: group.groupCurrency,
-        companies: companyContributions,
-        gross,
-        eliminations: {
-          total: eliminationTotal,
-          count: eliminations.length,
-          rows: v22Clone(eliminations)
-        },
-        adjustments: {
-          total: adjustmentTotal,
-          count: adjustments.length,
-          rows: v22Clone(adjustments)
-        },
-        consolidated,
-        status,
-        lineage: {
-          leaseLiability: companyContributions.map(row => ({ companyId: row.companyId, amount: row.leaseLiability })),
-          rou: companyContributions.map(row => ({ companyId: row.companyId, amount: row.rou })),
-          eliminations: eliminations.map(row => ({ id: row.id, fromCompanyId: row.fromCompanyId, toCompanyId: row.toCompanyId, amount: row.amount }))
-        },
-        sourceMetadata: {
-          calculation: "V21_EXISTING_CFO_DATA_LAYER",
-          currencyConversion: "NOT_PERFORMED",
-          consolidationVersion: V22_SCHEMA_VERSION
-        },
-        dataQuality: { missingCompanies: missingScopeCompanies }
-      },
-      error: null,
-      metadata: { schemaVersion: V22_SCHEMA_VERSION, companyCount: companyContributions.length }
-    };
-    return result;
-  }
 
   function createElimination(input = {}, options = {}) {
     v22Require("eliminations.manage", { ...options, groupId: input.groupId, action: "ELIMINATION_CREATE" });
@@ -25752,10 +19446,6 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(existing);
   }
 
-  function legacyReportAuth_getEliminations(groupId = null, options = {}) {
-    v22Require("eliminations.view", { ...options, groupId });
-    return v22Clone(groupId ? v22Eliminations.filter(item => String(item.groupId) === String(groupId)) : v22Eliminations) || [];
-  }
 
   function createConsolidationAdjustment(input = {}, options = {}) {
     v22Require("consolidation.execute", { ...options, groupId: input.groupId, action: "CONSOLIDATION_ADJUSTMENT_CREATE" });
@@ -25780,184 +19470,14 @@ ${renderAccountingCenterBulkPromo()}
     return v22Clone(row);
   }
 
-  function legacyReportAuth_v22RunIntercompanyReconciliation(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.view", { ...options, groupId, action: "INTERCOMPANY_RECONCILIATION" });
-    const rows = v22GetGroupEliminations(groupId, reportingDate);
-    const map = new Map();
-    rows.forEach(row => {
-      const key = `${row.fromCompanyId}|${row.toCompanyId}|${row.currency}`;
-      if (!map.has(key)) map.set(key, { fromCompanyId: row.fromCompanyId, toCompanyId: row.toCompanyId, currency: row.currency, receivable: 0, payable: 0, revenue: 0, expense: 0, lease: 0 });
-      const target = map.get(key);
-      const amount = v22Amount(row.amount);
-      if (row.eliminationType === "INTERCOMPANY_RECEIVABLE") target.receivable += amount;
-      if (row.eliminationType === "INTERCOMPANY_PAYABLE") target.payable += amount;
-      if (row.eliminationType === "INTERCOMPANY_REVENUE") target.revenue += amount;
-      if (row.eliminationType === "INTERCOMPANY_EXPENSE") target.expense += amount;
-      if (row.eliminationType === "INTERCOMPANY_LEASE") target.lease += amount;
-    });
-    return Array.from(map.values()).map(row => {
-      const variance = row.receivable - row.payable;
-      return { ...row, reportingDate: v22NormalizeDate(reportingDate), variance, status: Math.abs(variance) < 0.01 ? "MATCHED" : Math.abs(variance) < 1000 ? "WARNING" : "EXCEPTION" };
-    });
-  }
 
-  function legacyReportAuth_getGroupControlStatus(groupId, reportingDate, options = {}) {
-    v22Require("group.view", { ...options, groupId, action: "GROUP_CONTROL_VIEW" });
-    const group = v22Groups.find(item => String(item.id) === String(groupId));
-    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
-    const companies = v22CompanyList();
-    const scopes = v22Scope.filter(item => String(item.groupId) === String(groupId) && item.included !== false);
-    const visibleIds = new Set(v22AccessibleCompanyIds(options.user || v22CurrentUser()));
-    const checks = [];
-    const missingCompany = scopes.filter(scope => !companies.some(company => String(company.id) === String(scope.companyId)));
-    checks.push({ id: "MISSING_COMPANY", status: missingCompany.length ? "FAIL" : "PASS", count: missingCompany.length });
-    const duplicateCompanyIds = scopes.map(scope => String(scope.companyId)).filter((id, index, arr) => arr.indexOf(id) !== index);
-    checks.push({ id: "DUPLICATE_COMPANY", status: duplicateCompanyIds.length ? "FAIL" : "PASS", count: duplicateCompanyIds.length });
-    const invalidOwnership = scopes.filter(scope => v22Amount(scope.ownershipPercentage) < 0 || v22Amount(scope.ownershipPercentage) > 100);
-    checks.push({ id: "INVALID_OWNERSHIP", status: invalidOwnership.length ? "FAIL" : "PASS", count: invalidOwnership.length });
-    const inaccessible = scopes.filter(scope => !visibleIds.has(String(scope.companyId)));
-    checks.push({ id: "UNAUTHORIZED_COMPANY", status: inaccessible.length ? "WARNING" : "PASS", count: inaccessible.length });
-    const missingCurrency = scopes.filter(scope => !companies.find(company => String(company.id) === String(scope.companyId))?.baseCurrency);
-    checks.push({ id: "MISSING_CURRENCY", status: missingCurrency.length ? "FAIL" : "PASS", count: missingCurrency.length });
-    const reconciliation = v22RunIntercompanyReconciliation(groupId, date, options);
-    const exceptions = reconciliation.filter(row => row.status === "EXCEPTION");
-    checks.push({ id: "INTERCOMPANY_EXCEPTION", status: exceptions.length ? "FAIL" : "PASS", count: exceptions.length });
-    const duplicateEliminations = v22GetGroupEliminations(groupId, date).filter((row, index, arr) => arr.findIndex(item => item.fromCompanyId === row.fromCompanyId && item.toCompanyId === row.toCompanyId && item.account === row.account && item.amount === row.amount && item.reportingDate === row.reportingDate) !== index);
-    checks.push({ id: "DUPLICATE_ELIMINATION", status: duplicateEliminations.length ? "FAIL" : "PASS", count: duplicateEliminations.length });
-    const consolidated = getConsolidatedData(groupId, date, options);
-    const missingData = consolidated.data?.dataQuality?.missingCompanies || [];
-    checks.push({ id: "MISSING_DATA", status: missingData.length ? "WARNING" : "PASS", count: missingData.length });
-    const status = checks.some(check => check.status === "FAIL") ? "RED" : checks.some(check => check.status === "WARNING") ? "YELLOW" : "GREEN";
-    return { version: V22_SCHEMA_VERSION, groupId, reportingDate: date, status, companiesInScope: scopes.length, companiesVisible: visibleIds.size, checks, consolidationExceptions: exceptions, intercompanyExceptions: exceptions, missingData, group: group ? v22Clone(group) : null };
-  }
 
-  function v22CompanyCloseStatus(company, reportingDate) {
-    try {
-      if (typeof getCompanyMonthEndCloseStatus === "function") {
-        return getCompanyMonthEndCloseStatus(company.name || company.id, reportingDate);
-      }
-    } catch (error) {}
-    try {
-      if (typeof getMonthEndCloseStatus === "function") {
-        const result = getMonthEndCloseStatus(reportingDate);
-        return { status: result?.status || "OPEN" };
-      }
-    } catch (error) {}
-    return { status: "UNKNOWN" };
-  }
 
-  function legacyReportAuth_getGroupCloseStatus(groupId, reportingDate, options = {}) {
-    v22Require("group.view", { ...options, groupId, action: "GROUP_CLOSE_VIEW" });
-    const date = v22NormalizeDate(reportingDate) || v22Now().slice(0, 10);
-    const companies = v22VisibleGroupCompanies(groupId, date, options.user || v22CurrentUser());
-    const rows = companies.map(company => ({ companyId: company.id, company: company.name, status: v22CompanyCloseStatus(company, date)?.status || "UNKNOWN" }));
-    const open = rows.filter(row => !["CLOSED", "CERTIFIED", "GREEN"].includes(String(row.status).toUpperCase()));
-    const status = open.length === 0 ? "CLOSED" : open.some(row => row.status === "UNKNOWN") ? "OPEN" : "BLOCKED";
-    return { groupId, reportingDate: date, status, companies: rows, openCompanies: open.map(row => row.companyId) };
-  }
 
-  function legacyReportAuth_getGroupCfoDashboardData(groupId, reportingDate, options = {}) {
-    v22Require("group.view", { ...options, groupId, action: "GROUP_CFO_VIEW" });
-    const consolidated = getConsolidatedData(groupId, reportingDate, options);
-    const control = getGroupControlStatus(groupId, reportingDate, options);
-    const close = getGroupCloseStatus(groupId, reportingDate, options);
-    const rows = consolidated.data?.companies || [];
-    const expiring = rows.reduce((sum, row) => sum + row.contracts.filter(item => {
-      try {
-        const contract = v22ContractsForCompany(row.companyId).find(c => String(c.id) === String(item.contractId));
-        if (!contract?.renewalDate) return false;
-        const diff = (new Date(contract.renewalDate) - new Date(reportingDate)) / 86400000;
-        return diff >= 0 && diff <= 90;
-      } catch (error) { return false; }
-    }).length, 0);
-    return {
-      groupId,
-      reportingDate: consolidated.data?.reportingDate,
-      groupCurrency: consolidated.data?.groupCurrency,
-      liabilities: {
-        total: consolidated.data?.consolidated?.leaseLiability || 0,
-        current: consolidated.data?.consolidated?.currentLiability || 0,
-        nonCurrent: consolidated.data?.consolidated?.nonCurrentLiability || 0
-      },
-      rouAssets: { total: consolidated.data?.consolidated?.rou || 0 },
-      pnl: { interest: consolidated.data?.consolidated?.interest || 0, depreciation: consolidated.data?.consolidated?.depreciation || 0 },
-      cashFlow: { cashPayments: consolidated.data?.consolidated?.cashPayments || 0 },
-      contracts: { total: consolidated.data?.consolidated?.contracts || 0, active: consolidated.data?.consolidated?.activeContracts || 0, renewalUnder90Days: expiring },
-      controls: control,
-      close,
-      status: consolidated.data?.status || "YELLOW",
-      companyContribution: rows,
-      source: "V22_CONSOLIDATION_ENGINE"
-    };
-  }
 
-  function legacyReportAuth_exportGroupReport(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.export", { ...options, groupId, action: "CONSOLIDATION_EXPORT" });
-    const report = getGroupCfoDashboardData(groupId, reportingDate, options);
-    const rows = (report.companyContribution || []).map(row => ({
-      Company: row.company,
-      CompanyID: row.companyId,
-      Currency: row.baseCurrency,
-      Contracts: row.contractCount,
-      "Lease Liability": row.leaseLiability,
-      "Current Liability": row.currentLiability,
-      "Non-current Liability": row.nonCurrentLiability,
-      ROU: row.rou,
-      Interest: row.interest,
-      Depreciation: row.depreciation,
-      "Cash Payments": row.cashPayments,
-      Method: row.consolidationMethod,
-      Ownership: row.ownershipPercentage
-    }));
-    if (typeof XLSX !== "undefined") {
-      try {
-        const sheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, sheet, "Group Report");
-        XLSX.writeFile(workbook, `GK_Group_Report_${groupId}_${reportingDate || "DATE"}.xlsx`);
-        v22RecordAudit("CONSOLIDATION_EXPORTED", "GROUP", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
-        return true;
-      } catch (error) {}
-    }
-    v22RecordAudit("CONSOLIDATION_EXPORTED", "GROUP", groupId, { reportingDate, recordCount: rows.length, format: "json" });
-    return v22Clone(report);
-  }
 
-  function legacyReportAuth_exportConsolidation(groupId, reportingDate, options = {}) {
-    return exportGroupReport(groupId, reportingDate, options);
-  }
 
-  function legacyReportAuth_exportEliminations(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.export", { ...options, groupId, action: "ELIMINATION_EXPORT" });
-    const rows = v22GetGroupEliminations(groupId, reportingDate);
-    if (typeof XLSX !== "undefined") {
-      try {
-        const sheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, sheet, "Eliminations");
-        XLSX.writeFile(workbook, `GK_Eliminations_${groupId}_${reportingDate || "DATE"}.xlsx`);
-        v22RecordAudit("CONSOLIDATION_EXPORTED", "ELIMINATION", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
-        return true;
-      } catch (error) {}
-    }
-    return v22Clone(rows);
-  }
 
-  function legacyReportAuth_exportIntercompanyReconciliation(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.export", { ...options, groupId, action: "INTERCOMPANY_EXPORT" });
-    const rows = v22RunIntercompanyReconciliation(groupId, reportingDate, options);
-    if (typeof XLSX !== "undefined") {
-      try {
-        const sheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, sheet, "Intercompany");
-        XLSX.writeFile(workbook, `GK_Intercompany_${groupId}_${reportingDate || "DATE"}.xlsx`);
-        v22RecordAudit("CONSOLIDATION_EXPORTED", "INTERCOMPANY_RECONCILIATION", groupId, { reportingDate, recordCount: rows.length, format: "xlsx" });
-        return true;
-      } catch (error) {}
-    }
-    return v22Clone(rows);
-  }
 
   function v22GetDatabaseModel() {
     const groups = v22Groups.map(v22Clone);
@@ -25974,19 +19494,6 @@ ${renderAccountingCenterBulkPromo()}
     };
   }
 
-  function legacyReportAuth_exportGroupDatabaseReady(groupId = null, options = {}) {
-    v22Require("consolidation.export", { ...options, groupId, action: "DATABASE_READY_EXPORT" });
-    const model = v22GetDatabaseModel();
-    if (groupId) {
-      model.Group = model.Group.filter(item => String(item.id) === String(groupId));
-      model.Company = model.Company.filter(item => String(item.groupId) === String(groupId));
-      model.Ownership = model.Ownership.filter(item => model.Company.some(company => String(company.id) === String(item.parentCompanyId) || String(company.id) === String(item.subsidiaryCompanyId)));
-      model.ConsolidationScope = model.ConsolidationScope.filter(item => String(item.groupId) === String(groupId));
-      model.Elimination = model.Elimination.filter(item => String(item.groupId) === String(groupId));
-      model.ConsolidationAdjustment = model.ConsolidationAdjustment.filter(item => String(item.groupId) === String(groupId));
-    }
-    return model;
-  }
 
   function v22CreateDataSnapshot() {
     const base = typeof createDataSnapshot === "function" ? createDataSnapshot() : { storage: {} };
@@ -26041,71 +19548,8 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  function legacyReportAuth_getV22DataHealth(options = {}) {
-    const groups = v22Groups;
-    const companies = v22CompanyList();
-    const companyIds = new Set(companies.map(item => String(item.id)));
-    const groupIds = new Set(groups.map(item => String(item.id)));
-    const errors = [];
-    const warnings = [];
-    const duplicates = {};
-    const duplicateCheck = (name, rows) => {
-      const seen = new Set(); const dup = [];
-      rows.forEach(row => { const id = String(row?.id || ""); if (!id) return; if (seen.has(id)) dup.push(id); seen.add(id); });
-      if (dup.length) duplicates[name] = Array.from(new Set(dup));
-    };
-    duplicateCheck("Group", groups);
-    duplicateCheck("Company", companies);
-    duplicateCheck("Ownership", v22Ownership);
-    duplicateCheck("ConsolidationScope", v22Scope);
-    duplicateCheck("Elimination", v22Eliminations);
-    duplicateCheck("ConsolidationAdjustment", v22Adjustments);
-    const orphans = [];
-    v22Scope.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "ConsolidationScope", entityId: row.id, relation: "groupId" }); if (!companyIds.has(String(row.companyId))) orphans.push({ entityType: "ConsolidationScope", entityId: row.id, relation: "companyId" }); });
-    v22Ownership.forEach(row => { if (!companyIds.has(String(row.parentCompanyId))) orphans.push({ entityType: "Ownership", entityId: row.id, relation: "parentCompanyId" }); if (!companyIds.has(String(row.subsidiaryCompanyId))) orphans.push({ entityType: "Ownership", entityId: row.id, relation: "subsidiaryCompanyId" }); });
-    v22Eliminations.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "groupId" }); if (!companyIds.has(String(row.fromCompanyId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "fromCompanyId" }); if (!companyIds.has(String(row.toCompanyId))) orphans.push({ entityType: "Elimination", entityId: row.id, relation: "toCompanyId" }); });
-    v22Adjustments.forEach(row => { if (!groupIds.has(String(row.groupId))) orphans.push({ entityType: "ConsolidationAdjustment", entityId: row.id, relation: "groupId" }); });
-    const invalidOwnership = v22Ownership.filter(row => row.ownershipPercentage < 0 || row.ownershipPercentage > 100);
-    const invalidDates = [...v22Scope, ...v22Ownership, ...v22Eliminations, ...v22Adjustments].filter(row => row.effectiveDate !== undefined && row.effectiveDate !== null && !v22NormalizeDate(row.effectiveDate));
-    const invalidCurrency = [...v22Groups, ...companies, ...v22Eliminations, ...v22Adjustments].filter(row => row.groupCurrency !== undefined ? !/^[A-Z]{3}$/.test(String(row.groupCurrency)) : row.baseCurrency !== undefined && !/^[A-Z]{3}$/.test(String(row.baseCurrency)));
-    return {
-      schemaVersion: V22_SCHEMA_VERSION,
-      healthy: Object.keys(duplicates).length === 0 && orphans.length === 0 && invalidOwnership.length === 0 && invalidDates.length === 0 && invalidCurrency.length === 0,
-      checkedAt: v22Now(),
-      counts: { groups: groups.length, companies: companies.length, ownership: v22Ownership.length, scopes: v22Scope.length, eliminations: v22Eliminations.length, adjustments: v22Adjustments.length },
-      duplicateIds: duplicates,
-      orphanRecords: orphans,
-      brokenReferences: orphans,
-      invalidOwnership,
-      invalidDates,
-      invalidCurrencies: invalidCurrency,
-      errors,
-      warnings
-    };
-  }
 
-  function legacyReportAuth_getConsolidationReports(groupId, reportingDate, options = {}) {
-    const consolidated = getConsolidatedData(groupId, reportingDate, options);
-    return {
-      groupLeaseLiability: consolidated.data.consolidated.leaseLiability,
-      groupRuo: consolidated.data.consolidated.rou,
-      groupInterest: consolidated.data.consolidated.interest,
-      groupDepreciation: consolidated.data.consolidated.depreciation,
-      groupCashPayments: consolidated.data.consolidated.cashPayments,
-      companyContribution: consolidated.data.companies,
-      eliminationReport: consolidated.data.eliminations.rows,
-      intercompanyReconciliation: v22RunIntercompanyReconciliation(groupId, reportingDate, options),
-      consolidationExceptions: getGroupControlStatus(groupId, reportingDate, options),
-      groupCloseStatus: getGroupCloseStatus(groupId, reportingDate, options)
-    };
-  }
 
-  function legacyReportAuth_v22RunConsolidation(groupId, reportingDate, options = {}) {
-    v22Require("consolidation.execute", { ...options, groupId, action: "CONSOLIDATION_RUN" });
-    const result = getConsolidatedData(groupId, reportingDate, options);
-    v22RecordAudit("CONSOLIDATION_RUN", "GROUP", groupId, { reportingDate, status: result.data?.status, companyCount: result.data?.companies?.length || 0 });
-    return result;
-  }
 
   function v22GetApiAuthorizationContract() {
     return [
@@ -26448,35 +19892,6 @@ ${renderAccountingCenterBulkPromo()}
     return val;
   }
 
-  /**
-   * Bir tutarı aktif (veya belirtilen) raporlama para birimine çevirir.
-   * Kaynak ve hedef para birimi aynıysa hiçbir şey değişmeden döner
-   * (applied:false) — mevcut tek para birimli davranış korunur.
-   * Kur bulunamazsa applied:false + error döner; finansal ekranlar ham
-   * tutarı kur yokmuş gibi göstermez.
-   * @param {number} amount
-   * @param {string} fromCurrency - tutarın hâlihazırdaki para birimi
-   * @param {string|Date} [date] - kur tarihi (varsayılan bugün)
-   * @param {string} [toCurrency] - hedef PB (varsayılan getReportingCurrency())
-   * @returns {{value:number, currency:string, applied:boolean, rate:number|null, error:string|null}}
-   */
-  function legacyReportAuth_convertAmountToReportingCurrency(amount, fromCurrency, date, toCurrency) {
-    const from = String(fromCurrency || "TRY").toUpperCase();
-    const to = String(toCurrency || getReportingCurrency() || "TRY").toUpperCase();
-    const num = Number(amount) || 0;
-    if (!from || from === to) {
-      return { value: num, currency: from, applied: false, rate: 1, error: null };
-    }
-    try {
-      const result = convertCurrencyOnDate(num, from, to, date || new Date(), FX_CONFIG.defaultRateType, { audit: false });
-      if (result?.error) {
-        return { value: num, currency: from, applied: false, rate: null, error: result.error };
-      }
-      return { value: result.convertedAmount, currency: to, applied: true, rate: result.fxRate, error: null };
-    } catch (error) {
-      return { value: num, currency: from, applied: false, rate: null, error: error?.code || error?.message || String(error) };
-    }
-  }
 
   /* ============================================================
      TCMB (T.C. Merkez Bankası) DÖVİZ KURU ENTEGRASYONU
@@ -26949,7 +20364,6 @@ ${renderAccountingCenterBulkPromo()}
   function v23GroupCurrency(groupId) {
     try { return v23CurrencyCode(typeof getGroup === "function" ? getGroup(groupId)?.groupCurrency || getGroup(groupId)?.baseCurrency : ""); } catch(e) { return ""; }
   }
-  function getFxConfig() { return v23Clone(FX_CONFIG); }
   function getTranslationRateType(item={}) {
     const type=String(item.statementType || item.reportType || item.rateClass || "").toUpperCase();
     if(type.includes("EQUITY") || type.includes("HISTORICAL")) return FX_CONFIG.equityRateType;
@@ -26988,55 +20402,9 @@ ${renderAccountingCenterBulkPromo()}
     if(!row.reportingDate || !row.currency) throw new Error("CTA reportingDate and currency are required.");
     const rows=getCtaRecords(), idx=rows.findIndex(x=>x.id===row.id); if(idx>=0) rows[idx]=row; else rows.push(row); v23StorageSet(V23_CTA_STORAGE_KEY,rows); v23Audit("FX_ADJUSTMENT","CTA",row.id,{row}); return v23Clone(row);
   }
-  function legacyReportAuth_calculateFxGainLoss(openingAmount,closingAmount,transactionAmount,options={}) {
-    const difference=v23Num(closingAmount)-v23Num(openingAmount); const realized=options.realized===true;
-    return {type: realized ? (difference>=0?"REALIZED_FX_GAIN":"REALIZED_FX_LOSS") : (difference>=0?"UNREALIZED_FX_GAIN":"UNREALIZED_FX_LOSS"),amount:Math.abs(difference),signedAmount:difference,currency:v23CurrencyCode(options.currency),sourceAmount:v23Num(transactionAmount),reportingDate:v23DateKey(options.reportingDate)};
-  }
 
   function getV23Contracts() { try { return typeof v20GetContracts === "function" ? v20GetContracts() : v23Array(contracts); } catch(e) { return v23Array(contracts); } }
   function v23CompanyIdOf(row) { return String(row?.companyId || row?.companyIdValue || row?.company || row?.legalEntityId || "").trim(); }
-  function legacyReportAuth_getFxExposure(options={}) {
-    v23Authorize("fx.view",{...options,action:"FX_EXPOSURE"});
-    const rows=getV23Contracts(), out=[];
-    rows.forEach(contract=>{
-      const companyId=v23CompanyIdOf(contract); if(options.companyId && companyId!==String(options.companyId)) return;
-      const currency=v23CurrencyCode(contract.transactionCurrency || contract.currency || v23CompanyCurrency(companyId)); if(!currency) return;
-      const amount=v23Num(contract.foreignCurrencyAmount ?? contract.monthlyPayment ?? contract.paymentAmount ?? contract.amount);
-      if(!amount) return;
-      const functional=v23CurrencyCode(contract.functionalCurrency || v23CompanyCurrency(companyId));
-      out.push({companyId,currency,amount,functionalCurrency:functional,functionalAmount:contract.functionalAmount ?? null,groupCurrency:options.groupCurrency || null,groupAmount:null,contractId:contract.id || null});
-    });
-    return out;
-  }
-  function legacyReportAuth_getFxCfoDashboardData(groupId,reportingDate,options={}) {
-    v23Authorize("fx.view",{...options,action:"FX_CFO_VIEW",entityId:groupId});
-    const exposure=getFxExposure(options), byCurrency={}; exposure.forEach(x=>{ byCurrency[x.currency]=(byCurrency[x.currency]||0)+x.amount; });
-    const rates=getFxRates({}), date=v23DateKey(reportingDate), missing=[];
-    const groupCurrency=v23GroupCurrency(groupId);
-    Object.keys(byCurrency).forEach(currency=>{ if(currency!==groupCurrency){ try { getFxRate(currency,groupCurrency,date,V23_RATE_TYPES.CLOSING); } catch(e) { missing.push({fromCurrency:currency,toCurrency:groupCurrency,reportingDate:date,code:e.code||"FX_RATE_NOT_FOUND"}); } } });
-    return {groupId,reportingDate:date,groupCurrency,foreignCurrencyExposure:byCurrency,totalFxExposure:Object.values(byCurrency).reduce((a,b)=>a+b,0),fxRateCount:rates.length,missingFxRates:missing,companiesWithFxExposure:Array.from(new Set(exposure.map(x=>x.companyId).filter(Boolean))),translationDifference:0,fxGainLoss:0};
-  }
-  function legacyReportAuth_getFxDataQualityStatus(options={}) {
-    v23Authorize("fx.view",{...options,action:"FX_DATA_QUALITY"});
-    const rates=loadV23Rates(), currencies=loadV23Currencies(), checks=[];
-    checks.push({id:"CURRENCY_MASTER",status:currencies.length?"GREEN":"RED",message:currencies.length?"Currency master available":"Currency master missing"});
-    checks.push({id:"INVALID_RATES",status:rates.some(x=>!(v23Num(x.rate)>0))?"RED":"GREEN",message:"FX rate validity"});
-    const duplicateKeys=new Set(), duplicates=[]; rates.forEach(x=>{const k=[x.fromCurrency,x.toCurrency,x.rateDate,x.rateType].join("|"); if(duplicateKeys.has(k)) duplicates.push(k); duplicateKeys.add(k);});
-    checks.push({id:"DUPLICATE_RATES",status:duplicates.length?"RED":"GREEN",message:duplicates.length?"Duplicate rates found":"No duplicate rates"});
-    checks.push({id:"MISSING_RATE_SOURCE",status:rates.some(x=>!x.source)?"RED":"GREEN",message:"Rate source completeness"});
-    checks.push({id:"MISSING_RATE_DATE",status:rates.some(x=>!x.rateDate)?"RED":"GREEN",message:"Rate date completeness"});
-    const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
-    return {version:V23_SCHEMA_VERSION,status,checks,currencyCount:currencies.length,rateCount:rates.length,duplicateRates:duplicates};
-  }
-  function legacyReportAuth_getFxControlStatus(options={}) {
-    const quality=getFxDataQualityStatus(options), exposure=getFxExposure(options), manual=loadV23Rates().filter(x=>x.source==="MANUAL").length;
-    const checks=[...quality.checks,{id:"MANUAL_RATES",status:manual?"YELLOW":"GREEN",message:manual?`${manual} manual FX rate(s) in use`:"No manual FX rates"},{id:"FX_EXPOSURE",status:exposure.length?"GREEN":"GREEN",message:"FX exposure calculated"}];
-    const status=checks.some(x=>x.status==="RED")?"RED":checks.some(x=>x.status==="YELLOW")?"YELLOW":"GREEN";
-    return {version:V23_SCHEMA_VERSION,status,checks,missingRates:[],manualRates:manual};
-  }
-  function v23IntercompanyRows(groupId,reportingDate) {
-    try { const result=typeof v22RunIntercompanyReconciliation === "function" ? v22RunIntercompanyReconciliation(groupId,reportingDate,{user:v23CurrentUser()}) : null; return v23Array(result?.data?.rows || result?.rows || result); } catch(e) { return []; }
-  }
   function reconcileIntercompanyFx(input={},options={}) {
     v23Authorize("fx.execute",{...options,action:"FX_RECONCILIATION",entityId:input.groupId});
     const date=v23DateKey(input.reportingDate), sourceAmount=v23Num(input.sourceAmount), counterAmount=v23Num(input.counterpartyAmount), sourceCurrency=v23CurrencyCode(input.sourceCurrency), counterCurrency=v23CurrencyCode(input.counterpartyCurrency), groupCurrency=v23CurrencyCode(input.groupCurrency || v23GroupCurrency(input.groupId));
@@ -27066,54 +20434,7 @@ ${renderAccountingCenterBulkPromo()}
     const functionalCurrency=v23CurrencyCode(row.functionalCurrency || options.functionalCurrency || transactionCurrency);
     return { ...v23Clone(row), paymentAmount:v23Num(row.paymentAmount ?? row.amount), paymentCurrency:transactionCurrency, functionalCurrency, functionalAmount:row.functionalAmount ?? null, fxRate:row.fxRate ?? null, schemaVersion:V23_SCHEMA_VERSION };
   }
-  function legacyReportAuth_getFxConsolidatedData(groupId,reportingDate,options={}) {
-    v23Authorize("fx.execute",{...options,action:"FX_TRANSLATION",entityId:groupId});
-    if(typeof getConsolidatedData!=="function") return {success:false,error:"V22_CONSOLIDATION_UNAVAILABLE"};
-    const base=getConsolidatedData(groupId,reportingDate,{...options,user:options.user || v23CurrentUser()});
-    if(!base?.success) return base;
-    const groupCurrency=v23CurrencyCode(base.data?.groupCurrency || v23GroupCurrency(groupId));
-    const translatedCompanies=[];
-    const errors=[];
-    v23Array(base.data?.companies).forEach(company=>{
-      const companyId=String(company.companyId || company.id || "");
-      const functionalCurrency=v23CompanyCurrency(companyId) || groupCurrency;
-      const translated={};
-      ["leaseLiability","currentLiability","nonCurrentLiability","rou","interest","depreciation","cashPayments"].forEach(key=>{
-        const amount=v23Num(company[key]);
-        if(functionalCurrency===groupCurrency) translated[key]=amount;
-        else {
-          try { const r=translateAmount(amount,functionalCurrency,groupCurrency,reportingDate,FX_CONFIG.balanceSheetRateType,{allowMissing:false}); translated[key]=r.convertedAmount; } catch(e) { translated[key]={status:"ERROR",code:e.code || "FX_RATE_NOT_FOUND"}; errors.push({companyId,key,code:e.code || "FX_RATE_NOT_FOUND"}); }
-        }
-      });
-      translatedCompanies.push({companyId,functionalCurrency,groupCurrency,source:company,translated});
-    });
-    const consolidated=translatedCompanies.reduce((acc,row)=>{ Object.keys(row.translated).forEach(k=>{ if(typeof row.translated[k]==="number") acc[k]+=row.translated[k]; }); return acc; },{leaseLiability:0,currentLiability:0,nonCurrentLiability:0,rou:0,interest:0,depreciation:0,cashPayments:0});
-    const result={success:true,version:V23_SCHEMA_VERSION,groupId,reportingDate:v23DateKey(reportingDate),groupCurrency,companies:translatedCompanies,consolidated,errors,sourceMetadata:{v22Schema:V22_SCHEMA_VERSION,fxSchema:V23_SCHEMA_VERSION,translation:true}};
-    v23Audit("FX_TRANSLATION","GROUP",groupId,{reportingDate:v23DateKey(reportingDate),groupCurrency,companyCount:translatedCompanies.length,errorCount:errors.length});
-    return result;
-  }
-  function legacyReportAuth_getFxConsolidationReports(groupId,reportingDate,options={}) {
-    const data=getFxConsolidatedData(groupId,reportingDate,options);
-    return { groupTranslation:data, fxRates:getFxRates(), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options), cta:getCtaRecords({groupId}) };
-  }
-  function legacyReportAuth_getFxReports(options={}) {
-    return { fxRates:getFxRates(options), fxExposure:getFxExposure(options), fxDataQuality:getFxDataQualityStatus(options), fxControlStatus:getFxControlStatus(options) };
-  }
-  function legacyReportAuth_v23ExportRows(name,rows,options={}) {
-    v23Authorize("fx.export",{...options,action:"FX_EXPORT",entityId:name});
-    const data=v23Array(rows); if(!data.length) return false;
-    if(typeof XLSX!=="undefined") { try { const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31)); XLSX.writeFile(wb,`GK_FX_${name}_${Date.now()}.xlsx`); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"xlsx"}); return true; } catch(e) {} }
-    const headers=Object.keys(data[0]||{}), csv=[headers.join(";"),...data.map(r=>headers.map(h=>String(r[h] ?? "").replace(/;/g,",")).join(";"))].join("\n"); const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),link=document.createElement("a"); link.href=url; link.download=`GK_FX_${name}_${Date.now()}.csv`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url); v23Audit("FX_EXPORT","FX_REPORT",name,{recordCount:data.length,format:"csv"}); return true;
-  }
-  function legacyReportAuth_exportFxRates(options={}) { return v23ExportRows("Rates",getFxRates(options),options); }
-  function legacyReportAuth_exportFxExposure(options={}) { return v23ExportRows("Exposure",getFxExposure(options),options); }
-  function legacyReportAuth_exportFxGainLoss(rows=[],options={}) { return v23ExportRows("GainLoss",rows,options); }
-  function legacyReportAuth_exportFxTranslation(rows=[],options={}) { return v23ExportRows("Translation",rows,options); }
-  function legacyReportAuth_exportFxReconciliation(rows=[],options={}) { return v23ExportRows("Reconciliation",rows,options); }
 
-  function legacyReportAuth_getV23DatabaseModel() {
-    return { schemaVersion:V23_SCHEMA_VERSION, currencies:getCurrencies(), fxRates:getFxRates(), cta:getCtaRecords(), config:getFxConfig(), securityPermissions:V23_SECURITY_PERMISSIONS.slice() };
-  }
   function v23MigrationReport() {
     const currencies=getCurrencies(), contracts=getV23Contracts(), enriched=contracts.filter(x=>x.transactionCurrency || x.functionalCurrency || x.currency).length;
     return {from:"22.0",to:V23_SCHEMA_VERSION,companyIdsPreserved:true,currencyMasterReady:currencies.length>=5,contractsReviewed:contracts.length,currencyEnrichedRecords:enriched,defaultCurrencyPolicy:"company.baseCurrency",status:"READY"};
@@ -27705,8 +21026,6 @@ ${renderAccountingCenterBulkPromo()}
   // coreDate yorumu, PROJECT_CONTEXT.md bölüm 33.
   function v24Date(value) { const d = value ? new Date(value) : new Date(); return Number.isNaN(d.getTime()) ? null : d; }
   function v24DateKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : null; }
-  function v24MonthKey(value) { const d = v24Date(value); return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` : null; }
-  function v24Year(value) { const d = v24Date(value); return d ? d.getFullYear() : Number(value); }
   /** @deprecated-name Kalıcı: v24Clone — dış çağrılarla (window.GK_TFRS16, olası eski referanslar) uyumluluk için korunuyor. Bkz. coreClone. */
   function v24Clone(value) { return coreClone(value); }
   function v24Now() { return new Date().toISOString(); }
@@ -27717,7 +21036,6 @@ ${renderAccountingCenterBulkPromo()}
   function v24Load(key) { return v24StorageGet(key, []); }
   function v24Save(key, value) { v24StorageSet(key, value); return value; }
   function v24Find(list, id) { return v24Array(list).find(x => String(x.id) === String(id)) || null; }
-  function v24CompanyId(row) { return v24Text(row?.companyId || row?.company || row?.contract?.companyId || row?.contract?.company).trim() || null; }
   function v24Currency(row, fallback = "TRY") { return v24Text(row?.currency || row?.baseCurrency || row?.functionalCurrency || fallback).toUpperCase(); }
   function v24CurrentUser(options = {}) { return options.user || (typeof getCurrentUser === "function" ? getCurrentUser() : null); }
   function v24Require(permission, options = {}) {
@@ -27786,8 +21104,6 @@ ${renderAccountingCenterBulkPromo()}
     rows[index] = next; v24Save(V24_STORAGE_KEYS.PLANS, rows); v24Audit("BUDGET_UPDATED", "PLANNING_PLAN", id, { patch:v24Clone(patch) }); return v24Clone(next);
   }
   function v24VersionRows() { return v24Load(V24_STORAGE_KEYS.VERSIONS); }
-  function legacyReportAuth_getBudgetVersions(planId, options = {}) { v24Require("planning.view", { ...options, action:"PLANNING_VERSION_VIEW", entityId:planId }); return v24VersionRows().filter(x => String(x.planId) === String(planId)); }
-  function legacyReportAuth_getPlanningVersion(planId, version, options = {}) { return getBudgetVersions(planId, options).find(x => String(x.version) === String(version)) || null; }
   function createPlanningVersion(planId, input = {}, options = {}) {
     const plan = getPlanningPlan(planId, options); if (!plan) throw Object.assign(new Error("Planning plan not found."), { code:"PLAN_NOT_FOUND" });
     v24Require("planning.create", { ...options, companyId:plan.companyId, action:"PLANNING_VERSION_CREATE", entityId:planId });
@@ -27796,7 +21112,6 @@ ${renderAccountingCenterBulkPromo()}
     if (rows.some(x => String(x.planId)===String(planId) && String(x.version)===String(row.version))) throw Object.assign(new Error("Planning version already exists."), { code:"DUPLICATE_PLANNING_VERSION" });
     rows.push(row); v24Save(V24_STORAGE_KEYS.VERSIONS,rows); v24Audit("BUDGET_VERSION_CREATED","PLANNING_VERSION",row.id,row); return v24Clone(row);
   }
-  function v24VersionStatus(planId, version) { return getPlanningVersion(planId,version,{})?.status || null; }
   function v24AssertVersionEditable(planId, version) { const v=getPlanningVersion(planId,version,{}) || {}; if (v.status === "LOCKED") throw Object.assign(new Error("Locked budget version cannot be modified."), { code:"PLANNING_VERSION_LOCKED" }); return true; }
   function v24NormalizeLine(input = {}) {
     const companyId=v24Text(input.companyId).trim()||null, period=v24Text(input.period).trim();
@@ -27804,11 +21119,6 @@ ${renderAccountingCenterBulkPromo()}
     const amount=v24Number(input.amount), currency=v24Currency(input,v24CompanyRecord(companyId)?.baseCurrency||"TRY");
     return { id:input.id||v24Id("PL"),planId:input.planId,version:input.version||1,companyId,groupId:input.groupId||v24GroupIdForCompany(companyId),period,periodType:input.periodType||"MONTH",account:v24Text(input.account||input.category||"UNCLASSIFIED").toUpperCase(),category:v24Text(input.category||"OTHER").toUpperCase(),subCategory:v24Text(input.subCategory||"").toUpperCase(),currency,amount,driver:input.driver||null,scenario:v24Text(input.scenario||"BASE").toUpperCase(),source:input.source||"MANUAL",createdAt:input.createdAt||v24Now(),updatedAt:v24Now(),createdBy:input.createdBy||v24CurrentUser()?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};
   }
-  function legacyReportAuth_getPlanningLines(options = {}) {
-    v24Require("planning.view", { ...options, action:"PLANNING_LINE_VIEW" }); const user=v24CurrentUser(options);
-    return v24Load(V24_STORAGE_KEYS.LINES).filter(x => (!options.planId || String(x.planId)===String(options.planId)) && (!options.version || String(x.version)===String(options.version)) && (!options.companyId || String(x.companyId)===String(options.companyId)) && (!options.groupId || String(x.groupId)===String(options.groupId)) && (!options.period || String(x.period)===String(options.period)) && (!options.category || String(x.category)===String(options.category)) && (!x.companyId || v24CanCompany(user,x.companyId)));
-  }
-  function legacyReportAuth_getPlanningLine(id, options = {}) { return v24Find(getPlanningLines(options),id); }
   function createPlanningLine(input = {}, options = {}) {
     const line=v24NormalizeLine({ ...input, createdBy:input.createdBy||v24CurrentUser(options)?.id }); v24Require("planning.create",{...options,companyId:line.companyId,action:"PLANNING_LINE_CREATE",entityId:line.id}); v24AssertVersionEditable(line.planId,line.version);
     const rows=v24Load(V24_STORAGE_KEYS.LINES); if(rows.some(x=>String(x.planId)===String(line.planId)&&String(x.version)===String(line.version)&&String(x.companyId)===String(line.companyId)&&x.period===line.period&&x.account===line.account&&x.category===line.category&&x.scenario===line.scenario&&x.id!==line.id)) throw Object.assign(new Error("Duplicate planning line."),{code:"DUPLICATE_PLANNING_LINE"});
@@ -27839,14 +21149,8 @@ ${renderAccountingCenterBulkPromo()}
   function lockBudget(planId,options={}) { return v24SetPlanStatus(planId,"LOCKED",options); }
   function createBudget(input={},options={}) { return createPlanningPlan({...input,planType:"BUDGET"},options); }
   function updateBudget(id,patch={},options={}) { return updatePlanningPlan(id,patch,options); }
-  function legacyReportAuth_getBudget(options={}) { return getPlanningPlans({...options,planType:"BUDGET"}).filter(x=>x.planType==="BUDGET"); }
-  function legacyReportAuth_getBudgetVersion(planId,version,options={}) { return getPlanningVersion(planId,version,options); }
 
   function v24MonthsOfYear(year) { return Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,"0")}`); }
-  function v24PeriodMonths(period) { const p=String(period); if(/^\d{4}-\d{2}$/.test(p))return[p]; if(/^\d{4}-Q[1-4]$/.test(p)){const y=p.slice(0,4),q=Number(p.slice(-1));return [0,1,2].map(i=>`${y}-${String((q-1)*3+i+1).padStart(2,"0")}`);} if(/^\d{4}$/.test(p))return v24MonthsOfYear(Number(p)); return []; }
-  function v24SumLines(lines, category, months = null) { return v24Array(lines).filter(x=>(!category||x.category===category)&&(!months||months.includes(x.period))).reduce((s,x)=>s+v24Number(x.amount),0); }
-  function v24CategoryAmount(lines,category,months=null) { return v24SumLines(lines,category,months); }
-  function v24LineMap(lines) { const map={};v24Array(lines).forEach(l=>{const k=[l.companyId,l.period,l.category,l.account,l.currency,l.scenario].join("|");map[k]=(map[k]||0)+v24Number(l.amount);});return map; }
 
   function v24ActualRows(options={}) {
     const year=Number(options.year||new Date().getFullYear()), months=v24MonthsOfYear(year), companiesList=typeof v22CompanyList==="function"?v22CompanyList():(typeof companies!=="undefined"?companies:[]), user=v24CurrentUser(options), rows=[];
@@ -27861,13 +21165,11 @@ ${renderAccountingCenterBulkPromo()}
     });
     return rows;
   }
-  function legacyReportAuth_getActualPlanningData(options={}) { return v24ActualRows(options); }
   function v24ActualValue(category,companyId,period,options={}) { const row=v24ActualRows({year:Number(String(period).slice(0,4)),...options}).find(x=>String(x.companyId)===String(companyId)&&x.period===period);return v24Number(row?.categories?.[String(category).toUpperCase()]); }
   function v24BudgetForMonth(planId,version,companyId,period,category,options={}) { return getPlanningLines({...options,planId,version,companyId,period,category}).reduce((s,x)=>s+v24Number(x.amount),0); }
 
   function v24CreateForecastPlan(input={},options={}) { return createPlanningPlan({...input,planType:input.planType||"FORECAST"},options); }
   function createForecast(input={},options={}) { return v24CreateForecastPlan(input,options); }
-  function legacyReportAuth_getForecast(options={}) { return getPlanningPlans(options).filter(x=>x.planType==="FORECAST"||x.planType==="LATEST_ESTIMATE"); }
   function v24ForecastValue(method, actualValues, remainingPlanValues, historyValues=[]) {
     const actual=v24Number(actualValues), remaining=v24Number(remainingPlanValues), history=v24Array(historyValues).map(v24Number).filter(Number.isFinite), m=String(method||"MANUAL").toUpperCase();
     if(m==="ACTUAL_PLUS_REMAINING_BUDGET") return actual+remaining;
@@ -27887,66 +21189,15 @@ ${renderAccountingCenterBulkPromo()}
     });
     v24Audit("FORECAST_CREATED","FORECAST",options.planId||null,{year,method,companyId});return results;
   }
-  function legacyReportAuth_getRunRateForecast(options={}) { return generateForecast({...options,method:"RUN_RATE"}); }
-  function legacyReportAuth_getActualPlusRemainingBudgetForecast(options={}) { return generateForecast({...options,method:"ACTUAL_PLUS_REMAINING_BUDGET"}); }
-  function legacyReportAuth_getTrendForecast(options={}) { return generateForecast({...options,method:"TREND"}); }
 
-  function legacyReportAuth_calculateVariance(actual,plan,options={}) {
-    const a=v24Number(actual), p=v24Number(plan), variance=a-p, pct=p===0?(a===0?0:null):(variance/Math.abs(p))*100, category=String(options.category||"").toUpperCase(), cfg=V24_CATEGORY_CONFIG[category]||{direction:"EXPENSE",favorableWhen:"NEGATIVE"}, favorable=cfg.favorableWhen==="POSITIVE"?variance>0:variance<0, absThreshold=v24Number(options.absoluteThreshold??V24_DEFAULT_MATERIALITY.absoluteThreshold), pctThreshold=v24Number(options.percentageThreshold??V24_DEFAULT_MATERIALITY.percentageThreshold), material=Math.abs(variance)>=absThreshold || (pct!=null&&Math.abs(pct)>=pctThreshold), redPct=v24Number(options.redPercentage??V24_DEFAULT_MATERIALITY.redPercentage), status=!material?"GREEN":(pct!=null&&Math.abs(pct)>=redPct?"RED":"YELLOW");
-    const result={actual:a,plan:p,variance,variancePercent:pct,status,favorable:variance===0?null:favorable,unfavorable:variance===0?null:!favorable,material,varianceType:"ABSOLUTE",category,varianceReason:options.varianceReason||null,managementComment:options.managementComment||null};
-    if(options.audit!==false)v24Audit("VARIANCE_CALCULATED","VARIANCE",options.entityId||null,{category,actual:a,plan:p,variance,status});return result;
-  }
-  function legacyReportAuth_calculateVariancePercent(actual,plan,options={}) { return calculateVariance(actual,plan,options).variancePercent; }
-  function legacyReportAuth_getVarianceStatus(actual,plan,options={}) { return calculateVariance(actual,plan,options).status; }
-  function legacyReportAuth_getPlanningVarianceReport(options={}) {
-    v24Require("planning.view",{...options,action:"VARIANCE_VIEW"}); const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,categories=options.categories||Object.keys(V24_CATEGORY_CONFIG),rows=[];
-    categories.forEach(category=>{const months=v24MonthsOfYear(year),actual=months.reduce((s,p)=>s+v24ActualValue(category,companyId,p,options),0),plan=planId?months.reduce((s,p)=>s+v24BudgetForMonth(planId,version,companyId,p,category,options),0):0;rows.push({category,...calculateVariance(actual,plan,{...options,category,audit:false})});});return rows;
-  }
-  function legacyReportAuth_getMaterialVariances(options={}) { return getPlanningVarianceReport(options).filter(x=>x.material); }
 
   function createPlanningDriver(input={},options={}) {
     v24Require("planning.create",{...options,companyId:input.companyId,action:"DRIVER_CREATE"}); const row={id:input.id||v24Id("DRV"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),driverType:v24Text(input.driverType||"GENERIC").toUpperCase(),driverName:v24Text(input.driverName||"Driver"),period:v24Text(input.period),value:v24Number(input.value),unit:v24Text(input.unit||"NUMBER"),source:v24Text(input.source||"MANUAL").toUpperCase(),createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.DRIVERS);rows.push(row);v24Save(V24_STORAGE_KEYS.DRIVERS,rows);v24Audit("BUDGET_UPDATED","PLANNING_DRIVER",row.id,row);return v24Clone(row);
   }
-  function legacyReportAuth_getPlanningDrivers(options={}) { v24Require("planning.view",{...options,action:"DRIVER_VIEW"});const user=v24CurrentUser(options);return v24Load(V24_STORAGE_KEYS.DRIVERS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))&&(!x.companyId||v24CanCompany(user,x.companyId))); }
-  function legacyReportAuth_calculateDriverModel(input={},options={}) {
-    const type=String(input.driverType||"").toUpperCase(), volume=v24Number(input.volume), price=v24Number(input.price), revenue=v24Number(input.revenue), ratio=v24Number(input.ratio), headcount=v24Number(input.headcount), avgCost=v24Number(input.averageCost), debt=v24Number(input.debt), rate=v24Number(input.rate), assetBase=v24Number(input.assetBase), result={driverType:type};
-    if(type==="REVENUE")result.amount=volume*price;
-    else if(type==="COGS")result.amount=revenue*ratio;
-    else if(type==="PAYROLL")result.amount=headcount*avgCost;
-    else if(type==="INTEREST")result.amount=debt*rate;
-    else if(type==="DEPRECIATION")result.amount=assetBase*rate;
-    else result.amount=v24Number(input.value);
-    return result;
-  }
   function createScenario(input={},options={}) { v24Require("scenario.manage",{...options,companyId:input.companyId,action:"SCENARIO_CREATE"});const name=String(input.scenario||"BASE").toUpperCase();if(!V24_SCENARIOS.includes(name))throw Object.assign(new Error("Invalid scenario."),{code:"INVALID_SCENARIO"});const row={id:input.id||v24Id("SCN"),planId:input.planId||null,companyId:input.companyId||null,groupId:input.groupId||v24GroupIdForCompany(input.companyId),scenario:name,parameters:v24Clone(input.parameters||{}),status:input.status||"DRAFT",createdAt:v24Now(),updatedAt:v24Now(),createdBy:v24CurrentUser(options)?.id||"SYSTEM",schemaVersion:V24_SCHEMA_VERSION};const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS);rows.push(row);v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_CREATED","SCENARIO",row.id,row);return v24Clone(row); }
   function updateScenario(id,patch={},options={}) { const rows=v24Load(V24_STORAGE_KEYS.SCENARIOS),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)throw Object.assign(new Error("Scenario not found."),{code:"SCENARIO_NOT_FOUND"});const cur=rows[i];v24Require("scenario.manage",{...options,companyId:cur.companyId,action:"SCENARIO_UPDATE",entityId:id});rows[i]={...cur,...v24Clone(patch),id:cur.id,updatedAt:v24Now(),schemaVersion:V24_SCHEMA_VERSION};v24Save(V24_STORAGE_KEYS.SCENARIOS,rows);v24Audit("SCENARIO_UPDATED","SCENARIO",id,{patch});return v24Clone(rows[i]); }
-  function legacyReportAuth_getScenarios(options={}) { v24Require("scenario.view",{...options,action:"SCENARIO_VIEW"});return v24Load(V24_STORAGE_KEYS.SCENARIOS).filter(x=>(!options.planId||String(x.planId)===String(options.planId))&&(!options.companyId||String(x.companyId)===String(options.companyId))); }
-  function legacyReportAuth_calculateScenario(base={},scenario={},options={}) { const params=scenario.parameters||{};const revenue=v24Number(base.revenue)*(1+v24Number(params.revenueGrowth)/100);const cogs=v24Number(base.cogs)*(1+v24Number(params.cogsPercent)/100);const opex=v24Number(base.opex)*(1+v24Number(params.opexPercent)/100);const ebitda=revenue-cogs-opex;const interest=v24Number(base.interest)*(1+v24Number(params.interestRate)/10000);const netIncome=ebitda-v24Number(base.depreciation)-interest-v24Number(base.tax);return {...base,scenario:scenario.scenario||"BASE",revenue,cogs,opex,ebitda,interest,netIncome,cashFlow:v24Number(base.cashFlow)+v24Number(params.cashFlowAdjustment)}; }
 
-  function legacyReportAuth_getPlanningCashForecast(options={}) {
-    v24Require("planning.view",{...options,action:"CASH_FORECAST_VIEW"});const year=Number(options.year||new Date().getFullYear()),companyId=options.companyId||null,planId=options.planId,version=options.version||1,months=v24MonthsOfYear(year),out=[];let opening=v24Number(options.openingCash);
-    months.forEach(period=>{const operating=v24Number(options.monthlyOperatingCash?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"OPERATING_CASH_FLOW",options):0));const capex=v24Number(options.monthlyCapex?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"CAPEX",options):0));const financing=v24Number(options.monthlyFinancing?.[period] ?? (planId?v24BudgetForMonth(planId,version,companyId,period,"FINANCING_CASH_FLOW",options):0));const lease=v24Number(options.monthlyLeasePayments?.[period] ?? (v24ActualValue("LEASE_PAYMENT",companyId,period,options)));const interest=v24Number(options.monthlyInterest?.[period] ?? v24ActualValue("INTEREST",companyId,period,options));const tax=v24Number(options.monthlyTax?.[period]||0);const closing=opening+operating-capex+financing-lease-interest-tax;out.push({period,companyId,openingCash:opening,operatingCashFlow:operating,capex,financing,leasePayments:lease,interest,tax,netCashFlow:closing-opening,closingCash:closing,currency:v24Currency(v24CompanyRecord(companyId)||{},"TRY")});opening=closing;});return out;
-  }
-  function legacyReportAuth_getGroupPlanningData(options={}) {
-    v24Require("planning.view",{...options,action:"GROUP_PLANNING_VIEW"});const groupId=options.groupId,plans=getPlanningPlans({...options,groupId}),planId=options.planId||plans[0]?.id,version=options.version||getBudgetVersions(planId,options)[0]?.version||1,lines=getPlanningLines({...options,planId,version,groupId}),by={};lines.forEach(l=>{const c=l.companyId||"UNASSIGNED";if(!by[c])by[c]={companyId:c,revenue:0,ebitda:0,cashFlow:0};if(l.category==="REVENUE")by[c].revenue+=v24Number(l.amount);if(l.category==="EBITDA")by[c].ebitda+=v24Number(l.amount);if(l.category==="OPERATING_CASH_FLOW"||l.category==="NET_CASH_FLOW")by[c].cashFlow+=v24Number(l.amount);});return {groupId,planId,version,companies:Object.values(by),totals:Object.values(by).reduce((a,r)=>({revenue:a.revenue+r.revenue,ebitda:a.ebitda+r.ebitda,cashFlow:a.cashFlow+r.cashFlow}),{revenue:0,ebitda:0,cashFlow:0})};
-  }
-  function legacyReportAuth_getCompanyPlanningContribution(companyId,options={}) { const data=getGroupPlanningData({...options,companyId});return data.companies.find(x=>String(x.companyId)===String(companyId))||{companyId,revenue:0,ebitda:0,cashFlow:0}; }
-  function legacyReportAuth_getEbitdaBridge(options={}) { const rows=getPlanningVarianceReport({...options,categories:["REVENUE","COGS","OPEX"]});const budgetEbitda=v24Number(options.budgetEbitda);const revenue=rows.find(x=>x.category==="REVENUE")?.variance||0,cogs=rows.find(x=>x.category==="COGS")?.variance||0,opex=rows.find(x=>x.category==="OPEX")?.variance||0;return {budgetEbitda,revenueVariance:revenue,cogsVariance:-cogs,opexVariance:-opex,forecastEbitda:budgetEbitda+revenue-cogs-opex}; }
-  function legacyReportAuth_getRevenueBridge(options={}) { const params=options.drivers||{};return {budgetRevenue:v24Number(options.budgetRevenue),volumeImpact:v24Number(params.volumeImpact),priceImpact:v24Number(params.priceImpact),mixImpact:v24Number(params.mixImpact),forecastRevenue:v24Number(options.budgetRevenue)+v24Number(params.volumeImpact)+v24Number(params.priceImpact)+v24Number(params.mixImpact)}; }
-  function legacyReportAuth_getCashBridge(options={}) { return {budgetClosingCash:v24Number(options.budgetClosingCash),operatingVariance:v24Number(options.operatingVariance),capexVariance:v24Number(options.capexVariance),financingVariance:v24Number(options.financingVariance),fxVariance:v24Number(options.fxVariance),forecastClosingCash:v24Number(options.budgetClosingCash)+v24Number(options.operatingVariance)+v24Number(options.capexVariance)+v24Number(options.financingVariance)+v24Number(options.fxVariance)}; }
 
-  function legacyReportAuth_getPlanningDataQualityStatus(options={}) {
-    v24Require("planning.view",{...options,action:"PLANNING_DATA_QUALITY"});const plans=getPlanningPlans(options),lines=v24Load(V24_STORAGE_KEYS.LINES),drivers=v24Load(V24_STORAGE_KEYS.DRIVERS),checks=[];const add=(code,ok,severity="WARNING",details=null)=>checks.push({code,passed:!!ok,severity,details});
-    add("PLANS_EXIST",plans.length>0,"WARNING");add("NO_DUPLICATE_LINES",new Set(lines.map(x=>x.id)).size===lines.length,"BLOCKING");add("VALID_CURRENCY",lines.every(x=>!!x.currency),"BLOCKING");add("VALID_PERIOD",lines.every(x=>/^\d{4}(-\d{2}|-Q[1-4])?$/.test(String(x.period))),"BLOCKING");add("COMPANY_ACCESS",lines.filter(x=>x.companyId).every(x=>v24CanCompany(v24CurrentUser(options),x.companyId)),"BLOCKING");add("DRIVER_REFERENCES",drivers.every(x=>x.period&&x.driverName),"WARNING");const blocking=checks.some(x=>!x.passed&&x.severity==="BLOCKING"),warnings=checks.some(x=>!x.passed);return {version:V24_SCHEMA_VERSION,status:blocking?"RED":(warnings?"YELLOW":"GREEN"),checks,planCount:plans.length,lineCount:lines.length,driverCount:drivers.length};
-  }
-  function legacyReportAuth_getPlanningControlStatus(options={}) { return getPlanningDataQualityStatus(options); }
-  function legacyReportAuth_getPlanningCfoDashboardData(options={}) {
-    v24Require("planning.view",{...options,action:"PLANNING_CFO_VIEW"});const year=Number(options.year||new Date().getFullYear()),variance=getPlanningVarianceReport({...options,year}),material=variance.filter(x=>x.material),forecast=generateForecast({...options,year,method:options.forecastMethod||"ACTUAL_PLUS_REMAINING_BUDGET",audit:false}),by=(cat)=>forecast.find(x=>x.category===cat)||{ytdActual:0,fullYearForecast:0,remainingBudget:0};const revenueBudget=v24Number(options.revenueBudget),ebitdaBudget=v24Number(options.ebitdaBudget);return {version:V24_PLANNING_ENGINE_VERSION,year,revenue:{budget:revenueBudget,actual:by("REVENUE").ytdActual,forecast:by("REVENUE").fullYearForecast},ebitda:{budget:ebitdaBudget,actual:by("EBITDA").ytdActual,forecast:by("EBITDA").fullYearForecast,margin:by("REVENUE").fullYearForecast?by("EBITDA").fullYearForecast/by("REVENUE").fullYearForecast*100:0},netIncomeForecast:by("NET_INCOME").fullYearForecast,cashFlowForecast:getPlanningCashForecast(options),budgetVariance:variance,forecastVariance:variance,materialVariances:material,scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};
-  }
-  function legacyReportAuth_exportPlanningData(options={}) { v24Require("planning.export",{...options,action:"PLANNING_EXPORT"});const payload={schemaVersion:V24_SCHEMA_VERSION,exportedAt:v24Now(),plans:getPlanningPlans(options),versions:v24VersionRows(),lines:getPlanningLines(options),drivers:getPlanningDrivers(options),scenarios:getScenarios(options),dataQuality:getPlanningDataQualityStatus(options)};v24Audit("PLANNING_EXPORTED","PLANNING",null,{planCount:payload.plans.length,lineCount:payload.lines.length});return payload; }
-  function legacyReportAuth_exportBudget(options={}) { return exportPlanningData({...options,planType:"BUDGET"}); }
-  function legacyReportAuth_exportForecast(options={}) { return exportPlanningData({...options,planType:"FORECAST"}); }
-  function legacyReportAuth_exportScenario(options={}) { return exportPlanningData(options); }
   function v24MigrationReport() { const plans=v24Load(V24_STORAGE_KEYS.PLANS),lines=v24Load(V24_STORAGE_KEYS.LINES),versions=v24VersionRows();return {from:"23.0",to:V24_SCHEMA_VERSION,plans:plans.length,versions:versions.length,lines:lines.length,status:"READY",actualEnginePreserved:true,fxEnginePreserved:true,consolidationPreserved:true}; }
   function v24MigrateData() {
     [V24_STORAGE_KEYS.PLANS,V24_STORAGE_KEYS.VERSIONS,V24_STORAGE_KEYS.LINES,V24_STORAGE_KEYS.DRIVERS,V24_STORAGE_KEYS.SCENARIOS,V24_STORAGE_KEYS.VARIANCES,V24_STORAGE_KEYS.CASH,V24_STORAGE_KEYS.ADJUSTMENTS,V24_STORAGE_KEYS.AUDIT].forEach(key=>{const rows=v24Load(key);if(Array.isArray(rows))v24Save(key,rows.map(x=>({...x,schemaVersion:x.schemaVersion||V24_SCHEMA_VERSION})));});v24PermissionInstall();return v24MigrationReport();
@@ -28274,28 +21525,6 @@ ${renderAccountingCenterBulkPromo()}
     }
   }
 
-  /**
-   * Erken ödeme uygulanmış bir sözleşme için etkin (effective) ödeme
-   * planını döndürür: erken ödeme tarihine kadarki orijinal dönemler +
-   * o tarihten sonraki private API tarafından revize edilmiş dönemler.
-   *
-   * @param {Object} contract - Kiralama sözleşmesi
-   * @returns {Array<Object>} Etkin ödeme planı
-   */
-  function legacyReportAuth_getEffectiveSchedule(contract) {
-    if (contract?.earlyPaymentSchedule?.length) {
-      const engine = getPrivateCalculationForConsumer(contract);
-      const cutoff = parseDate(contract.earlyPaymentScheduleAsOf);
-      const closedPeriods = cutoff
-        ? engine.schedule.filter(period => {
-            const periodDate = parseDate(period.date);
-            return periodDate ? periodDate.getTime() <= cutoff.getTime() : false;
-          })
-        : [];
-      return [...closedPeriods, ...contract.earlyPaymentSchedule];
-    }
-    return getPrivateCalculationForConsumer(contract).schedule;
-  }
 
   /* ---------- 4) GELECEK BAŞLANGIÇ TARİHLİ KİRALAMALAR ---------- */
 
@@ -28385,162 +21614,10 @@ ${renderAccountingCenterBulkPromo()}
     return activated;
   }
 
-  /**
-   * "Gelecek Kiralamalar" KPI verisini hesaplar.
-   * @returns {Object} { count, contracts, totalMonthlyCommitment }
-   */
-  function legacyReportAuth_getFutureLeasesKPI() {
-    const pending = safeArray(contracts).filter(c => c.status === "pending");
-    const totalMonthlyCommitment = pending.reduce((sum, c) => sum + (Number(c.monthlyPayment) || 0), 0);
-    return {
-      count: pending.length,
-      contracts: pending.map(c => ({ id: c.id, company: c.company, startDate: c.startDate })),
-      totalMonthlyCommitment
-    };
-  }
 
-  /**
-   * "Gelecek Kiralamalar" KPI'ını DOM'a yazar (futureLeasesCount /
-   * futureLeasesCommitment elementleri varsa). Elementler HTML'de
-   * yoksa sessizce atlar.
-   * @returns {void}
-   */
-  function legacyReportAuth_updateFutureLeaseKPI() {
-    try {
-      const kpi = getFutureLeasesKPI();
-      setText("futureLeasesCount", kpi.count);
-      setText("futureLeasesCommitment", formatCurrency(kpi.totalMonthlyCommitment));
-    } catch (error) {
-      console.error("updateFutureLeaseKPI error:", error);
-    }
-  }
 
-  /* ---------- 5) RAPORLAMA FORMATLARI (PDF / HTML) ---------- */
 
-  /**
-   * Bir external script'i (CDN) sayfaya bir kez yükler.
-   * @param {string} src - Script URL'i
-   * @returns {Promise<void>}
-   */
-  function loadExternalScript(src) {
-    return new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${src}"]`)) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = src;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Script yüklenemedi: ${src}`));
-      document.head.appendChild(script);
-    });
-  }
 
-  /**
-   * Bir sözleşme için basit, yazdırılabilir bir rapor HTML'i üretir.
-   * @param {Object} contract - Kiralama sözleşmesi
-   * @param {Object} engine - calculateLeaseEngine(contract) sonucu
-   * @returns {string} HTML string
-   */
-  function legacyReportAuth_buildReportHtml(contract, engine) {
-    const rows = (engine.schedule || []).map(period => `
-      <tr>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${period.period}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(period.date instanceof Date ? period.date.toLocaleDateString("tr-TR") : String(period.date))}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.openingLiability)}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.payment)}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.interest)}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.principal)}</td>
-        <td style="padding:6px;border:1px solid #e2e8f0;">${formatCurrency(period.closingLiability)}</td>
-      </tr>
-    `).join("");
-
-    return `
-      <div style="font-family:Arial,sans-serif;padding:24px;color:#1e293b;">
-        <h2 style="margin:0 0 4px;">TFRS 16 Kiralama Raporu</h2>
-        <p style="margin:0 0 16px;color:#64748b;font-size:12px;">${escapeHtml(contract.company || "")} · ${escapeHtml(contract.supplier || "")} · Sözleşme: ${escapeHtml(contract.id)}</p>
-        <table style="width:100%;border-collapse:collapse;font-size:11px;">
-          <thead>
-            <tr style="background:#f1f5f9;text-align:left;">
-              <th style="padding:6px;border:1px solid #e2e8f0;">Dönem</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Tarih</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Açılış</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Ödeme</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Faiz</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Anapara</th>
-              <th style="padding:6px;border:1px solid #e2e8f0;">Kapanış</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  /**
-   * Bir sözleşme için PDF veya HTML rapor dışa aktarır.
-   * PDF için html2pdf.js CDN'den lazy-load edilir.
-   *
-   * @param {string} contractId - Sözleşme ID
-   * @param {"pdf"|"html"} format - Çıktı formatı
-   * @param {Object} [options] - Şu an kullanılmıyor, ileriye dönük
-   * @returns {Promise<Object>} result - { valid }
-   */
-  async function legacyReportAuth_exportReport(contractId, format, options = {}) {
-    try {
-      showLoading(`${String(format).toUpperCase()} raporu hazırlanıyor...`, null);
-      const contract = contracts.find(c => c.id === contractId);
-      if (!contract) {
-        showToast("Sözleşme bulunamadı.", "error");
-        return { valid: false };
-      }
-
-      const engine = getPrivateCalculationForConsumer(contract);
-      const html = buildReportHtml(contract, engine);
-
-      if (format === "html") {
-        const win = window.open("", "_blank");
-        if (!win) {
-          showToast("Yeni pencere açılamadı (popup engelleyici).", "error");
-          return { valid: false };
-        }
-        win.document.write(`<html><head><title>TFRS16 Rapor - ${escapeHtml(contract.id)}</title></head><body>${html}</body></html>`);
-        win.document.close();
-      } else if (format === "pdf") {
-        await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
-        const container = document.createElement("div");
-        container.innerHTML = html;
-        document.body.appendChild(container);
-        await window.html2pdf().from(container).set({
-          filename: `TFRS16_Rapor_${contract.id}.pdf`,
-          margin: 10,
-          jsPDF: { format: "a4", orientation: "landscape" }
-        }).save();
-        document.body.removeChild(container);
-      } else {
-        showToast("Desteklenmeyen rapor formatı.", "error");
-        return { valid: false };
-      }
-
-      recordAuditEvent({
-        action: "REPORT_EXPORTED",
-        entityType: "CONTRACT",
-        entityId: contract.id,
-        contractId: contract.id,
-        reason: `Rapor dışa aktarıldı (${String(format).toUpperCase()})`,
-        metadata: { format }
-      });
-
-      updateLoadingProgress(100, `${contract.id}: ${String(format).toUpperCase()} rapor hazır.`);
-      showToast(`${contract.id}: ${String(format).toUpperCase()} rapor oluşturuldu.`, "success");
-      return { valid: true };
-    } catch (error) {
-      showError(error, "exportReport");
-      return { valid: false, errors: [String(error?.message || error)] };
-    } finally {
-      hideLoading();
-    }
-  }
 
   /* ---------- V25 REFRESH ENTEGRASYONU (monkey-patch, additive) ---------- */
 
@@ -29858,111 +22935,9 @@ ${renderAccountingCenterBulkPromo()}
     return V26_COUNTRIES.map(c => `<option value="${c.code}" ${c.code === selected ? "selected" : ""}>${c.name} (${c.code})</option>`).join("");
   }
 
-  function legacyReportAuth_v26ConvertToPresentation(amount, fromCurrency, toCurrency, asOfDate) {
-    const from = String(fromCurrency || "TRY").toUpperCase();
-    const to = String(toCurrency || from).toUpperCase();
-    if (from === to) return { amount: Number(amount) || 0, rate: 1, from, to, ok: true };
-    try {
-      if (typeof convertCurrencyOnDate === "function") {
-        const r = convertCurrencyOnDate(amount, from, to, asOfDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"), { allowMissing: true, audit: false });
-        if (r?.error || !Number.isFinite(r?.convertedAmount)) {
-          return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: r?.error || "FX_RATE_NOT_FOUND" };
-        }
-        return { amount: r.convertedAmount, rate: r.fxRate, from, to, ok: true };
-      }
-    } catch (error) {
-      return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: error.message };
-    }
-    return { amount: Number(amount) || 0, rate: null, from, to, ok: false, error: "FX_ENGINE_UNAVAILABLE" };
-  }
 
-  /* ==========================================================
-     V26 PRESENTATION CURRENCY EXPORT HELPERS
-     ----------------------------------------------------------
-     Additive layer: existing export signatures remain compatible;
-     presentationCurrency is optional. Missing FX never destroys
-     the original value; the result carries an explicit error.
-  ========================================================== */
 
-  async function legacyReportAuth_v26ConvertScheduleToPresentation(schedule, fromCurrency, toCurrency, asOfDate) {
-    const rows = Array.isArray(schedule) ? schedule : [];
-    const from = String(fromCurrency || "TRY").toUpperCase();
-    const to = String(toCurrency || from).toUpperCase();
-    const moneyFields = ["openingLiability", "payment", "interest", "principal", "closingLiability", "depreciation", "rouClosing"];
-    const errors = [];
-    const out = [];
-    const reportingDate = asOfDate || getScheduleReportingDate();
 
-    for (const row of rows) {
-      const copy = { ...row };
-      let rate = 1;
-      let ok = true;
-      let error = null;
-      if (from !== to) {
-        try {
-          const fx = await getFxRateAuto(from, to, reportingDate, (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"), { allowLastAvailable: true });
-          if (fx?.error || !(Number(fx?.rate) > 0) || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
-          rate = Number(fx.rate);
-          moneyFields.forEach(field => { copy[field] = v23Round((Number(row[field]) || 0) * rate, 2); });
-        } catch (e) {
-          ok = false;
-          error = e?.message || String(e);
-          errors.push(`${row?.period || "?"}: ${error}`);
-          moneyFields.forEach(field => { copy[field] = Number(row[field]) || 0; });
-          rate = null;
-        }
-      } else {
-        moneyFields.forEach(field => { copy[field] = Number(row[field]) || 0; });
-      }
-      copy.presentationCurrency = to;
-      copy.presentationRate = rate;
-      copy.presentationFxOk = ok;
-      copy.presentationFxError = error;
-      out.push(copy);
-    }
-    return { schedule: out, asOfDate: v23DateKey(reportingDate), fromCurrency: from, toCurrency: to, rate: out.find(r => Number.isFinite(r.presentationRate))?.presentationRate ?? (from === to ? 1 : null), ok: errors.length === 0, errors };
-  }
-
-  function v26PresentationMoneyKey(key) {
-    return /amount|value|balance|liability|payment|interest|principal|depreciation|rou|debit|credit|cost|adjustment|gain|loss|total|carrying|expense|income|asset|actual|expected/i.test(String(key || ""));
-  }
-
-  async function legacyReportAuth_v26ConvertJsonMoneyToPresentation(value, fromCurrency, toCurrency, asOfDate) {
-    const from = String(fromCurrency || "TRY").toUpperCase();
-    const to = String(toCurrency || from).toUpperCase();
-    let rate = 1;
-    let ok = true;
-    let error = null;
-    try {
-      if (from !== to) {
-        const fx = await getFxRateAuto(from, to, asOfDate || new Date(), (typeof V23_RATE_TYPES !== "undefined" ? V23_RATE_TYPES.CLOSING : "CLOSING"));
-        if (fx?.error || !Number.isFinite(Number(fx?.rate))) throw new Error(fx?.message || fx?.error || `${from}/${to} kuru bulunamadı.`);
-        rate = Number(fx.rate);
-      }
-    } catch (e) {
-      ok = false;
-      error = e?.message || String(e);
-      rate = null;
-    }
-
-    const transform = (node, key = "") => {
-      if (typeof node === "number") return (ok && v26PresentationMoneyKey(key)) ? v23Round(node * rate, 2) : node;
-      if (Array.isArray(node)) return node.map((v, i) => transform(v, `${key}[${i}]`));
-      if (node && typeof node === "object") {
-        const obj = {};
-        Object.keys(node).forEach(k => { obj[k] = transform(node[k], k); });
-        return obj;
-      }
-      if (typeof node === "string") {
-        try {
-          const parsed = JSON.parse(node);
-          return JSON.stringify(transform(parsed, key));
-        } catch (_) { return node; }
-      }
-      return node;
-    };
-    return { value: transform(value), rate, ok, error, from, to };
-  }
 
   function renderCompanyManagementPage(container) {
     if (!container) return;
@@ -30109,269 +23084,7 @@ ${renderAccountingCenterBulkPromo()}
       </div>`;
   }
 
-  function legacyReportAuth_v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate) {
-    const companies = v26LoadCompanies().filter(c => !groupId || c.groupId === groupId);
-    const asOf = reportingDate || new Date().toISOString().slice(0, 10);
-    const allContracts = typeof contracts !== "undefined" ? contracts : [];
 
-    // V22 ownership / scope ile kesişim (varsa)
-    let scopeCompanyIds = null;
-    try {
-      if (groupId && typeof getConsolidationScope === "function") {
-        const scope = getConsolidationScope(groupId) || [];
-        if (scope.length) scopeCompanyIds = new Set(scope.map(s => String(s.companyId)));
-      }
-    } catch (e) {}
-
-    const rows = companies
-      .filter(co => !scopeCompanyIds || scopeCompanyIds.has(String(co.id)) || scopeCompanyIds.has(String(co.code)))
-      .map(co => {
-        const coContracts = allContracts.filter(
-          ct => String(ct.companyId || "") === co.id ||
-            String(ct.company || "") === co.name ||
-            String(ct.company || "") === co.code
-        );
-        let leaseLiability = 0;
-        let rouAsset = 0;
-        let openingRou = 0;
-        let depreciation = 0;
-        let additions = 0;
-        let openingLiability = 0;
-        let interestAccrued = 0;
-        let paymentsTotal = 0;
-        const contractDetails = [];
-        coContracts.forEach(ct => {
-          try {
-            const calc = typeof calculateLeaseEngine === "function" ? calculateLeaseEngine(ct) : null;
-            const txCur = String(ct.currency || co.functionalCurrency || "TRY").toUpperCase();
-            const fnCur = String(ct.functionalCurrency || co.functionalCurrency || "TRY").toUpperCase();
-            let cLiab = 0, cRou = 0, cOpenRou = 0, cDep = 0, cOpenLiab = 0, cInt = 0, cPay = 0;
-            if (calc) {
-              cLiab = Number(calc.liability) || 0;
-              cRou = Number(calc.rouAssets) || 0;
-              leaseLiability += cLiab;
-              rouAsset += cRou;
-              const schedule = calc.schedule || [];
-              if (schedule.length) {
-                cOpenRou = Number(schedule[0].rouOpening) || cRou;
-                cOpenLiab = Number(schedule[0].openingLiability) || cLiab;
-                cDep = schedule.reduce((s, r) => s + (Number(r.depreciation) || 0), 0);
-                cInt = schedule.reduce((s, r) => s + (Number(r.interest) || 0), 0);
-                cPay = schedule.reduce((s, r) => s + (Number(r.payment) || 0), 0);
-                openingRou += cOpenRou;
-                openingLiability += cOpenLiab;
-                depreciation += cDep;
-                interestAccrued += cInt;
-                paymentsTotal += cPay;
-              } else {
-                openingRou += cRou;
-                openingLiability += cLiab;
-                cOpenRou = cRou;
-                cOpenLiab = cLiab;
-              }
-            }
-            const stdCt = getApplicableStandards(
-              { ...ct, currency: txCur, functionalCurrency: fnCur, reportingCurrency: presentationCurrency },
-              co
-            );
-            const liabP = v26ConvertToPresentation(cLiab, fnCur, presentationCurrency, asOf);
-            const rouP = v26ConvertToPresentation(cRou, fnCur, presentationCurrency, asOf);
-            contractDetails.push({
-              contractId: ct.id,
-              supplier: ct.supplier || "",
-              transactionCurrency: txCur,
-              functionalCurrency: fnCur,
-              leaseLiability: cLiab,
-              rouAsset: cRou,
-              openingRou: cOpenRou,
-              depreciation: cDep,
-              openingLiability: cOpenLiab,
-              interestAccrued: cInt,
-              paymentsTotal: cPay,
-              leaseLiabilityPres: liabP.amount,
-              rouAssetPres: rouP.amount,
-              standards: stdCt
-            });
-          } catch (e) {}
-        });
-        additions = Math.max(0, rouAsset + depreciation - openingRou);
-        const fx = co.functionalCurrency || "TRY";
-        const liabFx = v26ConvertToPresentation(leaseLiability, fx, presentationCurrency, asOf);
-        const rouFx = v26ConvertToPresentation(rouAsset, fx, presentationCurrency, asOf);
-        const openingRouFx = v26ConvertToPresentation(openingRou, fx, presentationCurrency, asOf);
-        const depFx = v26ConvertToPresentation(depreciation, fx, presentationCurrency, asOf);
-        const addFx = v26ConvertToPresentation(additions, fx, presentationCurrency, asOf);
-        const openingLiabFx = v26ConvertToPresentation(openingLiability, fx, presentationCurrency, asOf);
-        const interestFx = v26ConvertToPresentation(interestAccrued, fx, presentationCurrency, asOf);
-        const paymentsFx = v26ConvertToPresentation(paymentsTotal, fx, presentationCurrency, asOf);
-        const sample = {
-          currency: fx,
-          functionalCurrency: fx,
-          reportingCurrency: presentationCurrency
-        };
-        const std = getApplicableStandards(sample, co);
-        return {
-          company: co,
-          contractCount: coContracts.length,
-          leaseLiability,
-          rouAsset,
-          openingRou,
-          depreciation,
-          additions,
-          openingLiability,
-          interestAccrued,
-          paymentsTotal,
-          currency: fx,
-          leaseLiabilityPres: liabFx.amount,
-          rouAssetPres: rouFx.amount,
-          openingRouPres: openingRouFx.amount,
-          depreciationPres: depFx.amount,
-          additionsPres: addFx.amount,
-          openingLiabilityPres: openingLiabFx.amount,
-          interestAccruedPres: interestFx.amount,
-          paymentsTotalPres: paymentsFx.amount,
-          fxRate: liabFx.rate,
-          fxOk: liabFx.ok && rouFx.ok,
-          fxError: liabFx.error || rouFx.error || null,
-          standards: std,
-          contractDetails
-        };
-      });
-
-    const contractDetailsFlat = rows.flatMap(r =>
-      (r.contractDetails || []).map(cd => ({
-        ...cd,
-        companyCode: r.company.code,
-        companyName: r.company.name
-      }))
-    );
-
-    return {
-      rows,
-      contractDetails: contractDetailsFlat,
-      totals: {
-        contractCount: rows.reduce((s, r) => s + r.contractCount, 0),
-        leaseLiability: rows.reduce((s, r) => s + r.leaseLiability, 0),
-        rouAsset: rows.reduce((s, r) => s + r.rouAsset, 0),
-        leaseLiabilityPres: rows.reduce((s, r) => s + r.leaseLiabilityPres, 0),
-        rouAssetPres: rows.reduce((s, r) => s + r.rouAssetPres, 0),
-        openingRou: rows.reduce((s, r) => s + r.openingRou, 0),
-        depreciation: rows.reduce((s, r) => s + r.depreciation, 0),
-        additions: rows.reduce((s, r) => s + r.additions, 0),
-        openingRouPres: rows.reduce((s, r) => s + r.openingRouPres, 0),
-        depreciationPres: rows.reduce((s, r) => s + r.depreciationPres, 0),
-        additionsPres: rows.reduce((s, r) => s + r.additionsPres, 0),
-        openingLiability: rows.reduce((s, r) => s + r.openingLiability, 0),
-        interestAccrued: rows.reduce((s, r) => s + r.interestAccrued, 0),
-        paymentsTotal: rows.reduce((s, r) => s + r.paymentsTotal, 0),
-        openingLiabilityPres: rows.reduce((s, r) => s + r.openingLiabilityPres, 0),
-        interestAccruedPres: rows.reduce((s, r) => s + r.interestAccruedPres, 0),
-        paymentsTotalPres: rows.reduce((s, r) => s + r.paymentsTotalPres, 0)
-      }
-    };
-  }
-
-  function legacyReportAuth_v26ExportConsolidationExcel(groupId, presentationCurrency, reportingDate) {
-    const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
-    let v22EliminationRows = [];
-    let v22EliminationTotalPresentation = 0;
-    try {
-      v22EliminationRows = getEliminations(groupId).filter(r => String(r.reportingDate || "") === String(reportingDate) && String(r.status || "") !== "REJECTED");
-      v22EliminationTotalPresentation = v22EliminationRows.reduce((sum, r) => sum + v26ConvertToPresentation(Number(r.amount) || 0, r.currency || "TRY", presentationCurrency, reportingDate).amount, 0);
-    } catch (e) {}
-    const v26ConsolidatedLeaseAfterElimination = Math.max(0, Number(data.totals.leaseLiabilityPres || 0) - v22EliminationTotalPresentation);
-    const fmt = typeof formatCurrency === "function" ? formatCurrency : n => Number(n).toFixed(2);
-    const rows = data.rows.map(r => ({
-      "Şirket Kodu": r.company.code,
-      "Şirket Adı": r.company.name,
-      "Fonksiyonel PB": r.currency,
-      "Sözleşme Sayısı": r.contractCount,
-      "Kira Yükümlülüğü (Fonks.)": r.leaseLiability,
-      "ROU (Fonks.)": r.rouAsset,
-      [`Kira Yükümlülüğü (${presentationCurrency})`]: r.leaseLiabilityPres,
-      [`ROU (${presentationCurrency})`]: r.rouAssetPres,
-      "Kur": r.fxRate ?? "",
-      "FX OK": r.fxOk ? "Evet" : "Hayır",
-      "Standartlar": r.standards.badgeLabel,
-      "Açıklama": r.standards.message
-    }));
-    rows.push({
-      "Şirket Kodu": "TOPLAM",
-      "Şirket Adı": "",
-      "Fonksiyonel PB": presentationCurrency,
-      "Sözleşme Sayısı": data.totals.contractCount,
-      "Kira Yükümlülüğü (Fonks.)": data.totals.leaseLiability,
-      "ROU (Fonks.)": data.totals.rouAsset,
-      [`Kira Yükümlülüğü (${presentationCurrency})`]: data.totals.leaseLiabilityPres,
-      [`ROU (${presentationCurrency})`]: data.totals.rouAssetPres,
-      "Kur": "",
-      "FX OK": "",
-      "Standartlar": "",
-      "Açıklama": ""
-    });
-
-    if (typeof XLSX !== "undefined") {
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Konsolidasyon");
-      const rollRows = data.rows.map(r => ({
-        "Şirket": r.company.code,
-        [`Açılış ROU (${presentationCurrency})`]: r.openingRouPres,
-        [`İlaveler (${presentationCurrency})`]: r.additionsPres,
-        [`Amortisman (${presentationCurrency})`]: r.depreciationPres,
-        [`Kapanış ROU (${presentationCurrency})`]: r.rouAssetPres,
-        "Fonks. PB": r.currency
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rollRows), "ROU Hareket");
-      const liabRows = data.rows.map(r => ({
-        "Şirket": r.company.code,
-        [`Açılış Yük. (${presentationCurrency})`]: r.openingLiabilityPres,
-        [`Faiz (${presentationCurrency})`]: r.interestAccruedPres,
-        [`Ödemeler (${presentationCurrency})`]: r.paymentsTotalPres,
-        [`Kapanış Yük. (${presentationCurrency})`]: r.leaseLiabilityPres,
-        "Fonks. PB": r.currency
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(liabRows), "Yukumluluk Hareket");
-      const contractRows = (data.contractDetails || []).map(cd => ({
-        "Sözleşme": cd.contractId,
-        "Şirket": cd.companyCode,
-        "Tedarikçi": cd.supplier,
-        "İşlem PB": cd.transactionCurrency,
-        "Fonks. PB": cd.functionalCurrency,
-        [`Kira Yük. (${presentationCurrency})`]: cd.leaseLiabilityPres,
-        [`ROU (${presentationCurrency})`]: cd.rouAssetPres,
-        "Standartlar": cd.standards?.badgeLabel || "",
-        "Açıklama": cd.standards?.message || ""
-      }));
-      if (contractRows.length) {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(contractRows), "Sozlesme Detay");
-      }
-      XLSX.writeFile(wb, `TFRS16_Konsolidasyon_${groupId}_${presentationCurrency}_${Date.now()}.xlsx`);
-      if (typeof recordAuditEvent === "function") {
-        recordAuditEvent({
-          action: "EXPORT",
-          entityType: "CONSOLIDATION",
-          entityId: groupId,
-          reason: "V26 konsolidasyon Excel export",
-          metadata: { presentationCurrency, reportingDate, rowCount: rows.length }
-        });
-      }
-      return true;
-    }
-    // CSV fallback
-    const headers = Object.keys(rows[0] || {});
-    const csv = [headers.join(";"), ...rows.map(row => headers.map(h => String(row[h] ?? "").replace(/;/g, ",")).join(";"))].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `TFRS16_Konsolidasyon_${groupId}_${Date.now()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    return true;
-  }
 
   /* ==========================================================
      V26 — V22 GRUP / ELİMİNASYON YÖNETİM UI
@@ -30474,285 +23187,6 @@ ${renderAccountingCenterBulkPromo()}
     document.body.appendChild(modal);modal.querySelector('#cancel').onclick=()=>modal.remove();modal.querySelector('#save').onclick=()=>v26UiRun(()=>{const input={groupId:modal.querySelector('#group').value,fromCompanyId:modal.querySelector('#from').value,toCompanyId:modal.querySelector('#to').value,account:modal.querySelector('#account').value,amount:Number(modal.querySelector('#amount').value),currency:modal.querySelector('#currency').value,eliminationType:modal.querySelector('#type').value,reportingDate:modal.querySelector('#date').value,reason:modal.querySelector('#reason').value,status:modal.querySelector('#status').value}; if(row)updateElimination(row.id,input);else createElimination(input);modal.remove();onDone();});
   }
 
-  function legacyReportAuth_v26RenderConsolidationReportBody(container, options = {}) {
-    if (!container) return;
-    injectV26Styles();
-    const presentationCurrency = options.presentationCurrency || "USD";
-    const reportingDate = options.reportingDate || new Date().toISOString().slice(0, 10);
-    const companies = v26LoadCompanies();
-    const groupIds = [...new Set(companies.map(c => c.groupId).filter(Boolean))];
-    const groupId = options.groupId || groupIds[0] || "GRP-1";
-    const data = v26BuildConsolidationRows(groupId, presentationCurrency, reportingDate);
-    let v22EliminationRows = [];
-    let v22EliminationTotalPresentation = 0;
-    try {
-      v22EliminationRows = getEliminations(groupId).filter(r => String(r.reportingDate || "") === String(reportingDate) && String(r.status || "") !== "REJECTED");
-      v22EliminationTotalPresentation = v22EliminationRows.reduce((sum, r) => sum + v26ConvertToPresentation(Number(r.amount) || 0, r.currency || "TRY", presentationCurrency, reportingDate).amount, 0);
-    } catch (e) {}
-    const v26ConsolidatedLeaseAfterElimination = Math.max(0, Number(data.totals.leaseLiabilityPres || 0) - v22EliminationTotalPresentation);
-    const fmt = typeof formatCurrency === "function" ? formatCurrency : n => Number(n || 0).toFixed(0);
-    const fxMissing = data.rows.some(r => !r.fxOk && r.currency !== presentationCurrency);
-
-    container.innerHTML = `
-      <div class="gk-v26-page">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-          <div>
-            <h2 style="margin:0;font-size:20px;color:#0f172a;">Konsolidasyon Raporu</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:#64748b;">
-              Grup: <strong>${escapeHtml(groupId)}</strong> ·
-              Raporlama: <strong>${escapeHtml(reportingDate)}</strong> ·
-              Sunum PB: <strong>${escapeHtml(presentationCurrency)}</strong>
-            </p>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="v26ConsolGroup" class="gk-v26-btn gk-v26-btn-secondary" style="padding:8px 12px;">
-              ${groupIds.map(g => `<option value="${escapeHtml(g)}" ${g === groupId ? "selected" : ""}>${escapeHtml(g)}</option>`).join("") || `<option value="GRP-1">GRP-1</option>`}
-            </select>
-            <select id="v26ConsolPresFx" class="gk-v26-btn gk-v26-btn-secondary" style="padding:8px 12px;">
-              ${v26CurrencyOptions(presentationCurrency)}
-            </select>
-            <input type="date" id="v26ConsolDate" value="${escapeHtml(reportingDate)}" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" />
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26ConsolRefresh">Yenile</button>
-            <button type="button" class="gk-v26-btn" id="v26ConsolExcel">Excel'e Aktar</button>
-            <button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26ConsolPrint">Yazdır / PDF</button>
-          </div>
-        </div>
-
-        ${fxMissing ? `<div class="gk-v26-card" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412;font-size:13px;">
-          Bazı satırlarda V23 kur tablosunda kapanış kuru bulunamadı; bu satırlar fonksiyonel tutarla gösterildi.
-          Kur eklemek için V23 FX motorunu / TCMB senkronunu kullanın.
-        </div>` : ""}
-
-        <div class="gk-v26-card">
-          <table class="gk-v26-table">
-            <thead>
-              <tr>
-                <th>Şirket</th>
-                <th>Fonks. PB</th>
-                <th style="text-align:right;">Sözleşme</th>
-                <th style="text-align:right;">Kira Yük. (Fonks.)</th>
-                <th style="text-align:right;">ROU (Fonks.)</th>
-                <th style="text-align:right;">Kira Yük. (${escapeHtml(presentationCurrency)})</th>
-                <th style="text-align:right;">ROU (${escapeHtml(presentationCurrency)})</th>
-                <th>Standartlar</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.rows.map(r => `
-                <tr>
-                  <td><strong>${escapeHtml(r.company.code)}</strong> ${escapeHtml(r.company.name)}</td>
-                  <td>${escapeHtml(r.currency)}</td>
-                  <td style="text-align:right;">${r.contractCount}</td>
-                  <td style="text-align:right;">${fmt(r.leaseLiability)}</td>
-                  <td style="text-align:right;">${fmt(r.rouAsset)}</td>
-                  <td style="text-align:right;">${fmt(r.leaseLiabilityPres)}${!r.fxOk && r.currency !== presentationCurrency ? " *" : ""}</td>
-                  <td style="text-align:right;">${fmt(r.rouAssetPres)}${!r.fxOk && r.currency !== presentationCurrency ? " *" : ""}</td>
-                  <td><span class="gk-std-badge ${r.standards.badgeClass}" title="${escapeHtml(r.standards.message)}">${escapeHtml(r.standards.badgeLabel)}</span></td>
-                </tr>`).join("")}
-              <tr style="font-weight:700;background:#f8fafc;">
-                <td colspan="2">TOPLAM</td>
-                <td style="text-align:right;">${data.totals.contractCount}</td>
-                <td style="text-align:right;">${fmt(data.totals.leaseLiability)}</td>
-                <td style="text-align:right;">${fmt(data.totals.rouAsset)}</td>
-                <td style="text-align:right;">${fmt(v26ConsolidatedLeaseAfterElimination)}</td>
-                <td style="text-align:right;">${fmt(data.totals.rouAssetPres)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="gk-v26-card">
-          <h3 style="margin:0 0 10px;font-size:15px;">ROU Hareket Tablosu (Konsolide — ${escapeHtml(presentationCurrency)})</h3>
-          <table class="gk-v26-table">
-            <thead>
-              <tr>
-                <th>Şirket</th>
-                <th style="text-align:right;">Açılış</th>
-                <th style="text-align:right;">İlaveler</th>
-                <th style="text-align:right;">Amortisman</th>
-                <th style="text-align:right;">Kapanış</th>
-                <th>Fonks. PB</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.rows.map(r => `
-                <tr>
-                  <td>${escapeHtml(r.company.code)}</td>
-                  <td style="text-align:right;">${fmt(r.openingRouPres)}</td>
-                  <td style="text-align:right;">${fmt(r.additionsPres)}</td>
-                  <td style="text-align:right;">${fmt(r.depreciationPres)}</td>
-                  <td style="text-align:right;">${fmt(r.rouAssetPres)}</td>
-                  <td>${escapeHtml(r.currency)}</td>
-                </tr>`).join("")}
-              <tr style="font-weight:700;background:#f8fafc;">
-                <td>TOPLAM (${escapeHtml(presentationCurrency)})</td>
-                <td style="text-align:right;">${fmt(data.totals.openingRouPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.additionsPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.depreciationPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.rouAssetPres)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="gk-v26-card">
-          <h3 style="margin:0 0 10px;font-size:15px;">Kira Yükümlülüğü Hareket Tablosu (Konsolide — ${escapeHtml(presentationCurrency)})</h3>
-          <table class="gk-v26-table">
-            <thead>
-              <tr>
-                <th>Şirket</th>
-                <th style="text-align:right;">Açılış</th>
-                <th style="text-align:right;">Faiz</th>
-                <th style="text-align:right;">Ödemeler</th>
-                <th style="text-align:right;">Kapanış</th>
-                <th>Fonks. PB</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.rows.map(r => `
-                <tr>
-                  <td>${escapeHtml(r.company.code)}</td>
-                  <td style="text-align:right;">${fmt(r.openingLiabilityPres)}</td>
-                  <td style="text-align:right;">${fmt(r.interestAccruedPres)}</td>
-                  <td style="text-align:right;">${fmt(r.paymentsTotalPres)}</td>
-                  <td style="text-align:right;">${fmt(r.leaseLiabilityPres)}</td>
-                  <td>${escapeHtml(r.currency)}</td>
-                </tr>`).join("")}
-              <tr style="font-weight:700;background:#f8fafc;">
-                <td>TOPLAM (${escapeHtml(presentationCurrency)})</td>
-                <td style="text-align:right;">${fmt(data.totals.openingLiabilityPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.interestAccruedPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.paymentsTotalPres)}</td>
-                <td style="text-align:right;">${fmt(data.totals.leaseLiabilityPres)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
-          <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">
-            Tutarlar sunum PB'sine V23 kapanış kuru ile çevrilmiştir (kur yoksa fonksiyonel tutar kullanılır).
-            Dönemsel detay için V19.1 Finansal Raporlama ekranını kullanın.
-          </p>
-        </div>
-
-        <div class="gk-v26-card">
-          <h3 style="margin:0 0 10px;font-size:15px;">Sözleşme Bazlı Detay (${escapeHtml(presentationCurrency)})</h3>
-          <table class="gk-v26-table">
-            <thead>
-              <tr>
-                <th>Sözleşme</th>
-                <th>Şirket</th>
-                <th>İşlem PB</th>
-                <th>Fonks. PB</th>
-                <th style="text-align:right;">Kira Yük.</th>
-                <th style="text-align:right;">ROU</th>
-                <th>Standartlar</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(data.contractDetails || []).map(cd => `
-                <tr>
-                  <td><strong>${escapeHtml(cd.contractId)}</strong><div style="font-size:11px;color:#64748b;">${escapeHtml(cd.supplier || "")}</div></td>
-                  <td>${escapeHtml(cd.companyCode)}</td>
-                  <td>${escapeHtml(cd.transactionCurrency)}</td>
-                  <td>${escapeHtml(cd.functionalCurrency)}</td>
-                  <td style="text-align:right;">${fmt(cd.leaseLiabilityPres)}</td>
-                  <td style="text-align:right;">${fmt(cd.rouAssetPres)}</td>
-                  <td><span class="gk-std-badge ${cd.standards.badgeClass}" title="${escapeHtml(cd.standards.message)}">${escapeHtml(cd.standards.badgeLabel)}</span></td>
-                </tr>`).join("") || `<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Bu grupta sözleşme yok</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="gk-v26-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin:0;font-size:15px;">Eliminasyonlar</h3><p style="margin:4px 0;color:#64748b;font-size:12px;">${escapeHtml(reportingDate)} · V22 intercompany eliminasyonları</p></div><button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="v26ConsolElimOpen">Eliminasyon Yönetimi</button></div>
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;"><div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;"><div style="font-size:11px;color:#64748b;">Toplam Eliminasyon</div><strong style="font-size:18px;">${fmt(v22EliminationTotalPresentation)} ${escapeHtml(presentationCurrency)}</strong></div><div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;"><div style="font-size:11px;color:#64748b;">Eliminasyon Sonrası Kira Yükümlülüğü</div><strong style="font-size:18px;">${fmt(v26ConsolidatedLeaseAfterElimination)} ${escapeHtml(presentationCurrency)}</strong></div></div>
-          <table class="gk-v26-table" style="margin-top:12px;"><thead><tr><th>From</th><th>To</th><th>Account</th><th>Type</th><th style="text-align:right;">Tutar</th><th>Status</th></tr></thead><tbody>${v22EliminationRows.map(r=>`<tr><td>${escapeHtml(r.fromCompanyId)}</td><td>${escapeHtml(r.toCompanyId)}</td><td>${escapeHtml(r.account)}</td><td>${escapeHtml(r.eliminationType)}</td><td style="text-align:right;">${fmt(v26ConvertToPresentation(r.amount,r.currency,presentationCurrency,reportingDate).amount)}</td><td>${escapeHtml(r.status)}</td></tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;">Bu dönem için eliminasyon yok</td></tr>`}</tbody></table>
-        </div>
-
-        <div class="gk-v26-card">
-          <h3 style="margin:0 0 8px;font-size:14px;">Test Senaryoları (referans)</h3>
-          <table class="gk-v26-table" style="font-size:12px;">
-            <thead>
-              <tr>
-                <th>Senaryo</th>
-                <th>Şirket PB</th>
-                <th>İşlem PB</th>
-                <th>Sunum PB</th>
-                <th>TMS21</th>
-                <th>TMS29</th>
-                <th>Açıklama</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td>LEASE-001</td><td>TRY</td><td>TRY</td><td>TRY</td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td><span class="gk-std-badge gk-std-yellow">EVET</span></td><td>TL işlem, TL raporlama</td></tr>
-              <tr><td>LEASE-002</td><td>EUR</td><td>EUR</td><td>EUR</td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>EUR işlem, EUR raporlama</td></tr>
-              <tr><td>LEASE-003</td><td>TRY</td><td>EUR</td><td>TRY</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-yellow">EVET</span></td><td>EUR işlem, TL raporlama</td></tr>
-              <tr><td>LEASE-004</td><td>TRY</td><td>EUR</td><td>USD</td><td><span class="gk-std-badge gk-std-purple">EVET</span></td><td><span class="gk-std-badge gk-std-purple">EVET</span></td><td>EUR→TL + USD sunum</td></tr>
-              <tr><td>LEASE-005</td><td>USD</td><td>EUR</td><td>USD</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>EUR işlem, USD raporlama</td></tr>
-              <tr><td>LEASE-006</td><td>EUR</td><td>TRY</td><td>EUR</td><td><span class="gk-std-badge gk-std-blue">EVET</span></td><td><span class="gk-std-badge gk-std-green">HAYIR</span></td><td>TRY işlem, EUR raporlama</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="gk-v26-card">
-          <h3 style="margin:0 0 8px;font-size:14px;">Dipnotlar</h3>
-          <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.7;">
-            <li>TMS21 Kur Farkı — V23 FX motoru / <code>getFxRateAuto</code> / <code>convertCurrencyOnDate</code></li>
-            <li>TMS29 Enflasyon — yalnızca fonksiyonel PB = TRY (V18 Parça 2)</li>
-            <li>Grup kapsamı — V22 <code>getConsolidationScope</code> (tanımlıysa filtrelenir)</li>
-            <li>Eliminasyon / iştirak payı — V22 ownership katmanı (ayrı rapor)</li>
-          </ul>
-        </div>
-      </div>`;
-
-    const reRender = () => {
-      v26RenderConsolidationReportBody(container, {
-        groupId: container.querySelector("#v26ConsolGroup")?.value || groupId,
-        presentationCurrency: container.querySelector("#v26ConsolPresFx")?.value || presentationCurrency,
-        reportingDate: container.querySelector("#v26ConsolDate")?.value || reportingDate
-      });
-    };
-    container.querySelector("#v26ConsolRefresh")?.addEventListener("click", reRender);
-    container.querySelector("#v26ConsolElimOpen")?.addEventListener("click", () => { let host=document.getElementById("v26PageHost")||container; renderEliminationManagementPage(host); host.scrollIntoView({behavior:"smooth",block:"start"}); });
-    container.querySelector("#v26ConsolGroup")?.addEventListener("change", reRender);
-    container.querySelector("#v26ConsolPresFx")?.addEventListener("change", reRender);
-    container.querySelector("#v26ConsolExcel")?.addEventListener("click", () => {
-      const g = container.querySelector("#v26ConsolGroup")?.value || groupId;
-      const fx = container.querySelector("#v26ConsolPresFx")?.value || presentationCurrency;
-      const d = container.querySelector("#v26ConsolDate")?.value || reportingDate;
-      v26ExportConsolidationExcel(g, fx, d);
-      if (typeof showToast === "function") showToast("Konsolidasyon dışa aktarıldı", "success", 2000);
-      else if (typeof showAlert === "function") showAlert("Konsolidasyon Excel/CSV indirildi.");
-    });
-    container.querySelector("#v26ConsolPrint")?.addEventListener("click", () => {
-      const page = container.querySelector(".gk-v26-page");
-      if (!page) return;
-      const w = window.open("", "_blank", "noopener,noreferrer");
-      if (!w) {
-        window.print();
-        return;
-      }
-      w.document.write(`<!DOCTYPE html><html><head><title>Konsolidasyon ${escapeHtml(groupId)}</title>
-        <style>
-          body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a;}
-          table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}
-          th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;}
-          th{background:#f8fafc;}
-          .gk-std-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;}
-          .gk-std-green{background:#dcfce7;color:#166534;}
-          .gk-std-blue{background:#dbeafe;color:#1e40af;}
-          .gk-std-yellow{background:#fef9c3;color:#854d0e;}
-          .gk-std-purple{background:#f3e8ff;color:#6b21a8;}
-          .gk-std-gray{background:#f1f5f9;color:#475569;}
-          button,select,input{display:none!important;}
-          @media print{body{padding:0;}}
-        </style></head><body>${page.innerHTML}</body></html>`);
-      w.document.close();
-      setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
-    });
-  }
 
   function legacyReportAuth_renderConsolidationReportPage(container, options = {}) {
     const renderer = window.LeaseQantTfrs16ReportingUi?.renderConsolidation;
@@ -31487,58 +23921,9 @@ const V26_FX_UI_PAGE_SIZE = 50;
     window.alert(String(message || ""));
   }
 
-  function v26InflationEscape(value) {
-    return typeof escapeHtml === "function"
-      ? escapeHtml(value)
-      : String(value ?? "").replace(/[&<>"']/g, c => ({
-          "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-        }[c]));
-  }
 
-  function v26InflationMonthRange(fromMonth, toMonth) {
-    const out = [];
-    if (!/^\d{4}-\d{2}$/.test(String(fromMonth || "")) ||
-        !/^\d{4}-\d{2}$/.test(String(toMonth || ""))) return out;
 
-    const [fy, fm] = String(fromMonth).split("-").map(Number);
-    const [ty, tm] = String(toMonth).split("-").map(Number);
-    let y = fy, m = fm;
 
-    while (y < ty || (y === ty && m <= tm)) {
-      out.push(`${y}-${String(m).padStart(2, "0")}`);
-      m++;
-      if (m > 12) { m = 1; y++; }
-      if (out.length > 2400) break;
-    }
-    return out;
-  }
-
-  function v26InflationContractStartMonth() {
-    try {
-      const list = Array.isArray(window.contracts)
-        ? window.contracts
-        : (typeof contracts !== "undefined" && Array.isArray(contracts) ? contracts : []);
-      const months = list
-        .map(c => {
-          const raw = c?.startDate || c?.commencementDate || c?.leaseStartDate || c?.contractStartDate;
-          const d = typeof parseDate === "function" ? parseDate(raw) : new Date(raw);
-          return d && !Number.isNaN(d.getTime())
-            ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-            : null;
-        })
-        .filter(Boolean)
-        .sort();
-
-      return months[0] || null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function v26InflationCurrentMonth() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }
 
   function v26ExportInflationIndexExcel() {
     try {
