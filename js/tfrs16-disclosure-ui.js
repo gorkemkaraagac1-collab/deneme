@@ -349,8 +349,12 @@
         </aside></div></div>`;
   }
 
+  // Each render owns the container only until the next render: a request
+  // started for the previous period must not draw over the new one.
+  let footnotesRender = 0;
   function renderFootnotes(container) {
     if (!container) return;
+    const renderToken = ++footnotesRender;
     const bridge = global.GK_TFRS16 || {};
     bridge.injectV26Styles?.();
     const facade = global.LeaseQantPrivateTfrs16Facade;
@@ -407,7 +411,7 @@
       draw();
       try {
         const results = await facade.createTrustedDisclosureSnapshots(contractIds, period());
-        if (requestKey !== `${state.companyId}|${state.periodStart}|${state.reportingDate}`) return;
+        if (requestKey !== `${state.companyId}|${state.periodStart}|${state.reportingDate}`) { state.producing = false; return; }
         const succeeded = results.filter(result => result?.success === true);
         const failed = results.filter(result => result?.success !== true);
         if (failed.length) {
@@ -490,6 +494,7 @@
         });
     };
     const draw = () => {
+      if (renderToken !== footnotesRender || !container.isConnected) return;
       load();
       const tabs = [["asset", "Varlık"], ["liability", "Yükümlülük"], ["liquidity", "Likidite"]];
       const rows = state.status === "ready" ? rowsForTab(state.pkg, state.tab) : [];

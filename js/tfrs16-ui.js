@@ -1472,7 +1472,7 @@ window.fetch = (input, init = {}) => {
       saveContracts(contracts);
       return {
         valid: false,
-        errors: [`Backend'e uygulanmış ${kind} kaydı yazılamadı: ${error?.message || error}`]
+        errors: [LIFECYCLE_ERROR_TEXT[error?.code || error?.body?.code] || `Backend'e uygulanmış ${kind} kaydı yazılamadı: ${error?.message || error}`]
       };
     }
 
@@ -3098,10 +3098,25 @@ window.fetch = (input, init = {}) => {
     DATED_CHANGE_END_INVALID: "Yeni kira bitiş tarihi yürürlük tarihinden sonra olmalı.",
     DATED_CHANGE_RATE_INVALID: "Yeni iskonto oranı geçersiz.",
     DATED_CHANGE_SCOPE_REDUCTION_INVALID: "Kapsam azalışı %0 ile %100 arasında (100 hariç) olmalı. Kiralamanın tamamen sona ermesi kapsam azalışı değil, fesihtir.",
-    DATED_CHANGE_TERMS_REQUIRED: "Yeni ödeme takvimi, bitiş tarihi veya iskonto oranından en az biri girilmeli.",
+    CHANGE_BEFORE_APPLIED_CHANGE: "Bu tarihten sonra uygulanmış bir değişiklik var. Önce o değişikliği geri alın, sonra bu tarihli değişikliği girin.",
+    PERIOD_CLOSED: "Bu değişikliğin yürürlük tarihi kapalı bir döneme düşüyor. Dönem yeniden açılmadan uygulanamaz veya geri alınamaz.",
+    LEASE_TERM_ASSESSMENT_REQUIRED: "Kira süresi değerlendirmesi gerekli (opsiyonların makul ölçüde kesinliği ve kanıt referansı).",
+        DATED_CHANGE_TERMS_REQUIRED: "Yeni ödeme takvimi, bitiş tarihi veya iskonto oranından en az biri girilmeli.",
     GROUP_A_INSUFFICIENT_EVIDENCE: "Kiralama tanımlama değerlendirmesi eksik.",
     GROUP_A_L3_UNSUPPORTED: "Bileşen ayrıştırmalı sözleşmelerde olay muhasebesi henüz desteklenmiyor."
   };
+  // A refused change always explains itself: some refusals arrive without an
+  // errors list (code/message only), which used to throw on join() and leave
+  // the user with no message at all.
+  function changeErrorText(result) {
+    if (Array.isArray(result?.errors) && result.errors.length) return result.errors.join("\n");
+    const code = result?.code || result?.error?.code;
+    const known = code ? LIFECYCLE_ERROR_TEXT[code] : null;
+    if (known) return known;
+    const message = result?.message || result?.error?.message || (typeof result?.error === "string" ? result.error : "");
+    return `İşlem tamamlanamadı${message || code ? `: ${message || code}` : "."}`;
+  }
+
   function lifecycleErrorText(error) {
     const known = LIFECYCLE_ERROR_TEXT[error?.code];
     if (known) return known;
@@ -10164,7 +10179,7 @@ ${renderAccountingCenterBulkPromo()}
       createButton.textContent = originalLabel;
 
       if (!result.valid) {
-        showAlert(result.errors.join("\n"));
+        showAlert(changeErrorText(result));
         return;
       }
 
@@ -10198,7 +10213,7 @@ ${renderAccountingCenterBulkPromo()}
         button.disabled = false;
 
         if (!result.valid) {
-          showAlert(result.errors.join("\n"));
+          showAlert(changeErrorText(result));
           return;
         }
 
@@ -10213,7 +10228,7 @@ ${renderAccountingCenterBulkPromo()}
         button.disabled = false;
 
         if (!result.valid) {
-          showAlert(result.errors.join("\n"));
+          showAlert(changeErrorText(result));
           return;
         }
 
@@ -10384,7 +10399,7 @@ ${renderAccountingCenterBulkPromo()}
       createButton.textContent = originalLabel;
 
       if (!result.valid) {
-        showAlert(result.errors.join("\n"));
+        showAlert(changeErrorText(result));
         return;
       }
       resetReassessmentFormMode();
@@ -10416,7 +10431,7 @@ ${renderAccountingCenterBulkPromo()}
         }
         button.disabled = false;
         if (!result.valid) {
-          showAlert(result.errors.join("\n"));
+          showAlert(changeErrorText(result));
           return;
         }
         refreshAfterMutation();
@@ -10428,7 +10443,7 @@ ${renderAccountingCenterBulkPromo()}
         const result = await cancelReassessment(contract, id);
         button.disabled = false;
         if (!result.valid) {
-          showAlert(result.errors.join("\n"));
+          showAlert(changeErrorText(result));
           return;
         }
         refreshAfterMutation();
