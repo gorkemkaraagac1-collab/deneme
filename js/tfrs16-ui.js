@@ -8756,11 +8756,15 @@ ${renderAccountingCenterHeader()}
           değişikliksiz TRY sözleşmeleri destekler.
         </div>
 
+        <details class="lq-legacy-journal">
+          <summary style="cursor:pointer;font-size:12px;color:#64748b">Eski fiş önizlemesi (yalnızca değişikliksiz TRY sözleşmeleri)</summary>
+
 ${renderAccountingCenterFilters(contract)}
 
 ${renderAccountingCenterPreviewContainer()}
 
 ${renderAccountingCenterBulkPromo()}
+        </details>
       </div>
 
     `;
