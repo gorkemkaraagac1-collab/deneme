@@ -1,4 +1,6 @@
 'use strict';
+// Needs evidence from a disposable local integration run; skipped otherwise.
+if(!require('node:fs').existsSync('/tmp/authority-rc1-numeric.json')){require('node:test').test('integration evidence /tmp/authority-rc1-numeric.json not present',{skip:'integration evidence /tmp/authority-rc1-numeric.json not present'},()=>{});return;}
 // Numeric assertions on external disposable API evidence; no private payload
 // or accounting implementation is shipped in this public test source.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{webcrypto}=require('node:crypto');

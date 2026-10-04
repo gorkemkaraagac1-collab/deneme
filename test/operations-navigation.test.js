@@ -55,7 +55,7 @@ test('v2 modification and reassessment arrange existing controls into source-hon
  assert.equal(host.querySelector('#reassessmentReason').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'01 · Değişikliği tanımla');
  assert.equal(host.querySelector('#reassessmentPurchaseOption').closest('.lq-op-stage').querySelector('.lq-op-stage-title').textContent,'02 · Yeni şartları gir');
  assert.equal(host.querySelector('#createModificationButton').closest('.lq-op-form-actions')?.className,'lq-op-form-actions');
- assert.match(host.querySelector('.lq-op-side').textContent,/Kaynak gerekli/);
+ assert.match(host.querySelector('.lq-op-side').textContent,/Taslak oluşturulunca gösterilir/);
  assert.match(host.querySelector('.lq-op-summary-list').textContent,/28\.02\.2025/);
  assert.doesNotMatch(host.textContent,/0,00|0\.00/);
  const calls=[];

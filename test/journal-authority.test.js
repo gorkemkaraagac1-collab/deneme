@@ -1,4 +1,6 @@
 'use strict';
+// Needs evidence from a disposable local integration run; skipped otherwise.
+if(!require('node:fs').existsSync(process.env.JOURNAL_AUTHORITY_PROOF||'/tmp/journal-auth-r1-numeric.json')){require('node:test').test('integration evidence /tmp/journal-auth-r1-numeric.json not present',{skip:'integration evidence /tmp/journal-auth-r1-numeric.json not present'},()=>{});return;}
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');

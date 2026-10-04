@@ -6,7 +6,7 @@ function page(file){const d=new JSDOM('<!doctype html><body><nav class="sidebar"
  d.window.fetch=()=>Promise.resolve({ok:true,json:()=>Promise.resolve({})});d.window.eval(adminJs);d.window.buildAdminRail();return d.window;}
 test('ray kanonik menüyü kurar ve etkin sayfayı işaretler',()=>{
  const w=page('plans.html');const links=[...w.document.querySelectorAll('#sidebar .sidebar-nav a')];
- assert.deepEqual(links.map(a=>a.getAttribute('href')).join(','),'index.html,companies.html,users.html,licenses.html,periods.html,opening-balances.html,fx-rates.html,ledger.html,inflation-indices.html,audit.html,faq.html');
+ assert.deepEqual(links.map(a=>a.getAttribute('href')).join(','),'index.html,companies.html,users.html,licenses.html,periods.html,opening-balances.html,fx-rates.html,ledger.html,journal-mappings.html,inflation-indices.html,audit.html,faq.html');
  assert.equal(w.document.querySelector('#sidebar a.active').getAttribute('href'),'licenses.html');
  assert.ok(!w.document.body.innerHTML.includes('eski'));
 });
