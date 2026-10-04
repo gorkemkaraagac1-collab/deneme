@@ -1283,6 +1283,7 @@ const ADMIN_RAIL = [
     { href: "opening-balances.html", label: "Açılış bakiyeleri", icon: "acilis", adminOnly: true },
     { href: "fx-rates.html", label: "Döviz kurları", icon: "kur", adminOnly: true, badge: "fx" },
     { href: "ledger.html", label: "Defter verileri", icon: "defter", adminOnly: true },
+    { href: "journal-mappings.html", label: "Hesap eşlemesi", icon: "defter", adminOnly: true },
     { href: "inflation-indices.html", label: "Enflasyon endeksleri", icon: "endeks", adminOnly: true, badge: "cpi" },
     { group: "Sistem", adminOnly: true },
     { href: "audit.html", label: "Denetim izi", icon: "denetim", adminOnly: true },
