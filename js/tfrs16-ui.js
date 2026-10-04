@@ -3270,7 +3270,6 @@ window.fetch = (input, init = {}) => {
       reassessment.cancelledAt = new Date().toISOString();
       reassessment.cancelledBy = auditActor();
       reassessment.journal = [];
-      recordReassessmentAuditEvent(contract, "REASSESSMENT_ROLLED_BACK", reassessment, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
       saveContracts(contracts);
       try { await persistContractToApi(contract, true); }
       catch (error) {
@@ -3278,8 +3277,10 @@ window.fetch = (input, init = {}) => {
         Object.assign(reassessment, oldValue);
         Object.assign(contract, { monthlyPayment: currentTerms.payment, endDate: currentTerms.leaseEndDate, discountRate: currentTerms.discountRate, renewalOption: currentTerms.renewalOption, terminationOption: currentTerms.terminationOption, purchaseOption: currentTerms.purchaseOption });
         saveContracts(contracts);
-        return { valid: false, errors: [`Backend'e kaydedilemedi: ${error?.message || error}`] };
+        return { valid: false, errors: [LIFECYCLE_ERROR_TEXT[error?.code || error?.body?.code] || `Backend'e kaydedilemedi: ${error?.message || error}`] };
       }
+      // The rollback is recorded only once the server has accepted it.
+      recordReassessmentAuditEvent(contract, "REASSESSMENT_ROLLED_BACK", reassessment, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
       return { valid: true, reassessment, rolledBack: true };
     }
 
@@ -4000,7 +4001,6 @@ window.fetch = (input, init = {}) => {
       modification.cancelledAt = new Date().toISOString();
       modification.cancelledBy = auditActor();
       modification.journal = [];
-      recordModificationAuditEvent(contract, "MODIFICATION_ROLLED_BACK", modification, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
       saveContracts(contracts);
       try { await persistContractToApi(contract, true); }
       catch (error) {
@@ -4008,8 +4008,10 @@ window.fetch = (input, init = {}) => {
         Object.assign(modification, oldValue);
         Object.assign(contract, { monthlyPayment: currentTerms.payment, endDate: currentTerms.leaseEndDate, discountRate: currentTerms.discountRate });
         saveContracts(contracts);
-        return { valid: false, errors: [`Backend'e kaydedilemedi: ${error?.message || error}`] };
+        return { valid: false, errors: [LIFECYCLE_ERROR_TEXT[error?.code || error?.body?.code] || `Backend'e kaydedilemedi: ${error?.message || error}`] };
       }
+      // The rollback is recorded only once the server has accepted it.
+      recordModificationAuditEvent(contract, "MODIFICATION_ROLLED_BACK", modification, oldValue, { status: "CANCELLED", restoredTerms: previousTerms, priorTerms: currentTerms });
       return { valid: true, modification, rolledBack: true };
     }
 
@@ -4323,13 +4325,20 @@ window.fetch = (input, init = {}) => {
    * @param {number} [duration=5000] - Bildirimin ekranda kalma süresi (ms)
    * @returns {void}
    */
-  function showToast(message, type = "info", duration = 5000) {
+  function showToast(message, type = "info", duration = 5000, options = {}) {
     try {
       injectToastStyles();
 
       const toast = document.createElement("div");
       toast.className = `gk-toast gk-toast-${type}`;
       toast.textContent = message;
+      // Refusals and errors are announced and stay until read (click closes).
+      const urgent = type === "error" || type === "warning" || options.announce === true;
+      toast.setAttribute("role", urgent ? "alert" : "status");
+      toast.setAttribute("aria-live", urgent ? "assertive" : "polite");
+      toast.style.cursor = "pointer";
+      toast.title = "Kapatmak için tıklayın";
+      toast.addEventListener("click", () => toast.remove());
       document.body.appendChild(toast);
 
       setTimeout(() => {
@@ -4366,15 +4375,15 @@ window.fetch = (input, init = {}) => {
    * @param {"success"|"error"|"warning"|"info"} [type="info"] - Bildirim tipi
    * @returns {void}
    */
+  // showAlert replaced blocking alert() dialogs: its messages (refusals,
+  // validation errors) must remain readable, so they stay 15 seconds and are
+  // announced as alerts unless they report success.
   function showAlert(message, type = "info") {
-    if (type === "error") {
-      showToast(`❌ ${message}`, "error");
-    } else if (type === "warning") {
-      showToast(`⚠️ ${message}`, "warning");
-    } else if (type === "success") {
+    if (type === "success") {
       showToast(`✅ ${message}`, "success");
     } else {
-      showToast(message, "info");
+      showToast(type === "error" ? `❌ ${message}` : type === "warning" ? `⚠️ ${message}` : message,
+        type, 15000, { announce: true });
     }
   }
 
