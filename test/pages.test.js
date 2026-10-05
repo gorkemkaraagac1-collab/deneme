@@ -65,14 +65,16 @@ async function overview(disclosureError=false){
  w.LeaseQantReportingAuthorityUi={defaultPeriod:()=>period,companies:async()=>[],load:async()=>({identity:{presentationCurrency:'TRY',companyName:'Holding'},period,totals:{leaseLiability:m(100),currentLiability:m(20),nonCurrentLiability:m(80)},population:{count:1,includedCount:1,excludedCount:0,exclusions:[]},controls:{status:'PASS',checks:[{status:'PASS'}]}})};
  w.GK_TFRS16={getPortfolioContracts:()=>[C[1]]};
  w.LeaseQantDashboardCharts={scopeOk:()=>true,assetModel:()=>({supported:false,status:'Girdi gerekli'}),bridgeModel:()=>({currency:'TRY',rows:[],residual:null,missing:0,complete:false}),renderBridge:()=>'<p>Sunucu mutabakat kaynağı gerekli</p>',maturityModel:()=>({supported:false}),renderMaturity:()=>'<p>Kaynak gerekli</p>'};
- w.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async()=>({}),loadLeaseDisclosure:async()=>{if(disclosureError)throw Error('offline');return {validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cashLedger'}],supportStatus:[{requirementId:'fx',supportedStatus:'NOT_SUPPORTED'}]};}};
+ w.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async()=>({}),loadLeaseDisclosure:async()=>{if(disclosureError)throw Error('offline');return {validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],supportStatus:[{requirementId:'fx',supportedStatus:'NOT_SUPPORTED'},{requirementId:'IFRS16_61_97_LESSOR_DISCLOSURE_BOUNDARY',supportedStatus:'OUT_OF_SCOPE'}]};}};
+ w.eval(fs.readFileSync(path.join(__dirname,'../js/tfrs16-disclosure-ui.js'),'utf8'));
  w.eval(src);await new Promise(r=>setTimeout(r,160));return dom;
 }
 test('real overview warns on loaded but incomplete disclosure and lists source actions',async()=>{
  const dom=await overview(),d=dom.window.document;
  assert.match(d.getElementById('lqOvRunway').textContent,/2 eksik/);
- assert.match(d.getElementById('lqOvActions').textContent,/cashLedger/);
- assert.match(d.getElementById('lqOvActions').textContent,/fx/);
+ assert.match(d.getElementById('lqOvActions').textContent,/Gerçekleşen toplam kira nakdi/);
+ assert.match(d.getElementById('lqOvActions').textContent,/Açıklama gerekliliği/);
+ assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/totalCashOutflowForLeases|IFRS16_61_97_LESSOR_DISCLOSURE_BOUNDARY|\bfx\b/);
  assert.doesNotMatch(d.getElementById('lqOvActions').textContent,/Bekleyen işlem yok/);
  assert.ok(d.querySelector('#lqOvKpis .lq-pg-split'));
  dom.window.close();
@@ -84,8 +86,9 @@ test('real overview never declares no pending action after disclosure load failu
  dom.window.close();
 });
 
-test('overview uses actual capability vocabulary and preserves unsupported and out-of-scope actions',()=>{
+test('overview preserves unsupported actions and excludes out-of-scope boundaries',()=>{
  const dom=load(),state=dom.window.LeaseQantPages.disclosureState;
  const p={validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'cash'}],supportStatus:[{requirementId:'auto',supportedStatus:'SUPPORTED_AUTOMATIC'},{requirementId:'input',supportedStatus:'SUPPORTED_WITH_ENTITY_INPUT'},{requirementId:'unsupported',supportedStatus:'NOT_YET_SUPPORTED'},{requirementId:'boundary',supportedStatus:'OUT_OF_SCOPE'}]};
- assert.equal(state(p).issues.join(','),'cash,unsupported,boundary');assert.equal(state(p).complete,false);dom.window.close();
+ assert.equal(state(p).issues.join(','),'cash,unsupported');assert.equal(state(p).complete,false);
+ assert.equal(state({validation:{status:'COMPLETE_FOR_SUPPORTED_SCOPE'},supportStatus:[{requirementId:'IFRS16_61_97_LESSOR_DISCLOSURE_BOUNDARY',supportedStatus:'OUT_OF_SCOPE'}]}).complete,true);dom.window.close();
 });

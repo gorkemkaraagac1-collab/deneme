@@ -130,13 +130,15 @@
   }
 
   function disclosureState(pkg) {
-    const missing = Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : [];
-    const supported = new Set(["SUPPORTED", "SUPPORTED_AUTOMATIC", "SUPPORTED_WITH_ENTITY_INPUT", "SUPPORTED_WITH_LEDGER_INPUT", "SUPPORTED_WITH_DISCLOSURE_INPUT", "NOT_APPLICABLE"]);
+    const missing = (Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : []).filter(x => x.status !== "OUT_OF_SCOPE");
+    const supported = new Set(["SUPPORTED", "SUPPORTED_AUTOMATIC", "SUPPORTED_WITH_ENTITY_INPUT", "SUPPORTED_WITH_LEDGER_INPUT", "SUPPORTED_WITH_DISCLOSURE_INPUT", "NOT_APPLICABLE", "OUT_OF_SCOPE"]);
     const unsupported = (Array.isArray(pkg?.supportStatus) ? pkg.supportStatus : []).filter(x => !supported.has(x.supportedStatus));
-    const issues = [...new Set([...missing.map(x => x.fieldId || x.requirementId || "Eksik kaynak"), ...unsupported.map(x => x.requirementId || "Desteklenmeyen gereklilik")])];
+    const gaps = global.LeaseQantTfrs16DisclosureUi?.sourceGaps?.(pkg);
+    const issues = gaps ? gaps.map(x => x.id) : [...new Set([...missing.map(x => x.fieldId || x.requirementId || "Eksik kaynak"), ...unsupported.map(x => x.requirementId || "Desteklenmeyen gereklilik")])];
+    const issueLabels = gaps ? gaps.map(x => x.label) : issues.map(() => "Eksik veri veya destek gerekliliği");
     const status = pkg?.validation?.status;
     const complete = status === "COMPLETE_FOR_SUPPORTED_SCOPE" && issues.length === 0;
-    return { complete, issues, status, label: complete ? "Desteklenen kapsam tamam" : issues.length ? `${issues.length} eksik / desteklenmeyen kalem` : "Tamlık doğrulanmadı" };
+    return { complete, issues, issueLabels, status, label: complete ? "Desteklenen kapsam tamam" : issues.length ? `${issues.length} eksik / desteklenmeyen kalem` : "Tamlık doğrulanmadı" };
   }
   const helpers = Object.freeze({ contractRows, monthsLeft, daysBetween, disclosureState });
   if (root.getAttribute("data-lq-ui") !== "2") { global.LeaseQantPages = helpers; return; }
@@ -356,7 +358,7 @@
     if (!d.ok) acts.push(["warn", "Dipnot paketi alınamadı: " + errText(d.e), "İncele", 'data-pg="nav" data-key="footnotes"']);
     else if (!ds.complete) {
       acts.push(["warn", "Dipnot: " + ds.label, "İncele", 'data-pg="nav" data-key="footnotes"']);
-      ds.issues.forEach(id => acts.push(["warn", "Dipnot kaynağı / destek: " + id, "İncele", 'data-pg="nav" data-key="footnotes"']));
+      ds.issueLabels.forEach(label => acts.push(["warn", "Dipnot: " + label, "İncele", 'data-pg="nav" data-key="footnotes"']));
     }
     if (ending) acts.push(["warn", `${ending} sözleşme 90 gün içinde bitiyor`, "Listele", 'data-pg="contracts" data-view="ending"']);
     $("lqOvActions").innerHTML = `<span class="lq-pg-kick">AKSİYON MERKEZİ</span>${acts.length ? acts.map(([tone, text, label, attrs]) => `<button type="button" class="lq-pg-action" ${attrs}><i class="is-${tone}"></i><span>${esc(text)}</span><b>${label}</b></button>`).join("") : `<p class="lq-pg-empty is-ok">${ICON_CHECK} Bekleyen işlem yok.</p>`}`;
