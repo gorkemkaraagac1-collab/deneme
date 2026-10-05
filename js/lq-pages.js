@@ -696,15 +696,32 @@
       const exp = fr.tab === "expense";
       const cols = exp ? [{ label: "ŞİRKET" }, { label: "DÖNEM FAİZİ" }, { label: "DÖNEM AMORTİSMANI" }, { label: "SÖZLEŞMESEL ÖDEME" }, { label: "GELECEK 12 AY FAİZ" }, { label: "KAPSAM" }]
         : [{ label: "ŞİRKET" }, { label: "KISA VADELİ" }, { label: "UZUN VADELİ" }, { label: "KİRA YÜKÜMLÜLÜĞÜ" }, { label: "GELECEK 12 AY ANAPARA" }, { label: "KAPSAM" }];
-      const lines = data.map(({ c, r }) => {
+      // IAS 29: period expenses and payments in the reporting-date unit, the
+      // same figures as the movement tables (depreciation indexed from the
+      // cost layer, interest and payments from the month they arose). Future
+      // amounts and balances are monetary and stay nominal.
+      const restated = d => {
+        if (!d?.ok) return null;
+        const m = d.v.periodMovement || {}, t = m.liability?.tms29;
+        const dep = fv(m.rou?.depreciation);
+        return t?.status === "SUPPORTED" && dep !== null && m.rou?.openingRestated
+          ? { interest: t.totals.interest, depreciation: dep, payments: t.totals.scheduledContractualCash - t.totals.commencementAdvance } : null;
+      };
+      let anyRestated = false;
+      const lines = data.map(({ c, r, d }) => {
         if (!r.ok) return errRow(c, r.e, cols.length - 1);
         const t = r.v.totals;
         const cov = r.v.population.excludedCount ? `<span class="lq-pg-need">${r.v.population.excludedCount} kapsam dışı</span>` : `<span class="is-ok lq-pg-c">${ICON_CHECK}</span>`;
         const cell = m => `<span>${mv(m) === null ? '<span class="lq-pg-need">Kaynak yok</span>' : acc0(mv(m))}</span>`;
+        const x = exp ? restated(d) : null;
+        if (x) {
+          anyRestated = true;
+          return `<div class="lq-pg-ftr">${name(c)}<span>${acc0(x.interest)}</span><span>${acc0(x.depreciation)}</span><span>${acc0(x.payments)}</span>${cell(t.next12MonthInterest)}${cov}</div>`;
+        }
         return exp ? `<div class="lq-pg-ftr">${name(c)}${cell(t.periodInterest)}${cell(t.periodDepreciation)}${cell(t.contractualPayments)}${cell(t.next12MonthInterest)}${cov}</div>`
           : `<div class="lq-pg-ftr">${name(c)}${cell(t.currentLiability)}${cell(t.nonCurrentLiability)}<span class="is-strong">${mv(t.leaseLiability) === null ? "—" : acc0(mv(t.leaseLiability))}</span>${cell(t.next12MonthPrincipal)}${cov}</div>`;
       });
-      html = frTable(cols, lines);
+      html = frTable(cols, lines) + (anyRestated ? notice("TMS 29 uygulanıyor: dönem faizi, amortisman ve sözleşmesel ödemeler dönem sonu alım gücüyle gösterilir (hareket tablolarıyla aynı tutarlar). Gelecek 12 ay faizi ve bakiyeler parasal tutarlardır, düzeltilmez.") : "");
     } else if (fr.tab === "maturity") {
       const first = data.find(x => x.d.ok);
       const bands = first ? (charts().maturityModel(first.d.v).bands || []) : [];
