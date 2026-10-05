@@ -1403,7 +1403,10 @@ html[data-lq-ui="2"] #contractModal.lq-wiz .modal-header h2 { font-size: 17px !i
 html[data-lq-ui="2"] #contractModal.lq-wiz .modal-header p { font-size: 12px !important; color: var(--lq-ink-3) !important; }
 html[data-lq-ui="2"] .lq-wz-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 24px; padding: 24px 32px; overflow: auto; }
 html[data-lq-ui="2"] #contractModal.lq-wiz #contractForm { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--lq-line); border-radius: 12px; min-height: 0; overflow: visible !important; }
-html[data-lq-ui="2"] #contractModal.lq-wiz .modal-body { padding: 24px 28px !important; overflow: visible !important; max-height: none !important; background: transparent !important; }
+html[data-lq-ui="2"] #contractModal.lq-wiz .modal-body { padding: 24px 28px !important; overflow: visible !important; max-height: none !important; background: transparent !important; flex: 0 0 auto !important; min-height: auto !important; }
+/* The form grows with its fields (the layout scrolls); it must not be squeezed
+   to the viewport, which made fields overflow under the footer and the card. */
+html[data-lq-ui="2"] #contractModal.lq-wiz #contractForm { align-self: start; height: auto !important; max-height: none !important; }
 html[data-lq-ui="2"] #contractModal.lq-wiz .form-section.lq-wz-empty { display: none !important; }
 html[data-lq-ui="2"] .lq-wz-panel[hidden] { display: none !important; }
 html[data-lq-ui="2"] .lq-wz-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
