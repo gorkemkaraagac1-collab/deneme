@@ -611,6 +611,30 @@
       ${lines.map(line => labelFinancialRow(line, cols)).join("")}</div></div></section>`;
   }
 
+  // ROU movement by class of underlying asset (TFRS 16.53(a),(h),(j)):
+  // classes as columns, movements as rows, one block per company.
+  const ASSET_CLASS_LABELS = { PROPERTY: "Gayrimenkul", VEHICLES: "Taşıtlar", PLANT_EQUIPMENT: "Makine ve ekipman",
+    IT_EQUIPMENT: "Bilgi teknolojileri ekipmanı", OTHER: "Diğer" };
+  function rouByClassHtml(data) {
+    const blocks = data.map(({ c, d }) => {
+      const field = d.ok ? d.v.quantitative?.rouRollForwardByAssetClass : null;
+      if (!field) return "";
+      if (field.status !== "SUPPORTED" || !Array.isArray(field.value) || !field.value.length) {
+        return `<p class="lq-pg-small is-warn">${esc(c.name || c.id)}: varlık sınıfı kırılımı için tüm sözleşmelere dipnot sınıfı atanmalı (Dipnotlar → Dipnot varsayımları).</p>`;
+      }
+      const classes = field.value;
+      const total = key => classes.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
+      const rows = [["Açılış", "opening", 1], ["İlk muhasebeleştirme", "initialRecognitionAdditions", 1], ["Modifikasyon", "modifications", 1],
+        ["Yeniden ölçüm", "remeasurements", 1], ["Amortisman", "depreciation", -1], ["Finansal alt kiralamaya devredilen", "subleaseDerecognition", -1]]
+        .filter(([, key]) => key === "opening" || key === "depreciation" || Math.abs(total(key)) >= 0.5);
+      const cols = [{ label: "HAREKET" }, ...classes.map(row => ({ label: esc(ASSET_CLASS_LABELS[row.assetClass] || row.assetClass).toLocaleUpperCase("tr-TR") })), { label: "TOPLAM" }];
+      const lines = rows.map(([label, key, sign]) => `<div class="lq-pg-ftr"><span class="is-name">${esc(label)}</span>${classes.map(row => `<span>${acc0(sign * (Number(row[key]) || 0))}</span>`).join("")}<span>${acc0(sign * total(key))}</span></div>`)
+        .concat(`<div class="lq-pg-ftr"><span class="is-name is-strong">Kapanış ${esc(trDate(period().periodEnd))}</span>${classes.map(row => `<span class="is-strong">${acc0(row.closing)}</span>`).join("")}<span class="is-strong">${acc0(total("closing"))}</span></div>`);
+      return `<h3 class="lq-pg-subhead" style="margin:22px 0 10px;font-size:15px;font-weight:600">${esc(c.name || c.id)} · varlık sınıfına göre kullanım hakkı hareketi</h3>` + frTable(cols, lines, "lq-pg-byclass");
+    }).join("");
+    return blocks;
+  }
+
   function drawFinancialTab() {
     const body = $("lqFrBody");
     if (!body || !fr.data) return;
@@ -627,26 +651,47 @@
     let html = "";
     if (fr.tab === "liability" || fr.tab === "rou") {
       const liab = fr.tab === "liability";
+      // IAS 29 (TMS 29.8, .34): when applied, every line is in the measuring
+      // unit at the reporting date. The liability is monetary: its restated
+      // movement leaves the gain/loss on the net monetary position (29.27).
+      // The ROU is non-monetary: restatement sits inside each line, so there
+      // is no separate inflation column.
+      const lt = d => (d.ok && d.v.periodMovement?.liability?.tms29?.status === "SUPPORTED") ? d.v.periodMovement.liability.tms29.totals : null;
+      const restatedRou = d => d.ok && d.v.periodMovement?.rou?.openingRestated && fv(d.v.periodMovement.rou.openingRestated) !== null;
+      const anyTms29 = data.some(({ d }) => lt(d) || restatedRou(d));
+      const legacyRouTms29 = data.some(({ d }) => d.ok && !restatedRou(d) && d.v.periodMovement?.rou?.tms29Movement?.status === "SUPPORTED");
       const cols = liab
-        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "KİRA ÖDEMELERİ (SÖZLEŞMESEL)" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: "FARK · TMS 29 / DİĞER", warn: true }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
-        : [{ label: "ŞİRKET" }, { label: "AÇILIŞ NDD" }, { label: "İLK MUHASEBELEŞTİRME" }, { label: "SONRAKİ İLAVELER" }, { label: "AMORTİSMAN" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "TMS 29 DÜZELTMESİ", warn: true }, { label: `KAPANIŞ NDD ${trDate(p.periodEnd)}` }];
+        ? [{ label: "ŞİRKET" }, { label: "AÇILIŞ" }, { label: "YENİ SÖZLEŞMELER" }, { label: "FAİZ" }, { label: "KİRA ÖDEMELERİ (SÖZLEŞMESEL)" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, { label: "KUR FARKI TMS 21" }, { label: anyTms29 ? "TMS 29 PARASAL KAZANÇ / KAYIP" : "FARK / DİĞER", warn: true }, { label: `KAPANIŞ ${trDate(p.periodEnd)}` }, { label: "MUTABAKAT" }]
+        : [{ label: "ŞİRKET" }, { label: "AÇILIŞ NDD" }, { label: "İLK MUHASEBELEŞTİRME" }, { label: "SONRAKİ İLAVELER" }, { label: "AMORTİSMAN" }, { label: "MODİFİKASYON" }, { label: "YENİDEN ÖLÇÜM" }, ...(legacyRouTms29 ? [{ label: "TMS 29 DÜZELTMESİ", warn: true }] : []), { label: `KAPANIŞ NDD ${trDate(p.periodEnd)}` }];
+      const okIcon = `<span class="is-ok lq-pg-c">${ICON_CHECK}</span>`;
       const lines = data.map(({ c, d }) => {
         if (!d.ok) return errRow(c, d.e, cols.length - 1);
         const m = d.v.periodMovement || {};
         if (liab) {
           const l = m.liability || {};
+          const t = lt(d);
+          if (t) {
+            const payments = -(t.scheduledContractualCash - t.commencementAdvance);
+            const residual = t.opening + t.initialRecognitionAdditions + t.interest + payments + t.modifications + t.remeasurements + t.tms21Movement + t.monetaryGainLoss - t.closing;
+            return `<div class="lq-pg-ftr">${name(c)}<span>${acc0(t.opening)}</span><span>${acc0(t.initialRecognitionAdditions)}</span><span>${acc0(t.interest)}</span><span>${acc0(payments)}</span><span>${acc0(t.modifications)}</span><span>${acc0(t.remeasurements)}</span><span>${acc0(t.tms21Movement)}</span><span class="is-warn">${acc0(t.monetaryGainLoss)}</span><span class="is-strong">${acc0(t.closing)}</span>${Math.abs(residual) < 1 ? okIcon : `<span class="lq-pg-need">Fark</span>`}</div>`;
+          }
           const bm = charts().bridgeModel(d.v);
           const pay = bm.rows.find(r => r.id === "payments");
-          const recon = bm.residual === null ? (bm.complete ? `<span class="is-ok lq-pg-c">${ICON_CHECK}</span>` : `<span class="lq-pg-need">Eksik</span>`) : `<span class="lq-pg-need">Fark</span>`;
-          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}${""}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-warn">${bm.residual === null ? "—" : acc0(bm.residual)}</span><span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
+          const recon = bm.residual === null ? (bm.complete ? okIcon : `<span class="lq-pg-need">Eksik</span>`) : `<span class="lq-pg-need">Fark</span>`;
+          return `<div class="lq-pg-ftr">${name(c)}${fieldCell(l.opening)}${fieldCell(l.initialRecognitionAdditions)}${fieldCell(l.interest)}${pay && isNum(pay.value) ? `<span>${acc0(pay.value)}</span>` : fieldCell(l.actualCashOutflow)}${fieldCell(l.modifications)}${fieldCell(l.remeasurements)}${fieldCell(l.tms21Movement)}<span class="is-warn">${bm.residual === null ? "—" : acc0(bm.residual)}</span><span class="is-strong">${acc0(fv(l.closing))}</span>${recon}</div>`;
         }
         const r = m.rou || {};
         const dep = fv(r.depreciation);
-        return `<div class="lq-pg-ftr">${name(c)}${fieldCell(r.opening)}${fieldCell(r.initialRecognitionAdditions)}${fieldCell(r.subsequentAdditions)}${dep !== null ? `<span>${acc0(-Math.abs(dep))}</span>` : fieldCell(r.depreciation)}${fieldCell(r.modifications)}${fieldCell(r.remeasurements)}${fieldCell(r.tms29Movement)}<span class="is-strong">${acc0(fv(r.closing))}</span></div>`;
+        const opening = restatedRou(d) ? r.openingRestated : r.opening;
+        return `<div class="lq-pg-ftr">${name(c)}${fieldCell(opening)}${fieldCell(r.initialRecognitionAdditions)}${fieldCell(r.subsequentAdditions)}${dep !== null ? `<span>${acc0(-Math.abs(dep))}</span>` : fieldCell(r.depreciation)}${fieldCell(r.modifications)}${fieldCell(r.remeasurements)}${legacyRouTms29 ? (restatedRou(d) ? "<span>—</span>" : fieldCell(r.tms29Movement)) : ""}<span class="is-strong">${acc0(fv(r.closing))}</span></div>`;
       });
-      html = frTable(cols, lines) + notice(liab
-        ? "<strong>Fark sütunu</strong> kapanış ile paketteki hareketlerin toplamı arasındaki farktır; pakette TMS 29 parasal kazanç/kayıp için ayrı alan olmadığından bu sütunda görünür. Kira yükümlülüğü parasal kalemdir; kur farkı TMS 21 uyarınca kâr veya zarardadır. <strong>Kira ödemeleri</strong> sözleşmesel ödemelerdir; istisna kira ödemeleri ve başlangıç tarihindeki peşin ödemeler (kullanım hakkı maliyetinin parçası, TFRS 16.24(b)) hariçtir."
-        : "Kullanım hakkı varlığı parasal olmayan kalemdir; kur farkı oluşmaz. TMS 29 uygulanıyorsa düzeltme ayrı sütundadır.");
+      html = frTable(cols, lines) + (liab ? "" : rouByClassHtml(data)) + notice(liab
+        ? (anyTms29
+          ? "TMS 29 uygulanıyor: açılış dönem başı alım gücünden, faiz, ödemeler, yeni sözleşmeler, modifikasyon ve kur farkı gerçekleştikleri aydan dönem sonu alım gücüne getirilmiştir. Kira yükümlülüğü parasal kalemdir; kapanışı düzeltilmez (TMS 29.12). Aradaki fark net parasal pozisyon kazancı (−) / kaybıdır (+) ve kâr veya zarara yansır (TMS 29.27–28). <strong>Kira ödemeleri</strong> sözleşmesel ödemelerdir; başlangıç tarihindeki peşin ödemeler (TFRS 16.24(b)) hariçtir."
+          : "<strong>Fark sütunu</strong> kapanış ile paketteki hareketlerin toplamı arasındaki farktır. Kira yükümlülüğü parasal kalemdir; kur farkı TMS 21 uyarınca kâr veya zarardadır. <strong>Kira ödemeleri</strong> sözleşmesel ödemelerdir; istisna kira ödemeleri ve başlangıç tarihindeki peşin ödemeler (kullanım hakkı maliyetinin parçası, TFRS 16.24(b)) hariçtir.")
+        : (anyTms29
+          ? "Kullanım hakkı varlığı parasal olmayan kalemdir (kur farkı oluşmaz). TMS 29 uygulanıyor: tüm satırlar dönem sonu alım gücündedir; açılış dönem başından, ilaveler, modifikasyonlar ve amortisman ilgili maliyet katmanının edinim ayından endekslenmiştir (TMS 29.8, .15, .34). Bu yüzden ayrı enflasyon sütunu yoktur."
+          : "Kullanım hakkı varlığı parasal olmayan kalemdir; kur farkı oluşmaz."));
     } else if (fr.tab === "expense" || fr.tab === "split") {
       const exp = fr.tab === "expense";
       const cols = exp ? [{ label: "ŞİRKET" }, { label: "DÖNEM FAİZİ" }, { label: "DÖNEM AMORTİSMANI" }, { label: "SÖZLEŞMESEL ÖDEME" }, { label: "GELECEK 12 AY FAİZ" }, { label: "KAPSAM" }]

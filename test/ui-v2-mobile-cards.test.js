@@ -53,7 +53,7 @@ function installSources(window) {
   };
   window.LeaseQantPrivateTfrs16Facade = {
     loadLeaseDisclosureAvailability: async request => ({ request }),
-    loadLeaseDisclosure: async () => disclosurePackage()
+    loadLeaseDisclosure: async () => (window.__tms29Package || disclosurePackage())
   };
   window.LeaseQantDashboardCharts = {
     scopeOk: () => true,
@@ -150,4 +150,40 @@ test('legacy view remains outside the mobile card markup and the responsive rule
   assert.match(cssSource, /@media\s*\(max-width:\s*900px\)[\s\S]*?html\[data-lq-ui="2"\]\s+\.lq-pg-table\s*>\s*\.lq-pg-tr\[data-open-contract\]/);
   assert.match(cssSource, /html\[data-lq-ui="2"\]\s+\.lq-pg-fgrid\s*>\s*\.lq-pg-ftr:not\(\.is-head\)/);
   assert.match(cssSource, /html\[data-lq-ui="2"\]\s+\.lq-pg-event/);
+});
+
+test('IAS 29: liability table shows the monetary gain column, ROU table has no inflation column and a by-class block', async () => {
+  const dom = new JSDOM(`<!doctype html><html data-lq-ui="2"><body>
+    <select id="v26ActiveCompanySelect"><option value="company-1" selected>Synthetic Company</option></select>
+    <nav id="sidebarNav"><button class="nav-item active" data-open="financialReporting">Raporlama</button></nav>
+    <div id="v26PageHost" style="display:block"></div>
+  </body></html>`, { url: 'https://leaseqant.com/tfrs16.html', runScripts: 'outside-only' });
+  installSources(dom.window);
+  const base = disclosurePackage();
+  dom.window.__tms29Package = { ...base,
+    quantitative: { rouRollForwardByAssetClass: { status: 'SUPPORTED', value: [
+      { assetClass: 'PROPERTY', opening: 70, initialRecognitionAdditions: 0, modifications: 0, remeasurements: 0, depreciation: 3, subleaseDerecognition: 0, closing: 67 },
+      { assetClass: 'VEHICLES', opening: 32, initialRecognitionAdditions: 0, modifications: 0, remeasurements: 0, depreciation: 3, subleaseDerecognition: 0, closing: 29 }] } },
+    periodMovement: { ...base.periodMovement,
+      rou: { ...base.periodMovement.rou, openingRestated: metric(102), tms29Movement: metric(2), closing: metric(96) },
+      liability: { ...base.periodMovement.liability, tms29: { status: 'SUPPORTED', totals: { opening: 102, initialRecognitionAdditions: 0, interest: 4,
+        scheduledContractualCash: 10, commencementAdvance: 0, modifications: 0, remeasurements: 0, tms21Movement: 0, monetaryGainLoss: -2, closing: 94 } } } } };
+  dom.window.eval(pageSource);
+  dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+  await tick();
+  const finance = dom.window.document.getElementById('lqFinancial');
+  const headings = () => Array.from(finance.querySelector('.lq-pg-ftr.is-head').children, cell => cell.textContent.trim());
+  finance.querySelector('[data-frtab="liability"]').click();
+  assert.ok(headings().includes('TMS 29 PARASAL KAZANÇ / KAYIP'));
+  const liabilityRow = finance.querySelector('.lq-pg-ftr:not(.is-head)');
+  assert.match(liabilityRow.textContent, /\(2\)/);
+  assert.ok(liabilityRow.querySelector('.is-ok'), 'restated movement reconciles to the nominal closing');
+  finance.querySelector('[data-frtab="rou"]').click();
+  assert.equal(headings().some(h => /TMS 29/.test(h)), false);
+  assert.match(finance.querySelector('.lq-pg-ftr:not(.is-head)').textContent, /102/);
+  const byClass = finance.querySelector('.lq-pg-byclass');
+  assert.ok(byClass);
+  const classHead = Array.from(byClass.querySelector('.lq-pg-ftr.is-head').children, cell => cell.textContent.trim());
+  assert.deepEqual(classHead, ['HAREKET', 'GAYRİMENKUL', 'TAŞITLAR', 'TOPLAM']);
+  dom.window.close();
 });
