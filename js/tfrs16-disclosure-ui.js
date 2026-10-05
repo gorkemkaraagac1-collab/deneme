@@ -57,6 +57,17 @@
     }));
   }
 
+  // Exemption lines only when the server package carries them.
+  function exemptionRows(q) {
+    return [["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
+        ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
+        ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments],
+        ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null],
+        ["Satış ve geri kiralama kazancı/kaybı (TFRS 16.53(i))", q.saleAndLeasebackGainLoss && q.saleAndLeasebackGainLoss.status !== "NOT_SUPPORTED" ? q.saleAndLeasebackGainLoss : null],
+        ["Satış sayılmayan devirlerden finansal borç (TFRS 16.103, TFRS 9)", q.failedSaleFinancingLiability && q.failedSaleFinancingLiability.status === "SUPPORTED" ? q.failedSaleFinancingLiability : null]]
+        .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field));
+  }
+
   function rowsForTab(pkg, tab) {
     const q = pkg?.quantitative || {};
     const maturity = pkg?.maturityAnalysis || {};
@@ -70,8 +81,21 @@
       ? `TMS 29: ${missingCpi.join(", ")} için doğrulanmış TÜFE yok. Endeks doğrulanınca hesaplanır (Yönetim → Enflasyon Endeksleri).`
       : "";
     const rouRow = (label, field) => fieldRow(label, field, cpiNote && field?.status === "NOT_CALCULABLE" ? cpiNote : undefined);
+    // IAS 29 (TMS 29.8, .34): lines in the reporting-date unit. ROU opening
+    // carries its restatement (no separate inflation line); the liability
+    // movement is restated and closes with the net monetary position.
+    const rouRestated = rou.openingRestated && VALUE_STATUSES.has(rou.openingRestated.status);
+    const lt = liability.tms29?.status === "SUPPORTED" ? liability.tms29.totals : null;
+    const tmsField = (value, extra = {}) => ({ value, status: Math.abs(value) < 0.005 ? "ZERO_CONFIRMED" : "SUPPORTED",
+      currency: liability.closing?.currency || pkg?.period?.presentationCurrency || "", fieldId: "LEASE_LIABILITY_TMS29",
+      sourceIds: liability.closing?.sourceIds || [], evidenceIds: liability.tms29?.evidenceIds || [], ...extra });
+    const roll = q.rouRollForwardByAssetClass;
+    const rollField = key => roll && VALUE_STATUSES.has(roll.status) && Array.isArray(roll.value)
+      ? { ...roll, value: roll.value.map(row => ({ assetClass: row.assetClass, value: row[key], currency: row.currency })) } : roll;
     if (tab === "asset") return [
-      rouRow("Kullanım hakkı varlığı — açılış", rou.opening),
+      rouRestated ? rouRow("Kullanım hakkı varlığı — açılış (dönem sonu alım gücüyle)", { ...rou.openingRestated,
+        note: "TMS 29: açılış dönem başı alım gücünden dönem sonuna getirildi; ilaveler, modifikasyon ve amortisman kendi edinim aylarından endekslidir." })
+        : rouRow("Kullanım hakkı varlığı — açılış", rou.opening),
       rouRow("İlk muhasebeleştirme ilaveleri", rou.initialRecognitionAdditions || q.initialRecognitionRouAdditions),
       rouRow("Sonraki dönem ilaveleri", rou.subsequentAdditions),
       rouRow("Dönem amortismanı", rou.depreciation || q.rouDepreciationTotal),
@@ -82,10 +106,27 @@
       // The derecognition gain/loss belongs next to the ROU it arises from.
       ...(q.subleaseDerecognitionGainLoss && q.subleaseDerecognitionGainLoss.status !== "NOT_SUPPORTED" && q.subleaseDerecognitionGainLoss.value
         ? [fieldRow("Finansal alt kiralama devir kazancı/kaybı (TFRS 16.B58)", q.subleaseDerecognitionGainLoss)] : []),
-      rouRow("TMS 29 kullanım hakkı hareketi", rou.tms29Movement),
+      ...(rouRestated ? [] : [rouRow("TMS 29 kullanım hakkı hareketi", rou.tms29Movement)]),
       rouRow("Kullanım hakkı varlığı — kapanış", rou.closing || q.rouCarryingAmount),
+      ...(roll && roll.status === "SUPPORTED" ? classRows("Varlık sınıfına göre açılış", rollField("opening")) : []),
+      ...(roll && roll.status === "SUPPORTED" ? classRows("Varlık sınıfına göre ilaveler", rollField("initialRecognitionAdditions")) : []),
       ...classRows("Varlık sınıfına göre amortisman", q.rouDepreciationByAssetClass),
       ...classRows("Varlık sınıfına göre kapanış", q.rouCarryingAmountByAssetClass)
+    ];
+    if (tab === "liability" && lt) return [
+      fieldRow("Kira yükümlülüğü — açılış (dönem sonu alım gücüyle)", tmsField(lt.opening,
+        { note: "TMS 29: açılış ve dönem hareketleri gerçekleştikleri aydan dönem sonu alım gücüne getirildi; kapanış parasal kalem olduğundan düzeltilmez (TMS 29.12)." })),
+      fieldRow("İlk muhasebeleştirme girişleri", tmsField(lt.initialRecognitionAdditions)),
+      fieldRow("Dönem faiz gideri", tmsField(lt.interest)),
+      fieldRow("Planlanan sözleşme ödemeleri", tmsField(lt.scheduledContractualCash - lt.commencementAdvance), "Gerçekleşmiş ödeme değildir; başlangıç tarihindeki peşin ödeme hariç."),
+      fieldRow("Modifikasyon hareketi", tmsField(lt.modifications)),
+      fieldRow("Yeniden değerlendirme / ölçüm hareketi", tmsField(lt.remeasurements)),
+      fieldRow("TMS 21 kur hareketi", tmsField(lt.tms21Movement)),
+      fieldRow("TMS 29 net parasal pozisyon kazancı (−) / kaybı (+)", tmsField(lt.monetaryGainLoss), "Kâr veya zarara yansır (TMS 29.27–28)."),
+      ...(movement.modificationGainLoss ? [fieldRow("Kısmi fesih kazancı (+) / kaybı (−) (TFRS 16.46(a))", movement.modificationGainLoss)] : []),
+      fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
+      fieldRow("Gerçekleşmiş toplam kira nakit çıkışı (nominal)", liability.actualCashOutflow || q.totalCashOutflowForLeases),
+      ...exemptionRows(q)
     ];
     if (tab === "liability") return [
       fieldRow("Kira yükümlülüğü — açılış", liability.opening),
@@ -99,14 +140,7 @@
       fieldRow("TMS 21 kur hareketi", liability.tms21Movement),
       ...(movement.modificationGainLoss ? [fieldRow("Kısmi fesih kazancı (+) / kaybı (−) (TFRS 16.46(a))", movement.modificationGainLoss)] : []),
       fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
-      // Exemption lines only when the server package carries them.
-      ...[["Kısa vadeli kiralama gideri (TFRS 16.53(c))", q.shortTermLeaseExpense],
-        ["Düşük değerli varlık kiralama gideri (TFRS 16.53(d))", q.lowValueLeaseExpense],
-        ["Kısa vadeli kiralama taahhütleri (TFRS 16.55)", q.shortTermLeaseCommitments],
-        ["Alt kiralama geliri (TFRS 16.53(f))", q.subleaseIncome && q.subleaseIncome.status !== "NOT_SUPPORTED" ? q.subleaseIncome : null],
-        ["Satış ve geri kiralama kazancı/kaybı (TFRS 16.53(i))", q.saleAndLeasebackGainLoss && q.saleAndLeasebackGainLoss.status !== "NOT_SUPPORTED" ? q.saleAndLeasebackGainLoss : null],
-        ["Satış sayılmayan devirlerden finansal borç (TFRS 16.103, TFRS 9)", q.failedSaleFinancingLiability && q.failedSaleFinancingLiability.status === "SUPPORTED" ? q.failedSaleFinancingLiability : null]]
-        .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field))
+      ...exemptionRows(q)
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
       maturity.discountedLeaseLiabilityCarryingAmount)];
