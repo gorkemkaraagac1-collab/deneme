@@ -188,7 +188,7 @@
             <button type="button" role="menuitem" data-lq-cv-act="html">Rapor (HTML)</button>
             <button type="button" role="menuitem" data-lq-cv-act="csv" ${state.report?.row?.status === "SUPPORTED" ? "" : "disabled"}>Hesaplama tablosu (CSV)</button>
             <button type="button" role="menuitem" data-lq-cv-act="edit">Sözleşmeyi düzenle</button>
-            <button type="button" role="menuitem" class="is-danger" data-lq-cv-act="delete">Sözleşmeyi sil</button>
+            <button type="button" role="menuitem" class="is-danger" data-lq-cv-act="delete">Arşivle / sil</button>
           </div></div>
       </div></div>`;
   }
