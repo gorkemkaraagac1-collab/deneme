@@ -3,7 +3,7 @@
    - Mevcut DOM kimliklerini taşımaz/yeniden adlandırmaz; yalnızca
      şirket seçicisini (aynı öğe, aynı dinleyiciler) bağlam çubuğuna taşır.
    - Dönem seçimi js/lq-reporting-period.js içindeki ortak durumdadır.
-   - html[data-lq-ui="2"] değilse hiçbir şey yapmaz (?ui=legacy). */
+   - html[data-lq-ui="2"] (tfrs16.html her zaman ayarlar) değilse hiçbir şey yapmaz. */
 ((global) => {
   "use strict";
   const root = document.documentElement;
