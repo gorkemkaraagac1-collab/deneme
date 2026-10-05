@@ -201,6 +201,10 @@
   const notice = (html, tone = "info") => `<div class="lq-pg-note is-${tone}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8v.5"></path></svg><span>${html}</span></div>`;
   function errText(e) {
     const code = e?.code;
+    // The server says why a session ended (logout elsewhere, password change,
+    // deactivated account).
+    if (e?.status === 401 && e?.code === "SESSION_REVOKED") return "Oturumunuz sonlandırıldı (çıkış yapıldı veya parola değişti). Yeniden giriş yapın.";
+    if (e?.status === 401 && e?.code === "ACCOUNT_INACTIVE") return "Hesabınız etkin değil. Yöneticinize başvurun.";
     if (e?.status === 401) return "Oturum açmanız gerekiyor.";
     if (e?.status === 403 || /ACCESS_DENIED/.test(code || "")) return "Bu şirket için erişim yetkiniz yok.";
     if (code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED") return "Seçilen dönem için onaylı dipnot hesaplama kaydı yok.";

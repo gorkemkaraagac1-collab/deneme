@@ -260,5 +260,15 @@
       btn.textContent = "Giriş Yap";
     });
   </script>
+  <script>
+    // Why the previous session ended (set by the app when the server refused it).
+    (function () {
+      var reason = new URLSearchParams(location.search).get("reason");
+      var text = { SESSION_REVOKED: "Oturumunuz sonlandırıldı (çıkış yapıldı veya parola değişti). Yeniden giriş yapın.",
+        ACCOUNT_INACTIVE: "Hesabınız etkin değil. Yöneticinize başvurun." }[reason];
+      var el = document.getElementById("errorMsg");
+      if (text && el) { el.textContent = text; el.style.display = "block"; }
+    })();
+  </script>
 </body>
 </html>

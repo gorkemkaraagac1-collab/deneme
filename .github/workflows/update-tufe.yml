@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +29,20 @@ jobs:
           TUIK_API_KEY: ${{ secrets.TUIK_API_KEY }}
         run: node fetch-tuik-tufe.js
 
-      - name: Değişiklikleri commit'le
+      # Change management: the update goes through a pull request (tests and
+      # review) instead of a direct push to the protected main branch.
+      - name: Değişikliği PR olarak aç
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/tufe-endeks.json
-          git diff --cached --quiet || git commit -m "TÜFE endeksi güncellendi ($(date +%Y-%m))"
-          git push
+          if git diff --cached --quiet; then echo "Değişiklik yok."; exit 0; fi
+          BRANCH="data/tufe-$(date +%Y-%m)-${GITHUB_RUN_ID}"
+          git switch -c "$BRANCH"
+          git commit -m "TÜFE endeksi güncellendi ($(date +%Y-%m))"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "TÜFE endeksi güncellendi ($(date +%Y-%m))" \
+            --body "Legacy TÜFE JSON aracı (manuel tetikleme, run ${GITHUB_RUN_ID}) tarafından üretildi. Production enflasyon kayıtları bu dosyadan okunmaz. İnceleyip merge edin."

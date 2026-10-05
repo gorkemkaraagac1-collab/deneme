@@ -27,7 +27,17 @@ window.fetch = (input, init = {}) => {
     document.documentElement.style.visibility = "hidden";
     const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
     if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
-    else { fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
+    else {
+      // The login page is told why the session ended (revoked / inactive).
+      fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include" })
+        .then(async r => {
+          if (r.ok) { document.documentElement.style.visibility = "visible"; return; }
+          const body = await r.json().catch(() => ({}));
+          const reason = ["SESSION_REVOKED", "ACCOUNT_INACTIVE"].includes(body && body.code) ? `?reason=${body.code}` : "";
+          window.location.replace(`login.html${reason}`);
+        })
+        .catch(() => window.location.replace("login.html"));
+    }
   }
 
   window.logout = function logout() {

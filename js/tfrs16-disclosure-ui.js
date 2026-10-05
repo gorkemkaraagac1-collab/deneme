@@ -205,6 +205,10 @@
   }
 
   function errorLabel(error) {
+    // The server says why a session ended (logout elsewhere, password change,
+    // deactivated account).
+    if (error?.status === 401 && error?.code === "SESSION_REVOKED") return "Oturumunuz sonlandırıldı (çıkış yapıldı veya parola değişti). Yeniden giriş yapın.";
+    if (error?.status === 401 && error?.code === "ACCOUNT_INACTIVE") return "Hesabınız etkin değil. Yöneticinize başvurun.";
     if (error?.status === 401) return "Oturum açmanız gerekiyor.";
     if (error?.status === 403) return "Bu şirketin dipnotlarına erişim yetkiniz yok.";
     if (error?.code === "DISCLOSURE_TRUSTED_SOURCE_REQUIRED" && Array.isArray(error.details?.staleContractIds) && error.details.staleContractIds.length) {
