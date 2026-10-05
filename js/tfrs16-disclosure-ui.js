@@ -407,17 +407,37 @@
     const months = error?.details?.missingMonths;
     return (JOURNAL_ERRORS[code] || `Yevmiye üretilemedi (${code || "bilinmeyen hata"})`) + (months?.length ? `: ${months.join(", ")}` : "");
   }
+  const JOURNAL_TABLE_STYLE = `<style>
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;border:1px solid #dbe3ee;border-radius:8px;overflow:hidden}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table th{background:#0f1b33!important;color:#ffffff!important;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;text-align:left;font-weight:600}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table td{color:#0f172a!important;padding:9px 12px;border-top:1px solid #e2e8f0;opacity:1!important}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table tbody tr:nth-child(even) td{background:#f5f8fc}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table tbody tr:hover td{background:#e8f0fe}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table .lq-jr-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table td.is-zero{color:#a0aec0!important}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table .lq-jr-code{color:#1d4ed8!important;font-weight:700}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table tr.lq-jr-total td{background:#eef2f7!important;font-weight:700;border-top:2px solid #0f1b33}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table.is-voucher{font-size:12.5px;margin:8px 0 12px}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table.is-voucher th{background:#334155!important}
+    :is(#v26PageHost,body) .lq-dn-yevmiye details summary{color:#0f172a;cursor:pointer;padding:6px 0}
+  </style>`;
+
   function journalSectionHtml({ ready, status, error, journal: j, tms29, title = "Dönem yevmiyesi (TFRS 16)" }) {
-    const head = `<section class="gk-v26-card lq-dn-journal" style="margin-top:16px"><h3 style="margin:0 0 6px">${escapeHtml(title)}</h3>`
+    const head = `<section class="gk-v26-card lq-dn-yevmiye" style="margin-top:16px"><h3 style="margin:0 0 6px">${escapeHtml(title)}</h3>`
       + `<p style="margin:0 0 10px;color:#64748b;font-size:12px">Fiş satırları dipnotun güvenilir kaynaklarından üretilir (sunum para birimi${tms29 ? ", TMS 29 düzeltilmiş" : ""}). Ödemeler sözleşmesel plandır; deftere gönderilmez.</p>`
       + `<button type="button" class="gk-v26-btn" id="disclosureJournal" ${ready && status !== "loading" ? "" : "disabled"}>${status === "loading" ? "Yevmiye hazırlanıyor…" : "Dönem yevmiyesini oluştur"}</button>`;
     if (status === "error") return head + `<p role="alert" style="color:#991b1b">${escapeHtml(journalErrorText(error))}</p></section>`;
     if (!j) return head + `</section>`;
-    const rows = j.summary.map(r => `<tr><td class="lq-dn-mono">${escapeHtml(r.accountCode)}</td><td>${escapeHtml(r.accountName)}</td><td style="text-align:right">${money2(r.debit)}</td><td style="text-align:right">${money2(r.credit)}</td></tr>`).join("");
+    // Readable journal tables: dark text, zebra rows, account code
+    // emphasised, zero amounts muted, totals row (overrides pale page styles).
+    const amount = v => Number(v) ? `<td class="lq-jr-num">${money2(v)}</td>` : `<td class="lq-jr-num is-zero">${money2(0)}</td>`;
+    const rows = j.summary.map(r => `<tr><td class="lq-jr-code">${escapeHtml(r.accountCode)}</td><td>${escapeHtml(r.accountName)}</td>${amount(r.debit)}${amount(r.credit)}</tr>`).join("")
+      + `<tr class="lq-jr-total"><td></td><td>Toplam</td><td class="lq-jr-num">${money2(j.totalDebit)}</td><td class="lq-jr-num">${money2(j.totalCredit)}</td></tr>`;
     const vouchers = j.vouchers.map(v => `<details><summary>${escapeHtml(v.contractId)} · borç ${money2(v.totalDebit)} · ${v.reconciled ? "dipnotla mutabık ✓" : "mutabakat farkı"}</summary>`
-      + `<table style="width:100%;font-size:12px"><tbody>${v.lines.map(l => `<tr><td>${escapeHtml(JOURNAL_MOVEMENTS[l.movement] || l.movement)}</td><td class="lq-dn-mono">${escapeHtml(l.accountCode)} ${escapeHtml(l.accountName)}</td><td style="text-align:right">${l.debit ? money2(l.debit) : ""}</td><td style="text-align:right">${l.credit ? money2(l.credit) : ""}</td></tr>`).join("")}</tbody></table></details>`).join("");
+      + `<table class="lq-jr-table is-voucher"><thead><tr><th>Hareket</th><th>Hesap</th><th class="lq-jr-num">Borç</th><th class="lq-jr-num">Alacak</th></tr></thead><tbody>${v.lines.map(l => `<tr><td>${escapeHtml(JOURNAL_MOVEMENTS[l.movement] || l.movement)}</td><td><span class="lq-jr-code">${escapeHtml(l.accountCode)}</span> ${escapeHtml(l.accountName)}</td><td class="lq-jr-num">${l.debit ? money2(l.debit) : ""}</td><td class="lq-jr-num">${l.credit ? money2(l.credit) : ""}</td></tr>`).join("")}</tbody></table></details>`).join("");
     return head + `<p role="status" style="margin:10px 0">${escapeHtml(j.voucherCount)} fiş · borç ${money2(j.totalDebit)} = alacak ${money2(j.totalCredit)} ${escapeHtml(j.currency)} · ${j.reconciled ? "tüm fişler dipnot hareketiyle mutabık" : "mutabakat farkı olan fiş var"}</p>`
-      + `<table style="width:100%;font-size:12.5px"><thead><tr><th>Hesap</th><th>Hesap adı</th><th style="text-align:right">Borç</th><th style="text-align:right">Alacak</th></tr></thead><tbody>${rows}</tbody></table>`
+      + JOURNAL_TABLE_STYLE
+      + `<table class="lq-jr-table"><thead><tr><th>Hesap</th><th>Hesap adı</th><th class="lq-jr-num">Borç</th><th class="lq-jr-num">Alacak</th></tr></thead><tbody>${rows}</tbody></table>`
       + `<button type="button" class="gk-v26-btn gk-v26-btn-secondary" id="disclosureJournalCsv" style="margin-top:10px">↓ Yevmiyeyi CSV olarak indir</button>`
       + `<div style="margin-top:10px">${vouchers}</div></section>`;
   }
