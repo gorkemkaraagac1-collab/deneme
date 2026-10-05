@@ -148,7 +148,7 @@
   if(format==='xlsx'||format==='excel'){if(!global.XLSX)fail('REPORTING_EXPORT_UNAVAILABLE');const book=global.XLSX.utils.book_new();
    global.XLSX.utils.book_append_sheet(book,global.XLSX.utils.json_to_sheet(rows),'Rapor');global.XLSX.writeFile(book,'TFRS16_Backend_Rapor.xlsx');
   }else if(format==='pdf'||format==='print'){const page=global.open('','_blank');if(!page)fail('REPORTING_EXPORT_UNAVAILABLE');page.opener=null;
-   page.document.write('<!doctype html><meta charset="utf-8"><title>TFRS16 Rapor</title>'+html(p,section,contractId));page.document.close();page.print();
+   page.document.write('<!doctype html><meta charset="utf-8"><title>TFRS16 Rapor</title><style>@import url(https://fonts.googleapis.com/css2?family=Caladea:ital,wght@0,400;0,700;1,400;1,700&display=swap);html,body,*{font-family:Cambria,Caladea,Georgia,serif!important}</style>'+html(p,section,contractId));page.document.close();page.print();
   }else{const content=format==='html'?html(p,section,contractId):serialize(p,format,section,contractId);
    const url=global.URL.createObjectURL(new Blob([content],{type:format==='html'?'text/html;charset=utf-8':'text/plain;charset=utf-8'}));
    const link=global.document.createElement('a');link.href=url;link.download='TFRS16_Backend_Rapor.'+(format==='txt'?'txt':format==='html'?'html':'csv');link.click();global.URL.revokeObjectURL(url);}

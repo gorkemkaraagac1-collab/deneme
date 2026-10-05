@@ -1,0 +1,38 @@
+/* LeaseQant yazı tipi: tüm sayfalarda Cambria.
+   Cambria bir Microsoft (Office/Windows/macOS) fontudur ve web'den
+   yüklenemez; yüklü olmayan cihazlarda aynı ölçülerle tasarlanmış açık
+   kaynak Caladea kullanılır, satır ve tablo düzeni kaymaz.
+   Font Awesome ikonları kendi yazı tiplerinde kalır. */
+@import url("https://fonts.googleapis.com/css2?family=Caladea:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+
+:root {
+  --lq-cambria: Cambria, Caladea, "Cambria Math", Georgia, "Times New Roman", serif;
+  /* Modüllerin kendi yazı tipi değişkenleri de Cambria'ya bağlanır. */
+  --lq-font: var(--lq-cambria) !important;
+  --lq-mono: var(--lq-cambria) !important;
+  --font: var(--lq-cambria) !important;
+  --body: var(--lq-cambria) !important;
+  --mono: var(--lq-cambria) !important;
+  --serif: var(--lq-cambria) !important;
+  --sans: var(--lq-cambria) !important;
+  --display: var(--lq-cambria) !important;
+}
+
+/* :not(#lq-cambria) kimlik düzeyinde öncelik verir; modüllerin !important
+   kuralları ve satır içi stiller de geçersiz kalır. */
+html:not(#lq-cambria),
+html:not(#lq-cambria) body,
+html:not(#lq-cambria) body *:not(#lq-cambria):not(.fa):not(.fas):not(.far):not(.fab):not(.fa-solid):not(.fa-regular):not(.fa-brands):not([class^="fa-"]):not([class*=" fa-"]),
+html:not(#lq-cambria) input,
+html:not(#lq-cambria) select,
+html:not(#lq-cambria) textarea,
+html:not(#lq-cambria) button {
+  font-family: Cambria, Caladea, "Cambria Math", Georgia, "Times New Roman", serif !important;
+}
+
+/* Rakamlar tablolarda alt alta hizalı kalsın. */
+html:not(#lq-cambria) body table,
+html:not(#lq-cambria) body [class*="num"],
+html:not(#lq-cambria) body [class*="mono"] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
