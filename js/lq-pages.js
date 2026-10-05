@@ -324,14 +324,24 @@
     const liab = mv(t.leaseLiability), curL = mv(t.currentLiability), ncL = mv(t.nonCurrentLiability);
     const shortPct = liab && curL !== null ? Math.max(0, Math.min(100, Math.round((curL / liab) * 100))) : null;
     const assetM = d.ok ? charts().assetModel?.(d.v) : null;
+    // IAS 29 applied: the non-monetary ROU and the period expenses are shown
+    // in the reporting-date unit, from the disclosure package (the same
+    // figures as Finansal Raporlama and Dipnotlar). The liability is
+    // monetary and stays as reported.
+    const mvt = d.ok ? d.v.periodMovement || {} : {};
+    const tms29On = !!(mvt.rou?.openingRestated && mvt.liability?.tms29?.status === "SUPPORTED");
+    const rouShown = tms29On ? mvt.rou.closing : t.rouCarryingAmount;
+    const depShown = tms29On ? mvt.rou.depreciation : t.periodDepreciation;
+    const interestShown = tms29On ? { value: mvt.liability.tms29.totals.interest, status: "SUPPORTED" } : t.periodInterest;
+    const valueOf = f => (f && typeof f === "object" && isNum(f.value) && f.status !== "NOT_CALCULABLE" ? acc0(f.value) : valueOr(f));
     $("lqOvKpis").innerHTML = `
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KİRA YÜKÜMLÜLÜĞÜ</span><span class="lq-pg-big">${valueOr(t.leaseLiability)}</span>
         ${shortPct !== null ? `<div class="lq-pg-split" role="img" aria-label="Kısa vade %${shortPct}"><i style="width:${shortPct}%"></i><i style="width:${100 - shortPct}%"></i></div>` : ""}
         <div class="lq-pg-kv2"><span>Kısa ${acc0(curL)}</span><span>Uzun ${acc0(ncL)}</span></div>${gapNote}${srcLine}</article>
-      <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KULLANIM HAKKI VARLIĞI (NDD)</span><span class="lq-pg-big">${valueOr(t.rouCarryingAmount)}</span>
-        ${assetM?.supported && assetM.items.length && assetM.total ? `<div class="lq-pg-split is-classes">${assetM.items.slice(0, 5).map((it, i) => `<i class="c${i}" style="width:${Math.max(2, Math.round((it.value / assetM.total) * 100))}%" title="${esc(it.label)}"></i>`).join("")}</div><div class="lq-pg-small lq-pg-muted">${esc(assetM.items.slice(0, 3).map(i => i.label).join(" · "))}</div>` : `<div class="lq-pg-small lq-pg-muted">Tarihi esas</div>`}${gapShort}${srcLine}</article>
+      <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">KULLANIM HAKKI VARLIĞI (NDD)</span><span class="lq-pg-big">${tms29On ? valueOf(rouShown) : valueOr(t.rouCarryingAmount)}</span>
+        ${assetM?.supported && assetM.items.length && assetM.total ? `<div class="lq-pg-split is-classes">${assetM.items.slice(0, 5).map((it, i) => `<i class="c${i}" style="width:${Math.max(2, Math.round((it.value / assetM.total) * 100))}%" title="${esc(it.label)}"></i>`).join("")}</div><div class="lq-pg-small lq-pg-muted">${esc(assetM.items.slice(0, 3).map(i => i.label).join(" · "))}</div>` : `<div class="lq-pg-small lq-pg-muted">${tms29On ? "TMS 29 · dönem sonu alım gücü" : "Tarihi esas"}</div>`}${tms29On && assetM?.supported ? '<div class="lq-pg-small lq-pg-muted">TMS 29 · dönem sonu alım gücü</div>' : ""}${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">DÖNEM GİDERİ · ${esc(monthName(p.reportingDate).toLocaleUpperCase("tr-TR"))}</span>
-        <div class="lq-pg-kv2 is-big"><span><small>Faiz</small>${valueOr(t.periodInterest)}</span><span><small>Amortisman</small>${valueOr(t.periodDepreciation)}</span></div>${mv(t.exemptLeaseExpense) ? `<div class="lq-pg-small lq-pg-muted">İstisna kira gideri (TFRS 16.6) ${acc0(mv(t.exemptLeaseExpense))}</div>` : ""}${gapShort}${srcLine}</article>
+        <div class="lq-pg-kv2 is-big"><span><small>Faiz</small>${tms29On ? valueOf(interestShown) : valueOr(t.periodInterest)}</span><span><small>Amortisman</small>${tms29On ? valueOf(depShown) : valueOr(t.periodDepreciation)}</span></div>${mv(t.exemptLeaseExpense) ? `<div class="lq-pg-small lq-pg-muted">İstisna kira gideri (TFRS 16.6) ${acc0(mv(t.exemptLeaseExpense))}</div>` : ""}${gapShort}${srcLine}</article>
       <article class="lq-pg-card lq-pg-kpi"><span class="lq-pg-kick">AKTİF SÖZLEŞME</span><span class="lq-pg-big">${activeCount}</span>
         <div class="lq-pg-chips">${pkg ? `<span class="lq-pg-chipx">${pkg.population.includedCount} sertifikalı</span>${pkg.population.excludedCount ? `<span class="lq-pg-chipx is-warn">${pkg.population.excludedCount} kapsam dışı</span>` : ""}` : ""}</div>
         ${btn("Portföyü aç", 'data-pg="contracts" data-view="all"', "link")}</article>`;
@@ -396,7 +406,7 @@
       if (r.kind === "total") { bar = `<i class="is-total" style="bottom:0;height:${Math.max(2, y(r.value)).toFixed(1)}px"></i>`; label = fmt(r.value); }
       else if (r.kind === "missing" || r.kind === "na") { bar = `<em class="lq-pg-need${r.kind === "na" ? " is-na" : ""}">${esc(r.kind === "na" ? "Uyg." : "Kaynak")}</em>`; label = "—"; }
       else { const b = Math.min(y(r.from), y(r.to)), h = Math.abs(y(r.to) - y(r.from)); bar = `<i class="is-${r.kind}" style="bottom:${b.toFixed(1)}px;height:${Math.max(2, h).toFixed(1)}px"></i>`; label = r.value > 0 ? `+${fmt(r.value)}` : fmt(r.value); }
-      const short = { opening: "Açılış", additions: "Yeni", interest: "Faiz", payments: "Ödemeler", modifications: "Modifikasyon", remeasurements: "Yen. ölçüm", tms21: "Kur farkı TMS 21", residual: "Mutabakat farkı", closing: "Kapanış" }[r.id] || r.label;
+      const short = { opening: "Açılış", additions: "Yeni", interest: "Faiz", payments: "Ödemeler", modifications: "Modifikasyon", remeasurements: "Yen. ölçüm", tms21: "Kur farkı TMS 21", tms29: "TMS 29 parasal", residual: "Mutabakat farkı", closing: "Kapanış" }[r.id] || r.label;
       return `<div class="lq-pg-col is-${r.kind}" title="${esc(r.label)}${r.note ? " — " + esc(r.note) : ""}"><span class="lq-pg-colv">${label}</span><div class="lq-pg-colbar" style="height:${H}px">${bar}</div><span class="lq-pg-coll">${esc(short)}</span></div>`;
     }).join("");
     const foot = bm.residual !== null
@@ -584,7 +594,7 @@
     if (seq !== fr.seq || !box.isConnected) return;
     fr.data = rows;
     const sub = box.querySelector(".lq-pg-sub");
-    if (sub) sub.innerHTML = `${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))} · ${rows.length} şirket · tarihi esas${rows.length > 1 ? " · şirketler ayrı kaynak, toplam alınmaz" : ""}`;
+    if (sub) sub.innerHTML = `${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))} · ${rows.length} şirket · ${rows.some(row => row.d?.ok && row.d.v.periodMovement?.rou?.openingRestated) ? "TMS 29 · dönem sonu alım gücü" : "tarihi esas"}${rows.length > 1 ? " · şirketler ayrı kaynak, toplam alınmaz" : ""}`;
     drawFinancialTab();
   }
 
