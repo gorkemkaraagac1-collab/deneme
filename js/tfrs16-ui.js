@@ -793,22 +793,32 @@ window.fetch = (input, init = {}) => {
     };
 
     if (isUpdate) {
-      return tfrs16ApiFetch(
+      return afterOwnContractWrite(tfrs16ApiFetch(
         `/api/contracts/${encodeURIComponent(contract.id)}`,
         { method: "PUT", body: JSON.stringify(payload) }
-      );
+      ));
     }
-    return tfrs16ApiFetch("/api/contracts", {
+    return afterOwnContractWrite(tfrs16ApiFetch("/api/contracts", {
       method: "POST",
       body: JSON.stringify(payload)
-    });
+    }));
   }
 
   async function deleteContractFromApi(contractId) {
-    return tfrs16ApiFetch(
+    return afterOwnContractWrite(tfrs16ApiFetch(
       `/api/contracts/${encodeURIComponent(contractId)}`,
       { method: "DELETE" }
-    );
+    ));
+  }
+
+  // This tab already holds its own write, so the server copy it produced is
+  // the new reference for the stale-tab check (no reload for our own save).
+  async function afterOwnContractWrite(request) {
+    const result = await request;
+    tfrs16ApiFetch("/api/contracts")
+      .then(rows => { if (Array.isArray(rows)) backendContractsSignature = JSON.stringify(rows); })
+      .catch(() => {});
+    return result;
   }
 
   let backendContractsHydrated = false;
@@ -981,13 +991,23 @@ window.fetch = (input, init = {}) => {
   let staleCheckRunning = false;
   async function refreshIfContractsChanged() {
     if (staleCheckRunning || !backendContractsHydrated || document.visibilityState !== "visible") return;
-    if (document.querySelector(".modal-overlay:not(.hidden)")) return;
+    // Edit dialogs keep their typed values; the read-only contract detail is
+    // refreshed unless one of its forms holds unsaved input.
+    if (document.querySelector(".modal-overlay:not(.hidden):not(#detailModal)")) return;
     if (document.activeElement?.matches?.("input, textarea, select")) return;
+    const detail = document.getElementById("detailModal");
+    const detailOpen = !!detail && !detail.classList.contains("hidden");
+    if (detailOpen && hasUnsavedInput(detail)) return;
     staleCheckRunning = true;
     try {
       const rows = await tfrs16ApiFetch("/api/contracts");
       if (Array.isArray(rows) && JSON.stringify(rows) !== backendContractsSignature) {
+        const openId = detailOpen ? selectedContractId : null;
         await hydrateTfrs16BackendData();
+        if (openId && contracts.some(item => item.id === openId)
+          && !document.getElementById("detailModal")?.classList.contains("hidden")) {
+          openDetail(openId);
+        }
       }
     } catch (_) {
       /* The next visit retries; the page keeps its current data. */
@@ -995,8 +1015,19 @@ window.fetch = (input, init = {}) => {
       staleCheckRunning = false;
     }
   }
+  function hasUnsavedInput(root) {
+    return Array.from(root.querySelectorAll("input, textarea, select")).some(el => {
+      if (el.type === "hidden" || el.disabled) return false;
+      if (el.type === "checkbox" || el.type === "radio") return el.checked !== el.defaultChecked;
+      if (el.tagName === "SELECT") return Array.from(el.options).some(option => option.selected !== option.defaultSelected);
+      return el.value !== el.defaultValue;
+    });
+  }
   document.addEventListener("visibilitychange", () => { void refreshIfContractsChanged(); });
   window.addEventListener("focus", () => { void refreshIfContractsChanged(); });
+  // Some browsers/automation switch tabs without focus events: a light check
+  // every 30 s while the tab is visible covers that case.
+  setInterval(() => { void refreshIfContractsChanged(); }, 30000);
 
   async function hydrateTfrs16BackendData() {
     await hydrateContractsFromApi();
@@ -9223,7 +9254,7 @@ window.fetch = (input, init = {}) => {
 
         const confirmed =
           confirm(
-            `${contract.id} sözleşmesini silmek istediğinizden emin misiniz?`
+            `${contract.id} sözleşmesi kaldırılsın mı?\n\nHesaplama geçmişi olan sözleşme silinmez, arşivlenir: listelerden ve raporlardan çıkar, denetim izinde ARCHIVE olarak kalır. Geçmişi olmayan sözleşme kalıcı olarak silinir.`
           );
 
         if (!confirmed) {
