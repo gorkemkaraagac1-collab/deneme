@@ -21,3 +21,19 @@ jobs:
         run: for f in js/*.js; do node --check "$f"; done
       - name: Verify TFRS16 private cutover gate
         run: node scripts/check-tfrs16-cutover.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Full frontend test suite (test-only dependencies live in test/ and are
+      # never deployed); the TAP result is kept as change evidence.
+      - name: Install test dependencies
+        run: npm ci --prefix test --no-audit --no-fund
+      - name: Frontend test suite
+        run: node --test --test-timeout=60000 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=test-results.tap test/*.test.js
+      - name: Keep test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results-${{ github.sha }}
+          path: test-results.tap
+          retention-days: 400

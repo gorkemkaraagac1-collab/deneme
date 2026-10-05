@@ -15,7 +15,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The site is published only after the full test suite and the gates pass.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Gates and syntax
+        run: |
+          set -euo pipefail
+          node scripts/check-authority-public-boundary.js
+          node scripts/check-tfrs16-cutover.js
+          for f in js/*.js; do node --check "$f"; done
+      - run: npm ci --prefix test --no-audit --no-fund
+      - name: Frontend test suite
+        run: node --test --test-timeout=60000 test/*.test.js
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
