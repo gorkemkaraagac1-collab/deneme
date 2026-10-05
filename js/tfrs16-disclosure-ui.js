@@ -258,11 +258,16 @@
     COMPLETE_FOR_SUPPORTED_SCOPE: "Desteklenen açıklama kapsamı tamam", INCOMPLETE_INPUT_REQUIRED: "Onaylı girdiler eksik",
     UNSUPPORTED_REQUIREMENT_PRESENT: "Desteklenmeyen açıklama gerekliliği var", FAILED_VALIDATION: "Sunucu doğrulaması başarısız"
   });
+  const CERTIFICATION_LABELS = Object.freeze({
+    DISCLOSURE_BACKEND_IMPLEMENTED_NOT_CERTIFIED: "Dipnot altyapısı hazır; bağımsız doğrulama henüz tamamlanmadı."
+  });
+  const certificationLabel = status => CERTIFICATION_LABELS[status] || "Bağımsız doğrulama bilgisi sunulmadı.";
   const SUPPORTED_REQUIREMENTS = new Set(["SUPPORTED", "SUPPORTED_AUTOMATIC", "SUPPORTED_WITH_ENTITY_INPUT", "SUPPORTED_WITH_LEDGER_INPUT", "SUPPORTED_WITH_DISCLOSURE_INPUT", "NOT_APPLICABLE"]);
   function sourceGaps(pkg) {
     const gaps = [], seen = new Set();
     const add = (id, status) => {
-      if (!id || seen.has(id) || VALUE_STATUSES.has(status) || status === "NOT_APPLICABLE") return;
+      // Scope boundaries are not missing inputs for the lessee's note.
+      if (!id || seen.has(id) || VALUE_STATUSES.has(status) || status === "NOT_APPLICABLE" || status === "OUT_OF_SCOPE") return;
       seen.add(id);gaps.push({id, label:GAP_LABELS[id] || "Açıklama gerekliliği", status:status || "BACKEND_FIELD_MISSING"});
     };
     (Array.isArray(pkg?.missingInputs) ? pkg.missingInputs : []).forEach(x => add(x.fieldId, x.status));
@@ -340,10 +345,10 @@
             <div class="lq-dn-kv"><span>Dipnot kimliği</span><span class="lq-dn-mono">${e(ready ? String(pkg.identity?.disclosureId || "—").slice(0, 14) : "—")}</span></div>
             <div class="lq-dn-kv"><span>Manuel düzeltme</span><span>Yok</span></div></section>
           <section data-disclosure-source-gaps><span class="lq-dn-kick">KAYNAK VE DESTEK GEREKLİLİKLERİ</span>
-            ${ready ? `<p>${complete ? "Desteklenen kapsamda eksik gereklilik bildirilmedi." : "Paket yüklenmesi açıklama tamlığını kanıtlamaz."}</p>
-              <p>Varlık sınıfları ve şirket beyanları onaylı şirket girdisi; vade analizi onaylı politika ve sunucu planı; gerçekleşen nakit defter kanıtı gerektirir. Planlanan ödeme defter nakdinin yerine geçmez.</p>
-              <ul>${gaps.map(g => `<li><strong>${e(g.label)}</strong><br>${e(STATUS_LABELS[g.status] || "Kaynak doğrulaması gerekli")}<details><summary>Kaynak kimliği</summary><code>${e(g.id)}</code> · ${e(g.status)}</details></li>`).join("")}</ul>
-              <details><summary>Doğrulama ve destek sınırı</summary><p>${e(pkg.validation?.status)} · ${e(pkg.certification?.status || "Sertifikasyon kanıtı verilmedi")}</p><p>Bu görünüm eksik veriyi kaydetmez veya tamamlamaz. Şirket girdisi ve politika onayı bu arayüzde sunulmuyor; desteklenmeyen kapsam için yeni hesaplama yapılmaz.</p></details>` : '<p>Paket yüklenince gereklilikler gösterilir.</p>'}
+            ${ready ? `<p>${complete ? "Desteklenen kiracı dipnotları kapsamında eksik veri bildirilmedi." : "Dipnotu tamamlamak için gerekli veri ve destek durumu aşağıda gösterilir."}</p>
+              ${gaps.length ? `<p>Şirket bilgilerini ve vade politikasını “Varsayımları düzenle” bölümünden tamamlayabilirsiniz. Gerçekleşen nakit çıkışları için doğrulanmış ödeme veya defter kayıtları gerekir.</p>` : ""}
+              <ul>${gaps.map(g => `<li><strong>${e(g.label)}</strong><br>${e(STATUS_LABELS[g.status] || "Kaynak doğrulaması gerekli")}</li>`).join("")}</ul>
+              <details><summary>Doğrulama bilgisi</summary><p>${e(validationLabel)}</p><p>${e(certificationLabel(pkg.certification?.status))}</p><p>Bu görünüm mevcut kaynaklardan hazırlanır. Eksik bilgiler otomatik olarak tamamlanmaz.</p></details>` : '<p>Paket yüklenince gereklilikler gösterilir.</p>'}
           </section>
           <section><span class="lq-dn-kick">MUTABAKAT KONTROLLERİ</span>${checkHtml}</section>
         </aside></div></div>`;
@@ -562,14 +567,14 @@
         + `<p>Şirket: ${escapeHtml(pkg.identity?.companyId)} · Dönem: ${escapeHtml(pkg.period?.reportingPeriodStart)} – ${escapeHtml(pkg.period?.reportingPeriodEnd)}`
         + ` · Para birimi: ${escapeHtml(pkg.period?.presentationCurrency)}</p>`
         + `<p>Kapsam: ${escapeHtml(pkg.population?.populationId)} · Kaynak sayısı: ${escapeHtml(pkg.population?.includedCount)}`
-        + ` · Kaynak durumu: ${escapeHtml(state.availability?.sourceTrustStatus)}`
-        + ` · Doğrulama: ${escapeHtml(pkg.validation?.status)}`
+        + ` · Kaynak durumu: ${escapeHtml(state.availability?.sourceTrustStatus === "TRUSTED_SOURCE_IDENTIFIERS_VERIFIED" ? "Kaynak kayıtları doğrulandı" : "Kaynak doğrulaması gerekli")}`
+        + ` · Doğrulama: ${escapeHtml(VALIDATION_LABELS[pkg.validation?.status] || "Tamlık doğrulanmadı")}`
         + ` · Eksik girdi: ${escapeHtml(pkg.missingInputs?.length ?? 0)}`
-        + ` · Paket sertifikasyon etiketi: ${escapeHtml(pkg.certification?.status)}</p>`
+        + ` · Bağımsız doğrulama: ${escapeHtml(certificationLabel(pkg.certification?.status))}</p>`
         + `<p>Para birimi kanıtı: ${escapeHtml(pkg.identity?.currencyEvidenceId)}`
         + ` · Vade politikası: ${escapeHtml(pkg.maturityAnalysis?.timeBandPolicyId || "Gerekli")}`
         + ` · Açıklama kimliği: ${escapeHtml(pkg.identity?.disclosureId)}</p>`
-        + `<p>Dönem hareketi kapsamı: ${escapeHtml(pkg.periodMovement?.sourceRouteStatus || "Kaynak gerekli")}`
+        + `<p>Dönem hareketi kapsamı: ${escapeHtml(pkg.periodMovement?.sourceRouteStatus === "P1_TRUSTED_SNAPSHOT_ONLY" ? "Doğrulanmış dönem kayıtları" : "Kaynak doğrulaması gerekli")}`
         + ` · Güvenilir snapshot: ${escapeHtml((pkg.periodMovement?.sourceSnapshotIds || []).join(", ") || "Yok")}</p></details>` : "";
       if (global.document?.documentElement?.getAttribute("data-lq-ui") === "2") {
         container.innerHTML = designHtml({ state, companies, tabs, body, pkg, escapeHtml, errorLabel });

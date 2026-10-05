@@ -466,7 +466,7 @@ test('real v2 disclosure shows full source gaps separately from numerical table 
  window.LeaseQantPrivateTfrs16Facade={loadLeaseDisclosureAvailability:async period=>{requested=period;return {...period,populationId:'POP-TEST',contractIds:['CONTRACT-1'],calculationIds:['CALC-1'],currencyProfile:{presentationCurrency:'TRY',evidenceId:'CURRENCY-TEST'}};},loadLeaseDisclosure:async()=>({...fixture(requested),validation:{status:'UNSUPPORTED_REQUIREMENT_PRESENT'},missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],qualitative:{leasingActivity:{status:'REQUIRES_ENTITY_INPUT'}},supportStatus:[{requirementId:'IFRS-UNSUPPORTED',supportedStatus:'NOT_SUPPORTED'}]})};
  load('js/tfrs16-disclosure-ui.js',window);const target=window.document.getElementById('footnotes');window.LeaseQantTfrs16DisclosureUi.renderFootnotes(target);await new Promise(r=>setTimeout(r,20));
  assert.match(target.textContent,/3 kaynak \/ destek gerekliliği/);assert.match(target.textContent,/Desteklenmeyen açıklama gerekliliği var/);assert.match(target.textContent,/Kiralama faaliyetinin niteliği/);assert.match(target.textContent,/Defter verisi gerekli/);
- assert.doesNotMatch(target.textContent,/Tüm kalemler kaynaklı|Motor · otomatik/);assert.equal(target.querySelectorAll('[data-disclosure-source-gaps] li').length,3);assert.equal(target.querySelector('[data-disclosure-source-gaps] input'),null);assert.match(target.textContent,/DISCLOSURE_BACKEND_IMPLEMENTED_NOT_CERTIFIED/);dom.window.close();
+ assert.doesNotMatch(target.textContent,/Tüm kalemler kaynaklı|Motor · otomatik|DISCLOSURE_BACKEND_IMPLEMENTED_NOT_CERTIFIED|UNSUPPORTED_REQUIREMENT_PRESENT|IFRS-UNSUPPORTED|REQUIRES_LEDGER_DATA/);assert.equal(target.querySelectorAll('[data-disclosure-source-gaps] li').length,3);assert.equal(target.querySelector('[data-disclosure-source-gaps] input'),null);assert.match(target.textContent,/bağımsız doğrulama henüz tamamlanmadı/);dom.window.close();
 });
 
 test('legacy disclosure presentation retains its existing structure',async()=>{
@@ -478,6 +478,6 @@ test('legacy disclosure presentation retains its existing structure',async()=>{
 test('real backend support vocabulary separates capability from absent evidence',()=>{
  const window={};load('js/tfrs16-disclosure-ui.js',window);const sourceGaps=window.LeaseQantTfrs16DisclosureUi.sourceGaps;
  const pkg={missingInputs:[{fieldId:'totalCashOutflowForLeases',status:'REQUIRES_LEDGER_DATA'}],supportStatus:[{requirementId:'AUTO',supportedStatus:'SUPPORTED_AUTOMATIC'},{requirementId:'ENTITY',supportedStatus:'SUPPORTED_WITH_ENTITY_INPUT'},{requirementId:'LEDGER',supportedStatus:'SUPPORTED_WITH_LEDGER_INPUT'},{requirementId:'DISC',supportedStatus:'SUPPORTED_WITH_DISCLOSURE_INPUT'},{requirementId:'UNSUPPORTED',supportedStatus:'NOT_YET_SUPPORTED'},{requirementId:'BOUNDARY',supportedStatus:'OUT_OF_SCOPE'}]};
- const gaps=sourceGaps(pkg);assert.equal(gaps.map(x=>x.id).join(','),'totalCashOutflowForLeases,UNSUPPORTED,BOUNDARY');assert.equal(gaps[0].status,'REQUIRES_LEDGER_DATA');
+ const gaps=sourceGaps(pkg);assert.equal(gaps.map(x=>x.id).join(','),'totalCashOutflowForLeases,UNSUPPORTED');assert.equal(gaps[0].status,'REQUIRES_LEDGER_DATA');
  assert.equal(sourceGaps({supportStatus:[{requirementId:'UNKNOWN',supportedStatus:'FUTURE_UNKNOWN'}]}).length,1);
 });
