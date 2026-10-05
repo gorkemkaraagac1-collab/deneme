@@ -796,27 +796,40 @@ window.fetch = (input, init = {}) => {
       return afterOwnContractWrite(tfrs16ApiFetch(
         `/api/contracts/${encodeURIComponent(contract.id)}`,
         { method: "PUT", body: JSON.stringify(payload) }
-      ));
+      ), contract.id);
     }
     return afterOwnContractWrite(tfrs16ApiFetch("/api/contracts", {
       method: "POST",
       body: JSON.stringify(payload)
-    }));
+    }), contract.id);
   }
 
   async function deleteContractFromApi(contractId) {
     return afterOwnContractWrite(tfrs16ApiFetch(
       `/api/contracts/${encodeURIComponent(contractId)}`,
       { method: "DELETE" }
-    ));
+    ), contractId);
   }
 
-  // This tab already holds its own write, so the server copy it produced is
-  // the new reference for the stale-tab check (no reload for our own save).
-  async function afterOwnContractWrite(request) {
+  // Stale-tab reference: the server row of each contract as last loaded.
+  const contractRowSignatures = rows => new Map(rows.map(row => [String(row?.id), JSON.stringify(row)]));
+  function changedContractIds(rows, exceptId) {
+    const next = contractRowSignatures(rows), known = backendContractsSignature || new Map();
+    const ids = new Set([...next.keys(), ...known.keys()]);
+    return [...ids].filter(id => id !== String(exceptId) && next.get(id) !== known.get(id));
+  }
+
+  // This tab already holds its own write, so only that contract's new server
+  // row becomes the reference. Changes to any other contract (made in
+  // another tab meanwhile) still trigger the reload.
+  async function afterOwnContractWrite(request, contractId) {
     const result = await request;
     tfrs16ApiFetch("/api/contracts")
-      .then(rows => { if (Array.isArray(rows)) backendContractsSignature = JSON.stringify(rows); })
+      .then(rows => {
+        if (!Array.isArray(rows)) return;
+        if (changedContractIds(rows, contractId).length) { void refreshIfContractsChanged(); return; }
+        backendContractsSignature = contractRowSignatures(rows);
+      })
       .catch(() => {});
     return result;
   }
@@ -846,7 +859,7 @@ window.fetch = (input, init = {}) => {
           )
         );
       contracts = mapped;
-      backendContractsSignature = JSON.stringify(rows);
+      backendContractsSignature = contractRowSignatures(rows);
       backendContractsHydrated = true;
       backendContractsHydrationError = null;
       // Audit evidence is ancillary to the accounting hydration path. A
@@ -1001,7 +1014,7 @@ window.fetch = (input, init = {}) => {
     staleCheckRunning = true;
     try {
       const rows = await tfrs16ApiFetch("/api/contracts");
-      if (Array.isArray(rows) && JSON.stringify(rows) !== backendContractsSignature) {
+      if (Array.isArray(rows) && changedContractIds(rows).length) {
         const openId = detailOpen ? selectedContractId : null;
         await hydrateTfrs16BackendData();
         if (openId && contracts.some(item => item.id === openId)
