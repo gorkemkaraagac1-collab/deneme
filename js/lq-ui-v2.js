@@ -309,6 +309,36 @@
     const date = document.createElement("b");
     meta.append(small, date);
 
+    // Period scope: the reporting month is the period end; the period
+    // starts 1, 3 or 6 months earlier, at the fiscal-year start or at a
+    // chosen month.
+    const scopeBox = document.createElement("div");
+    scopeBox.className = "lq-ribbon-scope";
+    scopeBox.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    const selectStyle = "padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#172033;font-size:12px";
+    const scopeSelect = document.createElement("select");
+    scopeSelect.setAttribute("aria-label", "Dönem kapsamı");
+    scopeSelect.style.cssText = selectStyle;
+    [["MONTH", "Tek ay"], ["QUARTER", "Son 3 ay"], ["HALF", "Son 6 ay"], ["YTD", "Hesap dönemi başından"], ["CUSTOM", "Özel başlangıç"]]
+      .forEach(([value, label]) => { const o = document.createElement("option"); o.value = value; o.textContent = label; scopeSelect.append(o); });
+    const fiscalSelect = document.createElement("select");
+    fiscalSelect.setAttribute("aria-label", "Hesap dönemi başlangıç ayı");
+    fiscalSelect.style.cssText = selectStyle;
+    MONTHS_LONG.forEach((label, i) => { const o = document.createElement("option"); o.value = String(i + 1); o.textContent = `${label} başı`; fiscalSelect.append(o); });
+    const customSelect = document.createElement("select");
+    customSelect.setAttribute("aria-label", "Dönem başlangıç ayı");
+    customSelect.style.cssText = selectStyle;
+    api.months(24).forEach(key => { const o = document.createElement("option"); o.value = key; o.textContent = `${monthLabel(key).long} başı`; customSelect.append(o); });
+    scopeBox.append(scopeSelect, fiscalSelect, customSelect);
+    const applyScope = () => {
+      const before = api.get();
+      api.setScope({ scope: scopeSelect.value, fiscalStart: Number(fiscalSelect.value), customStart: customSelect.value });
+      render();
+      const after = api.get();
+      if (after.periodStart !== before.periodStart || after.periodEnd !== before.periodEnd) onChange();
+    };
+    [scopeSelect, fiscalSelect, customSelect].forEach(el => el.addEventListener("change", applyScope));
+
     const buttons = [];
     const render = () => {
       const r = api.get();
@@ -317,7 +347,16 @@
         btn.setAttribute("aria-checked", String(on));
         btn.tabIndex = on ? 0 : -1;
       });
-      date.textContent = formatDate(r.reportingDate);
+      const sc = api.getScope ? api.getScope() : { scope: "MONTH", fiscalStart: 1, customStart: null };
+      scopeSelect.value = sc.scope;
+      fiscalSelect.value = String(sc.fiscalStart || 1);
+      if (sc.customStart) customSelect.value = sc.customStart;
+      else customSelect.value = r.startKey || r.key;
+      fiscalSelect.hidden = sc.scope !== "YTD";
+      customSelect.hidden = sc.scope !== "CUSTOM";
+      const multi = r.months > 1;
+      small.textContent = multi ? `RAPORLAMA DÖNEMİ · ${r.months} AY` : "RAPORLAMA TARİHİ";
+      date.textContent = multi ? `${formatDate(r.periodStart)} – ${formatDate(r.reportingDate)}` : formatDate(r.reportingDate);
       date.title = `${monthLabel(r.key).long} · ${formatDate(r.periodStart)} – ${formatDate(r.periodEnd)}`;
     };
 
@@ -354,6 +393,7 @@
       group.append(btn);
     });
 
+    meta.append(scopeBox);
     wrap.append(group, meta);
     render();
     global.requestAnimationFrame?.(() => {

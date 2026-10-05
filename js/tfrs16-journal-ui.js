@@ -265,7 +265,11 @@
     const date = /^(\d{4})-(\d{2})-/.exec(common?.periodStart || "");
     const saved = periodChoices.get(scope);
     if (!saved && !date) return; // Missing common period is never replaced by January.
-    const values = saved || [date[1], String(Number(date[2])), "monthly", common.periodStart, common.periodEnd];
+    // A multi-month common period (quarter, year to date...) maps to the
+    // custom range; a single month to the monthly choice.
+    const singleMonth = String(common?.periodStart || "").slice(0, 7) === String(common?.periodEnd || "").slice(0, 7);
+    const endDate = /^(\d{4})-(\d{2})-/.exec(common?.periodEnd || "") || date;
+    const values = saved || [endDate[1], String(Number(endDate[2])), singleMonth ? "monthly" : "custom", common.periodStart, common.periodEnd];
     controls.forEach((control, i) => {
       if (!control) return;
       if (control.tagName === "SELECT" && !Array.from(control.options).some(o => o.value === values[i])) {
