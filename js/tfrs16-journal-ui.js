@@ -227,7 +227,7 @@
       const page=global.open("","_blank");
       if (!page) fail("JOURNAL_EXPORT_UNAVAILABLE");
       page.opener=null;
-      page.document.write('<!doctype html><meta charset="utf-8"><title>Yevmiye önizleme</title>'+packages.map(pkg=>renderPackage(pkg)).join(""));
+      page.document.write('<!doctype html><meta charset="utf-8"><title>Yevmiye önizleme</title><style>@import url(https://fonts.googleapis.com/css2?family=Caladea:ital,wght@0,400;0,700;1,400;1,700&display=swap);html,body,*{font-family:Cambria,Caladea,Georgia,serif!important}</style>'+packages.map(pkg=>renderPackage(pkg)).join(""));
       page.document.close();page.print();
     });
   }
@@ -250,7 +250,7 @@
       const page=global.open("","_blank");
       if (!page) fail("JOURNAL_EXPORT_UNAVAILABLE");
       page.opener=null;
-      page.document.write('<!doctype html><meta charset="utf-8"><title>Yevmiye önizleme</title>'+packages.map(pkg=>renderPackage(pkg)).join(""));
+      page.document.write('<!doctype html><meta charset="utf-8"><title>Yevmiye önizleme</title><style>@import url(https://fonts.googleapis.com/css2?family=Caladea:ital,wght@0,400;0,700;1,400;1,700&display=swap);html,body,*{font-family:Cambria,Caladea,Georgia,serif!important}</style>'+packages.map(pkg=>renderPackage(pkg)).join(""));
       page.document.close();page.print();
     });
   }

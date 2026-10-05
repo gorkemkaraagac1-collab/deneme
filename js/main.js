@@ -1,3 +1,9 @@
+// Charts draw on canvas, which CSS does not reach: give them Cambria too.
+function applyCambriaChartFont() {
+  if (window.Chart && window.Chart.defaults && window.Chart.defaults.font) {
+    window.Chart.defaults.font.family = "Cambria, Caladea, Georgia, 'Times New Roman', serif";
+  }
+}
 /**
  * GK Financial Intelligence Platform - UI, Chart & Sensitivity Engine Integrator
  */
@@ -68,6 +74,7 @@ function renderCockpitTrendChart() {
     cockpitChartInstance.data.datasets[1].data = quarterlyEbitda;
     cockpitChartInstance.update();
   } else {
+    applyCambriaChartFont();
     cockpitChartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -124,6 +131,7 @@ function renderWorkingCapitalChart(wc) {
     wcChartInstance.data.datasets[0].data = dataValues;
     wcChartInstance.update();
   } else {
+    applyCambriaChartFont();
     wcChartInstance = new Chart(ctx, {
       type: 'bar',
       data: { labels: labels, datasets: [{ label: 'Süre (Gün)', data: dataValues, backgroundColor: backgroundColors, borderWidth: 1, borderRadius: 4 }] },
@@ -174,6 +182,7 @@ function renderDCFChart(projections) {
     dcfChartInstance.data.datasets[1].data = pvFcfData;
     dcfChartInstance.update();
   } else {
+    applyCambriaChartFont();
     dcfChartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -290,6 +299,7 @@ function renderTMS29Chart(rawAsset, adjustedAsset) {
     tms29ChartInstance.data.datasets[0].data = dataValues;
     tms29ChartInstance.update();
   } else {
+    applyCambriaChartFont();
     tms29ChartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -382,6 +392,7 @@ function renderTFRS16Chart(labels, data) {
     tfrs16ChartInstance.data.datasets[0].data = data;
     tfrs16ChartInstance.update();
   } else {
+    applyCambriaChartFont();
     tfrs16ChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -508,6 +519,7 @@ function renderECLChart(eadList, eclList) {
     eclChartInstance.data.datasets[1].data = eclM;
     eclChartInstance.update();
   } else {
+    applyCambriaChartFont();
     eclChartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
