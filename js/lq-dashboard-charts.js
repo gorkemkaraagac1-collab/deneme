@@ -37,6 +37,9 @@
      Ödemeler gerçekleşen nakit çıkışından alınır; yoksa planlanan ödeme kullanılır
      ve satır "planlanan" olarak işaretlenir. Mutabakat farkı paketin açıkça
      vermediği hareketleri (ör. TMS 29 parasal kazanç/kayıp) gizlemeden gösterir. */
+  const ASSET_CLASS_LABELS = { PROPERTY: "Gayrimenkul", VEHICLES: "Taşıtlar", PLANT_EQUIPMENT: "Makine ve ekipman",
+    IT_EQUIPMENT: "Bilgi teknolojileri ekipmanı", OTHER: "Diğer" };
+
   function bridgeModel(pkg) {
     const q = (pkg && pkg.quantitative) || {};
     const l = (pkg && pkg.periodMovement && pkg.periodMovement.liability) || {};
@@ -58,6 +61,24 @@
       ? (advanceValue ? { ...scheduled, value: scheduled.value - advanceValue } : scheduled)
       : actual;
 
+    // IAS 29: the liability movement in the reporting-date unit, closing
+    // with the gain/loss on the net monetary position (TMS 29.27).
+    const t29 = l.tms29 && l.tms29.status === "SUPPORTED" ? l.tms29.totals : null;
+    if (t29) {
+      const f = value => ({ value, status: Math.abs(value) < 0.005 ? "ZERO_CONFIRMED" : "SUPPORTED", currency: closing && closing.currency });
+      const tSteps = [
+        { id: "additions", label: "İlk muhasebeleştirme girişleri", field: f(t29.initialRecognitionAdditions) },
+        { id: "interest", label: "Faiz gideri (etkin faiz)", field: f(t29.interest) },
+        { id: "payments", label: "Kira ödemeleri (sözleşmesel)", field: f(t29.scheduledContractualCash - t29.commencementAdvance), negate: true,
+          note: "Yükümlülüğü azaltan sözleşmesel ödemeler; istisna kira ödemeleri ve başlangıçtaki peşin ödeme hariç." },
+        { id: "modifications", label: "Modifikasyonlar", field: f(t29.modifications) },
+        { id: "remeasurements", label: "Yeniden ölçüm", field: f(t29.remeasurements) },
+        { id: "tms21", label: "TMS 21 kur farkı", field: f(t29.tms21Movement) },
+        { id: "tms29", label: "TMS 29 parasal kazanç/kayıp", field: f(t29.monetaryGainLoss),
+          note: "Parasal yükümlülüğün enflasyon karşısındaki kazancı (−) / kaybı (+); kâr veya zarara yansır (TMS 29.27)." }
+      ];
+      return finishBridge(f(t29.opening), closing, tSteps, true, pkg);
+    }
     const steps = [
       { id: "additions", label: "İlk muhasebeleştirme girişleri", field: l.initialRecognitionAdditions },
       { id: "interest", label: "Faiz gideri (etkin faiz)", field: l.interest || q.interestExpense },
@@ -66,7 +87,12 @@
       { id: "modifications", label: "Modifikasyonlar", field: l.modifications },
       { id: "remeasurements", label: "Yeniden ölçüm", field: l.remeasurements },
       { id: "tms21", label: "TMS 21 kur farkı", field: l.tms21Movement }
-    ].map(s => {
+    ];
+    return finishBridge(opening, closing, steps, paymentPlanned, pkg);
+  }
+
+  function finishBridge(opening, closing, rawSteps, paymentPlanned, pkg) {
+    const steps = rawSteps.map(s => {
       if (s.field && s.field.status === "NOT_APPLICABLE") return { ...s, kind: "na", status: statusText(s.field) };
       if (!hasValue(s.field)) return { ...s, kind: "missing", status: statusText(s.field) };
       let v = s.field.value;
@@ -159,7 +185,7 @@
       return { supported: false, status: statusText(f), currency };
     }
     const items = f.value.filter(i => i && isNum(i.value))
-      .map(i => ({ label: i.assetClass || "Sınıflandırılmamış", value: i.value, currency: i.currency || currency }))
+      .map(i => ({ label: ASSET_CLASS_LABELS[i.assetClass] || i.assetClass || "Sınıflandırılmamış", value: i.value, currency: i.currency || currency }))
       .sort((a, b) => b.value - a.value);
     const total = items.reduce((a, b) => a + b.value, 0);
     return { supported: true, currency, items, total,

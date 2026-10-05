@@ -103,3 +103,18 @@ test('legacy UI: no section inserted',async()=>{
  const {dom,d}=await page('legacy',{loadLeaseDisclosureAvailability:async()=>{throw new Error('should not run');},loadLeaseDisclosure:async()=>null});
  await wait(100);assert.equal(d.getElementById('lqCharts'),null);dom.window.close();
 });
+
+test('bridge: with IAS 29 the movement is restated and closes with the monetary gain, no residual',async()=>{
+ const {dom,w}=await page('legacy');const {bridgeModel}=w.LeaseQantDashboardCharts;
+ const base=pkgFor();
+ const pkg={...base,periodMovement:{...base.periodMovement,liability:{...base.periodMovement.liability,tms29:{status:'SUPPORTED',totals:{
+  opening:1020,initialRecognitionAdditions:200,interest:30,scheduledContractualCash:150,commencementAdvance:0,modifications:0,remeasurements:0,
+  tms21Movement:40,monetaryGainLoss:-20,closing:1120}}}}};
+ const m=bridgeModel(pkg);
+ assert.equal(m.rows[0].value,1020);
+ const tms=m.rows.find(r=>r.id==='tms29');
+ assert.equal(tms.value,-20);
+ assert.equal(m.residual,null);
+ assert.equal(m.rows.at(-1).value,1120);
+ dom.window.close();
+});
