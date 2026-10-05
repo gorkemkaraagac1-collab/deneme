@@ -1,0 +1,11 @@
+{
+  "name": "leaseqant-frontend-tests",
+  "private": true,
+  "description": "Test-only dependencies for the public site; never deployed (Pages copies html, css, js and frontend only).",
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
