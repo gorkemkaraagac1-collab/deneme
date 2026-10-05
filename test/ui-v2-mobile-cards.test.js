@@ -185,5 +185,10 @@ test('IAS 29: liability table shows the monetary gain column, ROU table has no i
   assert.ok(byClass);
   const classHead = Array.from(byClass.querySelector('.lq-pg-ftr.is-head').children, cell => cell.textContent.trim());
   assert.deepEqual(classHead, ['HAREKET', 'GAYRİMENKUL', 'TAŞITLAR', 'TOPLAM']);
+  // Period expenses use the same restated figures (not the nominal report).
+  finance.querySelector('[data-frtab="expense"]').click();
+  const cells = Array.from(finance.querySelector('.lq-pg-ftr:not(.is-head)').children, cell => cell.textContent.trim());
+  assert.deepEqual(cells.slice(1, 4), ['4', '4', '10']);
+  assert.match(finance.textContent, /dönem sonu alım gücüyle/);
   dom.window.close();
 });
