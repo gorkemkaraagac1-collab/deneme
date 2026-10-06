@@ -31,6 +31,14 @@ window.fetch = (input, init = {}) => {
   }
 
   window.logout = function logout() {
+    // The token is read before the keys are cleared and sent with the logout
+    // request, so the server can revoke the session even when the browser
+    // blocks the third-party session cookie.
+    let token = "";
+    try {
+      token = sessionStorage.getItem("gk_session_token") || localStorage.getItem("access_token")
+        || localStorage.getItem("gk_backend_jwt") || "";
+    } catch (_) {}
     // Sunucu çerezi (gk_session) ve sekmedeki oturum anahtarı da silinmeli;
     // aksi halde aynı sekmede korumalı sayfaya dönülünce oturum açık kalır.
     [
@@ -41,8 +49,7 @@ window.fetch = (input, init = {}) => {
       "gk_tfrs16_contracts_v7",
       "gk_tfrs16_active_company_v1"
     ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
-    let token = "";
-    try { token = sessionStorage.getItem("gk_session_token") || ""; sessionStorage.removeItem("gk_session_token"); } catch (_) {}
+    try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
     const done = () => window.location.replace("login.html");
     const headers = token ? { Authorization: "Bearer " + token } : {};
     const timer = setTimeout(done, 3000);

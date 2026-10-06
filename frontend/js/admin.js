@@ -1002,7 +1002,13 @@ return div.innerHTML;
 // LOGOUT
 // ============================================================
 
-async function logout() { await fetch(API_BASE_URL + "/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+async function logout() {
+// The token is sent explicitly too: browsers that block third-party cookies
+// would otherwise reach the server without it, and the session could not be
+// revoked server-side.
+const logoutToken = (() => { try { return localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || ""; } catch (_) { return ""; } })();
+await fetch(API_BASE_URL + "/api/auth/logout", { method: "POST", credentials: "include",
+    headers: logoutToken ? { Authorization: `Bearer ${logoutToken}` } : {} }).catch(() => {});
 
 localStorage.removeItem(
     "access_token"
