@@ -22,7 +22,7 @@
   ];
   const FIELD_STEP = {
     contractId: "basics", company: "basics", supplier: "basics", currency: "basics", functionalCurrency: "basics", reportingCurrency: "basics", assetClass: "basics", assetClassCustom: "basics",
-    startDate: "term", endDate: "term", usefulLifeMonths: "term", renewalOption: "term", renewalDate: "term", renewalOptionExpectedToExercise: "term", renewalEndDate: "term",
+    startDate: "term", endDate: "term", usefulLifeMonths: "term", renewalOption: "term", renewalDate: "term", renewalOptionExpectedToExercise: "term", terminationOptionExpectedToExercise: "term", purchaseOptionExpectedToExercise: "term", leaseTermEvidenceReference: "term", renewalEndDate: "term",
     terminationOption: "term", terminationDate: "term", terminationPenalty: "term", purchaseOption: "term", purchaseOptionPrice: "term",
     residualValueGuarantee: "term", expectedResidualValueGuaranteePayment: "term", ownershipTransfer: "term",
     monthlyPayment: "payments", paymentFrequency: "payments", paymentTiming: "payments", leaseIncreaseType: "payments", leaseIncreaseRate: "payments",
