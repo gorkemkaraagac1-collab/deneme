@@ -744,12 +744,18 @@
       });
       html = bands.length ? frTable(cols, lines) : `<p class="lq-pg-empty">Vade analizi için doğrulanmış dipnot kaynağı yok.</p>`;
     } else {
-      const ev = [];
+      const ev = [], changes = [];
       data.forEach(({ c, r }) => { if (r.ok) { try { AUI().rawRows(r.v, "audit").forEach(a => ev.push({ ...a, company: c.name || c.id })); } catch (_) {} } });
+      // Accounting events by effective date (the audit list below is by
+      // recording time; a change effective in the period may be recorded later).
+      data.forEach(({ c, r }) => { if (r.ok) ((r.v && r.v.lifecycleEvents && r.v.lifecycleEvents.rows) || []).forEach(e => changes.push({ ...e, company: c.name || c.id })); });
+      const changeHtml = changes.length
+        ? `<span class="lq-pg-kick">MUHASEBE OLAYLARI (YÜRÜRLÜK TARİHİNE GÖRE)</span><div class="lq-pg-events">${changes.map(e => `<div class="lq-pg-event"><span data-label="Yürürlük" class="lq-pg-mono">${esc(trDate(e.effectiveDate))}</span><button type="button" data-label="Sözleşme" class="lq-pg-mono lq-pg-link" data-fr="open" data-id="${esc(e.contractId)}">${esc(e.contractId)}</button><span data-label="Olay">${esc(e.kind === "MODIFICATION" ? "Modifikasyon" : "Yeniden değerlendirme")} · ${esc(e.type)}${e.discountRate !== null && e.discountRate !== undefined ? ` · iskonto %${esc(String(e.discountRate))}` : ""}</span><span data-label="Şirket ve kayıt" class="lq-pg-muted">${esc(e.company)} · kaydedildi ${esc(String(e.appliedAt || "").replace("T", " ").slice(0, 16))}</span></div>`).join("")}</div><span class="lq-pg-kick">SUNUCU KAYIT OLAYLARI (KAYIT ZAMANINA GÖRE)</span>`
+        : "";
       ev.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
-      html = `<section class="lq-pg-card lq-pg-pad"><span class="lq-pg-kick">DÖNEM OLAYLARI · ${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))}</span>${ev.length
+      html = `<section class="lq-pg-card lq-pg-pad"><span class="lq-pg-kick">DÖNEM OLAYLARI · ${esc(trDate(p.periodStart))} – ${esc(trDate(p.periodEnd))}</span>${changeHtml}${ev.length
         ? `<div class="lq-pg-events">${ev.slice(0, 200).map(a => `<div class="lq-pg-event"><span data-label="Zaman" class="lq-pg-mono">${esc(String(a.timestamp || "").replace("T", " ").slice(0, 16))}</span><button type="button" data-label="Sözleşme" class="lq-pg-mono lq-pg-link" data-fr="open" data-id="${esc(a.contract_id)}">${esc(a.contract_id || "—")}</button><span data-label="Olay">${esc(a.action || "Olay")}</span><span data-label="Şirket ve kullanıcı" class="lq-pg-muted">${esc(a.company)} · ${esc(a.actor || "")}</span></div>`).join("")}</div>`
-        : '<p class="lq-pg-empty">Bu dönemde sunucuya kayıtlı olay yok.</p>'}</section>`;
+        : `<p class="lq-pg-empty">${changes.length ? "Bu dönemde kaydedilmiş sunucu olayı yok." : "Bu dönemde sunucuya kayıtlı olay yok."}</p>`}</section>`;
     }
     body.innerHTML = html;
   }
