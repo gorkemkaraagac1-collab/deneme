@@ -615,6 +615,20 @@
               <div class="form-field">
                 <label><input type="checkbox" id="ownershipTransfer" name="ownershipTransfer" /> Mülkiyet devri</label>
               </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="terminationOptionExpectedToExercise" name="terminationOptionExpectedToExercise" disabled /> Fesih opsiyonu kullanılacak</label>
+                <small>Feshin makul ölçüde kesin olduğu durumda işaretleyin (TFRS 16.18–21).</small>
+              </div>
+              <div class="form-field">
+                <label><input type="checkbox" id="purchaseOptionExpectedToExercise" name="purchaseOptionExpectedToExercise" disabled /> Satın alma opsiyonu kullanılacak</label>
+                <small>Satın almanın makul ölçüde kesin olduğu durumda işaretleyin.</small>
+              </div>
+              <div class="form-field">
+                <label for="leaseTermEvidenceReference">Kira süresi değerlendirme referansı</label>
+                <input type="text" id="leaseTermEvidenceReference" name="leaseTermEvidenceReference" maxlength="200" disabled
+                  placeholder="Örn. Yönetim kararı 2025/01, iş planı" />
+                <small>Opsiyonlu sözleşmelerde zorunlu: opsiyon kararının dayandığı belge veya karar (TFRS 16.18–21).</small>
+              </div>
             </div>
           </div>
         </div>
@@ -1204,6 +1218,23 @@
       renewalEndDate.disabled = !renewalActive;
       renewalEndDate.required = renewalActive;
       if (!renewalActive) renewalEndDate.value = "";
+    }
+
+    // Lease-term judgements (IFRS 16.18-21): each option's "reasonably
+    // certain" judgement and the evidence reference the server requires.
+    const judgement = (box, id) => {
+      const el = document.getElementById(id);
+      if (!el || !box) return;
+      el.disabled = !box.checked;
+      if (!box.checked) el.checked = false;
+    };
+    judgement(termination, "terminationOptionExpectedToExercise");
+    judgement(option, "purchaseOptionExpectedToExercise");
+    const evidence = document.getElementById("leaseTermEvidenceReference");
+    if (evidence) {
+      const anyOption = [renewal, termination, option].some(box => box && box.checked);
+      evidence.disabled = !anyOption;
+      evidence.required = anyOption;
     }
 
     if (variableType && inSubstanceFixed) {

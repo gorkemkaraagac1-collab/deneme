@@ -4905,6 +4905,21 @@ window.fetch = (input, init = {}) => {
       contract?.renewalOptionExpectedToExercise === true
     );
 
+    setCheckbox(
+      "terminationOptionExpectedToExercise",
+      contract?.terminationOptionExpectedToExercise === true
+    );
+
+    setCheckbox(
+      "purchaseOptionExpectedToExercise",
+      contract?.purchaseOptionExpectedToExercise === true
+    );
+
+    setInput(
+      "leaseTermEvidenceReference",
+      contract?.leaseTermEvidenceReference || ""
+    );
+
     setInput(
       "renewalEndDate",
       contract?.renewalEndDate || ""
@@ -5369,6 +5384,11 @@ window.fetch = (input, init = {}) => {
       );
     }
 
+    if ((contract.renewalOption || contract.terminationOption || contract.purchaseOption)
+      && !String(contract.leaseTermEvidenceReference || "").trim()) {
+      errors.push("Opsiyonlu sözleşmede kira süresi değerlendirme referansı zorunludur (TFRS 16.18–21).");
+    }
+
     (contract.rentFreePeriodErrors || []).forEach(error => errors.push(error));
     (contract.rentFreePeriods || []).forEach(r => {
       if (dated) errors.push("Düzensiz ödeme takviminde kira ücretsiz dönem kullanılmaz; ilgili ödemeleri takvimden çıkarın.");
@@ -5724,6 +5744,15 @@ window.fetch = (input, init = {}) => {
 
           renewalOptionExpectedToExercise:
             getCheckbox("renewalOptionExpectedToExercise"),
+
+          terminationOptionExpectedToExercise:
+            getCheckbox("terminationOptionExpectedToExercise"),
+
+          purchaseOptionExpectedToExercise:
+            getCheckbox("purchaseOptionExpectedToExercise"),
+
+          leaseTermEvidenceReference:
+            String(getInput("leaseTermEvidenceReference") || "").trim() || null,
 
           renewalEndDate:
             normalizeDate(getInput("renewalEndDate")),
