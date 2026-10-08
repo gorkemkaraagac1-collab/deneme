@@ -1273,6 +1273,8 @@
   rvg?.addEventListener("change", sync);
   escalationType?.addEventListener("change", sync);
   document.getElementById("contractModal")?.addEventListener("click", () => setTimeout(sync, 0), { capture: true });
+  // Called after a saved contract is loaded into the form.
+  window.LeaseQantSyncContractFieldState = sync;
   sync();
 })();
 </script>
