@@ -42,6 +42,7 @@
       variablePayment: contract.variablePayment || "",
       variablePaymentType: contract.variablePaymentType || "",
       inSubstanceFixedPayment: contract.inSubstanceFixedPayment || "",
+      rentFreePeriods: Array.isArray(contract.rentFreePeriods) ? contract.rentFreePeriods : [],
       terminationOption: contract.terminationOption === true,
       terminationDate: contract.terminationDate || "",
       terminationPenalty: contract.terminationPenalty || "",

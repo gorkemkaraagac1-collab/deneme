@@ -391,6 +391,7 @@ window.fetch = (input, init = {}) => {
       ...(details.paymentFrequency === "irregular"
         ? { explicitPaymentSchedule: Array.isArray(details.explicitPaymentSchedule) ? details.explicitPaymentSchedule : [],
           termMonths: details.termMonths } : {}),
+      rentFreePeriods: Array.isArray(details.rentFreePeriods) ? details.rentFreePeriods : [],
       initialDirectCosts: details.initialDirectCosts !== null && details.initialDirectCosts !== undefined ? Number(details.initialDirectCosts) : 0,
       restorationObligation: details.restorationObligation !== null && details.restorationObligation !== undefined ? Number(details.restorationObligation) : 0,
       assetClass: details.assetClass || "",
@@ -699,6 +700,7 @@ window.fetch = (input, init = {}) => {
       paymentTiming: contract.paymentTiming || "arrears",
       ...(contract.paymentFrequency === "irregular"
         ? { explicitPaymentSchedule: contract.explicitPaymentSchedule || [], termMonths: contract.termMonths } : {}),
+      rentFreePeriods: Array.isArray(contract.rentFreePeriods) ? contract.rentFreePeriods : [],
       initialDirectCosts: Number(contract.initialDirectCosts) || 0,
       restorationObligation: Number(contract.restorationObligation) || 0,
       assetClass: contract.assetClass || "",
@@ -4926,6 +4928,13 @@ window.fetch = (input, init = {}) => {
     );
 
     setInput(
+      "rentFreePeriods",
+      Array.isArray(contract?.rentFreePeriods)
+        ? contract.rentFreePeriods.map(r => [r.startDate, r.endDate, r.description].filter(Boolean).join(" | ")).join("\n")
+        : ""
+    );
+
+    setInput(
       "terminationPenalty",
       contract?.terminationPenalty || 0
     );
@@ -5303,6 +5312,20 @@ window.fetch = (input, init = {}) => {
     return { rows: rows.sort((a, b) => a.economicDate.localeCompare(b.economicDate)), errors };
   }
 
+  // "Başlangıç | Bitiş | Açıklama" lines -> rent-free periods (regular
+  // payments due inside a period are 0; the server applies them).
+  function parseRentFreePeriods(text) {
+    const errors = [], rows = [];
+    String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+      const [startDate, endDate, ...rest] = line.split("|").map(part => (part || "").trim());
+      const iso = value => /^\d{4}-\d{2}-\d{2}$/.test(value || "") && normalizeDate(value);
+      if (!iso(startDate) || !iso(endDate)) errors.push(`Kira ücretsiz dönem ${index + 1}. satır: tarihler YYYY-AA-GG olmalı.`);
+      else if (endDate < startDate) errors.push(`Kira ücretsiz dönem ${index + 1}. satır: bitiş başlangıçtan önce olamaz.`);
+      else rows.push({ line: `${index + 1}.`, startDate, endDate, description: rest.join(" | ") });
+    });
+    return { rows: rows.sort((a, b) => a.startDate.localeCompare(b.startDate)), errors };
+  }
+
   // Remaining dated payments after a date, as editable "Tarih | Tutar | Referans" lines.
   function datedScheduleText(contract, after) {
     return escapeHtml((contract?.explicitPaymentSchedule || []).filter(r => r.economicDate > after)
@@ -5345,6 +5368,14 @@ window.fetch = (input, init = {}) => {
         "Tedarikçi boş."
       );
     }
+
+    (contract.rentFreePeriodErrors || []).forEach(error => errors.push(error));
+    (contract.rentFreePeriods || []).forEach(r => {
+      if (dated) errors.push("Düzensiz ödeme takviminde kira ücretsiz dönem kullanılmaz; ilgili ödemeleri takvimden çıkarın.");
+      else if (r.startDate < contract.startDate || r.endDate > contract.endDate) {
+        errors.push(`Kira ücretsiz dönem ${r.line} satır: dönem sözleşme başlangıç ve bitiş tarihleri arasında olmalı.`);
+      }
+    });
 
     if (dated) {
       (contract.explicitPaymentScheduleErrors || []).forEach(error => errors.push(error));
@@ -5808,6 +5839,10 @@ window.fetch = (input, init = {}) => {
             null
         };
 
+        const rentFree = parseRentFreePeriods(getInput("rentFreePeriods"));
+        contract.rentFreePeriods = rentFree.rows;
+        contract.rentFreePeriodErrors = rentFree.errors;
+
         if (contract.paymentFrequency === "irregular") {
           const parsed = parseExplicitPaymentSchedule(getInput("explicitPaymentSchedule"), contract.currency);
           contract.explicitPaymentSchedule = parsed.rows;
@@ -5825,6 +5860,8 @@ window.fetch = (input, init = {}) => {
             contract
           );
         delete contract.explicitPaymentScheduleErrors;
+        delete contract.rentFreePeriodErrors;
+        contract.rentFreePeriods = contract.rentFreePeriods.map(({ line, ...row }) => row);
         if (contract.explicitPaymentSchedule) contract.explicitPaymentSchedule = contract.explicitPaymentSchedule.map(({ line, ...row }) => row);
 
         if (!validation.valid) {
