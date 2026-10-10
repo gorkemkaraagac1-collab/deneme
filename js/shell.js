@@ -27,7 +27,7 @@ window.fetch = (input, init = {}) => {
     document.documentElement.style.visibility = "hidden";
     // A locally stored token is only a credential candidate, never proof of login.
     // Keep the protected page hidden until the backend confirms the session.
-    fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include", cache: "no-store" })
+    window.__GK_AUTH_READY__ = fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include", cache: "no-store" })
       .then(response => {
         if (!response.ok) throw new Error("invalid_session");
         document.documentElement.style.visibility = "visible";
@@ -41,6 +41,7 @@ window.fetch = (input, init = {}) => {
         ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
         try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
         window.location.replace("login.html");
+        throw new Error("invalid_session");
       });
   }
 
