@@ -36,6 +36,9 @@ function setup(query='',width=1280){
  }
  w.document.dispatchEvent(new w.Event('DOMContentLoaded'));w.dispatchEvent(new w.Event('load'));
  async function advance(to){
+  // Session verification introduces promise continuations before shell startup.
+  // Flush them before advancing the deterministic virtual clock.
+  for(let tick=0;tick<12;tick++) await Promise.resolve();
   for(let i=0;i<150;i++){
    const next=[...jobs].filter(([,j])=>j.at<=to).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;
    const [id,j]=next;now=j.at;jobs.delete(id);j.fn();if(j.interval&& !jobs.has(id))jobs.set(id,{...j,at:now+j.interval});await Promise.resolve();
