@@ -24,6 +24,6 @@ if(findings.length){console.error(JSON.stringify(findings));process.exit(1);}
 // Pages workflow uses an explicit runtime allowlist: test, scripts and docs
 // are not copied. Its publication manifest may not broaden to repository root.
 const workflow=fs.readFileSync(path.join(root,'.github/workflows/pages.yml'),'utf8');
-if(!workflow.includes('cp -R css js frontend _site/')||/cp\s+-R?\s+\.\s+_site/.test(workflow))throw Error('Pages allowlist changed');
+if(!workflow.includes('cp -R css js frontend en _site/')||/cp\s+-R?\s+\.\s+_site/.test(workflow))throw Error('Pages allowlist changed');
 console.log(JSON.stringify({repositoryFiles:files.length,privateLeakage:0,publicationTestFiles:0,
  demoAuth:'Existing prototype auth is not backend authentication; only real JWT routes supply authority.',result:'PASS'}));
