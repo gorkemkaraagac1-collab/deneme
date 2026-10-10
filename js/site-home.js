@@ -92,7 +92,7 @@
   }
   function showFailure(d, text) {
     msg.className = "form-msg err";
-    msg.innerHTML = escapeHtml(text) + ' Talebinizi doğrudan <a href="' + mailtoLink(d).replace(/"/g, "&quot;") + '">' + MAIL + "</a> adresine de gönderebilirsiniz.";
+    msg.innerHTML = escapeHtml(text) + (english ? ' You can also email your request to <a href="' : ' Talebinizi doğrudan <a href="') + mailtoLink(d).replace(/"/g, "&quot;") + '">' + MAIL + (english ? "</a>." : "</a> adresine de gönderebilirsiniz.");
     msg.hidden = false;
   }
   function localCheck(d) {
