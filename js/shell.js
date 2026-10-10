@@ -12,7 +12,7 @@ window.fetch = (input, init = {}) => {
   const url = typeof input === "string" ? input : (input && input.url) || "";
   if (url.startsWith("https://api.leaseqant.com")) {
     const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-    const token = sessionStorage.getItem("gk_session_token");
+    const token = sessionStorage.getItem("gk_session_token") || localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt");
     if (token && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
     return _gkFetch(input, { ...init, headers, credentials: init.credentials || "include" });
   }
@@ -25,9 +25,25 @@ window.fetch = (input, init = {}) => {
   // session. The redirect runs before the UI runtime script is loaded.
   if (isProtectedEnginePage) {
     document.documentElement.style.visibility = "hidden";
-    const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
-    if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
-    else { fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
+    // A locally stored token is only a credential candidate, never proof of login.
+    // Keep the protected page hidden until the backend confirms the session.
+    window.__GK_AUTH_READY__ = fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then(response => {
+        if (!response.ok) throw new Error("invalid_session");
+        document.documentElement.style.visibility = "visible";
+        return true;
+      })
+      .catch(() => {
+        // Discard stale credentials and user-specific cached data on auth failure.
+        [
+          "access_token", "gk_backend_jwt", "current_user",
+          "gk_tfrs16_v21_session_v1", "gk_tfrs16_contracts_v7",
+          "gk_tfrs16_active_company_v1"
+        ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
+        try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
+        window.location.replace("login.html");
+        return false;
+      });
   }
 
   window.logout = function logout() {
@@ -412,10 +428,18 @@ window.fetch = (input, init = {}) => {
     }, 2500);
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", __gkShellBoot, { once: true });
-  } else {
+  const bootAfterAuth = async () => {
+    if (isProtectedEnginePage) {
+      let authorized = false;
+      try { authorized = (await window.__GK_AUTH_READY__) === true; } catch (_) {}
+      if (!authorized) return;
+    }
     __gkShellBoot();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootAfterAuth, { once: true });
+  } else {
+    void bootAfterAuth();
   }
 
   // Expose for engine / debugging
