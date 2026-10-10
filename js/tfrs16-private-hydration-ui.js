@@ -30,7 +30,10 @@
     });
 
     inFlight = Promise.race([
-      Promise.resolve().then(() => hydrate()),
+      Promise.resolve(window.__GK_AUTH_READY__).then(authorized => {
+        if (authorized !== true) return { status: "auth-required" };
+        return hydrate();
+      }),
       deadline
     ])
       .then(result => {
