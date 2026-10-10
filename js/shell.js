@@ -31,6 +31,7 @@ window.fetch = (input, init = {}) => {
       .then(response => {
         if (!response.ok) throw new Error("invalid_session");
         document.documentElement.style.visibility = "visible";
+        return true;
       })
       .catch(() => {
         // Discard stale credentials and user-specific cached data on auth failure.
@@ -41,7 +42,7 @@ window.fetch = (input, init = {}) => {
         ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
         try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
         window.location.replace("login.html");
-        throw new Error("invalid_session");
+        return false;
       });
   }
 
