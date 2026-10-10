@@ -25,9 +25,23 @@ window.fetch = (input, init = {}) => {
   // session. The redirect runs before the UI runtime script is loaded.
   if (isProtectedEnginePage) {
     document.documentElement.style.visibility = "hidden";
-    const hasLegacySession = localStorage.getItem("access_token") || sessionStorage.getItem("gk_session_token") || localStorage.getItem("gk_backend_jwt");
-    if (hasLegacySession) { document.documentElement.style.visibility = "visible"; }
-    else { fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("invalid_session"); document.documentElement.style.visibility = "visible"; }).catch(() => window.location.replace("login.html")); }
+    // A locally stored token is only a credential candidate, never proof of login.
+    // Keep the protected page hidden until the backend confirms the session.
+    fetch("https://api.leaseqant.com/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then(response => {
+        if (!response.ok) throw new Error("invalid_session");
+        document.documentElement.style.visibility = "visible";
+      })
+      .catch(() => {
+        // Discard stale credentials and user-specific cached data on auth failure.
+        [
+          "access_token", "gk_backend_jwt", "current_user",
+          "gk_tfrs16_v21_session_v1", "gk_tfrs16_contracts_v7",
+          "gk_tfrs16_active_company_v1"
+        ].forEach(key => { try { localStorage.removeItem(key); } catch (_) {} });
+        try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
+        window.location.replace("login.html");
+      });
   }
 
   window.logout = function logout() {
