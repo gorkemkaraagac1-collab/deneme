@@ -12,7 +12,7 @@ window.fetch = (input, init = {}) => {
   const url = typeof input === "string" ? input : (input && input.url) || "";
   if (url.startsWith("https://api.leaseqant.com")) {
     const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-    const token = sessionStorage.getItem("gk_session_token");
+    const token = sessionStorage.getItem("gk_session_token") || localStorage.getItem("access_token") || localStorage.getItem("gk_backend_jwt");
     if (token && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
     return _gkFetch(input, { ...init, headers, credentials: init.credentials || "include" });
   }
