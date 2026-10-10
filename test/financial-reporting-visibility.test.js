@@ -92,3 +92,43 @@ test('topbar company selector receives authenticated reporting scope and remains
  assert.deepEqual(Array.from(select.options,o=>o.value),['ALL','COMP-A','COMP-B']);
  assert.equal(select.options[2].textContent,'Şirket B');s.dom.window.close();
 });
+
+
+test('auth gate accepts a backend-verified legacy bearer token before revealing TFRS16',async()=>{
+ const dom=new JSDOM(html,{url:'https://example.test/tfrs16.html',runScripts:'outside-only'});
+ const w=dom.window;
+ w.localStorage.setItem('access_token','LEGACY-TEST-TOKEN');
+ const requests=[];
+ w.fetch=async(url,options)=>{requests.push({url,options});return {ok:true};};
+ w.Headers=Headers;w.Request=Request;
+ w.eval(fs.readFileSync(path.join(root,'js/shell.js'),'utf8'));
+ assert.equal(w.document.documentElement.style.visibility,'hidden');
+ assert.equal(await w.__GK_AUTH_READY__,true);
+ assert.equal(w.document.documentElement.style.visibility,'visible');
+ assert.equal(requests.length,1);
+ assert.match(String(requests[0].url),/\/api\/auth\/me$/);
+ assert.equal(new Headers(requests[0].options.headers).get('Authorization'),'Bearer LEGACY-TEST-TOKEN');
+ dom.window.close();
+});
+test('auth gate fails closed for rejected session and clears cached credentials',async()=>{
+ const dom=new JSDOM(html,{url:'https://example.test/tfrs16.html',runScripts:'outside-only'});
+ const w=dom.window;
+ w.sessionStorage.setItem('gk_session_token','REJECTED-TEST-TOKEN');
+ w.localStorage.setItem('current_user','{"name":"Stale"}');
+ w.localStorage.setItem('gk_tfrs16_contracts_v7','SYNTHETIC-CACHE');
+ w.fetch=async()=>({ok:false,status:401});
+ w.Headers=Headers;w.Request=Request;
+ // jsdom does not implement cross-page navigation: verify fail-closed state
+ // without treating its expected navigation warning as an application failure.
+ const previousError=console.error;
+ console.error=()=>{};
+ try {
+   w.eval(fs.readFileSync(path.join(root,'js/shell.js'),'utf8'));
+   assert.equal(await w.__GK_AUTH_READY__,false);
+ } finally {console.error=previousError;}
+ assert.equal(w.document.documentElement.style.visibility,'hidden');
+ assert.equal(w.sessionStorage.getItem('gk_session_token'),null);
+ assert.equal(w.localStorage.getItem('current_user'),null);
+ assert.equal(w.localStorage.getItem('gk_tfrs16_contracts_v7'),null);
+ dom.window.close();
+});
