@@ -108,6 +108,9 @@ test('auth gate accepts a backend-verified legacy bearer token before revealing 
  assert.equal(requests.length,1);
  assert.match(String(requests[0].url),/\/api\/auth\/me$/);
  assert.equal(new Headers(requests[0].options.headers).get('Authorization'),'Bearer LEGACY-TEST-TOKEN');
+ // Let the authenticated shell DOMContentLoaded boot finish before teardown.
+ w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+ await new Promise(resolve=>setTimeout(resolve,0));
  dom.window.close();
 });
 test('auth gate fails closed for rejected session and clears cached credentials',async()=>{
