@@ -428,10 +428,18 @@ window.fetch = (input, init = {}) => {
     }, 2500);
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", __gkShellBoot, { once: true });
-  } else {
+  const bootAfterAuth = async () => {
+    if (isProtectedEnginePage) {
+      let authorized = false;
+      try { authorized = (await window.__GK_AUTH_READY__) === true; } catch (_) {}
+      if (!authorized) return;
+    }
     __gkShellBoot();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootAfterAuth, { once: true });
+  } else {
+    void bootAfterAuth();
   }
 
   // Expose for engine / debugging
