@@ -3,6 +3,8 @@
   "use strict";
   var API_BASE = "https://api.leaseqant.com";
   var MAIL = "info@leaseqant.com";
+  var english = document.documentElement.lang === "en";
+  function t(tr, en) { return english ? en : tr; }
   var doc = document;
 
   /* ---------- mobil menü ---------- */
@@ -90,16 +92,16 @@
   }
   function showFailure(d, text) {
     msg.className = "form-msg err";
-    msg.innerHTML = escapeHtml(text) + ' Talebinizi doğrudan <a href="' + mailtoLink(d).replace(/"/g, "&quot;") + '">' + MAIL + "</a> adresine de gönderebilirsiniz.";
+    msg.innerHTML = escapeHtml(text) + (english ? ' You can also email your request to <a href="' : ' Talebinizi doğrudan <a href="') + mailtoLink(d).replace(/"/g, "&quot;") + '">' + MAIL + (english ? "</a>." : "</a> adresine de gönderebilirsiniz.");
     msg.hidden = false;
   }
   function localCheck(d) {
     var bad = false;
-    if (d.name.trim().length < 2) { fieldErr("name", "Ad soyad gerekli."); bad = true; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email.trim())) { fieldErr("email", "Geçerli bir e-posta adresi girin."); bad = true; }
-    if (d.company.trim().length < 2) { fieldErr("company", "Şirket adı gerekli."); bad = true; }
-    if (d.phone.trim() && !/^[0-9+()\s.-]{7,40}$/.test(d.phone.trim())) { fieldErr("phone", "Telefon numarası geçersiz."); bad = true; }
-    if (!d.consent) { fieldErr("consent", "Devam etmek için aydınlatma metnini onaylayın."); bad = true; }
+    if (d.name.trim().length < 2) { fieldErr("name", t("Ad soyad gerekli.", "Full name is required.")); bad = true; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email.trim())) { fieldErr("email", t("Geçerli bir e-posta adresi girin.", "Enter a valid email address.")); bad = true; }
+    if (d.company.trim().length < 2) { fieldErr("company", t("Şirket adı gerekli.", "Company name is required.")); bad = true; }
+    if (d.phone.trim() && !/^[0-9+()\s.-]{7,40}$/.test(d.phone.trim())) { fieldErr("phone", t("Telefon numarası geçersiz.", "Enter a valid phone number.")); bad = true; }
+    if (!d.consent) { fieldErr("consent", t("Devam etmek için aydınlatma metnini onaylayın.", "Please confirm you have read the privacy notice.")); bad = true; }
     return !bad;
   }
 
@@ -114,7 +116,7 @@
     }
     submit.disabled = true;
     var label = submit.textContent;
-    submit.textContent = "Gönderiliyor…";
+    submit.textContent = t("Gönderiliyor…", "Sending…");
     var ctrl = window.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 20000);
     fetch(API_BASE + "/api/public/demo-request", {
@@ -138,10 +140,10 @@
           if (first) first.focus();
           return;
         }
-        if (res.status === 429) return showFailure(d, "Kısa sürede çok fazla talep gönderildi.");
-        showFailure(d, "Talebiniz şu an iletilemedi.");
+        if (res.status === 429) return showFailure(d, t("Kısa sürede çok fazla talep gönderildi.", "Too many requests. Please try again later."));
+        showFailure(d, t("Talebiniz şu an iletilemedi.", "Your request could not be submitted."));
       })
-      .catch(function () { showFailure(d, "Sunucuya ulaşılamadı."); })
+      .catch(function () { showFailure(d, t("Sunucuya ulaşılamadı.", "Could not reach the server.")); })
       .then(function () {
         clearTimeout(timer);
         submit.disabled = false;
