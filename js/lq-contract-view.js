@@ -18,6 +18,13 @@
 
   /* ---------- Saf yardımcılar ---------- */
   const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // The form stores the useful life in years (1-50) under usefulLifeMonths;
+  // larger values are months (imported data), as the engine reads them.
+  const usefulLifeLabel = v => {
+    const n = Number(v);
+    if (!(n > 0)) return "Sözleşme süresi";
+    return n <= 50 ? `${esc(n)} yıl (${esc(n * 12)} ay)` : `${esc(n)} ay`;
+  };
   const isNum = v => typeof v === "number" && Number.isFinite(v);
   const nf2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const nf0 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
@@ -323,7 +330,7 @@
         ${row("İskonto oranı", `%${esc(nf2.format(Number(c.discountRate) || 0))}`, "lq-cv-mono")}
         ${row("Artış", inc)}
         ${row("İlk doğrudan maliyet", money(Number(c.initialDirectCosts) || 0), "lq-cv-mono")}
-        ${row("Faydalı ömür", c.usefulLifeMonths ? `${esc(c.usefulLifeMonths)} ay` : "Sözleşme süresi")}
+        ${row("Faydalı ömür", usefulLifeLabel(c.usefulLifeMonths))}
       </section>
       <section class="lq-cv-card lq-cv-pad"><span class="lq-cv-kick">OPSİYONLAR VE TARİHLER</span>
         ${row("Yenileme", c.renewalOption ? "Var" : "Yok")}
