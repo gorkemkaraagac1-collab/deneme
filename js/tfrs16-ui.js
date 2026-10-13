@@ -4993,6 +4993,11 @@ window.fetch = (input, init = {}) => {
     if (typeof injectV26CurrencyFields === "function") {
       injectV26CurrencyFields(contract);
     }
+
+    // Re-apply the option-dependent field state (enabled/required) for the
+    // restored values: a saved option contract must open with its judgement
+    // and lease-term evidence fields editable (UAT CASE 06 retest).
+    if (typeof window.LeaseQantSyncContractFieldState === "function") window.LeaseQantSyncContractFieldState();
   }
 
   /**
