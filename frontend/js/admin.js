@@ -625,7 +625,7 @@ const token = localStorage.getItem("access_token") || sessionStorage.getItem("gk
  */
 if (!token && !document.cookie.includes("gk_session")) {
     window.location.href =
-        "../login.html";
+        "../../login.html";
     return false;
 }
 try {
@@ -652,7 +652,7 @@ try {
             "current_user"
         );
         window.location.href =
-            "../login.html";
+            "../../login.html";
         return false;
     }
     const result =
@@ -675,7 +675,7 @@ try {
 
     if (!user) {
         window.location.href =
-            "../login.html";
+            "../../login.html";
         return false;
     }
 
@@ -784,7 +784,7 @@ try {
         "current_user"
     );
     window.location.href =
-        "../login.html";
+        "../../login.html";
     return false;
 }
 
@@ -1018,7 +1018,7 @@ localStorage.removeItem(
 );
 try { sessionStorage.removeItem("gk_session_token"); } catch (_) {}
 window.location.href =
-    "../login.html";
+    "../../login.html";
 
 }
 

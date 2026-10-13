@@ -7,9 +7,14 @@
  * composition without changing the page's load contract.
  */
 (() => {
-  const boot = () => {
+  const boot = async () => {
     if (window.__GK_TFRS16_UI_COORDINATOR_RAN__) return;
     window.__GK_TFRS16_UI_COORDINATOR_RAN__ = true;
+    // Do not initialize the runtime (including local cache migration) until
+    // the backend confirms the session. Missing gate fails closed.
+    let authorized = false;
+    try { authorized = (await window.__GK_AUTH_READY__) === true; } catch (_) {}
+    if (!authorized) return;
     const runtimeBoot = window.__GK_TFRS16_UI_BOOT__;
     if (typeof runtimeBoot !== "function") {
       console.error("TFRS16 UI runtime başlatılamadı: boot hook bulunamadı.");

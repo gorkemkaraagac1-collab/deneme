@@ -59,7 +59,7 @@ jobs:
           # repository files therefore cannot silently enter the deployment.
           cp -- *.html *.png *.jpeg _site/
           cp -- auth.js content.json robots.txt sitemap.xml site.webmanifest styles.css _site/
-          cp -R css js frontend _site/
+          cp -R css js frontend en _site/
 
           python3 - <<'PY'
           from pathlib import Path
@@ -92,6 +92,7 @@ jobs:
           fi
 
           test -f _site/index.html
+          test -f _site/en/index.html
           test -f _site/tfrs16.html
           test -f _site/js/tfrs16-ui.js
           test -f _site/frontend/admin/index.html

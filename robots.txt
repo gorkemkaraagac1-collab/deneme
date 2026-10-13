@@ -4,4 +4,4 @@ Disallow: /admin.html
 Disallow: /dashboard.html
 Disallow: /login.html
 
-Sitemap: https://gk-advisory.com/sitemap.xml
+Sitemap: https://leaseqant.com/sitemap.xml
