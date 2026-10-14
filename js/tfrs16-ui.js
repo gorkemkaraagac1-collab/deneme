@@ -445,6 +445,8 @@ window.fetch = (input, init = {}) => {
       earlyPayments: Array.isArray(details.earlyPayments) ? details.earlyPayments : [],
       earlyPaymentSchedule: Array.isArray(details.earlyPaymentSchedule) ? details.earlyPaymentSchedule : [],
       earlyPaymentScheduleAsOf: details.earlyPaymentScheduleAsOf || null,
+      separateLeaseOf: details.separateLeaseOf || null,
+      separateLeaseAssessment: details.separateLeaseAssessment || null,
       auditTrail: Array.isArray(details.auditTrail) ? details.auditTrail : []
     };
   }
@@ -775,6 +777,10 @@ window.fetch = (input, init = {}) => {
         ? contract.earlyPaymentSchedule
         : [],
       earlyPaymentScheduleAsOf: contract.earlyPaymentScheduleAsOf || null,
+      // TFRS 16.44: a separate lease created from a scope increase keeps the
+      // link to the original contract and the recorded assessment.
+      separateLeaseOf: contract.separateLeaseOf || null,
+      separateLeaseAssessment: contract.separateLeaseAssessment || null,
       auditTrail: Array.isArray(contract.auditTrail)
         ? contract.auditTrail
         : []
@@ -7034,6 +7040,34 @@ window.fetch = (input, init = {}) => {
             </label>
           </div>
 
+          <fieldset id="separateLeaseAssessment" style="margin-top:10px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;">
+            <legend style="font-size:10px;font-weight:800;">TFRS 16.44 — Ayrı kiralama değerlendirmesi (kapsam artışı)</legend>
+            <label style="display:block;font-size:10px;font-weight:700;">
+              <input id="modificationAddsRightOfUse" type="checkbox"> Değişiklik bir veya daha fazla dayanak varlık için ek kullanım hakkı veriyor
+            </label>
+            <label style="display:block;font-size:10px;font-weight:700;margin-top:4px;">
+              <input id="modificationPriceCommensurate" type="checkbox"> Ek bedel, ek kapsamın bağımsız fiyatını (ve sözleşmeye özgü uygun düzeltmeleri) yansıtıyor
+            </label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:6px;">
+              <label style="font-size:10px;font-weight:700;">
+                Ek kapsam için aylık ek bedel
+                <input id="modificationAdditionalPayment" type="number" min="0" step="0.01" value="" style="display:block;width:100%;margin-top:5px;">
+              </label>
+              <label style="font-size:10px;font-weight:700;">
+                Ek kapsamın bağımsız aylık fiyatı
+                <input id="modificationStandalonePrice" type="number" min="0" step="0.01" value="" style="display:block;width:100%;margin-top:5px;">
+              </label>
+              <label style="font-size:10px;font-weight:700;">
+                Değerlendirme dayanağı / referans
+                <input id="modificationSeparateLeaseEvidence" type="text" placeholder="Örn. piyasa kira raporu, ek protokol" style="display:block;width:100%;margin-top:5px;">
+              </label>
+            </div>
+            <div style="font-size:10px;color:#64748b;margin-top:6px;">
+              İki koşul da sağlanırsa orijinal kiralama yeniden ölçülmez; ek kapsam yürürlük tarihinden başlayan ayrı bir kiralama olarak
+              (aylık ek bedel, yeni iskonto oranı, yeni bitiş tarihi) oluşturulur. Aksi halde değişiklik modifikasyon olarak işlenir.
+            </div>
+          </fieldset>
+
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">
             Neden <span style="font-weight:400;color:#64748b;">(yeni sözleşme şartını belirtin)</span>
             <input id="modificationReason" type="text" placeholder="Örn. kiraya verenle yeni bedel üzerinde anlaşıldı" style="display:block;width:100%;margin-top:5px;">
@@ -7107,6 +7141,7 @@ window.fetch = (input, init = {}) => {
     }
 
     const submitModificationForm = async () => {
+      if (!editingModificationId && await createSeparateLeaseIfApplicable()) return;
       const input = {
         modificationDate:
           document.getElementById("modificationDate")?.value,
@@ -7161,6 +7196,70 @@ window.fetch = (input, init = {}) => {
       resetModificationFormMode();
       refreshAfterMutation();
     };
+
+    // TFRS 16.44: a scope increase that adds a right of use at a price
+    // commensurate with its standalone price is a separate lease. The
+    // original is not remeasured; the additional scope becomes a new
+    // contract from the effective date, linked to the original.
+    async function createSeparateLeaseIfApplicable() {
+      const val = elId => document.getElementById(elId)?.value;
+      const checked = elId => document.getElementById(elId)?.checked === true;
+      if (val("modificationType") !== "SCOPE_INCREASE" || !checked("modificationAddsRightOfUse") || !checked("modificationPriceCommensurate")) return false;
+      const effectiveDate = val("modificationEffectiveDate");
+      const endDate = val("modificationNewEndDate") || contract.endDate;
+      const additional = Number(val("modificationAdditionalPayment"));
+      const standalone = Number(val("modificationStandalonePrice"));
+      const rate = Number(val("modificationNewDiscountRate"));
+      const evidence = String(val("modificationSeparateLeaseEvidence") || "").trim();
+      const errors = [];
+      if (contract.paymentFrequency && contract.paymentFrequency !== "monthly") errors.push("Ayrı kiralama oluşturma yalnız aylık ödemeli sözleşmelerde destekleniyor.");
+      if (!effectiveDate || effectiveDate <= String(contract.startDate || "")) errors.push("Yürürlük tarihi orijinal başlangıçtan sonra olmalı.");
+      if (!endDate || endDate <= effectiveDate) errors.push("Ek kapsamın bitiş tarihi yürürlük tarihinden sonra olmalı.");
+      if (!(additional > 0)) errors.push("Ek kapsam için aylık ek bedel girilmeli (yeni toplam değil, yalnız artış).");
+      if (!(standalone > 0)) errors.push("Ek kapsamın bağımsız aylık fiyatı girilmeli.");
+      if (!(rate > 0)) errors.push("Ek kiralama için iskonto oranı girilmeli.");
+      if (!evidence) errors.push("Değerlendirme dayanağı / referansı girilmeli.");
+      if (errors.length) { showAlert(errors.join("\n")); return true; }
+      const id = `${contract.id}-EK-${effectiveDate.replace(/-/g, "")}`;
+      if (contracts.some(item => item.id === id)) { showAlert(`${id} zaten mevcut.`); return true; }
+      const ok = typeof window.confirm !== "function" || window.confirm(
+        `TFRS 16.44: orijinal sözleşme yeniden ölçülmeyecek. ${effectiveDate}–${endDate} için aylık ${additional} ve %${rate} oranla ayrı kiralama (${id}) oluşturulsun mu?`);
+      if (!ok) return true;
+      const separate = {
+        id, companyId: contract.companyId, company: contract.company, supplier: contract.supplier,
+        currency: contract.currency || "TRY", functionalCurrency: contract.functionalCurrency || contract.currency || "TRY",
+        assetClass: contract.assetClass, paymentFrequency: "monthly", paymentTiming: contract.paymentTiming || "arrears",
+        startDate: effectiveDate, endDate, monthlyPayment: additional, discountRate: rate,
+        leaseIncreaseType: "none", status: "active", modifications: [], reassessments: [],
+        separateLeaseOf: contract.id,
+        separateLeaseAssessment: { standard: "TFRS16.44", additionalRightOfUse: true, priceCommensurate: true,
+          additionalPayment: additional, standalonePrice: standalone, evidenceReference: evidence,
+          reason: val("modificationReason") || "", assessedAt: new Date().toISOString() }
+      };
+      const originalLabel = createButton.textContent;
+      createButton.disabled = true;
+      createButton.textContent = "Kaydediliyor...";
+      try {
+        await persistContractToApi(separate, false);
+      } catch (error) {
+        showAlert(`Ayrı kiralama oluşturulamadı: ${error?.message || String(error)}`);
+        return true;
+      } finally {
+        createButton.disabled = false;
+        createButton.textContent = originalLabel;
+      }
+      ensureModificationState(separate);
+      ensureReassessmentState(separate);
+      contracts.push(separate);
+      recordAuditEvent({ action: "CREATE", entityType: "CONTRACT", entityId: id, contractId: id,
+        reason: `TFRS 16.44 ayrı kiralama (${contract.id} kapsam artışı)`, oldValue: null, newValue: separate,
+        metadata: { source: "separate-lease", originalContractId: contract.id } });
+      saveContracts(contracts);
+      formChanges.sync();
+      showAlert(`Ayrı kiralama oluşturuldu: ${id}. Orijinal sözleşme değişmedi.`);
+      refreshAfterMutation();
+      return true;
+    }
 
     const handleModificationAction = async (action, id, button) => {
       if (action === "edit") {

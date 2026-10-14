@@ -767,6 +767,14 @@
     if (!a) return;
     if (a.getAttribute("data-fr") === "open") { openView("contracts"); global.setTimeout(() => openDetail(a.getAttribute("data-id")), 50); return; }
     if (a.getAttribute("data-fr") === "csv") {
+      // Event log: rows are labelled cells (data-label), not a grid.
+      const events = Array.from($("lqFinancial").querySelectorAll(".lq-pg-event"));
+      if (fr.tab === "events") {
+        if (!events.length) return;
+        downloadCsv(events.map(row => Object.fromEntries(Array.from(row.children)
+          .map((cell, i) => [cell.getAttribute("data-label") || `S${i}`, cell.textContent.trim()]))), `LeaseQant_events_${period().reportingDate}.csv`);
+        return;
+      }
       const grid = $("lqFinancial").querySelector(".lq-pg-fgrid");
       if (!grid) return;
       const rows = Array.from(grid.querySelectorAll(".lq-pg-ftr")).map(r => Array.from(r.children).map(x => x.textContent.trim()));
