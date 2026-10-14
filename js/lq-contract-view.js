@@ -26,6 +26,15 @@
     return n <= 50 ? `${esc(n)} yıl (${esc(n * 12)} ay)` : `${esc(n)} ay`;
   };
   const isNum = v => typeof v === "number" && Number.isFinite(v);
+  // Rate at commencement: after an applied change the contract carries the
+  // revised rate, so take the one before the earliest applied change.
+  const initialDiscountRate = c => {
+    const applied = [...(c.modifications || []), ...(c.reassessments || [])]
+      .filter(e => String(e?.status || "").toUpperCase() === "APPLIED")
+      .sort((a, b) => String(a.effectiveDate || "").localeCompare(String(b.effectiveDate || "")));
+    const before = applied.length ? (applied[0].appliedFromTerms || applied[0].oldTerms || {}).discountRate : undefined;
+    return Number(before ?? c.discountRate) || 0;
+  };
   const nf2 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const nf0 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
   const money = v => isNum(v) ? (v < 0 ? `(${nf2.format(-v)})` : nf2.format(v)) : "—";
@@ -220,7 +229,7 @@
     const initLiab = init && isNum(init.liability) ? init.liability : sch.initialLiability;
     const exempt = !!r.row.exemption;
     return `<div class="lq-cv-kpis">
-      ${cell(`BAŞLANGIÇ YÜKÜMLÜLÜĞÜ · ${sc}`, money(initLiab), `NDD ${init && isNum(init.rou) ? money0(init.rou) : "—"} · ${trDate(c.startDate)} · İO %${esc(nf2.format(Number(c.discountRate) || 0))}`)}
+      ${cell(`BAŞLANGIÇ YÜKÜMLÜLÜĞÜ · ${sc}`, money(initLiab), `NDD ${init && isNum(init.rou) ? money0(init.rou) : "—"} · ${trDate(c.startDate)} · İO %${esc(nf2.format(initialDiscountRate(c)))}`)}
       ${cell(`KİRA YÜK. · ${rd} · ${pc}`, money(metricValue(m.leaseLiability)), `Kısa ${money0(metricValue(m.currentLiability))} · Uzun ${money0(metricValue(m.nonCurrentLiability))}`)}
       ${cell(`KHV NDD · ${rd} · ${pc}`, money(metricValue(m.rouCarryingAmount)), `Dönem amortismanı ${money0(metricValue(m.periodDepreciation))}`)}
       ${exempt
