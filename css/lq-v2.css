@@ -1669,3 +1669,4 @@ html[data-lq-ui="2"] #v26PageHost .lq-op-event-block p { color: var(--lq-ink-2) 
 html[data-lq-ui="2"] #v26PageHost .lq-op-event-block th, html[data-lq-ui="2"] #v26PageHost .lq-op-event-block [style*="font-weight:800"] { color: var(--lq-ink-2) !important; }
 html[data-lq-ui="2"] #v26PageHost .lq-op-stepper { background: var(--lq-surface-2, #F6F8FB) !important; background-image: none !important; border: 1px solid var(--lq-line) !important; border-radius: 10px; padding: 10px 12px !important; }
 html[data-lq-ui="2"] #v26PageHost .lq-op-stepper li { color: var(--lq-ink-2) !important; }
+html[data-lq-ui="2"] .lq-cv-change td { font-size: 11px; color: var(--lq-ink-3); font-style: italic; background: transparent; }
