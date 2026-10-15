@@ -37,6 +37,7 @@
       indexReviewDay: contract.indexReviewDay || "",
       initialDirectCosts: contract.initialDirectCosts || "",
       restorationObligation: contract.restorationObligation || "",
+      restorationObligationCurrency: contract.restorationObligationCurrency || "",
       leaseIncentives: contract.leaseIncentives || "",
       prepayments: contract.prepayments || "",
       variablePayment: contract.variablePayment || "",
