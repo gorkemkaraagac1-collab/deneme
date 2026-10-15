@@ -426,7 +426,17 @@
     target.innerHTML = `<section class="lq-cv-card"><h3>Doğrulanmış sözleşmesel ödeme planı</h3>
       <p>${esc(trDate(r.period?.reportingDate))} · ${esc(r.row.currency)} · Sunucu raporu</p>
       <div class="lq-cv-tscroll"><table aria-label="Doğrulanmış ödeme planı"><thead><tr>${columns.map(([, label]) => `<th scope="col">${label}</th>`).join("")}</tr></thead>
-      <tbody>${rows.map(row => `<tr>${columns.map(([key]) => `<td>${key === "date" ? esc(trDate(row[key])) : isNum(row[key]) ? money(row[key]) : "Kaynak gerekli"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <tbody>${rows.map((row, i) => {
+        // A change effective on a payment date is measured after that
+        // payment: the next row opens on the revised terms. Show the jump so
+        // the row closing and the reporting-date balance read together.
+        const prev = rows[i - 1];
+        const jump = prev && isNum(row.openingLiability) && isNum(prev.closingLiability) ? row.openingLiability - prev.closingLiability : 0;
+        const note = Math.abs(jump) >= 0.005
+          ? `<tr class="lq-cv-change"><td colspan="${columns.length}">↳ Değişiklik (yürürlük: ${esc(trDate(prev.date))} ödemesinden sonra, ${esc(trDate(row.date))} ve öncesi): yükümlülük ${money(jump)}. Raporlama bakiyesi değişikliği yürürlük tarihinde içerir; bu satır yeni koşullarla açılır.</td></tr>`
+          : "";
+        return note + `<tr>${columns.map(([key]) => `<td>${key === "date" ? esc(trDate(row[key])) : isNum(row[key]) ? money(row[key]) : "Kaynak gerekli"}</td>`).join("")}</tr>`;
+      }).join("")}</tbody></table></div>
       <p class="lq-cv-foot">Sözleşmesel plandır; gerçekleşen ödeme veya defter kanıtı değildir. Tarihler sunucu kaynağından değiştirilmeden gösterilir.</p></section>`;
     const journal = shell.querySelector("[data-authoritative-initial-journal]");
     if (journal && !journal.previousElementSibling?.hasAttribute("data-lq-initial-journal-heading")) {

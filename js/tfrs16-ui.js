@@ -6930,7 +6930,7 @@ window.fetch = (input, init = {}) => {
             <div
               style="
                 display:grid;
-                grid-template-columns:1fr 1fr 1fr 1fr auto;
+                grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;
                 gap:8px;
                 align-items:center;
                 padding:9px 0;
@@ -6941,7 +6941,12 @@ window.fetch = (input, init = {}) => {
               <span>${escapeHtml(item.modificationType || "OTHER")}</span>
               <span>${escapeHtml(item.effectiveDate || "")}</span>
               <span>${escapeHtml(item.status || "DRAFT")}</span>
-              <strong>${formatPresentationCurrency(displayedLiabilityAdjustment, contract.currency)}</strong>
+              <strong title="Yükümlülük farkı">${formatPresentationCurrency(displayedLiabilityAdjustment, contract.currency)}</strong>
+              <span title="Kısmi fesih kazancı (+) / kaybı (−), TFRS 16.46(a)">${
+                Math.abs(Number(item.gainLoss) || 0) >= 0.005
+                  ? `K/Z ${formatPresentationCurrency(Number(item.gainLoss), contract.currency)}`
+                  : "K/Z —"
+              }</span>
               <span style="display:flex;gap:5px;">
                 ${
                   item.status !== "APPLIED" && item.status !== "CANCELLED"
@@ -6964,7 +6969,7 @@ window.fetch = (input, init = {}) => {
           `;
           }
         ).join("")
-      : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz modification kaydı bulunmuyor.</div>`;
+      : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz modifikasyon kaydı yok. Kiraya verenle yeni şartlarda anlaşıldığında "Modifikasyon Oluştur" ile ekleyin.</div>`;
 
     return `
       <div
@@ -7096,11 +7101,12 @@ window.fetch = (input, init = {}) => {
         </div>
 
         <div style="margin-top:16px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;font-size:10px;font-weight:800;color:#64748b;padding-bottom:7px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:8px;font-size:10px;font-weight:800;color:#64748b;padding-bottom:7px;">
             <span>TİP</span>
             <span>YÜRÜRLÜK</span>
             <span>DURUM</span>
             <span>YÜKÜMLÜLÜK Δ</span>
+            <span>KAZANÇ / KAYIP</span>
             <span>İŞLEM</span>
           </div>
           ${rows}
@@ -7369,7 +7375,7 @@ window.fetch = (input, init = {}) => {
           </div>
         `;
         }).join("")
-      : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz reassessment kaydı bulunmuyor.</div>`;
+      : `<div style="padding:12px 0;color:#64748b;font-size:11px;">Henüz yeniden değerlendirme kaydı yok. Endeks, oran veya opsiyon değerlendirmesi değiştiğinde "Reassessment Oluştur" ile ekleyin.</div>`;
 
     return `
       <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:24px;">
@@ -7404,6 +7410,8 @@ window.fetch = (input, init = {}) => {
             <label style="font-size:10px;font-weight:700;">Satın Alma Opsiyonu<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
           </div>
 
+          <p id="reassessmentOptionWarning" role="status" hidden style="margin:10px 0 0;padding:8px 10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:11px;"></p>
+
           <label style="display:block;font-size:10px;font-weight:700;margin-top:10px;">Neden <span style="font-weight:400;color:#64748b;">(endeks, oran veya opsiyon kaynağını belirtin)</span><input id="reassessmentReason" type="text" placeholder="Örn. TÜFE endeksi değişti" style="display:block;width:100%;margin-top:5px;"></label>
 
           <button type="button" id="createReassessmentButton" class="primary-button" ${createDisabledAttr}>Reassessment Oluştur</button>
@@ -7431,6 +7439,26 @@ window.fetch = (input, init = {}) => {
     let editingReassessmentId = null;
     const createButton = document.getElementById("createReassessmentButton");
     const formChanges = trackFormChanges(createButton, ["reassessmentDate", "reassessmentEffectiveDate", "reassessmentType", "reassessmentNewPayment", "reassessmentNewEndDate", "reassessmentNewDiscountRate", "reassessmentRenewalOption", "reassessmentTerminationOption", "reassessmentPurchaseOption", "reassessmentReason", "reassessmentNewSchedule"]);
+
+    // TFRS 16.20-21: an option reassessment needs the option in the contract.
+    const optionWarning = document.getElementById("reassessmentOptionWarning");
+    const typeSelect = document.getElementById("reassessmentType");
+    const OPTION_TYPES = {
+      RENEWAL_OPTION_CHANGE: ["renewalOption", "yenileme"],
+      TERMINATION_OPTION_CHANGE: ["terminationOption", "fesih"],
+      PURCHASE_OPTION_CHANGE: ["purchaseOption", "satın alma"]
+    };
+    function updateOptionWarning() {
+      if (!optionWarning || !typeSelect) return;
+      const option = OPTION_TYPES[typeSelect.value];
+      const missing = option && contract[option[0]] !== true;
+      optionWarning.hidden = !missing;
+      optionWarning.textContent = missing
+        ? `Bu sözleşmede ${option[1]} opsiyonu tanımlı değil. Opsiyon yeniden değerlendirmesi yalnızca sözleşmede bulunan bir opsiyon için yapılır; yeni bir hak verildiyse bu bir modifikasyondur (TFRS 16.44-46).`
+        : "";
+    }
+    typeSelect?.addEventListener("change", updateOptionWarning);
+    updateOptionWarning();
 
     function resetReassessmentFormMode() {
       editingReassessmentId = null;
