@@ -393,7 +393,7 @@
   const JOURNAL_ERRORS = { JOURNAL_REQUIRES_CONFIGURATION: "Bu dönem için onaylı hesap eşlemesi yok. Yönetim → Hesap eşlemesi ekranından onaylayın.",
     JOURNAL_TMS29_INDEX_REQUIRED: "TMS 29 için doğrulanmış TÜFE eksik", JOURNAL_CURRENCY_PROFILE_REQUIRED: "Şirketin onaylı para birimi profili gerekli." };
   const JOURNAL_MOVEMENTS = { INITIAL_RECOGNITION: "İlk muhasebeleştirme", INTEREST: "Faiz", CONTRACTUAL_PAYMENT: "Sözleşmesel ödeme",
-    DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon / yeniden ölçüm", FX_DIFFERENCE: "Kur farkı (TMS 21)",
+    DEPRECIATION: "Amortisman", MODIFICATION_REMEASUREMENT: "Modifikasyon (kapsam/koşul değişikliği)", REASSESSMENT_REMEASUREMENT: "Yeniden değerlendirme (TÜFE / süre)", FX_DIFFERENCE: "Kur farkı (TMS 21)",
     TMS29_RESTATEMENT: "Enflasyon düzeltmesi (TMS 29)", SUBLEASE_DERECOGNITION: "Alt kiralama devri", SUBLEASE_INCOME: "Alt kiralama geliri",
     EXEMPT_LEASE_EXPENSE: "İstisna kira gideri", SALE_AND_LEASEBACK: "Satış ve geri kiralama (TFRS 16.100)", SUBLEASE_RECEIPT: "Alt kiralama tahsilatı" };
   const money2 = v => Number(v || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
