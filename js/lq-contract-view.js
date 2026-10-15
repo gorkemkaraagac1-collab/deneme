@@ -294,11 +294,13 @@
     (r.row.scheduleRows || []).forEach((row, idx, all) => {
       if (!idx || !isNum(row.openingLiability) || !isNum(all[idx - 1].closingLiability)) return;
       const change = row.openingLiability - all[idx - 1].closingLiability;
-      if (Math.abs(change) >= 0.5) jumps.set(row.date, { opening: all[idx - 1].closingLiability, change });
+      if (Math.abs(change) >= 0.5) jumps.set(row.date, { opening: all[idx - 1].closingLiability, change, after: all[idx - 1].date });
     });
     const openingCell = i => {
       const j = jumps.get(i.date);
-      return j ? `${money(j.opening)}<small class="lq-cv-muted" style="display:block">${j.change > 0 ? "+" : ""}${money(j.change)} değişiklik</small>` : money(i.openingLiability);
+      // The change takes effect after the previous payment row; the
+      // reporting-date balance already includes it on its effective date.
+      return j ? `${money(j.opening)}<small class="lq-cv-muted" style="display:block" title="Değişiklik ${esc(trDate(j.after))} ödemesinden sonra yürürlüğe girer; raporlama bakiyesi değişikliği yürürlük tarihinde içerir, bu satır yeni koşullarla açılır.">${j.change > 0 ? "+" : ""}${money(j.change)} değişiklik · yürürlük ${esc(trDate(j.after))} ödemesinden sonra</small>` : money(i.openingLiability);
     };
     const head = `<div class="lq-cv-trow is-head"><span>DÖNEM</span><span>TARİH</span><span>AÇILIŞ YÜK.</span><span>FAİZ</span><span>ÖDEME</span><span>ANAPARA</span><span>KAPANIŞ YÜK.</span><span>AMORTİSMAN</span><span>KAPANIŞ NDD</span></div>`;
     const body = sch.groups.map(g => {
