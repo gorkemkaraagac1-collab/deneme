@@ -264,6 +264,7 @@
     RENEWAL_END_DATE_REQUIRED: "Yenileme sonrası bitiş tarihi eksik",
     TERMINATION_DATE_REQUIRED: "Fesih tarihi eksik veya süre dışında",
     TERMINATION_PENALTY_MEASUREMENT_UNSUPPORTED: "Kesin fesihte ceza ölçümü desteklenmiyor",
+    FINAL_LEASE_PAYMENT_LIFECYCLE_UNSUPPORTED: "Satın alma bedeli / garanti ödemesiyle değişiklik desteklenmiyor",
     PURCHASE_OPTION_PRICE_MEASUREMENT_UNSUPPORTED: "Kesin satın almada bedel ölçümü desteklenmiyor",
     SHORT_TERM_EXEMPTION_INELIGIBLE: "Kısa vadeli istisna için süre 12 ayı aşıyor",
     REPORTING_FX_RATE_REQUIRED: "Doğrulanmış TCMB kuru eksik (Yönetim → Döviz kurları)",
