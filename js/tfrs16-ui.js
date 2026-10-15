@@ -394,6 +394,7 @@ window.fetch = (input, init = {}) => {
       rentFreePeriods: Array.isArray(details.rentFreePeriods) ? details.rentFreePeriods : [],
       initialDirectCosts: details.initialDirectCosts !== null && details.initialDirectCosts !== undefined ? Number(details.initialDirectCosts) : 0,
       restorationObligation: details.restorationObligation !== null && details.restorationObligation !== undefined ? Number(details.restorationObligation) : 0,
+      restorationObligationCurrency: details.restorationObligationCurrency || "",
       assetClass: details.assetClass || "",
       prepayments: details.prepayments !== null && details.prepayments !== undefined ? Number(details.prepayments) : 0,
       leaseIncentives: details.leaseIncentives !== null && details.leaseIncentives !== undefined ? Number(details.leaseIncentives) : 0,
@@ -705,6 +706,9 @@ window.fetch = (input, init = {}) => {
       rentFreePeriods: Array.isArray(contract.rentFreePeriods) ? contract.rentFreePeriods : [],
       initialDirectCosts: Number(contract.initialDirectCosts) || 0,
       restorationObligation: Number(contract.restorationObligation) || 0,
+      // TMS 37 provision currency when it differs from the lease (e.g. a TRY
+      // restoration on a USD lease); blank = contract currency.
+      restorationObligationCurrency: contract.restorationObligationCurrency || "",
       assetClass: contract.assetClass || "",
       prepayments: Number(contract.prepayments) || 0,
       leaseIncentives: Number(contract.leaseIncentives) || 0,
@@ -4814,6 +4818,11 @@ window.fetch = (input, init = {}) => {
     );
 
     setInput(
+      "restorationObligationCurrency",
+      contract?.restorationObligationCurrency || ""
+    );
+
+    setInput(
       "prepayments",
       contract?.prepayments || 0
     );
@@ -5661,6 +5670,9 @@ window.fetch = (input, init = {}) => {
             Number(
               getInput("restorationObligation")
             ) || 0,
+
+          restorationObligationCurrency:
+            getInput("restorationObligationCurrency") || "",
 
           // V16.7 ADDITION — the extended TFRS 16 parameters the
           // calculation engine (calculateLeaseEngine) already
