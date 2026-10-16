@@ -68,6 +68,25 @@
         .filter(([, field]) => field).map(([label, field]) => fieldRow(label, field));
   }
 
+  // Restoration / dismantling provision roll-forward (TMS 37.84, TFRS 16.24(d)),
+  // shown only when the server package carries a provision.
+  function restorationRows(movement) {
+    const r = movement.restorationProvision;
+    if (!r || r.status === "ZERO_CONFIRMED") return [];
+    const field = (value, extra = {}) => ({ value, status: r.status !== "SUPPORTED" ? r.status
+      : Math.abs(value) < 0.005 ? "ZERO_CONFIRMED" : "SUPPORTED", currency: r.currency || "", fieldId: "RESTORATION_PROVISION", ...extra });
+    if (r.status !== "SUPPORTED") return [fieldRow("Restorasyon karşılığı (TMS 37)", field(null, { note: "Karşılık para birimi sunum para biriminden farklı; çevrim henüz desteklenmiyor." }))];
+    return [
+      fieldRow("Restorasyon karşılığı — açılış", field(r.opening, r.restated ? { note: "TMS 29: hareketler gerçekleştikleri aydan dönem sonu alım gücüne getirildi; karşılık parasal kalemdir." } : {})),
+      fieldRow("Restorasyon karşılığı — ilk muhasebeleştirme", field(r.additions)),
+      fieldRow("Restorasyon karşılığı — iskonto çözülmesi (finansman gideri)", field(r.accretion)),
+      ...(r.restated ? [fieldRow("Restorasyon karşılığı — TMS 29 net parasal pozisyon", field(r.monetaryGainLoss))] : []),
+      fieldRow("Restorasyon karşılığı — kapanış", field(r.closing)),
+      fieldRow("  Kısa vadeli (379)", field(r.current)),
+      fieldRow("  Uzun vadeli (479)", field(r.nonCurrent))
+    ];
+  }
+
   function rowsForTab(pkg, tab) {
     const q = pkg?.quantitative || {};
     const maturity = pkg?.maturityAnalysis || {};
@@ -126,6 +145,7 @@
       ...(movement.modificationGainLoss ? [fieldRow("Kısmi fesih kazancı (+) / kaybı (−) (TFRS 16.46(a))", movement.modificationGainLoss)] : []),
       fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
       fieldRow("Gerçekleşmiş toplam kira nakit çıkışı (nominal)", liability.actualCashOutflow || q.totalCashOutflowForLeases),
+      ...restorationRows(movement),
       ...exemptionRows(q)
     ];
     if (tab === "liability") return [
@@ -140,6 +160,7 @@
       fieldRow("TMS 21 kur hareketi", liability.tms21Movement),
       ...(movement.modificationGainLoss ? [fieldRow("Kısmi fesih kazancı (+) / kaybı (−) (TFRS 16.46(a))", movement.modificationGainLoss)] : []),
       fieldRow("Kira yükümlülüğü — kapanış", liability.closing || maturity.discountedLeaseLiabilityCarryingAmount),
+      ...restorationRows(movement),
       ...exemptionRows(q)
     ];
     const rows = [fieldRow("İskontolu kira yükümlülüğü defter değeri",
