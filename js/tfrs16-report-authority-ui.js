@@ -70,11 +70,18 @@
  function read(reportingDate){requirePackage(current);if(reportingDate){const d=reportingDate instanceof Date?reportingDate:new Date(reportingDate);
    const key=typeof reportingDate==='string'?reportingDate:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
    if(current.period.reportingDate!==key)fail('REPORTING_PERIOD_SOURCE_REQUIRED');}return current;}
+ // C12-04: presentation-currency translation of a schedule row (IAS 21), as
+ // flat CSV columns; empty when the server sent none (e.g. future rows).
+ function presentationColumns(t){
+  return {presentationCurrency:t?.currency??null,presentationRate:t?.rate??null,presentationOpeningLiability:t?.openingLiability??null,
+   presentationInterest:t?.interest??null,presentationPayment:t?.payment??null,presentationClosingLiability:t?.closingLiability??null,
+   presentationFxDifference:t?.fxDifference??null};
+ }
  function rawRows(p,section='metrics',contractId){requirePackage(p);
   const provenance={companyId:p.identity.companyId,populationId:p.identity.populationId,periodStart:p.period.periodStart,periodEnd:p.period.periodEnd,coverage:p.population.coverage};
   if(section==='audit')return p.audit.rows.filter(r=>!contractId||r.contract_id===contractId).map(r=>({...r,...provenance,evidenceType:p.audit.evidenceType,timeBasis:p.audit.timeBasis,auditCoverage:p.audit.status}));
   if(section==='controls')return (p.controls.checks||[]).map(r=>({...r,...provenance,controlSourceHash:p.controls.sourceResultHash,controlScope:p.controls.status}));
-  if(section==='schedule')return p.contracts.filter(r=>r.status==='SUPPORTED'&&(!contractId||r.contractId===contractId)).flatMap(r=>r.scheduleRows.map(row=>({...row,...provenance,coverage:p.population.excludedCount?'SUPPORTED_SUBSET':'COMPLETE_POPULATION'})));
+  if(section==='schedule')return p.contracts.filter(r=>r.status==='SUPPORTED'&&(!contractId||r.contractId===contractId)).flatMap(r=>r.scheduleRows.map(({presentation,...row},_,all)=>({...row,...(all.some(x=>'presentation' in x)?presentationColumns(presentation):{}),...provenance,coverage:p.population.excludedCount?'SUPPORTED_SUBSET':'COMPLETE_POPULATION'})));
   if(section==='contracts')return p.contracts.map(r=>({contractId:r.contractId,companyId:r.companyId,status:r.status,reason:r.reason||null,currency:r.currency||null,...provenance}));
   const contract=contractId?p.contracts.find(r=>r.contractId===contractId):null;if(contractId&&contract?.status!=='SUPPORTED')fail('REPORTING_SOURCE_NOT_READY');
   return metrics.map(metric=>({metric,...(contract?contract.metrics:p.totals)[metric],...provenance,...(contract?{contractId,coverage:contract.metrics[metric].coverage,populationCoverage:p.population.coverage}: {})}));
