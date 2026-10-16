@@ -6540,7 +6540,8 @@ window.fetch = (input, init = {}) => {
   // C12-02: the FX rate list is browser data (no reporting authority needed):
   // export every stored rate, oldest first, as .xlsx (CSV without SheetJS).
   function exportFxRates(filters = {}) {
-    const rows = getFxRates(filters).slice()
+    // The page passes the rows it shows (its filters); otherwise every rate.
+    const rows = (Array.isArray(filters.rows) ? filters.rows : getFxRates(filters)).slice()
       .sort((a, b) => String(a.rateDate || "").localeCompare(String(b.rateDate || "")) || String(a.fromCurrency || "").localeCompare(String(b.fromCurrency || "")));
     if (!rows.length) return false;
     const exporter = window.LeaseQantTfrs16OperationsUi?.exportRowsFile;
@@ -17660,8 +17661,15 @@ const V26_FX_UI_PAGE_SIZE = 50;
       }));
       container.querySelector("#v26FxExportBtn")?.addEventListener("click", () => {
         try {
-          const ok = exportFxRates({});
-          if (ok !== false) v26FxUiToast("Tüm kur listesi Excel'e aktarıldı.", "success");
+          const shown = v26FxUiFilterRows({
+            fromCurrency: container.querySelector("#v26FxFromFilter")?.value || "",
+            toCurrency: container.querySelector("#v26FxToFilter")?.value || "",
+            rateType: container.querySelector("#v26FxTypeFilter")?.value || "",
+            dateFrom: container.querySelector("#v26FxDateFrom")?.value || "",
+            dateTo: container.querySelector("#v26FxDateTo")?.value || ""
+          });
+          const ok = exportFxRates({ rows: shown });
+          if (ok !== false) v26FxUiToast(`Ekrandaki filtreye uyan ${ok} kur kaydı Excel'e aktarıldı.`, "success");
           else v26FxUiToast("Dışa aktarılacak kur kaydı bulunamadı.", "warning");
         } catch (error) { v26FxUiToast(error?.message || "Excel dışa aktarma başarısız.", "error"); }
       });
