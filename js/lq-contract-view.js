@@ -512,10 +512,14 @@
     const r = state.report;
     if (!r?.package || r.row?.status !== "SUPPORTED") return;
     const ui = global.LeaseQantReportingAuthorityUi;
-    const text = ui.serialize(r.package, "csv", "schedule", state.contractId);
+    let text;
+    try { text = ui.serialize(r.package, "csv", "schedule", state.contractId); }
+    catch (error) { global.alert?.(`CSV oluşturulamadı: ${error?.code || error?.message || error}`); return; }
     const url = global.URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+    // Some browsers ignore a click on a link that is not in the document.
     const a = doc.createElement("a");
-    a.href = url; a.download = `LeaseQant_${state.contractId}_${r.period.reportingDate}.csv`; a.click();
+    a.href = url; a.download = `LeaseQant_${state.contractId}_${r.period.reportingDate}.csv`;
+    doc.body.appendChild(a); a.click(); a.remove();
     global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
   }
 
