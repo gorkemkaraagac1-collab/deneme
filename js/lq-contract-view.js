@@ -508,18 +508,29 @@
     });
   }
 
+  // Download problems are written next to the table (an alert can be
+  // suppressed by the browser, leaving the user with no feedback).
+  function showCsvStatus(message) {
+    const bar = doc.querySelector(".lq-cv-table .lq-cv-tools");
+    if (!bar) { global.console?.warn?.(message); return; }
+    let note = bar.querySelector("[data-lq-cv-csv-status]");
+    if (!note) { note = doc.createElement("span"); note.setAttribute("data-lq-cv-csv-status", ""); note.setAttribute("role", "status"); note.className = "lq-cv-muted"; bar.appendChild(note); }
+    note.textContent = message;
+  }
+
   function downloadCsv() {
     const r = state.report;
-    if (!r?.package || r.row?.status !== "SUPPORTED") return;
+    if (!r?.package || r.row?.status !== "SUPPORTED") { showCsvStatus("CSV için doğrulanmış sunucu raporu hazır değil."); return; }
     const ui = global.LeaseQantReportingAuthorityUi;
     let text;
     try { text = ui.serialize(r.package, "csv", "schedule", state.contractId); }
-    catch (error) { global.alert?.(`CSV oluşturulamadı: ${error?.code || error?.message || error}`); return; }
+    catch (error) { showCsvStatus(`CSV oluşturulamadı: ${error?.code || error?.message || error}`); return; }
     const url = global.URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
     // Some browsers ignore a click on a link that is not in the document.
     const a = doc.createElement("a");
     a.href = url; a.download = `LeaseQant_${state.contractId}_${r.period.reportingDate}.csv`;
     doc.body.appendChild(a); a.click(); a.remove();
+    showCsvStatus(`CSV hazırlandı (${Math.max(0, text.split("\r\n").length - 1)} satır). İnmediyse tarayıcının indirme iznini kontrol edin.`);
     global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
   }
 

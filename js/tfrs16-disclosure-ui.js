@@ -75,11 +75,12 @@
     if (!r || r.status === "ZERO_CONFIRMED") return [];
     const field = (value, extra = {}) => ({ value, status: r.status !== "SUPPORTED" ? r.status
       : Math.abs(value) < 0.005 ? "ZERO_CONFIRMED" : "SUPPORTED", currency: r.currency || "", fieldId: "RESTORATION_PROVISION", ...extra });
-    if (r.status !== "SUPPORTED") return [fieldRow("Restorasyon karşılığı (TMS 37)", field(null, { note: "Karşılık para birimi sunum para biriminden farklı; çevrim henüz desteklenmiyor." }))];
+    if (r.status !== "SUPPORTED") return [fieldRow("Restorasyon karşılığı (TMS 37)", field(null, { note: "Karşılık, sözleşme ve sunum para birimlerinden farklı bir para biriminde; bu çevrim desteklenmiyor." }))];
     return [
       fieldRow("Restorasyon karşılığı — açılış", field(r.opening, r.restated ? { note: "TMS 29: hareketler gerçekleştikleri aydan dönem sonu alım gücüne getirildi; karşılık parasal kalemdir." } : {})),
       fieldRow("Restorasyon karşılığı — ilk muhasebeleştirme", field(r.additions)),
       fieldRow("Restorasyon karşılığı — iskonto çözülmesi (finansman gideri)", field(r.accretion)),
+      ...(Math.abs(Number(r.tms21Movement) || 0) >= 0.005 ? [fieldRow("Restorasyon karşılığı — TMS 21 kur farkı", field(r.tms21Movement))] : []),
       ...(r.restated ? [fieldRow("Restorasyon karşılığı — TMS 29 net parasal pozisyon", field(r.monetaryGainLoss))] : []),
       fieldRow("Restorasyon karşılığı — kapanış", field(r.closing)),
       fieldRow("  Kısa vadeli (379)", field(r.current)),
