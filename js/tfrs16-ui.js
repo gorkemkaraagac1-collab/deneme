@@ -6543,27 +6543,16 @@ window.fetch = (input, init = {}) => {
     const rows = getFxRates(filters).slice()
       .sort((a, b) => String(a.rateDate || "").localeCompare(String(b.rateDate || "")) || String(a.fromCurrency || "").localeCompare(String(b.fromCurrency || "")));
     if (!rows.length) return false;
-    const data = rows.map(row => ({
+    const exporter = window.LeaseQantTfrs16OperationsUi?.exportRowsFile;
+    if (typeof exporter !== "function") throw new Error("Dışa aktarma modülü yüklenmedi.");
+    exporter({ fileBase: `LeaseQant_Kurlar_${new Date().toISOString().slice(0, 10)}`, sheetName: "Kurlar", rows: rows.map(row => ({
       Tarih: row.rateDate || "", Kaynak: row.fromCurrency || "", Hedef: row.toCurrency || "",
       Kur: Number(row.rate), KurTipi: row.rateType || "", Veren: row.source || "",
       Durum: row.status || row.verificationStatus || "", Aciklama: row.reason || ""
-    }));
-    const fileBase = `LeaseQant_Kurlar_${new Date().toISOString().slice(0, 10)}`;
-    if (window.XLSX?.utils?.json_to_sheet && typeof window.XLSX.writeFile === "function") {
-      const workbook = window.XLSX.utils.book_new();
-      window.XLSX.utils.book_append_sheet(workbook, window.XLSX.utils.json_to_sheet(data), "Kurlar");
-      window.XLSX.writeFile(workbook, `${fileBase}.xlsx`);
-      return data.length;
-    }
-    const headers = Object.keys(data[0]);
-    const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const csv = [headers.map(quote).join(";"), ...data.map(row => headers.map(key => quote(row[key])).join(";"))].join("\r\n");
-    const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url; link.download = `${fileBase}.csv`; document.body.appendChild(link); link.click(); link.remove();
-    URL.revokeObjectURL(url);
-    return data.length;
+    })) });
+    return rows.length;
   }
+
   function exportFxReconciliation() { return reportingAuthorityUnavailable(); }
   function exportFxTranslation() { return reportingAuthorityUnavailable(); }
   function exportGroupDatabaseReady() { return reportingAuthorityUnavailable(); }
