@@ -401,6 +401,34 @@ ${footer}
    * and audit recording stay in the engine bridge; this module owns only the
    * workbook/CSV presentation and browser download.
    */
+  // Generic list download (.xlsx via SheetJS, CSV fallback) for browser-held
+  // tables such as the FX rate list (C12-02).
+  function exportRowsFile({ fileBase = "LeaseQant", sheetName = "Liste", rows = [] } = {}) {
+    if (!Array.isArray(rows) || !rows.length) return false;
+    if (typeof XLSX !== "undefined" && XLSX?.utils?.json_to_sheet) {
+      try {
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), sheetName);
+        XLSX.writeFile(workbook, `${fileBase}.xlsx`);
+        return true;
+      } catch (error) {
+        console.error("List export error:", error);
+      }
+    }
+    const headers = Object.keys(rows[0]);
+    const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [headers.map(quote).join(";"), ...rows.map(row => headers.map(key => quote(row[key])).join(";"))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${fileBase}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  }
+
   function exportPaymentScheduleFile({ contractId, presentationCurrency, assumptionRows = [], scheduleRows = [], fxRows = [] } = {}) {
     if (!Array.isArray(scheduleRows) || !scheduleRows.length) return false;
     const safeId = String(contractId || "CONTRACT");
@@ -1148,5 +1176,5 @@ ${footer}
     `;
   }
 
-  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, bindPaymentScheduleEvents, bindSlbPreviewFlow, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
+  global.LeaseQantTfrs16OperationsUi = { renderModificationReassessment, renderSaleAndLeaseback, renderSublease, renderSlbForm, renderSubleaseForm, renderSlbResultHtml, renderSlbJournalHtml, renderSubleaseResultHtml, renderPaymentScheduleHeader, renderPaymentScheduleFilters, renderPaymentScheduleSection, renderPaymentScheduleTableShell, renderPaymentScheduleFooterContainers, renderPaymentScheduleRows, renderPaymentScheduleState, exportPaymentScheduleFile, exportRowsFile, bindPaymentScheduleEvents, bindSlbPreviewFlow, bindSlbEvents, bindSubleaseEvents, bindModificationEvents, bindReassessmentEvents };
 })(window);

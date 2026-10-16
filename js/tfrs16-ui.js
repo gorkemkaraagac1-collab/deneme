@@ -6537,7 +6537,22 @@ window.fetch = (input, init = {}) => {
   function exportForecast() { return reportingAuthorityUnavailable(); }
   function exportFxExposure() { return reportingAuthorityUnavailable(); }
   function exportFxGainLoss() { return reportingAuthorityUnavailable(); }
-  function exportFxRates() { return reportingAuthorityUnavailable(); }
+  // C12-02: the FX rate list is browser data (no reporting authority needed):
+  // export every stored rate, oldest first, as .xlsx (CSV without SheetJS).
+  function exportFxRates(filters = {}) {
+    const rows = getFxRates(filters).slice()
+      .sort((a, b) => String(a.rateDate || "").localeCompare(String(b.rateDate || "")) || String(a.fromCurrency || "").localeCompare(String(b.fromCurrency || "")));
+    if (!rows.length) return false;
+    const exporter = window.LeaseQantTfrs16OperationsUi?.exportRowsFile;
+    if (typeof exporter !== "function") throw new Error("Dışa aktarma modülü yüklenmedi.");
+    exporter({ fileBase: `LeaseQant_Kurlar_${new Date().toISOString().slice(0, 10)}`, sheetName: "Kurlar", rows: rows.map(row => ({
+      Tarih: row.rateDate || "", Kaynak: row.fromCurrency || "", Hedef: row.toCurrency || "",
+      Kur: Number(row.rate), KurTipi: row.rateType || "", Veren: row.source || "",
+      Durum: row.status || row.verificationStatus || "", Aciklama: row.reason || ""
+    })) });
+    return rows.length;
+  }
+
   function exportFxReconciliation() { return reportingAuthorityUnavailable(); }
   function exportFxTranslation() { return reportingAuthorityUnavailable(); }
   function exportGroupDatabaseReady() { return reportingAuthorityUnavailable(); }
