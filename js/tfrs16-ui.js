@@ -9346,10 +9346,13 @@ window.fetch = (input, init = {}) => {
       "Bitiş Tarihi": "2030-12-31",
       "İskonto Oranı": 18,
       "Para Birimi": "TRY",
+      "Fonksiyonel Para Birimi": "TRY",
       "Ödeme Zamanı": "Dönem Sonu (Arrears)",
       "Ödeme Frekansı": "Aylık",
       "Doğrudan İlk Maliyetler": 0,
       "Sökme / Restorasyon Karşılığı": 0,
+      // Boş = sözleşme para birimi (ör. USD kirada TRY restorasyon için "TRY").
+      "Restorasyon Para Birimi": "",
       "Yenileme Tarihi": "2030-09-30",
       "Varlık Sınıfı": "Makine",
       "Peşin Ödemeler": 0,
@@ -9377,7 +9380,13 @@ window.fetch = (input, init = {}) => {
       "Fesih Tarihi": "",
       "Fesih Cezası": "",
       "Satın Alma Opsiyonu Kullanımı Makul Ölçüde Kesin": "",
-      "Satın Alma Opsiyon Bedeli": ""
+      "Satın Alma Opsiyon Bedeli": "",
+      // TFRS 16.27(c): garanti kapsamında ödenmesi beklenen tutar (garantinin nominali değil).
+      "Kalıntı Değer Garantisi": "Hayır",
+      "Beklenen Garanti Ödemesi": "",
+      // Kira bedelsiz dönem varsa ilk ve son günü (YYYY-AA-GG).
+      "Kira Bedelsiz Dönem Başlangıç": "",
+      "Kira Bedelsiz Dönem Bitiş": ""
     }
   ];
 
@@ -10874,6 +10883,11 @@ window.fetch = (input, init = {}) => {
         terminationPenalty: ["termination penalty", "fesih cezası", "fesih cezasi"],
         purchaseOptionExpectedToExercise: ["purchase reasonably certain", "satın alma opsiyonu kullanımı makul ölçüde kesin", "satin alma opsiyonu kullanimi makul olcude kesin"],
         purchaseOptionPrice: ["purchase option price", "satın alma opsiyon bedeli", "satin alma opsiyon bedeli"],
+        residualValueGuarantee: ["residual value guarantee", "kalıntı değer garantisi", "kalinti deger garantisi"],
+        expectedResidualValueGuaranteePayment: ["expected residual value guarantee payment", "expected guarantee payment", "beklenen garanti ödemesi", "beklenen garanti odemesi"],
+        restorationObligationCurrency: ["restoration currency", "restorasyon para birimi"],
+        rentFreeStart: ["rent free start", "kira bedelsiz dönem başlangıç", "kira bedelsiz donem baslangic"],
+        rentFreeEnd: ["rent free end", "kira bedelsiz dönem bitiş", "kira bedelsiz donem bitis"],
         renewalOption: ["renewal option", "yenileme opsiyonu", "yenileme opsiyonu makul ölçüde kesin", "yenileme opsiyonu makul olcude kesin"],
         terminationOption: ["termination option", "fesih opsiyonu", "fesih opsiyonu makul ölçüde kesin değil", "fesih opsiyonu makul olcude kesin degil"],
         purchaseOption: ["purchase option", "satın alma opsiyonu", "satin alma opsiyonu", "satın alma opsiyonu makul ölçüde kesin", "satin alma opsiyonu makul olcude kesin"],
@@ -11318,6 +11332,11 @@ window.fetch = (input, init = {}) => {
       terminationPenalty: integrationOptionalNumber(row, fields.terminationPenalty || []),
       purchaseOptionExpectedToExercise: integrationOptionalBoolean(row, fields.purchaseOptionExpectedToExercise || []),
       purchaseOptionPrice: integrationOptionalNumber(row, fields.purchaseOptionPrice || []),
+      residualValueGuarantee: integrationOptionalBoolean(row, fields.residualValueGuarantee || []),
+      expectedResidualValueGuaranteePayment: integrationOptionalNumber(row, fields.expectedResidualValueGuaranteePayment || []),
+      restorationObligationCurrency: normalizeIntegrationCurrency(integrationFindValue(row, fields.restorationObligationCurrency || [])) || undefined,
+      rentFreeStart: integrationOptionalDate(row, fields.rentFreeStart || []),
+      rentFreeEnd: integrationOptionalDate(row, fields.rentFreeEnd || []),
       renewalOption: integrationOptionalBoolean(row, fields.renewalOption || []),
       terminationOption: integrationOptionalBoolean(row, fields.terminationOption || []),
       purchaseOption: integrationOptionalBoolean(row, fields.purchaseOption || []),
@@ -11557,8 +11576,14 @@ window.fetch = (input, init = {}) => {
     if (data.fixedIncrease !== undefined) base.fixedIncrease = data.fixedIncrease;
     if (data.variablePayment !== undefined) base.variablePayment = data.variablePayment;
     if (data.usefulLifeMonths !== undefined) base.usefulLifeMonths = data.usefulLifeMonths;
-    for (const key of ["leaseTermEvidenceReference", "renewalEndDate", "terminationDate", "terminationPenalty", "purchaseOptionPrice"]) {
+    for (const key of ["leaseTermEvidenceReference", "renewalEndDate", "terminationDate", "terminationPenalty", "purchaseOptionPrice",
+      "expectedResidualValueGuaranteePayment", "restorationObligationCurrency"]) {
       if (data[key] !== undefined) base[key] = data[key];
+    }
+    if (data.residualValueGuarantee !== undefined) base.residualValueGuarantee = data.residualValueGuarantee === true;
+    // One rent-free window from the template (the form supports several).
+    if (data.rentFreeStart && data.rentFreeEnd) {
+      base.rentFreePeriods = [{ startDate: data.rentFreeStart, endDate: data.rentFreeEnd, description: "Excel içe aktarma" }];
     }
     // Opsiyon kararları satırdan gelir; boş hücre "karar girilmedi" demektir ve
     // eski kayıttaki değer (önceden boş=Hayır saklanıyordu) varsayım olarak kalmaz.
