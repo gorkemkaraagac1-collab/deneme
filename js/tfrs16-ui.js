@@ -6910,6 +6910,30 @@ window.fetch = (input, init = {}) => {
       ? renewalEnd : String(contract?.endDate || "");
   }
 
+  // Terms in force after the applied event chain. Applying an event does not
+  // rewrite the headline contract fields, so a later event form must start from
+  // the last applied payment, rate and end date, not the commencement terms.
+  function currentLeaseTermsForEventForm(contract) {
+    const terms = {
+      payment: Number(contract?.monthlyPayment) || 0,
+      discountRate: Number(contract?.discountRate) || 0,
+      leaseEndDate: judgedLeaseEndDate(contract)
+    };
+    [...(contract?.modifications || []), ...(contract?.reassessments || [])]
+      .filter(item => item?.status === "APPLIED")
+      .map((item, index) => ({ item, index,
+        date: String(item.effectiveDate || item.modificationDate || item.reassessmentDate || "") }))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.index - b.index)
+      .forEach(({ item }) => {
+        const next = item.newTerms || item.appliedToTerms || {};
+        if (Number.isFinite(Number(next.payment)) && next.payment !== null && next.payment !== "") terms.payment = Number(next.payment);
+        if (Number.isFinite(Number(next.discountRate)) && next.discountRate !== null && next.discountRate !== "") terms.discountRate = Number(next.discountRate);
+        const end = next.leaseEndDate || next.leaseTerm;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(end || ""))) terms.leaseEndDate = String(end);
+      });
+    return terms;
+  }
+
   function renderModificationManagementSection(contract) {
 
     ensureModificationState(contract);
@@ -7062,15 +7086,15 @@ window.fetch = (input, init = {}) => {
               <input id="modificationNewPayment" type="hidden" value="0">
             </label>` : `<label style="font-size:10px;font-weight:700;">
               Yeni Aylık Ödeme
-              <input id="modificationNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;">
+              <input id="modificationNewPayment" type="number" min="0" step="0.01" value="${currentLeaseTermsForEventForm(contract).payment}" style="display:block;width:100%;margin-top:5px;">
             </label>`}
             <label style="font-size:10px;font-weight:700;">
               Yeni Kira Bitiş Tarihi
-              <input id="modificationNewEndDate" type="date" value="${escapeHtml(judgedLeaseEndDate(contract))}" style="display:block;width:100%;margin-top:5px;">
+              <input id="modificationNewEndDate" type="date" value="${escapeHtml(currentLeaseTermsForEventForm(contract).leaseEndDate)}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
               Yeni İskonto Oranı %
-              <input id="modificationNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;">
+              <input id="modificationNewDiscountRate" type="number" min="0" step="0.0001" value="${currentLeaseTermsForEventForm(contract).discountRate}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
               Kapsam Azaltma %
@@ -7175,9 +7199,9 @@ window.fetch = (input, init = {}) => {
       setValue("modificationType", item.modificationType || "OTHER");
       // Saved drafts keep the revised terms in newTerms.
       const terms = item.newTerms || {};
-      setValue("modificationNewPayment", item.newPayment ?? terms.payment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("modificationNewPayment", item.newPayment ?? terms.payment ?? currentLeaseTermsForEventForm(contract).payment);
       setValue("modificationNewEndDate", item.newLeaseEndDate || item.leaseEndDate || terms.leaseEndDate || terms.leaseTerm || "");
-      setValue("modificationNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? (Number(contract.discountRate) || 0));
+      setValue("modificationNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? currentLeaseTermsForEventForm(contract).discountRate);
       setValue("modificationScopeReduction", item.scopeReductionPercent || 0);
       setValue("modificationScopeIncrease", item.scopeIncreasePercent || 0);
       setValue("modificationReason", item.reason || "");
@@ -7427,9 +7451,9 @@ window.fetch = (input, init = {}) => {
               <option value="COMBINED_REASSESSMENT">Birleşik Reassessment</option>
               <option value="OTHER">Diğer</option>
             </select></label>
-            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">${datedScheduleText(contract, today)}</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>`}
-            <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(judgedLeaseEndDate(contract))}" style="display:block;width:100%;margin-top:5px;"></label>
-            <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
+            ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">${datedScheduleText(contract, today)}</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${currentLeaseTermsForEventForm(contract).payment}" style="display:block;width:100%;margin-top:5px;"></label>`}
+            <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(currentLeaseTermsForEventForm(contract).leaseEndDate)}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${currentLeaseTermsForEventForm(contract).discountRate}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yenileme Opsiyonu<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
             <label style="font-size:10px;font-weight:700;">Fesih Opsiyonu<select id="reassessmentTerminationOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Beklenmiyor</option><option value="true">Bekleniyor / kullanıldı</option></select></label>
             <label style="font-size:10px;font-weight:700;">Satın Alma Opsiyonu<select id="reassessmentPurchaseOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
@@ -7500,9 +7524,9 @@ window.fetch = (input, init = {}) => {
       setValue("reassessmentType", item.type || "OTHER");
       // Saved drafts keep the revised terms in newTerms.
       const terms = item.newTerms || {};
-      setValue("reassessmentNewPayment", item.newPayment ?? terms.payment ?? (Number(contract.monthlyPayment) || 0));
+      setValue("reassessmentNewPayment", item.newPayment ?? terms.payment ?? currentLeaseTermsForEventForm(contract).payment);
       setValue("reassessmentNewEndDate", item.newLeaseEndDate || item.leaseEndDate || terms.leaseEndDate || terms.leaseTerm || "");
-      setValue("reassessmentNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? (Number(contract.discountRate) || 0));
+      setValue("reassessmentNewDiscountRate", item.newDiscountRate ?? terms.discountRate ?? currentLeaseTermsForEventForm(contract).discountRate);
       setValue("reassessmentRenewalOption", String((item.newRenewalOption ?? terms.renewalOption) === true));
       setValue("reassessmentTerminationOption", String((item.newTerminationOption ?? terms.terminationOption) === true));
       setValue("reassessmentPurchaseOption", String((item.newPurchaseOption ?? terms.purchaseOption) === true));
