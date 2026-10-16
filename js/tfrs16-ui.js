@@ -6901,6 +6901,15 @@ window.fetch = (input, init = {}) => {
      generation logic above.
   ========================================================== */
 
+  // The lease end the measurement uses today: the renewal end when the
+  // renewal is reasonably certain (IFRS 16.18-19), else the contractual end.
+  // Event forms start from it so an untouched date means "term unchanged".
+  function judgedLeaseEndDate(contract) {
+    const renewalEnd = String(contract?.renewalEndDate || "");
+    return contract?.renewalOption === true && contract?.renewalOptionExpectedToExercise === true && renewalEnd > String(contract?.endDate || "")
+      ? renewalEnd : String(contract?.endDate || "");
+  }
+
   function renderModificationManagementSection(contract) {
 
     ensureModificationState(contract);
@@ -7057,7 +7066,7 @@ window.fetch = (input, init = {}) => {
             </label>`}
             <label style="font-size:10px;font-weight:700;">
               Yeni Kira Bitiş Tarihi
-              <input id="modificationNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;">
+              <input id="modificationNewEndDate" type="date" value="${escapeHtml(judgedLeaseEndDate(contract))}" style="display:block;width:100%;margin-top:5px;">
             </label>
             <label style="font-size:10px;font-weight:700;">
               Yeni İskonto Oranı %
@@ -7419,7 +7428,7 @@ window.fetch = (input, init = {}) => {
               <option value="OTHER">Diğer</option>
             </select></label>
             ${contract.paymentFrequency === "irregular" ? `<label style="font-size:10px;font-weight:700;grid-column:1/-1;">Yürürlük tarihinden sonraki yeni ödeme takvimi (Tarih | Tutar | Referans)<textarea id="reassessmentNewSchedule" rows="5" style="display:block;width:100%;margin-top:5px;">${datedScheduleText(contract, today)}</textarea><input id="reassessmentNewPayment" type="hidden" value="0"></label>` : `<label style="font-size:10px;font-weight:700;">Yeni Aylık Ödeme<input id="reassessmentNewPayment" type="number" min="0" step="0.01" value="${Number(contract.monthlyPayment) || 0}" style="display:block;width:100%;margin-top:5px;"></label>`}
-            <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(contract.endDate || "")}" style="display:block;width:100%;margin-top:5px;"></label>
+            <label style="font-size:10px;font-weight:700;">Yeni Kira Bitiş Tarihi<input id="reassessmentNewEndDate" type="date" value="${escapeHtml(judgedLeaseEndDate(contract))}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yeni İskonto Oranı %<input id="reassessmentNewDiscountRate" type="number" min="0" step="0.0001" value="${Number(contract.discountRate) || 0}" style="display:block;width:100%;margin-top:5px;"></label>
             <label style="font-size:10px;font-weight:700;">Yenileme Opsiyonu<select id="reassessmentRenewalOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Makul ölçüde kesin değil</option><option value="true">Makul ölçüde kesin</option></select></label>
             <label style="font-size:10px;font-weight:700;">Fesih Opsiyonu<select id="reassessmentTerminationOption" style="display:block;width:100%;margin-top:5px;"><option value="false">Beklenmiyor</option><option value="true">Bekleniyor / kullanıldı</option></select></label>
