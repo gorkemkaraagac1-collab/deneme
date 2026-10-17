@@ -5168,9 +5168,9 @@ window.fetch = (input, init = {}) => {
       panel.dataset.tab = "4"; // Tab 4 — Para Birimi & Standartlar (V26)
       panel.style.cssText = "grid-column:1/-1;border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#f8fafc;margin-top:8px;";
       panel.innerHTML = `
-        <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px;">Para Birimi & Standartlar (V26)</div>
+        <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px;">Para Birimi & Standartlar</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
-          <label style="font-size:12px;color:#64748b;font-weight:600;">Şirket (V26)
+          <label style="font-size:12px;color:#64748b;font-weight:600;">Şirket
             <select id="companyId" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-top:4px;"></select>
           </label>
           ${hasNativeCurrency ? "" : `
@@ -10380,7 +10380,7 @@ window.fetch = (input, init = {}) => {
       closedAt: new Date().toISOString(),
       closedBy: String(certifiedBy || "system")
     });
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "MONTH_END_CLOSE_CERTIFIED", entityType: "MONTH_END_CLOSE", entityId: period, reason: "V17 month-end close certification", metadata: { period, reportingDate: closeIsoDate(d), score: readiness.score, certifiedBy: next.certifiedBy } });
+    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "MONTH_END_CLOSE_CERTIFIED", entityType: "MONTH_END_CLOSE", entityId: period, reason: "Ay sonu kapanışı onaylandı", metadata: { period, reportingDate: closeIsoDate(d), score: readiness.score, certifiedBy: next.certifiedBy } });
     return { success: true, state: next, readiness: getCloseReadiness(d) };
   }
 
@@ -10402,7 +10402,7 @@ window.fetch = (input, init = {}) => {
       reopenedBy: String(actor || "system"),
       reopenReason: String(input.reason || "")
     });
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "MONTH_END_CLOSE_REOPENED", entityType: "MONTH_END_CLOSE", entityId: period, reason: input.reason || "V17 close reopen", metadata: { previousStatus: current?.status || null, reopenedBy: next.reopenedBy } });
+    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "MONTH_END_CLOSE_REOPENED", entityType: "MONTH_END_CLOSE", entityId: period, reason: input.reason || "Kapanış yeniden açıldı", metadata: { previousStatus: current?.status || null, reopenedBy: next.reopenedBy } });
     return { success: true, state: next, readiness: getCloseReadiness(d) };
   }
 
@@ -11735,7 +11735,7 @@ window.fetch = (input, init = {}) => {
           ]
         });
         if (typeof recordAuditEvent === "function") {
-          recordAuditEvent({ action: "IMPORT_BACKEND_PERSIST_FAILED", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import — backend'e yazılamadı", metadata: { jobId, rowNumber: result.rowNumber, companyId: next.companyId || null, backendCode, error: error?.message || String(error) } });
+          recordAuditEvent({ action: "IMPORT_BACKEND_PERSIST_FAILED", entityType: "CONTRACT", entityId: id, contractId: id, reason: "Excel içe aktarma: sunucuya kaydedilemedi", metadata: { jobId, rowNumber: result.rowNumber, companyId: next.companyId || null, backendCode, error: error?.message || String(error) } });
         }
         continue;
       }
@@ -11743,15 +11743,15 @@ window.fetch = (input, init = {}) => {
       if (index >= 0) working[index] = next; else working.push(next);
       committed.push({ rowNumber: result.rowNumber, contractId: id, action, status: result.status, warningCount: result.warnings.length, businessRuleWarnings: businessRuleCheck.valid ? [] : (businessRuleCheck.errors || []) });
       changes.push({ contractId: id, action, changes: fieldChanges });
-      if (typeof recordAuditEvent === "function") recordAuditEvent({ action: action === "CREATE" ? "IMPORT_CREATE" : "IMPORT_UPDATE", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import", oldValue: oldContract, newValue: next, metadata: { jobId, sourceType: options.sourceType || INTEGRATION_SOURCE_TYPES.EXCEL, sourceId: options.sourceId || null, schemaVersion: options.schemaVersion || INTEGRATION_SCHEMA_VERSION, fieldChanges } });
+      if (typeof recordAuditEvent === "function") recordAuditEvent({ action: action === "CREATE" ? "IMPORT_CREATE" : "IMPORT_UPDATE", entityType: "CONTRACT", entityId: id, contractId: id, reason: "Excel içe aktarma", oldValue: oldContract, newValue: next, metadata: { jobId, sourceType: options.sourceType || INTEGRATION_SOURCE_TYPES.EXCEL, sourceId: options.sourceId || null, schemaVersion: options.schemaVersion || INTEGRATION_SCHEMA_VERSION, fieldChanges } });
       if (!businessRuleCheck.valid && typeof recordAuditEvent === "function") {
-        recordAuditEvent({ action: "IMPORT_BUSINESS_RULE_WARNING", entityType: "CONTRACT", entityId: id, contractId: id, reason: "V19 integration import business rule check (validateImportedContract)", metadata: { jobId, rowNumber: result.rowNumber, errors: businessRuleCheck.errors || [] } });
+        recordAuditEvent({ action: "IMPORT_BUSINESS_RULE_WARNING", entityType: "CONTRACT", entityId: id, contractId: id, reason: "Excel içe aktarma: iş kuralı uyarısı", metadata: { jobId, rowNumber: result.rowNumber, errors: businessRuleCheck.errors || [] } });
       }
     }
     saveContracts(working);
     if (typeof refresh === "function") { try { refresh(); } catch (error) {} }
     rejected.forEach(result => {
-      if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "IMPORT_REJECT", entityType: "IMPORT", entityId: jobId, reason: "V19 integration import rejected row", metadata: { jobId, rowNumber: result.rowNumber, errors: result.errors, warnings: result.warnings } });
+      if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "IMPORT_REJECT", entityType: "IMPORT", entityId: jobId, reason: "Excel içe aktarma: satır reddedildi", metadata: { jobId, rowNumber: result.rowNumber, errors: result.errors, warnings: result.warnings } });
     });
     const finalStatus = rejected.length || preview.warningRows ? INTEGRATION_JOB_STATUS.COMPLETED_WITH_WARNINGS : INTEGRATION_JOB_STATUS.COMPLETED;
     const job = updateImportJob(jobId, { status: finalStatus, completedAt: integrationNow(), totalRows: preview.totalRows, importedRows: committed.length, rejectedRows: rejected.length, warningRows: preview.warningRows, errors: rejected.flatMap(x => x.errors || []), warnings: preview.validationResults.flatMap(x => x.warnings || []), validationResults: preview.validationResults, lifecycle: rejected.length ? INTEGRATION_LIFECYCLE.EXCEPTION : INTEGRATION_LIFECYCLE.PROCESSED, committedActions: committed, changeSummary: changes });
@@ -11795,7 +11795,7 @@ window.fetch = (input, init = {}) => {
     const item = { exportId: options.exportId || integrationId("EXP"), exportType, createdAt: options.createdAt || integrationNow(), createdBy: options.createdBy || integrationActor(), recordCount: Number(recordCount) || 0, status: options.status || "COMPLETED", schemaVersion: options.schemaVersion || INTEGRATION_SCHEMA_VERSION, source: "GK_FINANCE_INTELLIGENCE" };
     state.exports.push(item);
     saveIntegrationStorage(state);
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "EXPORT", entityType: "INTEGRATION_EXPORT", entityId: item.exportId, reason: "V19 data exchange export", metadata: item });
+    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "EXPORT", entityType: "INTEGRATION_EXPORT", entityId: item.exportId, reason: "Dışa aktarma", metadata: item });
     return integrationClone(item);
   }
 
@@ -11844,7 +11844,7 @@ window.fetch = (input, init = {}) => {
     const mismatches = rows.filter(row => row.status !== "MATCHED");
     const result = { reconciliationId: integrationId("REC"), source: options.source || "EXTERNAL", reportingDate: v19IsoDate(options.reportingDate || new Date()), externalCount: external.length, internalCount: internal.length, matchedCount: rows.filter(x => x.status === "MATCHED").length, mismatchCount: mismatches.length, status: exceptions.length || mismatches.length ? INTEGRATION_RECON_STATUS.MISMATCH : INTEGRATION_RECON_STATUS.MATCHED, rows, exceptions, createdAt: integrationNow() };
     const state = getIntegrationStorage(); state.reconciliations.push(result); saveIntegrationStorage(state);
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "RECONCILIATION", entityType: "INTEGRATION_RECONCILIATION", entityId: result.reconciliationId, reason: "V19 contract reconciliation", metadata: { status: result.status, source: result.source, reportingDate: result.reportingDate, mismatchCount: result.mismatchCount } });
+    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "RECONCILIATION", entityType: "INTEGRATION_RECONCILIATION", entityId: result.reconciliationId, reason: "Sözleşme mutabakatı", metadata: { status: result.status, source: result.source, reportingDate: result.reportingDate, mismatchCount: result.mismatchCount } });
     return result;
   }
 
@@ -11862,7 +11862,7 @@ window.fetch = (input, init = {}) => {
     });
     const result = { reconciliationId: integrationId("REC"), source: "EXTERNAL_JOURNAL", reportingDate: v19IsoDate(reportingDate || new Date()), externalCount: external.length, internalCount: internal.length, status: rows.every(x => x.status === "MATCHED") ? INTEGRATION_RECON_STATUS.MATCHED : INTEGRATION_RECON_STATUS.MISMATCH, rows, exceptions: rows.filter(x => x.status !== "MATCHED"), createdAt: integrationNow() };
     const state = getIntegrationStorage(); state.reconciliations.push(result); saveIntegrationStorage(state);
-    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "RECONCILIATION", entityType: "INTEGRATION_RECONCILIATION", entityId: result.reconciliationId, reason: "V19 journal reconciliation", metadata: { status: result.status, source: result.source } });
+    if (typeof recordAuditEvent === "function") recordAuditEvent({ action: "RECONCILIATION", entityType: "INTEGRATION_RECONCILIATION", entityId: result.reconciliationId, reason: "Yevmiye mutabakatı", metadata: { status: result.status, source: result.source } });
     return result;
   }
 
@@ -13492,7 +13492,7 @@ window.fetch = (input, init = {}) => {
           action,
           entityType,
           entityId: entityId || null,
-          reason: "V22 Consolidation Engine",
+          reason: "Konsolidasyon",
           metadata: { ...v22Clone(metadata), schemaVersion: V22_SCHEMA_VERSION }
         });
       }
@@ -16993,7 +16993,7 @@ window.fetch = (input, init = {}) => {
           action: editId ? "COMPANY_UPDATED" : "COMPANY_CREATED",
           entityType: "COMPANY",
           entityId: code,
-          reason: "V26 Şirket Yönetimi",
+          reason: "Şirket yönetimi",
           newValue: { code, name, country, functionalCurrency, groupId }
         });
       }
@@ -17567,7 +17567,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
             <div>
               <h2 style="margin:0;font-size:20px;color:#0f172a;">Döviz Kurları</h2>
-              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">V23 FX kuru yönetimi · TCMB otomatik çekim · kayıt/audit kontrollü</p>
+              <p style="margin:4px 0 0;font-size:13px;color:#64748b;">TCMB kurları otomatik çekilir; her kayıt onay ve denetim izine işlenir</p>
             </div>
             <div class="gk-v26-fx-actions">
               ${canManage ? `<button type="button" class="gk-v26-btn" id="v26FxNewBtn">+ Yeni Kur Ekle</button>` : ""}

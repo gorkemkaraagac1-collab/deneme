@@ -465,7 +465,7 @@
     const r = state.report;
     const route = !r?.error && r?.row?.status === "SUPPORTED" ? r.row.route : null;
     slot.innerHTML = `<section class="lq-cv-card lq-cv-pad"><span class="lq-cv-kick">STANDART VE KAYNAK</span>
-      <p>${route ? `Onaylı rapor rotası: ${esc(route)}` : "Onaylı rapor rotası için kaynak gerekli."}</p>
+      <p>${route ? `<span title="${esc(route)}">Tutarlar onaylı sunucu hesaplamasından gelir.</span>` : "Onaylı hesaplama kaynağı henüz oluşturulmadı."}</p>
       <p>TMS 29 uygulaması için onaylı dönem kanıtı gerekli.</p>
       ${r?.period?.reportingDate ? `<p>Raporlama tarihi: ${esc(trDate(r.period.reportingDate))}</p>` : ""}</section>`;
   }
