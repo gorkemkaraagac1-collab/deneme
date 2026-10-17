@@ -25,7 +25,7 @@
 
     container.innerHTML = `
       <div class="gk-v26-page">
-        <div class="gk-v26-card" style="background:#eff6ff;border-color:#bfdbfe;">
+        <div class="gk-v26-card" style="background:#E5F5F2;border-color:#A7E3D9;">
           <h2 style="margin:0 0 8px;font-size:18px;color:#0f172a;">Enflasyon Endeksleri artık Admin Panel'den yönetiliyor</h2>
           <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">
             TÜİK otomatik senkronizasyonu bu release kapsamında devre dışı. Aylık TÜFE endeksleri
