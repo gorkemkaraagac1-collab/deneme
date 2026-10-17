@@ -45,8 +45,15 @@
   function monthsBetween(start, end) {
     const a = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(start || "")), b = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(end || ""));
     if (!a || !b) return null;
-    let n = (+b[1] - +a[1]) * 12 + (+b[2] - +a[2]);
-    if (+b[3] >= +a[3] - 1) n += 1; // 01.01 – 31.12 = 12 ay
+    // A term ends the day before an anniversary: count whole months to the
+    // day after the end (01.01–31.12 = 12, 20.04.2025–19.04.2030 = 60); a
+    // remaining partial month counts as one.
+    const next = new Date(Date.UTC(+b[1], +b[2] - 1, +b[3] + 1));
+    let n = (next.getUTCFullYear() - +a[1]) * 12 + (next.getUTCMonth() + 1 - +a[2]);
+    // A month-end anchor (29–31) whose term ends on a shorter month's last
+    // day lands on the 1st: that is a whole month, not a partial one.
+    if (next.getUTCDate() > +a[3]) n += 1;
+    else if (next.getUTCDate() === 1 && +a[3] > 28) n -= 1;
     return n > 0 ? n : null;
   }
 
@@ -232,9 +239,15 @@
     const init = r.row.initialRecognition;
     const initLiab = init && isNum(init.liability) ? init.liability : sch.initialLiability;
     const exempt = !!r.row.exemption;
+    // A foreign-currency lease also shows the liability in its own currency:
+    // the presentation balance is translated at the reporting-date rate.
+    const closingRate = sc !== pc
+      ? (r.row.fxTranslation?.rates || []).find(rate => rate?.date === r.period.reportingDate)?.rate : null;
+    const sourceLiability = isNum(closingRate) && closingRate > 0 && isNum(metricValue(m.leaseLiability))
+      ? metricValue(m.leaseLiability) / closingRate : null;
     return `<div class="lq-cv-kpis">
       ${cell(`BAŞLANGIÇ YÜKÜMLÜLÜĞÜ · ${sc}`, money(initLiab), `NDD ${init && isNum(init.rou) ? money0(init.rou) : "—"} · ${trDate(c.startDate)} · İO %${esc(nf2.format(initialDiscountRate(c)))}`)}
-      ${cell(`KİRA YÜK. · ${rd} · ${pc}`, money(metricValue(m.leaseLiability)), `Kısa ${money0(metricValue(m.currentLiability))} · Uzun ${money0(metricValue(m.nonCurrentLiability))}`)}
+      ${cell(`KİRA YÜK. · ${rd} · ${pc}`, money(metricValue(m.leaseLiability)), `${sourceLiability != null ? `${money(sourceLiability)} ${sc} · ` : ""}Kısa ${money0(metricValue(m.currentLiability))} · Uzun ${money0(metricValue(m.nonCurrentLiability))}`)}
       ${cell(`KHV NDD · ${rd} · ${pc}`, money(metricValue(m.rouCarryingAmount)), `Dönem amortismanı ${money0(metricValue(m.periodDepreciation))}`)}
       ${exempt
         ? cell(`İSTİSNA KİRA GİDERİ · ${pc}`, money(metricValue(m.exemptLeaseExpense)), `Doğrusal · sözleşmesel ödeme ${money0(metricValue(m.contractualPayments))}`)
