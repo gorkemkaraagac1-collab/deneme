@@ -346,7 +346,7 @@
 
   function renderContractPaymentTerms(contract) {
     const facts = contractPaymentFacts(contract);
-    return `<section data-contract-source-terms style="margin:0 0 12px;padding:12px 14px;border:1px solid #dbeafe;border-radius:9px;background:#f8fbff;">
+    return `<section data-contract-source-terms style="margin:0 0 12px;padding:12px 14px;border:1px solid #D5F1EC;border-radius:9px;background:#f8fbff;">
       <strong style="display:block;margin-bottom:5px;">Kaydedilmiş sözleşme koşulları</strong>
       <div>${facts.startDate} – ${facts.endDate} · ${facts.frequency} ödeme · ${facts.amount} ${contractText(facts.currency)}</div>
       <small style="display:block;margin-top:4px;color:#64748b;">Bu alan sözleşme kaydındaki koşulları gösterir; hesaplanmış nakit akışı veya muhasebe sonucu değildir.</small>
@@ -400,7 +400,7 @@
       } else if (calculationSource === "private-error") {
         sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;font-weight:700;">⚠️ Private API sonucu alınamadı; hesaplama kapatıldı.</div>`;
       } else if (calculationSource === "local-warming") {
-        sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`;
+        sourceHtml = `<div style="margin-bottom:12px;padding:9px 13px;border-radius:8px;background:#E5F5F2;border:1px solid #A7E3D9;color:#0D7F73;font-size:12px;font-weight:700;">⏳ Private API sonucu hazırlanıyor; hesaplama bekletiliyor.</div>`;
       }
     }
     const errorHtml = calculationError

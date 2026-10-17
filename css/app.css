@@ -134,8 +134,8 @@ a:hover { text-decoration: underline; }
 
 .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
 .nav-item.active {
-  background: rgba(59, 130, 246, 0.18);
-  color: #93c5fd;
+  background: rgba(20,184,166, 0.18);
+  color: #7DDCCF;
 }
 .nav-item .icon {
   width: 18px;
@@ -164,7 +164,7 @@ a:hover { text-decoration: underline; }
   height: 32px;
   border-radius: 50%;
   background: #1e3a5f;
-  color: #93c5fd;
+  color: #7DDCCF;
   display: grid;
   place-items: center;
   font-weight: 650;

@@ -215,7 +215,7 @@ window.fetch = (input, init = {}) => {
             style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;font-size:14px;" />
           <div id="tfrs16McpError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px;"></div>
           <button type="submit" id="tfrs16McpSubmit"
-            style="width:100%;padding:10px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-weight:600;font-size:14px;cursor:pointer;margin-top:8px;">
+            style="width:100%;padding:10px;border:none;border-radius:8px;background:#0D7F73;color:#fff;font-weight:600;font-size:14px;cursor:pointer;margin-top:8px;">
             Parolayı Değiştir ve Devam Et
           </button>
         </form>
@@ -17844,7 +17844,7 @@ const V26_FX_UI_PAGE_SIZE = 50;
     if (!contract) return "";
     const parts = [contract.id, contract.company, contract.supplier].filter(Boolean);
     return `
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin:12px 0 0;font-size:13px;color:#1e3a8a;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#E5F5F2;border:1px solid #A7E3D9;border-radius:8px;margin:12px 0 0;font-size:13px;color:#1e3a8a;">
         <span style="font-size:16px;">📄</span>
         <span>İşlem uygulanacak sözleşme: <strong>${escapeHtml(parts.join(" — "))}</strong></span>
       </div>`;

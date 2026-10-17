@@ -327,22 +327,22 @@ hr{border:0;border-top:1px solid var(--border)}
    ============================================================ */
 body{font-size:14px}
 .sidebar{background:#07101F;color:#C4CEDD;border-right:0;display:flex;flex-direction:column}
-.lq-rail-brand{display:flex!important;flex-direction:row!important;align-items:center!important;gap:10px;height:64px;padding:0 18px!important;border-bottom:1px solid rgba(141,179,238,.14)!important}
+.lq-rail-brand{display:flex!important;flex-direction:row!important;align-items:center!important;gap:10px;height:64px;padding:0 18px!important;border-bottom:1px solid rgba(125,220,207,.14)!important}
 .lq-rail-logo img{height:30px;width:auto;display:block}
 .lq-rail-tag{margin-left:auto;height:20px;padding:0 7px;border-radius:5px;background:rgba(255,181,71,.14);color:#FFB547;font:600 10px var(--mono);letter-spacing:.08em;display:inline-flex;align-items:center}
 .sidebar-nav{flex:1;padding:12px}
 .sidebar-nav .nav-label{padding:16px 10px 6px;font:600 10.5px var(--mono);letter-spacing:.1em;color:#5E6A7D;text-transform:uppercase}
 .sidebar-nav a{height:38px;padding:0 10px;gap:10px;color:#C4CEDD;font-size:13.5px;border-radius:8px}
-.sidebar-nav a:hover{background:rgba(141,179,238,.08);color:#fff}
-.sidebar-nav a.active{background:rgba(13,127,115,.22);color:#fff;box-shadow:inset 3px 0 0 #8DB3EE}
+.sidebar-nav a:hover{background:rgba(125,220,207,.08);color:#fff}
+.sidebar-nav a.active{background:rgba(13,127,115,.22);color:#fff;box-shadow:inset 3px 0 0 #7DDCCF}
 .lq-rail-ico{width:18px;height:18px;flex-shrink:0;opacity:.9}
 .lq-rail-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lq-rail-badge{min-width:22px;height:20px;padding:0 6px;border-radius:10px;font:600 11px var(--mono);display:inline-flex;align-items:center;justify-content:center;background:rgba(141,179,238,.16);color:#8DB3EE}
+.lq-rail-badge{min-width:22px;height:20px;padding:0 6px;border-radius:10px;font:600 11px var(--mono);display:inline-flex;align-items:center;justify-content:center;background:rgba(125,220,207,.16);color:#7DDCCF}
 .lq-rail-badge[hidden]{display:none}
 [data-rail-badge="licenses"]{background:rgba(255,181,71,.18);color:#FFB547}
-.lq-rail-foot{padding:12px;border-top:1px solid rgba(141,179,238,.14)}
-.lq-rail-app{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;border:1px solid rgba(141,179,238,.22);color:#fff;text-decoration:none;font-size:13px}
-.lq-rail-app:hover{background:rgba(141,179,238,.08)}
+.lq-rail-foot{padding:12px;border-top:1px solid rgba(125,220,207,.14)}
+.lq-rail-app{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;border:1px solid rgba(125,220,207,.22);color:#fff;text-decoration:none;font-size:13px}
+.lq-rail-app:hover{background:rgba(125,220,207,.08)}
 .top-header{background:#fff;border-bottom:1px solid var(--border)}
 .top-header .page-title{font:600 19px var(--display);letter-spacing:-.01em}
 .top-header .user-info .username{font:500 13px var(--body)}

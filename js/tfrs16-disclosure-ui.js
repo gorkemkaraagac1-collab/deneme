@@ -438,7 +438,7 @@
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table tbody tr:hover td{background:#e8f0fe}
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table .lq-jr-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table td.is-zero{color:#a0aec0!important}
-    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table .lq-jr-code{color:#1d4ed8!important;font-weight:700}
+    :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table .lq-jr-code{color:#0D7F73!important;font-weight:700}
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table tr.lq-jr-total td{background:#eef2f7!important;font-weight:700;border-top:2px solid #0f1b33}
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table.is-voucher{font-size:12.5px;margin:8px 0 12px}
     :is(#v26PageHost,body) .lq-dn-yevmiye table.lq-jr-table.is-voucher th{background:#334155!important}
