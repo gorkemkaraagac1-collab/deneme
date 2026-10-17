@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kullanıcı Yönetimi - LeaseQant</title>
-    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/admin.css?v=20261017-brand">
 
     <style>
         .users-page{display:grid;gap:20px}
@@ -972,7 +972,7 @@ function renderUserRow(user) {
     const status = user.status === "INACTIVE" ? '<span class="lq-chip n">Pasif</span>' : '<span class="lq-chip ok">Aktif</span>';
     return `
         <tr>
-            <td><div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:15px;background:#EAF1FD;color:#1660D6;font:600 11.5px var(--body);display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(user)}</span>
+            <td><div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:15px;background:#E5F5F2;color:#0D7F73;font:600 11.5px var(--body);display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(user)}</span>
                 <div style="min-width:0"><strong style="font-weight:500">${escapeHtml(fullName || user.username || "-")}</strong><small style="display:block;color:var(--text-light);font-size:12px">${escapeHtml(user.email || user.username || "")}</small></div></div></td>
             <td><span class="lq-chip ${user.role === "ADMIN" ? "dk" : "b"}">${escapeHtml(ROLE_TR[user.role] || user.role || "-")}</span></td>
             <td><div style="display:flex;gap:6px;align-items:center">${status}${user.must_change_password ? '<span class="lq-chip warn" title="Kullanıcı ilk girişte şifresini değiştirmedi">İlk şifre</span>' : ""}</div></td>
