@@ -12,10 +12,10 @@
   --text: #0f172a;
   --text-2: #475569;
   --text-3: #94a3b8;
-  --primary: #1d4ed8;
-  --primary-hover: #1e40af;
-  --primary-soft: #eff6ff;
-  --primary-border: #bfdbfe;
+  --primary: #0D7F73;
+  --primary-hover: #0A665D;
+  --primary-soft: #E5F5F2;
+  --primary-border: #A7E3D9;
   --success: #059669;
   --success-soft: #ecfdf5;
   --warning: #d97706;
@@ -81,7 +81,7 @@ a:hover { text-decoration: underline; }
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, #14B8A6, #0D7F73);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -181,7 +181,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid rgba(147,197,253,.25);
   border-radius: 9px;
   background: rgba(30,58,95,.35);
-  color: #bfdbfe;
+  color: #A7E3D9;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
@@ -520,7 +520,7 @@ table.data-table tbody tr:last-child td {
 .badge-active { background: var(--success-soft); color: #047857; }
 .badge-draft { background: #f1f5f9; color: #475569; }
 .badge-ended { background: var(--warning-soft); color: #b45309; }
-.badge-mod { background: var(--primary-soft); color: #1d4ed8; }
+.badge-mod { background: var(--primary-soft); color: #0D7F73; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 .muted { color: var(--text-3); }
