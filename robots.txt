@@ -3,5 +3,14 @@ Allow: /
 Disallow: /admin.html
 Disallow: /dashboard.html
 Disallow: /login.html
+Disallow: /tool.html
+Disallow: /ecl.html
+Disallow: /dcf.html
+Disallow: /dcf-engine.html
+Disallow: /hedge.html
+Disallow: /financial-decision-cockpit.html
+Disallow: /working-capital.html
+Disallow: /tms19.html
+Disallow: /tms29.html
 
 Sitemap: https://leaseqant.com/sitemap.xml
